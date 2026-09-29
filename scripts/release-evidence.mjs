@@ -156,10 +156,30 @@ export async function findEvidence({ repository, targetSha, requiredFiles, api =
     return null;
 }
 
+export function downloadEvidenceArtifact(
+    repository,
+    artifactId,
+    request = execFileSync,
+    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
+) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            return request('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
+                maxBuffer: 2 * 1024 * 1024,
+            });
+        } catch (error) {
+            const transient = /gh: HTTP (?:429|5\d\d)\b|TLS handshake timeout|connection reset by peer/u.test(
+                String(error?.stderr ?? ''),
+            );
+            if (attempt === 2 || !transient) throw error;
+            pause(1000 * (attempt + 1));
+        }
+    }
+    throw new Error('Unreachable GitHub artifact retry state');
+}
+
 function readProof(repository, artifactId) {
-    const archive = execFileSync('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
-        maxBuffer: 2 * 1024 * 1024,
-    });
+    const archive = downloadEvidenceArtifact(repository, artifactId);
     const json = execFileSync(
         'python3',
         [
