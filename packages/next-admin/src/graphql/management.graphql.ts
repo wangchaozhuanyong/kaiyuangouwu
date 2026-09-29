@@ -243,6 +243,8 @@ export const STORE_PROFILE_FIELDS = gql`
         brandHighlightColor
         legalEntityName
         legalRegistrationCountry
+        legalRegistrationNumber
+        legalContactAddress
         supportEmail
         privacyEmail
         internalNote
@@ -1529,6 +1531,8 @@ export interface StoreProfileRecord {
     brandHighlightColor: string | null;
     legalEntityName: string | null;
     legalRegistrationCountry: string | null;
+    legalRegistrationNumber: string | null;
+    legalContactAddress: string | null;
     supportEmail: string | null;
     privacyEmail: string | null;
     internalNote: string | null;

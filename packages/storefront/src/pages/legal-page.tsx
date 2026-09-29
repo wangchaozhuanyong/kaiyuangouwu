@@ -50,6 +50,16 @@ export function ManagedLegalPage({
             isEmail: false,
         },
         {
+            label: isZh ? '公司登记号码' : 'Company registration number',
+            value: legalIdentity?.legalRegistrationNumber,
+            isEmail: false,
+        },
+        {
+            label: isZh ? '营业／通讯地址' : 'Business/contact address',
+            value: legalIdentity?.legalContactAddress,
+            isEmail: false,
+        },
+        {
             label: isZh ? '客服邮箱' : 'Support email',
             value: legalIdentity?.supportEmail,
             isEmail: true,

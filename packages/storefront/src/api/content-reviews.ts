@@ -245,6 +245,8 @@ export class ContentReviewsApi extends BaseDomainApi {
                 highlightColor: string | null;
                 legalEntityName: string | null;
                 legalRegistrationCountry: string | null;
+                legalRegistrationNumber: string | null;
+                legalContactAddress: string | null;
                 supportEmail: string | null;
                 privacyEmail: string | null;
             };
@@ -288,6 +290,8 @@ export class ContentReviewsApi extends BaseDomainApi {
                     highlightColor
                     legalEntityName
                     legalRegistrationCountry
+                    legalRegistrationNumber
+                    legalContactAddress
                     supportEmail
                     privacyEmail
                 }
@@ -333,6 +337,8 @@ export class ContentReviewsApi extends BaseDomainApi {
             brandHighlightColor: result.storefrontBranding?.highlightColor ?? null,
             legalEntityName: result.storefrontBranding?.legalEntityName ?? null,
             legalRegistrationCountry: result.storefrontBranding?.legalRegistrationCountry ?? null,
+            legalRegistrationNumber: result.storefrontBranding?.legalRegistrationNumber ?? null,
+            legalContactAddress: result.storefrontBranding?.legalContactAddress ?? null,
             supportEmail: result.storefrontBranding?.supportEmail ?? null,
             privacyEmail: result.storefrontBranding?.privacyEmail ?? null,
             currencyConfiguration: result.storefrontCurrencyConfiguration,

@@ -115,6 +115,8 @@ describe('StorefrontBrandingShopResolver', () => {
             brandHighlightColor: '#8B5CF6',
             legalEntityName: 'MOYAO AI Example Limited',
             legalRegistrationCountry: 'Malaysia',
+            legalRegistrationNumber: '123456789012 (123456-A)',
+            legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
             supportEmail: 'support@moyaoai.com',
             privacyEmail: 'privacy@moyaoai.com',
             logoAsset: null,
@@ -154,6 +156,8 @@ describe('StorefrontBrandingShopResolver', () => {
             highlightColor: '#8B5CF6',
             legalEntityName: 'MOYAO AI Example Limited',
             legalRegistrationCountry: 'Malaysia',
+            legalRegistrationNumber: '123456789012 (123456-A)',
+            legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
             supportEmail: 'support@moyaoai.com',
             privacyEmail: 'privacy@moyaoai.com',
         });

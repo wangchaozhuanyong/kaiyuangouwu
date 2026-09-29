@@ -49,6 +49,8 @@ function profile(overrides: Record<string, unknown> = {}) {
             brandHighlightColor: null,
             legalEntityName: null,
             legalRegistrationCountry: null,
+            legalRegistrationNumber: null,
+            legalContactAddress: null,
             supportEmail: null,
             privacyEmail: null,
         }),
@@ -238,9 +240,13 @@ describe('StoreProfileService', () => {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             legalEntityName: '新的法律文案',
+            legalRegistrationNumber: ' 123456789012 (123456-A) ',
+            legalContactAddress: ' 10 Example Road, 50000 Kuala Lumpur ',
         });
         expect(result.channel.sellerId).toBe('platform-seller');
         expect(result.legalEntityName).toBe('新的法律文案');
+        expect(result.legalRegistrationNumber).toBe('123456789012 (123456-A)');
+        expect(result.legalContactAddress).toBe('10 Example Road, 50000 Kuala Lumpur');
         expect(channelService.update).not.toHaveBeenCalled();
     });
     it.each(['admin', 'merchant'] as const)(

@@ -14,7 +14,7 @@ export interface ManagedLegalDocument {
 }
 
 const legalProfileTokenPattern =
-    /\{\{\s*(legalEntityName|legalRegistrationCountry|supportEmail|privacyEmail)\s*\}\}/gu;
+    /\{\{\s*(legalEntityName|legalRegistrationCountry|legalRegistrationNumber|legalContactAddress|supportEmail|privacyEmail)\s*\}\}/gu;
 const declaredScopePattern =
     /(?:适用于|applies?\s+to)[\s\S]{0,100}?(?:https?:\/\/)?((?:www\.)?[a-z\d-]+(?:\.[a-z\d-]+)+)/iu;
 

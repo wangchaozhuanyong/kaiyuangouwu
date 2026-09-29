@@ -77,6 +77,8 @@ export class StoreProfileService {
                     brandHighlightColor: null,
                     legalEntityName: null,
                     legalRegistrationCountry: null,
+                    legalRegistrationNumber: null,
+                    legalContactAddress: null,
                     supportEmail: null,
                     privacyEmail: null,
                 }),
@@ -564,6 +566,18 @@ export class StoreProfileService {
             profile.legalRegistrationCountry,
             '注册国家或地区',
             100,
+        );
+        profile.legalRegistrationNumber = this.normalizeLegalText(
+            input.legalRegistrationNumber,
+            profile.legalRegistrationNumber,
+            '公司登记号码',
+            100,
+        );
+        profile.legalContactAddress = this.normalizeLegalText(
+            input.legalContactAddress,
+            profile.legalContactAddress,
+            '营业或通讯地址',
+            500,
         );
         this.updateContactEmails(profile, input);
     }

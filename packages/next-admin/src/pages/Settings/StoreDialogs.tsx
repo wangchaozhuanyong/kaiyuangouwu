@@ -77,6 +77,10 @@ export function StoreEditor({
     const [legalRegistrationCountry, setLegalRegistrationCountry] = useState(
         profile.legalRegistrationCountry ?? '',
     );
+    const [legalRegistrationNumber, setLegalRegistrationNumber] = useState(
+        profile.legalRegistrationNumber ?? '',
+    );
+    const [legalContactAddress, setLegalContactAddress] = useState(profile.legalContactAddress ?? '');
     const [supportEmail, setSupportEmail] = useState(profile.supportEmail ?? '');
     const [privacyEmail, setPrivacyEmail] = useState(profile.privacyEmail ?? '');
     const [reviewEnglish, setReviewEnglish] = useState(false);
@@ -144,6 +148,8 @@ export function StoreEditor({
                 brandHighlightColor: brandHighlightColor.trim() || null,
                 legalEntityName: legalEntityName.trim() || null,
                 legalRegistrationCountry: legalRegistrationCountry.trim() || null,
+                legalRegistrationNumber: legalRegistrationNumber.trim() || null,
+                legalContactAddress: legalContactAddress.trim() || null,
                 supportEmail: supportEmail.trim() || null,
                 privacyEmail: privacyEmail.trim() || null,
                 internalNote: internalNote.trim() || null,
@@ -315,7 +321,7 @@ export function StoreEditor({
                 <div className="mb-3">
                     <p className="text-xs font-bold text-slate-800">法律与联系信息</p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        以下内容供隐私政策和使用条款引用；店铺归属请使用上方“所属商家主体”。四项填写完整后才能通过店铺上线检查。
+                        以下内容供隐私政策和使用条款引用；店铺归属请使用上方“所属商家主体”。法定主体、注册地及两个邮箱填写完整后才能通过店铺上线检查。登记号码和营业／通讯地址请按实际资料填写。
                     </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -335,6 +341,24 @@ export function StoreEditor({
                             onChange={event => setLegalRegistrationCountry(event.target.value)}
                             className={inputClass}
                             placeholder="例如：中国"
+                        />
+                    </Field>
+                    <Field label="公司登记号码">
+                        <input
+                            value={legalRegistrationNumber}
+                            maxLength={100}
+                            onChange={event => setLegalRegistrationNumber(event.target.value)}
+                            className={inputClass}
+                            placeholder="注册证书上的完整号码"
+                        />
+                    </Field>
+                    <Field label="营业／通讯地址（对外公开）">
+                        <input
+                            value={legalContactAddress}
+                            maxLength={500}
+                            onChange={event => setLegalContactAddress(event.target.value)}
+                            className={inputClass}
+                            placeholder="可供客户联系的营业或通讯地址"
                         />
                     </Field>
                     <Field label="客服邮箱">

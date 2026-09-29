@@ -28,6 +28,8 @@ const profile: StoreProfileRecord = {
     brandHighlightColor: null,
     legalEntityName: null,
     legalRegistrationCountry: null,
+    legalRegistrationNumber: null,
+    legalContactAddress: null,
     supportEmail: null,
     privacyEmail: null,
     internalNote: null,

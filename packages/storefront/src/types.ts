@@ -831,6 +831,8 @@ export interface MarketConfig {
 export interface StorefrontLegalIdentity {
     legalEntityName: string | null;
     legalRegistrationCountry: string | null;
+    legalRegistrationNumber?: string | null;
+    legalContactAddress?: string | null;
     supportEmail: string | null;
     privacyEmail: string | null;
 }
@@ -855,6 +857,8 @@ export interface StorefrontConfig {
     brandHighlightColor?: string | null;
     legalEntityName?: string | null;
     legalRegistrationCountry?: string | null;
+    legalRegistrationNumber?: string | null;
+    legalContactAddress?: string | null;
     supportEmail?: string | null;
     privacyEmail?: string | null;
     currencyConfiguration?: StorefrontCurrencyConfiguration;

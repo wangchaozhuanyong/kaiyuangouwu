@@ -60,6 +60,8 @@ const myStoreProfileFields = gql`
         brandHighlightColor
         legalEntityName
         legalRegistrationCountry
+        legalRegistrationNumber
+        legalContactAddress
         supportEmail
         privacyEmail
         primaryDomain
@@ -164,6 +166,8 @@ export interface MyStoreProfileRecord {
     brandHighlightColor: string | null;
     legalEntityName: string | null;
     legalRegistrationCountry: string | null;
+    legalRegistrationNumber: string | null;
+    legalContactAddress: string | null;
     supportEmail: string | null;
     privacyEmail: string | null;
     primaryDomain: string | null;
