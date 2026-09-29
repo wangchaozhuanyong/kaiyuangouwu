@@ -1025,6 +1025,9 @@ export const devConfig: VendureConfig = {
         // Enable if you need to debug the job queue
         // BullMQJobQueuePlugin.init({}),
         DefaultJobQueuePlugin.init({
+            // The 200ms default polls every idle queue five times a second, even when there are no jobs.
+            // One second keeps background work responsive while reducing the steady database load.
+            pollInterval: 1_000,
             concurrency: queueName => (queueName === 'image-generation-output' ? 2 : 1),
             backoffStrategy: (queueName, attempts) =>
                 queueName === 'image-generation-output'
