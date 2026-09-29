@@ -8,6 +8,8 @@ const roots = [
     'packages/storefront/public',
     'packages/storefront-content-plugin/src',
     'packages/store-management-plugin/src',
+    'packages/commerce-fulfillment-plugin/src',
+    'packages/dev-server/plugins/commerce-fulfillment',
     'packages/next-admin/src',
 ];
 const merchantBrand = /moyao|模钥|大马通|damatong|flashcast|闪铸|美宜佳|miyijia/iu;
