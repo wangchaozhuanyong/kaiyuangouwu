@@ -182,6 +182,23 @@ describe('progressive page readiness', () => {
         expect(phase()).toBe('ready');
     });
 
+    it('keeps a page ready when a failed category image has a usable replacement icon', async () => {
+        const category = (
+            <SafeImage src="/missing-category.png" alt="分类" errorFallback={<span>分类图标</span>} />
+        );
+        render(category, true);
+        act(() => {
+            requiredImage(host).dispatchEvent(new Event('error'));
+        });
+        render(category);
+        await advance();
+        expect(host.querySelector('[data-safe-image=error]')?.getAttribute('data-safe-image-recovered')).toBe(
+            'true',
+        );
+        expect(host.textContent).toContain('分类图标');
+        expect(phase()).toBe('ready');
+    });
+
     it('waits for the declared route query even when its skeleton is below a large header', async () => {
         render(<div data-page-pending="query" data-offscreen="true" />);
         await advance(300);

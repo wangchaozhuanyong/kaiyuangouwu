@@ -173,7 +173,9 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             // A second layout frame catches images introduced by the final data commit.
             if (++readyFrames >= 2) {
                 const visibleImageFailed = Array.from(root.querySelectorAll('[data-safe-image=error]')).some(
-                    node => isFirstViewportElement(node, root),
+                    node =>
+                        node.getAttribute('data-safe-image-recovered') !== 'true' &&
+                        isFirstViewportElement(node, root),
                 );
                 finish(failed.size || visibleImageFailed ? 'degraded' : 'ready');
             }
