@@ -345,7 +345,7 @@ export function StoreEditor({
                             autoComplete="email"
                             onChange={event => setSupportEmail(event.target.value)}
                             className={inputClass}
-                            placeholder="support@moyaoai.com"
+                            placeholder="support@example.com"
                         />
                     </Field>
                     <Field label="隐私邮箱">
@@ -356,7 +356,7 @@ export function StoreEditor({
                             autoComplete="email"
                             onChange={event => setPrivacyEmail(event.target.value)}
                             className={inputClass}
-                            placeholder="privacy@moyaoai.com"
+                            placeholder="privacy@example.com"
                         />
                     </Field>
                 </div>
@@ -779,7 +779,7 @@ export function ProvisionStoreDialog({
                         value={draft.name}
                         onChange={event => set('name', event.target.value)}
                         className={inputClass}
-                        placeholder="例如：模钥科技有限公司"
+                        placeholder="例如：商家有限公司"
                     />
                 </Field>
                 <Field label="网店编码 *">
@@ -787,7 +787,7 @@ export function ProvisionStoreDialog({
                         value={draft.code}
                         onChange={event => set('code', event.target.value)}
                         className={`${inputClass} font-mono`}
-                        placeholder="moyao-store"
+                        placeholder="my-store"
                     />
                 </Field>
                 <Field label="中文网站名称 *">

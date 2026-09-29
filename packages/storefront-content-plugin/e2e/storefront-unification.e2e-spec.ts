@@ -994,7 +994,7 @@ describe('unified storefront Admin API to Shop API', () => {
                                 } else {
                                     await browserExpect(
                                         page.locator('.auth-hero img.safe-image'),
-                                    ).toHaveAttribute('src', new RegExp(`auth-${route}-ai-campaign-v2`));
+                                    ).toHaveCount(0);
                                     await browserExpect(page.locator('.auth-hero')).toBeVisible();
                                 }
                                 await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');

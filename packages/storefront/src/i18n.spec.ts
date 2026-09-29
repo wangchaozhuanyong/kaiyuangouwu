@@ -73,6 +73,18 @@ describe('storefront market configuration', () => {
         });
     });
 
+    it('uses the Admin country and currency even when a Channel code resembles an old bootstrap market', () => {
+        expect(
+            marketForStorefrontConfig({
+                code: 'cn-mainland',
+                defaultLanguageCode: 'en',
+                defaultCurrencyCode: 'MYR',
+                availableCountries: [{ code: 'MY', name: 'Malaysia' }],
+                customFields: {},
+            }),
+        ).toMatchObject({ countryCode: 'MY', currencyCode: 'MYR', locale: 'en-MY', label: 'Malaysia' });
+    });
+
     it('formats English with the active market locale', () => {
         expect(localeFor('en', markets['cn-mainland'])).toBe('en-US');
         expect(localeFor('en', markets['my-malaysia'])).toBe('en-MY');

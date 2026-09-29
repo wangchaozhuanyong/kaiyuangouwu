@@ -17,6 +17,13 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 
 ## Product and Interface Design Principles
 
+### Multi-store storefront contract
+
+- All merchant storefronts use the same component, layout, and feature code. Use published Admin content and visual presets for store-specific color, images, wording, and appearance; an unconfigured block must not appear through a branded fallback.
+- Never branch merchant-facing UI, features, or default copy on a store name, domain, Channel code, or deployment host. If Admin lacks a needed setting, add one shared capability available to every store before changing any merchant presentation.
+- A Channel code may identify API requests, cache scope, permissions, or data ownership. Domain matching may route a request to a Channel. These operational uses must not choose merchant components or default branding.
+- Existing exceptions have narrow purposes: `packages/next-admin/src/layouts/AppShell.tsx` and `packages/next-admin/src/pages/Auth/` name the platform Admin product; `packages/dev-server/migrations/` records historical schema and data changes; `packages/store-domain-plugin/` and `deploy/nginx/` route domains and TLS to Channels; `packages/dev-server/scripts/sync-moyao-brand.mjs` and `sync-damatong-storefront.mjs` are reviewed one-time Admin content publishers, never runtime UI selectors or automatic store defaults. Merchant-provided content and assets may contain that merchant's brand. Do not copy these exceptions into new storefront code. Review each new exception and keep its reason near the code. Run `node scripts/check-storefront-unification.mjs` for changes to merchant-facing runtime source.
+
 - Uploaded storefront images belong to merchant content. Changing skins, spacing, colors, layouts, or copy never authorizes replacing or clearing them. Preserve existing asset bindings in editors, batch operations, and sync scripts. Image replacement requires a separately reviewed list of changes and explicit image confirmation; do not automatically set `allowImageReplacement` for appearance work. This applies to all stores, content items, auth visuals, and promotion-page source.
 
 - Treat each page, modal, or task-focused state as having one visually strongest primary action. Necessary parallel admin operations may remain available, but they must use secondary or tertiary emphasis unless one action is the clear next step.

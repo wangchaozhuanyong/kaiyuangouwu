@@ -347,8 +347,7 @@ export function DashboardModule() {
                                 <FeatureHelpButton topic="dashboard.overview" title="管理某个店铺" />
                             </h2>
                             <p className="mt-2 text-xs leading-5 text-blue-800">
-                                请使用右上角“当前店铺”切换到 MOYAO
-                                AI｜模钥或美宜佳。切换后才会显示该店自己的经营数据。
+                                请使用右上角“当前店铺”选择要管理的店铺。切换后才会显示该店自己的经营数据。
                             </p>
                         </section>
                         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

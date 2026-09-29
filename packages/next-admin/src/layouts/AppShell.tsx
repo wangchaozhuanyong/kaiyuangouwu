@@ -776,7 +776,7 @@ export function AppShell() {
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
                             <img
-                                key={storeLogoUrl ?? 'moyao-ai'}
+                                key={storeLogoUrl ?? 'platform-admin'}
                                 src={storeLogoUrl ?? adminBrandIcon}
                                 alt=""
                                 className="absolute inset-0 h-full w-full bg-white object-contain"
