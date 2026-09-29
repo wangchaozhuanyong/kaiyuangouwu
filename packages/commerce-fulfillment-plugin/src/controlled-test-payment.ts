@@ -105,7 +105,7 @@ export function createControlledTestPayment(enabled: boolean) {
         description: [
             {
                 languageCode: LanguageCode.zh_Hans,
-                value: '仅对指定测试商品和订单备注开放；订单建立后可再锁定订单号',
+                value: '按本店支付配置向所有订单或指定测试订单开放模拟支付',
             },
         ],
         args: {},
@@ -126,6 +126,11 @@ export function createControlledTestPayment(enabled: boolean) {
                 type: 'string',
                 required: true,
                 label: [{ languageCode: LanguageCode.zh_Hans, value: '本店 Channel ID' }],
+            },
+            allowAllOrders: {
+                type: 'boolean',
+                required: false,
+                label: [{ languageCode: LanguageCode.zh_Hans, value: '允许本店所有订单使用模拟支付' }],
             },
             orderCode: {
                 type: 'string',

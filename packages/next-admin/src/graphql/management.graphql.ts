@@ -231,6 +231,7 @@ export const STORE_PROFILE_FIELDS = gql`
         id
         updatedAt
         status
+        isPublished
         sortOrder
         descriptionZh
         descriptionEn
@@ -1516,6 +1517,7 @@ export interface StoreProfileRecord {
     id: string;
     updatedAt: string;
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
+    isPublished: boolean;
     sortOrder: number;
     descriptionZh: string;
     descriptionEn: string;
