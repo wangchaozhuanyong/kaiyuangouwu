@@ -332,6 +332,9 @@ export async function captureStorefrontConfiguration({
         // The same server-side activation rule protects Shop API requests. A verified domain alone
         // does not make a merchant draft operational; required release Channels remain checked below.
         assert.equal(typeof profile.isOperational, 'boolean', 'Storefront operational state is missing');
+        // The platform's default Channel is operational for Admin but its draft profile has no
+        // public storefront domain. Keep it out of domain-bound Shop API inspection.
+        if (profile.status === 'DRAFT' && !profile.primaryDomain) continue;
         if (!profile.isOperational) continue;
         const host = profile?.primaryDomain;
         assert.ok(

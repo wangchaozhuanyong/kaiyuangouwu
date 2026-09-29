@@ -305,7 +305,7 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
 });
 
-void test('non-operational drafts are excluded even when a merchant has a verified domain', async () => {
+void test('the domainless platform Channel and non-operational merchant drafts are excluded', async () => {
     const store = storeFixture();
     const calls = [];
     const request = async (_url, options) => {
@@ -330,7 +330,7 @@ void test('non-operational drafts are excluded even when a merchant has a verifi
                     {
                         id: 'platform-profile',
                         status: 'DRAFT',
-                        isOperational: false,
+                        isOperational: true,
                         primaryDomain: null,
                         channel: { id: '0', code: '__default_channel__' },
                     },
