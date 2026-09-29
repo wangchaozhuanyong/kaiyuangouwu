@@ -891,7 +891,7 @@ function costAt(costs: CostPoint[], at: Date): (CostPoint & { estimated: boolean
         else break;
     }
     if (historical) return { ...historical, estimated: false };
-    const current = costs.at(-1);
+    const current = costs[costs.length - 1];
     return current ? { ...current, estimated: true } : null;
 }
 

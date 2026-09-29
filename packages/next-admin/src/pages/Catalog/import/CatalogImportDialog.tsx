@@ -856,6 +856,7 @@ function UploadPanel({
                 <p className="text-xs text-slate-500 md:col-span-3">
                     导入商店必填且必须与当前目标店铺一致；不同商店请分文件导入。商品类型必填：虚拟货品 /
                     实物。销售方式填“标价销售”或“联系客服询价”；询价商品留空销售价与进货价，仅展示且不能下单。一级分类填写主分类，二级分类可留空；留空表示没有二级分类，更新时也会移除旧二级分类。
+                    主图素材文件名必须对应当前店铺已上传的唯一图片，仅在新建商品时关联主图。
                 </p>
                 {file && (
                     <div className="rounded-lg bg-slate-100 p-3 text-xs text-slate-700 md:col-span-3">
@@ -937,6 +938,7 @@ function LocalPreviewSummary({ preview }: { preview: LocalCatalogFile }) {
         ['进货价', preview.rows.filter(row => row.purchaseCost != null).length],
         ['销售价', preview.rows.filter(row => row.sellingPrice != null).length],
         ['询价展示', preview.rows.filter(row => row.pricingMode === 'QUOTE_ONLY').length],
+        ['主图素材文件名', preview.rows.filter(row => Boolean(row.featuredAssetName)).length],
         ['库存量', preview.rows.filter(row => row.stockOnHand != null).length],
         ['库存下限', preview.rows.filter(row => row.minimumStock != null).length],
         ['库存上限', preview.rows.filter(row => row.maximumStock != null).length],
@@ -1442,6 +1444,9 @@ function ImportRow({
                 <div className="mt-1 text-slate-500">库存量 {displayValue(data.stockOnHand, '—')}</div>
             </td>
             <td className="min-w-80 p-3">
+                {data.featuredAssetName && (
+                    <p className="mb-1 text-[10px] text-slate-500">主图素材：{data.featuredAssetName}</p>
+                )}
                 <p className="mb-2 leading-5 text-slate-500">{row.message || '—'}</p>
                 {canUpdate && row.action === 'WARNING' && (
                     <div className="flex gap-2">

@@ -33,14 +33,28 @@ function escapeRegExp(value: string): string {
  */
 export function storefrontNavigationCollections(items: CollectionSummary[]): CollectionSummary[] {
     const nestedByName = new Map<string, CollectionSummary[]>();
-    for (const item of items) {
+    const visibleItems = items
+        .map(item => ({
+            ...item,
+            children: (item.children ?? []).filter(
+                child => child.productVariantCount == null || child.productVariantCount > 0,
+            ),
+        }))
+        .filter(
+            item =>
+                item.productVariantCount == null ||
+                item.productVariantCount > 0 ||
+                (item.children?.length ?? 0) > 0,
+        );
+
+    for (const item of visibleItems) {
         for (const child of item.children ?? []) {
             const name = collectionIdentity(child.name);
             nestedByName.set(name, [...(nestedByName.get(name) ?? []), child]);
         }
     }
 
-    return items.filter(item => {
+    return visibleItems.filter(item => {
         if (item.children?.length) return true;
         const nestedMatches = nestedByName.get(collectionIdentity(item.name)) ?? [];
         const rootSlug = collectionIdentity(item.slug);
@@ -277,6 +291,7 @@ export class CatalogApi extends BaseDomainApi {
                         description
                         position
                         parentId
+                        productVariantCount
                         featuredAsset { id preview }
                         children {
                             id
@@ -285,6 +300,7 @@ export class CatalogApi extends BaseDomainApi {
                             description
                             position
                             parentId
+                            productVariantCount
                             featuredAsset { id preview }
                         }
                     }
