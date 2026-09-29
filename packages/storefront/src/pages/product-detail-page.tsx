@@ -156,7 +156,6 @@ export function ProductDetailPage() {
                             isZh ? '您好，我想咨询以下商品：' : 'Hello, I would like a quote for:',
                             product.name,
                             variant?.name,
-                            variant?.sku && `SKU: ${variant.sku}`,
                             window.location.href,
                         ]
                             .filter(Boolean)
