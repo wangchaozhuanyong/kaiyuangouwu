@@ -13,7 +13,11 @@ import { catchError } from 'rxjs';
 import { AdministratorAccessService } from './administrator-access.service';
 import { AdministratorPermissionAuditService } from './administrator-permission-audit.service';
 
-const allowedForSuspendedAccount = new Set(['Mutation.logout']);
+const sessionIndependentFields = new Set([
+    'Mutation.adminBeginLogin',
+    'Mutation.adminCompleteTwoFactorLogin',
+    'Mutation.logout',
+]);
 const legacyTeamMutations = new Set([
     'Mutation.createAdministrator',
     'Mutation.updateAdministrator',
@@ -86,7 +90,7 @@ export class AdministratorAccessInterceptor implements NestInterceptor {
         const requestContext = internal_getRequestContext(parsed.req, context);
         if (requestContext.apiType !== 'admin' || !requestContext.activeUserId) return next.handle();
         const rootField = `${parsed.info.parentType.name}.${parsed.info.fieldName}`;
-        if (allowedForSuspendedAccount.has(rootField)) return next.handle();
+        if (sessionIndependentFields.has(rootField)) return next.handle();
         const mailboxPermission = machineMailboxPermissions.get(rootField);
         if (
             requestContext.session?.authenticationStrategy === API_KEY_AUTH_STRATEGY_NAME &&

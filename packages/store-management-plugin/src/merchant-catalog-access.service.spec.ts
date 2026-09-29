@@ -107,6 +107,17 @@ const merchantContext = {
 } as any;
 
 describe('MerchantCatalogAccessService', () => {
+    it.each(['adminBeginLogin', 'adminCompleteTwoFactorLogin'])(
+        'allows public %s even when an old merchant session has another active Channel',
+        async fieldName => {
+            const { connection, service } = createService({ channelIds: ['store-b'] });
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {}),
+            ).resolves.toBeUndefined();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
     it.each(['store-a', 'store-b'])(
         'requires platform coupon operations to use the managed entry for %s',
         async channelId => {

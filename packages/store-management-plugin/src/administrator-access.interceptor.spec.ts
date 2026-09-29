@@ -66,6 +66,17 @@ describe('administrator access failure audit', () => {
         state.requestContext.userHasPermissions.mockReset().mockReturnValue(true);
     });
 
+    it.each(['adminBeginLogin', 'adminCompleteTwoFactorLogin'])(
+        'allows public %s without loading an old administrator profile',
+        async field => {
+            const { run, access, next } = invoke(field, {}, Promise.resolve('ok'));
+            access.current.mockRejectedValue(new Error('stale session profile'));
+            await expect(run()).resolves.toBe('ok');
+            expect(access.current).not.toHaveBeenCalled();
+            expect(next.handle).toHaveBeenCalledOnce();
+        },
+    );
+
     it.each([
         ['icloudPrimaryAccounts', 'Query', 'ReadIcloudRelay'],
         ['createIcloudPrimaryAccount', 'Mutation', 'CreateIcloudRelay'],

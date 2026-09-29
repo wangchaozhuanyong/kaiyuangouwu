@@ -741,11 +741,20 @@ describe.sequential('administrator access browser acceptance', () => {
         });
     });
 
-    it('lets a store manager run store operations without account or role administration', async () => {
+    it('lets a store manager work and then switch to the platform owner with an old cookie', async () => {
         await withAuthenticatedPage(credentials.storeManager, async page => {
             await openTeamPage(page, false);
             expect(await manageableEmails(page)).toEqual([]);
             await openCatalogPage(page);
+            await page.goto(`${origin}/dashboard/login`);
+            await page.locator('#admin-username').fill(credentials.owner.username);
+            await page.locator('#admin-password').fill(credentials.owner.password);
+            await page.getByRole('button', { name: '进入管理后台' }).click();
+            await page.waitForURL(/\/dashboard\/dashboard$/u);
+            await page
+                .locator('h1')
+                .filter({ hasText: /^平台管理中心/u })
+                .waitFor();
         });
     });
 
