@@ -118,7 +118,7 @@ test('a current client still requires an older Admin preview to cover client CSS
     );
 });
 
-test('GitHub evidence reads retry one transient HTTP failure without retrying invalid proof or client errors', () => {
+test('GitHub evidence reads retry transient HTTP and network failures without retrying client errors', () => {
     const delays = [];
     let calls = 0;
     const request = () => {
@@ -150,6 +150,7 @@ test('GitHub evidence reads retry one transient HTTP failure without retrying in
         assert.equal(attempts, 1);
     }
     let transientAttempts = 0;
+    const transientDelays = [];
     assert.throws(() =>
         requestGitHubApi(
             'repos/owner/repo/pulls/7',
@@ -157,10 +158,31 @@ test('GitHub evidence reads retry one transient HTTP failure without retrying in
                 transientAttempts++;
                 throw Object.assign(new Error('still unavailable'), { stderr: 'gh: HTTP 504' });
             },
-            delay => assert.equal(delay, 1000),
+            delay => transientDelays.push(delay),
         ),
     );
-    assert.equal(transientAttempts, 2);
+    assert.equal(transientAttempts, 3);
+    assert.deepEqual(transientDelays, [1000, 2000]);
+
+    let networkAttempts = 0;
+    const networkDelays = [];
+    assert.deepEqual(
+        requestGitHubApi(
+            'repos/owner/repo/actions/runs?status=completed&per_page=100',
+            () => {
+                networkAttempts++;
+                if (networkAttempts < 3)
+                    throw Object.assign(new Error('network unavailable'), {
+                        stderr: 'Get "https://api.github.com": net/http: TLS handshake timeout',
+                    });
+                return '{"workflow_runs":[]}';
+            },
+            delay => networkDelays.push(delay),
+        ),
+        { workflow_runs: [] },
+    );
+    assert.equal(networkAttempts, 3);
+    assert.deepEqual(networkDelays, [1000, 2000]);
 });
 
 test('a previous PR does not cover additional undeployed backend changes', () => {
@@ -380,7 +402,13 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     };
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
-        if (endpoint.endsWith('/actions/runs?status=completed&per_page=100')) return { workflow_runs: runs };
+        const workflowMatch = /\/actions\/workflows\/([^/]+)\/runs\?status=completed&per_page=100$/u.exec(
+            endpoint,
+        );
+        if (workflowMatch)
+            return {
+                workflow_runs: runs.filter(run => run.path.endsWith(`/${workflowMatch[1]}`)),
+            };
         if (endpoint.includes('/git/commits/'))
             return { tree: { sha: endpoint.endsWith(targetSha) ? 'target-tree' : 'source-tree' } };
         const artifacts = /\/actions\/runs\/(\d+)\/artifacts/u.exec(endpoint);
@@ -583,7 +611,7 @@ test('historical input mismatches are rejected locally without per-run PR or art
     };
     const result = await findInputCoverage(fixture);
     assert.equal(result.reused.length, 0);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 4);
     assert.ok(calls.every(endpoint => !endpoint.includes('/pulls/') && !endpoint.includes('/artifacts')));
 });
 

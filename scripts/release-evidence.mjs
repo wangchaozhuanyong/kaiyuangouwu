@@ -111,15 +111,17 @@ export function requestGitHubApi(
     request = execFileSync,
     pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
 ) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return JSON.parse(
                 request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
             );
         } catch (error) {
-            const transient = /gh: HTTP (?:429|5\d\d)\b/u.test(String(error?.stderr ?? ''));
-            if (attempt === 1 || !transient) throw error;
-            pause(1000);
+            const transient = /gh: HTTP (?:429|5\d\d)\b|TLS handshake timeout|connection reset by peer/u.test(
+                String(error?.stderr ?? ''),
+            );
+            if (attempt === 2 || !transient) throw error;
+            pause(1000 * (attempt + 1));
         }
     }
     throw new Error('Unreachable GitHub API retry state');
@@ -190,7 +192,15 @@ export async function findInputCoverage({
     );
     const reused = [];
     let anchor;
-    let runs = api(`repos/${repository}/actions/runs?status=completed&per_page=100`).workflow_runs;
+    // Other Actions workflows can fill the repository-wide first page, or leave it stale.
+    // Read only workflows that can produce trusted CI evidence.
+    let runs = ['build_and_test.yml', 'production_release.yml', 'deploy_storefront_fast_lane.yml']
+        .flatMap(
+            workflow =>
+                api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=100`)
+                    .workflow_runs,
+        )
+        .sort((left, right) => right.id - left.id);
     if (includeRunId) runs = [api(`repos/${repository}/actions/runs/${includeRunId}`), ...runs];
     const seen = new Set();
     for (const run of runs) {
