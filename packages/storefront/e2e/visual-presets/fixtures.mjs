@@ -6,6 +6,13 @@ const image =
             '<circle cx="970" cy="260" r="170" fill="#e9dec8"/>' +
             '<path d="M680 600L830 100 1120 610" fill="#b29b74"/></svg>',
     );
+const quickLinkImage =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">' +
+            '<rect width="64" height="64" fill="#cabc9c"/>' +
+            '<circle cx="32" cy="32" r="18" fill="#e9dec8"/></svg>',
+    );
 const wideHeroImage =
     'data:image/svg+xml,' +
     encodeURIComponent(
@@ -180,7 +187,7 @@ const quickLinksBlock = {
         id: `qa-quick-link-${position}`,
         enabled: true,
         position,
-        imageUrl: null,
+        imageUrl: position === 0 ? quickLinkImage : null,
         targetType,
         targetValue,
         settings: {},

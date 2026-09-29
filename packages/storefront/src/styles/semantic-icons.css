@@ -41,6 +41,10 @@
     box-shadow: none;
 }
 
+:is(.quick-grid, .proto-tool-left) .colorful-icon-img-wrap {
+    border-radius: var(--skin-control-radius);
+}
+
 :is(
         .section-header-icon-pill,
         .colorful-icon-badge,
