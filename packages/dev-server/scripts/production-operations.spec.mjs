@@ -265,6 +265,16 @@ void test('inspection forwards only fixed query failure codes and never raw stde
         operations.storefrontInspectionFailure({ stderr: `PRIVATE_ERROR\n${publishedFailure}\n` }),
         publishedFailure,
     );
+    assert.equal(
+        operations.storefrontInspectionFailure({
+            stderr: 'Shop API Channel mismatch\n\nprivate channel IDs',
+        }),
+        'STOREFRONT_CONFIGURATION_CHECK_FAILED reason=SHOP_CHANNEL_MISMATCH',
+    );
+    assert.equal(
+        operations.storefrontInspectionFailure({ stderr: 'Storefront operational state is missing\n' }),
+        'STOREFRONT_CONFIGURATION_CHECK_FAILED reason=OPERATIONAL_STATE_MISSING',
+    );
     for (const stderr of [
         'PRIVATE_ERROR',
         `${failure} PRIVATE_SECRET`,
