@@ -121,6 +121,27 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         );
     }, [previewEmbedded, previewSession, renderedRouteName]);
 
+    // A draft Channel rejects the public configuration request. End the loading shell as soon as
+    // that definitive response arrives, without showing another store's cached brand or catalog.
+    if (!previewEmbedded && state.storefrontUnavailable) {
+        return (
+            <main className="fatal-error-page" role="status">
+                <span className="fatal-error-mark" aria-hidden="true">
+                    ◇
+                </span>
+                <h1>{isZh ? '店铺暂未开放' : 'Store not open yet'}</h1>
+                <p>
+                    {isZh
+                        ? '店铺目前无法提供商品浏览与下单服务，请稍后再来。'
+                        : 'Products and checkout are unavailable for this store right now. Please check back later.'}
+                </p>
+                <button type="button" onClick={() => window.location.reload()}>
+                    {isZh ? '重新检查' : 'Check again'}
+                </button>
+            </main>
+        );
+    }
+
     return (
         <StorefrontContext.Provider value={effectiveStorefrontContext}>
             <DesktopLayoutContext.Provider value={desktop}>

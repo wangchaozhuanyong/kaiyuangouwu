@@ -2,6 +2,7 @@ import { dehydrate, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api';
+import { ShopApiGraphQlError } from './api/helpers';
 import {
     createStorefrontQueryClient,
     LEGACY_PUBLIC_QUERY_CACHE_KEYS,
@@ -100,6 +101,9 @@ describe('public React Query session cache', () => {
 
     it('does not retry a request after the server timeout', () => {
         expect(storefrontQueryRetry(0, new ShopApiTimeoutError('timeout'))).toBe(false);
+        expect(storefrontQueryRetry(0, new ShopApiGraphQlError(['not available'], 200, 'FORBIDDEN'))).toBe(
+            false,
+        );
         expect(storefrontQueryRetry(0, new Error('network'))).toBe(true);
         expect(storefrontQueryRetry(1, new Error('network'))).toBe(false);
     });

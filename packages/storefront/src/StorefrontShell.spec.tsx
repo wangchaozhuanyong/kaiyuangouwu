@@ -62,6 +62,7 @@ describe('catalog rendering boundary', () => {
             customer: null,
             customerLoadState: 'ready',
             retryAccount: vi.fn(),
+            storefrontUnavailable: false,
             ...overrides,
         };
         state.storefrontContextValue = {
@@ -105,6 +106,13 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).not.toContain('SIGN_IN_FORM');
         expect(element.textContent).toContain('PAGE_CONTENT');
         expect(element.textContent).toContain('CATALOG_NAVIGATION');
+    });
+    it('shows a clear closed-store state when the public configuration is forbidden', () => {
+        render({ storefrontUnavailable: true });
+        expect(element.textContent).toContain('店铺暂未开放');
+        expect(element.textContent).not.toContain('PAGE_CONTENT');
+        expect(element.textContent).not.toContain('CATALOG_NAVIGATION');
+        expect(element.querySelector('button')).not.toBeNull();
     });
     it('shows desktop browsing navigation to guests while keeping account navigation private', () => {
         viewport.desktop = true;
