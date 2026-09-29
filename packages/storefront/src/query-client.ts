@@ -1,6 +1,7 @@
 import { DehydratedState, QueryClient, QueryKey, dehydrate, hydrate } from '@tanstack/react-query';
 
 import { ShopApiTimeoutError } from './api';
+import { storefrontErrorCode } from './storefront-errors';
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
 // Periodic refresh remains a fallback when the public event stream is disconnected.
@@ -18,7 +19,11 @@ export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = [
 const PUBLIC_QUERY_CACHE_VERSION = 6;
 
 export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
-    return !(error instanceof ShopApiTimeoutError) && failureCount < 1;
+    return (
+        !(error instanceof ShopApiTimeoutError) &&
+        storefrontErrorCode(error) !== 'FORBIDDEN' &&
+        failureCount < 1
+    );
 }
 
 interface PersistedPublicQueryCache {
