@@ -12,6 +12,10 @@ const managedRoots = [
 ];
 const mediaExtension = /\.(?:avif|gif|jpe?g|png|svg|webp)$/iu;
 const designOnlyAssets = new Set([
+    // Historical auth campaign artwork is retained for source history, never used as a shared fallback.
+    'packages/storefront/src/assets/storefront/auth-ai-bridge-hero.jpg',
+    'packages/storefront/src/assets/storefront/auth-login-ai-campaign-v2.jpg',
+    'packages/storefront/src/assets/storefront/auth-register-ai-campaign-v2.jpg',
     'packages/storefront/src/assets/brand/moyao-ai/icon-monochrome.svg',
     'packages/storefront/src/assets/storefront/auth-login-ai-gateway.jpg',
     'packages/storefront/src/assets/storefront/auth-register-ai-workspace.jpg',

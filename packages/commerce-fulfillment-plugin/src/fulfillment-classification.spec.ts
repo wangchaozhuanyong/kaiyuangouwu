@@ -72,13 +72,12 @@ describe('hasCompleteShippingAddress', () => {
         phoneNumber: '13800000000',
     } as any;
 
-    it('accepts a complete mainland China address for the China channel', () => {
-        const ctx = { channel: { code: 'cn-mainland' } } as any;
-        expect(hasCompleteShippingAddress(ctx, completeAddress)).toBe(true);
+    it('accepts a complete shipping address', () => {
+        expect(hasCompleteShippingAddress(completeAddress)).toBe(true);
     });
 
-    it('rejects an address whose country does not match the active channel', () => {
-        const ctx = { channel: { code: 'my-malaysia' } } as any;
-        expect(hasCompleteShippingAddress(ctx, completeAddress)).toBe(false);
+    it('leaves destination eligibility to configured shipping methods', () => {
+        expect(hasCompleteShippingAddress({ ...completeAddress, countryCode: 'MY' })).toBe(true);
+        expect(hasCompleteShippingAddress({ ...completeAddress, postalCode: '' })).toBe(false);
     });
 });

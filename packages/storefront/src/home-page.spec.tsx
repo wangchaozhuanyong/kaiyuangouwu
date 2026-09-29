@@ -1009,7 +1009,7 @@ describe('HomePage desktop intro layout', () => {
         expect(frames[0]).toContain('aspect-ratio:3');
     });
 
-    it('keeps the desktop service row when a store has no published guarantee block', () => {
+    it('shows the service row only when a store publishes a guarantee block', () => {
         const contentBlocks = [
             positionedHeroBlock,
             {
@@ -1020,10 +1020,9 @@ describe('HomePage desktop intro layout', () => {
         const configuredBlockTypes = ['HERO', 'QUICK_LINKS'] as HomePageProps['configuredBlockTypes'];
         const desktopMarkup = renderHome({ contentBlocks, configuredBlockTypes }, true);
         expect(desktopMarkup).toContain('home-intro-grid is-grouped-intro');
-        expect(desktopMarkup).toContain('class="home-trust-bar"');
-        expect(desktopMarkup.match(/class="home-trust-item"/g)).toHaveLength(4);
-        expect(desktopMarkup).toContain('商品信息');
-        expect(desktopMarkup).toContain('查看规格、价格与库存');
+        expect(desktopMarkup).not.toContain('class="home-trust-bar"');
+        expect(desktopMarkup).not.toContain('商品信息');
+        expect(desktopMarkup).not.toContain('查看规格、价格与库存');
         expect(desktopMarkup).not.toContain('正品保障');
         expect(renderHome({ contentBlocks })).not.toContain('class="home-trust-bar"');
         // Configured but unpublished means the merchant hid or scheduled this module.

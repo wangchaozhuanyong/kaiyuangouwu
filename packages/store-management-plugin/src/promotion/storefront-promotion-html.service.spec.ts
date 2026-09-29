@@ -1,10 +1,7 @@
 import { load } from 'cheerio';
-import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { PROMOTION_VISUAL_SCRIPT, PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import {
-    MAX_PROMOTION_SOURCE_BYTES,
     StorefrontPromotionBindings,
     StorefrontPromotionHtmlService,
 } from './storefront-promotion-html.service';
@@ -115,249 +112,44 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('测试商店 &lt;b&gt;');
     });
 
-    it('provides a responsive default page with semantic store bindings', () => {
-        expect(service.defaultTemplate).toContain('min-height:100dvh');
-        expect(service.defaultTemplate).toContain('data-bind-src="store.logoUrl"');
-        expect(service.defaultTemplate).toContain('data-bind-text="store.name"');
-        expect(service.defaultTemplate).toContain('data-promo-header');
-        expect(service.defaultTemplate).toContain('data-promo-motion');
-        expect(service.defaultTemplate).toContain('data-promo-reveal');
-        expect(service.defaultTemplate).toContain('promo-capability-channels');
-        expect(service.defaultTemplate).toContain('promo-process-path');
-        expect(service.defaultTemplate).toContain('promo-faq-item');
-        expect(service.defaultTemplate).toContain('data-promo-carousel');
-        expect(service.defaultTemplate).toContain('promo-hero-art');
-        expect(service.defaultTemplate.match(/data-promo-slide role/g)).toHaveLength(3);
-        expect(service.defaultTemplate.match(/data-promo-slide-button=/g)).toHaveLength(3);
-        expect(service.defaultTemplate).not.toContain('data-promo-value-item');
-        expect(service.defaultTemplate).not.toContain('promo-value-module');
-        expect(service.defaultTemplate).not.toContain('data-promo-progress');
-        expect(service.defaultTemplate).not.toContain('data-promo-carousel-toggle');
-        expect(service.defaultTemplate).toContain('data-promo-carousel-status');
-        expect(service.defaultTemplate).toContain('{{promo.metaTitle}}');
-        expect(service.defaultTemplate).toContain('{{promo.finalTitle}}');
-        expect(service.defaultTemplate).toContain('--amber:#8B5CF6');
-        expect(service.defaultTemplate).toContain('--amber-bright:#22D3EE');
-        expect(service.defaultTemplate).toContain('MOYAO AI Network Stage');
-        expect(service.defaultTemplate).toContain('moyao-ai-network-stage-v27.webp');
-        expect(service.defaultTemplate).toContain('moyao-ai-network-stage-mobile-v27.webp');
-        expect(service.defaultTemplate).not.toContain('damatong-obsidian-field-v15.webp');
-        expect(service.defaultTemplate).not.toContain('damatong-lunar-amber-v15.webp');
-        expect(service.defaultTemplate).toContain('data-store-entry');
-        expect(service.defaultTemplate).toContain('promo-mobile-entry');
-        expect(service.defaultTemplate).toContain('prefers-reduced-motion:reduce');
-        expect(service.defaultTemplate).toContain('.promo-hero { min-height:auto; }');
-        expect(service.defaultTemplate).toContain('.promo-hero-inner { min-height:0; padding:68px 0 18px; }');
-        expect(service.defaultTemplate).toContain(
-            '.promo-hero-content { width:100%; display:grid; grid-template-columns:',
-        );
-        expect(service.defaultTemplate).toContain('.promo-hero-intro');
-        expect(service.defaultTemplate).toContain('.promo-hero-panel');
-        expect(service.defaultTemplate).toContain(
-            '.promo-hero-content { width:100%; display:block; text-align:center; }',
-        );
-        expect(service.defaultTemplate).not.toContain('min-height:max(720px,calc(100svh - 64px))');
-        expect(service.defaultTemplate).not.toContain('min-width:320px');
-        expect(service.defaultTemplate).not.toContain('.promo-value-rail');
-        expect(service.defaultTemplate).not.toContain('<canvas');
-        expect(service.defaultTemplate).not.toContain('data-promo-signal-canvas');
-        expect(service.defaultTemplate).not.toContain('promo-visual-canvas');
-        expect(service.defaultTemplate).toContain('--section-top:clamp(76px,6.4vw,108px)');
-        expect(service.defaultTemplate).toContain('--section-bottom:clamp(56px,4.8vw,82px)');
-        expect(service.defaultTemplate).toContain('--section-top:48px; --section-bottom:32px');
-        expect(service.defaultTemplate).toContain('.promo-section-title { max-width:18ch; margin-inline:0;');
-        expect(service.defaultTemplate).toContain('.promo-faq-heading .promo-section-title');
-        expect(service.defaultTemplate).toContain('.promo-final h2 { max-width:15ch; margin-inline:auto;');
-        expect(service.defaultTemplate).toContain(
-            '.promo-footer { min-height:0; align-items:center; justify-content:center;',
-        );
-        expect(service.defaultTemplate).toContain(
-            'padding:30px 0 48px; border-top:1px solid var(--line); text-align:center;',
-        );
-        expect(service.defaultTemplate).toContain(
-            '.promo-footer-meta,.promo-footer-nav { width:100%; justify-content:center; }',
-        );
-        expect(service.defaultTemplate).toContain('.promo-faq-item.is-faq-closing summary::after');
-        expect(service.defaultTemplate).not.toContain('promo-scene-index');
-        expect(service.defaultTemplate).not.toContain('promo-step-number');
-        expect(service.defaultTemplate).not.toContain('promo-trust-number');
-        expect(service.defaultTemplate).toContain('promo-trust-mark');
-        expect(service.defaultTemplateVersion).toBe(27);
-        expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
-        expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThanOrEqual(58 * 1024);
-    });
-
-    it('renders the configured MOYAO AI brand name and storefront logo', () => {
+    it('renders the shared unconfigured page without a store-specific campaign', () => {
         const html = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
-            bindings: {
-                ...bindings,
-                'store.name': 'MOYAO AI｜模钥',
-                'store.logoUrl': '/storefront/logo.svg',
-            },
-            entryTicket: 'signed-ticket',
-        });
-
-        expect(html).toContain('aria-label="MOYAO AI｜模钥"');
-        expect(html).toContain('class="promo-brand-mark"');
-        expect(html).toContain('src="/storefront/logo.svg"');
-        expect(html).toContain('data-bind-text="store.name">MOYAO AI｜模钥</span>');
-        expect(html).toContain('<link rel="icon" href="/storefront/logo.svg">');
-    });
-
-    it('renders a crawl-safe business introduction without live catalog data', () => {
-        const html = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
+            contentType: 'MARKDOWN',
+            source: '# {{store.name}}\n\n{{store.description}}',
             bindings,
             entryTicket: 'signed-ticket',
         });
 
         expect(html).toContain('测试商店 &lt;b&gt;');
-        expect(html).toContain('AI 效率工具');
-        expect(html).toContain('AI 服务订阅');
-        expect(html).toContain('低至 0.1 倍起');
-        expect(html).toContain('不同模型、通道与当前价格以服务中心为准');
-        expect(html).toContain('具体可用内容、当前价格与支持范围以服务中心页面为准');
-        expect(html).toContain('查看可用服务');
-        expect(html).toContain('可以直接在这里完成购买或交易吗');
-        expect(html.match(/推广页只用于介绍服务方向/gu)).toHaveLength(1);
-        expect(html).toContain('content="index,nofollow,max-image-preview:large"');
-        expect(html).not.toContain('旧品牌');
-        expect(html).not.toContain('CloudBridge');
-        expect(html).not.toContain('推广介绍层');
-        expect(html).not.toContain('主站业务层');
-        expect(html).not.toContain('不展示商品列表');
-        expect(html).not.toContain('featuredProduct');
-        expect(html).not.toContain('data-bind-entry-product');
-        expect(html).not.toContain('name="destination" value="product:');
+        expect(html).toContain('店铺简介');
+        expect(html).toContain('data-store-entry');
+        expect(html).not.toContain('MOYAO AI');
+        expect(html).not.toContain('moyao-ai-network-stage');
     });
 
-    it('renders the default page as one language at a time', () => {
-        const englishHtml = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
-            bindings: {
-                ...bindings,
-                'store.name': 'MOYAO AI',
-                'store.description': 'AI digital services',
-                'store.shareTitle': 'Explore AI services',
-                'store.shareDescription': 'Clear AI digital services for every workflow',
-                'store.language': 'en',
-            },
-            entryTicket: 'signed-ticket',
-        });
-        const chineseHtml = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
+    it('uses neutral entry text when the editor has not supplied a label', () => {
+        const zh = service.render({
+            contentType: 'MARKDOWN',
+            source: '# {{store.name}}',
             bindings,
             entryTicket: 'signed-ticket',
         });
-
-        expect(englishHtml).toContain('AI Digital Services');
-        expect(englishHtml).toContain('View available services');
-        expect(englishHtml).toContain('AI subscriptions');
-        expect(englishHtml).toContain('AI usage credits');
-        expect(englishHtml).toContain('Entrepreneurship');
-        expect(englishHtml).toContain('Coverage across workflows');
-        expect(englishHtml).not.toContain('Token credits');
-        expect(englishHtml).not.toContain('查看可用服务');
-        expect(englishHtml).not.toContain('服务能力');
-        expect(englishHtml).not.toContain('{{promo.');
-        expect(chineseHtml).toContain('AI 数字服务');
-        expect(chineseHtml).toContain('查看可用服务');
-        expect(chineseHtml).toContain('AI 服务订阅');
-        expect(chineseHtml).toContain('低至 0.1 倍起');
-        expect(chineseHtml).toContain('个人创业');
-        expect(chineseHtml).toContain('覆盖多种工作场景');
-        expect(chineseHtml).not.toContain('View available services');
-        expect(chineseHtml).not.toContain('SERVICE CAPABILITIES');
-        expect(chineseHtml).not.toContain('AI Digital Services');
-        expect(chineseHtml).not.toContain('Token');
-        expect(chineseHtml).not.toContain('TKN');
-        expect(chineseHtml).not.toContain('TOOL');
-        expect(chineseHtml).not.toContain('Assistant');
-        expect(chineseHtml).not.toContain('Coding');
-        expect(chineseHtml).not.toContain('Creative');
-        expect(chineseHtml).not.toContain('{{promo.');
-    });
-
-    it('appends only the trusted motion controller to pages that opt into promotion motion', () => {
-        const html = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
-            bindings,
+        const en = service.render({
+            contentType: 'MARKDOWN',
+            source: '# {{store.name}}',
+            bindings: { ...bindings, 'store.language': 'en' },
             entryTicket: 'signed-ticket',
         });
+        expect(zh).toContain('>进入店铺</button>');
+        expect(en).toContain('>Enter store</button>');
+        expect(zh).not.toContain('进入服务中心');
+        expect(en).not.toContain('Enter service center');
+    });
 
-        expect(html.match(/data-storefront-promotion-visual/g)).toHaveLength(1);
-        expect(html).toContain(PROMOTION_VISUAL_SCRIPT);
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('${JSON.stringify');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("page.setAttribute('data-promo-motion-state','ready')");
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain("getContext('2d'");
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('webgl');
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('canvas');
-        // Section navigation uses one passive, frame-coalesced position update.
-        expect(PROMOTION_VISUAL_SCRIPT).toContain(
-            "window.addEventListener('scroll',scheduleNavigation,{passive:true})",
+    it('rejects unpublished legacy promo tokens before a stale draft can go live', () => {
+        expect(() => service.validateSource('HTML', '<h1>{{promo.heroLead}}</h1>')).toThrow(
+            '旧版推广页占位符已停用',
         );
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('const slideInterval=3000');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("form.addEventListener('submit'");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("fetch('/promo',{cache:'no-store'");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('HTMLFormElement.prototype.submit.call(form)');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('carouselTimer=setTimeout');
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateProgress');
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateToggle');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('interactionPaused');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('manualHold=10000');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("carousel.addEventListener('mouseenter'");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("carousel.addEventListener('focusin'");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('data-promo-carousel-status');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain('const animateFaq=(item,opening)=>');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("duration:340,easing:'cubic-bezier(.22,1,.36,1)'");
-        expect(PROMOTION_VISUAL_SCRIPT).toContain("typeof Element.prototype.animate!=='function'");
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('valueItems');
-        expect(PROMOTION_VISUAL_SCRIPT).toContain(
-            "carouselNav.addEventListener('keydown',handleCarouselKeys)",
-        );
-        expect(html).toContain('测试商店 &lt;b&gt;');
-
-        const renderedScript = html.match(
-            /<script data-storefront-promotion-visual="">([\s\S]*?)<\/script>/u,
-        )?.[1];
-        expect(renderedScript).toBe(PROMOTION_VISUAL_SCRIPT);
-        expect(
-            createHash('sha256')
-                .update(renderedScript ?? '')
-                .digest('base64'),
-        ).toBe(PROMOTION_VISUAL_SCRIPT_SHA256);
-    });
-
-    it('keeps the bundled campaign stage independent from the configured store logo', () => {
-        const withLogo = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
-            bindings,
-            entryTicket: 'signed-ticket',
-        });
-        const withoutLogo = service.render({
-            contentType: 'HTML',
-            source: service.defaultTemplate,
-            bindings: { ...bindings, 'store.logoUrl': '' },
-            entryTicket: 'signed-ticket',
-        });
-
-        expect(withLogo).toContain('class="promo-brand-mark"');
-        expect(withLogo).toContain('data-bind-text="store.name">测试商店 &lt;b&gt;</span>');
-        expect(withoutLogo).not.toContain('class="promo-brand-mark"');
-        expect(withoutLogo).toContain('data-bind-text="store.name">测试商店 &lt;b&gt;</span>');
-        expect(withoutLogo).toContain('data-promo-motion');
-        expect(withoutLogo).toContain('/storefront/promo/moyao-ai-network-stage-v27.webp');
-        expect(withoutLogo).toContain('/storefront/promo/moyao-ai-network-stage-mobile-v27.webp');
-        expect(withoutLogo).not.toContain('<canvas');
-        expect(withoutLogo).toContain('<picture class="promo-hero-art"');
     });
 
     it('normalizes custom page zoom and keyboard focus accessibility', () => {

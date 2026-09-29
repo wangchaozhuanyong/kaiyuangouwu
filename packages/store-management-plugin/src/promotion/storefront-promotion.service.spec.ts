@@ -2,6 +2,38 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontPromotionService } from './storefront-promotion.service';
 
+describe('promotion defaults across channels', () => {
+    it('uses shared neutral content until a channel publishes its own page', async () => {
+        const render = vi.fn(() => '<html></html>');
+        const service = new StorefrontPromotionService({} as never, {} as never, { render } as never);
+        const findPage = vi.spyOn(service as any, 'findPage');
+        vi.spyOn(service as any, 'getBindings').mockResolvedValue({ 'store.name': '店铺' });
+        vi.spyOn(service as any, 'getPublicUrl').mockResolvedValue('/promotion');
+
+        findPage.mockResolvedValueOnce(null);
+        await service.renderPublished({} as never, 'ticket');
+        expect(render).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                contentType: 'MARKDOWN',
+                source: '# {{store.name}}\n\n{{store.description}}',
+            }),
+        );
+
+        findPage.mockResolvedValueOnce({
+            isCustomized: true,
+            publishedContentType: 'HTML',
+            publishedSource: '<h1>Managed page</h1>',
+        });
+        await service.renderPublished({} as never, 'ticket');
+        expect(render).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                contentType: 'HTML',
+                source: '<h1>Managed page</h1>',
+            }),
+        );
+    });
+});
+
 describe('promotion image replacement review', () => {
     function guardedFixture() {
         const page = {

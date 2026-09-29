@@ -335,7 +335,7 @@ function supportAccountCopy(channel: string, required: boolean): { label: string
     if (channel === 'TELEGRAM') {
         return {
             label: `Telegram 用户名${suffix}`,
-            placeholder: '例如 flashcast_support（不含 @）',
+            placeholder: '例如 store_support（不含 @）',
         };
     }
     if (channel === 'QQ_GROUP') return { label: `QQ群号${suffix}`, placeholder: '用于前台显示群号' };

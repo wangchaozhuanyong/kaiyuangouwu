@@ -42,12 +42,6 @@ import {
 import { isReferralClientFeatureEnabled } from './referral-client-feature';
 import { storefrontWebpUrl } from './responsive-image';
 import { storefrontErrorMessage } from './storefront-errors';
-import {
-    AUTH_LOGIN_HERO_FALLBACK_IMAGE,
-    AUTH_LOGIN_HERO_IMAGE,
-    AUTH_REGISTER_HERO_FALLBACK_IMAGE,
-    AUTH_REGISTER_HERO_IMAGE,
-} from './storefront-images';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import './styles/auth-shell.css';
@@ -384,7 +378,6 @@ export function LoginPage({
         <AuthLayout
             title={isZh ? '登录' : 'Sign in'}
             heroVariant="login"
-            showDefaultHero
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
@@ -666,7 +659,6 @@ export function RegisterPage({
         <AuthLayout
             title={isZh ? '注册' : 'Create account'}
             heroVariant="register"
-            showDefaultHero
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
@@ -1355,7 +1347,6 @@ function AuthLayout({
     storefrontName,
     logoUrl,
     heroContent,
-    showDefaultHero = false,
     onBack,
     children,
 }: {
@@ -1365,7 +1356,6 @@ function AuthLayout({
     storefrontName: string;
     logoUrl?: string | null;
     heroContent?: StorefrontContentBlock;
-    showDefaultHero?: boolean;
     onBack: () => void;
     children: ReactNode;
 }) {
@@ -1386,22 +1376,8 @@ function AuthLayout({
     const heroImageContrast = useImageTextContrast(managedHeroSrc);
     const heroImageTone = heroImageContrast.tone;
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
-    const defaultHeroSrc = showDefaultHero
-        ? authVisualVariant === 'login'
-            ? AUTH_LOGIN_HERO_IMAGE
-            : authVisualVariant === 'register'
-              ? AUTH_REGISTER_HERO_IMAGE
-              : null
-        : null;
-    const defaultHeroFallbackSrc = showDefaultHero
-        ? authVisualVariant === 'login'
-            ? AUTH_LOGIN_HERO_FALLBACK_IMAGE
-            : authVisualVariant === 'register'
-              ? AUTH_REGISTER_HERO_FALLBACK_IMAGE
-              : null
-        : null;
-    const heroImageSrc = managedHeroSrc ? authOriginalImageUrl(managedHeroSrc) : defaultHeroSrc;
-    const heroFallbackSrc = managedHeroSrc || defaultHeroFallbackSrc;
+    const heroImageSrc = managedHeroSrc ? authOriginalImageUrl(managedHeroSrc) : null;
+    const heroFallbackSrc = managedHeroSrc;
 
     return (
         <main
@@ -1455,7 +1431,7 @@ function AuthLayout({
                                             />
                                         ) : (
                                             <span className="auth-brand-mark" aria-hidden="true">
-                                                桥
+                                                <ShoppingBag aria-hidden="true" />
                                             </span>
                                         )}
                                         <strong>{storefrontName}</strong>

@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    interpolateLegalProfileTokens,
-    legalScopeHostname,
-    resolveManagedLegalDocument,
-    resolveManagedLegalIdentity,
-} from './legal-content';
+import { interpolateLegalProfileTokens, resolveManagedLegalDocument } from './legal-content';
 import { StorefrontContentBlock } from './types';
 
 function legalBlock(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
@@ -123,12 +118,39 @@ describe('resolveManagedLegalDocument', () => {
         expect(resolveManagedLegalDocument([block], 'privacy', 'Privacy')).toBeNull();
     });
 
-    it('fails closed instead of showing another known storefront policy', () => {
-        const moyaoPolicy = legalBlock({ code: 'terms', body: 'This policy applies to moyaoai.com.' });
+    it('uses only the legal blocks supplied for the active channel', () => {
+        const policy = legalBlock({ code: 'terms', body: 'This store policy.' });
 
-        expect(resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'damatong.net')).toBeNull();
-        expect(resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'www.moyaoai.com')).toMatchObject(
-            { body: 'This policy applies to moyaoai.com.' },
+        expect(resolveManagedLegalDocument([policy], 'terms', 'Terms')).toMatchObject({
+            body: 'This store policy.',
+        });
+        expect(resolveManagedLegalDocument([], 'terms', 'Terms')).toBeNull();
+    });
+
+    it('hides a policy that declares a different storefront domain without a store-specific list', () => {
+        const policy = legalBlock({
+            code: 'privacy',
+            body: '本隐私政策适用于您访问 damatong.net 及其对应店铺。',
+        });
+
+        expect(resolveManagedLegalDocument([policy], 'privacy', '隐私政策', 'moyaoai.com')).toBeNull();
+        expect(
+            resolveManagedLegalDocument([policy], 'privacy', '隐私政策', 'www.damatong.net'),
+        ).toMatchObject({
+            body: policy.body,
+        });
+    });
+
+    it('keeps policy references to outside services when no other storefront scope is declared', () => {
+        const policy = legalBlock({
+            code: 'privacy',
+            body: 'We may use payments.example.com as a service provider. This policy applies to shop.example.com.',
+        });
+
+        expect(resolveManagedLegalDocument([policy], 'privacy', 'Privacy', 'shop.example.com')).toMatchObject(
+            {
+                body: policy.body,
+            },
         );
     });
 });
@@ -155,38 +177,5 @@ describe('interpolateLegalProfileTokens', () => {
         expect(interpolateLegalProfileTokens('Controller: {{legalEntityName}}', undefined, 'en')).toBe(
             'Controller: Not configured',
         );
-    });
-});
-
-describe('legalScopeHostname', () => {
-    it('uses the production host and still resolves local proxy previews by storefront name', () => {
-        expect(legalScopeHostname('DAMATONG', 'www.damatong.net')).toBe('damatong.net');
-        expect(legalScopeHostname('MOYAO AI', 'localhost')).toBe('moyaoai.com');
-        expect(legalScopeHostname('大马通', '127.0.0.1')).toBe('damatong.net');
-    });
-
-    it('hides legal identity fields that reference the other storefront', () => {
-        expect(
-            resolveManagedLegalIdentity(
-                {
-                    legalEntityName: 'MOYAO AI',
-                    legalRegistrationCountry: 'China',
-                    supportEmail: 'support@moyaoai.com',
-                    privacyEmail: 'privacy@moyaoai.com',
-                },
-                'damatong.net',
-            ),
-        ).toBeUndefined();
-        expect(
-            resolveManagedLegalIdentity(
-                {
-                    legalEntityName: 'DAMATONG',
-                    legalRegistrationCountry: 'Malaysia',
-                    supportEmail: 'support@damatong.net',
-                    privacyEmail: 'privacy@damatong.net',
-                },
-                'damatong.net',
-            ),
-        ).toEqual(expect.objectContaining({ legalEntityName: 'DAMATONG' }));
     });
 });

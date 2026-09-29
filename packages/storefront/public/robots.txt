@@ -1,4 +1,2 @@
 User-agent: *
 Disallow: /
-Allow: /promo$
-Sitemap: https://moyaoai.com/sitemap.xml

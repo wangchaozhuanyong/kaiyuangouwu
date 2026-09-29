@@ -630,7 +630,7 @@ function MyStoreProfilePage() {
                                             type="email"
                                             autoComplete="email"
                                             maxLength={254}
-                                            placeholder="support@moyaoai.com"
+                                            placeholder="support@example.com"
                                             value={draft.supportEmail}
                                             onChange={event => update('supportEmail', event.target.value)}
                                         />
@@ -642,7 +642,7 @@ function MyStoreProfilePage() {
                                             type="email"
                                             autoComplete="email"
                                             maxLength={254}
-                                            placeholder="privacy@moyaoai.com"
+                                            placeholder="privacy@example.com"
                                             value={draft.privacyEmail}
                                             onChange={event => update('privacyEmail', event.target.value)}
                                         />

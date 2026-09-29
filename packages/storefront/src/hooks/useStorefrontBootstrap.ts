@@ -147,7 +147,7 @@ export function useStorefrontBootstrap() {
         const config = configQuery.data;
         if (!config) return;
         const nextStorefrontCode = config.code;
-        const configuredMarket = marketForStorefrontConfig(config, market);
+        const configuredMarket = marketForStorefrontConfig(config);
         const currencyConfiguration = config.currencyConfiguration;
         const settlementCurrencyCodes = currencyConfiguration?.availableCurrencyCodes.length
             ? currencyConfiguration.availableCurrencyCodes

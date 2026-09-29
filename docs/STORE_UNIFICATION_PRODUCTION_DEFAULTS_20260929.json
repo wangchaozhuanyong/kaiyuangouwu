@@ -1,0 +1,263 @@
+{
+  "capturedAtUtc": "2026-09-29 07:20:39 UTC",
+  "source": "AWS SSM read-only information_schema.COLUMNS on i-041a146558e432cbf",
+  "table": "referral_poster_template",
+  "inspectedColumns": 42,
+  "changedDefaults": 42,
+  "baselineSha256": "c3399a9087aa45abcfabc7622ff35ccfb6d8196b61de0c8bbe6da9daafcf6bde",
+  "targetSha256": "672f7750302d84399cc2b7b97b5d00e082228a8d4248c120ca71542bc313619f",
+  "columns": [
+    {
+      "name": "ctaTextEn",
+      "current": "Press and hold to enter CloudBridge AI",
+      "target": "Scan the QR code to visit the store",
+      "changeRequired": true
+    },
+    {
+      "name": "ctaTextZh",
+      "current": "长按识别二维码，立即进入云桥 AI",
+      "target": "长按识别二维码，进入店铺",
+      "changeRequired": true
+    },
+    {
+      "name": "featureOneTextEn",
+      "current": "A curated set of AI tools",
+      "target": "Browse products and services",
+      "changeRequired": true
+    },
+    {
+      "name": "featureOneTextZh",
+      "current": "多种 AI 工具任你选",
+      "target": "浏览店铺商品与服务分类",
+      "changeRequired": true
+    },
+    {
+      "name": "featureOneTitleEn",
+      "current": "精选 AI tools",
+      "target": "More choice",
+      "changeRequired": true
+    },
+    {
+      "name": "featureOneTitleZh",
+      "current": "热门工具汇集",
+      "target": "丰富选择",
+      "changeRequired": true
+    },
+    {
+      "name": "featureThreeTextEn",
+      "current": "Friendly help when you need it",
+      "target": "Help with orders and aftercare",
+      "changeRequired": true
+    },
+    {
+      "name": "featureThreeTextZh",
+      "current": "专业客服 贴心服务",
+      "target": "订单与售后问题均可咨询",
+      "changeRequired": true
+    },
+    {
+      "name": "featureThreeTitleEn",
+      "current": "Dedicated support",
+      "target": "Service support",
+      "changeRequired": true
+    },
+    {
+      "name": "featureThreeTitleZh",
+      "current": "专属售后支持",
+      "target": "服务支持",
+      "changeRequired": true
+    },
+    {
+      "name": "featureTwoTextEn",
+      "current": "Get started in a few clicks",
+      "target": "Find a suitable option",
+      "changeRequired": true
+    },
+    {
+      "name": "featureTwoTextZh",
+      "current": "快速开通 省时省心",
+      "target": "查看详情，选择合适方案",
+      "changeRequired": true
+    },
+    {
+      "name": "featureTwoTitleEn",
+      "current": "Fast activation",
+      "target": "Easy shopping",
+      "changeRequired": true
+    },
+    {
+      "name": "featureTwoTitleZh",
+      "current": "便捷开通服务",
+      "target": "轻松选购",
+      "changeRequired": true
+    },
+    {
+      "name": "footerTextEn",
+      "current": "One-stop platform for AI tools and digital services",
+      "target": "Shopping · Orders · Service support",
+      "changeRequired": true
+    },
+    {
+      "name": "footerTextZh",
+      "current": "热门 AI 工具与数字服务一站式平台",
+      "target": "商品选购 · 订单查询 · 服务支持",
+      "changeRequired": true
+    },
+    {
+      "name": "footerTitleEn",
+      "current": "AI that works for you",
+      "target": "Good choices start here",
+      "changeRequired": true
+    },
+    {
+      "name": "footerTitleZh",
+      "current": "让好用的 AI，真正为你所用",
+      "target": "好选择，从这里开始",
+      "changeRequired": true
+    },
+    {
+      "name": "headlineEn",
+      "current": "Popular AI tools\nmade easy",
+      "target": "Discover more\nFind your next favourite",
+      "changeRequired": true
+    },
+    {
+      "name": "headlineZh",
+      "current": "热门 AI 工具\n一站轻松获取",
+      "target": "精选商品与服务\n发现更多好选择",
+      "changeRequired": true
+    },
+    {
+      "name": "qrDescriptionEn",
+      "current": "Tools for work, creativity, learning and code",
+      "target": "See products and service details\nExplore current store offers",
+      "changeRequired": true
+    },
+    {
+      "name": "qrDescriptionZh",
+      "current": "满足多种 AI 使用场景",
+      "target": "查看商品与服务详情\n了解当前店铺活动",
+      "changeRequired": true
+    },
+    {
+      "name": "qrEyebrowEn",
+      "current": "Scan CloudBridge AI",
+      "target": "Explore products and services",
+      "changeRequired": true
+    },
+    {
+      "name": "qrEyebrowZh",
+      "current": "扫码访问云桥 AI",
+      "target": "发现更多商品与服务",
+      "changeRequired": true
+    },
+    {
+      "name": "qrTitleEn",
+      "current": "Discover practical AI services",
+      "target": "Visit our store",
+      "changeRequired": true
+    },
+    {
+      "name": "qrTitleZh",
+      "current": "发现更多实用 AI 服务",
+      "target": "进入店铺看看",
+      "changeRequired": true
+    },
+    {
+      "name": "rewardTextEn",
+      "current": "Earn {rewardRate}% in rewards when a friend makes a purchase",
+      "target": "Invite friends and earn {rewardRate}% rewards\nRewards follow this store’s rules",
+      "changeRequired": true
+    },
+    {
+      "name": "rewardTextZh",
+      "current": "好友成功消费，可获得 {rewardRate}% 奖励用于消费抵扣",
+      "target": "邀请好友消费，可获 {rewardRate}% 奖励\n奖励按店铺规则使用",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneFourEn",
+      "current": "Code",
+      "target": "Orders",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneFourZh",
+      "current": "智能编程",
+      "target": "订单查询",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneOneEn",
+      "current": "Work",
+      "target": "Browse",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneOneZh",
+      "current": "办公提效",
+      "target": "浏览商品",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneThreeEn",
+      "current": "Learn",
+      "target": "Shop",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneThreeZh",
+      "current": "学习辅助",
+      "target": "在线选购",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneTwoEn",
+      "current": "Create",
+      "target": "Details",
+      "changeRequired": true
+    },
+    {
+      "name": "sceneTwoZh",
+      "current": "内容创作",
+      "target": "查看详情",
+      "changeRequired": true
+    },
+    {
+      "name": "serviceTextEn",
+      "current": "Curated products · Easy shopping · Customer support",
+      "target": "Shopping · Orders · Service support",
+      "changeRequired": true
+    },
+    {
+      "name": "serviceTextZh",
+      "current": "好物严选 · 便捷消费 · 售后服务",
+      "target": "商品选购 · 订单查询 · 服务支持",
+      "changeRequired": true
+    },
+    {
+      "name": "siteIntroEn",
+      "current": "ChatGPT, Claude, Gemini, Codex and more\nExplore practical AI services in one place",
+      "target": "Explore products and services that suit your needs.\nBrowse details, shop and track orders in one place.",
+      "changeRequired": true
+    },
+    {
+      "name": "siteIntroZh",
+      "current": "ChatGPT、Claude、Gemini、Codex 等\n热门 AI 服务，一个网站轻松了解与选择",
+      "target": "按需求浏览商品，了解详情与服务说明。\n从选购到订单查询，一个网站轻松完成。",
+      "changeRequired": true
+    },
+    {
+      "name": "titleEn",
+      "current": "One-stop AI service",
+      "target": "Curated products & services",
+      "changeRequired": true
+    },
+    {
+      "name": "titleZh",
+      "current": "AI 工具一站式服务",
+      "target": "精选商品与服务",
+      "changeRequired": true
+    }
+  ]
+}

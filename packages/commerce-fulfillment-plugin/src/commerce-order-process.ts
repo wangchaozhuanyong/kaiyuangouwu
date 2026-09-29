@@ -75,7 +75,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         if (entersPayment && summary.containsPhysicalProducts) {
-            if (!hasCompleteShippingAddress(ctx, order.shippingAddress)) {
+            if (!hasCompleteShippingAddress(order.shippingAddress)) {
                 return ctx.translate('message.commerce-physical-order-requires-complete-address');
             }
             if (!order.shippingLines?.length) {

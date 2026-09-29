@@ -2,6 +2,8 @@ import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Asset, Channel, EntityId, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
+import { referralPosterCopy } from '../referral/referral-poster-presets';
+
 @Entity({ name: 'referral_poster_template' })
 @Index('IDX_referral_poster_template_channel_position', ['channelId', 'position'])
 export class ReferralPosterTemplate extends VendureEntity {
@@ -48,142 +50,142 @@ export class ReferralPosterTemplate extends VendureEntity {
     @EntityId({ nullable: true })
     shareBackgroundAssetId: ID | null;
 
-    @Column({ type: 'varchar', length: 80, default: 'AI 工具一站式服务' })
+    @Column({ type: 'varchar', length: 80, default: referralPosterCopy.titleZh })
     titleZh: string;
 
-    @Column({ type: 'varchar', length: 80, default: 'One-stop AI service' })
+    @Column({ type: 'varchar', length: 80, default: referralPosterCopy.titleEn })
     titleEn: string;
 
-    @Column({ type: 'varchar', length: 180, default: '热门 AI 工具\n一站轻松获取' })
+    @Column({ type: 'varchar', length: 180, default: referralPosterCopy.headlineZh })
     headlineZh: string;
 
-    @Column({ type: 'varchar', length: 180, default: 'Popular AI tools\nmade easy' })
+    @Column({ type: 'varchar', length: 180, default: referralPosterCopy.headlineEn })
     headlineEn: string;
 
-    @Column({ type: 'varchar', length: 220, default: '好友成功消费，可获得 {rewardRate}% 奖励用于消费抵扣' })
+    @Column({ type: 'varchar', length: 220, default: referralPosterCopy.rewardTextZh })
     rewardTextZh: string;
 
     @Column({
         type: 'varchar',
         length: 220,
-        default: 'Earn {rewardRate}% in rewards when a friend makes a purchase',
+        default: referralPosterCopy.rewardTextEn,
     })
     rewardTextEn: string;
 
     @Column({
         type: 'varchar',
         length: 260,
-        default: 'ChatGPT、Claude、Gemini、Codex 等\n热门 AI 服务，一个网站轻松了解与选择',
+        default: referralPosterCopy.siteIntroZh,
     })
     siteIntroZh: string;
 
     @Column({
         type: 'varchar',
         length: 260,
-        default: 'ChatGPT, Claude, Gemini, Codex and more\nExplore practical AI services in one place',
+        default: referralPosterCopy.siteIntroEn,
     })
     siteIntroEn: string;
 
-    @Column({ type: 'varchar', length: 260, default: '好物严选 · 便捷消费 · 售后服务' })
+    @Column({ type: 'varchar', length: 260, default: referralPosterCopy.serviceTextZh })
     serviceTextZh: string;
 
-    @Column({ type: 'varchar', length: 260, default: 'Curated products · Easy shopping · Customer support' })
+    @Column({ type: 'varchar', length: 260, default: referralPosterCopy.serviceTextEn })
     serviceTextEn: string;
 
-    @Column({ type: 'varchar', length: 100, default: '热门工具汇集' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureOneTitleZh })
     featureOneTitleZh: string;
 
-    @Column({ type: 'varchar', length: 100, default: '精选 AI tools' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureOneTitleEn })
     featureOneTitleEn: string;
 
-    @Column({ type: 'varchar', length: 160, default: '多种 AI 工具任你选' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureOneTextZh })
     featureOneTextZh: string;
 
-    @Column({ type: 'varchar', length: 160, default: 'A curated set of AI tools' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureOneTextEn })
     featureOneTextEn: string;
 
-    @Column({ type: 'varchar', length: 100, default: '便捷开通服务' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureTwoTitleZh })
     featureTwoTitleZh: string;
 
-    @Column({ type: 'varchar', length: 100, default: 'Fast activation' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureTwoTitleEn })
     featureTwoTitleEn: string;
 
-    @Column({ type: 'varchar', length: 160, default: '快速开通 省时省心' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureTwoTextZh })
     featureTwoTextZh: string;
 
-    @Column({ type: 'varchar', length: 160, default: 'Get started in a few clicks' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureTwoTextEn })
     featureTwoTextEn: string;
 
-    @Column({ type: 'varchar', length: 100, default: '专属售后支持' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureThreeTitleZh })
     featureThreeTitleZh: string;
 
-    @Column({ type: 'varchar', length: 100, default: 'Dedicated support' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.featureThreeTitleEn })
     featureThreeTitleEn: string;
 
-    @Column({ type: 'varchar', length: 160, default: '专业客服 贴心服务' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureThreeTextZh })
     featureThreeTextZh: string;
 
-    @Column({ type: 'varchar', length: 160, default: 'Friendly help when you need it' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.featureThreeTextEn })
     featureThreeTextEn: string;
 
-    @Column({ type: 'varchar', length: 100, default: '扫码访问 MOYAO AI 模钥' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.qrEyebrowZh })
     qrEyebrowZh: string;
 
-    @Column({ type: 'varchar', length: 100, default: 'Scan MOYAO AI' })
+    @Column({ type: 'varchar', length: 100, default: referralPosterCopy.qrEyebrowEn })
     qrEyebrowEn: string;
 
-    @Column({ type: 'varchar', length: 140, default: '发现更多实用 AI 服务' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.qrTitleZh })
     qrTitleZh: string;
 
-    @Column({ type: 'varchar', length: 140, default: 'Discover practical AI services' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.qrTitleEn })
     qrTitleEn: string;
 
-    @Column({ type: 'varchar', length: 140, default: '满足多种 AI 使用场景' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.qrDescriptionZh })
     qrDescriptionZh: string;
 
-    @Column({ type: 'varchar', length: 140, default: 'Tools for work, creativity, learning and code' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.qrDescriptionEn })
     qrDescriptionEn: string;
 
-    @Column({ type: 'varchar', length: 48, default: '办公提效' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneOneZh })
     sceneOneZh: string;
 
-    @Column({ type: 'varchar', length: 48, default: 'Work' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneOneEn })
     sceneOneEn: string;
 
-    @Column({ type: 'varchar', length: 48, default: '内容创作' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneTwoZh })
     sceneTwoZh: string;
 
-    @Column({ type: 'varchar', length: 48, default: 'Create' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneTwoEn })
     sceneTwoEn: string;
 
-    @Column({ type: 'varchar', length: 48, default: '学习辅助' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneThreeZh })
     sceneThreeZh: string;
 
-    @Column({ type: 'varchar', length: 48, default: 'Learn' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneThreeEn })
     sceneThreeEn: string;
 
-    @Column({ type: 'varchar', length: 48, default: '智能编程' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneFourZh })
     sceneFourZh: string;
 
-    @Column({ type: 'varchar', length: 48, default: 'Code' })
+    @Column({ type: 'varchar', length: 48, default: referralPosterCopy.sceneFourEn })
     sceneFourEn: string;
 
-    @Column({ type: 'varchar', length: 140, default: '长按识别二维码，立即进入 MOYAO AI 模钥' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.ctaTextZh })
     ctaTextZh: string;
 
-    @Column({ type: 'varchar', length: 140, default: 'Press and hold to enter MOYAO AI' })
+    @Column({ type: 'varchar', length: 140, default: referralPosterCopy.ctaTextEn })
     ctaTextEn: string;
 
-    @Column({ type: 'varchar', length: 160, default: '让好用的 AI，真正为你所用' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.footerTitleZh })
     footerTitleZh: string;
 
-    @Column({ type: 'varchar', length: 160, default: 'AI that works for you' })
+    @Column({ type: 'varchar', length: 160, default: referralPosterCopy.footerTitleEn })
     footerTitleEn: string;
 
-    @Column({ type: 'varchar', length: 220, default: '热门 AI 工具与数字服务一站式平台' })
+    @Column({ type: 'varchar', length: 220, default: referralPosterCopy.footerTextZh })
     footerTextZh: string;
 
-    @Column({ type: 'varchar', length: 220, default: 'One-stop platform for AI tools and digital services' })
+    @Column({ type: 'varchar', length: 220, default: referralPosterCopy.footerTextEn })
     footerTextEn: string;
 
     @Column({ type: 'varchar', length: 16, default: '#0E2A63' })

@@ -88,6 +88,7 @@ export {
     StorefrontDataChangedEvent,
     type StorefrontRealtimeTopic,
 } from './realtime/storefront-data-changed.event.js';
+export { referralPosterCopy } from './referral/referral-poster-presets.js';
 export {
     ReferralWalletSpendService,
     type ReserveReferralWalletInput,

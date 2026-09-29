@@ -103,26 +103,18 @@ export function resolveStorefrontLanguage(
     return defaultStorefrontLanguageFor(market);
 }
 
-export function marketForStorefrontConfig(
-    config: StorefrontConfig,
-    currentMarket?: MarketConfig,
-): MarketConfig {
-    const knownMarket = markets[config.code];
-    const countryCode =
-        knownMarket?.countryCode ??
-        config.availableCountries[0]?.code?.toUpperCase() ??
-        currentMarket?.countryCode ??
-        'US';
+export function marketForStorefrontConfig(config: StorefrontConfig): MarketConfig {
+    const countryCode = config.availableCountries[0]?.code?.toUpperCase() ?? 'US';
     const defaultLanguageCode: VendureLanguageCode =
         config.defaultLanguageCode === 'zh_Hans' ? 'zh_Hans' : 'en';
 
     return {
         code: config.code,
         defaultLanguageCode,
-        currencyCode: config.defaultCurrencyCode || knownMarket?.currencyCode || 'USD',
+        currencyCode: config.defaultCurrencyCode || 'USD',
         countryCode,
         locale: defaultLanguageCode === 'zh_Hans' ? 'zh-CN' : localeForCountry(countryCode),
-        label: knownMarket?.label ?? config.code,
+        label: config.availableCountries[0]?.name || countryCode,
     };
 }
 
@@ -132,8 +124,7 @@ export function languageCodeFor(language: StorefrontLanguage): VendureLanguageCo
 
 export function localeFor(language: StorefrontLanguage, market: MarketConfig): string {
     if (language === 'zh') return 'zh-CN';
-    if (market.code === 'cn-mainland') return 'en-US';
-    return market.locale || localeForCountry(market.countryCode);
+    return market.locale.startsWith('en-') ? market.locale : 'en-US';
 }
 
 export function documentLanguageFor(language: StorefrontLanguage): 'zh-CN' | 'en' {
