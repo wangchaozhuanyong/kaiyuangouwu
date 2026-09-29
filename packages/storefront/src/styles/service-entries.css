@@ -127,7 +127,7 @@
 /* Expanded service cards share the same colors and behavior as compact category entries. */
 .is-business-services-main.category-client-plugin-slot {
     display: grid;
-    gap: 12px;
+    gap: 10px;
     padding: 0;
     margin: 0 0 18px;
 }
@@ -155,7 +155,7 @@
     min-width: 0;
     min-height: 0;
     gap: 0 12px;
-    padding: 18px;
+    padding: 12px 16px;
     border: 1px solid
         color-mix(
             in srgb,
@@ -203,11 +203,10 @@
 }
 
 .is-business-services-main .category-client-plugin-copy > span {
-    min-height: 42px;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    min-height: 21px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 13px;
     line-height: 21px;
 }
@@ -222,7 +221,7 @@
     gap: 10px;
     min-width: 0;
     min-height: 44px;
-    margin-top: 16px;
+    margin-top: 10px;
     padding: 10px 14px;
     border-radius: var(--skin-control-radius, 10px);
     font-size: 13px;
@@ -260,6 +259,10 @@
 
 .is-assistance .category-client-plugin-copy > span {
     min-height: 40px;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
     font-size: 12px;
     line-height: 20px;
 }
@@ -273,7 +276,7 @@
 
 @media (min-width: 1024px) {
     .is-business-services-main.category-client-plugin-slot {
-        gap: 18px;
+        gap: 14px;
         margin-bottom: 24px;
     }
 
@@ -284,7 +287,7 @@
     .is-business-services-main .category-client-plugin {
         grid-template-columns: 32px minmax(0, 1fr);
         gap: 0 14px;
-        padding: 24px;
+        padding: 18px 20px;
     }
 
     .is-business-services-main .category-client-plugin-icon {
@@ -293,7 +296,7 @@
     }
 
     .is-business-services-main .category-client-plugin-copy {
-        gap: 10px;
+        gap: 6px;
     }
 
     .is-business-services-main .category-client-plugin-copy strong {
@@ -302,13 +305,13 @@
     }
 
     .is-business-services-main .category-client-plugin-copy > span {
-        min-height: 44px;
+        min-height: 22px;
         font-size: 13px;
         line-height: 22px;
     }
 
     .is-business-services-main .category-client-plugin-action {
-        margin-top: 20px;
+        margin-top: 12px;
         padding: 11px 16px;
     }
 
