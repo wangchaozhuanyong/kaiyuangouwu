@@ -46,7 +46,7 @@ function storeFixture(id = '1') {
     return {
         channelId: id,
         channelCode: `store-${id}`,
-        profile: { id, status: 'DRAFT', primaryDomain: `store-${id}.example.test` },
+        profile: { id, status: 'DRAFT', isOperational: true, primaryDomain: `store-${id}.example.test` },
         settings: { heroAutoplayIntervalSeconds: 6, configuredBlockTypes: ['HERO'] },
         sharing: {
             defaultPosterTemplate: 'white',
@@ -305,7 +305,7 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
 });
 
-void test('draft Channels without a domain are excluded from public storefront inspection', async () => {
+void test('non-operational drafts are excluded even when a merchant has a verified domain', async () => {
     const store = storeFixture();
     const calls = [];
     const request = async (_url, options) => {
@@ -320,6 +320,7 @@ void test('draft Channels without a domain are excluded from public storefront i
                         { id: '0', code: '__default_channel__', token: 'PRIVATE_PLATFORM_TOKEN' },
                         { id: store.channelId, code: store.channelCode, token: 'PRIVATE_STORE_TOKEN' },
                         { id: '3', code: 'new-draft-store', token: 'PRIVATE_DRAFT_TOKEN' },
+                        { id: '4', code: 'merchant-draft', token: 'PRIVATE_MERCHANT_TOKEN' },
                     ],
                 },
             };
@@ -329,6 +330,7 @@ void test('draft Channels without a domain are excluded from public storefront i
                     {
                         id: 'platform-profile',
                         status: 'DRAFT',
+                        isOperational: false,
                         primaryDomain: null,
                         channel: { id: '0', code: '__default_channel__' },
                     },
@@ -336,8 +338,16 @@ void test('draft Channels without a domain are excluded from public storefront i
                     {
                         id: 'draft-profile',
                         status: 'DRAFT',
+                        isOperational: false,
                         primaryDomain: null,
                         channel: { id: '3', code: 'new-draft-store' },
+                    },
+                    {
+                        id: 'merchant-profile',
+                        status: 'DRAFT',
+                        isOperational: false,
+                        primaryDomain: 'merchant.example.test',
+                        channel: { id: '4', code: 'merchant-draft' },
                     },
                 ],
             };
@@ -371,6 +381,10 @@ void test('draft Channels without a domain are excluded from public storefront i
     assert.throws(
         () => assertExpectedProductionScope(result, ['new-draft-store']),
         /required Channel new-draft-store/u,
+    );
+    assert.throws(
+        () => assertExpectedProductionScope(result, ['merchant-draft']),
+        /required Channel merchant-draft/u,
     );
     assert.equal(calls.length, 5);
 });
@@ -471,6 +485,7 @@ void test('active Channel without a verified domain fails before any public read
                                   id: '1',
                                   channel: { id: '1', code: 'configured-store' },
                                   status: 'ACTIVE',
+                                  isOperational: true,
                                   primaryDomain: null,
                               },
                           ],
