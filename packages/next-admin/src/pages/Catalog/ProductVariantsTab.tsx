@@ -46,7 +46,7 @@ export function ProductVariantsTab() {
         setIsQuickCreateSpecOpen,
         handleApplyOptionGroup,
     } = useProductEditor();
-    const quoteOnly = dynamicCustomFieldValues.pricingMode === 'QUOTE_ONLY';
+    const quoteOnly = dynamicCustomFieldValues?.pricingMode === 'QUOTE_ONLY';
 
     if (!isCreateMode && !productData?.product) return null;
     const selectableOptionGroupIds = new Set(
