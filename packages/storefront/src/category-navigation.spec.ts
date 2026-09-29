@@ -128,19 +128,25 @@ describe('category navigation responsive spacing', () => {
         expect(categoryPageSource).toContain('aria-controls="all-primary-categories"');
         expect(categoryPageSource).toContain('aria-expanded={allCategoriesOpen}');
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*36px;[^}]*position:\s*absolute;[^}]*right:\s*calc\(-1 \* var\(--page-section-inset, 8px\)\);/,
+            /\.category-page \.primary-category-strip\s*\{[^}]*--primary-category-toggle-width:\s*36px;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*var\(--primary-category-toggle-width\);[^}]*position:\s*absolute;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-categories-all\s*\{[^}]*right:\s*calc\(-1 \* var\(--page-section-inset, 8px\)\);/,
         );
         expect(stylesheet).toMatch(
             /\.category-page \.primary-categories-all-label\s*\{[^}]*min-height:\s*36px;[^}]*white-space:\s*normal;/,
         );
     });
 
-    it('removes the secondary All count and keeps the sort choices on the product surface', () => {
+    it('removes the secondary All count and keeps the sort choices on the shared control surface', () => {
         expect(categoryPageSource).not.toContain('subcat-side-all');
         expect(categoryPageSource).not.toContain('subcat-side-count');
         expect(categoryPageSource).not.toContain("{isZh ? '综合' : 'Default'}");
         expect(stylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*var\(--category-results-surface\);/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*var\(--control-surface\);/,
         );
     });
 
