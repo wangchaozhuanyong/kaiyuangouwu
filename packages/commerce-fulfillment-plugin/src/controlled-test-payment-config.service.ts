@@ -72,7 +72,12 @@ export class ControlledTestPaymentConfigService implements OnApplicationBootstra
             );
         if (method.checker?.code !== CONTROLLED_TEST_PAYMENT_CHECKER)
             throw new UserInputError('测试支付必须使用测试资格检查器');
-        if (method.enabled && !args.orderCode && !(args.qaSku && args.qaMarker))
+        if (
+            method.enabled &&
+            args.allowAllOrders !== 'true' &&
+            !args.orderCode &&
+            !(args.qaSku && args.qaMarker)
+        )
             throw new UserInputError('启用测试支付前必须限定订单号，或同时限定测试 SKU 与订单备注');
     }
 }

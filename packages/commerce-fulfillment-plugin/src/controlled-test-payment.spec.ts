@@ -3,6 +3,41 @@ import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createControlledTestPayment } from './controlled-test-payment';
+import { ControlledTestPaymentConfigService } from './controlled-test-payment-config.service';
+
+describe('test payment configuration', () => {
+    const method = {
+        id: 3,
+        enabled: true,
+        code: 'controlled-test-payment-T_2',
+        handler: {
+            code: 'controlled-test-payment-handler',
+            args: [
+                { name: 'channelId', value: 'T_2' },
+                { name: 'allowAllOrders', value: 'true' },
+            ],
+        },
+        checker: { code: 'controlled-test-payment-checker', args: [] },
+    };
+    const connection = { getEntityOrThrow: vi.fn().mockResolvedValue(method) };
+    const config = { entityOptions: {}, entityIdStrategy: { encodeId: (id: unknown) => `T_${String(id)}` } };
+    const service = new ControlledTestPaymentConfigService({} as any, connection as any, config as any);
+    const event = { ctx: { channelId: 2 }, entity: { id: 3 }, type: 'created' } as any;
+
+    it('accepts an explicitly enabled storewide method without a QA SKU or order note', async () => {
+        await expect(service.validate(event)).resolves.toBeUndefined();
+    });
+
+    it('still rejects an unrestricted method without the storewide opt-in', async () => {
+        const args = method.handler.args;
+        method.handler.args = [{ name: 'channelId', value: 'T_2' }];
+        try {
+            await expect(service.validate(event)).rejects.toThrow('启用测试支付前必须限定订单号');
+        } finally {
+            method.handler.args = args;
+        }
+    });
+});
 
 describe('test payments use the normal checkout workflow', () => {
     let order: any;
