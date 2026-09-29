@@ -507,14 +507,6 @@ export function HomePage() {
             entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
         );
     const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
-    const introOrders = ['HERO', 'QUICK_LINKS', 'TRUST_BAR']
-        .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
-        .filter(order => order >= 0);
-    // Group adjacent introductory modules only; a merchant can move other modules between them.
-    const groupedIntro =
-        desktop &&
-        introOrders.length > 0 &&
-        Math.max(...introOrders) - Math.min(...introOrders) + 1 === introOrders.length;
     const managedSections = homepageModules.flatMap(entry =>
         entry.block && ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'CUSTOM'].includes(entry.type)
             ? [entry.block]
@@ -880,6 +872,15 @@ export function HomePage() {
             </div>
         ) : null;
     const overlayTrustBar = desktop && hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
+    // The desktop service bar is overlaid on the hero, so its saved floor position
+    // must not split an otherwise adjacent hero and shortcut gallery.
+    const introOrders = (overlayTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
+        .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
+        .filter(order => order >= 0);
+    const groupedIntro =
+        desktop &&
+        introOrders.length > 0 &&
+        Math.max(...introOrders) - Math.min(...introOrders) + 1 === introOrders.length;
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
