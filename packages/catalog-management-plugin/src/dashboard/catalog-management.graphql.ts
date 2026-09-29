@@ -252,6 +252,7 @@ export const catalogExportRowsQuery = gql`
                 categories
                 importCategory
                 fulfillmentType
+                pricingMode
                 channelCode
                 brand
                 tags
@@ -780,6 +781,7 @@ export interface CatalogExportRowRecord {
     categories: string[];
     importCategory?: string | null;
     fulfillmentType: 'digital' | 'physical';
+    pricingMode: 'FIXED' | 'QUOTE_ONLY';
     channelCode: string;
     brand: string | null;
     tags: string[];

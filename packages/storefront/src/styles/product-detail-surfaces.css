@@ -671,6 +671,14 @@
     -webkit-backdrop-filter: blur(14px);
 }
 
+.detail-action-bar.is-quote-only {
+    grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.detail-action-bar.is-quote-only button:last-child {
+    width: 100%;
+}
+
 .detail-action-bar button {
     height: 44px;
     min-width: 0;

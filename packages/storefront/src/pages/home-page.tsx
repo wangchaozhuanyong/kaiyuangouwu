@@ -1789,9 +1789,18 @@ function FeaturedCollectionSection({
                                 );
                             const imageUrl = productImage(product);
                             const pricedVariant = lowestPricedProductVariant(product);
-                            const priceLabel = pricedVariant
-                                ? formatMoney(pricedVariant.priceWithTax, pricedVariant.currencyCode, locale)
-                                : null;
+                            const priceLabel =
+                                product.customFields?.pricingMode === 'QUOTE_ONLY'
+                                    ? isZh
+                                        ? '联系客服询价'
+                                        : 'Request a quote'
+                                    : pricedVariant
+                                      ? formatMoney(
+                                            pricedVariant.priceWithTax,
+                                            pricedVariant.currencyCode,
+                                            locale,
+                                        )
+                                      : null;
                             const productCopy = (
                                 <span className="featured-collection-product-overlay" aria-hidden="true">
                                     <strong>{product.name}</strong>

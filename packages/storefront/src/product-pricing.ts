@@ -11,5 +11,6 @@ export function lowestPricedProductVariant(product: Product): ProductVariant | n
 }
 
 export function minimumProductPrice(product: Product): number {
+    if (product.customFields?.pricingMode === 'QUOTE_ONLY') return Number.MAX_SAFE_INTEGER;
     return lowestPricedProductVariant(product)?.priceWithTax ?? Number.MAX_SAFE_INTEGER;
 }

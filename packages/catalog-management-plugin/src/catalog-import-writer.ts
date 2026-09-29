@@ -125,6 +125,7 @@ export class CatalogImportWriter {
                 facetValueIds: newProductFacetValueIds,
                 customFields: {
                     ...{ fulfillmentType: row.normalizedData.fulfillmentType },
+                    pricingMode: row.normalizedData.pricingMode ?? 'FIXED',
                     sourceCreatedAt: row.normalizedData.sourceCreatedAt
                         ? new Date(row.normalizedData.sourceCreatedAt)
                         : null,
@@ -209,6 +210,8 @@ export class CatalogImportWriter {
                 productFulfillmentType:
                     (product.customFields as unknown as Record<string, unknown>)?.fulfillmentType ??
                     'digital',
+                productPricingMode:
+                    (product.customFields as unknown as Record<string, unknown>)?.pricingMode ?? 'FIXED',
                 productDescription:
                     product.translations.find(translation => translation.languageCode === ctx.languageCode)
                         ?.description ?? '',
@@ -245,6 +248,8 @@ export class CatalogImportWriter {
         const replaceCategory = shouldApplyProductField('category') && Boolean(row.normalizedData.category);
         const replaceFulfillmentType =
             shouldApplyProductField('fulfillmentType') && Boolean(row.normalizedData.fulfillmentType);
+        const replacePricingMode =
+            shouldApplyProductField('pricingMode') && Boolean(row.normalizedData.pricingMode);
         const facetValueIds =
             !productCreated && (replaceBrand || replaceTags || replaceCategory)
                 ? await resolveCatalogFacetValues(facetServices, ctx, {
@@ -289,6 +294,7 @@ export class CatalogImportWriter {
                 replaceName ||
                 replaceSourceCreatedAt ||
                 replaceFulfillmentType ||
+                replacePricingMode ||
                 replaceProductEnabled ||
                 replaceBrand ||
                 replaceTags ||
@@ -299,13 +305,14 @@ export class CatalogImportWriter {
                 expectedUpdatedAt: product.updatedAt,
                 ...(replaceProductEnabled ? { enabled: row.normalizedData.enabled ?? undefined } : {}),
                 facetValueIds: nextFacetValueIds,
-                ...(replaceSourceCreatedAt || replaceFulfillmentType
+                ...(replaceSourceCreatedAt || replaceFulfillmentType || replacePricingMode
                     ? {
                           customFields: {
                               ...((product.customFields ?? {}) as unknown as Record<string, unknown>),
                               ...(replaceFulfillmentType
                                   ? { fulfillmentType: row.normalizedData.fulfillmentType }
                                   : {}),
+                              ...(replacePricingMode ? { pricingMode: row.normalizedData.pricingMode } : {}),
                               ...(replaceSourceCreatedAt
                                   ? {
                                         sourceCreatedAt: row.normalizedData.sourceCreatedAt
@@ -357,11 +364,17 @@ export class CatalogImportWriter {
                     enabled: effectiveVariantEnabled(row.normalizedData) ?? true,
                     sku,
                     optionIds,
-                    price: money(row.normalizedData.sellingPrice),
+                    price:
+                        row.normalizedData.pricingMode === 'QUOTE_ONLY'
+                            ? 0
+                            : money(row.normalizedData.sellingPrice),
                     prices: [
                         {
                             currencyCode: job.currencyCode,
-                            price: money(row.normalizedData.sellingPrice),
+                            price:
+                                row.normalizedData.pricingMode === 'QUOTE_ONLY'
+                                    ? 0
+                                    : money(row.normalizedData.sellingPrice),
                         },
                     ],
                     translations: [
@@ -445,12 +458,16 @@ export class CatalogImportWriter {
                               ],
                           }
                         : {}),
-                    ...(row.normalizedData.sellingPrice != null
+                    ...(row.normalizedData.sellingPrice != null ||
+                    row.normalizedData.pricingMode === 'QUOTE_ONLY'
                         ? {
                               prices: [
                                   {
                                       currencyCode: job.currencyCode,
-                                      price: money(row.normalizedData.sellingPrice),
+                                      price:
+                                          row.normalizedData.pricingMode === 'QUOTE_ONLY'
+                                              ? 0
+                                              : money(row.normalizedData.sellingPrice),
                                   },
                               ],
                           }

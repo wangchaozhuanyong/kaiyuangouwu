@@ -335,6 +335,7 @@ export interface NormalizedCatalogRow {
     category: string;
     /** Optional only for historical persisted rows; new imports require an explicit type. */
     fulfillmentType?: 'digital' | 'physical';
+    pricingMode?: 'FIXED' | 'QUOTE_ONLY';
     secondaryCategory?: string;
     channelCode: string;
     stockLocationCode: string;

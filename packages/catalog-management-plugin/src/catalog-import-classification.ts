@@ -4,6 +4,21 @@ import { type NormalizedCatalogRow } from './types';
 
 export type CatalogFulfillmentType = 'digital' | 'physical';
 
+export function parseCatalogPricingMode(
+    value: unknown,
+    rowNumber: number,
+): NormalizedCatalogRow['pricingMode'] {
+    if (value == null || value === '') return undefined;
+    if (typeof value !== 'string') {
+        throw new Error(`第 ${rowNumber} 行：销售方式只能是标价销售或联系客服询价`);
+    }
+    const text = value.normalize('NFKC').trim().toLocaleLowerCase();
+    if (!text) return undefined;
+    if (['fixed', '标价销售', '固定售价'].includes(text)) return 'FIXED';
+    if (['quote_only', '联系客服询价', '询价', '按需报价'].includes(text)) return 'QUOTE_ONLY';
+    throw new Error(`第 ${rowNumber} 行：销售方式只能是标价销售或联系客服询价`);
+}
+
 export interface CatalogCollectionHierarchyRecord {
     name?: string | null;
     translations?: Array<{ languageCode?: string | null; name?: string | null }>;

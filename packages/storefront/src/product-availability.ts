@@ -77,7 +77,11 @@ export function variantHasStock(variant: ProductVariant | null | undefined, quan
 }
 
 export function cartLineCanSelect(line: StorefrontCart['lines'][number]): boolean {
-    return line.available && variantHasStock(line.productVariant, line.quantity);
+    return (
+        line.available &&
+        line.productVariant?.product.customFields?.pricingMode !== 'QUOTE_ONLY' &&
+        variantHasStock(line.productVariant, line.quantity)
+    );
 }
 
 export function cartSelectionState(lines: StorefrontCart['lines']): StorefrontCart['selectionState'] {

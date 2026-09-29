@@ -88,6 +88,7 @@ interface ProductItem {
     description?: string;
     customFields?: {
         fulfillmentType?: FulfillmentType | null;
+        pricingMode?: 'FIXED' | 'QUOTE_ONLY' | null;
         refundPolicy?: string | null;
         manualDeliverySlaMinutes?: number | null;
     } | null;
@@ -806,6 +807,7 @@ export function CatalogModule() {
                                             product.customFields?.fulfillmentType === 'physical'
                                                 ? 'physical'
                                                 : 'digital';
+                                        const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
                                         const categories = collectionHierarchySummary(product.collections);
                                         const unlimitedDigitalStock =
                                             fulfillmentType === 'digital' &&
@@ -1026,7 +1028,9 @@ export function CatalogModule() {
 
                                                 {/* Variants Count */}
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-600">
-                                                    {variants.length > 0 ? (
+                                                    {quoteOnly ? (
+                                                        '—'
+                                                    ) : variants.length > 0 ? (
                                                         <span>
                                                             <strong className="text-slate-900">
                                                                 {variants.length}
@@ -1065,12 +1069,14 @@ export function CatalogModule() {
 
                                                 {/* Price */}
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold text-slate-900">
-                                                    {minPriceVariant
-                                                        ? formatMoney(
-                                                              minPriceVariant.price,
-                                                              minPriceVariant.currencyCode,
-                                                          )
-                                                        : '-'}
+                                                    {quoteOnly
+                                                        ? '联系客服询价'
+                                                        : minPriceVariant
+                                                          ? formatMoney(
+                                                                minPriceVariant.price,
+                                                                minPriceVariant.currencyCode,
+                                                            )
+                                                          : '-'}
                                                 </td>
 
                                                 {/* Purchase cost */}
@@ -1084,6 +1090,9 @@ export function CatalogModule() {
                                                         </span>
                                                     ) : operationsQuery.loading && !operations ? (
                                                         <span className="text-slate-400">读取中…</span>
+                                                    ) : quoteOnly &&
+                                                      operations?.minimumPurchaseCostMicrounits == null ? (
+                                                        <span className="text-slate-400">未填写</span>
                                                     ) : operations?.minimumPurchaseCostMicrounits == null ? (
                                                         <span className="font-bold text-rose-600">
                                                             缺成本
@@ -1115,7 +1124,7 @@ export function CatalogModule() {
 
                                                 {/* Margin */}
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
-                                                    {operations?.minimumMargin == null ? (
+                                                    {quoteOnly || operations?.minimumMargin == null ? (
                                                         <span className="text-slate-400">—</span>
                                                     ) : (
                                                         <span

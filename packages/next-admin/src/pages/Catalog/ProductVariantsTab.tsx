@@ -14,6 +14,7 @@ export function ProductVariantsTab() {
         activeCurrencyCode,
         effectiveFulfillmentType,
         variants,
+        dynamicCustomFieldValues,
         handleVariantFieldChange,
         handleAddVariant,
         handleGenerateVariantMatrix,
@@ -45,6 +46,7 @@ export function ProductVariantsTab() {
         setIsQuickCreateSpecOpen,
         handleApplyOptionGroup,
     } = useProductEditor();
+    const quoteOnly = dynamicCustomFieldValues.pricingMode === 'QUOTE_ONLY';
 
     if (!isCreateMode && !productData?.product) return null;
     const selectableOptionGroupIds = new Set(
@@ -320,7 +322,8 @@ export function ProductVariantsTab() {
                                         成本价 ({activeCurrencyCode})
                                     </th>
                                     <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        销售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
+                                        销售价 ({activeCurrencyCode}){' '}
+                                        {!quoteOnly && <span className="text-rose-500">*</span>}
                                     </th>
                                     <th scope="col" className="whitespace-nowrap px-3 py-3">
                                         毛利率
@@ -434,27 +437,33 @@ export function ProductVariantsTab() {
 
                                             {/* Price */}
                                             <td className="h-[52px] px-3 py-2">
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-slate-400 font-mono">
-                                                        {activeCurrencyCode}
+                                                {quoteOnly ? (
+                                                    <span className="font-semibold text-blue-700">
+                                                        联系客服询价
                                                     </span>
-                                                    <input
-                                                        type="number"
-                                                        aria-label={`第 ${index + 1} 行销售价`}
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={variant.price}
-                                                        onChange={e =>
-                                                            handleVariantFieldChange(
-                                                                index,
-                                                                'price',
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder="0.00"
-                                                        className={`w-24 font-mono font-bold border rounded px-2 py-1 bg-white ${rowError?.price ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-900'}`}
-                                                    />
-                                                </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-slate-400 font-mono">
+                                                            {activeCurrencyCode}
+                                                        </span>
+                                                        <input
+                                                            type="number"
+                                                            aria-label={`第 ${index + 1} 行销售价`}
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={variant.price}
+                                                            onChange={e =>
+                                                                handleVariantFieldChange(
+                                                                    index,
+                                                                    'price',
+                                                                    e.target.value,
+                                                                )
+                                                            }
+                                                            placeholder="0.00"
+                                                            className={`w-24 font-mono font-bold border rounded px-2 py-1 bg-white ${rowError?.price ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-900'}`}
+                                                        />
+                                                    </div>
+                                                )}
                                                 {rowError?.price && (
                                                     <div className="text-[10px] text-rose-500 mt-0.5">
                                                         {rowError.price}
@@ -465,6 +474,12 @@ export function ProductVariantsTab() {
                                             {/* Margin */}
                                             <td className="h-[52px] px-3 py-2 whitespace-nowrap">
                                                 {(() => {
+                                                    if (quoteOnly)
+                                                        return (
+                                                            <span className="text-slate-300 font-mono">
+                                                                —
+                                                            </span>
+                                                        );
                                                     const cost = parseFloat(variant.costPrice || '');
                                                     const price = parseFloat(variant.price || '');
                                                     if (!isNaN(cost) && !isNaN(price) && price > 0) {

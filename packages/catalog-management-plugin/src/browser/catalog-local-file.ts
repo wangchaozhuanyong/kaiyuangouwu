@@ -10,6 +10,7 @@ import {
 import {
     catalogCategoryPath,
     parseCatalogFulfillmentType,
+    parseCatalogPricingMode,
     validateCatalogCategories,
 } from '../catalog-import-classification';
 import { parseCatalogImportStore } from '../catalog-import-store';
@@ -20,7 +21,7 @@ export { CATALOG_EXCLUDED_HEADERS, CATALOG_FIELD_OPTIONS } from '../catalog-fiel
 
 type CellValue = string | number | boolean | Date | null | undefined;
 
-export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v4';
+export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v5';
 export const MAX_LOCAL_CATALOG_BYTES = 20 * 1024 * 1024;
 export const MAX_LOCAL_CATALOG_ROWS = 20_000;
 export const CATALOG_MAPPING_EXCLUDED = '__excluded__';
@@ -412,6 +413,7 @@ function normalizeRow(
     const fulfillmentType = textValue(values.get('fulfillmentType'))
         ? parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber)
         : undefined;
+    const pricingMode = parseCatalogPricingMode(values.get('pricingMode'), rowNumber);
     validateCatalogCategories(category, secondaryCategory, rowNumber);
     const sku = importSafeTextValue(values.get('sku'));
     const barcode = importSafeTextValue(values.get('barcode'));
@@ -420,6 +422,9 @@ function normalizeRow(
     }
     const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价');
     const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价');
+    if (pricingMode === 'QUOTE_ONLY' && sellingPrice != null) {
+        throw new Error(`第 ${rowNumber} 行：询价商品请留空销售价`);
+    }
     const shelfLifeDays = integerValue(values.get('shelfLifeDays'), rowNumber, '保质期');
     const lotQuantity = integerValue(values.get('lotQuantity'), rowNumber, '批次数量');
     const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算');
@@ -448,6 +453,7 @@ function normalizeRow(
         category,
         secondaryCategory,
         fulfillmentType,
+        pricingMode,
         channelCode: parseCatalogImportStore(importSafeTextValue(values.get('channelCode')), rowNumber),
         stockLocationCode: textValue(values.get('stockLocationCode')),
         currencyCode: textValue(values.get('currencyCode')).toUpperCase(),

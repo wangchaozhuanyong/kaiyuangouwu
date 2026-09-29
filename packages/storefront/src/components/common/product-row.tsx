@@ -130,7 +130,9 @@ export function ProductRow({
                 </div>
                 <div className="product-row-bottom">
                     <p className="product-row-price">
-                        {variant ? (
+                        {product.customFields?.pricingMode === 'QUOTE_ONLY' ? (
+                            <span>{language === 'zh' ? '联系客服询价' : 'Request a quote'}</span>
+                        ) : variant ? (
                             <PriceDisplay
                                 value={variant.priceWithTax}
                                 currency={variant.currencyCode}
@@ -140,9 +142,11 @@ export function ProductRow({
                             '--'
                         )}
                     </p>
-                    <span className={`product-row-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
-                        {availability.label}
-                    </span>
+                    {product.customFields?.pricingMode !== 'QUOTE_ONLY' && (
+                        <span className={`product-row-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
+                            {availability.label}
+                        </span>
+                    )}
                 </div>
             </div>
             {layout === 'catalog' ? (

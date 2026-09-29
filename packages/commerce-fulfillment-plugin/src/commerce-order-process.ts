@@ -6,12 +6,13 @@ import {
     Order,
     OrderProcess,
     OrderService,
+    ProductVariant,
     ProductVariantService,
     StockLevel,
     StockMovementService,
     TransactionalConnection,
 } from '@vendure/core';
-import { LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
 import { CommerceModeService } from './commerce-mode.service';
@@ -57,6 +58,16 @@ export const commerceOrderProcess: OrderProcess<string> = {
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled');
         if (!entersPayment && !confirmsPayment) {
             return;
+        }
+
+        if (order.lines.length) {
+            const variants = await connection.getRepository(ctx, ProductVariant).find({
+                where: { id: In(order.lines.map(line => line.productVariantId)) },
+                relations: ['product'],
+            });
+            if (variants.some(variant => variant.product?.customFields?.pricingMode === 'QUOTE_ONLY')) {
+                return '询价展示商品不能下单，请联系客服获取报价';
+            }
         }
 
         const summary = summarizeOrderFulfillment(order);

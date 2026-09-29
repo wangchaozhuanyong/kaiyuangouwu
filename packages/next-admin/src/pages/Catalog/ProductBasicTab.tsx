@@ -363,6 +363,11 @@ export function ProductBasicTab() {
                     </div>
                 </div>
             </section>
+            {productExtensionFields.some(field => field.name === 'pricingMode') && (
+                <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    预购展示商品请在下方“销售方式”选择“展示并联系客服询价”。此类商品不显示售价，也不能加入购物车或下单。
+                </p>
+            )}
             <DynamicCustomFieldsForm
                 helpTopic="catalog.product-editor"
                 fields={productExtensionFields}

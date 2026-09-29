@@ -18,6 +18,12 @@ export function sortCategoryProducts(
         }
         if (sortMode === 'newest') return Date.parse(second.createdAt) - Date.parse(first.createdAt);
         if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
+        if (sortMode === 'price-asc' || sortMode === 'price-desc') {
+            const quoteDifference =
+                Number(first.customFields?.pricingMode === 'QUOTE_ONLY') -
+                Number(second.customFields?.pricingMode === 'QUOTE_ONLY');
+            if (quoteDifference) return quoteDifference;
+        }
         if (sortMode === 'price-asc') return minimumProductPrice(first) - minimumProductPrice(second);
         if (sortMode === 'price-desc') return minimumProductPrice(second) - minimumProductPrice(first);
         return 0;

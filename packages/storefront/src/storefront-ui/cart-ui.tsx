@@ -184,7 +184,13 @@ function DesktopCartLine({
         96,
     );
     const currency = variant?.currencyCode ?? market.currencyCode;
-    const stockError = quantityStockMessage(variant, line.quantity, language);
+    const quoteOnly = variant?.product.customFields?.pricingMode === 'QUOTE_ONLY';
+    const quoteLabel = isZh ? '联系客服询价' : 'Request a quote';
+    const stockError = quoteOnly
+        ? isZh
+            ? '此商品仅供展示，不能下单'
+            : 'Display only; checkout is unavailable'
+        : quantityStockMessage(variant, line.quantity, language);
     const stock = productAvailability(variant).stock;
     const moreRef = useRef<HTMLDivElement>(null);
     const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -248,7 +254,7 @@ function DesktopCartLine({
                 )}
             </div>
             <span className="desktop-cart-unit-price">
-                {formatMoney(variant?.priceWithTax ?? 0, currency, locale)}
+                {quoteOnly ? quoteLabel : formatMoney(variant?.priceWithTax ?? 0, currency, locale)}
             </span>
             <div className="desktop-cart-quantity">
                 <QuantityControl
@@ -270,7 +276,9 @@ function DesktopCartLine({
                 />
             </div>
             <strong className="desktop-cart-amount">
-                {formatMoney((variant?.priceWithTax ?? 0) * line.quantity, currency, locale)}
+                {quoteOnly
+                    ? quoteLabel
+                    : formatMoney((variant?.priceWithTax ?? 0) * line.quantity, currency, locale)}
             </strong>
             <div className="desktop-cart-actions">
                 <button
@@ -390,7 +398,13 @@ export function SwipeableCartLine({
     const isZh = language === 'zh';
     const variant = line.productVariant;
     const productId = variant?.product.id;
-    const stockError = quantityStockMessage(variant, line.quantity, language);
+    const quoteOnly = variant?.product.customFields?.pricingMode === 'QUOTE_ONLY';
+    const quoteLabel = isZh ? '联系客服询价' : 'Request a quote';
+    const stockError = quoteOnly
+        ? isZh
+            ? '此商品仅供展示，不能下单'
+            : 'Display only; checkout is unavailable'
+        : quantityStockMessage(variant, line.quantity, language);
     const stock = productAvailability(variant).stock;
     const productName = variant?.name ?? (isZh ? '商品' : 'item');
     const fulfillmentType = variant?.customFields?.fulfillmentType;
@@ -661,9 +675,11 @@ export function SwipeableCartLine({
                     )}
                     <div className="cart-line-purchase-row">
                         <b>
-                            {variant
-                                ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                : formatMoney(0, market.currencyCode, locale)}
+                            {quoteOnly
+                                ? quoteLabel
+                                : variant
+                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                                  : formatMoney(0, market.currencyCode, locale)}
                         </b>
                         <div className="cart-line-actions">
                             <QuantityControl
