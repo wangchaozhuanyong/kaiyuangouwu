@@ -3693,6 +3693,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-page .primary-category-strip {
+    --primary-category-toggle-width: 36px;
     margin: 0 var(--page-section-inset, 16px);
     padding-inline: 0;
     border-radius: 0;
@@ -3703,8 +3704,9 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-page .primary-categories {
     flex: 1 1 auto;
     min-width: 0;
-    padding-inline: 0;
-    scroll-padding-inline: 0;
+    /* Let the final category scroll clear of the fixed All control. */
+    padding-inline: 0 var(--primary-category-toggle-width);
+    scroll-padding-inline: 0 var(--primary-category-toggle-width);
     justify-content: flex-start;
 }
 
@@ -3717,8 +3719,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-page .primary-categories-all {
-    width: 36px;
-    min-width: 36px;
+    width: var(--primary-category-toggle-width);
+    min-width: var(--primary-category-toggle-width);
     position: absolute;
     inset-block: 0;
     right: calc(-1 * var(--page-section-inset, 8px));
