@@ -198,6 +198,19 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // Category directory, nesting and rows use subtle seams to clarify navigation.
+                        if (
+                            file === path.join(__dirname, 'styles/desktop-commerce.css') &&
+                            [
+                                '.desktop-category-directory-title|bottom',
+                                '.desktop-catalog-sidebar .desktop-subcategory-sidebar|left',
+                                '.desktop-category-navigation .desktop-local-navigation > button, .desktop-category-navigation .desktop-category-entry|bottom',
+                                '.desktop-subcategory-sidebar nav > button|bottom',
+                            ].includes(`${selector.trim().replace(/\s+/g, ' ')}|${border[1]}`) &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
                         // The user's fresh profile-card reference includes three separated shortcuts.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
