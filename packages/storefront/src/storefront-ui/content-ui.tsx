@@ -416,7 +416,7 @@ function FlashSaleImage({
             },
             {
                 root: scroller,
-                rootMargin: '0px 480px 0px 120px',
+                rootMargin: '0px 120px 0px 120px',
                 threshold: 0.01,
             },
         );
