@@ -104,7 +104,13 @@ export class CatalogImportWriter {
             product =
                 (await this.connection.getRepository(ctx, Product).findOne({
                     where: { id: productId, deletedAt: IsNull() },
-                    relations: ['translations', 'facetValues', 'facetValues.facet'],
+                    relations: [
+                        'translations',
+                        'facetValues',
+                        'facetValues.facet',
+                        'featuredAsset',
+                        'assets',
+                    ],
                 })) ?? undefined;
             if (!product) throw new UserInputError('预览中的商品已不存在');
             if (
@@ -153,7 +159,13 @@ export class CatalogImportWriter {
             product =
                 (await this.connection.getRepository(ctx, Product).findOne({
                     where: { id: created.id },
-                    relations: ['translations', 'facetValues', 'facetValues.facet'],
+                    relations: [
+                        'translations',
+                        'facetValues',
+                        'facetValues.facet',
+                        'featuredAsset',
+                        'assets',
+                    ],
                 })) ?? undefined;
         }
         if (!product || !productId) throw new UserInputError('无法创建或加载商品');
@@ -221,6 +233,13 @@ export class CatalogImportWriter {
                 productDescription:
                     product.translations.find(translation => translation.languageCode === ctx.languageCode)
                         ?.description ?? '',
+                productFeaturedAssetId: product.featuredAsset?.id ? String(product.featuredAsset.id) : null,
+                productFeaturedAssetName: product.featuredAsset?.name ?? null,
+                productAssetIds:
+                    product.assets
+                        ?.slice()
+                        .sort((left, right) => left.position - right.position)
+                        .map(asset => String(asset.assetId)) ?? [],
                 productFacetValueIds: product.facetValues?.map(value => String(value.id)) ?? [],
                 productImportCategory: facetNames(product.facetValues, 'catalog-import-category')[0] ?? null,
                 variantName:
@@ -256,6 +275,9 @@ export class CatalogImportWriter {
             shouldApplyProductField('fulfillmentType') && Boolean(row.normalizedData.fulfillmentType);
         const replacePricingMode =
             shouldApplyProductField('pricingMode') && Boolean(row.normalizedData.pricingMode);
+        const replaceFeaturedAsset =
+            shouldApplyProductField('featuredAssetName') &&
+            Boolean(row.normalizedData.resolvedFeaturedAssetId);
         const facetValueIds =
             !productCreated && (replaceBrand || replaceTags || replaceCategory)
                 ? await resolveCatalogFacetValues(facetServices, ctx, {
@@ -301,6 +323,7 @@ export class CatalogImportWriter {
                 replaceSourceCreatedAt ||
                 replaceFulfillmentType ||
                 replacePricingMode ||
+                replaceFeaturedAsset ||
                 replaceProductEnabled ||
                 replaceBrand ||
                 replaceTags ||
@@ -311,6 +334,20 @@ export class CatalogImportWriter {
                 expectedUpdatedAt: product.updatedAt,
                 ...(replaceProductEnabled ? { enabled: row.normalizedData.enabled ?? undefined } : {}),
                 facetValueIds: nextFacetValueIds,
+                ...(replaceFeaturedAsset
+                    ? {
+                          featuredAssetId: row.normalizedData.resolvedFeaturedAssetId,
+                          assetIds: [
+                              ...new Set([
+                                  ...(product.assets ?? [])
+                                      .slice()
+                                      .sort((left, right) => left.position - right.position)
+                                      .map(asset => asset.assetId),
+                                  row.normalizedData.resolvedFeaturedAssetId as ID,
+                              ]),
+                          ],
+                      }
+                    : {}),
                 ...(replaceSourceCreatedAt || replaceFulfillmentType || replacePricingMode
                     ? {
                           customFields: {

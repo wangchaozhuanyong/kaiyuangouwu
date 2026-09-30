@@ -128,7 +128,7 @@ export class CatalogImportRollback {
         });
         const product = await this.connection.getRepository(ctx, Product).findOne({
             where: { id: productId, deletedAt: IsNull() },
-            relations: ['translations', 'facetValues'],
+            relations: ['translations', 'facetValues', 'featuredAsset', 'assets'],
         });
         if (variant) {
             if (Boolean(applied.variantCreated) || Boolean(before.variantCreated)) {
@@ -233,6 +233,13 @@ export class CatalogImportRollback {
                     enabled:
                         typeof before.productEnabled === 'boolean' ? before.productEnabled : product.enabled,
                     facetValueIds: stringArray(before.productFacetValueIds).map(value => value as ID),
+                    ...('productFeaturedAssetId' in before
+                        ? {
+                              // The service supports null to clear a featured image, although the generated input omits it.
+                              featuredAssetId: (stringValue(before.productFeaturedAssetId) || null) as ID,
+                              assetIds: stringArray(before.productAssetIds).map(value => value as ID),
+                          }
+                        : {}),
                     customFields: {
                         ...((product.customFields ?? {}) as unknown as Record<string, unknown>),
                         ...(before.productFulfillmentType
