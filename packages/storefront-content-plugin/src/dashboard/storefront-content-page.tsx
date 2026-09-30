@@ -179,7 +179,7 @@ const zhCopy = {
     heroImageMissing: '未配置图片',
     displaySettings: '显示设置',
     dualCardTemplate: '双卡片颜色模板',
-    dualCardTemplateHint: '模板已包含背景、边框、强调色与纹理；切换模板不会改变文字和跳转目标。',
+    dualCardTemplateHint: '双卡只展示文字与跳转，已存图片不会在前台显示；模板仅调整配色。',
     dualCardDefault: '默认',
     displayCount: '显示商品数量',
     displayCountHint: '客户端首屏显示 1 到 50 个商品。',
@@ -328,7 +328,7 @@ const enCopy: typeof zhCopy = {
     displaySettings: 'Display settings',
     dualCardTemplate: 'Dual-card color template',
     dualCardTemplateHint:
-        'Templates include backgrounds, borders, accents and textures. Changing templates keeps your copy and targets.',
+        'Cards show only copy and links. Saved images stay stored but are not displayed; templates change colors.',
     dualCardDefault: 'Default',
     displayCount: 'Number of products',
     displayCountHint: 'Show 1 to 50 products in this storefront section.',
@@ -1375,7 +1375,7 @@ function HomepageModuleRow({
                     <GripVertical className="size-4" aria-hidden="true" />
                 </div>
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                    {block?.imageUrl ? (
+                    {block?.type !== 'CORE_CATEGORIES' && block?.imageUrl ? (
                         <img className="size-10 rounded-md object-cover" src={block.imageUrl} alt="" />
                     ) : (
                         <LayoutTemplate className="size-4" aria-hidden="true" />
@@ -2129,7 +2129,8 @@ function BlockEditor({
                                             </Field>
                                         </>
                                     ) : null}
-                                    {advancedMode || previewUsesBlockImage(draft.type) ? (
+                                    {draft.type !== 'CORE_CATEGORIES' &&
+                                    (advancedMode || previewUsesBlockImage(draft.type)) ? (
                                         <AssetSelectionField
                                             className="@xl/editor-form:col-span-2 @2xl/editor-form:col-span-2"
                                             label={text.imageAsset}
@@ -2149,26 +2150,30 @@ function BlockEditor({
                                     ) : null}
                                     {advancedMode ? (
                                         <>
-                                            <Field
-                                                compact
-                                                label={text.imageUrl}
-                                                hint={text.imageHint}
-                                                className="@xl/editor-form:col-span-2"
-                                            >
-                                                <Input
-                                                    inputMode="url"
-                                                    value={draft.imageUrl ?? ''}
-                                                    onChange={event =>
-                                                        onChange({
-                                                            ...draft,
-                                                            imageAsset: null,
-                                                            imageAssetId: null,
-                                                            imageUrl: event.target.value || null,
-                                                        })
-                                                    }
-                                                />
-                                                <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
-                                            </Field>
+                                            {draft.type !== 'CORE_CATEGORIES' && (
+                                                <Field
+                                                    compact
+                                                    label={text.imageUrl}
+                                                    hint={text.imageHint}
+                                                    className="@xl/editor-form:col-span-2"
+                                                >
+                                                    <Input
+                                                        inputMode="url"
+                                                        value={draft.imageUrl ?? ''}
+                                                        onChange={event =>
+                                                            onChange({
+                                                                ...draft,
+                                                                imageAsset: null,
+                                                                imageAssetId: null,
+                                                                imageUrl: event.target.value || null,
+                                                            })
+                                                        }
+                                                    />
+                                                    <ImageSizeHint
+                                                        guidance={blockImageGuidance(draft.type)}
+                                                    />
+                                                </Field>
+                                            )}
                                             {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
                                                 <>
                                                     <Field compact label={text.backgroundColor}>
@@ -2460,7 +2465,8 @@ function BlockEditor({
                                                                         key={item.id ?? index}
                                                                         className="border border-current/15 p-2"
                                                                     >
-                                                                        {item.imageUrl ? (
+                                                                        {draft.type !== 'CORE_CATEGORIES' &&
+                                                                        item.imageUrl ? (
                                                                             <img
                                                                                 className="mb-2 aspect-square w-full rounded object-cover"
                                                                                 src={item.imageUrl}
@@ -2855,7 +2861,7 @@ function ItemEditor({
                 </IconButton>
             </div>
             <div className="grid items-start gap-x-3 gap-y-3 @xl/editor-form:grid-cols-2 @2xl/editor-form:grid-cols-12">
-                {advancedMode || simpleItemUsesImage(blockType) ? (
+                {blockType !== 'CORE_CATEGORIES' && (advancedMode || simpleItemUsesImage(blockType)) ? (
                     <AssetSelectionField
                         className={
                             advancedMode ? '@2xl/editor-form:col-span-2' : '@2xl/editor-form:col-span-3'
@@ -3439,15 +3445,7 @@ function simpleBlockNeedsTarget(type: ContentBlockType): boolean {
 }
 
 function simpleItemUsesImage(type: ContentBlockType): boolean {
-    return [
-        'HERO',
-        'QUICK_LINKS',
-        'CATEGORY_AD',
-        'COUPONS',
-        'TRUST_BAR',
-        'CORE_CATEGORIES',
-        'CUSTOM',
-    ].includes(type);
+    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'COUPONS', 'TRUST_BAR', 'CUSTOM'].includes(type);
 }
 
 function simpleModuleHasSettings(type: ContentBlockType): boolean {
