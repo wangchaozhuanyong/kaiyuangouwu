@@ -213,17 +213,15 @@ function AuthFormIntro({
     return (
         <header className={`auth-form-heading auth-form-heading-${language}`}>
             <span>{storefrontName}</span>
-            <h1>
-                {isLogin ? (isZh ? '欢迎回来' : 'Welcome back') : isZh ? '创建账户' : 'Create your account'}
-            </h1>
+            <h1>{isLogin ? (isZh ? '欢迎回来' : 'Welcome back') : isZh ? '创建账户' : 'Create account'}</h1>
             <p>
                 {isLogin
                     ? isZh
-                        ? '登录后查看订单、管理账户并继续使用店铺服务。'
-                        : 'Sign in to view orders, manage your account, and continue using store services.'
+                        ? '登录账户，查看订单与店铺服务。'
+                        : 'Sign in to manage orders and store services.'
                     : isZh
-                      ? '验证邮箱并完成注册，开始选购商品与使用店铺服务。'
-                      : 'Verify your email and create an account to shop and use store services.'}
+                      ? '验证邮箱，开启购物与店铺服务。'
+                      : 'Verify your email to start shopping.'}
             </p>
         </header>
     );
@@ -234,23 +232,23 @@ function AuthAssuranceRail({ language }: { language: StorefrontLanguage }) {
     const items = [
         {
             icon: ShieldCheck,
-            title: isZh ? '账户安全' : 'Account security',
-            description: isZh ? '登录信息加密保护' : 'Protected sign-in details',
+            tone: 'security',
+            title: isZh ? '账户安全' : 'Security',
         },
         {
             icon: ShoppingBag,
-            title: isZh ? '订单可查' : 'Order tracking',
-            description: isZh ? '购买记录集中管理' : 'Purchases in one place',
+            tone: 'mail',
+            title: isZh ? '订单可查' : 'Orders',
         },
         {
             icon: Sparkles,
-            title: isZh ? '服务统一' : 'Unified services',
-            description: isZh ? '商品与工具一个账户' : 'One account for store services',
+            tone: 'studio',
+            title: isZh ? '统一账户' : 'Account',
         },
         {
             icon: Headphones,
-            title: isZh ? '客服支持' : 'Customer support',
-            description: isZh ? '遇到问题及时联系' : 'Help when you need it',
+            tone: 'support',
+            title: isZh ? '客服支持' : 'Support',
         },
     ];
 
@@ -262,13 +260,12 @@ function AuthAssuranceRail({ language }: { language: StorefrontLanguage }) {
             {items.map(item => {
                 const Icon = item.icon;
                 return (
-                    <div className="auth-assurance-item" key={item.title}>
+                    <div className={`auth-assurance-item auth-assurance-${item.tone}`} key={item.title}>
                         <span className="auth-assurance-icon" aria-hidden="true">
                             <Icon />
                         </span>
                         <span>
                             <strong>{item.title}</strong>
-                            <small>{item.description}</small>
                         </span>
                     </div>
                 );
@@ -489,7 +486,9 @@ export function LoginPage({
                     onContentTarget={onContentTarget}
                 />
             )}
-            <AuthLegalNotice content={legalContent} language={language} onContentTarget={onContentTarget} />
+            {!authSettings.emailAutoRegistrationEnabled && !googleAvailable && (
+                <AuthLegalNotice content={legalContent} onContentTarget={onContentTarget} />
+            )}
         </AuthLayout>
     );
 }
@@ -748,7 +747,11 @@ export function RegisterPage({
                                 <>
                                     <Field
                                         name="password"
-                                        label={isZh ? '密码' : 'Password'}
+                                        label={
+                                            isZh
+                                                ? `密码 · ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
+                                                : `Password · ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`
+                                        }
                                         type="password"
                                         autoComplete="new-password"
                                         icon={<LockKeyhole />}
@@ -770,11 +773,6 @@ export function RegisterPage({
                                         language={language}
                                         showLabel={false}
                                     />
-                                    <small className="auth-password-hint">
-                                        {isZh
-                                            ? `密码需为 ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
-                                            : `Use ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`}
-                                    </small>
                                 </>
                             ) : (
                                 <small className="auth-password-hint">
@@ -887,11 +885,9 @@ export function RegisterPage({
                             {isZh ? '立即登录' : 'Sign in'}
                         </button>
                     </p>
-                    <AuthLegalNotice
-                        content={legalContent}
-                        language={language}
-                        onContentTarget={onContentTarget}
-                    />
+                    {!authSettings.emailPasswordEnabled && (
+                        <AuthLegalNotice content={legalContent} onContentTarget={onContentTarget} />
+                    )}
                 </>
             )}
         </AuthLayout>
@@ -1404,17 +1400,19 @@ function AuthLayout({
                         onImageReady={heroImageContrast.onImageLoad}
                     />
                 )}
-                <div className="auth-hero-header">
-                    <button
-                        className="auth-back-button"
-                        type="button"
-                        onClick={onBack}
-                        aria-label={language === 'zh' ? '返回' : 'Back'}
-                    >
-                        <ArrowLeft aria-hidden="true" />
-                        <span>{language === 'zh' ? '返回' : 'Back'}</span>
-                    </button>
-                </div>
+                {!authVisualVariant && (
+                    <div className="auth-hero-header">
+                        <button
+                            className="auth-back-button"
+                            type="button"
+                            onClick={onBack}
+                            aria-label={language === 'zh' ? '返回' : 'Back'}
+                        >
+                            <ArrowLeft aria-hidden="true" />
+                            <span>{language === 'zh' ? '返回' : 'Back'}</span>
+                        </button>
+                    </div>
+                )}
                 <div
                     className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}${hasManagedHero ? ' auth-hero-message-managed' : ''}`}
                 >
@@ -1511,22 +1509,22 @@ function AuthLayout({
                     {!heroMessage && <h2 className="auth-hero-title-fallback">{title}</h2>}
                 </div>
             </section>
-            {authVisualVariant ? (
-                <button
-                    className="auth-mobile-back-button"
-                    type="button"
-                    onClick={onBack}
-                    aria-label={language === 'zh' ? '返回' : 'Back'}
-                >
-                    <ArrowLeft aria-hidden="true" />
-                </button>
-            ) : null}
             <section className="login-content">
                 <div className="auth-form-column">
+                    {authVisualVariant ? (
+                        <button
+                            className="auth-form-back-button"
+                            type="button"
+                            onClick={onBack}
+                            aria-label={language === 'zh' ? '返回' : 'Back'}
+                        >
+                            <ArrowLeft aria-hidden="true" />
+                        </button>
+                    ) : null}
                     <div className="auth-card-content">{children}</div>
+                    {authVisualVariant ? <AuthAssuranceRail language={language} /> : null}
                 </div>
             </section>
-            {authVisualVariant ? <AuthAssuranceRail language={language} /> : null}
         </main>
     );
 }
@@ -1604,33 +1602,30 @@ function Field({
                     </label>
                     {labelAction}
                 </div>
-            ) : (
-                <label className="visually-hidden" htmlFor={inputId}>
-                    {label}
-                </label>
-            )}
+            ) : null}
             <div className={`auth-input-shell${hasPasswordToggle ? ' auth-password-input' : ''}`}>
                 {icon && (
                     <span className="auth-field-icon" aria-hidden="true">
                         {icon}
                     </span>
                 )}
-                {hasPasswordToggle ? (
-                    <>
-                        {input}
-                        <button
-                            className="auth-password-toggle"
-                            type="button"
-                            aria-label={passwordToggleLabel}
-                            aria-pressed={passwordVisible}
-                            onClick={() => setPasswordVisible(visible => !visible)}
-                        >
-                            {passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-                        </button>
-                    </>
-                ) : (
-                    input
+                {input}
+                {!showLabel && (
+                    <label className="auth-floating-label" htmlFor={inputId}>
+                        {label}
+                    </label>
                 )}
+                {hasPasswordToggle ? (
+                    <button
+                        className="auth-password-toggle"
+                        type="button"
+                        aria-label={passwordToggleLabel}
+                        aria-pressed={passwordVisible}
+                        onClick={() => setPasswordVisible(visible => !visible)}
+                    >
+                        {passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                    </button>
+                ) : null}
             </div>
             {!showLabel && labelAction ? <div className="auth-field-action-row">{labelAction}</div> : null}
         </div>
@@ -1744,13 +1739,9 @@ function RegistrationConsentControl({
 
 function AuthLegalNotice({
     content,
-    language,
-    prefix,
     onContentTarget,
 }: {
     content?: StorefrontContentBlock;
-    language: StorefrontLanguage;
-    prefix?: string;
     onContentTarget: AuthLegalProps['onContentTarget'];
 }) {
     const items =
@@ -1760,7 +1751,6 @@ function AuthLegalNotice({
     if (!items.length) return null;
     return (
         <small className="auth-legal-notice">
-            <span>{prefix ?? (language === 'zh' ? '继续操作前，请阅读' : 'Before continuing, review')}</span>
             <span className="auth-legal-links">
                 {items.map(item => (
                     <button

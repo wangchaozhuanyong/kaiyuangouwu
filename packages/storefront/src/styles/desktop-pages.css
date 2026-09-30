@@ -1720,7 +1720,7 @@
         min-width: 0;
         display: flex;
         align-items: center;
-        padding: 44px 48px;
+        padding: 32px 40px;
         background: var(--surface, var(--paper));
         grid-column: 2;
         grid-row: 1;
@@ -1759,26 +1759,6 @@
         min-height: 46px;
         border-radius: var(--skin-control-radius);
         box-shadow: var(--accent-shadow);
-    }
-    .desktop-store-layout .auth-mobile-back-button {
-        display: none;
-    }
-    .desktop-store-layout .auth-assurance-rail {
-        grid-column: 1 / -1;
-        grid-row: 2;
-        min-height: 88px;
-        padding: 18px 30px;
-        background: var(--surface-elevated, var(--surface));
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 18px;
-    }
-    .desktop-store-layout .auth-assurance-item {
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 11px;
     }
     .desktop-store-layout .auth-page-default {
         display: block;

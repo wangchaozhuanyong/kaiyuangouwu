@@ -144,6 +144,7 @@ describe('storefront skin system', () => {
                         if (!border || /^(?:0(?:px)?|none)(?:\s|$)/.test(border[2].trim())) continue;
                         // Approved functional-row redesign: only adjacent rows and the total boundary.
                         const functionalSeparators = [
+                            'styles/auth-flow.css|.auth-page .auth-assurance-rail',
                             'styles/account-catalog-surfaces.css|.account-page .account-recent-purchases > div > article + article::before',
                             'styles/account-security.css|.security-card-list > :is(.security-item-btn, .security-item-static)' +
                                 ' + :is(.security-item-btn, .security-item-static)::before',
