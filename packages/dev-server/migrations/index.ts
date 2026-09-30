@@ -141,6 +141,7 @@ import { AddCustomerProductActivity1790310060000 } from './1790310060000-add-cus
 import { AddReviewImages1790310120000 } from './1790310120000-add-review-images';
 import { NeutralReferralPosterDefaults1790640000000 } from './1790640000000-neutral-referral-poster-defaults';
 import { AddProductPricingMode1790643600000 } from './1790643600000-add-product-pricing-mode';
+import { AddStoreProfileCompanyDetails1790730000000 } from './1790730000000-add-store-profile-company-details';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -286,4 +287,5 @@ export const devServerMigrations = [
     AddReviewImages1790310120000,
     NeutralReferralPosterDefaults1790640000000,
     AddProductPricingMode1790643600000,
+    AddStoreProfileCompanyDetails1790730000000,
 ];

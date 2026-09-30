@@ -389,6 +389,8 @@ export interface UpdateStoreProfileInput {
     brandHighlightColor?: string | null;
     legalEntityName?: string | null;
     legalRegistrationCountry?: string | null;
+    legalRegistrationNumber?: string | null;
+    legalContactAddress?: string | null;
     supportEmail?: string | null;
     privacyEmail?: string | null;
     currentPassword?: string | null;

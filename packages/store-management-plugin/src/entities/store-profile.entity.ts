@@ -90,6 +90,12 @@ export class StoreProfile extends VendureEntity {
     @Column('varchar', { length: 100, nullable: true })
     legalRegistrationCountry: string | null;
 
+    @Column('varchar', { length: 100, nullable: true })
+    legalRegistrationNumber: string | null;
+
+    @Column('varchar', { length: 500, nullable: true })
+    legalContactAddress: string | null;
+
     @Column('varchar', { length: 254, nullable: true })
     supportEmail: string | null;
 

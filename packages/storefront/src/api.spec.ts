@@ -334,6 +334,8 @@ describe('ShopApi storefront config', () => {
             storefrontBranding: {
                 legalEntityName: 'MOYAO AI Example Limited',
                 legalRegistrationCountry: 'Malaysia',
+                legalRegistrationNumber: '123456789012 (123456-A)',
+                legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
                 supportEmail: 'support@moyaoai.com',
                 privacyEmail: 'privacy@moyaoai.com',
             },
@@ -344,12 +346,16 @@ describe('ShopApi storefront config', () => {
             availableProvinces: [{ code: 'MY-10', name: 'Selangor', countryCode: 'MY' }],
             legalEntityName: 'MOYAO AI Example Limited',
             legalRegistrationCountry: 'Malaysia',
+            legalRegistrationNumber: '123456789012 (123456-A)',
+            legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
             supportEmail: 'support@moyaoai.com',
             privacyEmail: 'privacy@moyaoai.com',
         });
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
         expect(request.query).toContain('legalEntityName');
         expect(request.query).toContain('legalRegistrationCountry');
+        expect(request.query).toContain('legalRegistrationNumber');
+        expect(request.query).toContain('legalContactAddress');
         expect(request.query).toContain('supportEmail');
         expect(request.query).toContain('privacyEmail');
         expect(request.query).toContain('availableStorefrontProvinces');

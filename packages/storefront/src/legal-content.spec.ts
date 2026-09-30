@@ -159,6 +159,8 @@ describe('interpolateLegalProfileTokens', () => {
     const identity = {
         legalEntityName: 'MOYAO AI Example Limited',
         legalRegistrationCountry: 'Malaysia',
+        legalRegistrationNumber: '123456789012 (123456-A)',
+        legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
         supportEmail: 'support@moyaoai.com',
         privacyEmail: 'privacy@moyaoai.com',
     };
@@ -166,11 +168,13 @@ describe('interpolateLegalProfileTokens', () => {
     it('replaces every supported legal profile token with managed store data', () => {
         expect(
             interpolateLegalProfileTokens(
-                '{{legalEntityName}} / {{ legalRegistrationCountry }} / {{supportEmail}} / {{privacyEmail}}',
+                '{{legalEntityName}} / {{ legalRegistrationCountry }} / {{legalRegistrationNumber}} / {{legalContactAddress}} / {{supportEmail}} / {{privacyEmail}}',
                 identity,
                 'en',
             ),
-        ).toBe('MOYAO AI Example Limited / Malaysia / support@moyaoai.com / privacy@moyaoai.com');
+        ).toBe(
+            'MOYAO AI Example Limited / Malaysia / 123456789012 (123456-A) / 10 Example Road, 50000 Kuala Lumpur / support@moyaoai.com / privacy@moyaoai.com',
+        );
     });
 
     it('does not expose unresolved supported tokens', () => {

@@ -82,6 +82,8 @@ describe('ManagedLegalPage', () => {
                 legalIdentity={{
                     legalEntityName: 'MOYAO AI Example Limited',
                     legalRegistrationCountry: 'Malaysia',
+                    legalRegistrationNumber: '123456789012 (123456-A)',
+                    legalContactAddress: '10 Example Road, 50000 Kuala Lumpur',
                     supportEmail: 'support@moyaoai.com',
                     privacyEmail: 'privacy@moyaoai.com',
                 }}
@@ -93,6 +95,8 @@ describe('ManagedLegalPage', () => {
         expect(markup).toContain('legal-identity-card');
         expect(markup).toContain('MOYAO AI Example Limited');
         expect(markup).toContain('Malaysia');
+        expect(markup).toContain('123456789012 (123456-A)');
+        expect(markup).toContain('10 Example Road, 50000 Kuala Lumpur');
         expect(markup).toContain('href="mailto:support@moyaoai.com"');
         expect(markup).toContain('href="mailto:privacy@moyaoai.com"');
         expect(markup).not.toContain('{{legalEntityName}}');

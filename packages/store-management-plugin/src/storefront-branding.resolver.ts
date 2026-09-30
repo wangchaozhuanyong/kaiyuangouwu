@@ -85,6 +85,8 @@ export class StorefrontBrandingShopResolver {
             highlightColor: profile?.brandHighlightColor ?? null,
             legalEntityName: profile?.legalEntityName ?? null,
             legalRegistrationCountry: profile?.legalRegistrationCountry ?? null,
+            legalRegistrationNumber: profile?.legalRegistrationNumber ?? null,
+            legalContactAddress: profile?.legalContactAddress ?? null,
             supportEmail: profile?.supportEmail ?? null,
             privacyEmail: profile?.privacyEmail ?? null,
         };

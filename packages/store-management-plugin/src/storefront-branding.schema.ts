@@ -20,6 +20,8 @@ export const storefrontBrandingSchema = gql`
         highlightColor: String
         legalEntityName: String
         legalRegistrationCountry: String
+        legalRegistrationNumber: String
+        legalContactAddress: String
         supportEmail: String
         privacyEmail: String
     }

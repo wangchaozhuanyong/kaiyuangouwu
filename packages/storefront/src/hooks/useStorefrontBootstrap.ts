@@ -131,6 +131,8 @@ export function useStorefrontBootstrap() {
         () => ({
             legalEntityName: configQuery.data?.legalEntityName?.trim() || null,
             legalRegistrationCountry: configQuery.data?.legalRegistrationCountry?.trim() || null,
+            legalRegistrationNumber: configQuery.data?.legalRegistrationNumber?.trim() || null,
+            legalContactAddress: configQuery.data?.legalContactAddress?.trim() || null,
             supportEmail: configQuery.data?.supportEmail?.trim() || null,
             privacyEmail: configQuery.data?.privacyEmail?.trim() || null,
         }),

@@ -271,6 +271,8 @@ export const adminApiExtensions = gql`
         brandHighlightColor: String
         legalEntityName: String
         legalRegistrationCountry: String
+        legalRegistrationNumber: String
+        legalContactAddress: String
         supportEmail: String
         privacyEmail: String
         primaryDomain: String

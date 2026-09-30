@@ -47,6 +47,8 @@ describe('StoreEditor seller binding', () => {
         brandHighlightColor: null,
         legalEntityName: null,
         legalRegistrationCountry: null,
+        legalRegistrationNumber: null,
+        legalContactAddress: null,
         supportEmail: null,
         privacyEmail: null,
         internalNote: null,
@@ -185,10 +187,24 @@ describe('StoreEditor seller binding', () => {
                 '注册公司全称',
             ),
         );
+        await act(async () => {
+            setInputValue(
+                container.querySelector<HTMLInputElement>('input[placeholder="注册证书上的完整号码"]')!,
+                '123456789012 (123456-A)',
+            );
+            setInputValue(
+                container.querySelector<HTMLInputElement>(
+                    'input[placeholder="可供客户联系的营业或通讯地址"]',
+                )!,
+                '10 Example Road, 50000 Kuala Lumpur',
+            );
+        });
         await save();
         expect(requestConfirmation).not.toHaveBeenCalled();
         const input = mutate.mock.calls[0][0].variables.input;
         expect(input.legalEntityName).toBe('注册公司全称');
+        expect(input.legalRegistrationNumber).toBe('123456789012 (123456-A)');
+        expect(input.legalContactAddress).toBe('10 Example Road, 50000 Kuala Lumpur');
         expect(input).not.toHaveProperty('sellerId');
         expect(input).not.toHaveProperty('currentPassword');
     });

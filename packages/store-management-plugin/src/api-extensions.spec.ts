@@ -28,7 +28,14 @@ describe('store management API extensions', () => {
     });
 
     it('keeps legal identity writable only by the platform while exposing approved values', () => {
-        const legalFields = ['legalEntityName', 'legalRegistrationCountry', 'supportEmail', 'privacyEmail'];
+        const legalFields = [
+            'legalEntityName',
+            'legalRegistrationCountry',
+            'legalRegistrationNumber',
+            'legalContactAddress',
+            'supportEmail',
+            'privacyEmail',
+        ];
         const adminTypeNames = ['StoreProfile', 'UpdateStoreProfileInput'];
 
         for (const name of adminTypeNames) {
@@ -61,7 +68,12 @@ describe('store management API extensions', () => {
             expect.arrayContaining(['supportEmail', 'privacyEmail']),
         );
         expect(merchantInput.fields?.map(field => field.name.value)).not.toEqual(
-            expect.arrayContaining(['legalEntityName', 'legalRegistrationCountry']),
+            expect.arrayContaining([
+                'legalEntityName',
+                'legalRegistrationCountry',
+                'legalRegistrationNumber',
+                'legalContactAddress',
+            ]),
         );
 
         const branding = shopApiExtensions.definitions.find(

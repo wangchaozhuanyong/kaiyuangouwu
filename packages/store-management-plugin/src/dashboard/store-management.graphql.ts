@@ -68,6 +68,8 @@ export interface StoreProfileRecord {
     internalNote: string | null;
     legalEntityName: string | null;
     legalRegistrationCountry: string | null;
+    legalRegistrationNumber: string | null;
+    legalContactAddress: string | null;
     supportEmail: string | null;
     privacyEmail: string | null;
     primaryDomain: string | null;
@@ -105,6 +107,8 @@ const storeProfileFields = gql`
         internalNote
         legalEntityName
         legalRegistrationCountry
+        legalRegistrationNumber
+        legalContactAddress
         supportEmail
         privacyEmail
         primaryDomain
