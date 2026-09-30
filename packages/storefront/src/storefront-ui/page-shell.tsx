@@ -434,16 +434,19 @@ export function LegalFooter({
 
     return (
         <footer className="legal-footer">
-            <strong>
-                <button
-                    type="button"
-                    className="legal-footer-entry"
-                    disabled={!onContentTarget}
-                    onClick={() => onContentTarget?.('PAGE', '#/legal?id=privacy')}
-                >
-                    {footerTitle}
-                </button>
-            </strong>
+            <div className="legal-footer-identity">
+                <strong>
+                    <button
+                        type="button"
+                        className="legal-footer-entry"
+                        disabled={!onContentTarget}
+                        onClick={() => onContentTarget?.('PAGE', '#/legal?id=privacy')}
+                    >
+                        {footerTitle}
+                    </button>
+                </strong>
+                <span className="legal-footer-brand">{storefrontName}</span>
+            </div>
             {!!footerItems.length && (
                 <nav aria-label={footerTitle}>
                     {footerItems.map(item => (
@@ -458,7 +461,6 @@ export function LegalFooter({
                     ))}
                 </nav>
             )}
-            <span>{storefrontName}</span>
         </footer>
     );
 }

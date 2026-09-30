@@ -2277,20 +2277,23 @@ html[lang='en'] .quick-grid b {
 }
 
 .legal-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 24px;
     margin: 0 var(--page-section-inset, var(--experience-page-gutter-mobile));
     padding: 16px 0 var(--footer-end-gap);
     color: var(--muted);
-    text-align: center;
+    text-align: start;
     font-size: 12px;
 }
 
-.legal-footer strong,
-.legal-footer p,
-.legal-footer span {
-    display: block;
+.legal-footer-identity {
+    min-width: 0;
 }
 
 .legal-footer strong {
+    display: block;
     color: var(--text);
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
@@ -2305,6 +2308,8 @@ html[lang='en'] .quick-grid b {
     background: transparent;
     color: inherit;
     font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
     cursor: pointer;
 }
 
@@ -2316,40 +2321,41 @@ html[lang='en'] .quick-grid b {
     cursor: default;
 }
 
-.legal-footer p {
-    max-width: 680px;
-    margin: 7px auto 0;
+.legal-footer-brand {
+    display: block;
     line-height: var(--line-height-relaxed);
-    white-space: pre-line;
+    overflow-wrap: anywhere;
 }
 
 .legal-footer nav {
-    margin: 9px 0;
     display: flex;
-    justify-content: center;
+    min-width: 0;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 4px 12px;
+    gap: 0 16px;
 }
 
 .legal-footer nav button {
-    min-height: 32px;
+    min-height: 44px;
+    max-width: 100%;
     padding: 0;
     border: 0;
     background: transparent;
     color: inherit;
-    text-decoration: underline;
+    text-align: end;
+    overflow-wrap: anywhere;
+    text-decoration: none;
     text-underline-offset: 3px;
+}
+
+.legal-footer nav button:hover:not(:disabled) {
+    color: var(--accent-ink);
+    text-decoration: underline;
 }
 
 .legal-footer nav button:disabled {
     cursor: default;
     text-decoration: none;
-}
-
-.legal-footer p + span,
-.legal-footer nav + span,
-.legal-footer strong + span {
-    margin-top: 10px;
 }
 
 @media (min-width: 900px) {
