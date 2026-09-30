@@ -1161,6 +1161,44 @@ function inspectRepositoryState(sourceSha, readGit = readRepositoryGit) {
     }
 }
 
+function inspectImageServices(
+    run = readCommand,
+    socketExists = file => {
+        try {
+            return lstatSync(file).isSocket();
+        } catch {
+            return false;
+        }
+    },
+) {
+    const units = ['vendure-clamd.service', 'vendure-image-worker.service'];
+    const services = Object.fromEntries(
+        units.map(unit => [
+            unit,
+            run('systemctl', [
+                'show',
+                unit,
+                '--property=Id,LoadState,ActiveState,SubState,Result,ExecMainStatus,NRestarts,StartLimitBurst,StartLimitIntervalUSec,Requires,Wants',
+            ]),
+        ]),
+    );
+    const sockets = {
+        antivirus: socketExists('/run/clamav/clamd.ctl'),
+        processor: socketExists('/run/vendure-image-worker/processor.sock'),
+    };
+    const ready =
+        Object.values(services).every(
+            service =>
+                service.status === 'ok' &&
+                /^LoadState=loaded$/mu.test(service.output) &&
+                /^ActiveState=active$/mu.test(service.output) &&
+                /^SubState=running$/mu.test(service.output),
+        ) &&
+        sockets.antivirus &&
+        sockets.processor;
+    return { ready, services, sockets };
+}
+
 function diagnose(request) {
     // Fixed paths only: report sizes without enumerating customer files or
     // treating an untracked production path as safe to delete.
@@ -1237,6 +1275,7 @@ function diagnose(request) {
             'vendure-production-healthcheck.service',
             '--property=Result,ExecMainStatus,ExecMainExitTimestamp,ActiveState',
         ]),
+        imageServices: inspectImageServices(),
         latestBackups: backupMetadata(),
     };
     try {
@@ -2418,6 +2457,14 @@ function runLocked(environment = process.env) {
     if (request.operation === 'preflight-release') {
         const plan = inspectProductionReleases();
         assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);
+        if (existsSync(path.join(plan.currentRuntime, 'deploy/image-worker/server.cjs'))) {
+            const imageServices = inspectImageServices();
+            process.stdout.write(`PRODUCTION_IMAGE_SERVICES ${JSON.stringify(imageServices)}\n`);
+            assert.ok(
+                imageServices.ready,
+                'Image processing dependency is unavailable; run Production Operations diagnose before releasing',
+            );
+        }
         const storefront = spawnSync(
             '/usr/bin/node',
             [
@@ -2584,6 +2631,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    inspectImageServices,
     applyAptListsCleanup,
     applySnapCacheCleanup,
     applyAptMetadataCleanup,
