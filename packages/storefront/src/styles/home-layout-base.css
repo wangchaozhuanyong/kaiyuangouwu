@@ -13,6 +13,10 @@
     padding-top: 8px;
 }
 
+.homepage-modules:has(> .notice-strip) {
+    padding-top: var(--homepage-module-gap);
+}
+
 .homepage-modules > .home-intro-grid {
     display: contents;
 }
