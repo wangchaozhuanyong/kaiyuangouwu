@@ -168,6 +168,7 @@
         "vite": "7.3.6",
         "websocket-driver": "0.7.5",
         "webpack": "5.105.0",
+        "webpack-dev-middleware": "7.4.6",
         "webpack-dev-server": "5.2.6"
     },
     "trustedDependencies": [

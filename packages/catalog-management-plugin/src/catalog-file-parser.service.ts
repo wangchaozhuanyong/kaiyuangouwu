@@ -278,6 +278,7 @@ function normalizeRow(
         enabled: statusValue(values.get('enabled'), rowNumber),
         variantEnabled: statusValue(values.get('variantEnabled'), rowNumber, 'SKU 状态'),
         description: textValue(values.get('description')),
+        featuredAssetName: importSafeTextValue(values.get('featuredAssetName')),
         tags: textValue(values.get('tags'))
             .split(/[，,；;、]/)
             .map(value => value.trim())
@@ -327,6 +328,7 @@ function invalidRow(
         enabled: null,
         variantEnabled: null,
         description: textValue(cells[fields.indexOf('description')]),
+        featuredAssetName: textValue(cells[fields.indexOf('featuredAssetName')]),
         tags: [],
         sourceCreatedAt: null,
         sku: textValue(cells[fields.indexOf('sku')]),

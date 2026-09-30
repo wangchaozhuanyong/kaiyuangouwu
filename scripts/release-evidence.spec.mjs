@@ -19,6 +19,7 @@ import { classifyChanges } from './ci-impact.mjs';
 import { packageCommands } from './ci-run.mjs';
 import {
     coversChanges,
+    downloadEvidenceArtifact,
     findEvidence,
     findInputCoverage,
     frontendEvidencePlan,
@@ -26,6 +27,7 @@ import {
     isTrustedRun,
     requestGitHubApi,
     validateExecutedChecks,
+    waitForCompleteInputCoverage,
 } from './release-evidence.mjs';
 
 test('release evidence readers can verify merged PR CI with read-only GitHub token access', () => {
@@ -183,6 +185,63 @@ test('GitHub evidence reads retry transient HTTP and network failures without re
     );
     assert.equal(networkAttempts, 3);
     assert.deepEqual(networkDelays, [1000, 2000]);
+});
+
+test('evidence archives retry transient downloads and fail closed on client or persistent errors', () => {
+    const delays = [];
+    const archive = Buffer.from('trusted archive bytes');
+    let attempts = 0;
+    const result = downloadEvidenceArtifact(
+        'owner/repo',
+        42,
+        (command, args, options) => {
+            attempts++;
+            assert.equal(command, 'gh');
+            assert.deepEqual(args, ['api', 'repos/owner/repo/actions/artifacts/42/zip']);
+            assert.equal(options.maxBuffer, 2 * 1024 * 1024);
+            if (attempts < 3)
+                throw Object.assign(new Error('network unavailable'), {
+                    stderr: Buffer.from('Get "https://api.github.com": net/http: TLS handshake timeout'),
+                });
+            return archive;
+        },
+        delay => delays.push(delay),
+    );
+    assert.equal(result, archive);
+    assert.equal(attempts, 3);
+    assert.deepEqual(delays, [1000, 2000]);
+
+    for (const stderr of ['gh: HTTP 403', 'gh: HTTP 404', 'invalid archive']) {
+        let calls = 0;
+        assert.throws(() =>
+            downloadEvidenceArtifact(
+                'owner/repo',
+                42,
+                () => {
+                    calls++;
+                    throw Object.assign(new Error('download failed'), { stderr });
+                },
+                () => assert.fail('Client errors must not wait'),
+            ),
+        );
+        assert.equal(calls, 1);
+    }
+
+    let persistentAttempts = 0;
+    const persistentDelays = [];
+    assert.throws(() =>
+        downloadEvidenceArtifact(
+            'owner/repo',
+            42,
+            () => {
+                persistentAttempts++;
+                throw Object.assign(new Error('still unavailable'), { stderr: 'gh: HTTP 503' });
+            },
+            delay => persistentDelays.push(delay),
+        ),
+    );
+    assert.equal(persistentAttempts, 3);
+    assert.deepEqual(persistentDelays, [1000, 2000]);
 });
 
 test('a previous PR does not cover additional undeployed backend changes', () => {
@@ -761,6 +820,37 @@ test('a later deployment failure preserves v2 successful CI-stage evidence, neve
         const result = await findInputCoverage(fixture);
         assert.equal(result.missing.length === 0, conclusion === 'success');
     }
+});
+
+test('verification refreshes temporarily incomplete proof lists and still rejects persistent gaps', async () => {
+    const missing = { anchor: { runId: 7 }, missing: [{ id: 'backend:dev-server' }] };
+    const complete = { anchor: { runId: 7 }, missing: [] };
+    const events = [];
+    let reads = 0;
+    const recovered = await waitForCompleteInputCoverage(
+        () => {
+            events.push('read');
+            return ++reads === 1 ? missing : complete;
+        },
+        {
+            delays: [1],
+            pause: async delay => events.push(`pause:${delay}`),
+            refresh: () => events.push('refresh'),
+        },
+    );
+    assert.equal(recovered, complete);
+    assert.deepEqual(events, ['read', 'pause:1', 'refresh', 'read']);
+
+    let persistentReads = 0;
+    const persistent = await waitForCompleteInputCoverage(
+        () => {
+            persistentReads++;
+            return missing;
+        },
+        { delays: [1, 2], pause: async () => undefined, refresh: () => undefined },
+    );
+    assert.equal(persistent, missing);
+    assert.equal(persistentReads, 3);
 });
 
 test('client styles invalidate both client and Admin preview input fingerprints', () => {

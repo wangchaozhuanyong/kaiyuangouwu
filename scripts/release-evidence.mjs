@@ -156,10 +156,30 @@ export async function findEvidence({ repository, targetSha, requiredFiles, api =
     return null;
 }
 
+export function downloadEvidenceArtifact(
+    repository,
+    artifactId,
+    request = execFileSync,
+    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
+) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            return request('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
+                maxBuffer: 2 * 1024 * 1024,
+            });
+        } catch (error) {
+            const transient = /gh: HTTP (?:429|5\d\d)\b|TLS handshake timeout|connection reset by peer/u.test(
+                String(error?.stderr ?? ''),
+            );
+            if (attempt === 2 || !transient) throw error;
+            pause(1000 * (attempt + 1));
+        }
+    }
+    throw new Error('Unreachable GitHub artifact retry state');
+}
+
 function readProof(repository, artifactId) {
-    const archive = execFileSync('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
-        maxBuffer: 2 * 1024 * 1024,
-    });
+    const archive = downloadEvidenceArtifact(repository, artifactId);
     const json = execFileSync(
         'python3',
         [
@@ -317,6 +337,26 @@ export async function findInputCoverage({
     return { targetTree, anchor, reused, missing: [...missing.values()] };
 }
 
+export async function waitForCompleteInputCoverage(
+    loadCoverage,
+    {
+        delays = [5_000, 15_000, 30_000],
+        pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+        refresh = () => apiCache.clear(),
+    } = {},
+) {
+    let result = await loadCoverage();
+    for (const delay of delays) {
+        if (result.anchor && result.missing.length === 0) return result;
+        await pause(delay);
+        // GitHub can briefly serve an incomplete run or artifact list after the CI gate succeeds.
+        // Revalidate every proof from a fresh API snapshot; never treat the prior plan as approval.
+        refresh();
+        result = await loadCoverage();
+    }
+    return result;
+}
+
 export function validateExecutedChecks(plan, inventory, results) {
     for (const check of checkRequirements(plan, inventory)) {
         for (const job of requiredJobs(check, plan.full))
@@ -378,13 +418,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
             expectedTree,
             'CI run source differs from release',
         );
-        const result = await findInputCoverage({
-            repository,
-            targetSha: git('rev-parse', target),
-            plan: releaseInspection(base, target),
-            includeRunId: runId,
-            currentRunId: process.env.GITHUB_RUN_ID,
-        });
+        const result = await waitForCompleteInputCoverage(() =>
+            findInputCoverage({
+                repository,
+                targetSha: git('rev-parse', target),
+                plan: releaseInspection(base, target),
+                includeRunId: runId,
+                currentRunId: process.env.GITHUB_RUN_ID,
+            }),
+        );
         assert.ok(
             result.anchor && String(result.anchor.runId) === runId,
             'CI source anchor is missing or untrusted',

@@ -356,6 +356,10 @@ export interface NormalizedCatalogRow {
     enabled: boolean | null;
     variantEnabled?: boolean | null;
     description: string;
+    /** Exact filename of an image asset already assigned to the import channel. */
+    featuredAssetName?: string;
+    /** Resolved server-side only during preview; never accepted from the source file. */
+    resolvedFeaturedAssetId?: string;
     tags: string[];
     sourceCreatedAt: string | null;
     sku: string;

@@ -26,6 +26,7 @@ async function getFileType(buffer: Buffer) {
 export class AssetServer {
     private readonly assetStorageStrategy: AssetStorageStrategy;
     private readonly cacheDir = 'cache';
+    private readonly validatedTransformParameters = new WeakMap<Request, ImageTransformParameters>();
     private cacheHeader: string;
     private presets: ImageTransformPreset[];
     private imageTransformStrategies: ImageTransformStrategy[];
@@ -102,6 +103,7 @@ export class AssetServer {
                 if (!res.hasHeader('Cache-Control')) res.setHeader('Cache-Control', this.cacheHeader);
                 res.send(file);
             } catch (e: any) {
+                this.validatedTransformParameters.set(req, params);
                 const err = new Error('File not found');
                 (err as any).status = 404;
                 return next(err);
@@ -128,7 +130,10 @@ export class AssetServer {
                         return;
                     }
                     try {
-                        const parameters = await this.getImageTransformParameters(req);
+                        const parameters =
+                            this.validatedTransformParameters.get(req) ??
+                            (await this.getImageTransformParameters(req));
+                        this.validatedTransformParameters.delete(req);
                         const image = await transformImage(file, parameters);
                         let imageBuffer: Buffer = await image.toBuffer();
                         const cachedFileName = this.getFileNameFromParameters(req.path, parameters);

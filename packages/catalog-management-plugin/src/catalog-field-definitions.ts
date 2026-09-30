@@ -36,6 +36,11 @@ export const CATALOG_FIELD_DEFINITIONS = [
     { value: 'enabled', label: '商品状态', aliases: ['状态'] },
     { value: 'variantEnabled', label: 'SKU状态', aliases: ['SKU 状态'] },
     { value: 'description', label: '商品描述', aliases: ['描述'] },
+    {
+        value: 'featuredAssetName',
+        label: '主图素材文件名',
+        aliases: ['商品主图文件名', '主图文件名'],
+    },
     { value: 'manufacturedAt', label: '生产日期', aliases: [] },
     { value: 'shelfLifeDays', label: '保质期', aliases: ['保质期天数'] },
     { value: 'lotCode', label: '批次号', aliases: [] },

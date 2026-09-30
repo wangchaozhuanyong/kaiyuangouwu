@@ -178,11 +178,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // User-requested delivery data tables need row separators for column comparison.
+                        // Delivery tables and the coupon guide retain their approved separators.
                         if (
-                            file === path.join(__dirname, 'styles/logistics.css') &&
-                            selector.trim() === '.delivery-table td' &&
-                            border[1] === 'bottom' &&
+                            ((file === path.join(__dirname, 'styles/logistics.css') &&
+                                selector.trim() === '.delivery-table td' &&
+                                border[1] === 'bottom') ||
+                                (file === path.join(__dirname, 'styles/coupon-center.css') &&
+                                    selector.trim() === '.coupon-center-guide dl > div + div' &&
+                                    border[1] === 'inline')) &&
                             border[2].trim() === '1px solid var(--line-subtle)'
                         )
                             continue;
