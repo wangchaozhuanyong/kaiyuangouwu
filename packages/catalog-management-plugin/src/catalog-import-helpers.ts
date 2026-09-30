@@ -183,6 +183,7 @@ export function validateImportSource(input: BeginCatalogImportInput): void {
         'enabled',
         'variantEnabled',
         'description',
+        'featuredAssetName',
         'tags',
         'sourceCreatedAt',
         'sku',

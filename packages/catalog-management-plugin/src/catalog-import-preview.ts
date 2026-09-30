@@ -1,5 +1,6 @@
-import { CurrencyCode } from '@vendure/common/lib/generated-types';
+import { AssetType, CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
+    Asset,
     Collection,
     Product,
     ProductVariant,
@@ -57,6 +58,7 @@ export interface CatalogIndex {
     products: CatalogIndexProduct[];
     categoryPaths: Set<string>;
     childCategoryParents: Map<string, Set<string>>;
+    featuredAssetsByName?: Map<string, string[]>;
 }
 
 export class CatalogImportPreview {
@@ -73,8 +75,26 @@ export class CatalogImportPreview {
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
+        row.resolvedFeaturedAssetId = undefined;
         const typeError = catalogImportTypeError(ctx, row);
         if (typeError) return { ...emptyPlan('ERROR'), message: typeError };
+        if (row.featuredAssetName) {
+            const matchingAssetIds =
+                catalogIndex.featuredAssetsByName?.get(normalizeIdentity(row.featuredAssetName)) ?? [];
+            if (matchingAssetIds.length === 0) {
+                return {
+                    ...emptyPlan('ERROR'),
+                    message: `当前店铺素材库中找不到主图“${row.featuredAssetName}”，请先上传该图片再预览`,
+                };
+            }
+            if (matchingAssetIds.length > 1) {
+                return {
+                    ...emptyPlan('ERROR'),
+                    message: `主图素材名“${row.featuredAssetName}”不唯一，请使用唯一文件名`,
+                };
+            }
+            row.resolvedFeaturedAssetId = matchingAssetIds[0];
+        }
         const warnings = [validationWarning(row)];
         const categoryExists =
             Boolean(row.category) &&
@@ -150,6 +170,10 @@ export class CatalogImportPreview {
                     targetVariant = targetProduct.variants[0];
                 }
             }
+        }
+
+        if (targetProduct && row.featuredAssetName) {
+            return conflictPlan('主图素材文件名仅用于新建商品；已有商品请在商品编辑页更换主图');
         }
 
         if (targetProduct) {
@@ -550,10 +574,31 @@ export class CatalogImportPreview {
                 channelId: ctx.channelId,
             })
             .where('collection.isRoot = :isRoot', { isRoot: false });
-        const [products, collections] = await Promise.all([
+        const featuredAssetQuery = this.connection
+            .getRepository(ctx, Asset)
+            .createQueryBuilder('asset')
+            .innerJoin('asset.channels', 'assetChannel', 'assetChannel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .leftJoinAndSelect('asset.translations', 'assetTranslation')
+            .where('asset.type = :assetType', { assetType: AssetType.IMAGE });
+        const [products, collections, featuredAssets] = await Promise.all([
             productQuery.getMany(),
             collectionQuery.getMany(),
+            featuredAssetQuery.getMany(),
         ]);
+        const featuredAssetsByName = new Map<string, string[]>();
+        for (const asset of featuredAssets) {
+            for (const translation of asset.translations ?? []) {
+                const name = normalizeIdentity(translation.name);
+                if (!name) continue;
+                const matchingIds = featuredAssetsByName.get(name) ?? [];
+                const assetId = String(asset.id);
+                if (!matchingIds.includes(assetId)) {
+                    featuredAssetsByName.set(name, [...matchingIds, assetId]);
+                }
+            }
+        }
         const categoryPaths = new Set<string>();
         const childCategoryParents = new Map<string, Set<string>>();
         for (const collection of collections) {
@@ -589,6 +634,7 @@ export class CatalogImportPreview {
             })),
             categoryPaths,
             childCategoryParents,
+            featuredAssetsByName,
         };
     }
 }

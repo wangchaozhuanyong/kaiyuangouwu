@@ -20,6 +20,8 @@ export interface CollectionSummary {
     description: string;
     position: number;
     parentId: string;
+    /** Variant count resolved in the active Vendure channel. */
+    productVariantCount?: number | null;
     featuredAsset: Asset | null;
     children?: CollectionSummary[] | null;
 }

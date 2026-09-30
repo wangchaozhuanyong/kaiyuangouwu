@@ -123,6 +123,12 @@ export class CatalogImportWriter {
             const created = await this.productService.create(ctx, {
                 enabled: row.normalizedData.enabled ?? true,
                 facetValueIds: newProductFacetValueIds,
+                ...(row.normalizedData.resolvedFeaturedAssetId
+                    ? {
+                          featuredAssetId: row.normalizedData.resolvedFeaturedAssetId,
+                          assetIds: [row.normalizedData.resolvedFeaturedAssetId],
+                      }
+                    : {}),
                 customFields: {
                     ...{ fulfillmentType: row.normalizedData.fulfillmentType },
                     pricingMode: row.normalizedData.pricingMode ?? 'FIXED',
