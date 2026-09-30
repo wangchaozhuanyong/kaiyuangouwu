@@ -704,7 +704,7 @@ export const adminApiExtensions = gql`
         name: String!
         category: String!
         secondaryCategory: String
-        fulfillmentType: String!
+        fulfillmentType: String
         pricingMode: String
         channelCode: String!
         stockLocationCode: String!

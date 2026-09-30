@@ -291,6 +291,7 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         'enabled',
         'variantEnabled',
         'description',
+        'featuredAssetName',
         'tags',
         'sourceCreatedAt',
         'sku',
@@ -330,6 +331,7 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         enabled: typeof row.enabled === 'boolean' ? row.enabled : null,
         variantEnabled: typeof row.variantEnabled === 'boolean' ? row.variantEnabled : null,
         description: safeImportText(row.description, 50_000),
+        featuredAssetName: safeImportText(row.featuredAssetName ?? '', 255),
         tags: [...new Set((row.tags ?? []).map(tag => safeImportText(tag, 255)).filter(Boolean))].slice(
             0,
             100,
