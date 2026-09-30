@@ -9,6 +9,25 @@ import {
 } from './storefront-router';
 
 describe('storefront routing', () => {
+    it('preserves the logistics origin and list filter through related order links', () => {
+        for (const source of ['logistics', 'logistics-detail'] as const) {
+            const route = {
+                name: 'order-detail' as const,
+                id: 'order-3',
+                source,
+                deliveryStatus: 'transit' as const,
+                term: 'TRACK-123',
+            };
+            expect(routeFromHash(routeHref(route))).toMatchObject(route);
+        }
+        expect(
+            routeFromRouterLocation('/logistics', {
+                source: 'https://invalid.example',
+                deliveryStatus: 'unknown',
+            }),
+        ).toMatchObject({ source: undefined, deliveryStatus: undefined });
+    });
+
     it('round-trips the checkout address continuation without exposing address contents', () => {
         const route = {
             name: 'addresses' as const,

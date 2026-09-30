@@ -13,6 +13,7 @@ import {
     ShieldCheck,
     Star,
     TicketPercent,
+    Truck,
     UserRound,
     WalletCards,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { storefrontSupportChannels, supportServiceDetails } from '../../support-
 type AccountPath =
     | '/account'
     | '/orders'
+    | '/logistics'
     | '/coupons'
     | '/notifications'
     | '/favorites'
@@ -53,9 +55,10 @@ const desktopAccountGroups: ReadonlyArray<{
             {
                 path: '/orders',
                 label: ['我的订单', 'Orders'],
-                routes: ['orders', 'order-detail', 'logistics'],
+                routes: ['orders', 'order-detail'],
                 icon: Package,
             },
+            { path: '/logistics', label: ['物流动态', 'Deliveries'], routes: ['logistics'], icon: Truck },
             {
                 path: '/orders',
                 label: ['售后中心', 'After-sales'],
@@ -151,7 +154,9 @@ export function DesktopAccountNavigation() {
                         .filter(section => section.path !== '/reviews' || reviewSettingsStatus === 'enabled')
                         .map(section => {
                             const selected =
-                                (section.routes as readonly string[]).includes(route.name) &&
+                                (route.name === 'order-detail' && route.source?.startsWith('logistics')
+                                    ? section.path === '/logistics'
+                                    : (section.routes as readonly string[]).includes(route.name)) &&
                                 (route.name !== 'orders' ||
                                     (section.tab === 'service'
                                         ? route.tab === 'service'
