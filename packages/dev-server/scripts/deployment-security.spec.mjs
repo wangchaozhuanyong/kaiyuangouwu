@@ -839,6 +839,18 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /candidate AI image worker health check did not pass/u);
     assert.match(script, /PRODUCTION_API_READY phase=post-switch attempts=/u);
     assert.match(script, /PRODUCTION_AI_HEALTH_READY attempts=/u);
+    const imageWorkerRefresh = script.indexOf('refresh_image_processor "${candidate}"');
+    const postPointerHealthGate = script.indexOf('image_health_ready_attempt=0', imageWorkerRefresh);
+    const storefrontVerification = script.indexOf('verify-production-storefronts.mjs', postPointerHealthGate);
+    assert.ok(imageWorkerRefresh < postPointerHealthGate && postPointerHealthGate < storefrontVerification);
+    assert.match(
+        script.slice(postPointerHealthGate, storefrontVerification),
+        /for attempt in \$\(seq 1 30\); do/u,
+    );
+    assert.match(
+        script.slice(postPointerHealthGate, storefrontVerification),
+        /fail 'post-pointer AI image worker health check did not pass'/u,
+    );
     assert.match(script, /vendure-production-healthcheck\.timer/u);
     assert.match(script, /systemctl restart vendure-production-healthcheck\.service/u);
     assert.match(script, /rollback 1/u);
