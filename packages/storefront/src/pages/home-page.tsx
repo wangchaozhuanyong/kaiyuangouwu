@@ -872,9 +872,14 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    const overlayTrustBar = desktop && hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
-    // The desktop service bar is overlaid on the hero. Its saved position can
-    // still sit between the hero and shortcuts, but is not a separate floor.
+    const overlayTrustBar =
+        desktop &&
+        trustBlock?.settings?.placement !== 'belowHero' &&
+        hasHomepageModule('HERO') &&
+        heroCount > 0 &&
+        Boolean(trustBar);
+    // Each store can keep the desktop overlay or place its trust bar in the
+    // homepage floor order; mobile always follows the saved floor order.
     const introOrders = (overlayTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
