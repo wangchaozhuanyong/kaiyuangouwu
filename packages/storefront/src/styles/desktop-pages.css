@@ -1230,6 +1230,7 @@
 
     .desktop-store-layout .address-list {
         padding: 0;
+        background: transparent;
         gap: 20px;
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1249,6 +1250,9 @@
     }
     .desktop-store-layout .address-card > div {
         flex: 1;
+    }
+    .desktop-store-layout .address-card + .address-card::before {
+        display: none;
     }
     .desktop-store-layout .address-card p {
         flex: 1;
@@ -1351,6 +1355,8 @@
         box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .security-card-list {
+        --security-row-inset: 48px;
+        --security-row-end: 0px;
         display: grid;
         gap: 8px;
         border: 0;
@@ -1714,7 +1720,7 @@
         min-width: 0;
         display: flex;
         align-items: center;
-        padding: 44px 48px;
+        padding: 32px 40px;
         background: var(--surface, var(--paper));
         grid-column: 2;
         grid-row: 1;
@@ -1752,27 +1758,6 @@
     .desktop-store-layout .auth-page .primary-action {
         min-height: 46px;
         border-radius: var(--skin-control-radius);
-        box-shadow: var(--accent-shadow);
-    }
-    .desktop-store-layout .auth-mobile-back-button {
-        display: none;
-    }
-    .desktop-store-layout .auth-assurance-rail {
-        grid-column: 1 / -1;
-        grid-row: 2;
-        min-height: 88px;
-        padding: 18px 30px;
-        background: var(--surface-elevated, var(--surface));
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 18px;
-    }
-    .desktop-store-layout .auth-assurance-item {
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 11px;
     }
     .desktop-store-layout .auth-page-default {
         display: block;
@@ -1983,15 +1968,14 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         margin: 0;
-        gap: 12px;
+        gap: 0;
     }
     .desktop-store-layout .support-channel-row {
         min-height: 84px;
-        border: 0;
-        border-radius: var(--skin-control-radius);
         padding: 16px;
-        background: var(--soft);
-        box-shadow: none;
+    }
+    .desktop-store-layout .support-channel-row + .support-channel-row::before {
+        inset-inline: 66px 16px;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;

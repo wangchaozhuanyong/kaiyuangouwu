@@ -458,7 +458,11 @@ refresh_image_processor() {
     fi
     [[ "$(readlink -f "${current_pointer}")" == "${runtime}" ]] || return 1
     [[ "${CUSTOMER_IMAGE_PROCESSOR_SOCKET:-}" == /* ]] || return 1
-    sudo -n systemctl restart vendure-image-worker.service
+    # The host's antivirus Wants the image worker, which Requires the antivirus.
+    # Keep stop/start in separate transactions: a restart through that cycle can
+    # restart clamd too and exhaust its deliberately bounded startup rate.
+    sudo -n systemctl stop vendure-image-worker.service
+    sudo -n systemctl start vendure-image-worker.service
     for attempt in $(seq 1 20); do
         if sudo -n systemctl is-active --quiet vendure-image-worker.service && \
             [[ -S "${CUSTOMER_IMAGE_PROCESSOR_SOCKET}" ]]; then

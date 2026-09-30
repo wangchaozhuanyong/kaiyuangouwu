@@ -483,7 +483,11 @@ export function AddressesPage({
                                             <Pencil />
                                             {isZh ? '编辑' : 'Edit'}
                                         </button>
-                                        <button type="button" onClick={() => void remove(address.id)}>
+                                        <button
+                                            type="button"
+                                            className="danger-action"
+                                            onClick={() => void remove(address.id)}
+                                        >
                                             <Trash2 />
                                             {isZh ? '删除' : 'Delete'}
                                         </button>
@@ -525,7 +529,11 @@ export function AddressesPage({
                                                 {isZh ? '设为默认' : 'Make default'}
                                             </button>
                                         )}
-                                        <button type="button" onClick={() => void removeEmail(email.id)}>
+                                        <button
+                                            type="button"
+                                            className="danger-action"
+                                            onClick={() => void removeEmail(email.id)}
+                                        >
                                             <Trash2 />
                                             {isZh ? '删除' : 'Delete'}
                                         </button>

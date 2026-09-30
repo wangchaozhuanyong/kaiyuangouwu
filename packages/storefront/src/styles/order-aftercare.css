@@ -1,4 +1,16 @@
 /* Shared by order details and payment confirmation. Skins supply surfaces and status tokens. */
+.order-detail-products article {
+    position: relative;
+}
+.order-detail-products article + article::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 81px;
+    border-top: 1px solid var(--skin-divider);
+}
+.order-logistics-item + .order-logistics-item {
+    border-top: 1px solid var(--skin-divider);
+}
 .after-sales-evidence {
     min-width: 0;
     display: grid;
@@ -300,8 +312,8 @@
     padding: 10px 16px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
-    color: var(--text);
+    background: transparent;
+    color: var(--accent-ink);
     font-weight: var(--font-weight-semibold);
 }
 .after-sales-cancel,

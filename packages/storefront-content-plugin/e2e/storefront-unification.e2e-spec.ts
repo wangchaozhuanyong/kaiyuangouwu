@@ -952,14 +952,14 @@ describe('unified storefront Admin API to Shop API', () => {
                                 if (width < 1024) {
                                     await browserExpect(page.locator('.auth-hero')).toBeHidden();
                                     await browserExpect(
-                                        page.locator('.auth-mobile-back-button'),
+                                        page.locator('.login-content .auth-form-back-button'),
                                     ).toBeVisible();
                                     await browserExpect(page.locator('.auth-form-heading')).toBeVisible();
                                 } else {
                                     await browserExpect(page.locator('.auth-hero')).toBeVisible();
                                     await browserExpect(
-                                        page.locator('.auth-mobile-back-button'),
-                                    ).toBeHidden();
+                                        page.locator('.login-content .auth-form-back-button'),
+                                    ).toBeVisible();
                                     const heroBox = await page.locator('.auth-hero').boundingBox();
                                     const copyBox = await page.locator('.auth-hero-copy').boundingBox();
                                     const formBox = await page.locator('.login-content').boundingBox();
@@ -978,6 +978,10 @@ describe('unified storefront Admin API to Shop API', () => {
                                     const assuranceRail = page.locator('.auth-assurance-rail');
                                     const railBox = await assuranceRail.boundingBox();
                                     if (!railBox) throw new Error('Missing desktop assurance rail');
+                                    expect(railBox.x).toBeGreaterThanOrEqual(formBox.x);
+                                    expect(railBox.y + railBox.height).toBeLessThanOrEqual(
+                                        formBox.y + formBox.height,
+                                    );
                                     expect(railBox.height).toBeLessThan(140);
                                     const itemTops = await assuranceRail
                                         .locator('.auth-assurance-item')

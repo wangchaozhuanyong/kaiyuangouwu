@@ -21,6 +21,19 @@ metadata, and the existing release retention plan. Backup contents, environment
 files and PM2 environment values are never logged. A blocked retention snapshot
 cannot produce an approval hash.
 
+Image diagnostics also report the fixed `vendure-clamd.service` and
+`vendure-image-worker.service` states, startup limits, dependencies, and local
+socket presence. A release with an existing image worker stops at preflight if
+either service or socket is unavailable. This read-only diagnosis uses the same
+GitHub OIDC authorization; no long-lived AWS access key or browser-token export is
+needed. Keep the local GitHub session and existing SSH key in their normal stores.
+
+When refreshing the image worker, deployment performs separate `stop` and `start`
+transactions. The production antivirus wants the worker and the worker requires
+the antivirus; a combined restart can propagate through this dependency cycle.
+Keep antivirus startup limits and scanning enabled. Recover the dependency first
+and verify its socket response before releasing a repaired candidate.
+
 Review every `keepDirectories`, `deleteDirectories` and `deleteArchives` entry.
 The existing retention policy keeps the current runtime and the two immediately
 older runtime directories. Failed candidates newer than current are included in

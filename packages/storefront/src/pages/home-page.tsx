@@ -872,8 +872,8 @@ export function HomePage() {
             </div>
         ) : null;
     const overlayTrustBar = desktop && hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
-    // The desktop service bar is overlaid on the hero, so its saved floor position
-    // must not split an otherwise adjacent hero and shortcut gallery.
+    // The desktop service bar is overlaid on the hero. Its saved position can
+    // still sit between the hero and shortcuts, but is not a separate floor.
     const introOrders = (overlayTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
@@ -882,7 +882,7 @@ export function HomePage() {
         introOrders.length > 0 &&
         homepageModules
             .slice(Math.min(...introOrders), Math.max(...introOrders) + 1)
-            .filter(entry => !(overlayTrustBar && entry.type === 'TRUST_BAR')).length === introOrders.length;
+            .every(entry => ['HERO', 'QUICK_LINKS', 'TRUST_BAR'].includes(entry.type));
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>

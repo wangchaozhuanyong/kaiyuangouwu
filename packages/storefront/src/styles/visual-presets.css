@@ -7,7 +7,7 @@ html[data-storefront-preset] {
     --font-display: var(--skin-display-font, var(--font-ui));
     --line-subtle: color-mix(in srgb, var(--skin-divider) 68%, transparent);
     --product-media-bg: color-mix(in srgb, var(--soft) 72%, var(--surface));
-    --accent-disabled-bg: color-mix(in srgb, var(--accent) 30%, var(--surface));
+    --accent-disabled-bg: var(--soft);
     --accent-disabled-text: var(--muted);
     --accent-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 12%, transparent);
     --warning-bg: color-mix(in srgb, var(--warning) 10%, var(--surface));
@@ -24,10 +24,9 @@ html[data-storefront-preset] {
     --control-surface-image: none;
     --control-surface-hover-image: none;
     --control-surface-pressed-image: none;
-    /* Module actions are interactive rows inside a larger card. They inherit
-       each skin's tonal control hierarchy without becoming nested cards. */
-    --module-action-surface: var(--control-surface);
-    --module-action-surface-hover: var(--control-surface-hover);
+    /* Information rows share their parent surface; controls keep their own fill. */
+    --module-action-surface: transparent;
+    --module-action-surface-hover: transparent;
     --product-card-surface: var(--surface);
     --availability-unavailable: var(--danger);
     --control-elevation: none;
@@ -45,5 +44,4 @@ html[data-storefront-preset='neo-minimalist'] {
     --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
     --product-card-surface: var(--surface-elevated);
     --availability-unavailable: var(--muted);
-    --module-action-surface-hover: var(--interaction-hover);
 }
