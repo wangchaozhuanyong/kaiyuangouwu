@@ -33,7 +33,11 @@ const collections: CollectionSummary[] = [
     },
 ];
 
-function renderCategories(route: RouteState, overrides: Record<string, unknown> = {}) {
+function renderCategories(
+    route: RouteState,
+    overrides: Record<string, unknown> = {},
+    expandChildren = false,
+) {
     return renderToStaticMarkup(
         <StorefrontContext.Provider
             value={
@@ -49,7 +53,7 @@ function renderCategories(route: RouteState, overrides: Record<string, unknown> 
                 } as unknown as StorefrontContextValue
             }
         >
-            <DesktopCategoryNavigation />
+            <DesktopCategoryNavigation expandChildren={expandChildren} />
         </StorefrontContext.Provider>,
     );
 }
@@ -167,6 +171,30 @@ describe('desktop catalog category navigation', () => {
         expect(stylesheet).toMatch(
             /\.desktop-subcategory-sidebar nav::\-webkit-scrollbar\s*\{[^}]*display:\s*none;/,
         );
+    });
+
+    it('keeps closing groups inert and hidden from assistive technology during category switching', () => {
+        const html = renderCategories(
+            { name: 'category', collectionId: 'parent', childId: 'child' },
+            {
+                collections: [
+                    ...collections,
+                    {
+                        ...collections[0],
+                        id: 'other-parent',
+                        name: '另一分类',
+                        children: [{ ...child, id: 'other-child', name: '收起的子分类' }],
+                    },
+                ],
+            },
+            true,
+        );
+
+        expect(html).toContain('class="desktop-category-children" aria-hidden="false"');
+        expect(html).toContain('class="desktop-category-children" inert="" aria-hidden="true"');
+        expect(html).toContain('收起的子分类');
+        expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
+        expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
     });
 
     it('keeps one standalone legal footer without duplicating the services navigation', () => {

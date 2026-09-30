@@ -2893,7 +2893,7 @@ html[lang='en'] .primary-categories button {
 .all-primary-categories h2 {
     min-height: 44px;
     margin: 0;
-    padding: 14px var(--page-section-inset, 14px) 8px;
+    padding: 14px var(--page-section-inset, 14px) 8px calc(var(--page-section-inset, 14px) + 8px);
     color: var(--text);
     font-size: 14px;
     font-weight: var(--font-weight-semibold);
@@ -3278,38 +3278,38 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .notice-strip-copy {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    animation: notice-ticker-enter 240ms ease-out;
-}
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        animation: notice-ticker-enter 240ms ease-out;
+    }
 
-.notice-strip-title {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 40%;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--text);
-    font-weight: var(--font-weight-bold);
-}
+    .notice-strip-title {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 40%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--text);
+        font-weight: var(--font-weight-bold);
+    }
 
-.notice-strip-title:only-child {
-    max-width: 100%;
-}
+    .notice-strip-title:only-child {
+        max-width: 100%;
+    }
 
-.notice-strip-content {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--muted);
-    font-weight: 400;
-}
+    .notice-strip-content {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--muted);
+        font-weight: 400;
+    }
 
     .category-page .primary-categories-all-label {
         height: auto;

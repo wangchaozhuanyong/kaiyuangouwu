@@ -250,6 +250,90 @@ function renderHome(overrides: Partial<HomePageProps> = {}, desktop = false) {
 }
 
 describe('HomePage hero carousel', () => {
+    it('reserves the uploaded dimensions for category and story artwork before decoding', () => {
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    { ...categoryAdBlock, imageAsset: { width: 1672, height: 941 } },
+                    { ...heroBlock, id: 'story', type: 'STORY', imageAsset: { width: 1448, height: 1086 } },
+                ],
+            },
+            true,
+        );
+        expect(markup).toContain('width="1672" height="941"');
+        expect(markup).toContain('width="1448" height="1086"');
+    });
+
+    it('reserves a category promotion rail while its selected products are pending', () => {
+        const markup = renderHome(
+            {
+                products: [],
+                managedContentLoading: true,
+                contentBlocks: [
+                    {
+                        ...categoryAdBlock,
+                        settings: { displayCount: 4, selectedProductIds: ['one', 'two', 'three', 'four'] },
+                    },
+                ],
+            },
+            true,
+        );
+        expect(markup.match(/product-card-skeleton/g)).toHaveLength(4);
+        expect(markup).toContain('category-promotion-products-4');
+        expect(markup).not.toContain('is-visual-only');
+    });
+
+    it.each([false, true])(
+        'reserves configured merchandising rows before products arrive, desktop=%s',
+        desktop => {
+            const contentBlocks: StorefrontContentBlock[] = [
+                {
+                    ...heroBlock,
+                    id: 'best',
+                    type: 'BEST_SELLERS',
+                    title: '热门商品',
+                    settings: { displayCount: 18 },
+                },
+                {
+                    ...heroBlock,
+                    id: 'recommended',
+                    type: 'RECOMMENDATIONS',
+                    title: '为你推荐',
+                    settings: { displayCount: 18 },
+                },
+            ];
+            const pending = renderHome(
+                {
+                    contentBlocks,
+                    products: [],
+                    catalogLoading: true,
+                    bestSellerProducts: [product],
+                    recommendationProducts: [product],
+                    bestSellersLoading: true,
+                    recommendationsLoading: true,
+                },
+                desktop,
+            );
+            expect(pending.match(/product-card-skeleton/g)).toHaveLength(36);
+            expect(pending.match(/aria-busy="true"/g)).toHaveLength(2);
+            expect(pending).toContain('热门商品');
+            expect(pending).toContain('为你推荐');
+            expect(pending).not.toContain(product.name);
+            expect(pending).not.toContain('route-loading');
+            const settled = renderHome(
+                {
+                    contentBlocks,
+                    products: [product],
+                    bestSellerProducts: [product],
+                    recommendationProducts: [product],
+                },
+                desktop,
+            );
+            expect(settled).toContain(product.name);
+            expect(settled).not.toContain('product-card-skeleton');
+        },
+    );
+
     it.each([false, true])('keeps managed copy on its image with desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
         expect(markup).toContain('class="hero hero-image-overlay"');

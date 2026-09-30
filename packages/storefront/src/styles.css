@@ -424,24 +424,6 @@ img {
         transform: translateX(350%);
     }
 }
-.page-readiness-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: var(--layer-readiness);
-    display: grid;
-    place-items: center;
-    background: var(--skin-background, #f4f5f7);
-}
-.page-readiness-error {
-    max-width: 420px;
-    padding: 24px;
-    text-align: center;
-}
-.page-readiness-error button {
-    margin: 8px;
-    padding: 10px 20px;
-}
-
 .route-transition {
     width: min(100%, var(--app-width));
     min-height: 100dvh;
