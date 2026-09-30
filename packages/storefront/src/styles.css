@@ -204,7 +204,11 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-    button:active:not(:disabled):not([aria-busy='true']):not([aria-disabled='true']) {
+    /* A full-bleed carousel image must stay flush while pressed or swiped;
+       moving it exposes the dark hero background along its top edge. */
+    button:active:not(:disabled):not([aria-busy='true']):not([aria-disabled='true']):not(
+            :where(.hero-rich-image-link)
+        ) {
         transform: translateY(1px);
     }
 }
