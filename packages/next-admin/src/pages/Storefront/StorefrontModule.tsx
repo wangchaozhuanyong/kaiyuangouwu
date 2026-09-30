@@ -172,6 +172,15 @@ export function StorefrontModule() {
                 `首页轮播图 ${heroCount + 1}`,
             ),
         );
+    const addScrollingAds = () => {
+        const block = newContentBlock(
+            'CUSTOM',
+            Math.max(-1, ...allBlocks.map(item => item.position)) + 1,
+            `滚动广告 ${homepageBlocks.filter(item => item.type === 'CUSTOM').length + 1}`,
+        );
+        block.settings = { displayMode: 'scrollingAds', scrollIntervalSeconds: 6 };
+        openEditor(block);
+    };
 
     const showNotice = (message: string) => {
         setNotice(message);
@@ -553,6 +562,22 @@ export function StorefrontModule() {
                                         </button>
                                     );
                                 })}
+                            <button
+                                type="button"
+                                disabled={pending || !canCreate}
+                                onClick={addScrollingAds}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left hover:border-blue-300 hover:bg-blue-50/40"
+                            >
+                                <span className="min-w-0">
+                                    <strong className="block text-xs text-slate-800">新增滚动广告楼层</strong>
+                                    <small className="mt-1 block text-[10px] leading-4 text-slate-400">
+                                        可重复添加，每组独立配置图片、文案、跳转和轮播间隔。
+                                    </small>
+                                </span>
+                                <span className="shrink-0 rounded bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
+                                    新增
+                                </span>
+                            </button>
                         </div>
                     </section>
                 </div>

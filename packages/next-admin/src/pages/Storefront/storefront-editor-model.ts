@@ -73,6 +73,7 @@ export function moduleHasSettings(type: StorefrontContentBlock['type']) {
         'BEST_SELLERS',
         'RECOMMENDATIONS',
         'SUPPORT',
+        'CUSTOM',
     ].includes(type);
 }
 

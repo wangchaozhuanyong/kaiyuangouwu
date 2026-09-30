@@ -591,6 +591,53 @@ export function StorefrontBlockEditor({
                                                     09:00–18:00 显示。
                                                 </p>
                                             </>
+                                        ) : draft.type === 'CUSTOM' ? (
+                                            <>
+                                                <Field label="展示方式">
+                                                    <select
+                                                        className={inputClass}
+                                                        value={
+                                                            draft.settings?.displayMode === 'scrollingAds'
+                                                                ? 'scrollingAds'
+                                                                : 'grid'
+                                                        }
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                displayMode: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="grid">卡片网格</option>
+                                                        <option value="scrollingAds">横向滚动广告</option>
+                                                    </select>
+                                                </Field>
+                                                {draft.settings?.displayMode === 'scrollingAds' && (
+                                                    <Field label="自动滚动间隔（秒）">
+                                                        <input
+                                                            type="number"
+                                                            min={3}
+                                                            max={30}
+                                                            value={numberSetting(
+                                                                draft.settings?.scrollIntervalSeconds,
+                                                                6,
+                                                            )}
+                                                            onChange={event =>
+                                                                updateSettings({
+                                                                    scrollIntervalSeconds: clamp(
+                                                                        Number(event.target.value),
+                                                                        3,
+                                                                        30,
+                                                                    ),
+                                                                })
+                                                            }
+                                                            className={inputClass}
+                                                        />
+                                                    </Field>
+                                                )}
+                                                <p className="sm:col-span-2 text-[11px] leading-5 text-slate-500">
+                                                    每个自定义楼层独立滚动；在下方子项中配置图片、文案和跳转。访客启用减少动态效果时暂停自动滚动。
+                                                </p>
+                                            </>
                                         ) : draft.type === 'NOTICE' ? (
                                             <Field label="公告轮播间隔（秒）">
                                                 <input
