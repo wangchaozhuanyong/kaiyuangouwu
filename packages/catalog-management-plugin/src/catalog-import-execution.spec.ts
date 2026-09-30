@@ -7,6 +7,60 @@ import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 
 describe('catalog import execution progress', () => {
+    it('marks preview preparation failures and saves a readable error on the job', async () => {
+        const job = {
+            id: 'job',
+            state: 'RECEIVING',
+            totalRows: 1,
+            channelId: 'channel',
+            stockLocationId: 'location',
+            currencyCode: 'MYR',
+            clearBlankFields: false,
+        } as CatalogImportJob;
+        const rowRepository = {
+            find: vi
+                .fn()
+                .mockResolvedValue([
+                    { sourceKey: 'source-1', normalizedData: { supplier: '' } } as CatalogImportRow,
+                ]),
+        };
+        const jobRepository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
+        const connection = {
+            getRepository: (_ctx: RequestContext, entity: unknown) => {
+                if (entity === CatalogImportRow) return rowRepository;
+                if (entity === CatalogImportJob) return jobRepository;
+                return { find: vi.fn().mockResolvedValue([]) };
+            },
+        };
+        const service = new CatalogImportService(
+            connection as never,
+            undefined as never,
+            { stockLocations: vi.fn().mockResolvedValue([]) } as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            { findByNames: vi.fn().mockResolvedValue(new Map()) } as never,
+        );
+        vi.spyOn(service, 'findJob').mockResolvedValue(job);
+        Reflect.set(service, 'buildCatalogIndex', vi.fn().mockRejectedValue(new Error('asset query failed')));
+
+        await expect(
+            service.finalizePreview({ channelId: 'channel' } as RequestContext, 'job'),
+        ).rejects.toThrow('asset query failed');
+        expect(jobRepository.update).toHaveBeenCalledWith(
+            'job',
+            expect.objectContaining({
+                state: 'FAILED',
+                errorMessage: 'asset query failed',
+                completedAt: expect.any(Date),
+            }),
+        );
+    });
+
     it('persists progress once per percentage and commits cache entries only after a successful transaction', async () => {
         const rows = Array.from({ length: 4074 }, (_, index) => ({
             id: index,

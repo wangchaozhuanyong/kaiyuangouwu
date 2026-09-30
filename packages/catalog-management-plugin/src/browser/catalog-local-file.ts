@@ -473,6 +473,7 @@ function normalizeRow(
         enabled: statusValue(values.get('enabled'), rowNumber),
         variantEnabled: statusValue(values.get('variantEnabled'), rowNumber, 'SKU 状态'),
         description: textValue(values.get('description')),
+        featuredAssetName: importSafeTextValue(values.get('featuredAssetName')),
         tags: textValue(values.get('tags'))
             .split(/[，,；;、]/u)
             .map(value => value.trim())

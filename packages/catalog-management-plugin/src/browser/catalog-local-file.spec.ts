@@ -32,6 +32,25 @@ describe('browser-local catalog parser', () => {
         });
     });
 
+    it('preserves the main image asset filename through parsing and transport', async () => {
+        const csv = [
+            '名称,分类,SKU,导入商店,销售方式,主图素材文件名',
+            '询价商品,家具,FC-QUOTE-001,test-store,联系客服询价,fc-quote-001.jpg',
+        ].join('\n');
+
+        const parsed = await parseCatalogArrayBuffer(
+            new TextEncoder().encode(csv).buffer,
+            '图片字段.csv',
+            'text/csv',
+        );
+        const transport = rowsForCatalogTransport(parsed.rows);
+
+        expect(parsed.errors).toEqual([]);
+        expect(parsed.rows[0].featuredAssetName).toBe('fc-quote-001.jpg');
+        expect(transport[0].featuredAssetName).toBe('fc-quote-001.jpg');
+        expect(transport[0]).not.toHaveProperty('raw');
+    });
+
     it('accepts a stable SKU maintenance row with blank values for preserve-on-import', async () => {
         const csv = [
             '名称,分类,SKU,包装换算,库存量,进货价,销售价,商品类型,导入商店',

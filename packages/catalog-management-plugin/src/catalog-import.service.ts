@@ -238,32 +238,32 @@ export class CatalogImportService {
             );
         }
 
-        const [catalogIndex, bindings, stockLocations, suppliersByName] = await Promise.all([
-            this.buildCatalogIndex(ctx),
-            this.connection.getRepository(ctx, CatalogSourceBinding).find({
-                where: {
-                    channelId: ctx.channelId,
-                    sourceKey: In([...new Set(rows.map(row => row.sourceKey))]),
-                },
-            }),
-            this.operations.stockLocations(ctx),
-            this.suppliers.findByNames(
-                ctx,
-                rows.map(item => item.normalizedData.supplier),
-            ),
-        ]);
-        const bindingMap = new Map(bindings.map(binding => [binding.sourceKey, binding]));
-        const duplicateGroups = groupRows(rows.map(row => row.normalizedData));
-        const productDuplicateGroups = groupProductRows(rows.map(row => row.normalizedData));
-        const firstExactRows = firstExactRowNumbers(rows.map(row => row.normalizedData));
-        const defaultContext: CatalogImportContextInput = {
-            channelId: job.channelId,
-            stockLocationId: job.stockLocationId,
-            currencyCode: job.currencyCode,
-            clearBlankFields: job.clearBlankFields,
-        };
-
         try {
+            const [catalogIndex, bindings, stockLocations, suppliersByName] = await Promise.all([
+                this.buildCatalogIndex(ctx),
+                this.connection.getRepository(ctx, CatalogSourceBinding).find({
+                    where: {
+                        channelId: ctx.channelId,
+                        sourceKey: In([...new Set(rows.map(row => row.sourceKey))]),
+                    },
+                }),
+                this.operations.stockLocations(ctx),
+                this.suppliers.findByNames(
+                    ctx,
+                    rows.map(item => item.normalizedData.supplier),
+                ),
+            ]);
+            const bindingMap = new Map(bindings.map(binding => [binding.sourceKey, binding]));
+            const duplicateGroups = groupRows(rows.map(row => row.normalizedData));
+            const productDuplicateGroups = groupProductRows(rows.map(row => row.normalizedData));
+            const firstExactRows = firstExactRowNumbers(rows.map(row => row.normalizedData));
+            const defaultContext: CatalogImportContextInput = {
+                channelId: job.channelId,
+                stockLocationId: job.stockLocationId,
+                currencyCode: job.currencyCode,
+                clearBlankFields: job.clearBlankFields,
+            };
+
             for (const entity of rows) {
                 const row = entity.normalizedData;
                 const targetStockLocation = effectiveStockLocation(
