@@ -119,7 +119,7 @@ describe('storefront skin system', () => {
         expect(owner).not.toContain('!important');
     });
 
-    it('rejects decorative separators throughout client CSS, utility maps and components', () => {
+    it('limits reading separators to approved adjacent rows and summary groups', () => {
         const files: string[] = [];
         const visit = (directory: string) => {
             for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -142,6 +142,31 @@ describe('storefront skin system', () => {
                             /^\s*border-(top|bottom|left|right|block|inline)(?:-(?:start|end))?(?:-width)?\s*:\s*(.+)$/,
                         );
                         if (!border || /^(?:0(?:px)?|none)(?:\s|$)/.test(border[2].trim())) continue;
+                        // Approved functional-row redesign: only adjacent rows and the total boundary.
+                        const functionalSeparators = [
+                            'styles/auth-flow.css|.auth-page .auth-assurance-rail',
+                            'styles/account-catalog-surfaces.css|.account-page .account-recent-purchases > div > article + article::before',
+                            'styles/account-security.css|.security-card-list > :is(.security-item-btn, .security-item-static)' +
+                                ' + :is(.security-item-btn, .security-item-static)::before',
+                            'styles/address-surfaces.css|.address-card + .address-card::before',
+                            'styles/checkout-payment-surfaces.css|.price-summary .summary-total',
+                            'styles/logistics.css|.delivery-table tr + tr',
+                            'styles/notifications.css|.notification-list > button + button::before',
+                            'styles/order-aftercare.css|.order-detail-products article + article::before',
+                            'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
+                            'styles/modals-and-support.css|.support-channel-row + .support-channel-row::before',
+                        ];
+                        const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
+                        if (
+                            border[1] === 'top' &&
+                            ((functionalSeparators.includes(functionalKey) &&
+                                border[2].trim() === '1px solid var(--skin-divider)') ||
+                                (functionalKey ===
+                                    'styles/account-security.css|.security-avatar-history-row + .security-avatar-history-row' &&
+                                    border[2].trim() === '1px solid var(--line-subtle)'))
+                        ) {
+                            continue;
+                        }
                         // The quantity stepper's seams identify its editable value between +/- controls.
                         if (
                             selector.trim() === '.detail-quantity-controls output' &&
@@ -485,7 +510,9 @@ describe('storefront skin system', () => {
         expect(source).toContain('--warning-bg: color-mix(in srgb, var(--warning) 10%, var(--surface));');
         expect(source).toContain('--product-media-bg: color-mix(in srgb, var(--soft) 72%, var(--surface));');
         const controls = stylesheet('./styles/control-surfaces.css');
-        const primaryAction = controls.match(/\.primary-action\s*\{([^}]+)\}/)?.[1];
+        const primaryAction = controls.match(
+            /:is\(\.primary-action, \.order-btn\.primary-btn\)\s*\{([^}]+)\}/,
+        )?.[1];
         expect(primaryAction).toContain('background: var(--auth-accent, var(--accent));');
         expect(primaryAction).toContain('color: var(--auth-button-foreground, var(--accent-foreground));');
         expect(controls).toMatch(

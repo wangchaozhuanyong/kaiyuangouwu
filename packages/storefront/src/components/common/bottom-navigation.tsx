@@ -192,7 +192,7 @@ export function BottomNavigation({
                     <a
                         key={item.key}
                         className={cn(
-                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-colors active:bg-[var(--interaction-pressed)] motion-safe:active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] hover:bg-[var(--interaction-hover)] hover:text-[var(--interaction-ink)]',
+                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-colors lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] hover:text-[var(--interaction-ink)]',
                             isActive && 'font-bold text-[var(--interaction-ink)]',
                         )}
                         aria-current={isActive ? 'page' : undefined}
@@ -216,27 +216,12 @@ export function BottomNavigation({
                         onMouseEnter={preloadTarget}
                         onTouchStart={preloadTarget}
                     >
-                        <span
-                            className={cn(
-                                'relative flex h-[30px] w-[42px] items-center justify-center rounded-lg',
-                                isActive && 'bg-[var(--interaction-hover)]',
-                            )}
-                        >
+                        <span className="relative flex h-[30px] w-[42px] items-center justify-center">
                             {item.iconUrl ? (
-                                <SafeImage
-                                    className={cn(
-                                        'size-6 object-contain motion-safe:transition-transform duration-200',
-                                        isActive && 'motion-safe:scale-[1.08]',
-                                    )}
-                                    src={item.iconUrl}
-                                    alt=""
-                                />
+                                <SafeImage className="size-6 object-contain" src={item.iconUrl} alt="" />
                             ) : (
                                 <Icon
-                                    className={cn(
-                                        'size-6 motion-safe:transition-transform duration-200',
-                                        isActive && 'motion-safe:scale-[1.08]',
-                                    )}
+                                    className="size-6"
                                     style={{ color: isActive ? item.activeColor : 'var(--muted)' }}
                                 />
                             )}

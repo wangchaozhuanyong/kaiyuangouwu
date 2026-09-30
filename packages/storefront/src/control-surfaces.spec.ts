@@ -11,8 +11,8 @@ describe('shared control surfaces', () => {
         );
         expect(stylesheet).toMatch(
             new RegExp(
-                String.raw`html\[data-storefront-preset\]\s*\{[^}]*--module-action-surface:\s*var\(--control-surface\);` +
-                    String.raw`[^}]*--module-action-surface-hover:\s*var\(--control-surface-hover\);`,
+                String.raw`html\[data-storefront-preset\]\s*\{[^}]*--module-action-surface:\s*transparent;` +
+                    String.raw`[^}]*--module-action-surface-hover:\s*transparent;`,
             ),
         );
     });

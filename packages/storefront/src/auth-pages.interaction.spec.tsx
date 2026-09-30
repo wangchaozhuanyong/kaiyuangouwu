@@ -47,6 +47,74 @@ afterEach(() => {
 });
 
 describe('storefront configurable authentication methods', () => {
+    it('keeps compact registration labelled, preserves consent and submits the existing payload', async () => {
+        const registerCustomerAccount = vi.fn().mockResolvedValue(undefined);
+        const api = {
+            referralProgram: vi.fn().mockResolvedValue({ enabled: true, attributionWindowDays: 30 }),
+            registerCustomerAccount,
+        };
+        const legalContent = {
+            items: [
+                {
+                    id: 'privacy',
+                    enabled: true,
+                    label: '隐私政策',
+                    targetType: 'PAGE',
+                    targetValue: 'privacy',
+                },
+            ],
+        };
+        await act(async () => {
+            root.render(
+                <RegisterPage {...baseProps} api={api as never} legalContent={legalContent as never} />,
+            );
+            await Promise.resolve();
+        });
+        const back = requiredElement<HTMLButtonElement>('.login-content .auth-form-back-button');
+        act(() => back.click());
+        expect(baseProps.onBack).toHaveBeenCalledOnce();
+        const fields = host.querySelectorAll<HTMLInputElement>('.auth-input-shell input');
+        expect(fields).toHaveLength(5);
+        for (const input of fields) expect(input.labels?.[0]?.textContent).toBeTruthy();
+        expect(host.textContent).not.toContain('继续操作前，请阅读');
+        const legalButtons = host.querySelectorAll<HTMLButtonElement>('.auth-legal-links button');
+        expect(legalButtons).toHaveLength(1);
+        act(() => legalButtons[0].click());
+        expect(baseProps.onContentTarget).toHaveBeenCalledWith('PAGE', 'privacy');
+        expect(requiredElement<HTMLInputElement>('input[type="checkbox"]').checked).toBe(false);
+        requiredElement<HTMLInputElement>('input[name="fullName"]').value = '李测试';
+        requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'layout@example.invalid';
+        requiredElement<HTMLInputElement>('input[name="password"]').value = 'qa-layout-only';
+        requiredElement<HTMLInputElement>('input[name="confirmPassword"]').value = 'qa-layout-only';
+        act(() => requiredElement<HTMLButtonElement>('.auth-password-toggle').click());
+        expect(requiredElement<HTMLInputElement>('input[name="password"]').type).toBe('text');
+        expect(requiredElement<HTMLInputElement>('input[name="confirmPassword"]').type).toBe('password');
+        await act(async () => {
+            submit(requiredElement<HTMLFormElement>('form'));
+            await Promise.resolve();
+        });
+        expect(registerCustomerAccount).not.toHaveBeenCalled();
+        expect(requiredElement('[role="alert"]').textContent).toBeTruthy();
+        acceptRegistrationConsent();
+        await act(async () => {
+            submit(requiredElement<HTMLFormElement>('form'));
+            await Promise.resolve();
+        });
+        expect(registerCustomerAccount).toHaveBeenCalledWith(
+            {
+                emailAddress: 'layout@example.invalid',
+                firstName: '测试',
+                lastName: '李',
+                password: 'qa-layout-only',
+            },
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
+            undefined,
+            undefined,
+        );
+        expect(host.textContent).toContain('请查收验证邮件');
+        expect(host.querySelector('.login-content .auth-form-back-button')).not.toBeNull();
+    });
+
     it('tries registration after an invalid email login without revealing account existence', async () => {
         const login = vi
             .fn()
