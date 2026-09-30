@@ -21,7 +21,7 @@ describe('storefront skin surface lifecycle', () => {
         const root = createRoot(host);
         act(() => root.render(<Skin presetId="classic" />));
         expect(document.documentElement.style.getPropertyValue('--bg')).toBe('#f1f5f9');
-        expect(document.documentElement.style.getPropertyValue('--skin-divider')).toBe('#e4eaf1');
+        expect(document.documentElement.style.getPropertyValue('--skin-divider')).toBe('#e4ebf3');
 
         act(() => root.render(<Skin presetId="neo-minimalist" />));
         expect(document.documentElement.style.getPropertyValue('--bg')).toBe('#070b14');
