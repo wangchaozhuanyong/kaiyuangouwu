@@ -62,6 +62,32 @@ describe('storefront semantic palette', () => {
         },
     );
 
+    it.each(['#000000', '#ffffff', '#777777', '#070b14'])(
+        'separates neutral %s brand identity from the classic action color',
+        color => {
+            const palette = resolveStorefrontSemanticPalette('classic', {
+                primaryColor: color,
+                accentColor: color,
+                highlightColor: color,
+            });
+            expect(palette.brand).toBe(color);
+            expect(palette.accent).toBe('#2563eb');
+            expect(palette.accentHover).not.toBe(color);
+            expect(storefrontContrastRatio(palette.accentInk, palette.surface)).toBeGreaterThanOrEqual(4.5);
+        },
+    );
+
+    it('preserves a chromatic merchant action color', () => {
+        const palette = resolveStorefrontSemanticPalette('classic', {
+            primaryColor: '#111111',
+            accentColor: '#b91c1c',
+            highlightColor: '#991b1b',
+        });
+        expect(palette.brand).toBe('#111111');
+        expect(palette.accent).toBe('#b91c1c');
+        expect(palette.accentHover).toBe('#991b1b');
+    });
+
     it('uses a saved background only as identity when no primary color exists', () => {
         const palette = resolveStorefrontSemanticPalette('classic', { backgroundColor: '#070b14' });
         expect(palette.brand).toBe('#070b14');

@@ -78,9 +78,11 @@
 }
 .notification-list {
     display: grid;
-    gap: 10px;
+    gap: 0;
     margin: 12px 0 0;
     padding: 0;
+    background: var(--surface);
+    border-radius: var(--skin-card-radius);
 }
 .notification-list > button {
     position: relative;
@@ -94,16 +96,28 @@
     min-height: 106px;
     padding: 16px;
     border: 0;
-    border-radius: var(--skin-card-radius);
-    background: var(--surface);
+    border-radius: 0;
+    background: transparent;
     color: var(--text);
-    box-shadow: var(--skin-card-shadow);
+    box-shadow: none;
     font: inherit;
     text-align: left;
     cursor: pointer;
 }
-.notification-list > button:hover {
-    background: var(--control-surface-hover);
+.notification-list > button + button::before {
+    content: '';
+    position: absolute;
+    inset: 0 16px auto 60px;
+    border-top: 1px solid var(--skin-divider);
+}
+.notification-list > button:hover strong {
+    color: var(--accent-ink);
+}
+.notification-list > button:active {
+    background: var(--accent-soft);
+}
+.notification-list > button:focus-visible {
+    outline-offset: -3px;
 }
 .notification-icon {
     grid-area: icon;
@@ -189,7 +203,7 @@
         margin-left: 0;
     }
     .notification-list {
-        gap: 4px;
+        gap: 0;
         margin-top: 20px;
     }
     .notification-list > button {
@@ -200,6 +214,9 @@
         gap: 16px;
         background: transparent;
         box-shadow: none;
+    }
+    .notification-list > button + button::before {
+        inset-inline: 60px 12px;
     }
     .notification-icon {
         align-self: center;

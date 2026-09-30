@@ -33,7 +33,7 @@ import {
 } from '../referral-client-feature';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
-import { orderStateLabel } from '../storefront-ui/order-ui';
+import { orderNotification, orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
@@ -350,7 +350,7 @@ export function AccountPage() {
 
             {customer && !desktop && (
                 <section
-                    className={`account-latest-logistics ${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_strong]:text-[var(--success)] [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
+                    className={`account-latest-logistics ${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
                 >
                     <header>
                         <h2>{isZh ? '最新物流' : 'Latest delivery'}</h2>
@@ -366,6 +366,7 @@ export function AccountPage() {
                     {latestLogisticsOrder ? (
                         <button
                             type="button"
+                            data-tone={orderNotification(latestLogisticsOrder, language).tone}
                             onClick={() => navigateTo({ name: 'order-detail', id: latestLogisticsOrder.id })}
                         >
                             <OrderImage language={language} order={latestLogisticsOrder} />
@@ -487,6 +488,7 @@ export function AccountPage() {
                                 </span>
                                 <button
                                     type="button"
+                                    className="secondary-action"
                                     onClick={() => navigateTo({ name: 'product', id: variant.product.id })}
                                 >
                                     {isZh ? '再次购买' : 'Buy again'}

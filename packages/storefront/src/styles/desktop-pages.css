@@ -1222,6 +1222,7 @@
 
     .desktop-store-layout .address-list {
         padding: 0;
+        background: transparent;
         gap: 20px;
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1241,6 +1242,9 @@
     }
     .desktop-store-layout .address-card > div {
         flex: 1;
+    }
+    .desktop-store-layout .address-card + .address-card::before {
+        display: none;
     }
     .desktop-store-layout .address-card p {
         flex: 1;
@@ -1342,6 +1346,8 @@
         box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .security-card-list {
+        --security-row-inset: 48px;
+        --security-row-end: 0px;
         display: grid;
         gap: 8px;
         border: 0;

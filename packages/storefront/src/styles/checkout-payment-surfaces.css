@@ -193,6 +193,10 @@
     min-height: 46px;
     margin-top: 6px;
     padding-top: 8px;
+    border-top: 1px solid var(--skin-divider);
+}
+.price-summary .summary-total + .summary-total {
+    border-top: 0;
 }
 
 .price-summary .summary-total dd {
@@ -225,9 +229,9 @@
     min-height: 42px;
     margin: 0 14px 10px;
     border: 0;
-    border-radius: 7px;
-    background: var(--control-surface);
-    color: var(--muted);
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--accent-ink);
 }
 
 .payment-main,
@@ -410,7 +414,8 @@
     padding: 0 16px;
     border: 0;
     border-radius: 7px;
-    background: var(--control-surface);
+    background: transparent;
+    color: var(--accent-ink);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -430,7 +435,8 @@
 
 .payment-summary > button:disabled {
     cursor: not-allowed;
-    opacity: 0.55;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
 }
 
 .payment-summary > .payment-edit-order {
@@ -521,8 +527,9 @@
     min-height: 48px;
     padding: 10px 16px;
     border: 0;
-    border-radius: var(--radius-sm);
-    background: var(--control-surface);
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--accent-ink);
     font-weight: var(--font-weight-semibold);
 }
 

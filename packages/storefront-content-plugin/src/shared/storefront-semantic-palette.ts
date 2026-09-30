@@ -187,7 +187,11 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
         normalizeStorefrontColor(brand.primaryColor) ??
         normalizeStorefrontColor(brand.backgroundColor) ??
         '#d33c30';
-    const accentSource = normalizeStorefrontColor(brand.accentColor) ?? brandColor;
+    const savedAccent = normalizeStorefrontColor(brand.accentColor) ?? brandColor;
+    const channels = colorChannels(savedAccent);
+    // Neutral brand identities stay intact; actionable controls need a distinct chromatic role.
+    const neutralAccent = Math.max(...channels) - Math.min(...channels) < 32;
+    const accentSource = neutralAccent ? '#2563eb' : savedAccent;
     // Legacy primary controls use white labels, so the derived UI accent must always support them.
     const accentForeground = '#ffffff';
     const accent = makeAccessibleAgainst(accentSource, accentForeground, 4.5, 'dark');
@@ -204,7 +208,8 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
         brand: brandColor,
         accent,
         accentHover: makeAccessibleAgainst(
-            normalizeStorefrontColor(brand.highlightColor) ?? mixColors(accent, '#000000', 0.14),
+            (neutralAccent ? null : normalizeStorefrontColor(brand.highlightColor)) ??
+                mixColors(accent, '#000000', 0.14),
             accentForeground,
             4.5,
             'dark',

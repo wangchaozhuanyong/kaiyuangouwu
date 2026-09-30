@@ -1737,7 +1737,7 @@ function OrderCard({
                         {formattedTime}
                     </time>
                     <div className="order-summary-actions">
-                        <button type="button" onClick={onOpen}>
+                        <button type="button" className="tertiary-action" onClick={onOpen}>
                             {isZh ? '查看详情' : 'Details'}
                             <ChevronRight aria-hidden="true" />
                         </button>
@@ -1814,7 +1814,7 @@ function OrderCard({
                 <div className={orderPageClassName('order-card-buttons')}>
                     <button
                         type="button"
-                        className={orderPageClassName('order-btn secondary-btn')}
+                        className={orderPageClassName('order-btn tertiary-action')}
                         onClick={onOpen}
                     >
                         {isZh ? '查看详情' : 'Details'}
@@ -1838,7 +1838,7 @@ function OrderCard({
                             </button>
                             <button
                                 type="button"
-                                className={orderPageClassName('order-btn primary-btn')}
+                                className={orderPageClassName('order-btn secondary-btn')}
                                 onClick={onBuyAgain}
                             >
                                 {isZh ? '再来一单' : 'Buy again'}
@@ -1847,7 +1847,7 @@ function OrderCard({
                     ) : (
                         <button
                             type="button"
-                            className={orderPageClassName('order-btn primary-btn')}
+                            className={orderPageClassName('order-btn secondary-btn')}
                             onClick={onBuyAgain}
                         >
                             {isZh ? '再来一单' : 'Buy again'}

@@ -1,6 +1,8 @@
 /* Address book and checkout address selection own their shared surface here. */
 .address-list {
-    padding-bottom: 24px;
+    margin-top: 9px;
+    margin-bottom: 24px;
+    background: var(--surface);
 }
 
 .address-type-tabs {
@@ -48,13 +50,21 @@
 }
 
 .address-card {
-    margin-top: 9px;
+    margin-top: 0;
     padding: 14px;
     border-top: 0;
+    position: relative;
     background: var(--surface);
     color: var(--text);
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+.address-card + .address-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 14px auto;
+    border-top: 1px solid var(--skin-divider);
 }
 
 .address-card header {
@@ -101,10 +111,14 @@
     padding: 0 4px;
     border: 0;
     background: transparent;
-    color: var(--muted);
+    color: var(--accent-ink);
     display: flex;
     align-items: center;
     gap: 5px;
+}
+
+.address-card footer button.danger-action {
+    color: var(--danger);
 }
 
 .address-card footer button svg {

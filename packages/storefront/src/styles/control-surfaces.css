@@ -34,8 +34,7 @@
         .currency-select:not(.topbar-capsule *),
         .language-button:not(.topbar-capsule *),
         .notice-button,
-        .proto-language-btn,
-        .desktop-outline-button
+        .proto-language-btn
     ) {
     border: 0;
     border-radius: var(--skin-control-radius, var(--radius-sm));
@@ -51,8 +50,7 @@
         .currency-select:not(.topbar-capsule *),
         .language-button:not(.topbar-capsule *),
         .notice-button,
-        .proto-language-btn,
-        .desktop-outline-button
+        .proto-language-btn
     ):hover:not(:disabled) {
     border-color: transparent;
     background-color: var(--control-surface-hover);
@@ -65,8 +63,7 @@
         .currency-select:not(.topbar-capsule *),
         .language-button:not(.topbar-capsule *),
         .notice-button,
-        .proto-language-btn,
-        .desktop-outline-button
+        .proto-language-btn
     ):active:not(:disabled) {
     background-color: var(--control-surface-pressed);
     background-image: var(--control-surface-pressed-image, none);
@@ -86,13 +83,7 @@
 
 :where(.storefront-app, .sheet-layer) select:disabled,
 :where(.storefront-app, .sheet-layer)
-    :is(
-        .currency-select,
-        .language-button,
-        .notice-button,
-        .proto-language-btn,
-        .desktop-outline-button
-    ):disabled {
+    :is(.currency-select, .language-button, .notice-button, .proto-language-btn):disabled {
     box-shadow: none;
     opacity: 0.56;
 }
@@ -100,13 +91,7 @@
 @media (prefers-reduced-motion: reduce) {
     :where(.storefront-app, .sheet-layer) select,
     :where(.storefront-app, .sheet-layer)
-        :is(
-            .currency-select,
-            .language-button,
-            .notice-button,
-            .proto-language-btn,
-            .desktop-outline-button
-        ) {
+        :is(.currency-select, .language-button, .notice-button, .proto-language-btn) {
         transition: none;
     }
 }
@@ -120,19 +105,19 @@
     }
 }
 
-.primary-action {
-    border-color: var(--auth-accent, var(--accent));
+:is(.primary-action, .order-btn.primary-btn) {
+    border: 1px solid var(--auth-accent, var(--accent));
     border-radius: var(--skin-control-radius);
     background: var(--auth-accent, var(--accent));
     color: var(--auth-button-foreground, var(--accent-foreground));
-    box-shadow: var(--accent-shadow);
+    box-shadow: none;
 }
 
-.primary-action:hover:not(:disabled) {
+:is(.primary-action, .order-btn.primary-btn):hover:not(:disabled) {
     border-color: var(--auth-accent-hover, var(--accent-hover));
     background: var(--auth-accent-hover, var(--accent-hover));
     color: var(--auth-button-foreground, var(--accent-foreground));
-    box-shadow: var(--accent-shadow);
+    box-shadow: none;
 }
 
 .primary-action:disabled {
@@ -140,4 +125,53 @@
     background: var(--accent-disabled-bg);
     color: var(--accent-disabled-text);
     box-shadow: none;
+}
+
+.tertiary-action {
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--accent-ink);
+    box-shadow: none;
+}
+.tertiary-action:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Shared action hierarchy: primary submits, outlined secondary actions, text utilities. */
+:is(.secondary-action, .desktop-outline-button, .order-btn.secondary-btn, .order-secondary-action) {
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--accent-ink);
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--accent-ink);
+    box-shadow: none;
+    font-weight: var(--font-weight-semibold);
+}
+:is(.secondary-action, .desktop-outline-button, .order-btn.secondary-btn, .order-secondary-action):hover:not(
+        :disabled
+    ),
+:is(.secondary-action, .desktop-outline-button, .order-btn.secondary-btn, .order-secondary-action):active:not(
+        :disabled
+    ) {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-color: var(--accent-ink);
+}
+:is(
+    .secondary-action,
+    .tertiary-action,
+    .desktop-outline-button,
+    .order-btn.primary-btn,
+    .order-btn.secondary-btn,
+    .order-secondary-action,
+    .primary-action
+):disabled {
+    border-color: transparent;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    box-shadow: none;
+    cursor: not-allowed;
 }

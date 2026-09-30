@@ -217,6 +217,24 @@
     transition: background 150ms ease;
 }
 
+.security-card-list {
+    --security-row-inset: 62px;
+    --security-row-end: 14px;
+}
+.security-card-list > :is(.security-item-btn, .security-item-static) {
+    position: relative;
+}
+.security-card-list
+    > :is(.security-item-btn, .security-item-static)
+    + :is(.security-item-btn, .security-item-static)::before {
+    content: '';
+    position: absolute;
+    inset: 0 var(--security-row-end) auto var(--security-row-inset);
+    border-top: 1px solid var(--skin-divider);
+}
+.security-avatar-history-row + .security-avatar-history-row {
+    border-top: 1px solid var(--line-subtle);
+}
 .security-item-btn {
     cursor: pointer;
 }

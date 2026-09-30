@@ -1773,12 +1773,12 @@
         align-items: center;
         justify-content: center;
         gap: 4px;
-        min-height: 40px;
+        min-height: 44px;
         padding: 0 12px;
         border: 0;
         border-radius: var(--skin-control-radius);
-        background: var(--control-surface);
-        color: var(--text);
+        background: transparent;
+        color: var(--accent-ink);
         font-size: 13px;
         white-space: nowrap;
         cursor: pointer;

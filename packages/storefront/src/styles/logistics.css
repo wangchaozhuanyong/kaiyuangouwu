@@ -385,9 +385,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px 24px;
     margin: 0;
-    padding: 20px;
-    background: var(--soft);
-    border-radius: var(--skin-control-radius);
+    padding: 20px 0;
+    background: transparent;
+    border-radius: 0;
 }
 .delivery-facts > div {
     min-width: 0;
@@ -426,7 +426,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     color: var(--accent-ink);
-    background: var(--control-surface);
+    background: transparent;
     cursor: pointer;
 }
 .delivery-tracking-code button svg {
@@ -618,8 +618,8 @@
         gap: 16px;
         padding: 20px 16px;
     }
-    .delivery-table tr:nth-child(even) {
-        background: var(--soft);
+    .delivery-table tr + tr {
+        border-top: 1px solid var(--skin-divider);
     }
     .delivery-table td {
         display: block;
