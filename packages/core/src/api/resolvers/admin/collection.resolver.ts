@@ -25,6 +25,7 @@ import { CollectionFilter } from '../../../config/catalog/collection-filter';
 import { Collection } from '../../../entity/collection/collection.entity';
 import { CollectionService } from '../../../service/services/collection.service';
 import { FacetValueService } from '../../../service/services/facet-value.service';
+import { collectionCountIds } from '../../common/collection-count-ids';
 import { ConfigurableOperationCodec } from '../../common/configurable-operation-codec';
 import { isFieldInSelection } from '../../common/is-field-in-selection';
 import { RequestContext } from '../../common/request-context';
@@ -44,10 +45,10 @@ export class CollectionResolver {
 
     @Query()
     @Allow(Permission.ReadCatalog, Permission.ReadCollection)
-    async collectionFilters(
+    collectionFilters(
         @Ctx() ctx: RequestContext,
         @Args() args: QueryCollectionsArgs,
-    ): Promise<ConfigurableOperationDefinition[]> {
+    ): ConfigurableOperationDefinition[] {
         return this.collectionService.getAvailableFilters(ctx);
     }
 
@@ -67,7 +68,7 @@ export class CollectionResolver {
         // Cache the variant counts query promise if productVariantCount is requested,
         // allowing the DB query to start before the field resolvers are called
         if (isFieldInSelection(info, 'productVariantCount')) {
-            const collectionIds = collections.items.map(c => c.id);
+            const collectionIds = collectionCountIds(collections.items);
             const countsPromise = this.collectionService.getProductVariantCounts(ctx, collectionIds);
             this.requestContextCache.set(ctx, CacheKey.CollectionVariantCounts, countsPromise);
         }

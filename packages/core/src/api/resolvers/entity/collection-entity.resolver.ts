@@ -84,7 +84,10 @@ export class CollectionEntityResolver {
         );
         if (cachedCountsPromise) {
             const countsMap = await cachedCountsPromise;
-            return countsMap.get(String(collection.id)) ?? 0;
+            const cachedCount = countsMap.get(String(collection.id));
+            if (cachedCount !== undefined) {
+                return cachedCount;
+            }
         }
         // Fallback to single query if cache not available (e.g., single collection query)
         const singleCountMap = await this.collectionService.getProductVariantCounts(ctx, [collection.id]);
