@@ -1,6 +1,6 @@
 # 经典皮肤浅色轮廓落地 · 2026-09-30
 
-状态：代码完成、本地验证完成；未推送、未创建 PR、未合并或部署。
+状态：实现与视觉本地验证完成；用户已授权合并 main、统一部署和线上验证。发布结果以 `artifacts/classic-soft-outline-release/RELEASE_LEDGER.md` 的实际回执为准。
 
 ## 完成结果
 
@@ -37,6 +37,8 @@
 
 所有浏览器数据都是本地合成 QA 样本，包括账户、余额、商品、订单与地址。支付页通过本地待支付 fixture 展示，仅验证外观，没有提交支付。后台验收为同源组件导出与构建，没有登录生产后台或保存店铺配置；上述结果不代表线上业务验收。
 
+发布前按 CI 的关联测试范围补查，NextAdmin 6 项通过，Storefront 41 个文件中 39 个通过；另两个文件保留的旧商品“无框/无阴影”断言已改为验证共享皮肤变量，修复后这两个文件共 109 项通过。对应 lint 与差异检查通过。运行时、发布清单和最终线上证据另记于发布台账，不将其他任务 WIP 合入。
+
 验收过程中修正过 QA 脚本的礼盒可见条件、异步商品等待与支付待支付前置样本；未为通过样式验收修改业务行为。后台样例导出完成后，临时 Vite 中间件关闭时出现依赖扫描中止警告；正式 NextAdmin 构建成功，样例已在浏览器校验。
 
 ## 预览与截图
@@ -61,6 +63,8 @@
 - `packages/storefront-content-plugin/src/shared/storefront-semantic-palette.ts`
 - `packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md`
 - `packages/storefront/src/skin-system.spec.ts`
+- `packages/storefront/src/home-page.spec.tsx`
+- `packages/storefront/src/product-navigation.spec.tsx`
 - `packages/storefront/src/styles/account-catalog-surfaces.css`
 - `packages/storefront/src/styles/account-identity.css`
 - `packages/storefront/src/styles/account-security.css`
