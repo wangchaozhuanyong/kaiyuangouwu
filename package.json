@@ -104,7 +104,7 @@
         "@grpc/grpc-js": "1.14.4",
         "@hono/node-server": "1.19.17",
         "@isaacs/brace-expansion": "5.0.1",
-        "brace-expansion": "5.0.9",
+        "brace-expansion": "5.0.11",
         "@nestjs/common": "11.2.1",
         "@nestjs/core": "11.2.1",
         "@nestjs/apollo": "13.4.4",
@@ -120,7 +120,7 @@
         "@sigstore/verify": "3.1.1",
         "@tiptap/extension-bubble-menu": "3.30.5",
         "axios": "1.18.0",
-        "engine.io": "6.6.9",
+        "engine.io": "6.6.10",
         "fast-uri": "3.1.7",
         "fast-xml-parser": "5.7.0",
         "file-type": "21.3.4",
@@ -143,6 +143,7 @@
         "multer": "2.3.0",
         "nanoid": "3.3.18",
         "node-forge": "1.4.0",
+        "nodemailer": "10.0.10",
         "esbuild": "0.28.2",
         "nx": "23.1.1",
         "pacote": "21.5.1",
@@ -163,7 +164,7 @@
         "tar": "7.5.22",
         "tmp": "0.2.7",
         "typeorm": "0.3.31",
-        "undici": "6.28.0",
+        "undici": "6.28.1",
         "uuid": "11.1.1",
         "vite": "7.3.6",
         "websocket-driver": "0.7.5",
@@ -201,6 +202,6 @@
     },
     "patchedDependencies": {
         "husky@4.3.8": "patches/husky@4.3.8.patch",
-        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch"
+        "brace-expansion@5.0.11": "patches/brace-expansion@5.0.11.patch"
     }
 }

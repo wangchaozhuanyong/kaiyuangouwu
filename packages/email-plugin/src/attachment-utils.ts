@@ -1,5 +1,5 @@
 import { Logger } from '@vendure/core';
-import { Readable, Stream } from 'stream';
+import { Readable } from 'stream';
 import { format, Url } from 'url';
 
 import { loggerCtx } from './constants';
@@ -8,7 +8,7 @@ import { EmailAttachment, SerializedAttachment } from './types';
 export async function serializeAttachments(attachments: EmailAttachment[]): Promise<SerializedAttachment[]> {
     const promises = attachments.map(async a => {
         const stringPath = (path: string | Url) => (typeof path === 'string' ? path : format(path));
-        const content = a.content instanceof Stream ? await streamToBuffer(a.content) : a.content;
+        const content = a.content instanceof Readable ? await streamToBuffer(a.content) : a.content;
         return {
             filename: null,
             cid: null,
