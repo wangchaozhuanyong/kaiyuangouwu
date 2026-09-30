@@ -7,13 +7,13 @@
     flex-direction: column;
     overflow: hidden;
     padding: 22px 20px 14px;
-    border: 1px solid rgb(255 255 255 / 90%);
+    border: var(--skin-card-outline, 1px solid rgb(255 255 255 / 90%));
     border-radius: 22px;
     background:
         radial-gradient(circle at 74% 28%, #d3eaff 0%, #e3f2ff 8%, transparent 8.5%),
         linear-gradient(135deg, #f9fcff 0%, #eaf5ff 48%, #cce6ff 100%);
     color: #10233e;
-    box-shadow: 0 7px 24px rgb(33 82 138 / 7%);
+    box-shadow: var(--skin-card-outline-shadow, 0 7px 24px rgb(33 82 138 / 7%));
 }
 .account-identity-card::before {
     position: absolute;
@@ -227,7 +227,8 @@
     border-radius: 22px;
     background: linear-gradient(135deg, #fff 0%, #f5faff 55%, #eaf3ff 100%);
     color: #10233e;
-    box-shadow: 0 7px 24px rgb(33 82 138 / 7%);
+    box-shadow: var(--skin-card-outline-shadow, 0 7px 24px rgb(33 82 138 / 7%));
+    border: var(--skin-card-outline, 0);
 }
 .account-identity-promotion-title {
     display: grid;

@@ -81,7 +81,7 @@
     margin: 10px var(--page-section-inset, 10px);
     background: var(--paper);
     border-radius: var(--radius-md);
-    border: 0;
+    border: var(--skin-card-outline, 0);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
 }
@@ -93,7 +93,7 @@
     padding: 0 14px;
     background: var(--paper);
     border-radius: var(--radius-md);
-    border: 0;
+    border: var(--skin-card-outline, 0);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
 }
@@ -513,7 +513,7 @@
 }
 @media (max-width: 1023px) {
     .cart-page :is(.cart-group, .coupon-row, .invalid-cart-lines) {
-        border: 0;
+        border: var(--skin-card-outline, 0);
         background: var(--surface);
         box-shadow: var(--shadow-sm);
     }
@@ -537,7 +537,7 @@
 
     .cart-page .cart-guest-notice {
         margin-inline: var(--page-section-inset, 10px);
-        border: 0;
+        border: var(--skin-card-outline, 0);
         border-radius: var(--radius-md);
         box-shadow: var(--shadow-sm);
     }
