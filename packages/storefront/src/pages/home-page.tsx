@@ -52,6 +52,7 @@ import {
     aggregateFlashSaleProducts,
     FlashSaleSection,
     HomeDualCategoryShowcase,
+    ManagedAdCarousel,
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
@@ -1617,24 +1618,30 @@ function ManagedContentSection({
                     />
                 </button>
             )}
-            {!!(block.items.length || additionalSelectedProducts.length) && (
-                <div className="managed-content-grid">
-                    {block.items.map(item => (
-                        <ManagedContentItemButton
-                            key={item.id}
-                            item={item}
-                            products={products}
-                            onContentTarget={onContentTarget}
-                        />
-                    ))}
-                    {additionalSelectedProducts.map(product => (
-                        <ManagedSelectedProductButton
-                            key={product.id}
-                            product={product}
-                            onContentTarget={onContentTarget}
-                        />
-                    ))}
-                </div>
+            {block.type === 'CUSTOM' &&
+            block.settings?.displayMode === 'scrollingAds' &&
+            block.items.length ? (
+                <ManagedAdCarousel block={block} products={products} onContentTarget={onContentTarget} />
+            ) : (
+                !!(block.items.length || additionalSelectedProducts.length) && (
+                    <div className="managed-content-grid">
+                        {block.items.map(item => (
+                            <ManagedContentItemButton
+                                key={item.id}
+                                item={item}
+                                products={products}
+                                onContentTarget={onContentTarget}
+                            />
+                        ))}
+                        {additionalSelectedProducts.map(product => (
+                            <ManagedSelectedProductButton
+                                key={product.id}
+                                product={product}
+                                onContentTarget={onContentTarget}
+                            />
+                        ))}
+                    </div>
+                )
             )}
         </section>
     );

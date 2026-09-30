@@ -1278,6 +1278,131 @@ html[lang='en'] .quick-grid b {
         transform 180ms ease;
 }
 
+.managed-ad-carousel {
+    min-width: 0;
+}
+
+.managed-ad-carousel-rail {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    padding: 2px 2px 8px;
+}
+
+.managed-ad-carousel-rail::-webkit-scrollbar {
+    display: none;
+}
+
+.managed-ad-carousel-rail > button {
+    flex: 0 0 min(82%, 400px);
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    scroll-snap-align: start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    display: grid;
+    grid-template-rows: auto minmax(62px, auto);
+    text-align: left;
+    cursor: pointer;
+}
+
+.managed-ad-carousel-rail > button:disabled {
+    cursor: default;
+}
+
+.managed-ad-carousel-rail .managed-content-media {
+    aspect-ratio: 16 / 9;
+}
+
+.managed-ad-carousel-rail .managed-content-media img {
+    object-fit: cover;
+}
+
+.managed-ad-carousel-rail .is-product-media .managed-content-media img {
+    object-fit: contain;
+}
+
+.managed-ad-carousel.is-product-carousel .managed-content-media {
+    aspect-ratio: 1;
+}
+
+.managed-ad-carousel-rail .managed-content-copy strong,
+.managed-ad-carousel-rail .managed-content-copy small {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.managed-ad-carousel-rail .managed-content-copy strong {
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.managed-ad-carousel-rail .managed-content-copy small {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: var(--line-height-body);
+}
+
+.managed-ad-carousel-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.managed-ad-carousel-controls > span {
+    margin-right: 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.managed-ad-carousel-controls > button {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.managed-ad-carousel-controls > button:hover {
+    background: var(--soft);
+}
+
+.managed-ad-carousel-controls > button:focus-visible,
+.managed-ad-carousel-rail > button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.managed-ad-carousel-controls svg {
+    width: 16px;
+    height: 16px;
+}
+
+@media (min-width: 900px) {
+    .managed-ad-carousel-rail > button {
+        flex-basis: min(78%, 900px);
+    }
+
+    .managed-ad-carousel.is-product-carousel .managed-ad-carousel-rail > button {
+        flex-basis: min(32%, 360px);
+    }
+}
+
 .managed-content-grid > button:hover:not(:disabled) {
     box-shadow: 0 5px 16px rgba(31, 43, 38, 0.09);
 }
