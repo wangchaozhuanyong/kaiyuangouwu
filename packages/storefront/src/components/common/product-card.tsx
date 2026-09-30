@@ -114,3 +114,29 @@ export function ProductCard({
         </article>
     );
 }
+
+export function ProductCardSkeleton({ appearance = 'card' }: { appearance?: 'card' | 'plain' }) {
+    return (
+        <div
+            className={`product-card product-card-skeleton${appearance === 'plain' ? ' is-plain' : ''}`}
+            aria-hidden="true"
+        >
+            <div className="product-card-detail-link">
+                <div className="product-card-media" />
+                <div className="product-card-content">
+                    <span className="product-card-name">&nbsp;</span>
+                    {appearance !== 'plain' && <span className="product-card-subtitle">&nbsp;</span>}
+                    <div className="product-card-meta">&nbsp;</div>
+                    <footer>
+                        <div className="product-card-price">
+                            <span className="price-lockup">
+                                <span className="price-integer">&nbsp;</span>
+                            </span>
+                        </div>
+                        <small className="product-card-stock">&nbsp;</small>
+                    </footer>
+                </div>
+            </div>
+        </div>
+    );
+}

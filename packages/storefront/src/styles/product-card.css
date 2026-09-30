@@ -186,6 +186,26 @@
     color: var(--availability-unavailable);
 }
 
+/* Loading uses the same square media, text lines and grid tracks as real cards. */
+.product-card-skeleton :is(.product-card-name, .product-card-subtitle, .product-card-meta, .price-lockup) {
+    width: 72%;
+    color: transparent;
+    background: var(--soft);
+    border-radius: var(--skin-control-radius);
+}
+
+.product-card-skeleton .product-card-subtitle {
+    width: 55%;
+}
+
+.product-card-skeleton .product-card-meta {
+    width: 62%;
+}
+
+.product-card-skeleton .product-card-price {
+    width: 60%;
+}
+
 .product-card.is-plain {
     --product-card-inset: 0;
     padding: 0;

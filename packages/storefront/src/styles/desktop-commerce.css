@@ -1109,26 +1109,48 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 8px 10px 14px;
-        border-bottom: 1px solid var(--line-subtle);
+        padding: 8px 10px 18px;
         font-size: 15px;
+        font-weight: 650;
+        line-height: 1.4;
         color: var(--text);
     }
     .desktop-category-entry {
         min-width: 0;
         width: 100%;
+        padding-bottom: 0;
+        margin-block: 0;
+        border-radius: var(--skin-card-radius);
+    }
+    .desktop-category-entry.is-expanded {
+        padding-bottom: 8px;
+        margin-block: 4px;
     }
     .desktop-category-entry > button {
         width: 100%;
         text-align: left;
         white-space: normal;
     }
+    .desktop-category-children {
+        display: grid;
+        grid-template-rows: 0fr;
+        opacity: 0;
+        visibility: hidden;
+    }
+    .desktop-category-entry.is-expanded > .desktop-category-children {
+        grid-template-rows: 1fr;
+        opacity: 1;
+        visibility: visible;
+    }
+    .desktop-category-children-clip {
+        min-height: 0;
+        overflow: hidden;
+    }
     .desktop-catalog-sidebar .desktop-subcategory-sidebar {
         position: static;
-        margin: 0 0 8px 24px;
-        padding: 0 0 0 10px;
+        margin: 2px 8px 0;
+        padding: 0;
         border: 0;
-        border-left: 1px solid var(--line-subtle);
         border-radius: 0;
         box-shadow: none;
         background: transparent;
@@ -1137,11 +1159,11 @@
         display: none;
     }
     .desktop-catalog-sidebar .desktop-subcategory-sidebar nav {
-        max-height: min(360px, calc(100dvh - var(--desktop-header-height) - 200px));
+        max-height: clamp(176px, calc(100dvh - var(--desktop-header-height) - 416px), 368px);
     }
 
     .desktop-category-navigation {
-        padding: 12px;
+        padding: 12px 10px;
         border-bottom: 0;
         border-radius: var(--skin-card-radius);
         background: var(--surface);
@@ -1157,7 +1179,7 @@
         align-items: stretch;
         flex-direction: column;
         flex-wrap: nowrap;
-        gap: 0;
+        gap: 4px;
         min-width: 0;
         overflow: visible;
     }
@@ -1166,7 +1188,7 @@
         justify-content: flex-start;
         border: 0;
         border-bottom: 0;
-        border-radius: 0;
+        border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--muted);
         padding: 8px 10px;
@@ -1176,13 +1198,6 @@
         font-size: 14px;
         white-space: nowrap;
     }
-    .desktop-category-navigation .desktop-local-navigation > button,
-    .desktop-category-navigation .desktop-category-entry {
-        border-bottom: 1px solid var(--line-subtle);
-    }
-    .desktop-category-navigation .desktop-category-entry:last-child {
-        border-bottom: 0;
-    }
     .desktop-category-directory-title,
     .desktop-local-navigation > button,
     .desktop-category-entry > button {
@@ -1191,7 +1206,14 @@
         gap: 10px;
         width: 100%;
     }
-    .desktop-category-navigation .desktop-local-navigation button > span:last-child {
+    .desktop-category-navigation .desktop-category-entry > button {
+        min-height: 52px;
+        padding: 8px 10px;
+        color: var(--text);
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    .desktop-category-name {
         flex: 1;
         min-width: 0;
         white-space: normal;
@@ -1200,9 +1222,9 @@
     .desktop-category-icon {
         display: grid;
         place-items: center;
-        width: 28px;
-        height: 28px;
-        flex: 0 0 28px;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px;
         overflow: hidden;
         border-radius: var(--skin-control-radius);
         background: transparent;
@@ -1228,8 +1250,26 @@
     .desktop-category-icon:has(img) {
         background: transparent;
     }
+    .desktop-category-directory-title .desktop-category-icon {
+        color: var(--accent-ink);
+        background: var(--selection-soft);
+    }
+    .desktop-category-directory-title .desktop-category-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+    .desktop-category-chevron {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--muted);
+    }
+    .desktop-category-entry.is-expanded .desktop-category-chevron {
+        transform: rotate(90deg);
+        color: var(--accent-ink);
+    }
     .desktop-local-navigation > button[aria-pressed='true'],
-    .desktop-category-entry > button[aria-pressed='true'] {
+    .desktop-category-navigation .desktop-category-entry > button[aria-pressed='true'] {
         color: var(--accent-ink);
         background: transparent;
         font-weight: 600;
@@ -1287,7 +1327,7 @@
     .desktop-subcategory-sidebar nav {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 0;
+        gap: 2px;
         border: 0;
         max-height: calc(100dvh - var(--desktop-header-height) - 110px);
         overflow-y: auto;
@@ -1299,41 +1339,50 @@
         display: none;
     }
     .desktop-subcategory-sidebar nav > button {
-        display: flex;
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
+        gap: 10px;
         width: 100%;
         min-width: 0;
         min-height: var(--experience-control-min);
-        padding: 10px 12px;
+        padding: 8px 14px 8px 44px;
         border: 0;
-        border-bottom: 1px solid var(--line-subtle);
-        border-radius: 0;
+        border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--muted);
-        font-size: 13px;
+        font-size: 14px;
         text-align: left;
         line-height: 1.45;
         white-space: normal;
         cursor: pointer;
     }
-    .desktop-subcategory-sidebar nav > button:last-child {
-        border-bottom: 0;
-    }
-    .desktop-subcategory-sidebar nav > button > span {
+    .desktop-subcategory-name {
         display: block;
         min-width: 0;
         overflow-wrap: anywhere;
     }
-    .desktop-subcategory-sidebar nav > button > svg {
-        width: 14px;
-        height: 14px;
-        flex: none;
+    .desktop-subcategory-sidebar nav > button::before {
+        content: '';
+        position: absolute;
+        left: 16px;
+        top: calc(50% - 8px);
+        width: 4px;
+        height: 16px;
+        border-radius: var(--skin-control-radius);
+        background: var(--accent-ink);
+        opacity: 0;
+        transform: scaleY(0.5);
+    }
+    .desktop-subcategory-sidebar nav > button[aria-pressed='true']::before {
+        opacity: 1;
+        transform: scaleY(1);
     }
     .desktop-subcategory-sidebar nav > button:hover {
         color: var(--interaction-ink);
-        background: var(--interaction-hover);
+        background: var(--soft);
     }
     .desktop-subcategory-sidebar nav > button:active {
         background: var(--interaction-pressed);
@@ -1341,13 +1390,47 @@
     }
     .desktop-subcategory-sidebar nav > button[aria-pressed='true'] {
         color: var(--accent-ink);
-        background: transparent;
+        background: var(--selection-soft);
         font-weight: 600;
-        box-shadow: inset 2px 0 0 var(--accent);
+        box-shadow: none;
     }
     .desktop-subcategory-sidebar nav > button[aria-pressed='true']:hover:not(:disabled) {
-        background: var(--interaction-hover);
+        background: var(--selection-soft);
         color: var(--accent-ink);
+    }
+    .desktop-subcategory-sidebar nav > button:focus-visible {
+        /* Keep keyboard focus inside the scroll area so its sides are not clipped. */
+        outline-offset: calc(-1 * var(--experience-focus-width));
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        .desktop-category-entry {
+            transition:
+                background-color var(--experience-motion-fast) var(--experience-ease-standard),
+                padding-bottom var(--experience-motion-standard) var(--experience-ease-standard),
+                margin-block var(--experience-motion-standard) var(--experience-ease-standard);
+        }
+        .desktop-category-children {
+            /* Keep both groups mounted so closing and opening share one bounded transition. */
+            transition:
+                grid-template-rows var(--experience-motion-standard) var(--experience-ease-standard),
+                opacity var(--experience-motion-fast) var(--experience-ease-standard),
+                visibility var(--experience-motion-standard);
+        }
+        .desktop-category-chevron {
+            transition:
+                transform var(--experience-motion-standard) var(--experience-ease-standard),
+                color var(--experience-motion-fast) var(--experience-ease-standard);
+        }
+        .desktop-category-navigation button {
+            transition:
+                background-color var(--experience-motion-fast) var(--experience-ease-standard),
+                color var(--experience-motion-fast) var(--experience-ease-standard);
+        }
+        .desktop-subcategory-sidebar nav > button::before {
+            transition:
+                opacity var(--experience-motion-fast) var(--experience-ease-standard),
+                transform var(--experience-motion-fast) var(--experience-ease-standard);
+        }
     }
     .desktop-catalog-results {
         min-width: 0;

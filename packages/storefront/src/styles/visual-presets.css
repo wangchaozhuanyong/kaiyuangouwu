@@ -36,6 +36,11 @@ html[data-storefront-preset] {
     --coupon-blue-ink: #334a52;
     --coupon-emerald-ink: #326457;
 }
+/* Match the runtime classic outline before cached content is painted. Without
+   this token, hydration adds two pixels to each auto-height bordered module. */
+html[data-storefront-preset='classic'] {
+    --skin-card-outline: 1px solid #d2ddea;
+}
 html[data-storefront-preset='neo-minimalist'] {
     --coupon-rose-ink: #e99084;
     --coupon-gold-ink: #d8bc80;

@@ -34,7 +34,7 @@ import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugi
 import { desktopHeroAspectRatio, HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
-import { ProductCard } from '../components/common/product-card';
+import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
@@ -400,6 +400,7 @@ export interface HomePageProps {
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
     managedContentProducts: Product[];
+    managedContentLoading?: boolean;
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes: Array<StorefrontContentBlock['type']>;
     coupons: StorefrontCouponCampaign[];
@@ -409,6 +410,8 @@ export interface HomePageProps {
     systemAnnouncements: StorefrontSystemAnnouncement[];
     bestSellerProducts: Product[];
     recommendationProducts: Product[];
+    bestSellersLoading?: boolean;
+    recommendationsLoading?: boolean;
     contentError: string;
     loading: boolean;
     error: string | null;
@@ -448,6 +451,7 @@ export function HomePage() {
         collections,
         contentBlocks,
         managedContentProducts,
+        managedContentLoading = false,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
@@ -457,6 +461,8 @@ export function HomePage() {
         systemAnnouncements,
         bestSellerProducts,
         recommendationProducts,
+        bestSellersLoading = false,
+        recommendationsLoading = false,
         contentError,
         loading,
         error,
@@ -1254,6 +1260,7 @@ export function HomePage() {
                                 <ManagedContentSection
                                     block={block}
                                     products={managedContentProductPool}
+                                    loading={managedContentLoading}
                                     language={language}
                                     locale={locale}
                                     market={market}
@@ -1262,7 +1269,11 @@ export function HomePage() {
                             </div>
                         ))}
 
-                        {!products.length && (
+                        {!products.length &&
+                        !bestSellersLoading &&
+                        !recommendationsLoading &&
+                        !bestSellerProducts.length &&
+                        !recommendationProducts.length ? (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModules.length }}
@@ -1292,7 +1303,7 @@ export function HomePage() {
                                     />
                                 )}
                             </div>
-                        )}
+                        ) : null}
 
                         {hasHomepageModule('FLASH_SALE') && flashSaleItems.length ? (
                             <div
@@ -1313,7 +1324,8 @@ export function HomePage() {
                             </div>
                         ) : null}
 
-                        {hasHomepageModule('BEST_SELLERS') && bestSellerProducts.length ? (
+                        {hasHomepageModule('BEST_SELLERS') &&
+                        (bestSellersLoading || bestSellerProducts.length) ? (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('BEST_SELLERS') }}
@@ -1326,6 +1338,14 @@ export function HomePage() {
                                     action={isZh ? '更多' : 'More'}
                                     onAction={() => navigateTo({ name: 'category', sort: 'sales' })}
                                     products={bestSellerProducts}
+                                    loading={bestSellersLoading}
+                                    skeletonCount={Math.min(
+                                        50,
+                                        Math.max(
+                                            1,
+                                            contentNumberSetting(bestSellersBlock?.settings?.displayCount, 4),
+                                        ),
+                                    )}
                                     market={market}
                                     locale={locale}
                                     language={language}
@@ -1334,7 +1354,8 @@ export function HomePage() {
                             </div>
                         ) : null}
 
-                        {hasHomepageModule('RECOMMENDATIONS') && recommendationProducts.length ? (
+                        {hasHomepageModule('RECOMMENDATIONS') &&
+                        (recommendationsLoading || recommendationProducts.length) ? (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
@@ -1355,6 +1376,17 @@ export function HomePage() {
                                     action={isZh ? '更多' : 'More'}
                                     onAction={() => navigateTo({ name: 'recommendations' })}
                                     products={recommendationProducts}
+                                    loading={recommendationsLoading}
+                                    skeletonCount={Math.min(
+                                        50,
+                                        Math.max(
+                                            1,
+                                            contentNumberSetting(
+                                                recommendationsBlock?.settings?.displayCount,
+                                                6,
+                                            ),
+                                        ),
+                                    )}
                                     market={market}
                                     locale={locale}
                                     language={language}
@@ -1479,6 +1511,7 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
 function ManagedContentSection({
     block,
     products,
+    loading = false,
     language,
     locale,
     market,
@@ -1486,6 +1519,7 @@ function ManagedContentSection({
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    loading?: boolean;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -1514,6 +1548,7 @@ function ManagedContentSection({
             <CategoryPromotionSection
                 block={block}
                 products={products}
+                loading={loading}
                 language={language}
                 locale={locale}
                 market={market}
@@ -1608,6 +1643,7 @@ function ManagedContentSection({
 function CategoryPromotionSection({
     block,
     products,
+    loading = false,
     language,
     locale,
     market,
@@ -1615,6 +1651,7 @@ function CategoryPromotionSection({
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    loading?: boolean;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -1633,8 +1670,12 @@ function CategoryPromotionSection({
         targetValue: block.targetValue,
         count: displayCount,
     });
-    const productGridCount = Math.max(1, Math.min(4, categoryProducts.length));
-    const hasSupportingContent = categoryProducts.length > 0 || block.items.length > 0;
+    const selectedCount = new Set(contentStringArraySetting(block.settings?.selectedProductIds)).size;
+    const pendingProducts = loading && selectedCount > 0;
+    const productGridCount = pendingProducts
+        ? Math.min(displayCount, selectedCount)
+        : Math.max(1, Math.min(4, categoryProducts.length));
+    const hasSupportingContent = pendingProducts || categoryProducts.length > 0 || block.items.length > 0;
     const colorfulMarketplace = isColorfulHomepageStyle(block.settings?.visualStyle);
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
@@ -1652,7 +1693,7 @@ function CategoryPromotionSection({
         const observer = new ResizeObserver(measure);
         observer.observe(rail);
         return () => observer.disconnect();
-    }, [desktop, categoryProducts.length]);
+    }, [desktop, categoryProducts.length, pendingProducts]);
 
     return (
         <section
@@ -1679,7 +1720,14 @@ function CategoryPromotionSection({
                     }
                 >
                     {block.imageUrl ? (
-                        <SafeImage src={block.imageUrl} alt={block.title} imageKind="hero" loading="lazy" />
+                        <SafeImage
+                            src={block.imageUrl}
+                            alt={block.title}
+                            imageKind="hero"
+                            loading="lazy"
+                            width={block.imageAsset?.width || undefined}
+                            height={block.imageAsset?.height || undefined}
+                        />
                     ) : (
                         <span className="category-promotion-placeholder" aria-hidden="true">
                             <LayoutGrid />
@@ -1690,21 +1738,27 @@ function CategoryPromotionSection({
                     </span>
                 </button>
 
-                {categoryProducts.length ? (
+                {pendingProducts || categoryProducts.length ? (
                     <div
                         ref={productRailRef}
+                        aria-busy={pendingProducts || undefined}
+                        data-page-pending={pendingProducts ? 'data' : undefined}
                         className={`product-grid category-promotion-products category-promotion-products-${productGridCount} desktop-product-rail is-four-column`}
                     >
-                        {categoryProducts.map(product => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                market={market}
-                                locale={locale}
-                                language={language}
-                                onOpen={() => onContentTarget('PRODUCT', product.id)}
-                            />
-                        ))}
+                        {pendingProducts
+                            ? Array.from({ length: productGridCount }, (_, index) => (
+                                  <ProductCardSkeleton key={index} />
+                              ))
+                            : categoryProducts.map(product => (
+                                  <ProductCard
+                                      key={product.id}
+                                      product={product}
+                                      market={market}
+                                      locale={locale}
+                                      language={language}
+                                      onOpen={() => onContentTarget('PRODUCT', product.id)}
+                                  />
+                              ))}
                     </div>
                 ) : block.items.length ? (
                     <div className="managed-content-grid category-promotion-legacy-grid">
@@ -1914,7 +1968,14 @@ function ContentStorySection({
                     aria-label={blockHasTarget ? block.ctaLabel || block.title : undefined}
                 >
                     {block.imageUrl ? (
-                        <SafeImage src={block.imageUrl} alt={block.title} imageKind="hero" loading="lazy" />
+                        <SafeImage
+                            src={block.imageUrl}
+                            alt={block.title}
+                            imageKind="hero"
+                            loading="lazy"
+                            width={block.imageAsset?.width || undefined}
+                            height={block.imageAsset?.height || undefined}
+                        />
                     ) : (
                         <span className="content-story-placeholder" aria-hidden="true">
                             <span>STORY</span>

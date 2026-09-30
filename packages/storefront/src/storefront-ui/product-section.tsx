@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-import { ProductCard } from '../components/common/product-card';
+import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { MarketConfig, Product, StorefrontLanguage } from '../types';
 
 import { SectionHeader, type SectionKind } from './page-shell';
@@ -26,7 +26,11 @@ export function ProductSection({
     desktopRail = false,
     prioritizeFirstImage = true,
     appearance,
+    loading = false,
+    skeletonCount = 4,
 }: {
+    loading?: boolean;
+    skeletonCount?: number;
     desktopRail?: boolean;
     prioritizeFirstImage?: boolean;
     title?: string;
@@ -48,11 +52,13 @@ export function ProductSection({
     subtitlePlacement?: 'below' | 'end';
     selection?: { ids: string[]; onToggle: (id: string) => void };
 }) {
-    if (!products.length) return null;
+    if (!loading && !products.length) return null;
     return (
         <section
             className={`content-section product-section${className ? ` ${className}` : ''}`}
             style={style}
+            aria-busy={loading || undefined}
+            data-page-pending={loading ? 'data' : undefined}
         >
             {title || subtitle || centerLabel || action ? (
                 <SectionHeader
@@ -67,39 +73,48 @@ export function ProductSection({
                 />
             ) : null}
             <div className={`product-grid${desktopRail ? ' desktop-product-rail is-four-column' : ''}`}>
-                {products.map((product, index) => {
-                    const card = (
-                        <ProductCard
-                            key={product.id}
-                            product={product}
-                            market={market}
-                            locale={locale}
-                            language={language}
-                            appearance={appearance}
-                            priority={prioritizeFirstImage && index === 0}
-                            imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
-                            favorite={favoriteProductIds?.includes(product.id)}
-                            onOpen={() => onProduct(product)}
-                            onFavorite={onFavorite ? () => onFavorite(product) : undefined}
-                        />
-                    );
-                    return selection ? (
-                        <div key={product.id} className="favorite-selection-card">
-                            {card}
-                            <label className="favorite-select-control">
-                                <input
-                                    type="checkbox"
-                                    checked={selection.ids.includes(product.id)}
-                                    onChange={() => selection.onToggle(product.id)}
-                                    aria-label={`${language === 'zh' ? '选择' : 'Select'} ${product.name}`}
-                                />
-                            </label>
-                        </div>
-                    ) : (
-                        card
-                    );
-                })}
+                {loading
+                    ? Array.from({ length: skeletonCount }, (_, index) => (
+                          <ProductCardSkeleton key={index} appearance={appearance} />
+                      ))
+                    : products.map((product, index) => {
+                          const card = (
+                              <ProductCard
+                                  key={product.id}
+                                  product={product}
+                                  market={market}
+                                  locale={locale}
+                                  language={language}
+                                  appearance={appearance}
+                                  priority={prioritizeFirstImage && index === 0}
+                                  imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
+                                  favorite={favoriteProductIds?.includes(product.id)}
+                                  onOpen={() => onProduct(product)}
+                                  onFavorite={onFavorite ? () => onFavorite(product) : undefined}
+                              />
+                          );
+                          return selection ? (
+                              <div key={product.id} className="favorite-selection-card">
+                                  {card}
+                                  <label className="favorite-select-control">
+                                      <input
+                                          type="checkbox"
+                                          checked={selection.ids.includes(product.id)}
+                                          onChange={() => selection.onToggle(product.id)}
+                                          aria-label={`${language === 'zh' ? '选择' : 'Select'} ${product.name}`}
+                                      />
+                                  </label>
+                              </div>
+                          ) : (
+                              card
+                          );
+                      })}
             </div>
+            {loading && (
+                <span className="visually-hidden" role="status">
+                    {language === 'zh' ? '正在加载商品' : 'Loading products'}
+                </span>
+            )}
         </section>
     );
 }

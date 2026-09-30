@@ -3,6 +3,7 @@ import path from 'node:path';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
+import { resolveStorefrontSkinTreatment } from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
 
 function stylesheet(relativePath: string): string {
@@ -19,6 +20,13 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('reserves the same classic border before and after theme hydration', () => {
+        const css = presetRootBlock(stylesheet('./styles/visual-presets.css'), 'classic');
+        expect(css).toContain(
+            `--skin-card-outline: ${resolveStorefrontSkinTreatment('classic').cardOutline};`,
+        );
+    });
+
     it('gives shared empty states one appearance owner instead of route and desktop overrides', () => {
         const violations: string[] = [];
         for (const file of readdirSync(path.join(__dirname, 'styles')).filter(name =>
@@ -286,6 +294,8 @@ describe('storefront skin system', () => {
                             '.ai-generation-progress progress',
                             // Functional active-state marker in the narrow category rail.
                             '.category-subcat-sidebar .subcat-side-item.is-active::before',
+                            // Desktop selection indicator; hidden on unselected category rows.
+                            '.desktop-subcategory-sidebar nav > button::before',
                         ]).has(selector.trim())
                     ) {
                         findings.push(`${file}: ${selector.trim()} draws a thin background divider`);
@@ -362,9 +372,7 @@ describe('storefront skin system', () => {
         const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
         const expectedSelectors = [
             'html[data-storefront-preset]',
-            ...storefrontVisualPresets
-                .filter(preset => preset.id !== 'classic')
-                .map(preset => `html[data-storefront-preset='${preset.id}']`),
+            ...storefrontVisualPresets.map(preset => `html[data-storefront-preset='${preset.id}']`),
         ];
         expect(rules.map(([, selector]) => selector.trim()).sort()).toEqual(expectedSelectors.sort());
         for (const [, , body] of rules) {

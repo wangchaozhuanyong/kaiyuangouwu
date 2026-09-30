@@ -91,6 +91,7 @@ export function useStorefrontAppState() {
         activeFlashSales,
         systemAnnouncements,
         managedContentProducts,
+        managedContentProductsQuery,
         activeFlashSaleItems,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
@@ -237,7 +238,13 @@ export function useStorefrontAppState() {
         enabled: storefrontContextResolved && !isNavigationPending,
     });
 
-    const { bestSellerProducts, recommendationProducts, recommendationsBlock } = useStorefrontMerchandising({
+    const {
+        bestSellerProducts,
+        recommendationProducts,
+        recommendationsBlock,
+        bestSellersLoading,
+        recommendationsLoading,
+    } = useStorefrontMerchandising({
         ...queryContext,
         customer,
         recentProductIds,
@@ -679,6 +686,7 @@ export function useStorefrontAppState() {
         reviewSettingsStatus,
         reviewSettingsQuery,
         managedContentProducts,
+        managedContentLoading: managedContentProductsQuery.isLoading || productsQuery.isLoading,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         authSettings,
@@ -691,6 +699,8 @@ export function useStorefrontAppState() {
         systemAnnouncements,
         bestSellerProducts,
         recommendationProducts,
+        bestSellersLoading,
+        recommendationsLoading,
         recommendationsBlock,
         contentError,
         contentQuery,

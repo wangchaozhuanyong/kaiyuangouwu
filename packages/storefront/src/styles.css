@@ -425,21 +425,38 @@ img {
     }
 }
 .page-readiness-overlay {
+    /* A late timeout must not repaint or intercept the already visible page. */
     position: fixed;
-    inset: 0;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(var(--bottom-navigation-height) + var(--safe-bottom) + 16px);
+    left: max(16px, env(safe-area-inset-left));
     z-index: var(--layer-readiness);
-    display: grid;
-    place-items: center;
-    background: var(--skin-background, #f4f5f7);
+    max-width: 420px;
+    margin-inline: auto;
+    pointer-events: none;
 }
 .page-readiness-error {
-    max-width: 420px;
-    padding: 24px;
+    padding: 16px;
+    border: 1px solid var(--skin-divider);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface-elevated);
+    color: var(--text);
+    box-shadow: var(--skin-hero-shadow);
+    pointer-events: auto;
     text-align: center;
 }
+.page-readiness-error p {
+    margin: 0 0 8px;
+}
 .page-readiness-error button {
-    margin: 8px;
-    padding: 10px 20px;
+    min-height: var(--experience-control-min);
+    margin: 0 4px;
+    padding: 8px 16px;
+}
+@media (min-width: 1024px) {
+    .page-readiness-overlay {
+        bottom: 20px;
+    }
 }
 
 .route-transition {

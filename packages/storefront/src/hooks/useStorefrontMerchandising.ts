@@ -1,5 +1,6 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 
 import { buildBestSellerProducts, buildRecommendationProducts } from '../home-merchandising';
 import {
@@ -111,12 +112,16 @@ export function useStorefrontMerchandising({
         language,
     });
 
-    const purchaseSourceIds = Array.from(
-        new Set(
-            (customer?.orders.items ?? []).flatMap(order =>
-                order.lines.map(line => line.productVariant.product.id),
+    const purchaseSourceIds = useMemo(
+        () =>
+            Array.from(
+                new Set(
+                    (customer?.orders.items ?? []).flatMap(order =>
+                        order.lines.map(line => line.productVariant.product.id),
+                    ),
+                ),
             ),
-        ),
+        [customer],
     );
 
     const personalizationSourceIds = Array.from(new Set([...purchaseSourceIds, ...recentProductIds]));
@@ -144,21 +149,95 @@ export function useStorefrontMerchandising({
 
     const recommendationCandidates = recommendationCatalogQuery.data?.items ?? products;
 
-    const bestSellerProducts = buildBestSellerProducts({
-        pinnedProducts: pinnedBestSellerQuery.data ?? [],
-        candidates: bestSellerCandidates,
-        salesByProductId: bestSellerSalesQuery.data ?? {},
-        count: bestSellerDisplayCount,
-        seed: `${market.code}:${new Date().toISOString().slice(0, 10)}:best-sellers`,
-    });
+    const day = new Date().toISOString().slice(0, 10);
+    const bestSellerProducts = useMemo(
+        () =>
+            buildBestSellerProducts({
+                pinnedProducts: pinnedBestSellerQuery.data ?? [],
+                candidates: bestSellerCandidates,
+                salesByProductId: bestSellerSalesQuery.data ?? {},
+                count: bestSellerDisplayCount,
+                seed: `${market.code}:${day}:best-sellers`,
+            }),
+        [
+            pinnedBestSellerQuery.data,
+            bestSellerCandidates,
+            bestSellerSalesQuery.data,
+            bestSellerDisplayCount,
+            market.code,
+            day,
+        ],
+    );
 
-    const recommendationProducts = buildRecommendationProducts({
-        candidates: recommendationCandidates,
-        sourceProducts: personalizationSourceQuery.data ?? [],
-        purchaseSourceIds,
-        recentProductIds,
-        count: recommendationDisplayCount,
-        seed: `${market.code}:${new Date().toISOString().slice(0, 10)}:recommendations`,
-    });
-    return { bestSellerProducts, recommendationProducts, recommendationsBlock };
+    const recommendationProducts = useMemo(
+        () =>
+            buildRecommendationProducts({
+                candidates: recommendationCandidates,
+                sourceProducts: personalizationSourceQuery.data ?? [],
+                purchaseSourceIds,
+                recentProductIds,
+                count: recommendationDisplayCount,
+                seed: `${market.code}:${day}:recommendations`,
+            }),
+        [
+            recommendationCandidates,
+            personalizationSourceQuery.data,
+            purchaseSourceIds,
+            recentProductIds,
+            recommendationDisplayCount,
+            market.code,
+            day,
+        ],
+    );
+    // Do not publish the bootstrap catalog as a finished merchandising section. The
+    // ranked catalog, pinned products and sales arrive separately and would otherwise
+    // replace visible cards (and add rows) several times during the first render.
+    // Cached data stays usable during background refreshes; paused/failed requests
+    // retain the existing fallback products instead of leaving a permanent skeleton.
+    const bestSellersLoading =
+        homeContentReady &&
+        showBestSellers &&
+        (bestSellerCatalogQuery.isLoading ||
+            bestSellerSalesQuery.isLoading ||
+            pinnedBestSellerQuery.isLoading);
+    const recommendationsLoading =
+        recommendationsReady &&
+        showRecommendations &&
+        (recommendationCatalogQuery.isLoading || personalizationSourceQuery.isLoading);
+    const scope = JSON.stringify([storefrontQueryKeys.market(market), vendureLanguageCode]);
+    const bestSellers = useSettledProducts(bestSellerProducts, bestSellersLoading, scope, homeContentReady);
+    const recommendations = useSettledProducts(
+        recommendationProducts,
+        recommendationsLoading,
+        scope,
+        recommendationsReady,
+    );
+    return {
+        bestSellerProducts: bestSellers.products,
+        recommendationProducts: activeRoute === 'home' ? recommendations.products : recommendationProducts,
+        recommendationsBlock,
+        bestSellersLoading: bestSellers.loading,
+        recommendationsLoading: recommendations.loading,
+    };
+}
+
+// A refreshed catalog can introduce a new sales-query key. Keep the last complete
+// section visible while those new dependencies settle, including an empty result.
+function useSettledProducts(products: Product[], pending: boolean, scope: string, enabled: boolean) {
+    const [settled, setSettled] = useState<{ scope: string; products: Product[] }>();
+    useEffect(() => {
+        if (enabled && !pending)
+            setSettled(current =>
+                current?.scope === scope &&
+                current.products.length === products.length &&
+                current.products.every((product, index) => product === products[index])
+                    ? current
+                    : { scope, products },
+            );
+    }, [enabled, pending, products, scope]);
+    const previous = settled?.scope === scope ? settled : undefined;
+    return {
+        products: pending ? (previous?.products ?? []) : products,
+        loading: pending && !previous,
+    };
 }

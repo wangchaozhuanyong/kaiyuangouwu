@@ -56,6 +56,7 @@ export function HomeRoutePage() {
                 collections: runtime.collections,
                 contentBlocks: runtime.contentBlocks,
                 managedContentProducts: runtime.managedContentProducts,
+                managedContentLoading: runtime.managedContentLoading,
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
                 coupons: runtime.activeCoupons,
@@ -65,6 +66,8 @@ export function HomeRoutePage() {
                 systemAnnouncements: runtime.systemAnnouncements,
                 bestSellerProducts: runtime.bestSellerProducts,
                 recommendationProducts: runtime.recommendationProducts,
+                bestSellersLoading: runtime.bestSellersLoading,
+                recommendationsLoading: runtime.recommendationsLoading,
                 contentError,
                 // The home hero depends on content, not the product catalog.
                 loading: contentQuery.isPending && !contentQuery.isPaused,

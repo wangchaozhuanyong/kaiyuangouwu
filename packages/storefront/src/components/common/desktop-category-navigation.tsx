@@ -1,6 +1,5 @@
-import { Check, LayoutGrid } from 'lucide-react';
+import { ChevronRight, LayoutGrid } from 'lucide-react';
 
-import allCategoriesIcon from '../../assets/icons/catalog-directory-color.webp';
 import { catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
@@ -39,7 +38,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
             {expandChildren && (
                 <strong className="desktop-category-directory-title">
                     <span className="desktop-category-icon" aria-hidden="true">
-                        <img src={allCategoriesIcon} width={28} height={28} alt="" decoding="async" />
+                        <LayoutGrid strokeWidth={1.7} />
                     </span>
                     <span>{isZh ? '全部分类目录' : 'All categories'}</span>
                 </strong>
@@ -51,14 +50,24 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                 >
                     {collections.map(collection => {
                         const image = collectionImage(collection, products);
+                        const isExpanded =
+                            expandChildren &&
+                            activeCollection?.id === collection.id &&
+                            Boolean(collection.children?.length);
                         return (
-                            <div className="desktop-category-entry" key={collection.id}>
+                            <div
+                                className={`desktop-category-entry${isExpanded ? ' is-expanded' : ''}`}
+                                key={collection.id}
+                            >
                                 <button
                                     type="button"
                                     className={
                                         activeCollection?.id === collection.id ? 'is-active' : undefined
                                     }
                                     aria-pressed={activeCollection?.id === collection.id}
+                                    aria-expanded={
+                                        expandChildren && collection.children?.length ? isExpanded : undefined
+                                    }
                                     onClick={() =>
                                         update({
                                             name: 'category',
@@ -74,7 +83,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                                 src={image}
                                                 alt=""
                                                 imageKind="icon"
-                                                sizes="28px"
+                                                sizes="32px"
                                                 loading="eager"
                                                 errorFallback={<LayoutGrid aria-hidden="true" />}
                                             />
@@ -82,10 +91,24 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                             <LayoutGrid />
                                         )}
                                     </span>
-                                    <span>{collection.name}</span>
+                                    <span className="desktop-category-name">{collection.name}</span>
+                                    {expandChildren && Boolean(collection.children?.length) ? (
+                                        <ChevronRight
+                                            className="desktop-category-chevron"
+                                            aria-hidden="true"
+                                        />
+                                    ) : null}
                                 </button>
-                                {expandChildren && activeCollection?.id === collection.id ? (
-                                    <DesktopSubcategoryNavigation />
+                                {expandChildren && Boolean(collection.children?.length) ? (
+                                    <div
+                                        className="desktop-category-children"
+                                        inert={!isExpanded}
+                                        aria-hidden={!isExpanded}
+                                    >
+                                        <div className="desktop-category-children-clip">
+                                            <DesktopSubcategoryNavigation collection={collection} />
+                                        </div>
+                                    </div>
                                 ) : null}
                             </div>
                         );
@@ -110,23 +133,30 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
     );
 }
 
-export function DesktopSubcategoryNavigation() {
+export function DesktopSubcategoryNavigation({ collection }: { collection?: CollectionSummary } = {}) {
     const runtime: DesktopCategoryNavigationContext = useStorefront();
     const { route, language, collections, navigate } = runtime;
     if (route.name !== 'category') return null;
 
-    const activeCollection = collections.find(collection => collection.id === route.collectionId);
-    if (!activeCollection?.children?.length) return null;
+    const displayedCollection = collection ?? collections.find(item => item.id === route.collectionId);
+    if (!displayedCollection?.children?.length) return null;
 
-    const activeChild = activeCollection.children.find(collection => collection.id === route.childId);
+    const activeChild =
+        displayedCollection.id === route.collectionId
+            ? displayedCollection.children.find(child => child.id === route.childId)
+            : undefined;
     const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(route, changes));
     const isZh = language === 'zh';
 
     return (
         <aside className="desktop-subcategory-sidebar" aria-label={isZh ? '子分类' : 'Subcategories'}>
-            <strong>{activeCollection.name}</strong>
-            <nav aria-label={isZh ? `选择${activeCollection.name}分类` : `Choose ${activeCollection.name}`}>
-                {activeCollection.children.map(child => (
+            <strong>{displayedCollection.name}</strong>
+            <nav
+                aria-label={
+                    isZh ? `选择${displayedCollection.name}分类` : `Choose ${displayedCollection.name}`
+                }
+            >
+                {displayedCollection.children.map(child => (
                     <button
                         key={child.id}
                         type="button"
@@ -134,8 +164,7 @@ export function DesktopSubcategoryNavigation() {
                         aria-pressed={activeChild?.id === child.id}
                         onClick={() => update({ childId: child.id })}
                     >
-                        <span>{child.name}</span>
-                        {activeChild?.id === child.id ? <Check aria-hidden="true" /> : null}
+                        <span className="desktop-subcategory-name">{child.name}</span>
                     </button>
                 ))}
             </nav>
