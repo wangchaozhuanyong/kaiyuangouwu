@@ -82,6 +82,7 @@
     margin: 12px 0 0;
     padding: 0;
     background: var(--surface);
+    border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius);
 }
 .notification-list > button {

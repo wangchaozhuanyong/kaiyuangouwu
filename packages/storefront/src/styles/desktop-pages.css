@@ -1758,7 +1758,6 @@
     .desktop-store-layout .auth-page .primary-action {
         min-height: 46px;
         border-radius: var(--skin-control-radius);
-        box-shadow: var(--accent-shadow);
     }
     .desktop-store-layout .auth-page-default {
         display: block;

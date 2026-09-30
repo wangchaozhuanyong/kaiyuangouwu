@@ -540,10 +540,6 @@
     line-height: var(--line-height-relaxed);
 }
 
-.auth-legal-notice > span:first-child {
-    display: block;
-}
-
 .auth-legal-links {
     margin-top: 2px;
     display: flex;

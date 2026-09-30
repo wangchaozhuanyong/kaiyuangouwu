@@ -465,6 +465,12 @@
     border-radius: var(--skin-card-radius);
 }
 
+@media (max-width: 1023px) {
+    .support-channel-list {
+        border: var(--skin-card-outline, 0);
+    }
+}
+
 .support-channel-row {
     position: relative;
     width: 100%;
