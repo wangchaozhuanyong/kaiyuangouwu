@@ -1019,7 +1019,21 @@ pointer_changed=1
 refresh_image_processor "${candidate}"
 
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
-curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
+image_health_ready_attempt=0
+for attempt in $(seq 1 30); do
+    if curl --fail --silent --max-time 10 \
+        http://127.0.0.1:3002/image-generation/health >/dev/null 2>&1; then
+        image_health_ready_attempt="${attempt}"
+        break
+    fi
+    if [[ "${attempt}" == "30" ]]; then
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/image-generation/health >/dev/null || true
+        fail 'post-pointer AI image worker health check did not pass'
+    fi
+    sleep 2
+done
+printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer attempts=%s\n' "${image_health_ready_attempt}"
 node "${repository}/deploy/verify-production-storefronts.mjs" \
     --mode release \
     --release-id "${target_sha}"
