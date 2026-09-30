@@ -1976,15 +1976,14 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         margin: 0;
-        gap: 12px;
+        gap: 0;
     }
     .desktop-store-layout .support-channel-row {
         min-height: 84px;
-        border: 0;
-        border-radius: var(--skin-control-radius);
         padding: 16px;
-        background: var(--soft);
-        box-shadow: none;
+    }
+    .desktop-store-layout .support-channel-row + .support-channel-row::before {
+        inset-inline: 66px 16px;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;

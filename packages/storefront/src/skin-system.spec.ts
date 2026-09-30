@@ -153,6 +153,7 @@ describe('storefront skin system', () => {
                             'styles/notifications.css|.notification-list > button + button::before',
                             'styles/order-aftercare.css|.order-detail-products article + article::before',
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
+                            'styles/modals-and-support.css|.support-channel-row + .support-channel-row::before',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
                         if (
