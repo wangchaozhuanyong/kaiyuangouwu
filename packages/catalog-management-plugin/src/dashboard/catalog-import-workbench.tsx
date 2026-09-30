@@ -266,7 +266,10 @@ function CatalogImportWorkbench({
             toast.success('数据库差异预览已生成，尚未写入商品');
             await queryClient.invalidateQueries({ queryKey: ['catalog-import-history'] });
         },
-        onError: error => toast.error(errorMessage(error)),
+        onError: error => {
+            toast.error(errorMessage(error));
+            void queryClient.invalidateQueries({ queryKey: ['catalog-import-history'] });
+        },
     });
     const resolveMutation = useMutation({
         mutationFn: (input: { rowId: string; resolution: string; targetVariantId?: string }) =>
