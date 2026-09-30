@@ -2768,7 +2768,7 @@ html[lang='en'] .primary-categories button {
 .all-primary-categories h2 {
     min-height: 44px;
     margin: 0;
-    padding: 14px var(--page-section-inset, 14px) 8px;
+    padding: 14px var(--page-section-inset, 14px) 8px calc(var(--page-section-inset, 14px) + 8px);
     color: var(--text);
     font-size: 14px;
     font-weight: var(--font-weight-semibold);
