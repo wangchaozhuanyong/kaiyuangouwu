@@ -241,6 +241,7 @@
     margin-top: 9px;
     padding: 16px 14px;
     background: var(--surface);
+    border: var(--skin-card-outline, 0);
 }
 
 .payment-test-notice {
@@ -483,6 +484,7 @@
     padding: 18px;
     border-radius: var(--radius-md);
     background: var(--paper);
+    border: var(--skin-card-outline, 0);
 }
 
 .order-confirmation-summary dl > div {

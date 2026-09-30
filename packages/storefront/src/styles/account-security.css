@@ -20,6 +20,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    border: var(--skin-card-outline, 0);
 }
 
 .security-user-avatar {
@@ -201,6 +202,7 @@
     overflow: hidden;
     display: grid;
     gap: 2px;
+    border: var(--skin-card-outline, 0);
 }
 
 .security-item-btn,
@@ -521,6 +523,7 @@
     border-radius: 20px;
     background: var(--paper);
     box-shadow: 0 24px 80px rgb(15 23 42 / 28%);
+    border: var(--skin-card-outline, 0);
 }
 
 .security-privacy-dialog-close {

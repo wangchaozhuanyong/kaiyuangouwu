@@ -55,6 +55,7 @@
     color: var(--text);
     min-width: 0;
     overflow-wrap: anywhere;
+    border: var(--skin-card-outline, 0);
 }
 
 .address-card header {

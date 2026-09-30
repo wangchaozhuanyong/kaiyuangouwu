@@ -11,6 +11,7 @@
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     color: var(--text);
+    border: var(--skin-card-outline, 0);
 }
 .coupon-guide-layout {
     display: grid;

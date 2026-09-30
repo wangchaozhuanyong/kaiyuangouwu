@@ -509,7 +509,7 @@
     .account-page .account-section {
         margin: 10px var(--page-section-inset, 20px) 0;
         padding: 16px;
-        border: 0;
+        border: var(--skin-card-outline, 0);
         border-radius: var(--radius-md);
         background: var(--surface);
         box-shadow: var(--shadow-sm);

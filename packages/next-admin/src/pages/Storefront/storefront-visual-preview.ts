@@ -38,12 +38,12 @@ export function storefrontVisualPreviewDocument(
             body{padding:24px;min-height:100vh;background:var(--bg, #fff);color:var(--text, #0f172a)}.preview-shell{max-width:1060px;margin:auto;display:grid;gap:24px}
             .preview-brand{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px}
             .preview-brand b{font-size:20px}.preview-brand small{color:var(--muted)}
-            .preview-hero{padding:36px 28px;background:var(--surface);border-radius:var(--skin-hero-radius);color:var(--text);box-shadow:var(--skin-hero-shadow)}
+            .preview-hero{padding:36px 28px;border:var(--skin-card-outline,0);background:var(--surface);border-radius:var(--skin-hero-radius);color:var(--text);box-shadow:var(--skin-hero-shadow)}
             .preview-hero .hero-rich-title{color:var(--text);font-family:var(--skin-display-font);margin:12px 0;font-size:clamp(28px,4vw,42px)}
             .preview-hero p{line-height:1.8;color:var(--muted);max-width:34em}
             .preview-hero button{margin-top:18px;padding:12px 20px;border:0;border-radius:var(--skin-control-radius);background:var(--accent);color:var(--accent-foreground)}
             .preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-            .preview-card{padding:20px;border:0;background:var(--paper);border-radius:var(--skin-card-radius);box-shadow:var(--skin-card-shadow)}
+            .preview-card{padding:20px;border:var(--skin-card-outline,0);background:var(--paper);border-radius:var(--skin-card-radius);box-shadow:var(--skin-card-shadow)}
             .preview-card h2{font-size:18px;margin:0 0 16px}.preview-card p{font-size:14px;color:var(--muted)}
             .preview-card input{width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--skin-control-radius);background:var(--paper);margin-bottom:12px}
             .preview-card .primary-btn{background:var(--accent);color:var(--accent-foreground);border:0;padding:12px 18px;border-radius:var(--skin-control-radius)}

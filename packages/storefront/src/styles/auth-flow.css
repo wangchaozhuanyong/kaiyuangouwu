@@ -662,6 +662,7 @@
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--shadow-sm);
+    border: var(--skin-card-outline, 0);
 }
 
 .sheet:focus {
@@ -2522,7 +2523,7 @@
         min-height: 0;
         margin: 0;
         padding: 28px 22px;
-        border: 0;
+        border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
         background: var(--surface, var(--paper));
         box-shadow: var(--skin-card-shadow);
@@ -2552,7 +2553,7 @@
         max-width: 484px;
         margin: 14px auto 0;
         padding: 18px;
-        border: 0;
+        border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
         background: var(--surface, var(--paper));
         box-shadow: var(--skin-card-shadow);

@@ -43,6 +43,7 @@
     flex-direction: column;
     gap: 16px;
     overflow: hidden;
+    border: var(--skin-card-outline, 0);
 }
 
 .poster-close-btn {
@@ -349,6 +350,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    border: var(--skin-card-outline, 0);
 }
 
 .support-hours-heading {
@@ -465,7 +467,7 @@
     width: 100%;
     min-height: 76px;
     padding: 11px 11px 11px 13px;
-    border: 0;
+    border: var(--skin-card-outline, 0);
     border-radius: 12px;
     background: var(--surface);
     box-shadow: var(--shadow-sm);
@@ -759,6 +761,7 @@
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
+    border: var(--skin-card-outline, 0);
 }
 
 .support-faq-card h2 {
@@ -840,6 +843,7 @@
     border-radius: 16px;
     background: var(--surface);
     box-shadow: var(--shadow-sm);
+    border: var(--skin-card-outline, 0);
 }
 
 .support-evaluation-error {

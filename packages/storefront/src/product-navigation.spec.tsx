@@ -640,7 +640,7 @@ describe('product image navigation layers', () => {
         expect(descriptionRule).toMatch(/align-self:\s*stretch;/);
     });
 
-    it('keeps the shared product surface without a decorative outline or shadow', () => {
+    it('uses the shared skin treatment for product outlines and elevation', () => {
         const markup = renderToStaticMarkup(
             <ProductCard
                 product={digitalProduct}
@@ -657,6 +657,9 @@ describe('product image navigation layers', () => {
             /\.product-card\s*\{[^}]*background:\s*var\(--product-card-surface,\s*var\(--surface\)\);/,
         );
         expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--skin-control-radius\);/);
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*none;/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border:\s*var\(--skin-card-outline, 0\);/);
+        expect(stylesheet).toMatch(
+            /\.product-card\s*\{[^}]*box-shadow:\s*var\(--skin-card-outline-shadow, none\);/,
+        );
     });
 });

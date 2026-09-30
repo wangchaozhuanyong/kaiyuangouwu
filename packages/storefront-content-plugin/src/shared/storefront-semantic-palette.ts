@@ -37,6 +37,9 @@ export interface StorefrontSemanticPalette {
 /** Decorative surfaces are deliberately separate from accessible control borders. */
 export interface StorefrontSkinTreatment {
     divider: string;
+    /** Whole-border value; initial lets other skins retain each surface owner's fallback. */
+    cardOutline: string;
+    cardOutlineHover: string;
     displayFont: string;
     cardRadius: string;
     heroRadius: string;
@@ -263,21 +266,25 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
 
 const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment> = {
     classic: {
-        divider: '#e4eaf1',
+        divider: '#e4ebf3',
+        cardOutline: '1px solid #d2ddea',
+        cardOutlineHover: '#c5d3e4',
         displayFont:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
         cardRadius: '16px',
         heroRadius: '20px',
         controlRadius: '10px',
         mediaRadius: '12px',
-        cardShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
-        cardHoverShadow: '0 9px 22px rgba(15, 35, 52, 0.15)',
+        cardShadow: '0 2px 8px rgba(34, 65, 102, 0.04)',
+        cardHoverShadow: '0 4px 12px rgba(34, 65, 102, 0.07)',
         heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
         headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
     },
 
     'neo-minimalist': {
         divider: '#2a3548',
+        cardOutline: 'initial',
+        cardOutlineHover: 'initial',
         displayFont:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
         cardRadius: '16px',
@@ -365,6 +372,10 @@ export function storefrontSkinCssVariables(
     const variables: Record<string, string> = {
         ...storefrontServiceCardCssVariables(palette),
         '--skin-divider': treatment.divider,
+        '--skin-card-outline': treatment.cardOutline,
+        '--skin-card-outline-hover': treatment.cardOutlineHover,
+        // Opt-in elevation for surfaces with an existing custom (or absent) shadow.
+        '--skin-card-outline-shadow': treatment.cardOutline === 'initial' ? 'initial' : treatment.cardShadow,
         '--skin-display-font': treatment.displayFont,
         '--skin-card-radius': treatment.cardRadius,
         '--skin-hero-radius': treatment.heroRadius,

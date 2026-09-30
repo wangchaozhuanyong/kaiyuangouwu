@@ -23,7 +23,7 @@ export const checkoutPageStyles: PageStyleMap = {
     'checkout-address-quick-switcher':
         '[display:flex] [gap:8px] [overflow-x:auto] [padding:2px_0_10px] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:[display:none]',
     'checkout-assurance':
-        '[min-height:52px] [margin-top:9px] [padding:8px_14px] [background:var(--surface)] [color:var(--success)] [display:grid] [grid-template-columns:repeat(3,_minmax(0,_1fr))] [align-items:center] [gap:5px] [font-size:12px] [&_span]:[min-width:0] [&_span]:[display:flex] [&_span]:[align-items:center] [&_span]:[justify-content:center] [&_span]:[gap:4px] [&_span]:[white-space:nowrap] [&_svg]:[width:15px] [&_svg]:[height:15px] lg:[margin-top:20px] lg:[padding:24px] lg:[border:1px_solid_var(--line)] lg:[border-radius:var(--skin-control-radius)]',
+        '[min-height:52px] [margin-top:9px] [padding:8px_14px] [background:var(--surface)] [color:var(--success)] [display:grid] [grid-template-columns:repeat(3,_minmax(0,_1fr))] [align-items:center] [gap:5px] [font-size:12px] [&_span]:[min-width:0] [&_span]:[display:flex] [&_span]:[align-items:center] [&_span]:[justify-content:center] [&_span]:[gap:4px] [&_span]:[white-space:nowrap] [&_svg]:[width:15px] [&_svg]:[height:15px] lg:[margin-top:20px] lg:[padding:24px] lg:[border:var(--skin-card-outline,1px_solid_var(--line))] lg:[border-radius:var(--skin-control-radius)] [border:var(--skin-card-outline,0)]',
     'checkout-digital-delivery-section':
         "[position:relative] [overflow:hidden] [&::after]:[content:'@'] [&::after]:[position:absolute] [&::after]:[top:-28px] [&::after]:[right:-8px] [&::after]:[color:color-mix(in_srgb,_var(--accent)_5%,_transparent)] [&::after]:[font-family:ui-monospace,_SFMono-Regular,_Menlo,_monospace] [&::after]:[font-size:112px] [&::after]:[font-weight:700] [&::after]:[line-height:1] [&::after]:[pointer-events:none]",
     'checkout-form':
@@ -31,7 +31,7 @@ export const checkoutPageStyles: PageStyleMap = {
     'checkout-options':
         '[padding:0_14px] [&>button]:[width:100%] [&>button]:[min-height:52px] [&>button]:[padding:0] [&>button]:[border:0] [&>button]:[border-top:0] [&>button]:[background:transparent] [&>button]:[display:flex] [&>button]:[align-items:center] [&>button]:[justify-content:space-between] [&>button:first-child]:[border-top:0] [&_small]:[color:var(--muted)] [&_small]:[display:flex] [&_small]:[align-items:center] [&_small]:[gap:4px] [&_svg]:[width:17px] [&_svg]:[height:17px]',
     'checkout-section':
-        '[&_h2]:[margin:0] [&_h2]:[font-size:16px] [&_h2]:[font-weight:var(--font-weight-semibold)] [margin-top:9px] [padding:14px] [background:var(--surface)] [&>h2]:[margin-bottom:13px] lg:[margin-top:20px] lg:[padding:24px] lg:[border:1px_solid_var(--line)] lg:[border-radius:var(--skin-control-radius)]',
+        '[&_h2]:[margin:0] [&_h2]:[font-size:16px] [&_h2]:[font-weight:var(--font-weight-semibold)] [margin-top:9px] [padding:14px] [background:var(--surface)] [&>h2]:[margin-bottom:13px] lg:[margin-top:20px] lg:[padding:24px] lg:[border:var(--skin-card-outline,1px_solid_var(--line))] lg:[border-radius:var(--skin-control-radius)] [border:var(--skin-card-outline,0)]',
     'checkout-section-header-row':
         '[display:flex] [align-items:center] [justify-content:space-between] [margin-bottom:8px] [&_h2]:[margin:0]',
     'checkout-section-title':

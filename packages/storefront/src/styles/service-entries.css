@@ -54,7 +54,7 @@
 .category-client-plugin {
     width: 100%;
     min-height: 58px;
-    border: 0;
+    border: var(--skin-card-outline, 0);
     border-radius: 12px;
     padding: 10px 12px;
     display: grid;
