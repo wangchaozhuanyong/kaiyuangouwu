@@ -1,10 +1,11 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { Omit } from '@vendure/common/lib/omit';
 import { Injector, RequestContext, SerializedRequestContext, VendureEvent } from '@vendure/core';
-import { Attachment } from 'nodemailer/lib/mailer';
+import { type Attachment } from 'nodemailer';
 import SESTransport from 'nodemailer/lib/ses-transport';
 import SMTPPool from 'nodemailer/lib/smtp-pool';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { type Readable } from 'stream';
 
 import { EmailGenerator } from './generator/email-generator';
 import { EmailEventHandler } from './handler/event-handler';
@@ -385,7 +386,16 @@ export type OptionalToNullable<O> = {
  * @docsCategory core plugins/EmailPlugin
  * @docsPage Email Plugin Types
  */
-export type EmailAttachment = Omit<Attachment, 'raw'> & { path?: string };
+export type EmailAttachment = Omit<
+    Attachment,
+    'raw' | 'href' | 'httpHeaders' | 'tls' | 'headers' | 'content'
+> & {
+    path?: string;
+    content?: string | Buffer | Readable;
+    headers?:
+        | { [key: string]: string | string[] | { prepared: boolean; value: string } }
+        | Array<{ key: string; value: string }>;
+};
 
 export type SerializedAttachment = OptionalToNullable<
     Omit<EmailAttachment, 'content'> & { content: string | null }

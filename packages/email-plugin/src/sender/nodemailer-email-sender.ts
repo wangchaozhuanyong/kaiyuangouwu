@@ -4,7 +4,7 @@ import { Logger } from '@vendure/core';
 import fs from 'fs-extra';
 import { createTransport } from 'nodemailer';
 import { default as Mail } from 'nodemailer/lib/mailer';
-import { LoggerLevel } from 'nodemailer/lib/shared';
+import { LogLevel } from 'nodemailer/lib/shared';
 import path from 'path';
 import { Stream } from 'stream';
 import { format } from 'util';
@@ -164,7 +164,7 @@ export class NodemailerEmailSender implements EmailSender {
             return format(message, ...params);
         }
         return {
-            level(level: LoggerLevel) {
+            level(level: LogLevel) {
                 /* noop */
             },
             trace(...params: any) {
