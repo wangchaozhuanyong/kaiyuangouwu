@@ -1050,7 +1050,7 @@
         padding: 0;
     }
     .desktop-account-recommendations .product-grid {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
     }
     .desktop-account-page .section-header h2 {
         font-size: 18px;
