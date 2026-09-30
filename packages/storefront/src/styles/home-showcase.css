@@ -3153,38 +3153,38 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .notice-strip-copy {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    animation: notice-ticker-enter 240ms ease-out;
-}
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        animation: notice-ticker-enter 240ms ease-out;
+    }
 
-.notice-strip-title {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 40%;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--text);
-    font-weight: var(--font-weight-bold);
-}
+    .notice-strip-title {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 40%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--text);
+        font-weight: var(--font-weight-bold);
+    }
 
-.notice-strip-title:only-child {
-    max-width: 100%;
-}
+    .notice-strip-title:only-child {
+        max-width: 100%;
+    }
 
-.notice-strip-content {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--muted);
-    font-weight: 400;
-}
+    .notice-strip-content {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--muted);
+        font-weight: 400;
+    }
 
     .category-page .primary-categories-all-label {
         height: auto;
