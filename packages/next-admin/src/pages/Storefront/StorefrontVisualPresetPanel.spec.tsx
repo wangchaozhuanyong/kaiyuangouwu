@@ -71,7 +71,9 @@ describe('fixed desktop layout skin settings', () => {
         expect(document).toContain('--skin-divider:#2a3548');
         expect(document).toContain('--skin-card-radius:16px');
         expect(document).toContain('box-shadow:var(--skin-card-shadow)');
-        expect(document).toContain('.preview-hero{padding:36px 28px;background:var(--surface)');
+        expect(document).toContain(
+            '.preview-hero{padding:36px 28px;border:var(--skin-card-outline,0);background:var(--surface)',
+        );
         expect(document).toContain('background:var(--accent);color:var(--accent-foreground)');
     });
 

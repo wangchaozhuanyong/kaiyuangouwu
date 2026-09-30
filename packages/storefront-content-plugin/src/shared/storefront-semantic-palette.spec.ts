@@ -132,6 +132,27 @@ describe('storefront semantic palette', () => {
         }
     });
 
+    it('separates classic module outlines from control contrast and resets opt-in decoration in the dark skin', () => {
+        const classicPalette = resolveStorefrontSemanticPalette('classic');
+        const classic = storefrontSkinCssVariables('classic', classicPalette);
+        expect(classic['--skin-card-outline']).toBe('1px solid #d2ddea');
+        expect(storefrontContrastRatio('#d2ddea', classicPalette.surface)).toBeLessThan(1.5);
+        expect(storefrontContrastRatio(classicPalette.border, classicPalette.surface)).toBeGreaterThanOrEqual(
+            3,
+        );
+        expect(classic['--skin-card-outline-shadow']).toBe(classic['--skin-card-shadow']);
+        // Explicit initial values trigger each owner's fallback even after a live classic-to-dark switch.
+        const dark = storefrontSkinCssVariables('neo-minimalist');
+        for (const role of [
+            '--skin-card-outline',
+            '--skin-card-outline-hover',
+            '--skin-card-outline-shadow',
+        ]) {
+            expect(dark[role]).toBe('initial');
+        }
+        expect(dark['--skin-card-shadow']).toBe('0 8px 24px rgba(0, 0, 0, 0.24)');
+    });
+
     it('keeps five service colors distinct and readable on every current skin surface', () => {
         for (const presetId of ['classic', 'neo-minimalist'] as const) {
             for (const surfacePreset of ['classic', 'neo-minimalist'] as const) {

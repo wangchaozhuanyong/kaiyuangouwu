@@ -25,6 +25,7 @@
     overflow: hidden;
     background: var(--surface);
     border-radius: var(--skin-card-radius);
+    border: var(--skin-card-outline, 0);
 }
 .delivery-toolbar {
     display: flex;
@@ -352,6 +353,7 @@
     padding: 28px;
     background: var(--surface);
     border-radius: var(--skin-card-radius);
+    border: var(--skin-card-outline, 0);
 }
 .delivery-eyebrow {
     display: block;
@@ -709,6 +711,7 @@
     padding: 24px;
     background: var(--surface);
     border-radius: var(--skin-card-radius);
+    border: var(--skin-card-outline, 0);
 }
 .order-delivery-panel > header {
     display: flex;

@@ -10,12 +10,16 @@
     container-type: inline-size;
     overflow: hidden;
     padding: 0;
-    border: 0;
+    border: var(--skin-card-outline, 0);
     border-radius: var(--skin-control-radius);
     background: var(--product-card-surface, var(--surface));
     color: var(--text);
-    box-shadow: none;
+    box-shadow: var(--skin-card-outline-shadow, none);
     transition: background-color var(--experience-motion-fast) var(--experience-ease-standard);
+}
+
+.product-card:hover {
+    border-color: var(--skin-card-outline-hover, transparent);
 }
 
 /* Managed artwork colors apply to the section; product surfaces keep skin contrast. */

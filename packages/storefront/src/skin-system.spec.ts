@@ -438,7 +438,7 @@ describe('storefront skin system', () => {
         expect(layout).not.toMatch(/\.cart-group\s*[,\{]/);
         expect(skin).not.toContain('.cart-group');
         expect(stylesheet('./styles/cart-layout.css')).toMatch(
-            /\.cart-group\s*\{[^}]*border-radius:\s*var\(--radius-md\);[^}]*border:\s*0;/,
+            /\.cart-group\s*\{[^}]*border-radius:\s*var\(--radius-md\);[^}]*border:\s*var\(--skin-card-outline, 0\);/,
         );
         const desktopRow =
             [...stylesheet('./styles/desktop-pages.css').matchAll(/\.desktop-cart-row\s*\{([^}]*)\}/g)]
@@ -458,6 +458,9 @@ describe('storefront skin system', () => {
             /\.account-identity-assets\s*\{([^}]*)\}/,
         )?.[1];
         expect(accountAssets).not.toContain('border-top:');
+        expect(stylesheet('./styles/account-catalog-surfaces.css')).toMatch(
+            /\.account-page \.account-section\s*\{[^}]*border:\s*var\(--skin-card-outline, 0\);/,
+        );
     });
 
     it('owns populated logistics surfaces in one semantic component stylesheet', () => {
@@ -709,7 +712,6 @@ describe('storefront skin system', () => {
             '.product-review-list article',
             '.coupon-center-cart-link',
             '.payment-summary > header',
-            '.account-page .account-section',
             '.sheet > header',
             '.support-evaluation-header',
         ];

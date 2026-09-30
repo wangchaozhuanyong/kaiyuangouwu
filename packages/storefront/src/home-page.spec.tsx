@@ -1106,7 +1106,7 @@ describe('HomePage desktop intro layout', () => {
         );
         expect(stylesheet).not.toContain('.proto-product-grid > .product-card');
         expect(readStorefrontStylesheet(['./styles/product-card.css'])).toMatch(
-            /\.product-card\s*\{[^}]*border:\s*0;/,
+            /\.product-card\s*\{[^}]*border:\s*var\(--skin-card-outline, 0\);/,
         );
         expect(stylesheet).toMatch(/\.proto-filter-bar\s*\{[^}]*border:\s*none;/);
         expect(stylesheet).toMatch(

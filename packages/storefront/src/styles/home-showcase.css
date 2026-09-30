@@ -52,7 +52,7 @@
     gap: 4px;
     background: var(--surface);
     color: var(--text);
-    border: 0;
+    border: var(--skin-card-outline, 0);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     border-radius: var(--skin-card-radius);
@@ -135,6 +135,7 @@
     background: var(--surface);
     border-radius: 14px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    border: var(--skin-card-outline, 0);
 }
 
 .quick-grid-1 {
@@ -1150,6 +1151,7 @@ html[lang='en'] .quick-grid b {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px 10px;
     box-shadow: 0 2px 10px -2px rgba(15, 23, 42, 0.03);
+    border: var(--skin-card-outline, 0);
 }
 
 .trust-item {
@@ -1372,7 +1374,7 @@ html[lang='en'] .quick-grid b {
     flex-direction: column;
     padding: 0;
     overflow: hidden;
-    border: 0;
+    border: var(--skin-card-outline, 0);
     border-radius: var(--radius-md);
     background: var(--paper);
     color: var(--text);
@@ -1787,6 +1789,7 @@ html[lang='en'] .quick-grid b {
     color: var(--text);
     display: grid;
     box-shadow: var(--skin-hero-shadow);
+    border: var(--skin-card-outline, 0);
 }
 
 .content-story-visual {
@@ -3112,7 +3115,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .home-page :is(.notice-strip, .home-trust-bar, .quick-grid) {
-        border: 0;
+        border: var(--skin-card-outline, 0);
         box-shadow: var(--shadow-sm);
     }
 
@@ -3225,6 +3228,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         border-radius: 0;
         background: transparent;
         box-shadow: none;
+        border: 0;
     }
 
     .category-page .primary-categories button,
@@ -3461,7 +3465,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         min-height: 96px;
         margin: 10px 0 14px;
         padding: 14px 16px;
-        border: 0;
+        border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
         background: linear-gradient(
             115deg,
@@ -3518,6 +3522,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         gap: 32px;
         background: var(--account-hero-bg, linear-gradient(120deg, #203446, #142630));
         color: #fffdf8;
+        border: var(--skin-card-outline, 0);
     }
     .business-services-page .business-services-heading:not(:has(.business-services-hero-media)) {
         grid-template-columns: 1fr;
@@ -3589,7 +3594,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .business-services-empty {
     min-height: 190px;
     margin: 0;
-    border: 0;
+    border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius, 16px);
     padding: 28px 20px;
     display: flex;
@@ -3728,6 +3733,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     border-radius: 0;
     background: transparent;
     gap: 0;
+    border: 0;
 }
 
 .category-page .primary-categories {
@@ -3785,6 +3791,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         margin-block: 4px 8px;
         border-radius: var(--skin-card-radius, var(--radius-md));
         background: var(--surface);
+        border: var(--skin-card-outline, 0);
     }
 }
 

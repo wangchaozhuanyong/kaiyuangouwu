@@ -132,6 +132,7 @@
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--skin-card-shadow);
+    border: var(--skin-card-outline, 0);
 }
 .referral-overview {
     display: flex;
