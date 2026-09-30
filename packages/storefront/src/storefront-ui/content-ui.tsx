@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     Check,
+    ChevronLeft,
     ChevronRight,
     CircleCheck,
     Download,
@@ -791,26 +792,117 @@ export function ManagedContentSection({
                     />
                 </button>
             )}
-            {!!(block.items.length || additionalSelectedProducts.length) && (
-                <div className="managed-content-grid">
-                    {block.items.map(item => (
-                        <ManagedContentItemButton
-                            key={item.id}
-                            item={item}
-                            products={products}
-                            onContentTarget={onContentTarget}
-                        />
-                    ))}
-                    {additionalSelectedProducts.map(product => (
-                        <ManagedSelectedProductButton
-                            key={product.id}
-                            product={product}
-                            onContentTarget={onContentTarget}
-                        />
-                    ))}
-                </div>
+            {block.type === 'CUSTOM' &&
+            block.settings?.displayMode === 'scrollingAds' &&
+            block.items.length ? (
+                <ManagedAdCarousel block={block} products={products} onContentTarget={onContentTarget} />
+            ) : (
+                !!(block.items.length || additionalSelectedProducts.length) && (
+                    <div className="managed-content-grid">
+                        {block.items.map(item => (
+                            <ManagedContentItemButton
+                                key={item.id}
+                                item={item}
+                                products={products}
+                                onContentTarget={onContentTarget}
+                            />
+                        ))}
+                        {additionalSelectedProducts.map(product => (
+                            <ManagedSelectedProductButton
+                                key={product.id}
+                                product={product}
+                                onContentTarget={onContentTarget}
+                            />
+                        ))}
+                    </div>
+                )
             )}
         </section>
+    );
+}
+
+/** Repeatable, per-block carousel: its content and timing come entirely from Admin. */
+export function ManagedAdCarousel({
+    block,
+    products,
+    onContentTarget,
+}: {
+    block: StorefrontContentBlock;
+    products: Product[];
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const items = block.items.filter(item => item.enabled !== false);
+    const railRef = useRef<HTMLDivElement>(null);
+    const [current, setCurrent] = useState(0);
+    const [paused, setPaused] = useState(false);
+    const seconds = Math.min(30, Math.max(3, contentNumberSetting(block.settings?.scrollIntervalSeconds, 6)));
+    const selected = items.length ? current % items.length : 0;
+
+    useEffect(() => {
+        if (items.length < 2 || paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+            return;
+        const timer = window.setInterval(
+            () => setCurrent(index => (index + 1) % items.length),
+            seconds * 1000,
+        );
+        return () => window.clearInterval(timer);
+    }, [items.length, paused, seconds]);
+
+    useEffect(() => {
+        const rail = railRef.current;
+        const card = rail?.children[selected] as HTMLElement | undefined;
+        if (!rail || !card) return;
+        rail.scrollTo({
+            left: card.offsetLeft,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
+    }, [selected]);
+
+    if (!items.length) return null;
+    return (
+        <div
+            className={`managed-ad-carousel${items.every(item => item.targetType === 'PRODUCT') ? ' is-product-carousel' : ''}`}
+            role="region"
+            aria-label={block.title}
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+            onFocusCapture={() => setPaused(true)}
+            onBlurCapture={event => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
+            }}
+        >
+            <div className="managed-ad-carousel-rail" ref={railRef}>
+                {items.map(item => (
+                    <ManagedContentItemButton
+                        key={item.id ?? `${item.position}-${item.label}`}
+                        item={item}
+                        products={products}
+                        onContentTarget={onContentTarget}
+                    />
+                ))}
+            </div>
+            {items.length > 1 && (
+                <div className="managed-ad-carousel-controls">
+                    <span>
+                        {selected + 1} / {items.length}
+                    </span>
+                    <button
+                        type="button"
+                        aria-label="上一张广告"
+                        onClick={() => setCurrent(index => (index - 1 + items.length) % items.length)}
+                    >
+                        <ChevronLeft aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        aria-label="下一张广告"
+                        onClick={() => setCurrent(index => (index + 1) % items.length)}
+                    >
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+                </div>
+            )}
+        </div>
     );
 }
 
