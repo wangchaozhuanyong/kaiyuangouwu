@@ -168,11 +168,11 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('centers the sorting row within its own balanced section', () => {
+    it('centers the sorting row and separates the first product with shared list padding', () => {
         expect(presetStylesheet).toMatch(
             /\.category-page \.category-results \.sort-bar\s*\{[^}]*height:\s*44px;[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*align-items:\s*center;/,
         );
-        expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*0;/);
+        expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*12px;/);
     });
 
     it('distinguishes the active mobile subcategory without decorative dividers', () => {

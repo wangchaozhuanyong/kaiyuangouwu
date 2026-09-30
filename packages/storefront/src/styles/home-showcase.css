@@ -3279,7 +3279,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .category-page .category-product-list {
-        padding-top: 0;
+        padding-top: 12px;
     }
     .category-page .primary-category-strip {
         margin-inline: var(--page-section-inset, 16px);
