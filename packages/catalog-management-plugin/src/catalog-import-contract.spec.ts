@@ -39,6 +39,15 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('supplier: String!');
         expect(schema).toContain('rows: [CatalogNormalizedRowInput!]!');
         expect(schema).toContain('sourceRecordKey: String');
+        const normalizedRowInput = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'CatalogNormalizedRowInput',
+        );
+        const featuredAssetName = normalizedRowInput?.fields?.find(
+            field => field.name.value === 'featuredAssetName',
+        );
+        expect(featuredAssetName && print(featuredAssetName.type)).toBe('String');
         expect(schema).toContain('receivedRows: Int!');
         expect(schema).not.toContain('Upload');
         expect(schema).not.toContain('multipart');

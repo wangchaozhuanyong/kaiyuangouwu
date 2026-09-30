@@ -727,6 +727,7 @@ export const adminApiExtensions = gql`
         enabled: Boolean
         variantEnabled: Boolean
         description: String!
+        featuredAssetName: String
         tags: [String!]!
         sourceCreatedAt: String
         sku: String!
