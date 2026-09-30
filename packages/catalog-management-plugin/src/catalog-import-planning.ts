@@ -190,6 +190,7 @@ export function productFieldFingerprint(row: NormalizedCatalogRow): string {
         pricingMode: row.pricingMode ?? 'FIXED',
         enabled: row.enabled,
         description: row.description,
+        featuredAssetName: row.featuredAssetName,
         tags: row.tags,
     });
 }
@@ -221,6 +222,7 @@ export function createChanges(
         category: catalogCategoryPath(row),
         fulfillmentType: row.fulfillmentType,
         pricingMode: row.pricingMode,
+        featuredAssetName: row.featuredAssetName,
         specification: row.specification,
         saleUnit: row.primaryUnit,
         purchaseUnit: row.purchaseUnit || row.primaryUnit,

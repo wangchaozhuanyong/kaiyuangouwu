@@ -172,10 +172,6 @@ export class CatalogImportPreview {
             }
         }
 
-        if (targetProduct && row.featuredAssetName) {
-            return conflictPlan('主图素材文件名仅用于新建商品；已有商品请在商品编辑页更换主图');
-        }
-
         if (targetProduct) {
             const currentPricingMode =
                 (targetProduct.customFields as unknown as Record<string, unknown>)?.pricingMode ?? 'FIXED';
@@ -340,7 +336,7 @@ export class CatalogImportPreview {
         const [product, variantDetails, stock, cost, policy, supplierBinding] = await Promise.all([
             this.connection.getRepository(ctx, Product).findOne({
                 where: { id: variant.productId },
-                relations: ['translations', 'facetValues', 'facetValues.facet'],
+                relations: ['translations', 'facetValues', 'facetValues.facet', 'featuredAsset', 'assets'],
             }),
             this.connection.getRepository(ctx, ProductVariant).findOne({
                 where: { id: variant.id, deletedAt: IsNull() },
@@ -398,6 +394,13 @@ export class CatalogImportPreview {
             productFulfillmentType: productCustomFields.fulfillmentType ?? 'digital',
             productPricingMode: productCustomFields.pricingMode ?? 'FIXED',
             productDescription: productTranslation?.description ?? '',
+            productFeaturedAssetId: product?.featuredAsset?.id ? String(product.featuredAsset.id) : null,
+            productFeaturedAssetName: product?.featuredAsset?.name ?? null,
+            productAssetIds:
+                product?.assets
+                    ?.slice()
+                    .sort((left, right) => left.position - right.position)
+                    .map(asset => String(asset.assetId)) ?? [],
             productCategories,
             productImportCategory: productImportCategory || null,
             productFacetValueIds: product?.facetValues?.map(value => String(value.id)) ?? [],
@@ -443,6 +446,9 @@ export class CatalogImportPreview {
         );
         changed(changes, 'fulfillmentType', row.fulfillmentType, snapshot.productFulfillmentType);
         changed(changes, 'pricingMode', row.pricingMode, snapshot.productPricingMode);
+        if (row.resolvedFeaturedAssetId) {
+            changed(changes, 'featuredAssetName', row.featuredAssetName, snapshot.productFeaturedAssetName);
+        }
         changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
         changed(changes, 'variantEnabled', effectiveVariantEnabled(row), snapshot.variantEnabled);
         changedOptional(
