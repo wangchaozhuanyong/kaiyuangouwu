@@ -137,7 +137,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-page \.primary-categories-all\s*\{[^}]*right:\s*calc\(-1 \* var\(--page-section-inset, 8px\)\);/,
         );
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all-label\s*\{[^}]*min-height:\s*36px;[^}]*white-space:\s*normal;/,
+            /\.category-page \.primary-categories-all-label\s*\{[^}]*min-height:\s*36px;[^}]*white-space:\s*nowrap;[^}]*writing-mode:\s*vertical-rl;/,
         );
     });
 
