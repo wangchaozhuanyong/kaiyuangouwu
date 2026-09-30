@@ -880,7 +880,9 @@ export function HomePage() {
     const groupedIntro =
         desktop &&
         introOrders.length > 0 &&
-        Math.max(...introOrders) - Math.min(...introOrders) + 1 === introOrders.length;
+        homepageModules
+            .slice(Math.min(...introOrders), Math.max(...introOrders) + 1)
+            .filter(entry => !(overlayTrustBar && entry.type === 'TRUST_BAR')).length === introOrders.length;
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>

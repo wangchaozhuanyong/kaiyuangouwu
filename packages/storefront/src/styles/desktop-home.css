@@ -406,7 +406,7 @@
         padding: 8px 18px;
         gap: 12px;
         font-size: 13px;
-        margin-bottom: 16px;
+        margin-bottom: 0;
     }
     .desktop-store-layout .home-page .home-dual-showcase {
         gap: 20px;
