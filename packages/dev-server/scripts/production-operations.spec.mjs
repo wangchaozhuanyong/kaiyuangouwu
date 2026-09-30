@@ -28,6 +28,38 @@ const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('image readiness rejects failed antivirus and missing sockets before a release', () => {
+    const calls = [];
+    const healthy = { status: 'ok', output: 'LoadState=loaded\nActiveState=active\nSubState=running' };
+    const inspect = (antivirus = healthy, socketExists = () => true) =>
+        operations.inspectImageServices((command, args) => {
+            calls.push([command, args]);
+            return args[1] === 'vendure-clamd.service' ? antivirus : healthy;
+        }, socketExists);
+    assert.equal(inspect().ready, true);
+    assert.equal(inspect({ status: 'unavailable' }).ready, false);
+    assert.equal(
+        inspect({
+            status: 'ok',
+            output: 'LoadState=loaded\nActiveState=failed\nSubState=failed\nResult=start-limit-hit',
+        }).ready,
+        false,
+    );
+    assert.equal(
+        inspect({ status: 'ok', output: 'LoadState=loaded\nActiveState=activating\nSubState=start' }).ready,
+        false,
+    );
+    for (const missing of ['/run/clamav/clamd.ctl', '/run/vendure-image-worker/processor.sock']) {
+        assert.equal(inspect(healthy, socket => socket !== missing).ready, false);
+    }
+    for (const [command, args] of calls) {
+        assert.equal(command, 'systemctl');
+        assert.equal(args[0], 'show');
+        assert.ok(['vendure-clamd.service', 'vendure-image-worker.service'].includes(args[1]));
+        assert.doesNotMatch(args[2], /Environment|ExecStart|Journal/u);
+    }
+});
+
 void test('release preflight reads independent frontend revisions and detects missing bootstrap pointers', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-frontend-revisions-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
