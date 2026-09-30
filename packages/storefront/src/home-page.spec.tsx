@@ -1260,6 +1260,46 @@ describe('HomePage desktop intro layout', () => {
         for (const label of ['卧室', '餐厅', '客厅', '书房']) expect(markup).toContain(`<b>${label}</b>`);
     });
 
+    it.each([4, 5])(
+        'groups %i desktop shortcuts beside the hero across the overlaid service floor',
+        count => {
+            const shortcuts: StorefrontContentBlock = {
+                ...quickLinksBlock,
+                position: 3,
+                items: Array.from({ length: count }, (_, position) => ({
+                    id: `shortcut-${position}`,
+                    enabled: true,
+                    position,
+                    imageUrl: `/shortcut-${position}.webp`,
+                    targetType: 'PAGE',
+                    targetValue: 'category',
+                    label: `入口${position + 1}`,
+                    description: '',
+                })),
+            };
+            const contentBlocks = [positionedHeroBlock, positionedTrustBlock, shortcuts];
+            const markup = renderHome({ contentBlocks }, true);
+
+            expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
+            expect(markup).toContain('class="hero-service-overlay"');
+            expect(markup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
+            expect(markup.match(/class="desktop-quick-tile"/g)).toHaveLength(count);
+            expect(markup).toContain(`grid-template-columns:repeat(${count - 2}, minmax(0, 1fr))`);
+            expect(renderHome({ contentBlocks })).not.toContain('is-grouped-intro');
+
+            const separatedMarkup = renderHome(
+                {
+                    contentBlocks: [
+                        ...contentBlocks,
+                        { ...heroBlock, id: 'story-between', type: 'STORY', position: 2.5 },
+                    ],
+                },
+                true,
+            );
+            expect(separatedMarkup).not.toContain('is-grouped-intro');
+        },
+    );
+
     it('renders all six managed Damatong category shortcuts in a balanced grid', () => {
         const labels = ['正品香烟', '正品白酒', '正品槟榔', '坦克咖啡', '商业服务', '软件订阅'];
         const managedQuickLinksBlock: StorefrontContentBlock = {
