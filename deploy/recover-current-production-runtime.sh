@@ -131,8 +131,18 @@ for attempt in $(seq 1 60); do
     if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null; then
         pm2 save 9>&-
         if [[ -f "${candidate}/deploy/image-worker/server.cjs" ]]; then
-            curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null ||
-                fail 'recovered image service did not pass health'
+            # Type=simple reports the worker active before its socket is ready.
+            # Readiness must tolerate that bounded startup interval.
+            image_ready=0
+            for image_attempt in $(seq 1 30); do
+                if curl --fail --silent --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null; then
+                    image_ready=1
+                    break
+                fi
+                sleep 1
+            done
+            [[ "${image_ready}" == "1" ]] || fail 'recovered image service did not pass bounded readiness'
+            printf 'PRODUCTION_RECOVERY_IMAGE_READY attempts=%s\n' "${image_attempt}"
         fi
         sudo -n systemctl restart vendure-production-healthcheck.service ||
             fail 'runtime resumed but the production health service failed'
