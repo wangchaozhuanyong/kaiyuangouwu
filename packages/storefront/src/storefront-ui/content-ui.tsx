@@ -705,10 +705,12 @@ export function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLang
 export function ManagedContentSection({
     block,
     products,
+    language,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    language: StorefrontLanguage;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
@@ -769,7 +771,12 @@ export function ManagedContentSection({
             {block.type === 'CUSTOM' &&
             block.settings?.displayMode === 'scrollingAds' &&
             block.items.length ? (
-                <ManagedAdCarousel block={block} products={products} onContentTarget={onContentTarget} />
+                <ManagedAdCarousel
+                    block={block}
+                    products={products}
+                    language={language}
+                    onContentTarget={onContentTarget}
+                />
             ) : (
                 !!(block.items.length || additionalSelectedProducts.length) && (
                     <div className="managed-content-grid">
@@ -799,10 +806,12 @@ export function ManagedContentSection({
 export function ManagedAdCarousel({
     block,
     products,
+    language,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    language: StorefrontLanguage;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const items = block.items.filter(item => item.enabled !== false);
@@ -862,14 +871,14 @@ export function ManagedAdCarousel({
                     </span>
                     <button
                         type="button"
-                        aria-label="上一张广告"
+                        aria-label={language === 'zh' ? '上一张广告' : 'Previous ad'}
                         onClick={() => setCurrent(index => (index - 1 + items.length) % items.length)}
                     >
                         <ChevronLeft aria-hidden="true" />
                     </button>
                     <button
                         type="button"
-                        aria-label="下一张广告"
+                        aria-label={language === 'zh' ? '下一张广告' : 'Next ad'}
                         onClick={() => setCurrent(index => (index + 1) % items.length)}
                     >
                         <ChevronRight aria-hidden="true" />
