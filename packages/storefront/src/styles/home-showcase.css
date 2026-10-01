@@ -1388,6 +1388,21 @@ html[lang='en'] .quick-grid b {
     outline-offset: 2px;
 }
 
+@media (max-width: 899px) {
+    .managed-ad-carousel-rail > .is-product-media {
+        flex-basis: min(48%, 200px);
+        grid-template-rows: auto 1fr;
+    }
+
+    .managed-ad-carousel-rail .is-product-media .managed-content-copy {
+        grid-template-columns: minmax(0, 1fr) 18px;
+    }
+
+    .managed-ad-carousel-rail .is-product-media .managed-content-copy > span {
+        align-self: start;
+    }
+}
+
 @media (min-width: 900px) {
     .managed-ad-carousel-rail > button {
         flex-basis: min(78%, 900px);
