@@ -1030,7 +1030,22 @@ export function fixtureData(presetId = 'neo-minimalist', signedIn = true, conten
         eligibleShippingMethods: [],
         eligiblePaymentMethods: [],
         myReferralOverview: null,
-        referralProgram: null,
+        referralProgram:
+            content === 'auth-referral'
+                ? {
+                      channelId: 'qa-channel',
+                      enabled: true,
+                      rewardRate: 5,
+                      maxRewardPerOrder: null,
+                      releaseDelayDays: 7,
+                      currencyCode: 'MYR',
+                      minimumOrderAmount: 0,
+                      allowBalanceSpend: false,
+                      attributionWindowDays: 30,
+                      defaultPosterTemplate: '',
+                      posterTemplates: [],
+                  }
+                : null,
         imageStudioConfig: {
             enabled: true,
             promptOptimizationEnabled: true,

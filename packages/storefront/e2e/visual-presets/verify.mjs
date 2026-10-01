@@ -440,6 +440,9 @@ try {
                     }
                 }
                 if (name === 'login' || name === 'register') {
+                    if (name === 'register' && requestedContent === 'auth-referral') {
+                        await expect(page.getByRole('textbox', { name: /邀请码/ })).toBeVisible();
+                    }
                     await expect(page.locator('.auth-form-heading')).toBeVisible();
                     await expect(page.locator('.auth-form-toolbar')).toBeVisible();
                     await expect(page.locator('.auth-form-back-button')).toBeVisible();
@@ -459,6 +462,19 @@ try {
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
                         await expect(page.locator('.auth-hero img')).toBeVisible();
+                        const imageRatio = await page.locator('.auth-hero img').evaluate(img => ({
+                            width: img.getBoundingClientRect().width,
+                            height: img.getBoundingClientRect().height,
+                            naturalWidth: img.naturalWidth,
+                            naturalHeight: img.naturalHeight,
+                        }));
+                        expect(
+                            Math.abs(
+                                imageRatio.height -
+                                    (imageRatio.width * imageRatio.naturalHeight) / imageRatio.naturalWidth,
+                            ),
+                            `${preset}/${width}/${name} intrinsic image ratio`,
+                        ).toBeLessThanOrEqual(1);
                         const [columnBox, heroBox, formBox, assuranceBox] = await Promise.all([
                             page.locator('.auth-form-column').boundingBox(),
                             page.locator('.auth-hero').boundingBox(),

@@ -73,8 +73,14 @@ if (params.has('auth')) {
             createdAt: '2026-09-01T00:00:00Z',
             updatedAt: '2026-09-01T00:00:00Z',
             enabled: true,
-            imageUrl: block.imageUrl,
-            imageAsset: { ...asset, preview: block.imageUrl, width: 1391, height: 1131 },
+            imageUrl: '/assets/fixture-auth.svg',
+            imageAsset: {
+                ...asset,
+                preview: '/assets/fixture-auth.svg',
+                source: '/assets/fixture-auth.svg',
+                width: 1391,
+                height: 1131,
+            },
             settings: {},
         }));
 }
@@ -372,7 +378,11 @@ if (params.has('parity')) {
     window.fetch = async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input), location.href);
         if (url.pathname === '/shop-api') {
-            const data = fixtureData(params.get('preset') ?? 'classic', false);
+            const data = fixtureData(
+                params.get('preset') ?? 'classic',
+                false,
+                params.has('auth') ? 'auth-referral' : 'normal',
+            );
             data.activeChannel = { ...data.activeChannel, id: channel.id, code: channel.code };
             data.storefrontVisualPreset.channelId = channel.id;
             data.storefrontContent = blocks
