@@ -151,6 +151,8 @@ function OrderDetailsDrawer({ orderId, onClose }: { orderId: string; onClose: ()
 
 export function LogisticsRoutePage() {
     const runtime = useRuntime();
+    const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+    useEffect(() => setDetailOrderId(null), [runtime.customer?.id, runtime.market.code, runtime.route.id]);
     return (
         <RouteGate name="logistics">
             <AuthPageBoundary
@@ -165,7 +167,15 @@ export function LogisticsRoutePage() {
                     locale={runtime.locale}
                     language={runtime.language}
                     onBack={() => runtime.navigate({ name: 'account' })}
+                    onOpenOrder={setDetailOrderId}
                 />
+                {detailOrderId && runtime.customer && (
+                    <OrderDetailsDrawer
+                        key={detailOrderId}
+                        orderId={detailOrderId}
+                        onClose={() => setDetailOrderId(null)}
+                    />
+                )}
             </AuthPageBoundary>
         </RouteGate>
     );

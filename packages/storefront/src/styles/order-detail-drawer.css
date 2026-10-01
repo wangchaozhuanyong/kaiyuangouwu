@@ -1,5 +1,6 @@
 /* Order details reuse the page's data and actions in a narrow, independently scrolling drawer. */
-.order-detail-sheet-layer.sheet-layer > .sheet.order-detail-sheet {
+:is(.order-detail-sheet-layer, .delivery-detail-sheet-layer).sheet-layer
+    > .sheet:is(.order-detail-sheet, .delivery-detail-sheet) {
     width: min(640px, 100%);
 }
 .order-detail-content {
