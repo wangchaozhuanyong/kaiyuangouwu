@@ -714,6 +714,44 @@ fi
 check_production_disk_usage
 # The worker was paused before the first memory check. Keep the API serving
 # until readiness and the migration plan have passed.
+# Complete persistent-file readiness while the previous API is still serving.
+# A failure here can resume the paused worker without entering schema rollback.
+deploy_stage="persistent-file-backup-readiness"
+for file_backup_tool in \
+    vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
+    vendure-file-restore-drill vendure-s3-prefix-snapshot.py vendure-backup-s3-guard.py; do
+    sudo -n install -o root -g root -m 0755 \
+        "${repository}/deploy/systemd/${file_backup_tool}" "/usr/local/sbin/${file_backup_tool}"
+done
+for file_backup_unit in \
+    vendure-file-backup.service vendure-file-backup.timer \
+    vendure-file-backup-retention.service vendure-file-backup-retention.timer \
+    vendure-file-restore-drill.service vendure-file-restore-drill.timer; do
+    sudo -n install -o root -g root -m 0644 \
+        "${repository}/deploy/systemd/${file_backup_unit}" "/etc/systemd/system/${file_backup_unit}"
+done
+sudo -n install -d -o root -g root -m 0700 /var/backups/vendure-files
+sudo -n touch /var/backups/vendure-files/.backup.lock
+sudo -n chmod 0600 /var/backups/vendure-files/.backup.lock
+sudo -n systemctl daemon-reload
+file_backup_checksum="$(sudo -n find /var/backups/vendure-files -maxdepth 1 -type f \
+    -name 'vendure-files-*.tar.gz.sha256' -print -quit)"
+file_backup_result="$(sudo -n systemctl show vendure-file-backup.service -p Result --value)"
+if [[ -z "${file_backup_checksum}" || "${file_backup_result}" != "success" ]]; then
+    if ! sudo -n systemctl start vendure-file-backup.service; then
+        sudo -n systemctl show vendure-file-backup.service \
+            --property=Result,ExecMainStatus,ExecMainExitTimestamp,InvocationID >&2 || true
+        fail 'persistent file backup readiness failed before runtime mutation'
+    fi
+    file_backup_checksum="$(sudo -n find /var/backups/vendure-files -maxdepth 1 -type f \
+        -name 'vendure-files-*.tar.gz.sha256' -print -quit)"
+    file_backup_result="$(sudo -n systemctl show vendure-file-backup.service -p Result --value)"
+fi
+[[ -n "${file_backup_checksum}" && "${file_backup_result}" == "success" ]] ||
+    fail 'persistent file backup readiness did not produce successful evidence'
+sudo -n test -s "${file_backup_checksum}" || fail 'persistent file backup checksum is empty'
+printf 'PRODUCTION_FILE_BACKUP_READY phase=before-runtime-mutation result=%s\n' "${file_backup_result}"
+
 deploy_stage="migration-memory-readiness"
 rollback_needed=1
 worker_paused_early=0
@@ -1060,19 +1098,6 @@ sudo -n install -o root -g root -m 0644 \
 sudo -n install -o root -g root -m 0644 \
     "${repository}/deploy/systemd/vendure-production-healthcheck.timer" \
     /etc/systemd/system/vendure-production-healthcheck.timer
-for file_backup_tool in \
-    vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
-    vendure-file-restore-drill vendure-s3-prefix-snapshot.py; do
-    sudo -n install -o root -g root -m 0755 \
-        "${repository}/deploy/systemd/${file_backup_tool}" "/usr/local/sbin/${file_backup_tool}"
-done
-for file_backup_unit in \
-    vendure-file-backup.service vendure-file-backup.timer \
-    vendure-file-backup-retention.service vendure-file-backup-retention.timer \
-    vendure-file-restore-drill.service vendure-file-restore-drill.timer; do
-    sudo -n install -o root -g root -m 0644 \
-        "${repository}/deploy/systemd/${file_backup_unit}" "/etc/systemd/system/${file_backup_unit}"
-done
 sudo -n install -d -o root -g root -m 0700 \
     /var/backups/vendure-mysql /var/backups/vendure-files /var/lib/vendure-readiness
 sudo -n touch /var/backups/vendure-mysql/.backup.lock /var/backups/vendure-files/.backup.lock
@@ -1122,13 +1147,6 @@ if ! restore_drill_evidence_recent || \
     fi
 fi
 restore_drill_evidence_recent || fail 'the MySQL restore drill did not produce a recent receipt'
-if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -print -quit | grep -q . || \
-    [[ "$(sudo -n systemctl show vendure-file-backup.service -p Result --value)" != "success" ]]; then
-    if ! sudo -n systemctl start vendure-file-backup.service; then
-        sudo -n journalctl -u vendure-file-backup.service -n 80 --no-pager >&2 || true
-        fail 'the persistent file backup failed'
-    fi
-fi
 sudo -n systemctl enable --now vendure-production-healthcheck.timer
 # A timer invocation may have started during the runtime switch. Start a fresh
 # check after candidate readiness instead of joining that interrupted invocation.
