@@ -1626,7 +1626,12 @@ function ManagedContentSection({
             {block.type === 'CUSTOM' &&
             block.settings?.displayMode === 'scrollingAds' &&
             block.items.length ? (
-                <ManagedAdCarousel block={block} products={products} onContentTarget={onContentTarget} />
+                <ManagedAdCarousel
+                    block={block}
+                    products={products}
+                    language={language}
+                    onContentTarget={onContentTarget}
+                />
             ) : (
                 !!(block.items.length || additionalSelectedProducts.length) && (
                     <div className="managed-content-grid">
