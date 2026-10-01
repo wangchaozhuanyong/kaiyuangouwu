@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { publishedContentItems } from '../../../storefront-content-plugin/src/content-publication';
+import { dualCardTemplateId } from '../../../storefront-content-plugin/src/dual-card-template-options';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
@@ -570,16 +571,6 @@ export function useFlashSaleCountdown(endsAt: string | null, language: Storefron
         .join(' : ');
 }
 
-export const dualCardTemplateIds = [
-    'tech-duo',
-    'ocean-cobalt',
-    'forest-amber',
-    'graphite-lime',
-    'berry-slate',
-] as const;
-
-export type DualCardTemplateId = (typeof dualCardTemplateIds)[number];
-
 export function HomeDualCategoryShowcase({
     language,
     block,
@@ -592,7 +583,7 @@ export function HomeDualCategoryShowcase({
     const isZh = language === 'zh';
     const items = publishedContentItems(block);
     if (!block.enabled || !items.length) return null;
-    const template = dualCardTemplateSetting(block.settings);
+    const template = dualCardTemplateId(block.settings);
 
     return (
         <section
@@ -619,18 +610,10 @@ export function HomeDualCategoryShowcase({
                     <button
                         key={item.id}
                         type="button"
-                        className={`showcase-card showcase-card--${index === 0 ? 'gateway' : 'support'}${item.imageUrl ? ' has-managed-image' : ''}`}
+                        className={`showcase-card showcase-card--${index === 0 ? 'gateway' : 'support'}`}
                         disabled={disabled}
                         onClick={() => onContentTarget(item.targetType, item.targetValue)}
                     >
-                        {item.imageUrl ? (
-                            <>
-                                <span className="showcase-card-media" aria-hidden="true">
-                                    <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
-                                </span>
-                                <span className="showcase-card-image-shade" aria-hidden="true" />
-                            </>
-                        ) : null}
                         {template === 'tech-duo' ? (
                             <span className="showcase-card-icon" aria-hidden="true">
                                 <ShowcaseIcon />
@@ -651,15 +634,6 @@ export function HomeDualCategoryShowcase({
             })}
         </section>
     );
-}
-
-export function dualCardTemplateSetting(
-    settings: Record<string, unknown> | null | undefined,
-): DualCardTemplateId {
-    const value = settings?.dualCardTemplate;
-    return dualCardTemplateIds.includes(value as DualCardTemplateId)
-        ? (value as DualCardTemplateId)
-        : 'tech-duo';
 }
 
 export function localizedDualCardItemSetting(

@@ -7,6 +7,10 @@ import {
     normalizedHeroThemePreset,
     normalizedHomepageVisualStyle,
 } from '../../../../storefront-content-plugin/src/content-visuals';
+import {
+    dualCardTemplateId,
+    dualCardTemplates,
+} from '../../../../storefront-content-plugin/src/dual-card-template-options';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -336,8 +340,17 @@ export function StorefrontBlockEditor({
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
                                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                    {isSupport ? '客服页配色' : '图片、配色与跳转'}
-                                    <FeatureHelpButton topic="storefront.block-visuals" title="图片与配色" />
+                                    {isSupport
+                                        ? '客服页配色'
+                                        : draft.type === 'CORE_CATEGORIES'
+                                          ? '双卡配色与跳转'
+                                          : '图片、配色与跳转'}
+                                    {draft.type !== 'CORE_CATEGORIES' && (
+                                        <FeatureHelpButton
+                                            topic="storefront.block-visuals"
+                                            title="图片与配色"
+                                        />
+                                    )}
                                 </h3>
                                 {isSupport && (
                                     <p className="mt-1 text-[11px] text-slate-400">
@@ -345,21 +358,23 @@ export function StorefrontBlockEditor({
                                     </p>
                                 )}
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                    <div className="sm:col-span-2">
-                                        <AssetPicker
-                                            label={isSupport ? '电脑端客服页首配图' : '主图素材'}
-                                            value={draft.imageAsset}
-                                            fallbackUrl={draft.imageUrl}
-                                            onChange={asset =>
-                                                setDraft({
-                                                    ...draft,
-                                                    imageAsset: asset,
-                                                    imageAssetId: asset?.id ?? null,
-                                                    imageUrl: asset?.preview ?? null,
-                                                })
-                                            }
-                                        />
-                                    </div>
+                                    {draft.type !== 'CORE_CATEGORIES' && (
+                                        <div className="sm:col-span-2">
+                                            <AssetPicker
+                                                label={isSupport ? '电脑端客服页首配图' : '主图素材'}
+                                                value={draft.imageAsset}
+                                                fallbackUrl={draft.imageUrl}
+                                                onChange={asset =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        imageAsset: asset,
+                                                        imageAssetId: asset?.id ?? null,
+                                                        imageUrl: asset?.preview ?? null,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                     {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
                                         <Field label="卡片样式">
                                             <select
@@ -397,6 +412,26 @@ export function StorefrontBlockEditor({
                                             >
                                                 <option value="heroOverlay">主图内</option>
                                                 <option value="belowHero">主图下方</option>
+                                            </select>
+                                        </Field>
+                                    )}
+                                    {draft.type === 'CORE_CATEGORIES' && (
+                                        <Field
+                                            label="双卡片颜色模板"
+                                            helpText="双卡仅展示文案和跳转，不使用图片；暖居纯色会自动跟随当前店铺皮肤配色。"
+                                        >
+                                            <select
+                                                className={inputClass}
+                                                value={dualCardTemplateId(draft.settings)}
+                                                onChange={event =>
+                                                    updateSettings({ dualCardTemplate: event.target.value })
+                                                }
+                                            >
+                                                {dualCardTemplates.map(template => (
+                                                    <option key={template.id} value={template.id}>
+                                                        {template.labelZh} · {template.descriptionZh}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </Field>
                                     )}
@@ -878,7 +913,9 @@ export function StorefrontBlockEditor({
                             <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
                                 <div className="font-bold text-slate-900">生效方式</div>
                                 <p className="mt-2 leading-5">
-                                    预览包含尚未保存的修改。保存并核对成功后更新当前店铺配置；客户端按启用状态、语言内容、图片与展示时间决定是否显示。
+                                    {draft.type === 'CORE_CATEGORIES'
+                                        ? '预览包含尚未保存的修改。保存并核对后，客户端按已启用子项、当前语言和店铺皮肤展示双卡；已存图片不会显示。'
+                                        : '预览包含尚未保存的修改。保存并核对成功后更新当前店铺配置；客户端按启用状态、语言内容、图片与展示时间决定是否显示。'}
                                 </p>
                             </div>
                         </aside>

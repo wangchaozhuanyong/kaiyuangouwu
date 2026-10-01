@@ -300,7 +300,7 @@ export function ItemEditor({
                         />
                     </div>
                 )}
-                {!navigation && !support && (
+                {!navigation && !support && !coreCategories && (
                     <div className="sm:col-span-2">
                         <AssetPicker
                             label="子项图片"
