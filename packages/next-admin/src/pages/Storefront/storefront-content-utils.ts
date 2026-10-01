@@ -20,7 +20,16 @@ export interface StorefrontModuleDescriptor {
     defaultEnabled: boolean;
 }
 
-export const homepageModuleDescriptors: readonly StorefrontModuleDescriptor[] = homepageModuleCatalog;
+export const homepageModuleDescriptors: readonly StorefrontModuleDescriptor[] = [
+    ...homepageModuleCatalog,
+    // Custom floors share the editor but must remain addable after one has been configured.
+    {
+        type: 'CUSTOM',
+        name: '自定义图文／卡片模块',
+        description: '标题、图片、卡片和跳转，可重复添加多个独立楼层',
+        defaultEnabled: false,
+    },
+];
 
 export const contentModuleDescriptors: StorefrontModuleDescriptor[] = [
     { type: 'LEGAL', name: '法律条款', description: '服务协议、隐私政策与网站规则', defaultEnabled: false },

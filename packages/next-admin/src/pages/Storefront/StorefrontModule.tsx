@@ -529,21 +529,28 @@ export function StorefrontModule() {
                             {homepageModuleDescriptors
                                 .filter(descriptor => descriptor.type !== 'HERO')
                                 .map(descriptor => {
-                                    const existing = homepageBlocks.find(
-                                        block => block.type === descriptor.type,
-                                    );
+                                    const custom = descriptor.type === 'CUSTOM';
+                                    const existing = custom
+                                        ? undefined
+                                        : homepageBlocks.find(block => block.type === descriptor.type);
                                     return (
                                         <button
                                             key={descriptor.type}
                                             type="button"
+                                            aria-label={custom ? `新增${descriptor.name}` : undefined}
                                             disabled={pending || !(existing ? canUpdate : canCreate)}
                                             onClick={() =>
                                                 openEditor(
                                                     existing ??
                                                         newContentBlock(
                                                             descriptor.type,
-                                                            allBlocks.length,
-                                                            descriptor.name,
+                                                            Math.max(
+                                                                -1,
+                                                                ...allBlocks.map(block => block.position),
+                                                            ) + 1,
+                                                            custom
+                                                                ? `${descriptor.name} ${homepageBlocks.filter(block => block.type === 'CUSTOM' && block.settings?.displayMode !== 'scrollingAds').length + 1}`
+                                                                : descriptor.name,
                                                         ),
                                                 )
                                             }
@@ -560,7 +567,7 @@ export function StorefrontModule() {
                                             <span
                                                 className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold ${existing ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                                             >
-                                                {existing ? '已配置' : '配置'}
+                                                {custom ? '新增' : existing ? '已配置' : '配置'}
                                             </span>
                                         </button>
                                     );
