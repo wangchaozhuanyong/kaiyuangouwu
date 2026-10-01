@@ -64,3 +64,23 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
 }
+
+.quantity-control.is-compact {
+    grid-template-columns: 24px minmax(24px, auto) 24px;
+}
+
+.quantity-control.is-compact > button {
+    width: 24px;
+    height: 32px;
+}
+
+.quantity-control.is-compact > button > svg {
+    width: 14px;
+    height: 14px;
+}
+
+.quantity-control.is-compact > output {
+    min-width: 24px;
+    padding-inline: 4px;
+    font-size: 12px;
+}

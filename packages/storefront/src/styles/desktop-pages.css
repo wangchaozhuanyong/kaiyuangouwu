@@ -602,7 +602,7 @@
     .desktop-cart-columns,
     .desktop-cart-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 80px 100px 88px;
+        grid-template-columns: minmax(0, 1fr) 128px 112px 160px;
         align-items: center;
         gap: 16px;
         padding: 14px 24px;
@@ -708,6 +708,8 @@
     .desktop-cart-unit-price {
         grid-column: 2;
         grid-row: 1;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
     }
     .desktop-cart-quantity {
         grid-column: 3;
@@ -739,6 +741,8 @@
         grid-row: 1;
         color: var(--text);
         font-weight: 600;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
     }
     .desktop-cart-actions {
         grid-column: 2 / -1;
@@ -2016,7 +2020,7 @@
         }
         .desktop-cart-columns,
         .desktop-cart-row {
-            grid-template-columns: minmax(0, 1fr) 90px 136px 112px;
+            grid-template-columns: minmax(0, 1fr) 128px 112px 160px;
             column-gap: 12px;
             padding-inline: 20px;
         }
