@@ -71,6 +71,26 @@ const config = mergeConfig(testConfig(), {
     apiOptions: { port: 37387 },
     defaultLanguageCode: LanguageCode.zh_Hans,
     logger: new DefaultLogger({ level: LogLevel.Error }),
+    customFields: {
+        Channel: [
+            {
+                name: 'storefrontNameZh',
+                type: 'string',
+                length: 32,
+                nullable: false,
+                defaultValue: '本地测试店铺',
+                public: true,
+            },
+            {
+                name: 'storefrontNameEn',
+                type: 'string',
+                length: 32,
+                nullable: false,
+                defaultValue: 'Local test store',
+                public: true,
+            },
+        ],
+    },
     plugins: [
         CatalogManagementPlugin,
         StorefrontCartPlugin,
@@ -118,6 +138,8 @@ function required<T>(value: T | null | undefined, label: string): T {
     return value;
 }
 
+const entityIdStrategy = required(config.entityOptions.entityIdStrategy, 'entity ID strategy');
+
 beforeAll(async () => {
     await server.init({
         initialData: { ...initialData, defaultLanguage: LanguageCode.zh_Hans },
@@ -140,6 +162,8 @@ beforeAll(async () => {
         defaultLanguageCode: LanguageCode.zh_Hans,
         currencyCode: CurrencyCode.GBP,
         pricesIncludeTax: true,
+        defaultTaxZoneId: required(platform.channel.defaultTaxZone?.id, 'default tax zone ID'),
+        defaultShippingZoneId: required(platform.channel.defaultShippingZone?.id, 'default shipping zone ID'),
     });
     expect('id' in channel).toBe(true);
     own = await contexts.create({
@@ -289,7 +313,7 @@ it('ships a physical order, requires delivery evidence and lets only its custome
             }
         }
     `;
-    const fulfillmentId = config.entityOptions.entityIdStrategy.encodeId(fulfillment.id);
+    const fulfillmentId = entityIdStrategy.encodeId(fulfillment.id);
     const input = { fulfillmentId, idempotencyKey: `customer-delivered-${fulfillmentId}` };
     const anonymous = new SimpleGraphQLClient(config, 'http://127.0.0.1:37387/shop-api');
     await expect(anonymous.query(confirmation, { input })).rejects.toThrow();
@@ -316,7 +340,7 @@ it('ships a physical order, requires delivery evidence and lets only its custome
                 }
             }
         `,
-        { id: config.entityOptions.entityIdStrategy.encodeId(physicalOrder.id) },
+        { id: entityIdStrategy.encodeId(physicalOrder.id) },
     );
     expect(orderResult.order.fulfillments).toContainEqual({
         state: 'Delivered',
@@ -428,7 +452,8 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
     const review = await connection.withTransaction(own, ctx => reviews.submit(ctx, input));
     expect(review.channelId).toBe(own.channelId);
     expect(await reviews.findMine(foreign)).toEqual([]);
-    const beforeApproval = await reviews.findApprovedForProduct(own, review.productId);
+    const productId = required(review.productId, 'review product ID');
+    const beforeApproval = await reviews.findApprovedForProduct(own, productId);
     expect(beforeApproval.items).toEqual([]);
     await connection.withTransaction(platform, ctx =>
         reviews.moderate(ctx, { id: review.id, state: 'APPROVED', response: 'Local review approved' }),
@@ -445,7 +470,7 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
             }
         }
     `;
-    const variables = { productId: String(review.productId) };
+    const variables = { productId: String(productId) };
     const publicResult = await publicClient.query(publicQuery, variables);
     expect(publicResult.storefrontProductReviews.items).toEqual([
         { anonymous: true, customerName: '匿名用户', merchantResponse: 'Local review approved' },
@@ -455,7 +480,7 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
     expect(englishResult.storefrontProductReviews.items).toEqual([
         { anonymous: true, customerName: 'Anonymous customer', merchantResponse: null },
     ]);
-    const otherStoreReviews = await reviews.findApprovedForProduct(foreign, review.productId);
+    const otherStoreReviews = await reviews.findApprovedForProduct(foreign, productId);
     expect(otherStoreReviews.items).toEqual([]);
     await adminClient.asSuperAdmin();
     adminClient.setChannelToken(own.channel.token);
@@ -477,7 +502,7 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
     // ReadCatalog does not confer permission to disclose full customer profiles.
     expect(adminResult.storefrontReviews.items[0].customerName).not.toBe('匿名用户');
     expect(adminResult.storefrontReviews.items[0].customerId).toBe(
-        config.entityOptions.entityIdStrategy.encodeId(customer.id),
+        entityIdStrategy.encodeId(required(customer.id, 'customer ID')),
     );
 });
 
@@ -812,7 +837,14 @@ it('retains newly appended delivery and after-sales events when an older parent 
         const appended = await events.save(events.create({ ...eventFields, [parentKey]: parentId }));
         await parents.save(stale);
         const persisted = await events.findOneOrFail({ where: { id: appended.id } });
-        expect(String(persisted[parentKey])).toBe(String(parentId));
+        const persistedParentId =
+            parentKey === 'requestId' && 'requestId' in persisted
+                ? persisted.requestId
+                : parentKey === 'deliveryId' && 'deliveryId' in persisted
+                  ? persisted.deliveryId
+                  : undefined;
+        expect(persistedParentId).toBeDefined();
+        expect(String(persistedParentId)).toBe(String(parentId));
         const reloaded = await parents.findOneOrFail({
             where: { id: parentId },
             relations: { events: true },

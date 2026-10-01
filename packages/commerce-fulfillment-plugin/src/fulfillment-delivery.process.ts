@@ -9,6 +9,9 @@ export const fulfillmentDeliveryProcess: FulfillmentProcess<string> = {
         deliveryService = injector.get(FulfillmentDeliveryService);
     },
     onTransitionStart(_fromState, toState, { ctx, fulfillment, orders }) {
+        if (toState === 'Pending' || toState === 'Shipped') {
+            return deliveryService.guardPhysicalFulfillmentPayment(fulfillment, orders);
+        }
         if (toState === 'Delivered') {
             return deliveryService.guardDeliveredTransition(ctx, fulfillment, orders);
         }
