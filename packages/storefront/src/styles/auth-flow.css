@@ -2401,18 +2401,27 @@
 .auth-page-register .auth-form-column {
     position: relative;
 }
+.auth-form-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
 .auth-form-back-button {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 0;
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
     color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
 }
 .auth-form-back-button svg {
     width: 20px;
@@ -2431,21 +2440,20 @@
     display: block;
     text-align: left;
 }
-.auth-page-login .auth-form-heading > span,
-.auth-page-register .auth-form-heading > span {
-    display: block;
-    margin: 0 0 2px 54px;
+.auth-form-store-name {
+    max-width: 65%;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 17px;
+    font-size: 13px;
+    line-height: 20px;
+    text-align: right;
     overflow-wrap: anywhere;
 }
 .auth-page-login .auth-form-heading > h1,
 .auth-page-register .auth-form-heading > h1 {
-    margin: 0 0 0 54px;
+    margin: 0;
     color: var(--text);
-    font-size: 25px;
-    line-height: 30px;
+    font-size: 28px;
+    line-height: 36px;
     font-weight: var(--font-weight-bold);
     letter-spacing: -0.025em;
 }
@@ -2461,7 +2469,7 @@
 }
 .auth-page-login .auth-card-content:has(> .auth-result),
 .auth-page-register .auth-card-content:has(> .auth-result) {
-    padding-top: 52px;
+    padding-top: 0;
 }
 .auth-page .login-content .auth-account-form {
     margin-top: 0;

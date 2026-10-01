@@ -202,17 +202,14 @@ function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
 function AuthFormIntro({
     variant,
     language,
-    storefrontName,
 }: {
     variant: 'login' | 'register';
     language: StorefrontLanguage;
-    storefrontName: string;
 }) {
     const isZh = language === 'zh';
     const isLogin = variant === 'login';
     return (
         <header className={`auth-form-heading auth-form-heading-${language}`}>
-            <span>{storefrontName}</span>
             <h1>{isLogin ? (isZh ? '欢迎回来' : 'Welcome back') : isZh ? '创建账户' : 'Create account'}</h1>
             <p>
                 {isLogin
@@ -405,7 +402,7 @@ export function LoginPage({
                 </AuthResult>
             ) : (
                 <>
-                    <AuthFormIntro variant="login" {...{ language, storefrontName }} />
+                    <AuthFormIntro variant="login" language={language} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -719,7 +716,7 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
-                    <AuthFormIntro variant="register" {...{ language, storefrontName }} />
+                    <AuthFormIntro variant="register" language={language} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -1512,14 +1509,18 @@ function AuthLayout({
             <section className="login-content">
                 <div className="auth-form-column">
                     {authVisualVariant ? (
-                        <button
-                            className="auth-form-back-button"
-                            type="button"
-                            onClick={onBack}
-                            aria-label={language === 'zh' ? '返回' : 'Back'}
-                        >
-                            <ArrowLeft aria-hidden="true" />
-                        </button>
+                        <div className="auth-form-toolbar">
+                            <button
+                                className="auth-form-back-button"
+                                type="button"
+                                onClick={onBack}
+                                aria-label={language === 'zh' ? '返回' : 'Back'}
+                            >
+                                <ArrowLeft aria-hidden="true" />
+                                <span>{language === 'zh' ? '返回' : 'Back'}</span>
+                            </button>
+                            <span className="auth-form-store-name">{storefrontName}</span>
+                        </div>
                     ) : null}
                     <div className="auth-card-content">{children}</div>
                     {authVisualVariant ? <AuthAssuranceRail language={language} /> : null}
