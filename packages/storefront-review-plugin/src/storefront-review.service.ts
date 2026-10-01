@@ -148,6 +148,8 @@ export class StorefrontReviewService {
                 productName: variant.product?.name || variant.name,
                 variantName: variant.name,
                 sku: variant.sku,
+                unitPriceWithTax: line.unitPriceWithTax,
+                currencyCode: line.order.currencyCode,
                 fulfillmentType,
                 imageUrl:
                     line.productVariant.featuredAsset?.preview ??

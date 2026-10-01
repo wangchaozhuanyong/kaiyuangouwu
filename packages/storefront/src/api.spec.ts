@@ -2433,6 +2433,8 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('query MyStorefrontReviewCandidates');
         expect(request.query).toContain('orderLineId');
+        expect(request.query).toContain('unitPriceWithTax');
+        expect(request.query).toContain('currencyCode');
         expect(request.query).toContain('fulfillmentType');
         expect(request.query).toContain('imageUrl');
         expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).variables).toEqual({

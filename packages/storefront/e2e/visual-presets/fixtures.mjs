@@ -671,6 +671,8 @@ function reviewCenterFixture(signedIn) {
                 productName: line.productVariant.product.name,
                 variantName: line.productVariant.name,
                 sku: line.productVariant.sku,
+                unitPriceWithTax: line.unitPriceWithTax,
+                currencyCode: sourceOrder.currencyCode,
                 fulfillmentType: 'physical',
             };
         }),
@@ -986,6 +988,8 @@ export function fixtureData(presetId = 'neo-minimalist', signedIn = true, conten
                       productName: product.name,
                       variantName: variant.name,
                       sku: variant.sku,
+                      unitPriceWithTax: 2990,
+                      currencyCode: 'MYR',
                       fulfillmentType: 'physical',
                   },
               ]

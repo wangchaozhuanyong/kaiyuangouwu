@@ -54,6 +54,8 @@ const commonReviewTypes = gql`
         productName: String!
         variantName: String!
         sku: String!
+        unitPriceWithTax: Money!
+        currencyCode: String!
         fulfillmentType: String!
         imageUrl: String
     }

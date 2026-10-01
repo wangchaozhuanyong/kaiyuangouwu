@@ -30,12 +30,19 @@ describe('product review rating', () => {
             productName: 'QA 商品',
             variantName: 'QA 商品',
             sku: 'QA-SKU',
+            unitPriceWithTax: 81000,
+            currencyCode: 'MYR',
             fulfillmentType: 'physical',
             imageUrl: null,
         } satisfies StorefrontReviewCandidate;
+        const sameNameDifferentLine = {
+            ...candidate,
+            orderLineId: 'line-2',
+            unitPriceWithTax: 2800,
+        } satisfies StorefrontReviewCandidate;
         const api = {
             myReviews: vi.fn().mockResolvedValue([]),
-            reviewCandidates: vi.fn().mockResolvedValue([candidate]),
+            reviewCandidates: vi.fn().mockResolvedValue([candidate, sameNameDifferentLine]),
             submitReview,
         } as unknown as ShopApi;
         const customer = {
@@ -59,7 +66,7 @@ describe('product review rating', () => {
         const languageCode = languageCodeFor('zh');
         client.setQueryData(storefrontQueryKeys.customerReviews(marketCode, languageCode, customer.id), []);
         client.setQueryData(storefrontQueryKeys.reviewCandidates(marketCode, languageCode, customer.id), {
-            pages: [[candidate]],
+            pages: [[candidate, sameNameDifferentLine]],
             pageParams: [0],
         });
         const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
@@ -85,11 +92,18 @@ describe('product review rating', () => {
                     </QueryClientProvider>,
                 );
             });
-            expect(host.querySelector('.review-candidate-row')).not.toBeNull();
+            const candidateRows = host.querySelectorAll<HTMLButtonElement>('.review-candidate-row');
+            expect(candidateRows).toHaveLength(2);
+            expect(candidateRows[0].textContent).toContain('含税单价');
+            expect(candidateRows[0].textContent).toContain('MYR 810');
+            expect(candidateRows[0].textContent).toContain('订单行 line-1');
+            expect(candidateRows[1].textContent).toContain('MYR 28');
+            expect(candidateRows[1].textContent).toContain('订单行 line-2');
             act(() => {
-                host.querySelector<HTMLButtonElement>('.review-candidate-row')?.click();
+                candidateRows[1].click();
             });
             expect(host.querySelector('.review-submit')).not.toBeNull();
+            expect(host.querySelector('.review-composer > header')?.textContent).toContain('订单行 line-2');
             expect(host.querySelectorAll('.review-rating-input button[aria-pressed="true"]')).toHaveLength(0);
             act(() => {
                 host.querySelector<HTMLButtonElement>('.review-submit')?.click();

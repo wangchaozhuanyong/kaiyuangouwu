@@ -56,6 +56,8 @@ it('shows old-order candidate images from the review API and loads the next page
         productName: `商品 ${index}`,
         variantName: `商品 ${index}`,
         sku: `SKU-${index}`,
+        unitPriceWithTax: 81000,
+        currencyCode: 'MYR',
         fulfillmentType: 'physical',
         imageUrl: `/assets/preview/older-order-${index}.webp`,
     });
