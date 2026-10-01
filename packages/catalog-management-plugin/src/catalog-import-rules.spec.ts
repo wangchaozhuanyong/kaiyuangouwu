@@ -5,6 +5,7 @@ import {
     catalogImportOptionGroupCode,
     changed,
     changedOptional,
+    hasPlannedStockAdjustment,
     isCatalogImportResolutionState,
     productDescriptionForCreate,
 } from './catalog-import-planning';
@@ -180,6 +181,18 @@ describe('catalog import blank clearing rules', () => {
         expect(changes).not.toHaveProperty('stockOnHand');
         expect(changes).not.toHaveProperty('productEnabled');
         expect(changes).not.toHaveProperty('variantEnabled');
+    });
+
+    it('does not adjust stock for a price-only import when planned stock is unchanged', () => {
+        const plannedChanges: Record<string, unknown> = { sellingPrice: { from: 2, to: 3 } };
+        expect(hasPlannedStockAdjustment(5, plannedChanges)).toBe(false);
+        expect(
+            hasPlannedStockAdjustment(6, {
+                ...plannedChanges,
+                stockOnHand: { from: 5, to: 6 },
+            }),
+        ).toBe(true);
+        expect(hasPlannedStockAdjustment(null, { stockOnHand: { from: 5, to: 6 } })).toBe(false);
     });
 });
 

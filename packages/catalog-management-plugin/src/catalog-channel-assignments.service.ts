@@ -47,7 +47,6 @@ export class CatalogChannelAssignmentsService {
             isOwner || readableIds.length
                 ? await this.connection.getRepository(ctx, Channel).find({
                       ...(isOwner ? {} : { where: { id: In(readableIds) } }),
-                      select: { id: true, code: true, customFields: true },
                       order: { code: 'ASC' },
                       loadEagerRelations: false,
                   })

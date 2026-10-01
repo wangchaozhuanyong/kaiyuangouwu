@@ -266,6 +266,13 @@ export function changedOptional(
     }
 }
 
+export function hasPlannedStockAdjustment(
+    stockOnHand: number | null | undefined,
+    plannedChanges: Record<string, unknown> | null | undefined,
+): boolean {
+    return stockOnHand != null && Object.prototype.hasOwnProperty.call(plannedChanges ?? {}, 'stockOnHand');
+}
+
 function samePlannedValue(key: string, next: unknown, previous: unknown): boolean {
     // Parsing normalizes display text; keep the stored spelling when only that normalization differs.
     if (
