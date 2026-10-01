@@ -266,6 +266,9 @@ describe('AccountSecurityPage commerceMode adaptation', () => {
         );
 
         expect(markup).not.toContain('头像保护');
+        expect(markup).not.toContain('安全与保护');
+        expect(markup).not.toContain('登录保护');
+        expect(markup).not.toContain('导出我的个人数据');
         expect(markup).not.toContain('30 天可恢复保护');
         expect(markup).not.toContain('可恢复头像');
         expect(markup).toContain('更换头像');

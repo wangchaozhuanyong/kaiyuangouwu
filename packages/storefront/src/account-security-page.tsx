@@ -10,7 +10,6 @@ import {
     LogOut,
     Mail,
     MapPin,
-    ShieldCheck,
     Trash2,
     UserRound,
     UserX,
@@ -250,19 +249,13 @@ export function AccountSecurityPage({
     };
 
     const submitPrivacyAction = async () => {
-        if (
-            privacyActionRef.current ||
-            !privacyDialog ||
-            !privacyPassword ||
-            !onDataExport ||
-            !onRequestAccountClosure
-        )
-            return;
+        if (privacyActionRef.current || !privacyDialog || !privacyPassword) return;
         privacyActionRef.current = privacyDialog;
         setPrivacyAction(privacyDialog);
         setPrivacyError(null);
         try {
             if (privacyDialog === 'export') {
+                if (!onDataExport) return;
                 const exported = await onDataExport(privacyPassword);
                 downloadPersonalData(exported);
                 setPrivacyNotice(
@@ -271,6 +264,7 @@ export function AccountSecurityPage({
                         : `Your data was generated and downloaded (checksum ${exported.sha256.slice(0, 12)}…)`,
                 );
             } else {
+                if (!onRequestAccountClosure) return;
                 await onRequestAccountClosure(privacyPassword);
                 setPrivacyNotice(
                     isZh
@@ -475,30 +469,6 @@ export function AccountSecurityPage({
                     </div>
                 </div>
 
-                {/* 3. 安全防护与隐私 */}
-                <div className="security-group">
-                    <div className="security-group-header">
-                        <span>{isZh ? '安全与保护' : 'Security & Protection'}</span>
-                    </div>
-                    <div className="security-card-list">
-                        <div className="security-item-static">
-                            <span className="security-item-icon icon-shield" aria-hidden="true">
-                                <ShieldCheck size={17} />
-                            </span>
-                            <div className="security-item-info">
-                                <strong className="security-item-title">
-                                    {isZh ? '登录保护' : 'Sign-in protection'}
-                                </strong>
-                                <span className="security-item-subtitle">
-                                    {isZh
-                                        ? '通过账户邮箱验证后重置密码，请妥善保管登录信息。'
-                                        : 'Reset your password after email verification. Keep your sign-in details secure.'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {(fraudRiskLoading || fraudRiskCases.length > 0) && (
                     <div className="security-group">
                         <div className="security-group-header">
@@ -638,37 +608,40 @@ export function AccountSecurityPage({
                         <span>{isZh ? '数据与隐私' : 'Data & Privacy'}</span>
                     </div>
                     <div className="security-card-list">
-                        <button
-                            type="button"
-                            className="security-item-btn"
-                            disabled={dataSubjectLoading || privacyAction !== null || !onDataExport}
-                            onClick={() => {
-                                setPrivacyDialog('export');
-                                setPrivacyPassword('');
-                                setPrivacyError(null);
-                            }}
-                        >
-                            <span className="security-item-icon icon-data-export" aria-hidden="true">
-                                <FileJson size={17} />
-                            </span>
-                            <div className="security-item-info">
-                                <strong className="security-item-title">
-                                    {isZh ? '导出我的个人数据' : 'Export my personal data'}
-                                </strong>
-                                <span className="security-item-subtitle">
-                                    {isZh
-                                        ? '包含资料、订单、支付、售后、评价、风险复核与数据请求记录'
-                                        : 'Includes profile, orders, payments, support, reviews, risk cases and requests'}
+                        {/* Optional capability: hide export unless the host explicitly enables it. */}
+                        {onDataExport && (
+                            <button
+                                type="button"
+                                className="security-item-btn"
+                                disabled={dataSubjectLoading || privacyAction !== null}
+                                onClick={() => {
+                                    setPrivacyDialog('export');
+                                    setPrivacyPassword('');
+                                    setPrivacyError(null);
+                                }}
+                            >
+                                <span className="security-item-icon icon-data-export" aria-hidden="true">
+                                    <FileJson size={17} />
                                 </span>
-                            </div>
-                            <span className="security-item-tail">
-                                {dataSubjectLoading ? (
-                                    <LoaderCircle size={15} aria-hidden="true" />
-                                ) : (
-                                    <Download size={15} aria-hidden="true" />
-                                )}
-                            </span>
-                        </button>
+                                <div className="security-item-info">
+                                    <strong className="security-item-title">
+                                        {isZh ? '导出我的个人数据' : 'Export my personal data'}
+                                    </strong>
+                                    <span className="security-item-subtitle">
+                                        {isZh
+                                            ? '包含资料、订单、支付、售后、评价、风险复核与数据请求记录'
+                                            : 'Includes profile, orders, payments, support, reviews, risk cases and requests'}
+                                    </span>
+                                </div>
+                                <span className="security-item-tail">
+                                    {dataSubjectLoading ? (
+                                        <LoaderCircle size={15} aria-hidden="true" />
+                                    ) : (
+                                        <Download size={15} aria-hidden="true" />
+                                    )}
+                                </span>
+                            </button>
+                        )}
 
                         {activeClosure ? (
                             <div className="security-closure-state">

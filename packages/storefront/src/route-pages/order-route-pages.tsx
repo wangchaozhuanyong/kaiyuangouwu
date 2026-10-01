@@ -430,7 +430,7 @@ function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof u
                         );
                         runtime.notify(isZh ? '头像已移除' : 'Profile photo removed');
                     }}
-                    onDataExport={password => runtime.api.exportPersonalData(password)}
+                    // Personal-data export is not exposed by default; no Admin visibility switch exists.
                     onRequestAccountClosure={async password => {
                         await runtime.api.requestAccountClosure(password);
                         await refreshDataSubjectRequests();
