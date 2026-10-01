@@ -279,6 +279,8 @@ jobs:
                       lines.append(transport('deploy/verify-runtime-security-dependencies.cjs', 'verify-runtime-security-dependencies.cjs'))
                   if operation_name in {'preflight-release', 'postflight-release', 'inspect-storefront-config'}:
                       lines.append(transport('deploy/storefront-configuration-guard.mjs', 'storefront-configuration-guard.mjs'))
+                  if operation_name == 'diagnose':
+                      lines.append(transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'))
                   if operation_name == 'preflight-release':
                       lines.extend([
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),

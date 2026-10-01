@@ -1199,6 +1199,115 @@ function inspectImageServices(
     return { ready, services, sockets };
 }
 
+function inspectRecoveryReadiness() {
+    const releases = '/var/www/kaiyuangouwu-releases';
+    const marker = readCommand('cat', [path.join(releases, 'current-sha')]);
+    const pointer = readCommand('readlink', ['-f', '/var/www/kaiyuangouwu-current']);
+    const units = ['vendure-file-backup.service', 'vendure-mysql-backup.service', 'mysql.service'];
+    const services = Object.fromEntries(
+        units.map(unit => [
+            unit,
+            readCommand('systemctl', [
+                'show',
+                unit,
+                '--property=Id,LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainExitTimestamp,InvocationID,StartLimitBurst,StartLimitIntervalUSec',
+            ]),
+        ]),
+    );
+    const candidates = [];
+    if (pointer.status === 'ok' && pointer.output.startsWith(releases + '/')) {
+        candidates.push({ role: 'current-pointer', directory: pointer.output });
+    }
+    if (marker.status === 'ok' && /^[a-f0-9]{40}$/u.test(marker.output)) {
+        for (const name of readdirSync(releases)) {
+            if (!name.startsWith(marker.output + '-') || !/^[a-f0-9]{40}-[A-Za-z0-9-]+$/u.test(name))
+                continue;
+            const directory = path.join(releases, name);
+            if (!lstatSync(directory).isDirectory() || realpathSync(directory) !== directory) continue;
+            candidates.push({ role: 'version-marker-match', directory });
+        }
+    }
+    const guardSource =
+        readFileSync(path.join(__dirname, 'usdt-migration-guard.cjs'), 'utf8') +
+        '\nrun(...process.argv.slice(2)).catch(error => { ' +
+        "process.stderr.write('USDT_RUNTIME_GUARD_FAILED operation failed error_code=' + safeFailureCode(error) + '\\n'); " +
+        'process.exitCode = 1; });\n';
+    const runtimes = candidates.map(candidate => {
+        const metadataFile = path.join(candidate.directory, 'RUNTIME-METADATA.json');
+        let metadataSha = null;
+        try {
+            const sha = JSON.parse(readFileSync(metadataFile, 'utf8')).gitSha;
+            if (/^[a-f0-9]{40}$/u.test(sha)) metadataSha = sha;
+        } catch {
+            /* Report missing/invalid metadata without exposing its contents. */
+        }
+        // Only the existing read-only compatibility operation runs, under the deployment user.
+        // stdin avoids granting that user access to the root-owned operations scratch directory.
+        const guard = spawnSync(
+            'runuser',
+            ['-u', 'ubuntu', '--', process.execPath, '-', 'check-runtime', candidate.directory],
+            {
+                input: guardSource,
+                encoding: 'utf8',
+                timeout: 25000,
+                maxBuffer: 64 * 1024,
+            },
+        );
+        const failed = guard.stderr?.match(/USDT_RUNTIME_GUARD_FAILED [^\n]* error_code=([A-Z_]+)\n/u);
+        const compatible =
+            guard.status === 0 && guard.stdout?.endsWith('USDT_RUNTIME_GUARD_OK operation=check-runtime\n');
+        return {
+            ...candidate,
+            metadataSha,
+            apiEntryPresent: existsSync(path.join(candidate.directory, 'packages/dev-server/dist/index.js')),
+            workerEntryPresent: existsSync(
+                path.join(candidate.directory, 'packages/dev-server/dist/index-worker.js'),
+            ),
+            compatibility: compatible ? 'passed' : 'blocked',
+            errorCode: compatible
+                ? null
+                : (failed?.[1] ?? (guard.error?.code === 'ETIMEDOUT' ? 'ETIMEDOUT' : 'UNKNOWN')),
+        };
+    });
+    // Classify only recent messages. Old AccessDenied entries must not explain a new failure.
+    const journal = spawnSync(
+        'journalctl',
+        ['-u', 'vendure-file-backup.service', '--since=-60min', '-n', '200', '--no-pager', '-o', 'json'],
+        { encoding: 'utf8', timeout: 10000, maxBuffer: 512 * 1024 },
+    );
+    const signals = {
+        dnsFailure: 0,
+        accessDenied: 0,
+        noSpace: 0,
+        startLimit: 0,
+        dependency: 0,
+        concurrentBackup: 0,
+    };
+    if (journal.status === 0)
+        for (const line of journal.stdout.split('\n').filter(Boolean)) {
+            let message;
+            try {
+                message = String(JSON.parse(line).MESSAGE ?? '');
+            } catch {
+                continue;
+            }
+            for (const [key, pattern] of Object.entries({
+                dnsFailure: /EAI_AGAIN|Name or service not known|Temporary failure in name resolution/iu,
+                accessDenied: /AccessDenied|not authorized to perform/iu,
+                noSpace: /No space left on device/iu,
+                startLimit: /start-limit|Start request repeated too quickly/iu,
+                dependency: /Dependency failed/iu,
+                concurrentBackup: /Another persistent file backup is already running/iu,
+            }))
+                if (pattern.test(message)) signals[key]++;
+        }
+    return {
+        services,
+        runtimes,
+        recentFileBackupSignals: { available: journal.status === 0, windowMinutes: 60, ...signals },
+    };
+}
+
 function diagnose(request) {
     // Fixed paths only: report sizes without enumerating customer files or
     // treating an untracked production path as safe to delete.
@@ -1277,6 +1386,7 @@ function diagnose(request) {
         ]),
         imageServices: inspectImageServices(),
         latestBackups: backupMetadata(),
+        recoveryReadiness: inspectRecoveryReadiness(),
     };
     try {
         const plan = inspectProductionReleases();
