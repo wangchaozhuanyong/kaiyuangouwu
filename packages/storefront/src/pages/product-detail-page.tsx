@@ -188,8 +188,9 @@ export function ProductDetailPage() {
                   currencyCode: displayedCurrencyCode,
               })
             : null;
-    const isDigital =
-        (product.customFields?.fulfillmentType ?? variant?.customFields.fulfillmentType) === 'digital';
+    const isDigital = variant
+        ? variant.customFields.fulfillmentType === 'digital'
+        : product.customFields?.fulfillmentType === 'digital';
     const digitalDeliveryMode: DigitalDeliveryMode =
         variant?.customFields.digitalDeliveryMode ?? 'manual_service';
     const isAutoCard = isDigital && digitalDeliveryMode === 'auto_card';

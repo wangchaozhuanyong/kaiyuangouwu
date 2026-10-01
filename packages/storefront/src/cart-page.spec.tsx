@@ -12,6 +12,11 @@ import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } fro
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
     useNavigate: () => vi.fn(),
+    Link: ({ children, to, ...props }: import('react').PropsWithChildren<{ to: string }>) => (
+        <a href={to} {...props}>
+            {children}
+        </a>
+    ),
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

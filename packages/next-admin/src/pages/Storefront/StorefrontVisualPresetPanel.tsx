@@ -6,7 +6,10 @@ import {
     auditStorefrontSemanticPalette,
     resolveStorefrontSemanticPalette,
 } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
-import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
+import {
+    normalizeStorefrontVisualPreset,
+    storefrontVisualPresets,
+} from '../../../../storefront-content-plugin/src/visual-presets';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -59,7 +62,10 @@ export function StorefrontVisualPresetPanel() {
     const storefrontUrl = previewUrlQuery.data?.storeProfiles?.find(
         profile => profile.channel.id === channel?.id,
     )?.storefrontUrl;
-    const source = queryData?.storefrontVisualPreset;
+    const savedPreset = queryData?.storefrontVisualPreset;
+    const source = savedPreset
+        ? { ...savedPreset, presetId: normalizeStorefrontVisualPreset(savedPreset.presetId) }
+        : undefined;
     const previewBranding = queryData?.storefrontPreviewBranding;
     const branding = previewBranding?.channelId === channel?.id ? previewBranding : undefined;
     const consistent = Boolean(

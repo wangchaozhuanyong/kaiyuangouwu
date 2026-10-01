@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesktopLayoutContext } from '../desktop-layout';
 import { StoreCustomerCoupon, StorefrontCart } from '../types';
 
-import { CartGroup, CouponSheet } from './cart-ui';
+import { CartGroup, CouponSheet, SwipeableCartLine } from './cart-ui';
 
 vi.mock('@tanstack/react-router', () => ({
     Link: ({ children, to, ...props }: import('react').PropsWithChildren<{ to: string }>) => (
@@ -55,6 +55,91 @@ describe('CouponSheet interactions', () => {
         act(() => root.unmount());
         document.body.innerHTML = '';
         vi.clearAllMocks();
+    });
+
+    it.each([false, true])('keeps mobile image and title links outside swipe gestures when open=%s', open => {
+        const onActionOpenChange = vi.fn();
+        const onQuantity = vi.fn();
+        const onRemove = vi.fn();
+        const line: StorefrontCart['lines'][number] = {
+            id: 'line-link',
+            quantity: 1,
+            selected: true,
+            available: true,
+            productVariant: {
+                id: 'variant-link',
+                name: 'Travel cup',
+                sku: 'CUP',
+                priceWithTax: 4500,
+                currencyCode: 'MYR',
+                saleableStockLevel: 10,
+                featuredAsset: null,
+                product: { id: 'product-link', name: 'Travel cup', featuredAsset: null },
+                customFields: { fulfillmentType: 'physical' },
+            },
+        };
+        const render = (value: typeof line) =>
+            act(() =>
+                root.render(
+                    <SwipeableCartLine
+                        line={value}
+                        market={{
+                            code: 'my',
+                            defaultLanguageCode: 'zh_Hans',
+                            currencyCode: 'MYR',
+                            countryCode: 'MY',
+                            locale: 'zh-CN',
+                            label: 'Malaysia',
+                        }}
+                        locale="zh-CN"
+                        language="en"
+                        loading={false}
+                        open={open}
+                        favorite={false}
+                        pinned={false}
+                        onSelect={vi.fn()}
+                        onQuantity={onQuantity}
+                        onRemove={onRemove}
+                        onFavorite={vi.fn()}
+                        onPin={vi.fn()}
+                        onShare={vi.fn().mockResolvedValue(undefined)}
+                        onActionOpenChange={onActionOpenChange}
+                    />,
+                ),
+            );
+        render(line);
+        const front = container.querySelector<HTMLDivElement>('.cart-line');
+        expect(front).not.toBeNull();
+        if (!front) throw new Error('Missing cart line');
+        const setPointerCapture = vi.fn();
+        front.setPointerCapture = setPointerCapture;
+        const links = container.querySelectorAll<HTMLAnchorElement>(
+            'a.cart-line-image, a.cart-line-product-link',
+        );
+        expect(links).toHaveLength(2);
+        for (const link of links) {
+            expect(link.getAttribute('href')).toBe('/product?id=product-link');
+            const target = link.querySelector('strong') ?? link;
+            act(() => {
+                target.dispatchEvent(
+                    new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 180, clientY: 80 }),
+                );
+            });
+            const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+            link.addEventListener('click', event => event.preventDefault(), { once: true });
+            act(() => {
+                target.dispatchEvent(click);
+            });
+        }
+        expect(setPointerCapture).not.toHaveBeenCalled();
+        expect(onActionOpenChange).not.toHaveBeenCalled();
+        expect(onQuantity).not.toHaveBeenCalled();
+        expect(onRemove).not.toHaveBeenCalled();
+        act(() => container.querySelector<HTMLButtonElement>('.cart-line-swipe-toggle')?.click());
+        expect(onActionOpenChange).toHaveBeenCalledWith(open ? null : line.id);
+        render({ ...line, productVariant: null });
+        expect(container.querySelector('a.cart-line-image, a.cart-line-product-link')).toBeNull();
+        expect(container.textContent).toContain('Unavailable item');
     });
 
     it.each([false, true])('applies a coupon and closes after success in desktop=%s', async desktop => {

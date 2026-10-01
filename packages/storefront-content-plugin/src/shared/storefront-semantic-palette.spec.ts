@@ -35,9 +35,11 @@ describe('storefront semantic palette', () => {
     it.each(['classic', 'neo-minimalist'] as const)(
         'keeps the %s standard palette inside the contrast contract',
         presetId => {
-            expect(auditStorefrontSemanticPalette(resolveStorefrontSemanticPalette(presetId)).passes).toBe(
-                true,
-            );
+            const audit = auditStorefrontSemanticPalette(resolveStorefrontSemanticPalette(presetId));
+            expect(audit.passes).toBe(true);
+            for (const name of ['subtle-muted', 'accent-soft-muted']) {
+                expect(audit.checks.find(check => check.name === name)?.passes).toBe(true);
+            }
         },
     );
 

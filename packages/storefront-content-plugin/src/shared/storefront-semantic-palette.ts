@@ -61,6 +61,8 @@ export interface StorefrontPaletteAudit {
             | 'subtle-body'
             | 'muted'
             | 'page-muted'
+            | 'subtle-muted'
+            | 'accent-soft-muted'
             | 'button'
             | 'button-hover'
             | 'selection'
@@ -207,7 +209,12 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
         elevated: '#ffffff',
         subtle: mixColors(surface, surfaceText, 0.055),
         text: surfaceText,
-        muted: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.42), [page, surface], 4.5, 'dark'),
+        muted: makeAccessibleAgainstAll(
+            mixColors(surfaceText, surface, 0.42),
+            [page, surface, accentSoft],
+            4.5,
+            'dark',
+        ),
         brand: brandColor,
         accent,
         accentHover: makeAccessibleAgainst(
@@ -470,6 +477,8 @@ export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalett
         ['subtle-body', palette.text, palette.subtle, 4.5],
         ['muted', palette.muted, palette.surface, 4.5],
         ['page-muted', palette.muted, palette.page, 4.5],
+        ['subtle-muted', palette.muted, palette.subtle, 4.5],
+        ['accent-soft-muted', palette.muted, palette.accentSoft, 4.5],
         ['button', palette.onAccent, palette.accent, 4.5],
         ['button-hover', palette.onAccent, palette.accentHover, 4.5],
         ['selection', palette.onSelection, palette.selection, 4.5],

@@ -451,7 +451,7 @@ export function SwipeableCartLine({
         if (
             loading ||
             event.button !== 0 ||
-            (event.target instanceof Element && event.target.closest('button, input, label'))
+            (event.target instanceof Element && event.target.closest('a, button, input, label'))
         ) {
             return;
         }
@@ -614,7 +614,7 @@ export function SwipeableCartLine({
                     }
                     if (
                         open &&
-                        !(event.target instanceof Element && event.target.closest('button, input, label'))
+                        !(event.target instanceof Element && event.target.closest('a, button, input, label'))
                     ) {
                         closeAfterAction();
                     }
@@ -632,13 +632,19 @@ export function SwipeableCartLine({
                         <Check />
                     </span>
                 </label>
-                <div className="cart-line-image">
-                    {variant ? (
+                {variant ? (
+                    <Link
+                        to={routeHref({ name: 'product', id: variant.product.id })}
+                        className="cart-line-image"
+                        aria-label={isZh ? `查看 ${productName}` : `View ${productName}`}
+                    >
                         <ProductVariantImage language={language} variant={variant} alt={variant.name} />
-                    ) : (
+                    </Link>
+                ) : (
+                    <div className="cart-line-image">
                         <ProductImagePlaceholder language={language} compact />
-                    )}
-                </div>
+                    </div>
+                )}
                 <div className="cart-line-copy">
                     <button
                         className="cart-line-swipe-toggle"
@@ -657,7 +663,16 @@ export function SwipeableCartLine({
                     >
                         <ChevronLeft aria-hidden="true" />
                     </button>
-                    <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
+                    {variant ? (
+                        <Link
+                            to={routeHref({ name: 'product', id: variant.product.id })}
+                            className="cart-line-product-link"
+                        >
+                            <strong>{variant.name}</strong>
+                        </Link>
+                    ) : (
+                        <strong>{isZh ? '商品已失效' : 'Unavailable item'}</strong>
+                    )}
                     {fulfillmentLabel ? <span className="cart-line-tag">{fulfillmentLabel}</span> : null}
                     {stockError && (
                         <small className="cart-stock-error" role="status">

@@ -6,8 +6,9 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     try {
         const cachedPreset = sessionStorage.getItem('__storefront_preset__') || localStorage.getItem('__storefront_preset__');
-        if (cachedPreset === 'modern-oriental' || cachedPreset === 'classic') {
-            document.documentElement.setAttribute('data-storefront-preset', cachedPreset);
+        if (cachedPreset) {
+            document.documentElement.setAttribute('data-storefront-preset',
+                cachedPreset === 'neo-minimalist' ? cachedPreset : 'classic');
         }
     } catch (e) {}
 
@@ -60,7 +61,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             renderRecentQueries();
             const preset = data.storefrontVisualPreset.presetId;
             document.documentElement.setAttribute('data-storefront-preset',
-                preset === 'modern-oriental' ? preset : 'classic');
+                preset === 'neo-minimalist' ? preset : 'classic');
             const name = data.storefrontBranding?.name?.trim();
             if (name) {
                 document.querySelectorAll('[data-portal-store-name]').forEach(el => { el.textContent = name; });

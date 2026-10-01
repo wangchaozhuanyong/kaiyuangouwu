@@ -132,6 +132,76 @@ describe('desktop product purchase controls', () => {
         expect(host.querySelector('.detail-description')).toBeNull();
     });
 
+    it.each([
+        ['digital', 'physical'],
+        ['physical', 'digital'],
+    ] as const)(
+        'uses selected SKU instead of parent %s and responds to variant switching',
+        (parentType, selectedType) => {
+            const mismatchProduct = {
+                ...product,
+                customFields: {
+                    fulfillmentType: parentType,
+                    refundPolicy: 'MERCHANT_REVIEW',
+                    manualDeliverySlaMinutes: 1440,
+                },
+                variants: [
+                    {
+                        ...product.variants[0],
+                        customFields: { fulfillmentType: selectedType, digitalDeliveryMode: 'file_download' },
+                    },
+                    {
+                        ...product.variants[1],
+                        saleableStockLevel: 3,
+                        customFields: { fulfillmentType: parentType, digitalDeliveryMode: 'file_download' },
+                    },
+                ],
+            } as Product;
+            host = document.createElement('div');
+            document.body.append(host);
+            root = createRoot(host);
+            act(() =>
+                root.render(
+                    <ProductDetailPageContext.Provider
+                        value={{
+                            api: {} as never,
+                            product: mismatchProduct,
+                            products: [],
+                            cartQuantity: 0,
+                            market,
+                            locale: market.locale,
+                            language: 'zh',
+                            storefrontName: 'Store',
+                            logoUrl: null,
+                            flashSaleItems: [],
+                            couponCampaigns: [],
+                            customerCoupons: [],
+                            addingVariantId: null,
+                            favorite: false,
+                            onAdd: vi.fn(),
+                            onBuyNow: vi.fn(),
+                            onFavorite: vi.fn(),
+                            onNotify: vi.fn(),
+                        }}
+                    >
+                        <ProductDetailPage />
+                    </ProductDetailPageContext.Provider>,
+                ),
+            );
+
+            expect(host.textContent).toContain(
+                selectedType === 'digital' ? '数字商品 · 文件下载' : '现货商品',
+            );
+            const choices = host.querySelectorAll<HTMLButtonElement>('.detail-variant-choice');
+            act(() => choices[1].click());
+            expect(host.textContent).toContain(parentType === 'digital' ? '数字商品 · 文件下载' : '现货商品');
+            act(() => choices[0].click());
+            expect(host.textContent).toContain(
+                selectedType === 'digital' ? '数字商品 · 文件下载' : '现货商品',
+            );
+        },
+    );
+
     it('estimates a threshold coupon against the selected quantity and labels the total', () => {
         host = document.createElement('div');
         document.body.append(host);
