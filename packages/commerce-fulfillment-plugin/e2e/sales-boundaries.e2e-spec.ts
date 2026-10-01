@@ -257,6 +257,84 @@ afterAll(async () => {
     if (fixtureDirectory) rmSync(fixtureDirectory, { recursive: true, force: true });
 });
 
+it('rejects an unpaid physical order in shared fulfillment creation and shipping regardless of line order', async () => {
+    const fixtureOrderIds: Array<Order['id']> = [];
+    const isolatedCtx = platform;
+    const orders = server.app.get(OrderService);
+    const fulfillmentService = server.app.get(FulfillmentService);
+    const items: Array<{ orderId: Order['id']; lineId: OrderLine['id'] }> = [];
+    for (const state of ['PaymentSettled', 'ArrangingPayment'] as const) {
+        const fixtureOrder = await orders.create(isolatedCtx, required(own.activeUserId, 'customer user ID'));
+        const added = await orders.addItemToOrder(isolatedCtx, fixtureOrder.id, line.productVariant.id, 1);
+        expect('errorCode' in added).toBe(false);
+        const fixtureLine = await connection
+            .getRepository(isolatedCtx, OrderLine)
+            .findOneOrFail({ where: { order: { id: fixtureOrder.id } } });
+        await connection
+            .getRepository(isolatedCtx, OrderLine)
+            .update(fixtureLine.id, { customFields: { fulfillmentTypeSnapshot: 'physical' } });
+        await connection
+            .getRepository(isolatedCtx, Order)
+            .update(fixtureOrder.id, { active: false, state, orderPlacedAt: new Date() });
+        items.push({ orderId: fixtureOrder.id, lineId: fixtureLine.id });
+        fixtureOrderIds.push(fixtureOrder.id);
+    }
+    expect(new Set(fixtureOrderIds).size).toBe(2);
+    const handler = {
+        code: 'manual-fulfillment',
+        arguments: [
+            { name: 'method', value: 'Synthetic shared carrier' },
+            { name: 'trackingCode', value: 'SYNTHETIC-SHARED' },
+        ],
+    };
+    for (const sequence of [items, [...items].reverse()]) {
+        const rejected = await connection.withTransaction(isolatedCtx, ctx =>
+            orders.createFulfillment(ctx, {
+                lines: sequence.map(item => ({ orderLineId: item.lineId, quantity: 1 })),
+                handler,
+            }),
+        );
+        expect(rejected).toMatchObject({
+            errorCode: 'FULFILLMENT_STATE_TRANSITION_ERROR',
+            transitionError: expect.stringContaining('订单未付款'),
+        });
+    }
+    await connection
+        .getRepository(isolatedCtx, Order)
+        .update(items[1].orderId, { state: 'PaymentAuthorized' });
+    const fulfillment = await connection.withTransaction(isolatedCtx, ctx =>
+        orders.createFulfillment(ctx, {
+            lines: items.map(item => ({ orderLineId: item.lineId, quantity: 1 })),
+            handler,
+        }),
+    );
+    expect('errorCode' in fulfillment).toBe(false);
+    if ('errorCode' in fulfillment) throw new Error(fulfillment.message);
+    await connection
+        .getRepository(isolatedCtx, Order)
+        .update(items[1].orderId, { state: 'ArrangingPayment' });
+    const rejectedShipping = await fulfillmentService.transitionToState(
+        isolatedCtx,
+        fulfillment.id,
+        'Shipped',
+    );
+    expect(rejectedShipping).toMatchObject({
+        transitionError: expect.stringContaining('订单未付款'),
+    });
+    expect(
+        (await connection.getRepository(isolatedCtx, Fulfillment).findOneByOrFail({ id: fulfillment.id }))
+            .state,
+    ).toBe('Pending');
+    await connection
+        .getRepository(isolatedCtx, Order)
+        .update(items[1].orderId, { state: 'PaymentAuthorized' });
+    const shipped = await fulfillmentService.transitionToState(isolatedCtx, fulfillment.id, 'Shipped');
+    expect('fulfillment' in shipped).toBe(true);
+    // Close only these synthetic fixtures so the later shared-fixture todo-count assertion
+    // stays independent; this bypass is confined to test setup/cleanup, never production.
+    await connection.getRepository(platform, Order).update(fixtureOrderIds, { state: 'Cancelled' });
+});
+
 it('ships a physical order, requires delivery evidence and lets only its customer confirm once', async () => {
     const orders = server.app.get(OrderService);
     const delivery = server.app.get(FulfillmentDeliveryService);

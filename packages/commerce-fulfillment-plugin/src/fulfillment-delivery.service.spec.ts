@@ -209,6 +209,83 @@ describe('FulfillmentDeliveryService', () => {
         );
     });
 
+    it.each([false, true])('rejects any unpaid physical order regardless of order sequence (%s)', reverse => {
+        const test = createHarness();
+        const unpaid = {
+            ...test.order,
+            id: 'unpaid',
+            state: 'ArrangingPayment',
+            lines: [{ id: 'line-2', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+        };
+        test.fulfillment.lines.push({ orderLineId: 'line-2', quantity: 1 });
+        const orders = reverse ? [unpaid, test.order] : [test.order, unpaid];
+        expect(test.service.guardPhysicalFulfillmentPayment(test.fulfillment, orders)).toContain(
+            '订单未付款',
+        );
+    });
+
+    it.each([false, true])('does not let a digital order hide an unpaid physical order (%s)', reverse => {
+        const test = createHarness();
+        test.order.lines[0].customFields.fulfillmentTypeSnapshot = 'digital';
+        const unpaid = {
+            ...test.order,
+            id: 'unpaid',
+            state: 'ArrangingPayment',
+            lines: [{ id: 'line-2', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+        };
+        test.fulfillment.lines.push({ orderLineId: 'line-2', quantity: 1 });
+        expect(
+            test.service.guardPhysicalFulfillmentPayment(
+                test.fulfillment,
+                reverse ? [unpaid, test.order] : [test.order, unpaid],
+            ),
+        ).toContain('订单未付款');
+    });
+
+    it.each(['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'])(
+        'allows every permitted physical order state (%s)',
+        state => {
+            const test = createHarness();
+            test.order.state = state;
+            expect(
+                test.service.guardPhysicalFulfillmentPayment(test.fulfillment, [test.order]),
+            ).toBeUndefined();
+        },
+    );
+
+    it('checks only physical lines included in this fulfillment and preserves digital delivery', () => {
+        const test = createHarness();
+        const unrelated = {
+            ...test.order,
+            id: 'unrelated',
+            state: 'ArrangingPayment',
+            lines: [{ id: 'other-line', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+        };
+        expect(
+            test.service.guardPhysicalFulfillmentPayment(test.fulfillment, [unrelated, test.order]),
+        ).toBeUndefined();
+        test.order.state = 'ArrangingPayment';
+        test.order.lines[0].customFields.fulfillmentTypeSnapshot = 'digital';
+        expect(test.service.guardPhysicalFulfillmentPayment(test.fulfillment, [test.order])).toBeUndefined();
+    });
+
+    it.each(['no-orders', 'unrelated-lines', 'partially-missing', 'no-lines', 'ambiguous-owner'])(
+        'rejects incomplete or ambiguous line ownership (%s)',
+        situation => {
+            const test = createHarness();
+            let orders = [test.order];
+            if (situation === 'no-orders') orders = [];
+            if (situation === 'unrelated-lines') test.fulfillment.lines[0].orderLineId = 'missing-line';
+            if (situation === 'partially-missing')
+                test.fulfillment.lines.push({ orderLineId: 'missing-line', quantity: 1 });
+            if (situation === 'no-lines') test.fulfillment.lines = [];
+            if (situation === 'ambiguous-owner') orders.push({ ...test.order, id: 'second-owner' });
+            expect(test.service.guardPhysicalFulfillmentPayment(test.fulfillment, orders)).toBe(
+                '实物履约记录缺少订单归属',
+            );
+        },
+    );
+
     it('reconciles carrier exceptions into the durable incident channel', async () => {
         const test = createHarness();
         test.record.status = 'EXCEPTION';

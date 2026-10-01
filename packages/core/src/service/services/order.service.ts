@@ -1837,6 +1837,8 @@ export class OrderService {
         }
         const result = await this.fulfillmentService.transitionToState(ctx, fulfillment.id, 'Pending');
         if (isGraphQlErrorResult(result)) {
+            // Rejected creation must not leave fulfillment lines consuming the order's quantity.
+            await this.connection.rollBackTransaction(ctx);
             return result;
         }
         return result.fulfillment;
