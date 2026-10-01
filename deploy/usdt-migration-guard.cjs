@@ -214,12 +214,31 @@ async function run(operation, runtime, snapshotFile, repository = path.resolve(_
     }
 }
 
+function safeFailureCode(error) {
+    const safeCodes = new Set([
+        'ENOENT',
+        'EACCES',
+        'MODULE_NOT_FOUND',
+        'EAI_AGAIN',
+        'ENOTFOUND',
+        'ETIMEDOUT',
+        'ECONNREFUSED',
+        'ECONNRESET',
+        'ERR_ASSERTION',
+        'ER_ACCESS_DENIED_ERROR',
+        'ER_NO_SUCH_TABLE',
+        'ER_BAD_FIELD_ERROR',
+    ]);
+    return safeCodes.has(error.code) ? error.code : 'UNKNOWN';
+}
+
 module.exports = { assertStopped, assertCompatible, assertPending, schemaState, historySnapshot, inspect };
 if (require.main === module) {
     run(...process.argv.slice(2)).catch(error => {
         // Database/driver errors can contain connection details or records; do not print their raw message.
+        const code = safeFailureCode(error);
         process.stderr.write(
-            `USDT_RUNTIME_GUARD_FAILED ${error.code === 'ERR_ASSERTION' ? error.message.split('\n')[0] : 'operation failed; inspect securely on the production host'}\n`,
+            `USDT_RUNTIME_GUARD_FAILED ${error.code === 'ERR_ASSERTION' ? error.message.split('\n')[0] : 'operation failed; inspect securely on the production host'} error_code=${code}\n`,
         );
         process.exitCode = 1;
     });
