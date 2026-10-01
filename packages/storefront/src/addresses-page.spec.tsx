@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountSecurityPage } from './account-security-page';
 import { AddressesPage } from './addresses-page';
 import { ShopApi } from './api';
+import { isCompleteShippingAddress } from './checkout-address';
 import { languageCodeFor } from './i18n';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { ActiveCustomer, CustomerAddress, CustomerDeliveryEmail, MarketConfig } from './types';
@@ -453,6 +454,13 @@ describe('AddressesPage checkout selection and editing', () => {
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
     }
+    async function choose(name: string, value: string) {
+        await interact(() => {
+            const select = element<HTMLSelectElement>(`select[name="${name}"]`);
+            Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(select, value);
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
     async function paste(value: string) {
         await interact(() => {
             const input = element<HTMLTextAreaElement>('.address-smart-paste textarea');
@@ -583,12 +591,104 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(props.onBack).not.toHaveBeenCalled();
     });
 
+    it.each(['create', 'update'] as const)(
+        'rejects malformed phone numbers before %s address mutation',
+        async action => {
+            const onUse = vi.fn();
+            const customer = action === 'create' ? mockCustomer : { ...mockCustomer, addresses: [address] };
+            const { api } = mount({
+                customer,
+                selection: {
+                    addressId: action === 'create' ? 'new-address' : address.id,
+                    editAddress: action === 'update',
+                    onUse,
+                },
+            });
+            if (action === 'create') {
+                await fill('fullName', '测试收件人');
+                await fill('city', '吉隆坡');
+                await fill('streetLine1', 'QA Test Address');
+                await fill('postalCode', '00000');
+                await choose('countryCode', 'MY');
+                await choose('province', 'MY-14');
+            }
+            await fill('phoneNumber', 'not-a-phone');
+            await save();
+
+            expect(api.createAddress).not.toHaveBeenCalled();
+            expect(api.updateAddress).not.toHaveBeenCalled();
+            expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+            expect(container.textContent).toContain('请输入有效的电话号码');
+            expect(onUse).not.toHaveBeenCalled();
+        },
+    );
+
+    it('accepts a formatted international phone number', async () => {
+        const { api } = mount({
+            selection: { addressId: address.id, editAddress: true, onUse: vi.fn() },
+        });
+        await fill('phoneNumber', '+60 (12) 345-6789');
+        await save();
+        expect(api.updateAddress).toHaveBeenCalledWith(
+            expect.objectContaining({ phoneNumber: '+60 (12) 345-6789' }),
+        );
+    });
+
+    it.each(['123456', '1234567890123456', '00000000000'])(
+        'rejects a phone number outside the supported range or format: %s',
+        async phoneNumber => {
+            const { api } = mount({
+                selection: { addressId: address.id, editAddress: true, onUse: vi.fn() },
+            });
+            await fill('phoneNumber', phoneNumber);
+            await save();
+            expect(api.updateAddress).not.toHaveBeenCalled();
+            expect(container.textContent).toContain('请输入有效的电话号码');
+        },
+    );
+
+    it('does not make an address with an invalid phone number the default', async () => {
+        const invalidAddress = {
+            ...address,
+            id: 'address-invalid-phone',
+            phoneNumber: 'not-a-phone',
+            defaultShippingAddress: false,
+        };
+        const onNotify = vi.fn();
+        const { api } = mount({
+            customer: { ...mockCustomer, addresses: [address, invalidAddress] },
+            selection: undefined,
+            onNotify,
+        });
+        await interact(() => button('设为默认').click());
+        expect(api.updateAddress).not.toHaveBeenCalled();
+        expect(onNotify).toHaveBeenCalledWith('请先编辑地址并填写有效的电话号码');
+    });
+
     it('opens an incomplete selection for editing instead of returning it', async () => {
         const incomplete = { ...address, phoneNumber: '' };
         const { props } = mount({ customer: { ...mockCustomer, addresses: [incomplete] } });
         await interact(() => button('完善并使用此地址').click());
         expect(element<HTMLInputElement>('input[name="phoneNumber"]').value).toBe('');
         expect(props.selection?.onUse).not.toHaveBeenCalled();
+    });
+
+    it('requires an invalid legacy phone number to be corrected before selecting it for checkout', async () => {
+        const invalid = { ...address, phoneNumber: 'not-a-phone' };
+        const onUse = vi.fn();
+        const { props } = mount({
+            customer: { ...mockCustomer, addresses: [invalid] },
+            selection: { addressId: invalid.id, onUse },
+        });
+        expect(container.textContent).toContain('请完善收货地址');
+        await interact(() => button('完善并使用此地址').click());
+        expect(element<HTMLInputElement>('input[name="phoneNumber"]').value).toBe('not-a-phone');
+        expect(props.selection?.onUse).not.toHaveBeenCalled();
+    });
+
+    it('does not consider a saved address with an invalid phone complete for checkout', () => {
+        expect(isCompleteShippingAddress({ ...address, phoneNumber: 'not-a-phone' })).toBe(false);
+        expect(isCompleteShippingAddress({ ...address, phoneNumber: '+60 (12) 345-6789' })).toBe(true);
     });
 
     it('keeps the Malaysian country and existing state when pasted text has a Chinese province', async () => {

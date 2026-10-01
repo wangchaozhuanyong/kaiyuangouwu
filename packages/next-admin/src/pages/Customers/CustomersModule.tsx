@@ -90,6 +90,7 @@ import {
     getOrderStateClass,
     getOrderStateLabel,
 } from '../Sales/sales-utils';
+import { validateCustomerEmail, validateCustomerPhoneNumber } from './customer-validation';
 
 interface CustomerForm {
     title: string;
@@ -318,8 +319,14 @@ export function CustomersModule() {
     };
 
     const saveNewCustomer = async () => {
-        if (!createDraft.emailAddress.trim()) {
-            setActionError('邮箱不能为空');
+        const validationError = validateCustomerEmail(createDraft.emailAddress);
+        if (validationError) {
+            setActionError(validationError);
+            return;
+        }
+        const phoneValidationError = validateCustomerPhoneNumber(createDraft.phoneNumber);
+        if (phoneValidationError) {
+            setActionError(phoneValidationError);
             return;
         }
         try {
@@ -980,7 +987,11 @@ function CustomerDrawer({
     const availableGroups = allGroups.filter(group => !customer?.groups.some(item => item.id === group.id));
 
     const saveCustomer = async () => {
-        if (!customer || !form.emailAddress.trim()) return onError('邮箱不能为空');
+        if (!customer) return;
+        const validationError = validateCustomerEmail(form.emailAddress);
+        if (validationError) return onError(validationError);
+        const phoneValidationError = validateCustomerPhoneNumber(form.phoneNumber);
+        if (phoneValidationError) return onError(phoneValidationError);
         const customFieldErrors = validateCustomFieldValues(customerCustomFields, customFieldValues);
         if (Object.keys(customFieldErrors).length > 0) {
             return onError(Object.values(customFieldErrors)[0] ?? '客户扩展字段校验失败');
@@ -2099,7 +2110,7 @@ function CustomerAddressEditor({
     );
 }
 
-function CustomerEditForm({
+export function CustomerEditForm({
     form,
     setForm,
     pending,
@@ -2112,6 +2123,8 @@ function CustomerEditForm({
     onCancel: () => void;
     onSave: () => void;
 }) {
+    const emailError = validateCustomerEmail(form.emailAddress);
+    const phoneError = validateCustomerPhoneNumber(form.phoneNumber);
     return (
         <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -2125,17 +2138,31 @@ function CustomerEditForm({
                     value={form.firstName}
                     onChange={value => setForm({ ...form, firstName: value })}
                 />
-                <TextInput
-                    label="邮箱 *"
-                    type="email"
-                    value={form.emailAddress}
-                    onChange={value => setForm({ ...form, emailAddress: value })}
-                />
-                <TextInput
-                    label="手机号"
-                    value={form.phoneNumber}
-                    onChange={value => setForm({ ...form, phoneNumber: value })}
-                />
+                <div>
+                    <TextInput
+                        label="邮箱 *"
+                        type="email"
+                        value={form.emailAddress}
+                        onChange={value => setForm({ ...form, emailAddress: value })}
+                    />
+                    {form.emailAddress.trim() && emailError && (
+                        <p role="alert" className="mt-1 text-[11px] font-normal text-red-600">
+                            {emailError}
+                        </p>
+                    )}
+                </div>
+                <div>
+                    <TextInput
+                        label="手机号"
+                        value={form.phoneNumber}
+                        onChange={value => setForm({ ...form, phoneNumber: value })}
+                    />
+                    {form.phoneNumber.trim() && phoneError && (
+                        <p role="alert" className="mt-1 text-[11px] font-normal text-red-600">
+                            {phoneError}
+                        </p>
+                    )}
+                </div>
             </div>
             <div className="flex justify-end gap-2">
                 <button
@@ -2148,7 +2175,7 @@ function CustomerEditForm({
                 <button
                     type="button"
                     onClick={onSave}
-                    disabled={pending || !form.emailAddress.trim()}
+                    disabled={pending || Boolean(emailError) || Boolean(phoneError)}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                 >
                     {pending ? '保存中…' : '保存资料'}

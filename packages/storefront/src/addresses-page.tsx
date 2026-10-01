@@ -8,7 +8,11 @@ import './styles/checkout-payment-surfaces.css';
 import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
-import { isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
+import {
+    isCompleteShippingAddress,
+    isValidAddressPhoneNumber,
+    shippingAddressInput,
+} from './checkout-address';
 import { languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
 import {
@@ -152,12 +156,17 @@ export function AddressesPage({
         event.preventDefault();
         if (submitting) return;
         const data = new FormData(event.currentTarget);
+        const phoneNumber = formText(data, 'phoneNumber').trim();
+        if (!isValidAddressPhoneNumber(phoneNumber)) {
+            setFormError(isZh ? '请输入有效的电话号码' : 'Enter a valid phone number');
+            return;
+        }
         setSubmitting(true);
         setFormError('');
         try {
             const input: CustomerAddressInput = {
                 fullName: formText(data, 'fullName'),
-                phoneNumber: formText(data, 'phoneNumber'),
+                phoneNumber,
                 province: formText(data, 'province'),
                 city: formText(data, 'city'),
                 streetLine1: formText(data, 'streetLine1'),
@@ -216,6 +225,14 @@ export function AddressesPage({
         }
     };
     const makeDefault = async (address: CustomerAddress) => {
+        if (!isValidAddressPhoneNumber(address.phoneNumber)) {
+            onNotify(
+                isZh
+                    ? '请先编辑地址并填写有效的电话号码'
+                    : 'Edit this address and enter a valid phone number first',
+            );
+            return;
+        }
         try {
             await api.updateAddress({
                 id: address.id,
