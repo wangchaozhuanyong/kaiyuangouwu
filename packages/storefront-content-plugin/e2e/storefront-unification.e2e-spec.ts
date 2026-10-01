@@ -925,7 +925,11 @@ describe('unified storefront Admin API to Shop API', () => {
                                             ),
                                         )
                                         .toBe(true);
-                                    await browserExpect(imageLocator).toHaveCSS('object-fit', 'contain');
+                                    await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
+                                    await browserExpect(page.locator('.auth-hero-message')).toHaveCSS(
+                                        'position',
+                                        'absolute',
+                                    );
                                     await browserExpect(imageLocator).toHaveCSS('filter', 'none');
                                     await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
                                         'background-color',
@@ -1397,6 +1401,45 @@ describe('unified storefront Admin API to Shop API', () => {
         }
     });
     it('matches the real admin auth preview with explicit block colors, skin colors and classic brand inheritance', async () => {
+        // Build this case's auth fixtures when running it alone; earlier tests are not a setup step.
+        for (const index of [0, 2]) {
+            adminClient.setChannelToken(stores[index].token);
+            const existing = (await adminClient.query(READ)).storefrontContentBlocks.find(
+                (block: { type: string }) => block.type === 'AUTH_LOGIN',
+            );
+            if (!existing) {
+                const imageAssetId =
+                    index === 0
+                        ? String(
+                              (
+                                  await server.app
+                                      .get(TransactionalConnection)
+                                      .rawConnection.getRepository(Asset)
+                                      .findOneByOrFail({ source: 'store-0.svg' })
+                              ).id,
+                          )
+                        : null;
+                await adminClient.query(CREATE, {
+                    input: {
+                        code: 'auth-login-visual',
+                        type: 'AUTH_LOGIN',
+                        layoutVariant: 'HERO_OVERLAY',
+                        targetType: 'NONE',
+                        position: 1000,
+                        enabled: true,
+                        imageAssetId,
+                        backgroundColor: index === 0 ? '#203346' : null,
+                        textColor: index === 0 ? '#ffffff' : null,
+                        settings: { accentColor: index === 0 ? '#a63d32' : '' },
+                        translations: copy(
+                            index === 0 ? 'MOYAO主标题' : '',
+                            index === 0 ? 'MOYAO title' : '',
+                        ),
+                        items: [],
+                    },
+                });
+            }
+        }
         const readVisual = gql`
             query {
                 storefrontVisualPreset {
@@ -1545,7 +1588,11 @@ describe('unified storefront Admin API to Shop API', () => {
                     const img = clientFrame.locator('.auth-hero img.safe-image');
                     if (viewport === '电脑') {
                         await browserExpect(clientFrame.locator('.auth-hero')).toBeVisible();
-                        await browserExpect(img).toHaveCSS('object-fit', 'contain');
+                        await browserExpect(img).toHaveCSS('object-fit', 'cover');
+                        await browserExpect(clientFrame.locator('.auth-hero-message')).toHaveCSS(
+                            'position',
+                            'absolute',
+                        );
                         await browserExpect
                             .poll(() =>
                                 img.evaluate(
@@ -1594,6 +1641,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 'data-storefront-preset',
                 'neo-minimalist',
             );
+            // Deliberately cleared managed content keeps its page color; it is not an unconfigured card.
             await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', 'rgb(7, 11, 20)');
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
