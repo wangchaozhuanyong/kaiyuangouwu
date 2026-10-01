@@ -210,6 +210,24 @@ interface InventoryLotDraft {
     reason: string;
 }
 
+export function validateInventoryLotDraft(
+    draft: InventoryLotDraft,
+    variants: Array<Pick<CatalogExportRowRecord, 'variantId'>>,
+): string | undefined {
+    const variant = variants.find(item => item.variantId === draft.productVariantId);
+    const lotCode = draft.lotCode.trim();
+    const quantityText = draft.quantityOnHand.trim();
+    const quantityOnHand = Number(quantityText);
+    const purchaseCost = draft.purchaseCost.trim() ? Number(draft.purchaseCost) : null;
+    if (!variant || !lotCode) return '请选择 SKU 并填写批次号';
+    if (!quantityText || !Number.isInteger(quantityOnHand) || quantityOnHand < 0)
+        return '批次数量必须是不小于 0 的整数';
+    if (purchaseCost != null && (!Number.isFinite(purchaseCost) || purchaseCost < 0))
+        return '请输入有效的非负批次成本';
+    if (!draft.reason.trim()) return '请填写库存调整原因';
+    return undefined;
+}
+
 interface InventoryLotTransferDraft {
     inventoryLotId: string;
     sku: string;
@@ -571,22 +589,12 @@ export function InventoryWarehouseModule() {
         const lotCode = lotDraft.lotCode.trim();
         const quantityOnHand = Number(lotDraft.quantityOnHand);
         const purchaseCost = lotDraft.purchaseCost.trim() ? Number(lotDraft.purchaseCost) : null;
-        if (!variant || !lotCode) {
-            showError('请选择 SKU 并填写批次号');
+        const validationError = validateInventoryLotDraft(lotDraft, lotVariants);
+        if (validationError) {
+            showError(validationError);
             return;
         }
-        if (!Number.isInteger(quantityOnHand) || quantityOnHand < 0) {
-            showError('批次数量必须是不小于 0 的整数');
-            return;
-        }
-        if (purchaseCost != null && (!Number.isFinite(purchaseCost) || purchaseCost < 0)) {
-            showError('请输入有效的非负批次成本');
-            return;
-        }
-        if (!lotDraft.reason.trim()) {
-            showError('请填写库存调整原因');
-            return;
-        }
+        if (!variant) return;
         setActionError('');
         try {
             await saveInventoryLot({

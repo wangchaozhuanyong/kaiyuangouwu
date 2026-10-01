@@ -90,6 +90,7 @@ import {
     getOrderStateClass,
     getOrderStateLabel,
 } from '../Sales/sales-utils';
+import { toCustomerAddressInput } from './customer-address';
 import { validateCustomerEmail, validateCustomerPhoneNumber } from './customer-validation';
 
 interface CustomerForm {
@@ -153,22 +154,6 @@ function addressToForm(address: CustomerAddressRecord | null): CustomerAddressFo
         phoneNumber: address.phoneNumber ?? '',
         defaultShippingAddress: Boolean(address.defaultShippingAddress),
         defaultBillingAddress: Boolean(address.defaultBillingAddress),
-    };
-}
-
-function addressInput(form: CustomerAddressForm) {
-    return {
-        fullName: form.fullName.trim() || null,
-        company: form.company.trim() || null,
-        streetLine1: form.streetLine1.trim(),
-        streetLine2: form.streetLine2.trim() || null,
-        city: form.city.trim() || null,
-        province: form.province.trim() || null,
-        postalCode: form.postalCode.trim() || null,
-        countryCode: form.countryCode,
-        phoneNumber: form.phoneNumber.trim() || null,
-        defaultShippingAddress: form.defaultShippingAddress,
-        defaultBillingAddress: form.defaultBillingAddress,
     };
 }
 
@@ -1052,12 +1037,12 @@ function CustomerDrawer({
         try {
             if (addressEditor === 'create') {
                 await createAddress({
-                    variables: { customerId: customer.id, input: addressInput(addressForm) },
+                    variables: { customerId: customer.id, input: toCustomerAddressInput(addressForm) },
                 });
             } else {
                 await updateAddress({
                     variables: {
-                        input: { id: addressEditor.id, ...addressInput(addressForm) },
+                        input: { id: addressEditor.id, ...toCustomerAddressInput(addressForm) },
                     },
                 });
             }
