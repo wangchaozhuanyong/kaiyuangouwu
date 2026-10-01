@@ -23,7 +23,7 @@ async function portal(
     branding: unknown = {
         activeChannel: { id: 'store-a' },
         storefrontBranding: { name: '测试店铺甲' },
-        storefrontVisualPreset: { channelId: 'store-a', presetId: 'modern-oriental' },
+        storefrontVisualPreset: { channelId: 'store-a', presetId: 'neo-minimalist' },
     },
     recentStorage: Record<string, string> = {},
 ) {
@@ -54,9 +54,10 @@ async function portal(
     });
     await new Promise<void>(resolve => dom.window.addEventListener('DOMContentLoaded', () => resolve()));
     dom.window.eval(PORTAL_JS);
+    const bootstrapPreset = dom.window.document.documentElement.dataset.storefrontPreset;
     dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
     await new Promise(resolve => setTimeout(resolve, 0));
-    return { window: dom.window, document: dom.window.document, requests };
+    return { window: dom.window, document: dom.window.document, requests, bootstrapPreset };
 }
 
 function result(subject: string, targetType = 'PRIMARY') {
@@ -223,7 +224,7 @@ describe('mail portal store configuration', () => {
     });
 
     it.each([
-        ['测试店铺甲', 'modern-oriental'],
+        ['测试店铺甲', 'neo-minimalist'],
         ['测试店铺乙', 'classic'],
     ])('uses the host-resolved configuration for %s', async (name, preset) => {
         const { document } = await portal({
@@ -236,6 +237,21 @@ describe('mail portal store configuration', () => {
         expect(document.querySelectorAll('[data-portal-store-name]')).toHaveLength(2);
         expect(document.body.textContent).not.toContain('MOYAO AI');
     });
+
+    it.each(['modern-oriental', 'unsupported-preset'])(
+        'falls back to classic for removed server and cached skin %s',
+        async presetId => {
+            const { document, bootstrapPreset } = await portal(
+                {
+                    activeChannel: { id: 'store-a' },
+                    storefrontVisualPreset: { channelId: 'store-a', presetId },
+                },
+                { __storefront_preset__: presetId },
+            );
+            expect(bootstrapPreset).toBe('classic');
+            expect(document.documentElement.dataset.storefrontPreset).toBe('classic');
+        },
+    );
 
     it.each([
         null,

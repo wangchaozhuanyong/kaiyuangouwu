@@ -111,6 +111,24 @@ describe('fixed desktop layout skin settings', () => {
         expect(mocks.save).not.toHaveBeenCalled();
     });
 
+    it.each(['modern-oriental', 'unsupported-preset'])(
+        'normalizes removed saved skin %s without saving configuration',
+        presetId => {
+            const result = queryResult();
+            result.data.storefrontVisualPreset.presetId = presetId;
+            mocks.query.mockReturnValue(result);
+            act(() => root.render(<StorefrontVisualPresetPanel />));
+            expect(
+                Array.from(
+                    host.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+                    input => input.value,
+                ),
+            ).toEqual(['classic', 'neo-minimalist']);
+            expect(host.querySelector<HTMLInputElement>('input[value="classic"]')?.checked).toBe(true);
+            expect(mocks.save).not.toHaveBeenCalled();
+        },
+    );
+
     it.each(['classic', 'catalog'])('shows only skin options with legacy %s data', desktopLayout => {
         mocks.query.mockReturnValue(queryResult(desktopLayout));
         act(() => root.render(<StorefrontVisualPresetPanel />));
