@@ -101,11 +101,22 @@ export class FulfillmentDeliveryService {
     }
 
     guardPhysicalFulfillmentPayment(fulfillment: Fulfillment, orders: Order[]): string | void {
-        if (!isPhysicalFulfillment(fulfillment, orders)) return;
-        const order = orderForFulfillment(fulfillment, orders);
-        if (!order) return '实物履约记录缺少订单归属';
-        if (!FULFILLABLE_ORDER_STATES.has(order.state)) {
-            return '订单未付款或未授权，不能创建实物发货';
+        if (!fulfillment.lines?.length) return '实物履约记录缺少订单归属';
+        for (const fulfillmentLine of fulfillment.lines) {
+            const owners = orders.flatMap(order =>
+                (order.lines ?? [])
+                    .filter(line => String(line.id) === String(fulfillmentLine.orderLineId))
+                    .map(line => ({ order, line })),
+            );
+            if (owners.length !== 1) return '实物履约记录缺少订单归属';
+            const { order: ownerOrder, line: ownedLine } = owners[0];
+            const fulfillmentType =
+                ownedLine.customFields?.fulfillmentTypeSnapshot ??
+                ownedLine.productVariant?.customFields?.fulfillmentType ??
+                'physical';
+            if (fulfillmentType === 'physical' && !FULFILLABLE_ORDER_STATES.has(ownerOrder.state)) {
+                return '订单未付款或未授权，不能创建实物发货';
+            }
         }
     }
 
