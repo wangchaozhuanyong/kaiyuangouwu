@@ -636,6 +636,7 @@ export const CATALOG_EXPORT_ROWS_QUERY = gql`
                 categories
                 importCategory
                 fulfillmentType
+                pricingMode
                 channelCode
                 brand
                 tags

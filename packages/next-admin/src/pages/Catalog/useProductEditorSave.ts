@@ -717,12 +717,27 @@ export function useProductEditorSave({
 
                 const updateVariantInputs = changedExistingVariants.map(v => {
                     const original = productData?.product?.variants.find(item => item.id === v.id);
+                    const baselineVariant = baselineDraft?.variants.find(item => item.id === v.id);
+                    const { stockOnHand, ...fulfillmentInput } = variantFulfillmentInput(
+                        v,
+                        effectiveFulfillmentType,
+                    );
+                    const stockChanged =
+                        !baselineVariant ||
+                        v.stockOnHand !== baselineVariant.stockOnHand ||
+                        effectiveFulfillmentType !== baselineDraft?.fulfillmentType ||
+                        (effectiveFulfillmentType === 'digital' &&
+                            (v.digitalDeliveryMode !== baselineVariant.digitalDeliveryMode ||
+                                v.digitalStockPolicy !== baselineVariant.digitalStockPolicy));
                     return {
                         id: v.id,
                         sku: v.sku.trim(),
                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
                         price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
-                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
+                        ...fulfillmentInput,
+                        // Stock is an aggregate in this editor; unchanged stock must not be
+                        // copied into the channel's default location during a price/mode edit.
+                        ...(stockChanged ? { stockOnHand } : {}),
                         ...(!original ||
                         !sameValue(
                             sortedIds(v.optionIds),
