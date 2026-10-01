@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ShopApi } from '../api';
 import { matchesCatalogFilters } from '../api/helpers';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../catalog-route-query';
-import { CategoryClientPluginSlot, clientPluginPlacements } from '../client-plugins/client-plugin-registry';
+import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CatalogFilterSheet, type CatalogFilterValues } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { DesktopCategoryNavigation } from '../components/common/desktop-category-navigation';
@@ -113,8 +113,24 @@ export function DesktopCatalogPage() {
 
     return (
         <main className="desktop-catalog-main">
+            <div className="desktop-catalog-header-extras">
+                <CategoryClientPluginSlot
+                    block={clientPluginBlock}
+                    placement="AFTER_HEADER"
+                    categoryContext={categoryContext}
+                    language={language}
+                    onNavigate={navigate}
+                />
+            </div>
             <aside className="desktop-catalog-sidebar">
                 <DesktopCategoryNavigation expandChildren />
+                <CategoryClientPluginSlot
+                    block={clientPluginBlock}
+                    placement="AFTER_CATEGORY_NAVIGATION"
+                    categoryContext={categoryContext}
+                    language={language}
+                    onNavigate={navigate}
+                />
                 <section className="desktop-catalog-help">
                     <h2>{isZh ? '需要帮助？' : 'Need help?'}</h2>
                     <p>
@@ -231,6 +247,13 @@ export function DesktopCatalogPage() {
                         onClose={() => setFilterOpen(false)}
                     />
                 ) : null}
+                <CategoryClientPluginSlot
+                    block={clientPluginBlock}
+                    placement="BEFORE_PRODUCT_LIST"
+                    categoryContext={categoryContext}
+                    language={language}
+                    onNavigate={navigate}
+                />
                 <div className="desktop-catalog-body">
                     <section
                         className="desktop-catalog-results"
@@ -321,18 +344,13 @@ export function DesktopCatalogPage() {
                     </section>
                 </div>
                 <div className="desktop-catalog-extras">
-                    {clientPluginPlacements
-                        .filter(placement => placement !== 'BUSINESS_SERVICES_MAIN')
-                        .map(placement => (
-                            <CategoryClientPluginSlot
-                                key={placement}
-                                block={clientPluginBlock}
-                                placement={placement}
-                                categoryContext={categoryContext}
-                                language={language}
-                                onNavigate={navigate}
-                            />
-                        ))}
+                    <CategoryClientPluginSlot
+                        block={clientPluginBlock}
+                        placement="AFTER_PRODUCT_LIST"
+                        categoryContext={categoryContext}
+                        language={language}
+                        onNavigate={navigate}
+                    />
                 </div>
                 <footer className="desktop-catalog-footer">
                     <span>{runtime.storefrontName}</span>

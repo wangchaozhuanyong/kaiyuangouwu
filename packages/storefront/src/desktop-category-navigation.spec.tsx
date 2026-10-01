@@ -11,7 +11,7 @@ import { DesktopCatalogPage } from './pages/desktop-catalog-page';
 import { RouteState } from './storefront-router';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
-import { CollectionSummary } from './types';
+import { CollectionSummary, StorefrontContentBlock } from './types';
 
 const child: CollectionSummary = {
     id: 'child',
@@ -76,6 +76,89 @@ function renderSubcategories(route: RouteState) {
 }
 
 describe('desktop catalog category navigation', () => {
+    it('renders each managed plugin at its configured location without replacing the catalog columns', () => {
+        const placements = [
+            'AFTER_HEADER',
+            'AFTER_CATEGORY_NAVIGATION',
+            'BEFORE_PRODUCT_LIST',
+            'AFTER_PRODUCT_LIST',
+        ];
+        const block: StorefrontContentBlock = {
+            id: 'placements',
+            code: 'storefront-client-plugins',
+            type: 'CLIENT_PLUGINS',
+            enabled: true,
+            position: 0,
+            startsAt: null,
+            endsAt: null,
+            imageUrl: null,
+            backgroundColor: null,
+            textColor: null,
+            targetType: 'NONE',
+            targetValue: null,
+            settings: null,
+            title: '',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+            items: placements.map((placement, position) => ({
+                id: placement,
+                enabled: true,
+                position,
+                label: '',
+                description: '',
+                imageUrl: null,
+                targetType: 'NONE',
+                targetValue: null,
+                settings: {
+                    pluginCode: 'category-support-entry',
+                    placement,
+                    categoryScope: 'SELECTED',
+                    categoryIds: ['child'],
+                },
+            })),
+        };
+        const markup = renderToStaticMarkup(
+            <QueryClientProvider client={new QueryClient()}>
+                <StorefrontContext.Provider
+                    value={
+                        {
+                            route: { name: 'category', collectionId: 'parent', childId: 'child' },
+                            collections,
+                            language: 'zh',
+                            market: { code: 'MY', currencyCode: 'MYR', locale: 'zh-CN' },
+                            locale: 'zh-CN',
+                            contentBlocks: [block],
+                            storefrontName: '店铺',
+                            storefrontTagline: '',
+                            api: { catalog: vi.fn() },
+                            navigate: vi.fn(),
+                        } as unknown as StorefrontContextValue
+                    }
+                >
+                    <DesktopCatalogPage />
+                </StorefrontContext.Provider>
+            </QueryClientProvider>,
+        );
+        const sidebarEnd = markup.indexOf('class="desktop-catalog-workspace"');
+        const navigation = markup.indexOf('class="desktop-category-navigation"');
+        const afterHeader = markup.indexOf('is-after-header');
+        const afterNavigation = markup.indexOf('is-after-category-navigation');
+        const toolbar = markup.indexOf('class="desktop-catalog-toolbar"');
+        const beforeList = markup.indexOf('is-before-product-list');
+        const list = markup.indexOf('class="desktop-catalog-results"');
+        const afterList = markup.indexOf('is-after-product-list');
+        expect(afterHeader).toBeGreaterThan(-1);
+        expect(afterHeader).toBeLessThan(navigation);
+        expect(afterNavigation).toBeGreaterThan(navigation);
+        expect(afterNavigation).toBeLessThan(sidebarEnd);
+        expect(beforeList).toBeGreaterThan(toolbar);
+        expect(beforeList).toBeLessThan(list);
+        expect(afterList).toBeGreaterThan(list);
+        expect(markup.match(/class="category-client-plugin-slot /g)).toHaveLength(4);
+        expect(markup).toContain('class="desktop-catalog-workspace"');
+    });
+
     it.each(['home', 'category', 'search'] as const)('renders managed categories on %s', name => {
         const html = renderCategories({ name });
         expect(html).toContain('aria-label="商品分类"');
