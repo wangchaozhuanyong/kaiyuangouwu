@@ -1383,46 +1383,9 @@ html[lang='en'] .quick-grid b {
     line-height: var(--line-height-body);
 }
 
-.managed-ad-carousel-controls {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 5px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.managed-ad-carousel-controls > span {
-    margin-right: 4px;
-    font-variant-numeric: tabular-nums;
-}
-
-.managed-ad-carousel-controls > button {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-}
-
-.managed-ad-carousel-controls > button:hover {
-    background: var(--soft);
-}
-
-.managed-ad-carousel-controls > button:focus-visible,
 .managed-ad-carousel-rail > button:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
-}
-
-.managed-ad-carousel-controls svg {
-    width: 16px;
-    height: 16px;
 }
 
 @media (min-width: 900px) {

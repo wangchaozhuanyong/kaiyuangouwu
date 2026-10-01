@@ -1,7 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     Check,
-    ChevronLeft,
     ChevronRight,
     CircleCheck,
     Download,
@@ -864,27 +863,6 @@ export function ManagedAdCarousel({
                     />
                 ))}
             </div>
-            {items.length > 1 && (
-                <div className="managed-ad-carousel-controls">
-                    <span>
-                        {selected + 1} / {items.length}
-                    </span>
-                    <button
-                        type="button"
-                        aria-label={language === 'zh' ? '上一张广告' : 'Previous ad'}
-                        onClick={() => setCurrent(index => (index - 1 + items.length) % items.length)}
-                    >
-                        <ChevronLeft aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        aria-label={language === 'zh' ? '下一张广告' : 'Next ad'}
-                        onClick={() => setCurrent(index => (index + 1) % items.length)}
-                    >
-                        <ChevronRight aria-hidden="true" />
-                    </button>
-                </div>
-            )}
         </div>
     );
 }
