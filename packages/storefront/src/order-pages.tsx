@@ -51,6 +51,7 @@ import {
 import './styles/checkout-payment-surfaces.css';
 import './styles/logistics.css';
 import './styles/order-aftercare.css';
+import './styles/order-detail-drawer.css';
 import './styles/order-navigation.css';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
@@ -84,6 +85,7 @@ export function OrdersPage({
     onBack,
     onBuyAgain,
     onNotify,
+    onOpenOrder,
 }: {
     api: ShopApi;
     customer: ActiveCustomer | null;
@@ -95,9 +97,11 @@ export function OrdersPage({
     onBack: () => void;
     onBuyAgain: (order: OrderSummary) => Promise<void>;
     onNotify: (message: string) => void;
+    onOpenOrder?: (orderId: string) => void;
 }) {
     const navigate = useNavigate();
     const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
+    const openOrder = onOpenOrder ?? ((id: string) => navigateTo({ name: 'order-detail', id }));
     const isZh = language === 'zh';
     const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
@@ -363,7 +367,7 @@ export function OrdersPage({
                     locale={locale}
                     language={language}
                     onRetry={() => void afterSalesQuery.refetch()}
-                    onOpenOrder={orderId => navigateTo({ name: 'order-detail', id: orderId })}
+                    onOpenOrder={openOrder}
                     onCancel={id => void cancelAfterSales(id)}
                     onSubmitReturn={(id, carrier, trackingCode) =>
                         void submitAfterSalesReturn(id, carrier, trackingCode)
@@ -390,7 +394,7 @@ export function OrdersPage({
                             locale={locale}
                             language={language}
                             storefrontName={storefrontName}
-                            onOpen={() => navigateTo({ name: 'order-detail', id: order.id })}
+                            onOpen={() => openOrder(order.id)}
                             onBuyAgain={() => void onBuyAgain(order)}
                         />
                     ))}
@@ -601,7 +605,10 @@ function AfterSalesList({
                             <button
                                 type="button"
                                 className="after-sales-order-link"
-                                onClick={() => onOpenOrder(request.order.id)}
+                                onClick={() => {
+                                    setSelectedRequestId(null);
+                                    onOpenOrder(request.order.id);
+                                }}
                             >
                                 <span>
                                     {isZh ? `订单 ${request.order.code}` : `Order ${request.order.code}`}
@@ -869,7 +876,9 @@ export function OrderDetailPage({
     onConfirmDelivery,
     onUnavailable,
     onNotify,
+    presentation = 'page',
 }: {
+    presentation?: 'page' | 'drawer';
     api?: ShopApi;
     order: Order | null;
     market: MarketConfig;
@@ -889,7 +898,8 @@ export function OrderDetailPage({
 }) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
+    const isDrawer = presentation === 'drawer';
+    const desktop = useDesktopLayout() && !isDrawer;
     const [cancelOpen, setCancelOpen] = useState(false);
     const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
@@ -974,7 +984,7 @@ export function OrderDetailPage({
         </section>
     );
     const orderActions = !inCart && (
-        <div className={orderPageClassName('order-detail-actions')}>
+        <div className={isDrawer ? 'order-detail-actions' : orderPageClassName('order-detail-actions')}>
             {canCancel && (
                 <button
                     type="button"
@@ -1041,21 +1051,8 @@ export function OrderDetailPage({
             </span>
         </article>
     ));
-    return (
-        <main className={orderPageClassName('page subpage order-detail-page')}>
-            <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
-            <header className="delivery-linked-order-heading">
-                <h1>{isZh ? '订单详情' : 'Order details'}</h1>
-                <button className="delivery-back-link" type="button" onClick={onBack}>
-                    <ArrowLeft aria-hidden="true" />
-                    {backLabel ?? (isZh ? '返回' : 'Back')}
-                </button>
-            </header>
-            <section className={orderPageClassName('order-status')}>
-                <strong>{orderStateLabel(order.state, language)}</strong>
-                <span>{statusHint}</span>
-                <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
-            </section>
+    const deliveryPanel = (
+        <>
             {(physicalDeliveryLines(order).length > 0 || fulfillments.length > 0) && (
                 <section className="order-delivery-panel" id="order-logistics">
                     <header>
@@ -1090,7 +1087,7 @@ export function OrderDetailPage({
                                 <tbody>
                                     {fulfillments.map((fulfillment, index) => (
                                         <tr key={fulfillment.id}>
-                                            <td>
+                                            <td data-label={isZh ? '包裹 / 配送方式' : 'Package / method'}>
                                                 <strong>
                                                     {isZh ? `包裹 ${index + 1}` : `Package ${index + 1}`}
                                                 </strong>
@@ -1098,13 +1095,13 @@ export function OrderDetailPage({
                                                     {fulfillmentMethodLabel(fulfillment.method, language)}
                                                 </small>
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '运单号' : 'Tracking number'}>
                                                 <TrackingCode
                                                     code={fulfillment.trackingCode}
                                                     language={language}
                                                 />
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '配送状态' : 'Status'}>
                                                 <strong>
                                                     {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
                                                         ? isZh
@@ -1121,7 +1118,7 @@ export function OrderDetailPage({
                                                     </p>
                                                 )}
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '操作' : 'Action'}>
                                                 {fulfillment.state === 'Shipped' &&
                                                     fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
                                                         <button
@@ -1168,6 +1165,28 @@ export function OrderDetailPage({
                     )}
                 </section>
             )}
+        </>
+    );
+    const content = (
+        <>
+            {!isDrawer && (
+                <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
+            )}
+            {!isDrawer && (
+                <header className="delivery-linked-order-heading">
+                    <h1>{isZh ? '订单详情' : 'Order details'}</h1>
+                    <button className="delivery-back-link" type="button" onClick={onBack}>
+                        <ArrowLeft aria-hidden="true" />
+                        {backLabel ?? (isZh ? '返回' : 'Back')}
+                    </button>
+                </header>
+            )}
+            <section className={orderPageClassName('order-status')}>
+                <strong>{orderStateLabel(order.state, language)}</strong>
+                <span>{statusHint}</span>
+                <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
+            </section>
+            {!isDrawer && deliveryPanel}
             <section className={orderPageClassName('order-detail-products')}>
                 <header>
                     <strong>{storefrontName}</strong>
@@ -1180,9 +1199,13 @@ export function OrderDetailPage({
                         {orderActions}
                     </div>
                 ) : (
-                    orderProductRows
+                    <>
+                        {orderProductRows}
+                        {isDrawer && orderSummary}
+                    </>
                 )}
             </section>
+            {isDrawer && deliveryPanel}
             {!!digitalDeliveries.length && (
                 <section
                     className={orderPageClassName('digital-delivery-panel')}
@@ -1302,11 +1325,24 @@ export function OrderDetailPage({
                     </div>
                 )}
             </section>
-            {!desktop && (
+            {!desktop && !isDrawer && (
                 <>
                     {orderSummary}
                     {orderActions}
                 </>
+            )}
+        </>
+    );
+    const Container = isDrawer ? 'div' : 'main';
+    return (
+        <Container
+            className={
+                isDrawer ? 'order-detail-content' : orderPageClassName('page subpage order-detail-page')
+            }
+        >
+            {isDrawer ? <div className="order-detail-sheet-body">{content}</div> : content}
+            {isDrawer && orderActions && (
+                <footer className="order-detail-sheet-footer">{orderActions}</footer>
             )}
             {afterSalesOpen && (
                 <AfterSalesRequestSheet
@@ -1343,7 +1379,7 @@ export function OrderDetailPage({
                     onNotify={onNotify}
                 />
             )}
-        </main>
+        </Container>
     );
 }
 

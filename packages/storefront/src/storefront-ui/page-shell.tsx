@@ -577,7 +577,10 @@ export function Sheet({
             (initialFocus === 'dialog' ? dialog : (getFocusableElements()[0] ?? dialog)).focus();
         });
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
+            if (event.defaultPrevented || isInputMethodKey(event)) return;
+            // Only the frontmost modal owns keyboard navigation when a detail sheet opens a form.
+            const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+            if (dialogs[dialogs.length - 1] !== dialog) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onCloseRef.current();
