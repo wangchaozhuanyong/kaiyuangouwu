@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     attributionWithinWindow,
     captureReferralAttribution,
     normalizeReferralCode,
     readReferralAttribution,
+    referralShareUrl,
     storefrontVisitorId,
 } from './referral-attribution';
+import { setStorefrontPreviewParameters } from './storefront-preview-parameters';
 
 function memoryStorage() {
     const values = new Map<string, string>();
@@ -105,5 +107,29 @@ describe('referral attribution', () => {
                 () => 'visitor-device-id-00000003',
             ),
         ).toBeNull();
+    });
+});
+
+describe('referral share links', () => {
+    afterEach(() => {
+        setStorefrontPreviewParameters(new URLSearchParams());
+        vi.unstubAllGlobals();
+    });
+
+    it('keeps the public store origin and normalizes poster invitations', () => {
+        vi.stubGlobal('window', {
+            location: { origin: 'https://shop.example.test', href: 'https://shop.example.test/referral' },
+        });
+        expect(referralShareUrl(' ab 12 ', 'POSTER')).toBe(
+            'https://shop.example.test/register?ref=AB12&source=POSTER',
+        );
+    });
+
+    it('uses the existing preview document address inside an Admin srcdoc frame', () => {
+        vi.stubGlobal('window', { location: { origin: 'null', href: 'about:srcdoc' } });
+        setStorefrontPreviewParameters(
+            new URLSearchParams({ storefrontPreviewDocumentUrl: 'https://preview.example.test/' }),
+        );
+        expect(referralShareUrl('AB12')).toBe('https://preview.example.test/register?ref=AB12&source=LINK');
     });
 });

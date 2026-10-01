@@ -1,3 +1,5 @@
+import { storefrontDocumentUrl } from './storefront-preview-parameters';
+
 export type ReferralSource = 'LINK' | 'POSTER' | 'CODE';
 
 interface StoredReferralAttribution {
@@ -65,7 +67,7 @@ export function attributionWithinWindow(
 }
 
 export function referralShareUrl(code: string, source: ReferralSource = 'LINK'): string {
-    const url = new URL('/register', window.location.origin);
+    const url = new URL('/register', storefrontDocumentUrl() ?? window.location.origin);
     url.searchParams.set('ref', normalizeReferralCode(code));
     url.searchParams.set('source', source);
     return url.href;

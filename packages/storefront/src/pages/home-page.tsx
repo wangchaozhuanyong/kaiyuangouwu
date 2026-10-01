@@ -53,6 +53,7 @@ import {
     FlashSaleSection,
     HomeDualCategoryShowcase,
     ManagedAdCarousel,
+    ManagedContentItemButton,
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
@@ -81,7 +82,6 @@ import {
     MarketConfig,
     Product,
     StorefrontContentBlock,
-    StorefrontContentItem,
     StorefrontContentTargetType,
     StorefrontCouponCampaign,
     StorefrontFlashSale,
@@ -1601,6 +1601,11 @@ function ManagedContentSection({
             <SectionHeader
                 title={block.title}
                 subtitle={block.subtitle}
+                subtitlePlacement={
+                    block.type === 'CUSTOM' && block.settings?.displayMode === 'scrollingAds'
+                        ? 'end'
+                        : 'below'
+                }
                 action={blockHasTarget ? block.ctaLabel || undefined : undefined}
                 onAction={
                     blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
@@ -2051,54 +2056,6 @@ function ManagedSelectedProductButton({
                     {product.description ? <small>{trimText(product.description, 72)}</small> : null}
                 </span>
                 <ChevronRight aria-hidden="true" />
-            </span>
-        </button>
-    );
-}
-
-function ManagedContentItemButton({
-    item,
-    products,
-    onContentTarget,
-}: {
-    item: StorefrontContentItem;
-    products: Product[];
-    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-}) {
-    const disabled = item.targetType === 'NONE' || !item.targetValue;
-    const targetProduct =
-        item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
-    const targetProductImage = productImage(targetProduct);
-    return (
-        <button
-            className={`managed-content-card${targetProduct ? ' is-product-media' : ''}`}
-            type="button"
-            disabled={disabled}
-            onClick={() => onContentTarget(item.targetType, item.targetValue)}
-        >
-            <span className="managed-content-media" aria-hidden="true">
-                {item.imageUrl ? (
-                    <SafeImage
-                        src={item.imageUrl}
-                        fallbackSrc={targetProductImage ?? undefined}
-                        alt=""
-                        imageKind="card"
-                        loading="lazy"
-                    />
-                ) : targetProductImage ? (
-                    <SafeImage src={targetProductImage} alt="" imageKind="card" loading="lazy" />
-                ) : (
-                    <span className="managed-content-placeholder">
-                        <LayoutGrid aria-hidden="true" />
-                    </span>
-                )}
-            </span>
-            <span className="managed-content-copy">
-                <span>
-                    <strong>{item.label}</strong>
-                    {item.description && <small>{item.description}</small>}
-                </span>
-                {!disabled && <ChevronRight aria-hidden="true" />}
             </span>
         </button>
     );

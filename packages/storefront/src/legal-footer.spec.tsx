@@ -35,7 +35,7 @@ describe('LegalFooter', () => {
             />,
         );
 
-        expect(markup).toContain('服务与政策');
+        expect(markup).toContain('Demo Store');
         expect(markup).toContain('隐私政策');
         expect(markup).not.toContain(legalBlock.title);
         expect(markup).not.toContain(legalBlock.subtitle);

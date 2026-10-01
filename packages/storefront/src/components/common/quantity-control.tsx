@@ -9,6 +9,7 @@ export function QuantityControl({
     increaseLabel,
     decreaseDisabled = false,
     increaseDisabled = false,
+    compact = false,
     onDecrease,
     onIncrease,
 }: {
@@ -18,11 +19,16 @@ export function QuantityControl({
     increaseLabel: string;
     decreaseDisabled?: boolean;
     increaseDisabled?: boolean;
+    compact?: boolean;
     onDecrease: () => void;
     onIncrease: () => void;
 }) {
     return (
-        <span className="quantity-control" role="group" aria-label={label}>
+        <span
+            className={compact ? 'quantity-control is-compact' : 'quantity-control'}
+            role="group"
+            aria-label={label}
+        >
             <button type="button" aria-label={decreaseLabel} disabled={decreaseDisabled} onClick={onDecrease}>
                 <Minus aria-hidden="true" />
             </button>

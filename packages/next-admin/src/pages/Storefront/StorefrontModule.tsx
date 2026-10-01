@@ -138,6 +138,9 @@ export function StorefrontModule() {
     const allBlocks = channelConsistent ? (query.data?.storefrontContentBlocks ?? []) : [];
     const homepageRows = storefrontHomepageRows(allBlocks);
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
+    const scrollingAdBlocks = homepageBlocks.filter(
+        block => block.type === 'CUSTOM' && block.settings?.displayMode === 'scrollingAds',
+    );
     const configuredTypes = new Set(homepageBlocks.map(block => block.type));
     const visibleBlocks = allBlocks.filter(
         block =>
@@ -526,21 +529,28 @@ export function StorefrontModule() {
                             {homepageModuleDescriptors
                                 .filter(descriptor => descriptor.type !== 'HERO')
                                 .map(descriptor => {
-                                    const existing = homepageBlocks.find(
-                                        block => block.type === descriptor.type,
-                                    );
+                                    const custom = descriptor.type === 'CUSTOM';
+                                    const existing = custom
+                                        ? undefined
+                                        : homepageBlocks.find(block => block.type === descriptor.type);
                                     return (
                                         <button
                                             key={descriptor.type}
                                             type="button"
+                                            aria-label={custom ? `新增${descriptor.name}` : undefined}
                                             disabled={pending || !(existing ? canUpdate : canCreate)}
                                             onClick={() =>
                                                 openEditor(
                                                     existing ??
                                                         newContentBlock(
                                                             descriptor.type,
-                                                            allBlocks.length,
-                                                            descriptor.name,
+                                                            Math.max(
+                                                                -1,
+                                                                ...allBlocks.map(block => block.position),
+                                                            ) + 1,
+                                                            custom
+                                                                ? `${descriptor.name} ${homepageBlocks.filter(block => block.type === 'CUSTOM' && block.settings?.displayMode !== 'scrollingAds').length + 1}`
+                                                                : descriptor.name,
                                                         ),
                                                 )
                                             }
@@ -557,27 +567,61 @@ export function StorefrontModule() {
                                             <span
                                                 className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold ${existing ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                                             >
-                                                {existing ? '已配置' : '配置'}
+                                                {custom ? '新增' : existing ? '已配置' : '配置'}
                                             </span>
                                         </button>
                                     );
                                 })}
-                            <button
-                                type="button"
-                                disabled={pending || !canCreate}
-                                onClick={addScrollingAds}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left hover:border-blue-300 hover:bg-blue-50/40"
-                            >
-                                <span className="min-w-0">
-                                    <strong className="block text-xs text-slate-800">新增滚动广告楼层</strong>
-                                    <small className="mt-1 block text-[10px] leading-4 text-slate-400">
-                                        可重复添加，每组独立配置图片、文案、跳转和轮播间隔。
-                                    </small>
-                                </span>
-                                <span className="shrink-0 rounded bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
-                                    新增
-                                </span>
-                            </button>
+                            <div className="rounded-lg border border-slate-200 p-3 sm:col-span-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <strong className="flex items-center gap-2 text-xs text-slate-800">
+                                            滚动广告楼层
+                                            <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                                                已配置 {scrollingAdBlocks.length} 组
+                                            </span>
+                                        </strong>
+                                        <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                                            每组独立配置标题、副标题、图片、跳转和轮播间隔，可重复添加。
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={pending || !canCreate}
+                                        onClick={addScrollingAds}
+                                        className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50"
+                                    >
+                                        新增滚动广告楼层
+                                    </button>
+                                </div>
+                                {scrollingAdBlocks.length > 0 && (
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                        {scrollingAdBlocks.map(block => (
+                                            <button
+                                                key={block.id ?? block.code}
+                                                type="button"
+                                                aria-label={`编辑滚动广告：${block.internalName}`}
+                                                disabled={pending || !canUpdate}
+                                                onClick={() => openEditor(block)}
+                                                className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-slate-50 p-3 text-left hover:bg-blue-50/40 disabled:opacity-50"
+                                            >
+                                                <span className="min-w-0">
+                                                    <strong className="block truncate text-xs text-slate-800">
+                                                        {blockTranslation(block, 'zh_Hans').title ||
+                                                            block.internalName}
+                                                    </strong>
+                                                    <small className="mt-1 block truncate text-[10px] text-slate-400">
+                                                        {block.internalName} · {block.items.length} 个子项
+                                                    </small>
+                                                </span>
+                                                <span className="shrink-0 text-[11px] font-bold text-blue-700">
+                                                    编辑
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </section>
                 </div>

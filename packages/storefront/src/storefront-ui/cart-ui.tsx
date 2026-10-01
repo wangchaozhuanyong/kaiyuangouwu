@@ -673,45 +673,46 @@ export function SwipeableCartLine({
                             )}
                         </small>
                     )}
-                    <div className="cart-line-purchase-row">
-                        <b>
-                            {quoteOnly
-                                ? quoteLabel
-                                : variant
-                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                  : formatMoney(0, market.currencyCode, locale)}
-                        </b>
-                        <div className="cart-line-actions">
-                            <QuantityControl
-                                value={line.quantity}
-                                label={isZh ? `${productName} 购买数量` : `${productName} quantity`}
-                                decreaseLabel={
-                                    line.quantity === 1
-                                        ? isZh
-                                            ? `减少 ${productName} 数量并删除商品`
-                                            : `Decrease ${productName} quantity and remove item`
-                                        : isZh
-                                          ? `减少 ${productName} 数量`
-                                          : `Decrease ${productName} quantity`
-                                }
-                                onDecrease={() =>
-                                    line.quantity === 1
-                                        ? onRemove(line.id)
-                                        : onQuantity(line.id, line.quantity - 1)
-                                }
-                                decreaseDisabled={loading}
-                                increaseLabel={
-                                    isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
-                                }
-                                onIncrease={() => onQuantity(line.id, line.quantity + 1)}
-                                increaseDisabled={
-                                    loading ||
-                                    !line.available ||
-                                    !variant ||
-                                    !variantCanIncreaseQuantity(variant, line.quantity)
-                                }
-                            />
-                        </div>
+                </div>
+                <div className="cart-line-purchase-row">
+                    <b>
+                        {quoteOnly
+                            ? quoteLabel
+                            : variant
+                              ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                              : formatMoney(0, market.currencyCode, locale)}
+                    </b>
+                    <div className="cart-line-actions">
+                        <QuantityControl
+                            compact
+                            value={line.quantity}
+                            label={isZh ? `${productName} 购买数量` : `${productName} quantity`}
+                            decreaseLabel={
+                                line.quantity === 1
+                                    ? isZh
+                                        ? `减少 ${productName} 数量并删除商品`
+                                        : `Decrease ${productName} quantity and remove item`
+                                    : isZh
+                                      ? `减少 ${productName} 数量`
+                                      : `Decrease ${productName} quantity`
+                            }
+                            onDecrease={() =>
+                                line.quantity === 1
+                                    ? onRemove(line.id)
+                                    : onQuantity(line.id, line.quantity - 1)
+                            }
+                            decreaseDisabled={loading}
+                            increaseLabel={
+                                isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
+                            }
+                            onIncrease={() => onQuantity(line.id, line.quantity + 1)}
+                            increaseDisabled={
+                                loading ||
+                                !line.available ||
+                                !variant ||
+                                !variantCanIncreaseQuantity(variant, line.quantity)
+                            }
+                        />
                     </div>
                 </div>
             </div>

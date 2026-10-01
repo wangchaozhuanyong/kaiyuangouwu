@@ -150,6 +150,60 @@
     font-size: 17px;
     font-weight: 600;
 }
+.referral-reward-help {
+    position: relative;
+    flex-shrink: 0;
+}
+.referral-reward-help-trigger {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.referral-reward-help-trigger svg {
+    width: 16px;
+    height: 16px;
+}
+.referral-reward-help-trigger:hover,
+.referral-reward-help-trigger[aria-expanded='true'] {
+    color: var(--accent-ink);
+}
+.referral-reward-help-trigger:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+.referral-reward-help-popover {
+    position: absolute;
+    inset-inline-end: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    width: min(18rem, calc(100vw - 4.5rem));
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.8;
+    text-align: start;
+    box-shadow: var(--skin-card-hover-shadow);
+}
+.referral-reward-help-popover strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
 .referral-stat-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -205,23 +259,30 @@
     font-variant-numeric: tabular-nums;
 }
 .referral-record-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
     margin-bottom: 16px;
+    padding: 4px;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
 }
 .referral-record-tabs button {
     display: inline-flex;
+    min-width: 0;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 6px;
     min-height: 44px;
-    padding: 10px 12px;
+    padding: 10px 8px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    background: transparent;
     color: var(--text-soft);
     font: inherit;
     font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
     cursor: pointer;
 }
 .referral-record-tabs button:hover {
@@ -234,6 +295,7 @@
 }
 .referral-record-tabs span {
     font-size: 12px;
+    opacity: 0.8;
     font-variant-numeric: tabular-nums;
 }
 .referral-records :focus-visible {

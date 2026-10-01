@@ -434,19 +434,7 @@ export function LegalFooter({
 
     return (
         <footer className="legal-footer">
-            <div className="legal-footer-identity">
-                <strong>
-                    <button
-                        type="button"
-                        className="legal-footer-entry"
-                        disabled={!onContentTarget}
-                        onClick={() => onContentTarget?.('PAGE', '#/legal?id=privacy')}
-                    >
-                        {footerTitle}
-                    </button>
-                </strong>
-                <span className="legal-footer-brand">{storefrontName}</span>
-            </div>
+            <strong className="legal-footer-brand">{storefrontName}</strong>
             {!!footerItems.length && (
                 <nav aria-label={footerTitle}>
                     {footerItems.map(item => (

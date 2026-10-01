@@ -56,7 +56,14 @@ vi.mock('./StorefrontBlockEditor', () => ({
         value: StorefrontContentBlock;
         onSave: (value: StorefrontContentBlock) => Promise<void>;
     }) => (
-        <button aria-label="保存测试草稿" onClick={() => void onSave(value)}>
+        <button
+            aria-label="保存测试草稿"
+            data-block-id={value.id ?? 'new'}
+            data-block-type={value.type}
+            data-block-position={value.position}
+            data-display-mode={value.settings?.displayMode as string}
+            onClick={() => void onSave(value)}
+        >
             保存测试草稿
         </button>
     ),
@@ -157,6 +164,74 @@ afterEach(() => {
 });
 
 describe('store scoped verified content writes', () => {
+    it('creates independent custom card floors repeatedly without editing existing custom ads or images', async () => {
+        const existing = {
+            ...newContentBlock('CUSTOM', 10, '空间灵感'),
+            id: 'existing-ad',
+            updatedAt: core.updatedAt,
+            settings: { displayMode: 'scrollingAds' },
+            imageAssetId: 'existing-image',
+            items: [item],
+        };
+        current.storefrontContentBlocks.push(existing);
+        mocks.create.mockImplementation(({ variables: { input } }) => {
+            const saved = {
+                ...input,
+                id: `custom-${mocks.create.mock.calls.length}`,
+                updatedAt: core.updatedAt,
+            };
+            current.storefrontContentBlocks.push(saved);
+            return Promise.resolve({ data: { createStorefrontContentBlock: saved } });
+        });
+        mocks.refetch.mockImplementation(() => Promise.resolve({ data: current }));
+        await render();
+        for (const position of [11, 12]) {
+            await click('新增自定义图文／卡片模块');
+            const draft = button('保存测试草稿');
+            expect(draft.dataset.blockId).toBe('new');
+            expect(draft.dataset.blockType).toBe('CUSTOM');
+            expect(draft.dataset.displayMode).toBeUndefined();
+            expect(draft.dataset.blockPosition).toBe(String(position));
+            await click('保存测试草稿');
+            expect(host.querySelector('[role="alert"]')).toBeNull();
+            expect(host.querySelector('button[aria-label="保存测试草稿"]')).toBeNull();
+        }
+        expect(mocks.create).toHaveBeenCalledTimes(2);
+        const inputs = mocks.create.mock.calls.map(([request]) => request.variables.input);
+        expect(inputs.map(input => input.position)).toEqual([11, 12]);
+        expect(inputs.every(input => input.enabled === false && input.type === 'CUSTOM')).toBe(true);
+        expect(new Set(inputs.map(input => input.code)).size).toBe(2);
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(current.storefrontContentBlocks.find(block => block.id === existing.id)).toEqual(existing);
+        expect(button('新增自定义图文／卡片模块').disabled).toBe(false);
+    });
+
+    it('opens each configured scrolling ad independently and keeps adding a separate draft', async () => {
+        const ads = ['空间灵感', '新品灵感'].map((name, index) => ({
+            ...newContentBlock('CUSTOM', index + 1, name),
+            id: `ad-${index}`,
+            updatedAt: core.updatedAt,
+            settings: { displayMode: 'scrollingAds', scrollIntervalSeconds: 6 },
+            items: [{ ...item, id: `ad-item-${index}` }],
+        }));
+        current.storefrontContentBlocks.push(...ads, newContentBlock('CUSTOM', 3, '普通图文'));
+        await render();
+        expect(host.textContent).toContain('已配置 2 组');
+        expect(host.querySelector('[aria-label="编辑滚动广告：普通图文"]')).toBeNull();
+        for (const ad of ads) {
+            await click(`编辑滚动广告：${ad.internalName}`);
+            expect(button('保存测试草稿').dataset.blockId).toBe(ad.id);
+        }
+        const add = Array.from(host.querySelectorAll('button')).find(
+            node => node.textContent === '新增滚动广告楼层',
+        );
+        await act(async () => add!.click());
+        expect(button('保存测试草稿').dataset.blockId).toBe('new');
+        expect(button('保存测试草稿').dataset.displayMode).toBe('scrollingAds');
+        expect(mocks.create).not.toHaveBeenCalled();
+        expect(mocks.update).not.toHaveBeenCalled();
+    });
+
     it('removes the personal account background editor from store settings', async () => {
         await render();
         const settings = Array.from(host.querySelectorAll('button')).find(node =>

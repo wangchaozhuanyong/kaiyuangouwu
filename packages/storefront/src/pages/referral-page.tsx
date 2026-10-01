@@ -13,7 +13,7 @@ import {
     Users,
     WalletCards,
 } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 const REFERRAL_LIST_PAGE_SIZE = 10;
 
@@ -479,23 +479,61 @@ function SummaryCard({
 }
 
 function RewardInfo({ isZh, releaseDelayDays }: { isZh: boolean; releaseDelayDays: number }) {
+    const [open, setOpen] = useState(false);
+    const helpRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const helpId = useId();
+
+    useEffect(() => {
+        if (!open) return;
+        const closeOutside = (event: Event) => {
+            if (event.target instanceof Node && !helpRef.current?.contains(event.target)) {
+                setOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            setOpen(false);
+            buttonRef.current?.focus();
+        };
+        document.addEventListener('pointerdown', closeOutside);
+        document.addEventListener('focusin', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOutside);
+            document.removeEventListener('focusin', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [open]);
+
     return (
-        <details className="group relative">
-            <summary
-                className="grid size-11 shrink-0 cursor-pointer list-none place-items-center rounded-full border border-[var(--line)] bg-[var(--soft)] text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
+        <div ref={helpRef} className="referral-reward-help">
+            <button
+                ref={buttonRef}
+                type="button"
+                className="referral-reward-help-trigger"
                 aria-label={isZh ? '查看奖励说明' : 'View reward details'}
+                aria-expanded={open}
+                aria-controls={helpId}
+                onClick={() => setOpen(value => !value)}
             >
-                <Info className="size-4" aria-hidden="true" />
-            </summary>
+                <Info aria-hidden="true" />
+                <span>{isZh ? '奖励说明' : 'Reward details'}</span>
+            </button>
             <div
-                className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-3.5rem))] rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] p-3 text-left text-xs font-medium leading-5 text-[var(--text-soft)] shadow-[var(--skin-card-hover-shadow)]"
+                id={helpId}
+                className="referral-reward-help-popover"
                 role="note"
+                tabIndex={-1}
+                hidden={!open}
             >
+                <strong>{isZh ? '奖励生效与使用' : 'Availability and use'}</strong>
                 {isZh
                     ? `奖励在订单成功后进入待生效，默认 ${releaseDelayDays} 天后可用，可用于消费抵扣。`
                     : `Rewards become available ${releaseDelayDays} days after payment and can be applied to future orders.`}
             </div>
-        </details>
+        </div>
     );
 }
 

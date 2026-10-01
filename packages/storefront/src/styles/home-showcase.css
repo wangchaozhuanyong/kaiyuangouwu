@@ -1383,46 +1383,24 @@ html[lang='en'] .quick-grid b {
     line-height: var(--line-height-body);
 }
 
-.managed-ad-carousel-controls {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 5px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.managed-ad-carousel-controls > span {
-    margin-right: 4px;
-    font-variant-numeric: tabular-nums;
-}
-
-.managed-ad-carousel-controls > button {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-}
-
-.managed-ad-carousel-controls > button:hover {
-    background: var(--soft);
-}
-
-.managed-ad-carousel-controls > button:focus-visible,
 .managed-ad-carousel-rail > button:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
-.managed-ad-carousel-controls svg {
-    width: 16px;
-    height: 16px;
+@media (max-width: 899px) {
+    .managed-ad-carousel-rail > .is-product-media {
+        flex-basis: min(48%, 200px);
+        grid-template-rows: auto 1fr;
+    }
+
+    .managed-ad-carousel-rail .is-product-media .managed-content-copy {
+        grid-template-columns: minmax(0, 1fr) 18px;
+    }
+
+    .managed-ad-carousel-rail .is-product-media .managed-content-copy > span {
+        align-self: start;
+    }
 }
 
 @media (min-width: 900px) {
@@ -1446,7 +1424,7 @@ html[lang='en'] .quick-grid b {
 
 .managed-content-media {
     width: 100%;
-    aspect-ratio: var(--product-media-ratio);
+    aspect-ratio: 16 / 9;
     overflow: hidden;
     background: var(--product-media-bg);
     display: block;
@@ -1469,6 +1447,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .managed-content-card.is-product-media .managed-content-media {
+    aspect-ratio: var(--product-media-ratio);
     border-radius: var(--radius-md);
 }
 
@@ -2173,6 +2152,15 @@ html[lang='en'] .quick-grid b {
 
 .section-header.has-end-subtitle .section-header-title-lockup {
     min-width: 0;
+    max-width: 65%;
+    flex-shrink: 0;
+}
+
+.section-header.has-end-subtitle h2 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .section-header.has-end-subtitle {
@@ -2448,42 +2436,15 @@ html[lang='en'] .quick-grid b {
     font-size: 12px;
 }
 
-.legal-footer-identity {
+.legal-footer-brand {
+    display: flex;
     min-width: 0;
-}
-
-.legal-footer strong {
-    display: block;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: var(--font-weight-semibold);
-}
-
-.legal-footer-entry {
-    display: inline-flex;
     min-height: 44px;
     align-items: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: start;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-}
-
-.legal-footer-entry:hover:not(:disabled) {
-    color: var(--accent-ink);
-}
-
-.legal-footer-entry:disabled {
-    cursor: default;
-}
-
-.legal-footer-brand {
-    display: block;
-    line-height: var(--line-height-relaxed);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
     overflow-wrap: anywhere;
 }
 
@@ -2502,6 +2463,7 @@ html[lang='en'] .quick-grid b {
     border: 0;
     background: transparent;
     color: inherit;
+    font: inherit;
     text-align: end;
     overflow-wrap: anywhere;
     text-decoration: none;
