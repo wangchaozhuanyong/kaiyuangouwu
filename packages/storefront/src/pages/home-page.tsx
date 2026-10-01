@@ -1601,6 +1601,11 @@ function ManagedContentSection({
             <SectionHeader
                 title={block.title}
                 subtitle={block.subtitle}
+                subtitlePlacement={
+                    block.type === 'CUSTOM' && block.settings?.displayMode === 'scrollingAds'
+                        ? 'end'
+                        : 'below'
+                }
                 action={blockHasTarget ? block.ctaLabel || undefined : undefined}
                 onAction={
                     blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined

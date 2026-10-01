@@ -2173,6 +2173,15 @@ html[lang='en'] .quick-grid b {
 
 .section-header.has-end-subtitle .section-header-title-lockup {
     min-width: 0;
+    max-width: 65%;
+    flex-shrink: 0;
+}
+
+.section-header.has-end-subtitle h2 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .section-header.has-end-subtitle {

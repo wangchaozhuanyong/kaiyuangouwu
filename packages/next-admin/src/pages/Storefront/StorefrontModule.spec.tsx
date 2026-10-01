@@ -56,7 +56,12 @@ vi.mock('./StorefrontBlockEditor', () => ({
         value: StorefrontContentBlock;
         onSave: (value: StorefrontContentBlock) => Promise<void>;
     }) => (
-        <button aria-label="保存测试草稿" onClick={() => void onSave(value)}>
+        <button
+            aria-label="保存测试草稿"
+            data-block-id={value.id ?? 'new'}
+            data-display-mode={value.settings?.displayMode as string}
+            onClick={() => void onSave(value)}
+        >
             保存测试草稿
         </button>
     ),
@@ -157,6 +162,32 @@ afterEach(() => {
 });
 
 describe('store scoped verified content writes', () => {
+    it('opens each configured scrolling ad independently and keeps adding a separate draft', async () => {
+        const ads = ['空间灵感', '新品灵感'].map((name, index) => ({
+            ...newContentBlock('CUSTOM', index + 1, name),
+            id: `ad-${index}`,
+            updatedAt: core.updatedAt,
+            settings: { displayMode: 'scrollingAds', scrollIntervalSeconds: 6 },
+            items: [{ ...item, id: `ad-item-${index}` }],
+        }));
+        current.storefrontContentBlocks.push(...ads, newContentBlock('CUSTOM', 3, '普通图文'));
+        await render();
+        expect(host.textContent).toContain('已配置 2 组');
+        expect(host.querySelector('[aria-label="编辑滚动广告：普通图文"]')).toBeNull();
+        for (const ad of ads) {
+            await click(`编辑滚动广告：${ad.internalName}`);
+            expect(button('保存测试草稿').dataset.blockId).toBe(ad.id);
+        }
+        const add = Array.from(host.querySelectorAll('button')).find(
+            node => node.textContent === '新增滚动广告楼层',
+        );
+        await act(async () => add!.click());
+        expect(button('保存测试草稿').dataset.blockId).toBe('new');
+        expect(button('保存测试草稿').dataset.displayMode).toBe('scrollingAds');
+        expect(mocks.create).not.toHaveBeenCalled();
+        expect(mocks.update).not.toHaveBeenCalled();
+    });
+
     it('removes the personal account background editor from store settings', async () => {
         await render();
         const settings = Array.from(host.querySelectorAll('button')).find(node =>
