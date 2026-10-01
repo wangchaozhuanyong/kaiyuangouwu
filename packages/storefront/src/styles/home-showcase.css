@@ -1411,6 +1411,12 @@ html[lang='en'] .quick-grid b {
     .managed-ad-carousel.is-product-carousel .managed-ad-carousel-rail > button {
         flex-basis: min(32%, 360px);
     }
+
+    .managed-ad-carousel:not(.is-product-carousel)
+        .managed-ad-carousel-rail:has(> button:nth-child(3))
+        > button {
+        flex-basis: calc((100% - 24px) / 3);
+    }
 }
 
 .managed-content-grid > button:hover:not(:disabled) {
