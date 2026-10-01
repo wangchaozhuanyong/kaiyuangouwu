@@ -646,49 +646,51 @@ function CustomerServiceEvaluationSection({
                         </div>
                     ) : null}
 
-                    <div className="support-rating-row">
-                        <div
-                            className="support-stars"
-                            role="radiogroup"
-                            aria-label={isZh ? '服务评分' : 'Rating'}
-                        >
-                            {[1, 2, 3, 4, 5].map(star => (
-                                <button
-                                    type="button"
-                                    key={star}
-                                    className={`support-star-btn ${star <= rating ? 'is-active' : ''}`}
-                                    onClick={() => setRating(star)}
-                                    aria-label={`${star} star`}
-                                    aria-pressed={star === rating}
-                                >
-                                    <Star
-                                        size={24}
-                                        fill={star <= rating ? 'currentColor' : 'none'}
-                                        aria-hidden="true"
-                                    />
-                                </button>
-                            ))}
+                    <div className="support-evaluation-options">
+                        <div className="support-rating-row">
+                            <div
+                                className="support-stars"
+                                role="radiogroup"
+                                aria-label={isZh ? '服务评分' : 'Rating'}
+                            >
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                        type="button"
+                                        key={star}
+                                        className={`support-star-btn ${star <= rating ? 'is-active' : ''}`}
+                                        onClick={() => setRating(star)}
+                                        aria-label={`${star} star`}
+                                        aria-pressed={star === rating}
+                                    >
+                                        <Star
+                                            size={24}
+                                            fill={star <= rating ? 'currentColor' : 'none'}
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                            <span className="support-rating-text">
+                                {ratingLabels[rating] || (isZh ? '请选择评分' : 'Choose a rating')}
+                            </span>
                         </div>
-                        <span className="support-rating-text">
-                            {ratingLabels[rating] || (isZh ? '请选择评分' : 'Choose a rating')}
-                        </span>
-                    </div>
 
-                    <div className="support-evaluation-tags">
-                        {tags.map(tag => {
-                            const active = selectedTags.includes(tag.code);
-                            return (
-                                <button
-                                    type="button"
-                                    key={tag.code}
-                                    className={`support-tag-btn ${active ? 'is-active' : ''}`}
-                                    onClick={() => toggleTag(tag.code)}
-                                    aria-pressed={active}
-                                >
-                                    {tag.label}
-                                </button>
-                            );
-                        })}
+                        <div className="support-evaluation-tags">
+                            {tags.map(tag => {
+                                const active = selectedTags.includes(tag.code);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={tag.code}
+                                        className={`support-tag-btn ${active ? 'is-active' : ''}`}
+                                        onClick={() => toggleTag(tag.code)}
+                                        aria-pressed={active}
+                                    >
+                                        {tag.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <textarea
