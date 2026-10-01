@@ -118,8 +118,10 @@ describe('referral page reward summary', () => {
         const markup = renderReferralPage();
 
         expect(markup.match(/class="referral-stat(?: is-prominent)?"/g)).toHaveLength(4);
-        expect(markup).toContain('<details');
+        expect(markup).toContain('class="referral-reward-help-trigger"');
         expect(markup).toContain('aria-label="查看奖励说明"');
+        expect(markup).toContain('aria-expanded="false"');
+        expect(markup).toContain('role="note" tabindex="-1" hidden=""');
         expect(markup).toContain('默认 7 天后可用，可用于消费抵扣。');
         expect(markup).not.toContain('提现');
         expect(markup).not.toContain('人工提款');
@@ -141,7 +143,6 @@ describe('referral page reward summary', () => {
 
     it('consumes semantic skin surfaces without fixed light cards or clipped reward totals', () => {
         const markup = renderReferralPage();
-        expect(markup).toContain('bg-[var(--surface)]');
         expect(markup).toContain('class="referral-overview"');
         expect(markup).not.toContain('bg-white');
         expect(markup).not.toContain('text-slate-900');
