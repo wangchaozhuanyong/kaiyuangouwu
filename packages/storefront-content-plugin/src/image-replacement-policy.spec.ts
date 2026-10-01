@@ -80,3 +80,18 @@ describe('promotion source image ownership', () => {
         ).toMatchObject([{ before: '/share.png' }]);
     });
 });
+
+it('preserves decoration bindings for copy edits and reviews replacement or clearing', () => {
+    const previous = {
+        settings: { mobileDecorationImageAssetId: 'skyline', mobileDecorationImageUrl: '/skyline.webp' },
+    };
+    expect(
+        imageReplacements(previous, { settings: { ...previous.settings, formTitleZh: '登录账户' } }),
+    ).toEqual([]);
+    expect(imageReplacements(previous, { settings: {} })).toMatchObject([
+        { slot: 'mobile-decoration', before: 'asset:skyline', after: null },
+    ]);
+    expect(imageReplacements(previous, { settings: { mobileDecorationImageAssetId: 'new' } })).toMatchObject([
+        { slot: 'mobile-decoration', after: 'asset:new' },
+    ]);
+});

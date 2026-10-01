@@ -309,16 +309,18 @@ export class ShopApi {
 
     submitReview = (input: SubmitStorefrontReviewInput) => this.contentReviewsApi.submitReview(input);
 
-    async login(emailAddress: string, password: string): Promise<void> {
-        await this.accountApi.login(emailAddress, password);
+    async login(emailAddress: string, password: string, rememberMe = true): Promise<void> {
+        await this.accountApi.login(emailAddress, password, rememberMe);
         this.publishCookieAuthenticationChange();
     }
 
     async authenticateWithGoogle(
         credential: string,
         consent: StorefrontRegistrationConsentInput,
+        options: { rememberMe?: boolean; inviteCode?: string; referralSource?: string } = {},
     ): Promise<void> {
-        return this.accountApi.authenticateWithGoogle(credential, consent);
+        await this.accountApi.authenticateWithGoogle(credential, consent, options);
+        this.publishCookieAuthenticationChange();
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {

@@ -469,11 +469,15 @@ describe('ShopApi storefront mutations', () => {
         });
 
         await expect(
-            new ShopApi(market).authenticateWithGoogle('signed-google-id-token', {
-                termsAccepted: true,
-                privacyAcknowledged: true,
-                locale: 'en',
-            }),
+            new ShopApi(market).authenticateWithGoogle(
+                'signed-google-id-token',
+                {
+                    termsAccepted: true,
+                    privacyAcknowledged: true,
+                    locale: 'en',
+                },
+                { rememberMe: false, inviteCode: 'ABC123', referralSource: 'LINK' },
+            ),
         ).resolves.toBe(undefined);
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
             query: string;
@@ -485,6 +489,9 @@ describe('ShopApi storefront mutations', () => {
             termsAccepted: true,
             privacyAcknowledged: true,
             locale: 'en',
+            rememberMe: false,
+            inviteCode: 'ABC123',
+            referralSource: 'LINK',
         });
     });
 

@@ -1,4 +1,5 @@
 import { ExternalAuthenticationService, SettingsStoreService } from '@vendure/core';
+import { ReferralService } from '@vendure/store-management-plugin';
 import { storefrontAuthSettingKeys } from '@vendure/storefront-content-plugin';
 import { OAuth2Client } from 'google-auth-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,8 @@ import {
     STOREFRONT_GOOGLE_AUTH_INVALID,
     STOREFRONT_GOOGLE_AUTH_UNAVAILABLE,
     STOREFRONT_GOOGLE_CONSENT_REQUIRED,
+    STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED,
+    STOREFRONT_GOOGLE_INVITE_INVALID,
     StorefrontGoogleAuthenticationStrategy,
 } from './storefront-google-authentication-strategy';
 
@@ -40,17 +43,21 @@ function setup(options?: { enabled?: boolean; googleClientId?: string | null }) 
         }),
         recordRegistrationByEmail: vi.fn().mockResolvedValue(undefined),
     };
+    const referrals = {
+        registerExternalCustomer: vi.fn((_ctx, _email, _code, _source, create) => create(ctx)),
+    };
     const injector = {
         get(token: unknown) {
             if (token === ExternalAuthenticationService) return externalAuthenticationService;
             if (token === SettingsStoreService) return settingsStore;
+            if (token === ReferralService) return referrals;
             if (token === DATA_CONSENT_SERVICE_TOKEN) return consentService;
             throw new Error('Unexpected dependency');
         },
     };
     const strategy = new StorefrontGoogleAuthenticationStrategy();
     strategy.init(injector as never);
-    return { strategy, consentService, externalAuthenticationService, settingsStore };
+    return { strategy, consentService, externalAuthenticationService, settingsStore, referrals };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -158,6 +165,64 @@ describe('StorefrontGoogleAuthenticationStrategy', () => {
             STOREFRONT_GOOGLE_AUTH_INVALID,
         );
         expect(externalAuthenticationService.findCustomerUser).not.toHaveBeenCalled();
+        expect(externalAuthenticationService.createCustomerAndUser).not.toHaveBeenCalled();
+    });
+    it('does not link a third-party email even when its old Google claim was verified', async () => {
+        const { strategy, externalAuthenticationService, referrals } = setup();
+        vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+            getPayload: () => ({ sub: 'third-party', email: 'buyer@example.com', email_verified: true }),
+        } as never);
+        await expect(strategy.authenticate(ctx as never, googleData('signed-token'))).resolves.toBe(
+            STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED,
+        );
+        expect(externalAuthenticationService.createCustomerAndUser).not.toHaveBeenCalled();
+        expect(referrals.registerExternalCustomer).not.toHaveBeenCalled();
+    });
+
+    it('accepts Workspace and passes referral attribution through the registration transaction', async () => {
+        const { strategy, externalAuthenticationService, referrals } = setup();
+        const created = { id: 'workspace-user' };
+        externalAuthenticationService.createCustomerAndUser.mockResolvedValue(created);
+        vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+            getPayload: () => ({
+                sub: 'workspace',
+                email: 'buyer@example.com',
+                hd: 'example.com',
+                email_verified: true,
+            }),
+        } as never);
+        await expect(
+            strategy.authenticate(ctx as never, {
+                ...googleData('signed-token'),
+                inviteCode: 'ABC123',
+                referralSource: 'LINK',
+            }),
+        ).resolves.toBe(created);
+        expect(referrals.registerExternalCustomer).toHaveBeenCalledWith(
+            ctx,
+            'buyer@example.com',
+            'ABC123',
+            'LINK',
+            expect.any(Function),
+        );
+    });
+
+    it('reports invalid invitations and rejects invalid or expired tokens without creating users', async () => {
+        const { strategy, externalAuthenticationService, referrals } = setup();
+        const verify = vi
+            .spyOn(OAuth2Client.prototype, 'verifyIdToken')
+            .mockRejectedValue(new Error('expired'));
+        await expect(strategy.authenticate(ctx as never, googleData('expired-token'))).resolves.toBe(
+            STOREFRONT_GOOGLE_AUTH_INVALID,
+        );
+        expect(referrals.registerExternalCustomer).not.toHaveBeenCalled();
+        verify.mockResolvedValue({
+            getPayload: () => ({ sub: 'new', email: 'new@gmail.com', email_verified: true }),
+        } as never);
+        referrals.registerExternalCustomer.mockRejectedValue(new Error(STOREFRONT_GOOGLE_INVITE_INVALID));
+        await expect(strategy.authenticate(ctx as never, googleData('signed-token'))).resolves.toBe(
+            STOREFRONT_GOOGLE_INVITE_INVALID,
+        );
         expect(externalAuthenticationService.createCustomerAndUser).not.toHaveBeenCalled();
     });
 });

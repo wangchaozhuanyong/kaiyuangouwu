@@ -3,6 +3,7 @@ export interface ImageBinding {
     imageAsset?: { id: string | number } | null;
     imageAssetId?: string | number | null;
     imageUrl?: string | null;
+    settings?: Record<string, unknown> | null;
 }
 
 interface ImageItem extends ImageBinding {
@@ -37,6 +38,26 @@ export function imageReplacements(
         if (oldKey && oldKey !== newKey) changes.push({ slot, before: oldKey, after: newKey });
     };
     check('main', previous, patch);
+    if (patch.settings !== undefined) {
+        const decoration = (value: ImageBinding) => ({
+            imageAssetId:
+                typeof value.settings?.mobileDecorationImageAssetId === 'string'
+                    ? value.settings.mobileDecorationImageAssetId
+                    : null,
+            imageUrl:
+                typeof value.settings?.mobileDecorationImageUrl === 'string'
+                    ? value.settings.mobileDecorationImageUrl
+                    : null,
+        });
+        const before = decoration(previous);
+        const after = decoration(patch);
+        // Settings are replaced as a whole, so clearing an existing binding needs review too.
+        check('mobile-decoration', before, {
+            imageAssetId: after.imageAssetId ?? null,
+            imageUrl: after.imageUrl ?? null,
+        });
+    }
+
     if (patch.items != null) {
         for (const item of previous.items ?? []) {
             // Persisted identity survives reordering. Position is never an ownership key.

@@ -34,6 +34,13 @@ function acceptRegistrationConsent(): void {
     act(() => requiredElement<HTMLInputElement>('.auth-registration-consent input').click());
 }
 
+async function settle(action: () => void) {
+    await act(async () => {
+        action();
+        await Promise.resolve();
+    });
+}
+
 beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
@@ -154,7 +161,7 @@ describe('storefront configurable authentication methods', () => {
             await Promise.resolve();
         });
 
-        expect(login).toHaveBeenCalledWith('new@example.com', 'secure-password');
+        expect(login).toHaveBeenCalledWith('new@example.com', 'secure-password', true);
         expect(registerCustomerAccount).toHaveBeenCalledWith(
             {
                 emailAddress: 'new@example.com',
@@ -204,5 +211,79 @@ describe('storefront configurable authentication methods', () => {
             undefined,
         );
         expect(host.textContent).toContain('验证链接已发送至 quick@example.com');
+    });
+    it('changes language without replacing the form and passes the remember-me choice', async () => {
+        const api = { login: vi.fn().mockResolvedValue(undefined) };
+        const props = {
+            ...baseProps,
+            api: api as never,
+            onSuccess: vi.fn().mockResolvedValue(undefined),
+            onToggleLanguage: vi.fn(),
+        };
+        act(() => root.render(<LoginPage {...props} />));
+        requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'buyer@example.test';
+        requiredElement<HTMLInputElement>('input[name="password"]').value = 'qa-only-password';
+        act(() => requiredElement<HTMLInputElement>('.auth-remember input').click());
+        const language = requiredElement<HTMLSelectElement>('.auth-language-control select');
+        act(() => {
+            language.value = 'en';
+            language.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        expect(props.onToggleLanguage).toHaveBeenCalledOnce();
+        act(() => root.render(<LoginPage {...props} language="en" />));
+        expect(requiredElement<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
+            'buyer@example.test',
+        );
+        expect(requiredElement<HTMLInputElement>('input[name="password"]').value).toBe('qa-only-password');
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(api.login).toHaveBeenCalledWith('buyer@example.test', 'qa-only-password', false);
+        expect(props.onSuccess).toHaveBeenCalledOnce();
+    });
+
+    it('supports consent and completion when Google is the only registration method', async () => {
+        let credentialCallback: ((response: { credential?: string }) => void) | undefined;
+        window.google = {
+            accounts: {
+                id: {
+                    initialize: options => {
+                        credentialCallback = options.callback;
+                    },
+                    renderButton: vi.fn(),
+                },
+            },
+        };
+        const api = {
+            referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+            authenticateWithGoogle: vi.fn().mockResolvedValue(undefined),
+        };
+        const onSuccess = vi.fn().mockResolvedValue(undefined);
+        await settle(() =>
+            root.render(
+                <RegisterPage
+                    {...baseProps}
+                    api={api as never}
+                    onSuccess={onSuccess}
+                    authSettings={{
+                        emailPasswordEnabled: false,
+                        emailAutoRegistrationEnabled: false,
+                        emailQuickRegistrationEnabled: false,
+                        googleEnabled: true,
+                        googleClientId: '123-test.apps.googleusercontent.com',
+                    }}
+                />,
+            ),
+        );
+        expect(requiredElement<HTMLInputElement>('.auth-registration-consent input').checked).toBe(false);
+        await settle(() => credentialCallback?.({ credential: 'qa-id-token' }));
+        expect(api.authenticateWithGoogle).not.toHaveBeenCalled();
+        acceptRegistrationConsent();
+        await settle(() => credentialCallback?.({ credential: 'qa-id-token' }));
+        expect(api.authenticateWithGoogle).toHaveBeenCalledWith(
+            'qa-id-token',
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
+            expect.objectContaining({ inviteCode: undefined }),
+        );
+        expect(onSuccess).toHaveBeenCalledOnce();
+        delete window.google;
     });
 });
