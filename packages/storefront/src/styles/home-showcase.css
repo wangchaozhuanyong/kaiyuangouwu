@@ -2436,42 +2436,15 @@ html[lang='en'] .quick-grid b {
     font-size: 12px;
 }
 
-.legal-footer-identity {
+.legal-footer-brand {
+    display: flex;
     min-width: 0;
-}
-
-.legal-footer strong {
-    display: block;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: var(--font-weight-semibold);
-}
-
-.legal-footer-entry {
-    display: inline-flex;
     min-height: 44px;
     align-items: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: start;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-}
-
-.legal-footer-entry:hover:not(:disabled) {
-    color: var(--accent-ink);
-}
-
-.legal-footer-entry:disabled {
-    cursor: default;
-}
-
-.legal-footer-brand {
-    display: block;
-    line-height: var(--line-height-relaxed);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
     overflow-wrap: anywhere;
 }
 
@@ -2490,6 +2463,7 @@ html[lang='en'] .quick-grid b {
     border: 0;
     background: transparent;
     color: inherit;
+    font: inherit;
     text-align: end;
     overflow-wrap: anywhere;
     text-decoration: none;
