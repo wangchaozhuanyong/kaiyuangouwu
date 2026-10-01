@@ -1076,6 +1076,13 @@
         top: calc(var(--desktop-header-height) + 20px);
         min-width: 0;
     }
+    .desktop-catalog-header-extras {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+    .desktop-catalog-header-extras:empty {
+        display: none;
+    }
     .desktop-catalog-help {
         padding: 20px;
         margin-top: 20px;
