@@ -62,6 +62,22 @@ let blocks = params.has('empty')
           imageAsset: type === 'HERO' ? asset : null,
           imageUrl: type === 'HERO' ? asset.preview : null,
       }));
+if (params.has('auth')) {
+    blocks = fixtureData('classic', false)
+        .storefrontContent.filter(block => block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER')
+        .map((block, position) => ({
+            ...newContentBlock(block.type as 'AUTH_LOGIN' | 'AUTH_REGISTER', position, block.title),
+            __typename: 'StorefrontContentBlock',
+            id: block.id,
+            code: block.code,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: '2026-09-01T00:00:00Z',
+            enabled: true,
+            imageUrl: block.imageUrl,
+            imageAsset: { ...asset, preview: block.imageUrl, width: 1391, height: 1131 },
+            settings: {},
+        }));
+}
 if (params.has('original')) {
     for (const block of blocks) {
         if (block.type === 'HERO') block.settings = { ...block.settings, themePreset: 'bright' };
@@ -627,7 +643,7 @@ createRoot(document.getElementById('root')!).render(
                                 <ClientPluginsModule />
                             ) : params.has('services') ? (
                                 <BusinessServicesCopyModule />
-                            ) : params.has('support') || params.has('announcements') ? (
+                            ) : params.has('support') || params.has('announcements') || params.has('auth') ? (
                                 <StorefrontContentModule />
                             ) : (
                                 <StorefrontModule />

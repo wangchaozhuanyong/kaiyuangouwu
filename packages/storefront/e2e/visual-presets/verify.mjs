@@ -441,13 +441,26 @@ try {
                 }
                 if (name === 'login' || name === 'register') {
                     await expect(page.locator('.auth-form-heading')).toBeVisible();
+                    await expect(page.locator('.auth-form-toolbar')).toBeVisible();
+                    await expect(page.locator('.auth-form-back-button')).toBeVisible();
+                    await expect(page.locator('.auth-form-store-name')).toHaveText('店铺皮肤验收');
+                    const [toolbarBox, brandBox, headingBox] = await Promise.all([
+                        page.locator('.auth-form-toolbar').boundingBox(),
+                        page.locator('.auth-form-store-name').boundingBox(),
+                        page.locator('.auth-form-heading').boundingBox(),
+                    ]);
+                    expect(Math.abs(toolbarBox.x - headingBox.x)).toBeLessThanOrEqual(1);
+                    expect(
+                        Math.abs(toolbarBox.x + toolbarBox.width - brandBox.x - brandBox.width),
+                    ).toBeLessThanOrEqual(1);
+                    expect(headingBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
                     await expect(page.locator('.auth-assurance-item')).toHaveCount(4);
                     await expect(page.locator('.auth-route-tabs')).toHaveCount(0);
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
                         await expect(page.locator('.auth-hero img')).toBeVisible();
-                        const [moduleBox, heroBox, formBox, assuranceBox] = await Promise.all([
-                            page.locator('.auth-page').boundingBox(),
+                        const [columnBox, heroBox, formBox, assuranceBox] = await Promise.all([
+                            page.locator('.auth-form-column').boundingBox(),
                             page.locator('.auth-hero').boundingBox(),
                             page.locator('.login-content').boundingBox(),
                             page.locator('.auth-assurance-rail').boundingBox(),
@@ -458,12 +471,11 @@ try {
                             `${preset}/${width}/${name} split alignment`,
                         ).toBeLessThanOrEqual(1);
                         expect(
-                            Math.abs((moduleBox?.width ?? 0) - (assuranceBox?.width ?? 0)),
+                            Math.abs((columnBox?.width ?? 0) - (assuranceBox?.width ?? 0)),
                             `${preset}/${width}/${name} assurance span`,
                         ).toBeLessThanOrEqual(1);
                     } else {
                         await expect(page.locator('.auth-hero')).toBeHidden();
-                        await expect(page.locator('.auth-mobile-back-button')).toBeVisible();
                         expect(
                             await page.evaluate(
                                 () =>

@@ -13,6 +13,13 @@ const quickLinkImage =
             '<rect width="64" height="64" fill="#cabc9c"/>' +
             '<circle cx="32" cy="32" r="18" fill="#e9dec8"/></svg>',
     );
+const authImage =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1391" height="1131">' +
+            '<rect width="1391" height="1131" fill="#cabc9c"/>' +
+            '<circle cx="1010" cy="360" r="230" fill="#e9dec8"/></svg>',
+    );
 const wideHeroImage =
     'data:image/svg+xml,' +
     encodeURIComponent(
@@ -884,6 +891,22 @@ export function fixtureData(presetId = 'neo-minimalist', signedIn = true, conten
             content === 'wide-hero'
                 ? { ...block, imageUrl: wideHeroImage, imageAsset: { width: 1600, height: 520 } }
                 : block,
+            ...['login', 'register'].map((authVariant, index) => ({
+                ...block,
+                id: `qa-auth-${authVariant}`,
+                code: `auth-${authVariant}-visual`,
+                type: authVariant === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER',
+                position: index + 1,
+                imageUrl: authImage,
+                imageAsset: { width: 1391, height: 1131 },
+                targetType: 'NONE',
+                targetValue: null,
+                title: authVariant === 'login' ? '欢迎回到示例店铺' : '开启你的购物生活',
+                subtitle: '本地布局验收配图与文案。',
+                body: '',
+                ctaLabel: '',
+                settings: {},
+            })),
             quickLinksBlock,
             servicesBlock,
             ...(content === 'flash-sale-heading'
