@@ -217,25 +217,7 @@ export function LogisticsPage({
                 </div>
             ) : (
                 <div className="delivery-overview">
-                    <div className="delivery-intro">
-                        <div>
-                            <h1 className="delivery-desktop-title">{zh ? '物流动态' : 'Delivery updates'}</h1>
-                            <p>
-                                {zh
-                                    ? '查看配送进度、运单和每个包裹的更新记录。'
-                                    : 'Track deliveries, shipment numbers and package updates.'}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            className="delivery-text-button"
-                            disabled={list.isFetching}
-                            onClick={() => void list.refetch()}
-                        >
-                            <RefreshCw aria-hidden="true" />
-                            {list.isFetching ? (zh ? '更新中' : 'Updating') : zh ? '刷新' : 'Refresh'}
-                        </button>
-                    </div>
+                    <h1 className="sr-only">{zh ? '物流动态' : 'Delivery updates'}</h1>
                     <div className="delivery-list-surface">
                         <div className="delivery-toolbar">
                             <nav
@@ -265,26 +247,40 @@ export function LogisticsPage({
                                     </button>
                                 ))}
                             </nav>
-                            <form
-                                className="delivery-search"
-                                onSubmit={event => {
-                                    event.preventDefault();
-                                    go({ ...listRoute, term: search.trim() || undefined }, true);
-                                }}
-                            >
-                                <Search aria-hidden="true" />
-                                <input
-                                    aria-label={
-                                        zh
-                                            ? '搜索已加载的订单、商品或运单号'
-                                            : 'Search loaded orders, products or tracking numbers'
-                                    }
-                                    placeholder={zh ? '订单、商品、运单号' : 'Order, item or tracking no.'}
-                                    value={search}
-                                    onChange={event => setSearch(event.target.value)}
-                                />
-                                <button type="submit">{zh ? '搜索' : 'Search'}</button>
-                            </form>
+                            <div className="delivery-toolbar-actions">
+                                <form
+                                    className="delivery-search"
+                                    onSubmit={event => {
+                                        event.preventDefault();
+                                        go({ ...listRoute, term: search.trim() || undefined }, true);
+                                    }}
+                                >
+                                    <Search aria-hidden="true" />
+                                    <input
+                                        aria-label={
+                                            zh
+                                                ? '搜索已加载的订单、商品或运单号'
+                                                : 'Search loaded orders, products or tracking numbers'
+                                        }
+                                        placeholder={
+                                            zh ? '订单、商品、运单号' : 'Order, item or tracking no.'
+                                        }
+                                        value={search}
+                                        onChange={event => setSearch(event.target.value)}
+                                    />
+                                    <button type="submit">{zh ? '搜索' : 'Search'}</button>
+                                </form>
+                                <button
+                                    type="button"
+                                    className="delivery-refresh-button"
+                                    disabled={list.isFetching}
+                                    aria-busy={list.isFetching}
+                                    onClick={() => void list.refetch()}
+                                >
+                                    <RefreshCw aria-hidden="true" />
+                                    {list.isFetching ? (zh ? '更新中' : 'Updating') : zh ? '刷新' : 'Refresh'}
+                                </button>
+                            </div>
                         </div>
                         <div className="delivery-list-caption">
                             <span>
