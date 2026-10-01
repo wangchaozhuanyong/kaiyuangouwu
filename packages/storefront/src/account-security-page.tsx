@@ -5,13 +5,11 @@ import {
     ChevronRight,
     Download,
     FileJson,
-    History,
     KeyRound,
     LoaderCircle,
     LogOut,
     Mail,
     MapPin,
-    RotateCcw,
     ShieldCheck,
     Trash2,
     UserRound,
@@ -32,7 +30,6 @@ import { routeNavigateOptions } from './storefront-router';
 import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
-    CustomerAvatarHistoryEntry,
     DataSubjectExportPayload,
     DataSubjectRequest,
     FraudRiskCase,
@@ -67,9 +64,6 @@ export function AccountSecurityPage({
     commerceMode,
     onBack,
     onAvatarChange,
-    avatarHistory = [],
-    avatarHistoryLoading = false,
-    onAvatarRestore,
     onAvatarRemove,
     dataSubjectRequests = [],
     dataSubjectLoading = false,
@@ -87,9 +81,6 @@ export function AccountSecurityPage({
     commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
     onAvatarChange: (file: File) => Promise<void>;
-    avatarHistory?: CustomerAvatarHistoryEntry[];
-    avatarHistoryLoading?: boolean;
-    onAvatarRestore?: (retentionId: string) => Promise<void>;
     onAvatarRemove?: () => Promise<void>;
     dataSubjectRequests?: DataSubjectRequest[];
     dataSubjectLoading?: boolean;
@@ -332,12 +323,12 @@ export function AccountSecurityPage({
             />
 
             <div className="security-page-body">
-                {/* 1. 用户信息高质感微卡片 */}
+                {/* Personal information and avatar actions have separate layout areas. */}
                 <section className="security-user-card" aria-label={isZh ? '个人信息' : 'Personal info'}>
                     <button
                         type="button"
                         className="security-user-avatar"
-                        disabled={avatarUploading}
+                        disabled={avatarUploading || avatarAction !== null}
                         aria-label={isZh ? '更换头像' : 'Change profile photo'}
                         aria-busy={avatarUploading}
                         aria-describedby={avatarError ? 'avatar-upload-message' : undefined}
@@ -371,122 +362,46 @@ export function AccountSecurityPage({
                             <h2 className="security-user-name">{displayName}</h2>
                         </div>
                         <p className="security-user-email">{customer.emailAddress}</p>
-                        <div className="security-avatar-actions">
+                    </div>
+                    <div
+                        className="security-avatar-actions"
+                        role="group"
+                        aria-label={isZh ? '头像操作' : 'Profile photo actions'}
+                    >
+                        <button
+                            type="button"
+                            disabled={avatarUploading || avatarAction !== null}
+                            onClick={() => avatarInputRef.current?.click()}
+                        >
+                            <Camera size={12} aria-hidden="true" />
+                            {isZh ? '更换头像' : 'Change photo'}
+                        </button>
+                        {avatarUrl && onAvatarRemove && (
                             <button
                                 type="button"
+                                className="is-danger"
                                 disabled={avatarUploading || avatarAction !== null}
-                                onClick={() => avatarInputRef.current?.click()}
+                                onClick={() => void runAvatarAction('remove', onAvatarRemove)}
                             >
-                                <Camera size={12} aria-hidden="true" />
-                                {isZh ? '更换头像' : 'Change photo'}
-                            </button>
-                            {avatarUrl && onAvatarRemove && (
-                                <button
-                                    type="button"
-                                    className="is-danger"
-                                    disabled={avatarUploading || avatarAction !== null}
-                                    onClick={() => void runAvatarAction('remove', onAvatarRemove)}
-                                >
-                                    {avatarAction === 'remove' ? (
-                                        <LoaderCircle size={12} aria-hidden="true" />
-                                    ) : (
-                                        <Trash2 size={12} aria-hidden="true" />
-                                    )}
-                                    {isZh ? '移除' : 'Remove'}
-                                </button>
-                            )}
-                        </div>
-                        {(avatarUploading || avatarError) && (
-                            <p
-                                id="avatar-upload-message"
-                                className={`security-avatar-message${avatarError ? ' is-error' : ''}`}
-                                role={avatarError ? 'alert' : 'status'}
-                            >
-                                {avatarError ?? (isZh ? '正在上传头像…' : 'Uploading profile photo…')}
-                            </p>
-                        )}
-                    </div>
-                </section>
-
-                <div className="security-group">
-                    <div className="security-group-header">
-                        <span>{isZh ? '头像保护' : 'Profile photo protection'}</span>
-                    </div>
-                    <div className="security-card-list">
-                        <div className="security-item-static">
-                            <span className="security-item-icon icon-avatar-history" aria-hidden="true">
-                                <History size={17} />
-                            </span>
-                            <div className="security-item-info">
-                                <strong className="security-item-title">
-                                    {isZh ? '30 天可恢复保护' : '30-day recovery protection'}
-                                </strong>
-                                <span className="security-item-subtitle">
-                                    {isZh
-                                        ? '当前头像不会因时间自动删除；更换或移除后才进入恢复区'
-                                        : 'Your current photo never expires; replaced photos enter recovery first'}
-                                </span>
-                            </div>
-                        </div>
-                        {(avatarHistoryLoading || avatarHistory.length > 0) && (
-                            <div className="security-avatar-history" aria-live="polite">
-                                {avatarHistoryLoading ? (
-                                    <span className="security-avatar-history-loading">
-                                        <LoaderCircle size={14} aria-hidden="true" />
-                                        {isZh ? '正在加载恢复记录…' : 'Loading recovery history…'}
-                                    </span>
+                                {avatarAction === 'remove' ? (
+                                    <LoaderCircle size={12} aria-hidden="true" />
                                 ) : (
-                                    avatarHistory.map(entry => (
-                                        <div className="security-avatar-history-row" key={entry.id}>
-                                            {entry.asset?.preview ? (
-                                                <SafeImage
-                                                    frameClassName="security-avatar-history-image"
-                                                    className="security-avatar-history-image"
-                                                    src={entry.asset.preview}
-                                                    alt=""
-                                                />
-                                            ) : (
-                                                <span
-                                                    className="security-avatar-history-image is-empty"
-                                                    aria-hidden="true"
-                                                >
-                                                    <UserRound size={16} />
-                                                </span>
-                                            )}
-                                            <span className="security-avatar-history-copy">
-                                                <strong>{isZh ? '可恢复头像' : 'Recoverable photo'}</strong>
-                                                <small>
-                                                    {isZh ? '保留至 ' : 'Retained until '}
-                                                    {formatAvatarRetentionDate(entry.purgeAfter, language)}
-                                                    {entry.legalHold ? (isZh ? '（保留中）' : ' (held)') : ''}
-                                                </small>
-                                            </span>
-                                            {entry.asset && onAvatarRestore && (
-                                                <button
-                                                    type="button"
-                                                    className="security-avatar-restore"
-                                                    disabled={avatarAction !== null}
-                                                    onClick={() =>
-                                                        void runAvatarAction(entry.id, () =>
-                                                            onAvatarRestore(entry.id),
-                                                        )
-                                                    }
-                                                >
-                                                    {avatarAction === entry.id ? (
-                                                        <LoaderCircle size={13} aria-hidden="true" />
-                                                    ) : (
-                                                        <RotateCcw size={13} aria-hidden="true" />
-                                                    )}
-                                                    {isZh ? '恢复' : 'Restore'}
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))
+                                    <Trash2 size={12} aria-hidden="true" />
                                 )}
-                            </div>
+                                {isZh ? '移除' : 'Remove'}
+                            </button>
                         )}
                     </div>
-                </div>
+                    {(avatarUploading || avatarError) && (
+                        <p
+                            id="avatar-upload-message"
+                            className={`security-avatar-message${avatarError ? ' is-error' : ''}`}
+                            role={avatarError ? 'alert' : 'status'}
+                        >
+                            {avatarError ?? (isZh ? '正在上传头像…' : 'Uploading profile photo…')}
+                        </p>
+                    )}
+                </section>
 
                 {/* 2. 核心设置列表 */}
                 <div className="security-group">
@@ -1017,15 +932,5 @@ function formatPrivacyDate(value: string, language: StorefrontLanguage): string 
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-    }).format(date);
-}
-
-function formatAvatarRetentionDate(value: string, language: StorefrontLanguage): string {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
     }).format(date);
 }

@@ -193,11 +193,8 @@ describe('storefront skin system', () => {
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
                         if (
                             border[1] === 'top' &&
-                            ((functionalSeparators.includes(functionalKey) &&
-                                border[2].trim() === '1px solid var(--skin-divider)') ||
-                                (functionalKey ===
-                                    'styles/account-security.css|.security-avatar-history-row + .security-avatar-history-row' &&
-                                    border[2].trim() === '1px solid var(--line-subtle)'))
+                            functionalSeparators.includes(functionalKey) &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
                         ) {
                             continue;
                         }
@@ -632,7 +629,7 @@ describe('storefront skin system', () => {
     it('routes account security actions and status copy through semantic colors', () => {
         const source = stylesheet('./styles/account-security.css');
 
-        expect(source).toMatch(/\.security-avatar-actions button,[\s\S]*?color:\s*var\(--accent-ink\);/);
+        expect(source).toMatch(/\.security-avatar-actions button\s*\{[^}]*color:\s*var\(--accent-ink\);/);
         expect(source).toMatch(
             /\.security-item-danger \.security-item-title\s*\{[^}]*color:\s*var\(--danger\);/,
         );
