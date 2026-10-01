@@ -450,7 +450,7 @@ describe('managed auth visual layout', () => {
         );
         expect(styles).toMatch(
             // eslint-disable-next-line max-len -- Keeping the complete CSS contract in one expression makes regression failures actionable.
-            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1160px\);[^}]*min-height:\s*min\(680px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;/,
+            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1200px\);[^}]*min-height:\s*min\(680px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;/,
         );
         expect(styles).not.toContain('.desktop-store-layout .auth-assurance-rail');
         expect(styles).toMatch(/\.desktop-store-layout \.auth-page \.auth-hero\s*\{[^}]*border-radius:\s*0;/);

@@ -461,26 +461,28 @@ try {
                     await expect(page.locator('.auth-route-tabs')).toHaveCount(0);
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
-                        await expect(page.locator('.auth-hero img')).toBeVisible();
-                        const imageRatio = await page.locator('.auth-hero img').evaluate(img => ({
-                            width: img.getBoundingClientRect().width,
-                            height: img.getBoundingClientRect().height,
-                            naturalWidth: img.naturalWidth,
-                            naturalHeight: img.naturalHeight,
-                        }));
-                        expect(
-                            Math.abs(
-                                imageRatio.height -
-                                    (imageRatio.width * imageRatio.naturalHeight) / imageRatio.naturalWidth,
-                            ),
-                            `${preset}/${width}/${name} intrinsic image ratio`,
-                        ).toBeLessThanOrEqual(1);
-                        const [columnBox, heroBox, formBox, assuranceBox] = await Promise.all([
-                            page.locator('.auth-form-column').boundingBox(),
-                            page.locator('.auth-hero').boundingBox(),
-                            page.locator('.login-content').boundingBox(),
-                            page.locator('.auth-assurance-rail').boundingBox(),
-                        ]);
+                        const heroImage = page.locator('.auth-hero img.safe-image');
+                        await expect(heroImage).toBeVisible();
+                        await expect(heroImage).toHaveCSS('object-fit', 'cover');
+                        const [columnBox, heroBox, formBox, assuranceBox, imageBox, copyBox] =
+                            await Promise.all([
+                                page.locator('.auth-form-column').boundingBox(),
+                                page.locator('.auth-hero').boundingBox(),
+                                page.locator('.login-content').boundingBox(),
+                                page.locator('.auth-assurance-rail').boundingBox(),
+                                heroImage.boundingBox(),
+                                page.locator('.auth-hero-copy').boundingBox(),
+                            ]);
+                        for (const dimension of ['x', 'y', 'width', 'height']) {
+                            expect(
+                                Math.abs(imageBox[dimension] - heroBox[dimension]),
+                                `${preset}/${width}/${name} image fills hero ${dimension}`,
+                            ).toBeLessThanOrEqual(1);
+                        }
+                        expect(copyBox.x).toBeGreaterThanOrEqual(imageBox.x);
+                        expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(imageBox.x + imageBox.width);
+                        expect(copyBox.y).toBeGreaterThanOrEqual(imageBox.y);
+                        expect(copyBox.y + copyBox.height).toBeLessThanOrEqual(imageBox.y + imageBox.height);
                         expect(heroBox?.y, `${preset}/${width}/${name} hero alignment`).toBe(formBox?.y);
                         expect(
                             Math.abs((heroBox?.x ?? 0) + (heroBox?.width ?? 0) - (formBox?.x ?? 0)),
