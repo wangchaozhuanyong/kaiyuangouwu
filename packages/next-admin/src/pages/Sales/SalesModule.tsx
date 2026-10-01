@@ -35,6 +35,10 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
+import {
+    canCreatePhysicalFulfillment,
+    PHYSICAL_FULFILLMENT_ORDER_STATES,
+} from './order-operation-availability';
 import { csvCell } from './sales-csv';
 import {
     canManageOrderInChannel,
@@ -152,7 +156,6 @@ const ORDER_SORT_FIELDS = [
 ] as const;
 type OrderSortField = (typeof ORDER_SORT_FIELDS)[number];
 const EMPTY_ORDERS: SalesOrderItem[] = [];
-const FULFILLABLE_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
 const tabs: Array<{ id: OrderTab; label: string }> = [
     { id: 'ALL', label: '全部交易' },
     { id: 'DRAFT', label: '草稿订单' },
@@ -166,7 +169,7 @@ const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
     ALL: { notIn: ['AddingItems', 'Draft'] },
     DRAFT: { in: ['AddingItems', 'Draft'] },
     TO_SETTLE: { eq: 'PaymentAuthorized' },
-    TO_FULFILL: { in: FULFILLABLE_STATES },
+    TO_FULFILL: { in: [...PHYSICAL_FULFILLMENT_ORDER_STATES] },
     IN_TRANSIT: { in: ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'] },
     DELIVERED: { eq: 'Delivered' },
     CANCELLED: { eq: 'Cancelled' },
@@ -253,7 +256,7 @@ export function SalesModule() {
     const selectableOrders = orders.filter(
         order =>
             canManageOrderInChannel(order, data?.activeChannel?.id) &&
-            FULFILLABLE_STATES.includes(order.state) &&
+            canCreatePhysicalFulfillment(order.state) &&
             getRemainingPhysicalLines(order).length > 0,
     );
     const selectedOrders = selectableOrders.filter(order => selectedOrderIds.includes(order.id));
@@ -329,6 +332,10 @@ export function SalesModule() {
         let successCount = 0;
         for (let index = 0; index < selectedOrders.length; index += 1) {
             const order = selectedOrders[index];
+            if (!canCreatePhysicalFulfillment(order.state)) {
+                failures.push(`${order.code}：订单未付款或未授权，不能发货`);
+                continue;
+            }
             setBatchProgress(`正在处理 ${index + 1}/${selectedOrders.length}：${order.code}`);
             try {
                 const response = await addFulfillment({
@@ -752,7 +759,7 @@ export function SalesModule() {
                                                 const canFulfill =
                                                     canUpdateOrder &&
                                                     canManageOrderInChannel(order, data?.activeChannel?.id) &&
-                                                    FULFILLABLE_STATES.includes(order.state) &&
+                                                    canCreatePhysicalFulfillment(order.state) &&
                                                     remainingLines.length > 0;
                                                 const summary = summarizeOrderListItem(order);
                                                 const isSelected = selectedOrderIds.includes(order.id);

@@ -14,6 +14,7 @@ function createHarness() {
     };
     const order = {
         id: 'order-1',
+        state: 'PaymentSettled',
         salesChannelId: 'channel-1',
         customer,
         lines: [{ id: 'line-1', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
@@ -196,6 +197,16 @@ describe('FulfillmentDeliveryService', () => {
             test.service.guardDeliveredTransition(test.ctx, test.fulfillment, [test.order]),
         ).resolves.toBeUndefined();
         expect(test.events).toHaveLength(0);
+    });
+
+    it('blocks physical fulfillment until the order is paid or authorized', () => {
+        const test = createHarness();
+        expect(test.service.guardPhysicalFulfillmentPayment(test.fulfillment, [test.order])).toBeUndefined();
+
+        test.order.state = 'ArrangingPayment';
+        expect(test.service.guardPhysicalFulfillmentPayment(test.fulfillment, [test.order])).toBe(
+            '订单未付款或未授权，不能创建实物发货',
+        );
     });
 
     it('reconciles carrier exceptions into the durable incident channel', async () => {

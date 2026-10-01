@@ -28,6 +28,12 @@ import {
 
 const DELIVERY_SLA_DAYS = 14;
 const NOTE_MAX_LENGTH = 2_000;
+const FULFILLABLE_ORDER_STATES = new Set([
+    'PaymentAuthorized',
+    'PaymentSettled',
+    'PartiallyShipped',
+    'PartiallyDelivered',
+]);
 
 @Injectable()
 export class FulfillmentDeliveryService {
@@ -91,6 +97,15 @@ export class FulfillmentDeliveryService {
                 '实物包裹已发出',
                 key,
             );
+        }
+    }
+
+    guardPhysicalFulfillmentPayment(fulfillment: Fulfillment, orders: Order[]): string | void {
+        if (!isPhysicalFulfillment(fulfillment, orders)) return;
+        const order = orderForFulfillment(fulfillment, orders);
+        if (!order) return '实物履约记录缺少订单归属';
+        if (!FULFILLABLE_ORDER_STATES.has(order.state)) {
+            return '订单未付款或未授权，不能创建实物发货';
         }
     }
 

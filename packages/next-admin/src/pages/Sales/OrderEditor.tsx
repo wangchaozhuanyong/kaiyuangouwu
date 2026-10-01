@@ -55,6 +55,7 @@ import { getChannelDisplayName } from '../../utils/channel-display';
 import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { OrderProfitExpensePanel } from './OrderProfitExpensePanel';
+import { canCreatePhysicalFulfillment } from './order-operation-availability';
 import {
     buildCompatibleRefundOrderInput,
     canManageOrderInChannel,
@@ -412,6 +413,10 @@ export function OrderEditor() {
 
     const handleFulfill = async () => {
         if (!order || remainingPhysicalLines.length === 0) return;
+        if (!canCreatePhysicalFulfillment(order.state)) {
+            setActionError('订单未付款或未授权，不能创建实物发货');
+            return;
+        }
         if (!manualHandlerAvailable) {
             setActionError('后端未启用 manual-fulfillment 处理器，无法创建实物发货');
             return;
@@ -769,7 +774,16 @@ export function OrderEditor() {
                                     setActionError('');
                                     setIsFulfillOpen(true);
                                 }}
-                                disabled={!manualHandlerAvailable || busy}
+                                disabled={
+                                    !manualHandlerAvailable ||
+                                    busy ||
+                                    !canCreatePhysicalFulfillment(order.state)
+                                }
+                                title={
+                                    canCreatePhysicalFulfillment(order.state)
+                                        ? undefined
+                                        : '订单完成付款或授权后才能发货'
+                                }
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
                             >
                                 <Truck className="h-4 w-4" />
