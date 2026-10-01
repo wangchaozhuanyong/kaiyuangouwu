@@ -933,24 +933,48 @@ export function ManagedContentItemButton({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const disabled = item.targetType === 'NONE' || !item.targetValue;
+    const isProductMedia = item.targetType === 'PRODUCT';
+    const [mediaRatio, setMediaRatio] = useState<{ source: string; value: number } | null>(null);
     const targetProduct =
         item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
     const targetProductImage = productImage(targetProduct);
     return (
         <button
-            className={`managed-content-card${targetProduct ? ' is-product-media' : ''}`}
+            className={`managed-content-card${isProductMedia ? ' is-product-media' : ''}`}
             type="button"
             disabled={disabled}
             onClick={() => onContentTarget(item.targetType, item.targetValue)}
         >
-            <span className="managed-content-media" aria-hidden="true">
+            <span
+                className="managed-content-media"
+                aria-hidden="true"
+                style={
+                    !isProductMedia && mediaRatio?.source === item.imageUrl
+                        ? { aspectRatio: mediaRatio.value }
+                        : undefined
+                }
+            >
                 {item.imageUrl ? (
                     <SafeImage
                         src={item.imageUrl}
                         fallbackSrc={targetProductImage ?? undefined}
                         alt=""
-                        imageKind="card"
+                        imageKind={isProductMedia ? 'card' : 'hero'}
                         loading="lazy"
+                        onImageReady={
+                            !isProductMedia
+                                ? image => {
+                                      const source = item.imageUrl;
+                                      if (!source || !image.naturalWidth || !image.naturalHeight) return;
+                                      const value = image.naturalWidth / image.naturalHeight;
+                                      setMediaRatio(current =>
+                                          current?.source === source && current.value === value
+                                              ? current
+                                              : { source, value },
+                                      );
+                                  }
+                                : undefined
+                        }
                     />
                 ) : targetProductImage ? (
                     <SafeImage src={targetProductImage} alt="" imageKind="card" loading="lazy" />

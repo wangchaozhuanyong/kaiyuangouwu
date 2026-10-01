@@ -1446,7 +1446,7 @@ html[lang='en'] .quick-grid b {
 
 .managed-content-media {
     width: 100%;
-    aspect-ratio: var(--product-media-ratio);
+    aspect-ratio: 16 / 9;
     overflow: hidden;
     background: var(--product-media-bg);
     display: block;
@@ -1469,6 +1469,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .managed-content-card.is-product-media .managed-content-media {
+    aspect-ratio: var(--product-media-ratio);
     border-radius: var(--radius-md);
 }
 
