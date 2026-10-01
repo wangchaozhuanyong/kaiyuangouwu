@@ -194,10 +194,12 @@ export class StoreCommerceSettingsService {
         if (!country.enabled) {
             throw new UserInputError('所选配送国家已停用');
         }
-        const [taxZone, shippingZone] = await Promise.all([
-            this.ensureDedicatedZone(ctx, storeZoneName(channel.code, 'tax'), country.id),
-            this.ensureDedicatedZone(ctx, storeZoneName(channel.code, 'shipping'), country.id),
-        ]);
+        const taxZone = await this.ensureDedicatedZone(ctx, storeZoneName(channel.code, 'tax'), country.id);
+        const shippingZone = await this.ensureDedicatedZone(
+            ctx,
+            storeZoneName(channel.code, 'shipping'),
+            country.id,
+        );
         const updatedChannel = await this.channelService.update(ctx, {
             id: channel.id,
             pricesIncludeTax: normalized.pricesIncludeTax,

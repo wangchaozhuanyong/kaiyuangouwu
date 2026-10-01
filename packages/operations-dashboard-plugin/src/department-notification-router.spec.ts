@@ -28,6 +28,18 @@ describe('DepartmentNotificationRouter', () => {
             escalation: 'EXEC',
             actionRequired: true,
         });
+        expect(router.route('fulfillment.delivery.attention', 'P2')).toMatchObject({
+            owner: 'FULFILLMENT',
+            collaborators: ['SALES', 'TECH'],
+            actionRequired: true,
+            slaMinutes: 60,
+            fallback: false,
+        });
+        expect(router.route('fulfillment.delivery.recovered', 'P2')).toMatchObject({
+            owner: 'FULFILLMENT',
+            actionRequired: false,
+            fallback: false,
+        });
     });
 
     it('does not allow a P0 override to remove EXEC escalation', () => {

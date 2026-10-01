@@ -57,6 +57,8 @@ const routeDefinitions: readonly DepartmentRouteDefinition[] = [
     route('commerce.fulfillment.auto_card_failed', 'P1', 'FULFILLMENT', ['TECH', 'SALES'], true, 60),
     route('commerce.fulfillment.manual_delivery_failed', 'P1', 'FULFILLMENT', ['TECH', 'SALES'], true, 60),
     route('commerce.fulfillment.manual_delivery_overdue', 'P1', 'FULFILLMENT', ['SALES'], true, 60),
+    route('fulfillment.delivery.attention', 'P2', 'FULFILLMENT', ['SALES', 'TECH'], true, 60),
+    route('fulfillment.delivery.recovered', 'P2', 'FULFILLMENT', ['SALES'], false, null),
     route('commerce.refund.pending', 'P1', 'FULFILLMENT', ['DATA_FINANCE'], true, 60),
     route('commerce.refund.settled', 'P2', 'FULFILLMENT', ['DATA_FINANCE'], false, null),
     route('commerce.refund.failed', 'P1', 'FULFILLMENT', ['DATA_FINANCE', 'TECH'], true, 60),

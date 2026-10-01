@@ -28,6 +28,7 @@ import {
 import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
     effectiveStockLocation,
+    hasPlannedStockAdjustment,
     microunits,
     money,
     productDescriptionForCreate,
@@ -518,7 +519,7 @@ export class CatalogImportWriter {
                     customFields,
                 },
             ]);
-            if (row.normalizedData.stockOnHand != null) {
+            if (hasPlannedStockAdjustment(row.normalizedData.stockOnHand, row.plannedChanges)) {
                 await this.operations.updateVariant(
                     ctx,
                     {

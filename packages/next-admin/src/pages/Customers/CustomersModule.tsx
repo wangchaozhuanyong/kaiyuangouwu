@@ -2131,7 +2131,10 @@ export function CustomerEditForm({
                         onChange={value => setForm({ ...form, emailAddress: value })}
                     />
                     {form.emailAddress.trim() && emailError && (
-                        <p role="alert" className="mt-1 text-[11px] font-normal text-red-600">
+                        <p
+                            role="alert"
+                            className="mt-1 text-[11px] font-normal text-red-600 dark:text-red-400"
+                        >
                             {emailError}
                         </p>
                     )}
@@ -2143,7 +2146,10 @@ export function CustomerEditForm({
                         onChange={value => setForm({ ...form, phoneNumber: value })}
                     />
                     {form.phoneNumber.trim() && phoneError && (
-                        <p role="alert" className="mt-1 text-[11px] font-normal text-red-600">
+                        <p
+                            role="alert"
+                            className="mt-1 text-[11px] font-normal text-red-600 dark:text-red-400"
+                        >
                             {phoneError}
                         </p>
                     )}

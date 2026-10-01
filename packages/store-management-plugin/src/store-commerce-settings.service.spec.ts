@@ -194,11 +194,20 @@ describe('StoreCommerceSettingsService', () => {
         const countryService = {
             findOneByCode: vi.fn().mockResolvedValue({ id: 'country-my', enabled: true }),
         };
+        let taxZoneCreated = false;
         const zoneService = {
-            create: vi
-                .fn()
-                .mockResolvedValueOnce({ id: 'tax-zone-1', name: 'Store my-malaysia tax' })
-                .mockResolvedValueOnce({ id: 'shipping-zone-1', name: 'Store my-malaysia shipping' }),
+            create: vi.fn().mockImplementation((_ctx, zoneInput) => {
+                if (zoneInput.name === 'Store my-malaysia tax') {
+                    return new Promise(resolve => {
+                        setTimeout(() => {
+                            taxZoneCreated = true;
+                            resolve({ id: 'tax-zone-1', name: zoneInput.name });
+                        }, 0);
+                    });
+                }
+                if (!taxZoneCreated) throw new Error('tax zone creation must finish first');
+                return Promise.resolve({ id: 'shipping-zone-1', name: zoneInput.name });
+            }),
         };
         const taxRateService = { create: vi.fn().mockResolvedValue({ id: 'tax-rate-1' }) };
         const configuredMethod = { id: 'configured-method', code: storeShippingMethodCode(channel.code) };

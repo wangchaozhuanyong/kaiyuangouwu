@@ -1,4 +1,7 @@
 import {
+    Channel,
+    ChannelService,
+    LanguageCode,
     ProductVariant,
     RequestContextService,
     StockLevel,
@@ -12,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { CatalogChannelAssignmentsService } from '../src/catalog-channel-assignments.service';
 import { rollbackState } from '../src/catalog-import-rollback-state';
 import { CatalogImportService } from '../src/catalog-import.service';
 import { CatalogManagementPlugin } from '../src/catalog-management.plugin';
@@ -21,6 +25,12 @@ import { CatalogImportRow } from '../src/entities/catalog-import-row.entity';
 describe('catalog rollback data integrity (AUD-001 / AUD-002)', () => {
     const { server } = createTestEnvironment(
         mergeConfig(testConfig(), {
+            customFields: {
+                Channel: [
+                    { name: 'storefrontNameZh', type: 'string', defaultValue: '' },
+                    { name: 'storefrontNameEn', type: 'string', defaultValue: '' },
+                ],
+            },
             plugins: [CatalogManagementPlugin],
             importExportOptions: { importAssetsDir: path.join(__dirname, '../../core/e2e/fixtures/assets') },
         }),
@@ -173,5 +183,37 @@ describe('catalog rollback data integrity (AUD-001 / AUD-002)', () => {
         await Promise.all([rollback, sale]);
         spy.mockRestore();
         expect(await stocks(f.variants.map(v => v.id))).toEqual([95]);
+    });
+
+    it('reads localized embedded store names without expanding assignment output', async () => {
+        const created = await server.app.get(ChannelService).create(ctx, {
+            code: 'assignment-name-fixture',
+            token: 'local-assignment-name-fixture',
+            defaultLanguageCode: LanguageCode.en,
+            availableLanguageCodes: [LanguageCode.en],
+            defaultCurrencyCode: ctx.currencyCode,
+            availableCurrencyCodes: [ctx.currencyCode],
+            pricesIncludeTax: false,
+        });
+        if (!('id' in created)) throw new Error('Could not create local assignment fixture');
+        const repository = connection.getRepository(ctx, Channel);
+        const channel = await repository.findOneByOrFail({ id: created.id });
+        Object.assign(channel.customFields, {
+            storefrontNameZh: '本地测试店',
+            storefrontNameEn: 'Local fixture store',
+        });
+        await repository.save(channel);
+        const permission = vi.spyOn(ctx, 'userHasPermissions').mockReturnValue(true);
+        try {
+            const result = await server.app.get(CatalogChannelAssignmentsService).list(ctx);
+            expect(result.channels.find(item => item.id === created.id)).toEqual({
+                id: created.id,
+                code: 'assignment-name-fixture',
+                displayName: 'Local fixture store',
+                isDefault: false,
+            });
+        } finally {
+            permission.mockRestore();
+        }
     });
 });

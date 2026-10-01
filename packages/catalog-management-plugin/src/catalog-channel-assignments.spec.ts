@@ -98,6 +98,13 @@ describe('catalog channel assignments', () => {
         expect(result.channels.map(channel => channel.id)).toEqual([2]);
         expect(result.items[0].channels.map(channel => channel.id)).toEqual([2]);
         expect(channelRepository.find.mock.calls[0][0]).toMatchObject({ where: { id: expect.anything() } });
+        expect(channelRepository.find.mock.calls[0][0]).not.toHaveProperty('select');
+        expect(result.channels[0]).toEqual({
+            id: 2,
+            code: 'store-a',
+            displayName: '店铺 A',
+            isDefault: false,
+        });
     });
 
     it('rejects an unbounded page before reading any products', async () => {
