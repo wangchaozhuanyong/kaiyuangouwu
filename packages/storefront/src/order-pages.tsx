@@ -583,6 +583,7 @@ function AfterSalesList({
                 <Sheet
                     title={isZh ? '售后详情' : 'After-sales details'}
                     language={language}
+                    side="right"
                     className="after-sales-detail-sheet"
                     onClose={() => setSelectedRequestId(null)}
                 >

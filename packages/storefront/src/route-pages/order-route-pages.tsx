@@ -86,6 +86,7 @@ function OrderDetailsDrawer({ orderId, onClose }: { orderId: string; onClose: ()
         <Sheet
             title={isZh ? '订单详情' : 'Order details'}
             language={runtime.language}
+            side="right"
             className="order-detail-sheet"
             onClose={onClose}
         >

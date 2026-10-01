@@ -298,49 +298,6 @@
     font-size: 12px;
     line-height: 1.6;
 }
-/* Keep this sheet at the right edge, including when desktop dialogs are centered. */
-.sheet-layer:is(.after-sales-detail-sheet-layer, .order-detail-sheet-layer, .delivery-detail-sheet-layer):has(
-        > .sheet
-    ) {
-    inset: 0;
-    width: 100%;
-    max-width: none;
-    transform: none;
-    padding: 0;
-    display: flex;
-    align-items: stretch;
-    justify-content: flex-end;
-}
-:is(.after-sales-detail-sheet-layer, .order-detail-sheet-layer, .delivery-detail-sheet-layer).sheet-layer
-    > .sheet:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) {
-    position: relative;
-    inset: auto;
-    display: flex;
-    flex-direction: column;
-    width: min(560px, 100%);
-    height: 100dvh;
-    max-height: 100dvh;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    overflow: hidden;
-    transform: none;
-    animation: after-sales-drawer-in 200ms ease-out;
-}
-:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) > header {
-    flex: none;
-    min-height: 72px;
-    padding: 12px 16px 12px 24px;
-}
-:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) > header button {
-    flex: none;
-    color: var(--text);
-    border-radius: var(--skin-control-radius);
-}
-:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) > header button:hover {
-    background: var(--control-surface);
-}
 .after-sales-detail-body {
     min-height: 0;
     overflow-y: auto;
@@ -390,32 +347,13 @@
     color: var(--muted);
     font-size: 13px;
 }
-.after-sales-details-button:focus-visible,
-:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet)
-    :is(button, a, input):focus-visible {
+.after-sales-details-button:focus-visible {
     outline: 2px solid var(--accent-ink);
     outline-offset: 2px;
-}
-@keyframes after-sales-drawer-in {
-    from {
-        transform: translateX(100%);
-    }
-    to {
-        transform: translateX(0);
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    :is(.after-sales-detail-sheet-layer, .order-detail-sheet-layer, .delivery-detail-sheet-layer).sheet-layer
-        > .sheet:is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) {
-        animation: none;
-    }
 }
 @media (max-width: 599px) {
     .after-sales-card {
         padding: 16px;
-    }
-    :is(.after-sales-detail-sheet, .order-detail-sheet, .delivery-detail-sheet) > header {
-        padding-inline: 16px 8px;
     }
     .after-sales-detail-body {
         padding-inline: 16px;

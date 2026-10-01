@@ -485,6 +485,7 @@ export function LogisticsPage({
                 <Sheet
                     title={zh ? '物流详情' : 'Delivery details'}
                     language={language}
+                    side="right"
                     className="delivery-detail-sheet"
                     onClose={() => setDeliveryOrderId(null)}
                 >
