@@ -188,8 +188,14 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="desktop-referral-content">
+                // REFERRAL_CELEBRATION_20261002: user-approved campaign theme, independent of store skins.
+                // Keep this marker and the scoped palette in referral.css when repairing skin rules.
+                <div className="desktop-referral-content" data-referral-theme="celebration">
                     <section className="referral-invite">
+                        <div className="referral-invite-kicker">
+                            <Gift aria-hidden="true" />
+                            <span>{isZh ? '分享有礼' : 'SHARE & EARN'}</span>
+                        </div>
                         <h1 className="referral-invite-title">
                             {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
                         </h1>
@@ -390,6 +396,7 @@ export function ReferralPage() {
                                 </>
                             ) : (
                                 <p className="referral-record-empty">
+                                    <Gift aria-hidden="true" />
                                     {isZh
                                         ? '还没有邀请记录，分享给第一位好友吧'
                                         : 'No invitees yet. Share with your first friend.'}
@@ -427,6 +434,7 @@ export function ReferralPage() {
                                 </>
                             ) : (
                                 <p className="referral-record-empty">
+                                    <WalletCards aria-hidden="true" />
                                     {isZh ? '暂无奖励流水' : 'No reward activity yet'}
                                 </p>
                             )}

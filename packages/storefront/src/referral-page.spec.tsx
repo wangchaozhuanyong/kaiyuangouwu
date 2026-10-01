@@ -141,13 +141,14 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
     });
 
-    it('consumes semantic skin surfaces without fixed light cards or clipped reward totals', () => {
+    it('marks the approved independent campaign theme without clipping reward totals', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('class="referral-overview"');
         expect(markup).not.toContain('bg-white');
         expect(markup).not.toContain('text-slate-900');
         expect(markup).not.toContain('w-full truncate');
         expect(markup).toContain('class="desktop-referral-content"');
+        expect(markup).toContain('data-referral-theme="celebration"');
     });
 
     it('paginates invitees list with previous and next buttons', () => {

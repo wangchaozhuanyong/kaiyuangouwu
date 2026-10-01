@@ -79,9 +79,35 @@ describe('storefront skin system', () => {
         }
         for (const page of ['notifications', 'referral']) {
             const css = stylesheet(`./styles/${page}.css`);
-            expect(css).not.toMatch(/#[\da-f]{3,8}\b|!important|data-storefront-preset/iu);
+            expect(css).not.toMatch(/!important|data-storefront-preset/iu);
+            // REFERRAL_CELEBRATION_20261002: only the approved local theme may own fixed colors.
+            postcss.parse(css).walkDecls(declaration => {
+                if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
+                expect(page).toBe('referral');
+                expect(declaration.prop).toMatch(/^--/u);
+                expect((declaration.parent as postcss.Rule).selector).toBe(
+                    ".desktop-referral-content[data-referral-theme='celebration']",
+                );
+            });
             expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
         }
+    });
+
+    it('preserves the approved referral campaign palette independently of storefront skins', () => {
+        const css = postcss.parse(stylesheet('./styles/referral.css'));
+        const tokens = new Map<string, string>();
+        css.walkRules(".desktop-referral-content[data-referral-theme='celebration']", rule => {
+            rule.walkDecls(declaration => {
+                tokens.set(declaration.prop, declaration.value);
+            });
+        });
+        // These approved campaign roles must not be replaced with store/skin-derived values.
+        expect(tokens.get('--accent')).toBe('#b92f32');
+        expect(tokens.get('--surface')).toBe('#fffdf9');
+        expect(tokens.get('--referral-gold')).toBe('#ffe0a0');
+        expect(tokens.get('--skin-card-radius')).toBe('22px');
+        expect([...tokens.values()].join(' ')).not.toContain('var(');
+        expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
     });
 
     it('owns transparent decorative icons globally without page or skin frames', () => {
