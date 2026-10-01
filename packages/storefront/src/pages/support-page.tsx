@@ -1,7 +1,7 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ChevronRight, Clock3, Copy, Headphones, MessageCircle, QrCode, Star, ThumbsUp } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
 
 import '../styles/modals-and-support.css';
@@ -111,6 +111,7 @@ export function SupportContent({
     const [qrChannel, setQrChannel] = useState<StorefrontSupportChannel | null>(null);
     const [qrImageRetryKey, setQrImageRetryKey] = useState(0);
     const [faqSearch, setFaqSearch] = useState('');
+    const faqSearchId = useId();
     const [faqPage, setFaqPage] = useState(0);
     const isZh = language === 'zh';
     const service = supportServiceDetails(content, language);
@@ -307,10 +308,15 @@ export function SupportContent({
                         className="support-faq-card"
                         aria-label={isZh ? '常见问题' : 'Frequently asked questions'}
                     >
-                        <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
-                        <label className="support-faq-search">
-                            <span>{isZh ? '搜索常见问题' : 'Search frequently asked questions'}</span>
+                        <div className="support-faq-header">
+                            <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
+                            <label htmlFor={faqSearchId}>
+                                {isZh ? '搜索常见问题' : 'Search frequently asked questions'}
+                            </label>
+                        </div>
+                        <div className="support-faq-search">
                             <input
+                                id={faqSearchId}
                                 type="search"
                                 value={faqSearch}
                                 onChange={event => {
@@ -319,7 +325,7 @@ export function SupportContent({
                                 }}
                                 placeholder={isZh ? '输入问题关键词' : 'Search questions'}
                             />
-                        </label>
+                        </div>
                         <div className="support-faq-list">
                             {visibleFaqs.map(item => (
                                 <details key={item.id} className="support-faq-item">
