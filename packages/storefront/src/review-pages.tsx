@@ -267,7 +267,6 @@ export function ReviewCenterPage({
                                                         candidate.currencyCode,
                                                         market.locale,
                                                     )}
-                                                    {candidate.sku ? ` · SKU ${candidate.sku}` : ''}
                                                 </small>
                                                 <small
                                                     className="review-candidate-order"

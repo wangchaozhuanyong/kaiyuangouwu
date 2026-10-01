@@ -6,11 +6,14 @@ import {
 import {
     ChannelService,
     Customer,
+    ExternalAuthenticationMethod,
+    ExternalAuthenticationService,
     mergeConfig,
     PaymentMethodHandler,
     RequestContextService,
     Role,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -21,8 +24,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { DataConsentService } from '../src/data-consent.service';
+import { DataConsentRecord } from '../src/entities/data-consent-record.entity';
+import { ReferralAccount } from '../src/entities/referral-account.entity';
+import { ReferralProgramConfig } from '../src/entities/referral-program-config.entity';
+import { ReferralRelationship } from '../src/entities/referral-relationship.entity';
 import { StoreProfile } from '../src/entities/store-profile.entity';
 import { referralPosterCopy } from '../src/referral/referral-poster-presets';
+import { ReferralService } from '../src/referral/referral.service';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const externalPaymentHandler = new PaymentMethodHandler({
@@ -1180,6 +1189,139 @@ describe('referral rebate closed loop', () => {
             adminClient.setChannelToken(primary.token);
         }
         expect((await read()).defaultPosterTemplate).toBe(id);
+    }, 30_000);
+
+    it('keeps external registration, consent and referral atomic in the real database', async () => {
+        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const connection = server.app.get(TransactionalConnection);
+        const external = server.app.get(ExternalAuthenticationService);
+        const referrals = server.app.get(ReferralService);
+        const consents = server.app.get(DataConsentService);
+        const configs = connection.getRepository(ctx, ReferralProgramConfig);
+        const original = await configs.findOne({ where: { channelId: ctx.channelId } });
+        const program = await configs.save(
+            new ReferralProgramConfig({
+                ...(original ?? {}),
+                channelId: ctx.channelId,
+                enabled: true,
+                currencyCode: ctx.channel.defaultCurrencyCode,
+            }),
+        );
+        const suffix = randomUUID();
+        const identity = (name: string) => ({
+            strategy: 'google',
+            externalIdentifier: `external-referral-${name}-${suffix}`,
+            emailAddress: `${name}-${suffix}@example.invalid`,
+            firstName: 'External',
+            lastName: 'Fixture',
+            verified: true,
+        });
+        const snapshots = {
+            terms: { version: 'external-terms-v1', digest: 'a'.repeat(64) },
+            privacy: { version: 'external-privacy-v1', digest: 'b'.repeat(64) },
+            locale: 'en',
+        };
+        const records = connection.getRepository(ctx, DataConsentRecord);
+        const customers = connection.getRepository(ctx, Customer);
+        const users = connection.getRepository(ctx, User);
+        const relationships = connection.getRepository(ctx, ReferralRelationship);
+        try {
+            const inviterIdentity = identity('inviter-external');
+            const inviter = await external.createCustomerAndUser(ctx, inviterIdentity);
+            const inviterCustomer = await customers.findOneOrFail({ where: { user: { id: inviter.id } } });
+            const account = await connection.getRepository(ctx, ReferralAccount).save(
+                new ReferralAccount({
+                    channelId: ctx.channelId,
+                    customerId: inviterCustomer.id,
+                    inviteCode: `G${suffix.replace(/-/g, '').slice(0, 10).toUpperCase()}`,
+                }),
+            );
+            const failed = identity('rollback-external');
+            const beforeConsent = await records.count();
+            const beforeRelationships = await relationships.count();
+            await expect(
+                referrals.registerExternalCustomer(
+                    ctx,
+                    failed.emailAddress,
+                    account.inviteCode,
+                    'LINK',
+                    async tx => {
+                        const user = await external.createCustomerAndUser(tx, failed);
+                        await consents.recordRegistrationByEmail(
+                            tx,
+                            failed.emailAddress,
+                            'GOOGLE_REGISTRATION',
+                            snapshots,
+                        );
+                        throw new Error(`external consent failure after user ${user.id}`);
+                    },
+                ),
+            ).rejects.toThrow('external consent failure');
+            expect(await customers.count({ where: { emailAddress: failed.emailAddress } })).toBe(0);
+            expect(await users.count({ where: { identifier: failed.emailAddress } })).toBe(0);
+            expect(
+                await connection.getRepository(ctx, ExternalAuthenticationMethod).count({
+                    where: { strategy: 'google', externalIdentifier: failed.externalIdentifier },
+                }),
+            ).toBe(0);
+            expect(await records.count()).toBe(beforeConsent);
+            expect(await relationships.count()).toBe(beforeRelationships);
+
+            const valid = identity('registered-external');
+            const registered = await referrals.registerExternalCustomer(
+                ctx,
+                valid.emailAddress,
+                account.inviteCode,
+                'LINK',
+                async tx => {
+                    const user = await external.createCustomerAndUser(tx, valid);
+                    await consents.recordRegistrationByEmail(
+                        tx,
+                        valid.emailAddress,
+                        'GOOGLE_REGISTRATION',
+                        snapshots,
+                    );
+                    return user;
+                },
+            );
+            const customer = await customers.findOneOrFail({ where: { user: { id: registered.id } } });
+            expect(
+                await records.count({ where: { customerId: customer.id, source: 'GOOGLE_REGISTRATION' } }),
+            ).toBe(2);
+            const relationship = await relationships.findOneOrFail({
+                where: { channelId: ctx.channelId, inviteeCustomerId: customer.id },
+            });
+            expect(relationship.inviterCustomerId).toBe(inviterCustomer.id);
+            expect(relationship.source).toBe('LINK');
+
+            const invalid = identity('invalid-invite-external');
+            let called = false;
+            await expect(
+                referrals.registerExternalCustomer(ctx, invalid.emailAddress, 'BADINVITE', 'LINK', tx => {
+                    called = true;
+                    return external.createCustomerAndUser(tx, invalid);
+                }),
+            ).rejects.toThrow('STOREFRONT_GOOGLE_INVITE_INVALID');
+            expect(called).toBe(false);
+            expect(await customers.count({ where: { emailAddress: invalid.emailAddress } })).toBe(0);
+
+            const linked = await referrals.registerExternalCustomer(
+                ctx,
+                inviterIdentity.emailAddress,
+                'BADINVITE',
+                'LINK',
+                tx =>
+                    external.createCustomerAndUser(tx, {
+                        ...inviterIdentity,
+                        externalIdentifier: `linked-${suffix}`,
+                    }),
+            );
+            expect(linked.id).toBe(inviter.id);
+            expect(await relationships.count({ where: { inviteeCustomerId: inviterCustomer.id } })).toBe(0);
+        } finally {
+            if (original) await configs.save(original);
+            else await configs.delete(program.id);
+        }
     }, 30_000);
 });
 

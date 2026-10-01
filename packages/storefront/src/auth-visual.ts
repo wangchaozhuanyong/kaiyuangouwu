@@ -1,3 +1,8 @@
+import {
+    authBenefitIcons,
+    type AuthBenefitIcon,
+} from '../../storefront-content-plugin/src/shared/auth-visual';
+
 import { StorefrontContentBlock, StorefrontLanguage } from './types';
 
 export type AuthVisualVariant = 'login' | 'register';
@@ -5,6 +10,8 @@ export type AuthVisualVariant = 'login' | 'register';
 export interface AuthVisualBenefit {
     title: string;
     description: string;
+    icon: AuthBenefitIcon;
+    imageUrl?: string | null;
 }
 
 export interface AuthVisualMessage {
@@ -35,9 +42,13 @@ export function resolveAuthVisualMessage(
 ): AuthVisualMessage {
     const benefits = (content?.items ?? [])
         .filter(item => item.enabled !== false && item.label.trim())
-        .map(item => ({
+        .map((item, index) => ({
             title: item.label.trim(),
             description: item.description.trim(),
+            icon: authBenefitIcons.includes(item.settings?.authIcon as AuthBenefitIcon)
+                ? (item.settings?.authIcon as AuthBenefitIcon)
+                : authBenefitIcons[index % authBenefitIcons.length],
+            imageUrl: item.imageUrl,
         }));
     return {
         eyebrow: content ? content.ctaLabel.trim() : '',

@@ -357,7 +357,7 @@ import {
             useClass: StorefrontPaymentCurrencyInterceptor,
         },
     ],
-    exports: [ReferralWalletSpendService, FraudRiskService],
+    exports: [ReferralWalletSpendService, FraudRiskService, ReferralService],
     configuration: config => {
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {

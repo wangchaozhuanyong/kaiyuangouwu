@@ -20,6 +20,7 @@ import {
     RequestContext,
     RequestContextService,
     TransactionalConnection,
+    User,
     UserInputError,
 } from '@vendure/core';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
@@ -370,6 +371,44 @@ export class ReferralService implements OnApplicationBootstrap {
             await this.bindRelationship(ctx, inviterAccount, invitee, source);
         }
         return { success: true };
+    }
+
+    /** Used only by a verified external strategy, never exposed as a post-login binding mutation. */
+    async registerExternalCustomer(
+        ctx: RequestContext,
+        emailAddress: string,
+        inviteCode: string | undefined,
+        source: string | undefined,
+        create: (transactionContext: RequestContext) => Promise<User>,
+    ): Promise<User> {
+        return this.connection.withTransaction(ctx, async transactionContext => {
+            const normalizedCode = normalizeInviteCode(inviteCode);
+            const existingCustomer = await this.connection
+                .getRepository(transactionContext, Customer)
+                .createQueryBuilder('customer')
+                .where('LOWER(customer.emailAddress) = :emailAddress', {
+                    emailAddress: emailAddress.trim().toLowerCase(),
+                })
+                .getOne();
+            // Linking an existing account must never grant a new-registration referral reward.
+            const config =
+                !existingCustomer && normalizedCode ? await this.getConfig(transactionContext) : null;
+            const inviter = config?.enabled
+                ? await this.findAccountByCode(transactionContext, normalizedCode)
+                : null;
+            if (config?.enabled && !inviter) throw new UserInputError('STOREFRONT_GOOGLE_INVITE_INVALID');
+            const user = await create(transactionContext);
+            if (inviter) {
+                const customer = await this.customerService.findOneByUserId(
+                    transactionContext,
+                    user.id,
+                    true,
+                );
+                if (!customer) throw new UserInputError('STOREFRONT_GOOGLE_AUTH_INVALID');
+                await this.bindRelationship(transactionContext, inviter, customer, source ?? 'CODE');
+            }
+            return user;
+        });
     }
 
     async myOverview(ctx: RequestContext) {

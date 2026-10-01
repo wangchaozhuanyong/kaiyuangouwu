@@ -1,4 +1,4 @@
-import { ReactNode, Suspense } from 'react';
+import { ReactNode, Suspense, useRef } from 'react';
 import { preload } from 'react-dom';
 
 import { authOriginalImageUrl } from '../../../storefront-content-plugin/src/shared/auth-visual';
@@ -15,6 +15,18 @@ import { imageSources } from '../responsive-image';
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
+
+// A locale refresh must not clear credentials or briefly remove the merchant image.
+// This cache is component memory only and is discarded on navigation/store changes.
+function useAuthVisualContent(variant: 'login' | 'register') {
+    const runtime = useRuntime();
+    const content = findAuthVisualContent(runtime.contentBlocks, variant);
+    const scope = `${runtime.market.code}:${variant}`;
+    const previous = useRef({ scope, content });
+    if (previous.current.scope !== scope || !runtime.contentQuery?.isPending)
+        previous.current = { scope, content };
+    return runtime.contentQuery?.isPending ? previous.current.content : content;
+}
 
 function AuthRouteBoundary({
     children,
@@ -38,16 +50,20 @@ function AuthRouteBoundary({
     }
     const pendingContent =
         heroVariant && runtime.contentQuery?.isPending && !runtime.error && !runtime.contentError;
+    const initialized = useRef(false);
+    if (!pendingContent) initialized.current = true;
+    const pendingInitialContent = pendingContent && !initialized.current;
     const placeholder = <span data-page-pending="module" />;
     return (
         <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
-            <Suspense fallback={placeholder}>{pendingContent ? placeholder : children}</Suspense>
+            <Suspense fallback={placeholder}>{pendingInitialContent ? placeholder : children}</Suspense>
         </AuthPageBoundary>
     );
 }
 
 export function LoginRoutePage() {
     const runtime = useRuntime();
+    const authVisualContent = useAuthVisualContent('login');
     return (
         <AuthRouteBoundary heroVariant="login">
             <LazyLoginPage
@@ -59,8 +75,9 @@ export function LoginRoutePage() {
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
-                authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
+                authVisualContent={authVisualContent}
                 authSettings={runtime.authSettings}
+                onToggleLanguage={runtime.toggleLanguage}
                 onBack={runtime.goBack}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
@@ -71,6 +88,7 @@ export function LoginRoutePage() {
 
 export function RegisterRoutePage() {
     const runtime = useRuntime();
+    const authVisualContent = useAuthVisualContent('register');
     return (
         <AuthRouteBoundary heroVariant="register">
             <LazyRegisterPage
@@ -82,8 +100,9 @@ export function RegisterRoutePage() {
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
-                authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'register')}
+                authVisualContent={authVisualContent}
                 authSettings={runtime.authSettings}
+                onToggleLanguage={runtime.toggleLanguage}
                 onBack={runtime.goBack}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}

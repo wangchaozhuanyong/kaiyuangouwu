@@ -88,3 +88,57 @@ it('requires image review, invalidates it after another image change, and preser
         host.remove();
     }
 });
+
+it('saves shared auth presentation settings while retaining merchant artwork and bilingual copy', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onSave = vi.fn(async () => undefined);
+    const value = {
+        ...newContentBlock('AUTH_LOGIN', 0),
+        id: 'auth-saved',
+        imageAssetId: 'hero',
+        imageUrl: '/hero.webp',
+        settings: {
+            formTitleZh: '欢迎登录',
+            formTitleEn: 'Welcome',
+            heroCopyPosition: 'bottom',
+            heroBenefitsStyle: 'icons',
+            mobileDecorationImageAssetId: 'skyline',
+            mobileDecorationImageUrl: '/skyline.webp',
+        },
+    };
+    value.translations[0].title = '更好的生活';
+    const button = (name: string) =>
+        Array.from(host.querySelectorAll('button')).find(item => item.textContent === name)!;
+    try {
+        await act(async () =>
+            root.render(
+                <StorefrontBlockEditor
+                    value={value}
+                    saving={false}
+                    onClose={() => undefined}
+                    onSave={onSave}
+                />,
+            ),
+        );
+        expect(host.textContent).toContain('表单标题（电脑与手机共用）');
+        expect(host.textContent).toContain('电脑端图片上的文字位置');
+        expect(host.textContent).toContain('卖点图标');
+        await act(async () => button('保存并核对').click());
+        expect(onSave).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                imageAssetId: 'hero',
+                imageUrl: '/hero.webp',
+                settings: value.settings,
+            }),
+            false,
+        );
+        await act(async () => button('装饰图素材清除').click());
+        expect(button('保存并核对').disabled).toBe(true);
+        expect(host.textContent).toContain('手机底部装饰图已替换或清除');
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});

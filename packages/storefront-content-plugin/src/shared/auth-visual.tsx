@@ -14,6 +14,56 @@ export interface AuthVisualData {
     items: Array<{ id?: string; label: string; enabled?: boolean }>;
 }
 
+/** Shared editor/runtime contract; absent fields keep a neutral, usable account page. */
+export const authBenefitIcons = [
+    'shopping-bag',
+    'map-pin',
+    'store',
+    'compass',
+    'shield-check',
+    'headphones',
+    'sparkles',
+] as const;
+export type AuthBenefitIcon = (typeof authBenefitIcons)[number];
+
+export function authPresentation(
+    content: Pick<AuthVisualData, 'settings'> | undefined,
+    variant: 'login' | 'register',
+    language: string,
+) {
+    const settings = content?.settings;
+    const zh = language === 'zh' || language === 'zh_Hans';
+    const copy = (key: string, fallback: string) => {
+        const value = settings?.[`${key}${zh ? 'Zh' : 'En'}`];
+        return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+    };
+    const decoration = settings?.mobileDecorationImageUrl;
+    return {
+        title: copy(
+            'formTitle',
+            variant === 'login' ? (zh ? '登录账户' : 'Sign in') : zh ? '注册账户' : 'Create account',
+        ),
+        subtitle: copy(
+            'formSubtitle',
+            variant === 'login'
+                ? zh
+                    ? '连接本地服务'
+                    : 'Connect with local services'
+                : zh
+                  ? '开启购物之旅'
+                  : 'Start your shopping journey',
+        ),
+        position: settings?.heroCopyPosition === 'bottom' ? 'bottom' : 'center',
+        benefitsStyle: settings?.heroBenefitsStyle === 'tags' ? 'tags' : 'icons',
+        showLogo: settings?.heroLogoEnabled !== false,
+        // Managed decoration is optional and never supplied from a store-name fallback.
+        decorationUrl:
+            typeof decoration === 'string' && /^(https?:\/\/|\/(?!\/))/.test(decoration)
+                ? decoration
+                : undefined,
+    };
+}
+
 export function configuredColor(value: unknown): string | undefined {
     return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : undefined;
 }

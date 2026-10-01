@@ -98,6 +98,7 @@ export function StorefrontBlockEditor({
     ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
     const imageChangeDescriptions = imageChanges.map(change => {
         if (change.slot === 'main') return `主图：${imageName(value)} → ${imageName(draft)}`;
+        if (change.slot === 'mobile-decoration') return '手机底部装饰图已替换或清除';
         const itemId = change.slot.slice('item:'.length);
         const previous = value.items.find(item => String(item.id) === itemId);
         const next = draft.items.find(item => String(item.id) === itemId);
@@ -105,6 +106,8 @@ export function StorefrontBlockEditor({
         return `${label}：${imageName(previous)} → ${next ? imageName(next) : '移除子项图片'}`;
     });
     const isSupport = draft.type === 'SUPPORT';
+    const isAuth = draft.type === 'AUTH_LOGIN' || draft.type === 'AUTH_REGISTER';
+    const authLanguageSuffix = language === 'zh_Hans' ? 'Zh' : 'En';
     const productSettingKey = ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(draft.type)
         ? 'selectedProductIds'
         : draft.type === 'BEST_SELLERS'
@@ -295,17 +298,29 @@ export function StorefrontBlockEditor({
                                 </div>
                                 <div className="mt-4 space-y-4">
                                     <Field
-                                        label={`${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`}
+                                        label={`${isAuth ? '电脑左侧' : ''}${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`}
                                     >
-                                        <input
-                                            value={translation.title}
-                                            onChange={event =>
-                                                updateTranslation({ title: event.target.value })
-                                            }
-                                            className={inputClass}
-                                        />
+                                        {isAuth ? (
+                                            <textarea
+                                                rows={2}
+                                                value={translation.title}
+                                                onChange={event =>
+                                                    updateTranslation({ title: event.target.value })
+                                                }
+                                                className={`${inputClass} resize-y`}
+                                                placeholder="可换行安排主标题层次"
+                                            />
+                                        ) : (
+                                            <input
+                                                value={translation.title}
+                                                onChange={event =>
+                                                    updateTranslation({ title: event.target.value })
+                                                }
+                                                className={inputClass}
+                                            />
+                                        )}
                                     </Field>
-                                    <Field label="副标题">
+                                    <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
                                         <input
                                             value={translation.subtitle}
                                             onChange={event =>
@@ -314,6 +329,60 @@ export function StorefrontBlockEditor({
                                             className={inputClass}
                                         />
                                     </Field>
+                                    {isAuth && (
+                                        <>
+                                            <Field label="表单标题（电脑与手机共用）">
+                                                <input
+                                                    className={inputClass}
+                                                    maxLength={60}
+                                                    value={stringSetting(
+                                                        draft.settings?.[`formTitle${authLanguageSuffix}`],
+                                                        '',
+                                                    )}
+                                                    placeholder={
+                                                        draft.type === 'AUTH_LOGIN'
+                                                            ? language === 'zh_Hans'
+                                                                ? '登录账户'
+                                                                : 'Sign in'
+                                                            : language === 'zh_Hans'
+                                                              ? '注册账户'
+                                                              : 'Create account'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            [`formTitle${authLanguageSuffix}`]:
+                                                                event.target.value,
+                                                        })
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label="表单副标题（电脑与手机共用）">
+                                                <input
+                                                    className={inputClass}
+                                                    maxLength={160}
+                                                    value={stringSetting(
+                                                        draft.settings?.[`formSubtitle${authLanguageSuffix}`],
+                                                        '',
+                                                    )}
+                                                    placeholder={
+                                                        draft.type === 'AUTH_LOGIN'
+                                                            ? language === 'zh_Hans'
+                                                                ? '连接本地服务'
+                                                                : 'Connect with local services'
+                                                            : language === 'zh_Hans'
+                                                              ? '开启购物之旅'
+                                                              : 'Start your shopping journey'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            [`formSubtitle${authLanguageSuffix}`]:
+                                                                event.target.value,
+                                                        })
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    )}
                                     <Field label={isSupport ? '客服说明' : '正文'}>
                                         <textarea
                                             rows={5}
@@ -325,7 +394,7 @@ export function StorefrontBlockEditor({
                                         />
                                     </Field>
                                     {!isSupport && (
-                                        <Field label="按钮文案">
+                                        <Field label={isAuth ? '图片上的引导短句' : '按钮文案'}>
                                             <input
                                                 value={translation.ctaLabel}
                                                 onChange={event =>
@@ -469,6 +538,79 @@ export function StorefrontBlockEditor({
                                                     <option value="standard">标准</option>
                                                     <option value="high">高对比度</option>
                                                 </select>
+                                            </Field>
+                                        </>
+                                    )}
+                                    {isAuth && (
+                                        <>
+                                            <Field label="电脑端图片上的文字位置">
+                                                <select
+                                                    className={inputClass}
+                                                    value={
+                                                        draft.settings?.heroCopyPosition === 'bottom'
+                                                            ? 'bottom'
+                                                            : 'center'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            heroCopyPosition: event.target.value,
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="center">左侧居中</option>
+                                                    <option value="bottom">左侧靠下</option>
+                                                </select>
+                                            </Field>
+                                            <Field label="卖点呈现方式">
+                                                <select
+                                                    className={inputClass}
+                                                    value={
+                                                        draft.settings?.heroBenefitsStyle === 'tags'
+                                                            ? 'tags'
+                                                            : 'icons'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            heroBenefitsStyle: event.target.value,
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="icons">图标、标题与说明</option>
+                                                    <option value="tags">简洁文字标签</option>
+                                                </select>
+                                            </Field>
+                                            <label className="flex items-center gap-2 text-sm text-slate-700">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={draft.settings?.heroLogoEnabled !== false}
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            heroLogoEnabled: event.target.checked,
+                                                        })
+                                                    }
+                                                />
+                                                图片顶部展示店铺品牌
+                                            </label>
+                                            <Field label="手机底部装饰图（选填）">
+                                                <AssetPicker
+                                                    label="装饰图素材"
+                                                    value={null}
+                                                    fallbackUrl={
+                                                        stringSetting(
+                                                            draft.settings?.mobileDecorationImageUrl,
+                                                            '',
+                                                        ) || null
+                                                    }
+                                                    onChange={asset =>
+                                                        updateSettings({
+                                                            mobileDecorationImageUrl: asset?.preview ?? null,
+                                                            mobileDecorationImageAssetId: asset?.id ?? null,
+                                                        })
+                                                    }
+                                                />
+                                                <p className="mt-2 text-xs text-slate-500">
+                                                    建议使用浅色横向城市轮廓图；仅显示在表单下方，短屏或输入时隐藏。留空不展示。
+                                                </p>
                                             </Field>
                                         </>
                                     )}

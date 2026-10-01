@@ -928,7 +928,7 @@ describe('unified storefront Admin API to Shop API', () => {
                                     await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
                                     await browserExpect(page.locator('.auth-hero-message')).toHaveCSS(
                                         'position',
-                                        'absolute',
+                                        'relative',
                                     );
                                     await browserExpect(imageLocator).toHaveCSS('filter', 'none');
                                     await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
@@ -979,21 +979,10 @@ describe('unified storefront Admin API to Shop API', () => {
                                     );
                                     expect(formBox.x).toBeGreaterThanOrEqual(heroBox.x + heroBox.width - 1);
                                     expect(formBox.y).toBeCloseTo(heroBox.y, 0);
-                                    const assuranceRail = page.locator('.auth-assurance-rail');
-                                    const railBox = await assuranceRail.boundingBox();
-                                    if (!railBox) throw new Error('Missing desktop assurance rail');
-                                    expect(railBox.x).toBeGreaterThanOrEqual(formBox.x);
-                                    expect(railBox.y + railBox.height).toBeLessThanOrEqual(
-                                        formBox.y + formBox.height,
-                                    );
-                                    expect(railBox.height).toBeLessThan(140);
-                                    const itemTops = await assuranceRail
-                                        .locator('.auth-assurance-item')
-                                        .evaluateAll(items =>
-                                            items.map(item => item.getBoundingClientRect().top),
-                                        );
-                                    expect(itemTops).toHaveLength(4);
-                                    expect(Math.max(...itemTops) - Math.min(...itemTops)).toBeLessThan(2);
+                                    // An explicitly empty merchant benefit list stays empty.
+                                    await browserExpect(page.locator('.auth-hero-benefits')).toHaveCount(0);
+                                    await browserExpect(page.locator('.auth-assurance-rail')).toHaveCount(0);
+                                    await browserExpect(page.locator('.login-content .auth-form-brand')).toBeVisible();
                                 }
                             } else {
                                 if (width < 1024) {
@@ -1552,6 +1541,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 await page.goto(pageUrl);
                 await preview.goto(previewUrl);
                 await preview.evaluate(() => document.documentElement.classList.add('dark'));
+                await preview.getByRole('button', { name: '电脑', exact: true }).click();
                 const clientFrame = preview.frameLocator('iframe[title="客户端装修效果"]');
                 await browserExpect(clientFrame.locator('.auth-page')).toBeVisible({ timeout: 15000 });
                 await browserExpect(clientFrame.locator('.login-content')).toHaveCSS(
@@ -1591,7 +1581,7 @@ describe('unified storefront Admin API to Shop API', () => {
                         await browserExpect(img).toHaveCSS('object-fit', 'cover');
                         await browserExpect(clientFrame.locator('.auth-hero-message')).toHaveCSS(
                             'position',
-                            'absolute',
+                            'relative',
                         );
                         await browserExpect
                             .poll(() =>

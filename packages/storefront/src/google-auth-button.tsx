@@ -37,18 +37,35 @@ declare global {
     }
 }
 
+let identityScriptPromise: Promise<void> | undefined;
+
 function loadGoogleIdentityScript(): Promise<void> {
     if (window.google?.accounts.id) return Promise.resolve();
-    const existing = document.getElementById(GOOGLE_IDENTITY_SCRIPT_ID) as HTMLScriptElement | null;
-    return new Promise((resolve, reject) => {
+    if (identityScriptPromise) return identityScriptPromise;
+    const promise = new Promise<void>((resolve, reject) => {
+        const existing = document.getElementById(GOOGLE_IDENTITY_SCRIPT_ID) as HTMLScriptElement | null;
         const script = existing ?? document.createElement('script');
-        const onLoad = () => resolve();
+        const cleanup = () => {
+            clearTimeout(timeout);
+            script.removeEventListener('load', onLoad);
+            script.removeEventListener('error', onError);
+        };
         const onError = () => {
+            cleanup();
             script.remove();
             reject(new Error('Google Identity Services could not be loaded'));
         };
-        script.addEventListener('load', onLoad, { once: true });
-        script.addEventListener('error', onError, { once: true });
+        const onLoad = () => {
+            if (!window.google?.accounts.id) {
+                onError();
+                return;
+            }
+            cleanup();
+            resolve();
+        };
+        const timeout = window.setTimeout(onError, 15000);
+        script.addEventListener('load', onLoad);
+        script.addEventListener('error', onError);
         if (!existing) {
             script.id = GOOGLE_IDENTITY_SCRIPT_ID;
             script.src = GOOGLE_IDENTITY_SCRIPT_URL;
@@ -57,6 +74,13 @@ function loadGoogleIdentityScript(): Promise<void> {
             document.head.append(script);
         }
     });
+    identityScriptPromise = promise;
+    void promise
+        .finally(() => {
+            if (identityScriptPromise === promise) identityScriptPromise = undefined;
+        })
+        .catch(() => undefined);
+    return promise;
 }
 
 export function GoogleAuthButton({
@@ -74,6 +98,10 @@ export function GoogleAuthButton({
     const callbackRef = useRef(onCredential);
     const [error, setError] = useState('');
     const [ready, setReady] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+    const busyRef = useRef(false);
+    const disabledRef = useRef(disabled);
+    disabledRef.current = disabled;
 
     callbackRef.current = onCredential;
 
@@ -91,6 +119,7 @@ export function GoogleAuthButton({
                     auto_select: false,
                     cancel_on_tap_outside: true,
                     callback: response => {
+                        if (!active || disabledRef.current || busyRef.current) return;
                         if (!response.credential) {
                             setError(
                                 language === 'zh'
@@ -100,15 +129,21 @@ export function GoogleAuthButton({
                             return;
                         }
                         setError('');
-                        void callbackRef.current(response.credential).catch(cause => {
-                            setError(
-                                cause instanceof Error
-                                    ? cause.message
-                                    : language === 'zh'
-                                      ? 'Google 登录失败，请重试'
-                                      : 'Google sign-in failed. Try again',
-                            );
-                        });
+                        busyRef.current = true;
+                        void callbackRef
+                            .current(response.credential)
+                            .catch(cause => {
+                                setError(
+                                    cause instanceof Error
+                                        ? cause.message
+                                        : language === 'zh'
+                                          ? 'Google 登录失败，请重试'
+                                          : 'Google sign-in failed. Try again',
+                                );
+                            })
+                            .finally(() => {
+                                busyRef.current = false;
+                            });
                     },
                 });
                 window.google.accounts.id.renderButton(host, {
@@ -135,14 +170,28 @@ export function GoogleAuthButton({
             active = false;
             host?.replaceChildren();
         };
-    }, [clientId, language]);
+    }, [clientId, language, attempt]);
 
     return (
         <div className={`google-auth-button${disabled ? ' google-auth-button-disabled' : ''}`}>
-            <div ref={hostRef} aria-busy={!ready} />
+            <div ref={hostRef} aria-busy={!ready && !error} inert={disabled || undefined} />
+            {!ready && !error && (
+                <span className="google-auth-loading" role="status">
+                    {language === 'zh' ? '正在加载 Google 登录…' : 'Loading Google sign-in…'}
+                </span>
+            )}
             {error ? (
                 <small className="form-error" role="alert">
                     {error}
+                    {!ready && (
+                        <button
+                            className="auth-inline-link"
+                            type="button"
+                            onClick={() => setAttempt(value => value + 1)}
+                        >
+                            {language === 'zh' ? '重新加载' : 'Retry'}
+                        </button>
+                    )}
                 </small>
             ) : null}
         </div>
