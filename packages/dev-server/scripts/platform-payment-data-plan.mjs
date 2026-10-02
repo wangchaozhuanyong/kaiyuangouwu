@@ -20,6 +20,18 @@ export async function collectPlatformPaymentDataPlan(adapter) {
         optional('payment', ['id', 'method', 'orderId', 'state']),
         optional('storefront_usdt_payment_intent', ['id', 'channelId', 'orderId', 'status']),
     ]);
+    // The database computes hashes: no configurable argument, credential or recipient is exported.
+    const fingerprints =
+        adapter.kind === 'mysql' &&
+        adapter.columnExists &&
+        (await adapter.columnExists('payment_method', 'handler')) &&
+        (await adapter.columnExists('payment_method', 'checker'))
+            ? await adapter.query(`SELECT id,
+            CASE WHEN JSON_VALID(handler) THEN JSON_UNQUOTE(JSON_EXTRACT(handler, '$.code')) ELSE NULL END AS handlerCode,
+            SHA2(CAST(handler AS CHAR), 256) AS handlerDigest,
+            SHA2(COALESCE(CAST(checker AS CHAR), 'null'), 256) AS checkerDigest
+            FROM payment_method ORDER BY id`)
+            : [];
     const platformIds = new Set(
         links.filter(l => String(l.channelId) === String(platform.id)).map(l => String(l.paymentMethodId)),
     );
@@ -33,12 +45,17 @@ export async function collectPlatformPaymentDataPlan(adapter) {
             ? 'KEEP_PLATFORM_CONFIGURATION'
             : 'REVIEW_EXPLICIT_MAPPING_KEEP_PAYMENT_HISTORY',
         automaticMigration: false,
+        configurationEvidence:
+            fingerprints.find(row => String(row.id) === String(method.id)) ?? 'DATA_MISSING',
     }));
     return {
         format: 1,
         productionReady: false,
         mutatesData: false,
         platformChannelId: String(platform.id),
+        operatingChannels: channels
+            .filter(channel => String(channel.id) !== String(platform.id))
+            .map(channel => ({ id: String(channel.id), code: channel.code })),
         entries,
         switches: switches.map(s => ({
             ...s,
