@@ -1771,7 +1771,42 @@ try {
                         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
                     ).toBe(true);
                 }
+                // Read the painted card composition, not just token declarations.
+                // Plain search cards must never inherit the classic module outline.
+                const productFrames = await page.locator('.product-card:visible').evaluateAll(cards =>
+                    cards.map(card => {
+                        const style = getComputedStyle(card);
+                        const media = card.querySelector('.product-card-media');
+                        const content = card.querySelector('.product-card-content');
+                        return {
+                            plain: card.classList.contains('is-plain'),
+                            border: style.borderWidth,
+                            radius: style.borderRadius,
+                            shadow: style.boxShadow,
+                            background: style.backgroundColor,
+                            inset: getComputedStyle(content).paddingLeft,
+                            mediaRadius: getComputedStyle(media).borderRadius,
+                            controlRadius: style.getPropertyValue('--skin-control-radius').trim(),
+                            mediaWidth: media.getBoundingClientRect().width,
+                            mediaHeight: media.getBoundingClientRect().height,
+                        };
+                    }),
+                );
+                for (const frame of productFrames) {
+                    expect(frame.inset).toBe(frame.plain ? '0px' : '8px');
+                    expect(Math.abs(frame.mediaWidth - frame.mediaHeight)).toBeLessThanOrEqual(1);
+                    if (frame.plain) {
+                        expect(frame.border, `${preset}/${width}/${name} plain product outline`).toBe('0px');
+                        expect(frame.radius).toBe('0px');
+                        expect(frame.shadow).toBe('none');
+                        expect(frame.background).toBe('rgba(0, 0, 0, 0)');
+                        expect(frame.mediaRadius).toBe(frame.controlRadius);
+                    } else {
+                        expect(frame.radius).toBe(frame.controlRadius);
+                    }
+                }
                 results.push({
+                    productFrames,
                     preset,
                     width,
                     name,

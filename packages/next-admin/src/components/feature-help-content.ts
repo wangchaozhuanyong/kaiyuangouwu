@@ -309,6 +309,12 @@ export const featureHelpContent = {
         example: '例如：将轮播图移到第一层，在其下方放置“本周推荐”商品楼层。',
         impact: '发布后会改变当前店铺首页的模块顺序与显示。',
     },
+    'storefront.account': {
+        purpose: '配置当前店铺账户设置中的个人数据导出入口。',
+        requirements: ['先确认当前选择的店铺', '开关保存成功后才会生效'],
+        example: '例如：开启后，客户可在“账户设置 → 数据与隐私”找到“导出我的个人数据”。',
+        impact: '默认关闭；仅影响当前店铺电脑和手机端的入口显示，不会自动导出或删除客户数据。',
+    },
     'storefront.auth': {
         purpose: '统一配置商城邮箱注册登录和 Google 快捷注册登录方式。',
         requirements: ['邮箱自动注册与快捷注册依赖邮箱密码登录', '全平台 Google 配置仅超级管理员可修改'],
