@@ -454,13 +454,27 @@ describe('storefront skin system', () => {
                     const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
                     for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
                         if (
-                            !selector.trim().endsWith('.subpage-header') ||
+                            !selector.includes('.subpage-header') ||
                             selector.includes('.product-detail-page')
                         )
                             continue;
-                        expect(body, `${file}: ${selector}`).not.toMatch(
-                            /(?:^|;)\s*(?:height|min-height|margin|padding(?:-top)?):/,
+                        const ownsHeader = /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*$/u.test(
+                            selector,
                         );
+                        const ownsTitle =
+                            /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*>\s*strong\b/u.test(
+                                selector,
+                            );
+                        if (ownsHeader) {
+                            expect(body, `${file}: ${selector}`).not.toMatch(
+                                /(?:^|;)\s*(?:height|min-height|margin|padding(?:-top)?):/,
+                            );
+                        }
+                        if (ownsHeader || ownsTitle) {
+                            expect(body, `${file}: ${selector}`).not.toMatch(
+                                /(?:^|;)\s*(?:font-size|font-weight|line-height):/,
+                            );
+                        }
                     }
                 }
             }
@@ -469,6 +483,10 @@ describe('storefront skin system', () => {
         expect(stylesheet('./styles/subpage-content.css')).toMatch(
             /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*height:\s*auto;/,
         );
+        expect(stylesheet('./styles/subpage-content.css')).toMatch(
+            /\.desktop-store-layout \.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
+        );
+        expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('[&>.subpage-header]');
         expect(stylesheet('./styles/home-showcase.css')).not.toMatch(
             /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*padding-top:\s*72px;/,
         );
@@ -594,6 +612,26 @@ describe('storefront skin system', () => {
 
     it('keeps color ownership in the shared semantic palette instead of preset CSS copies', () => {
         const source = stylesheet('./styles/visual-presets.css');
+        const lineOwners = new Set([
+            'styles/experience-foundations.css',
+            // User-approved local campaign and service themes retain their boundaries.
+            'styles/referral.css',
+            'pages/business-services-page.css',
+        ]);
+        const visitLineOwners = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) visitLineOwners(file);
+                else if (file.endsWith('.css') && !lineOwners.has(path.relative(__dirname, file))) {
+                    postcss.parse(readFileSync(file, 'utf8')).walkDecls(declaration => {
+                        expect(declaration.prop, file).not.toBe('--line');
+                        expect(declaration.prop, file).not.toBe('--line-strong');
+                        expect(declaration.prop, file).not.toBe('--focus');
+                    });
+                }
+            }
+        };
+        visitLineOwners(__dirname);
         const semanticTokens = [
             '--bg',
             '--paper',

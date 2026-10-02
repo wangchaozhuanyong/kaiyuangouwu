@@ -288,14 +288,18 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('去添加收货地址');
     });
 
-    it('does not use red focus styling for delivery email inputs or the saved-email trigger', () => {
+    it('uses shared resting edges and keyboard focus for delivery email inputs and the saved-email trigger', () => {
         const fieldStyle = checkoutPageStyles['digital-delivery-email-field'];
         const triggerStyle = checkoutPageStyles['digital-delivery-email-trigger'];
 
         expect(fieldStyle).not.toContain('var(--accent)');
-        expect(fieldStyle).toContain('[&_input:focus]:[border-color:#3b82f6]');
+        expect(fieldStyle).toContain('[&_input]:[border:1px_solid_var(--line)]');
+        expect(fieldStyle).toContain('[&_input:focus]:[border-color:var(--focus)]');
+        expect(fieldStyle).not.toMatch(/#[\da-f]{3,8}\b|rgba?\(/iu);
         expect(triggerStyle).not.toContain('var(--accent)');
-        expect(triggerStyle).toContain('[&:focus-visible]:[border-color:#3b82f6]');
+        expect(triggerStyle).toContain('[border:1px_solid_var(--line)]');
+        expect(triggerStyle).toContain('[&:focus-visible]:[border-color:var(--focus)]');
+        expect(triggerStyle).not.toMatch(/#[\da-f]{3,8}\b|rgba?\(/iu);
         expect(triggerStyle).toContain('[&:focus-visible]:[outline:0]');
     });
 

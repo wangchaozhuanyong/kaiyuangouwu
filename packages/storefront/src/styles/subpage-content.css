@@ -476,10 +476,10 @@
         display: block;
         flex: 1;
         text-align: left;
-        font-size: var(--type-page-size);
+        font-size: var(--type-topbar-size);
         font-weight: var(--font-weight-semibold);
         opacity: 1;
-        line-height: var(--type-page-leading);
+        line-height: var(--type-topbar-leading);
     }
     .desktop-store-layout .subpage-header > button {
         position: static;
