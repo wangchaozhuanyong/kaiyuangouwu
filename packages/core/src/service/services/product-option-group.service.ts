@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Injectable } from '@nestjs/common';
 import {
     AssignProductOptionGroupsToChannelInput,
@@ -23,11 +24,11 @@ import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { CatalogResourceOwnership } from '../../entity/catalog-governance/catalog-resource-ownership.entity';
 import { Channel } from '../../entity/channel/channel.entity';
+import { Product } from '../../entity/product/product.entity';
+import { ProductOption } from '../../entity/product-option/product-option.entity';
 import { ProductOptionGroupTranslation } from '../../entity/product-option-group/product-option-group-translation.entity';
 import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
-import { ProductOption } from '../../entity/product-option/product-option.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
-import { Product } from '../../entity/product/product.entity';
 import { EventBus } from '../../event-bus';
 import { ProductOptionGroupEvent } from '../../event-bus/events/product-option-group-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';

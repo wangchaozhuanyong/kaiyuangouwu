@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Injectable } from '@nestjs/common';
 import {
     CreateFacetValueInput,
@@ -18,9 +19,9 @@ import { assertFound } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Product, ProductVariant } from '../../entity';
+import { Facet } from '../../entity/facet/facet.entity';
 import { FacetValueTranslation } from '../../entity/facet-value/facet-value-translation.entity';
 import { FacetValue } from '../../entity/facet-value/facet-value.entity';
-import { Facet } from '../../entity/facet/facet.entity';
 import { EventBus } from '../../event-bus';
 import { FacetValueEvent } from '../../event-bus/events/facet-value-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';

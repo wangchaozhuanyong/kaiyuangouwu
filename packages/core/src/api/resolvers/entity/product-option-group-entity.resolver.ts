@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Args, Parent, ResolveField, Resolver } from '@nestjs/graphql';
 import { Permission, ProductListOptions } from '@vendure/common/lib/generated-types';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
@@ -6,9 +7,9 @@ import { PaginatedList } from '@vendure/common/lib/shared-types';
 import { Translated } from '../../../common/types/locale-types';
 import { idsAreEqual } from '../../../common/utils';
 import { Channel } from '../../../entity/channel/channel.entity';
-import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
-import { ProductOption } from '../../../entity/product-option/product-option.entity';
 import { Product } from '../../../entity/product/product.entity';
+import { ProductOption } from '../../../entity/product-option/product-option.entity';
+import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { LocaleStringHydrator } from '../../../service/helpers/locale-string-hydrator/locale-string-hydrator';
 import { ProductOptionGroupService } from '../../../service/services/product-option-group.service';
 import { ProductService } from '../../../service/services/product.service';
