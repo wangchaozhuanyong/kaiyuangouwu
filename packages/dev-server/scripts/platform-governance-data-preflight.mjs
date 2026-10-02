@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { collectPlatformCatalogDataPlan } from './platform-catalog-data-plan.mjs';
+import { buildGovernanceReconciliationPlan } from './platform-governance-reconciliation-plan.mjs';
 import { collectPlatformPaymentDataPlan } from './platform-payment-data-plan.mjs';
 import { createStoreIsolationAdapter, safeReadOnlyAuditFailure } from './store-isolation-data-preflight.mjs';
 
@@ -17,6 +18,9 @@ export async function collectPlatformGovernanceDataPreflight(adapter) {
         productionApply: false,
         catalog,
         payment,
+        reconciliation: Object.values(catalog.referenceEvidence).every(Array.isArray)
+            ? buildGovernanceReconciliationPlan({ catalog, payment })
+            : { status: 'DATA_MISSING', productionApply: false },
     };
     const bytes = Buffer.from(JSON.stringify(plan));
     const compressed = gzipSync(bytes).toString('base64');

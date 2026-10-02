@@ -292,6 +292,7 @@ jobs:
                       lines.extend(transport(f'packages/dev-server/scripts/{name}', f'repository/packages/dev-server/scripts/{name}') for name in [
                           'platform-governance-data-preflight.mjs', 'platform-catalog-data-plan.mjs',
                           'platform-payment-data-plan.mjs', 'store-isolation-data-preflight.mjs',
+                          'platform-governance-reconciliation-plan.mjs',
                           'store-isolation-ownership-evidence.mjs', 'store-isolation-customer-dependencies.mjs',
                       ])
                   if operation_name == 'audit-store-isolation-data':
