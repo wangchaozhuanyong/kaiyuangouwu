@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, UserRound } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import { checkoutAddress } from '../checkout-address';
 import { languageCodeFor } from '../i18n';
@@ -90,62 +90,70 @@ function OrderDetailsDrawer({ orderId, onClose }: { orderId: string; onClose: ()
             className="order-detail-sheet"
             onClose={onClose}
         >
-            {!query.data ? (
-                <div className="order-detail-sheet-state">
-                    {error ? (
-                        <EmptyState
-                            icon={<Package />}
-                            title={isZh ? '订单详情暂不可用' : 'Order details unavailable'}
-                            detail={error}
-                            action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void query.refetch()}
-                        />
-                    ) : (
+            <Suspense
+                fallback={
+                    <div className="order-detail-sheet-state">
                         <PageSkeleton label={isZh ? '正在加载订单详情' : 'Loading order details'} />
-                    )}
-                </div>
-            ) : (
-                <>
-                    {error && (
-                        <InlineError
-                            message={error}
-                            action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void query.refetch()}
+                    </div>
+                }
+            >
+                {!query.data ? (
+                    <div className="order-detail-sheet-state">
+                        {error ? (
+                            <EmptyState
+                                icon={<Package />}
+                                title={isZh ? '订单详情暂不可用' : 'Order details unavailable'}
+                                detail={error}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={() => void query.refetch()}
+                            />
+                        ) : (
+                            <PageSkeleton label={isZh ? '正在加载订单详情' : 'Loading order details'} />
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        {error && (
+                            <InlineError
+                                message={error}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={() => void query.refetch()}
+                            />
+                        )}
+                        <LazyOrderDetailPage
+                            presentation="drawer"
+                            api={runtime.api}
+                            order={query.data}
+                            market={runtime.market}
+                            locale={runtime.locale}
+                            language={runtime.language}
+                            reviewEnabled={runtime.reviewSettingsStatus === 'enabled'}
+                            storefrontName={runtime.storefrontName}
+                            onBack={onClose}
+                            onBuyAgain={runtime.addOrderToCart}
+                            onReopen={runtime.reopenPendingOrder}
+                            onCancelOrder={runtime.cancelAuthorizedOrder}
+                            onCreateAfterSales={async input => {
+                                await runtime.createAfterSalesRequest(input);
+                                onClose();
+                            }}
+                            onConfirmDelivery={async fulfillmentId => {
+                                await runtime.api.confirmFulfillmentDelivery(fulfillmentId);
+                                await queryClient.invalidateQueries({
+                                    queryKey: storefrontQueryKeys.customerScope(
+                                        storefrontQueryKeys.market(runtime.market),
+                                        languageCodeFor(runtime.language),
+                                        runtime.customer?.id ?? '',
+                                    ),
+                                });
+                                runtime.notify(isZh ? '已确认收货，订单状态已更新' : 'Delivery confirmed');
+                            }}
+                            onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}
+                            onNotify={runtime.notify}
                         />
-                    )}
-                    <LazyOrderDetailPage
-                        presentation="drawer"
-                        api={runtime.api}
-                        order={query.data}
-                        market={runtime.market}
-                        locale={runtime.locale}
-                        language={runtime.language}
-                        reviewEnabled={runtime.reviewSettingsStatus === 'enabled'}
-                        storefrontName={runtime.storefrontName}
-                        onBack={onClose}
-                        onBuyAgain={runtime.addOrderToCart}
-                        onReopen={runtime.reopenPendingOrder}
-                        onCancelOrder={runtime.cancelAuthorizedOrder}
-                        onCreateAfterSales={async input => {
-                            await runtime.createAfterSalesRequest(input);
-                            onClose();
-                        }}
-                        onConfirmDelivery={async fulfillmentId => {
-                            await runtime.api.confirmFulfillmentDelivery(fulfillmentId);
-                            await queryClient.invalidateQueries({
-                                queryKey: storefrontQueryKeys.customerScope(
-                                    storefrontQueryKeys.market(runtime.market),
-                                    languageCodeFor(runtime.language),
-                                    runtime.customer?.id ?? '',
-                                ),
-                            });
-                            runtime.notify(isZh ? '已确认收货，订单状态已更新' : 'Delivery confirmed');
-                        }}
-                        onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}
-                        onNotify={runtime.notify}
-                    />
-                </>
-            )}
+                    </>
+                )}
+            </Suspense>
         </Sheet>
     );
 }
