@@ -52,7 +52,7 @@
         width: 100%;
         min-height: 320px;
         height: auto;
-        flex: 1;
+        flex: 1 0 auto;
         align-self: stretch;
         border: 0;
         border-radius: var(--skin-hero-radius);

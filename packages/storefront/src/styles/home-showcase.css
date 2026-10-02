@@ -20,7 +20,10 @@
     position: static;
     z-index: 3;
     display: flex;
+    max-width: 100%;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 0;
     padding: 0 4px;
     border: 0;
@@ -143,6 +146,7 @@
     flex-direction: column;
 }
 .home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
+    flex-shrink: 0;
     position: relative;
     top: auto;
     left: auto;
@@ -153,6 +157,7 @@
     margin-left: clamp(28px, 3vw, 44px);
 }
 .home-page .hero .hero-service-overlay {
+    flex-shrink: 0;
     position: relative;
     z-index: 2;
     align-self: center;
