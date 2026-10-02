@@ -45,7 +45,7 @@ test('preflight exports only fixed IDs and states, preserves missing evidence an
     );
     assert.equal(result.enabledStoreSwitchCount, 0);
     assert.ok(plan.catalog.validation.dataMissing.includes('Facet'));
-    assert.ok(!bytes.toString().includes('handler'));
+    assert.ok(!bytes.toString().includes('arguments'));
 });
 
 test('the complete plan survives a catalog larger than one SSM response', async () => {
