@@ -1857,12 +1857,13 @@ html[lang='en'] .quick-grid b {
 }
 
 .featured-collection-action {
-    min-height: 36px;
+    min-height: var(--experience-control-min);
     margin: 0;
     padding: 0 0 0 8px;
     position: relative;
     grid-column: 2;
     grid-row: 1;
+    justify-self: end;
     border: 0;
     background: transparent;
     color: inherit;
@@ -1872,6 +1873,14 @@ html[lang='en'] .quick-grid b {
     font-size: 12px;
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
+}
+
+.featured-collection-action-label {
+    display: inline-flex;
+    align-items: center;
+    gap: inherit;
+    line-height: var(--type-helper-leading);
+    white-space: nowrap;
 }
 
 .featured-collection-action svg {

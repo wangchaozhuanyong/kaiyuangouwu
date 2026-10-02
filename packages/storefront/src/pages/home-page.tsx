@@ -1836,8 +1836,10 @@ function FeaturedCollectionSection({
                             type="button"
                             onClick={() => onContentTarget(block.targetType, block.targetValue)}
                         >
-                            {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
-                            <ChevronRight aria-hidden="true" />
+                            <span className="featured-collection-action-label">
+                                {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
+                                <ChevronRight aria-hidden="true" />
+                            </span>
                         </button>
                     ) : null}
                 </div>
