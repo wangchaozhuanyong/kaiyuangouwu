@@ -1,6 +1,29 @@
 /* Shared low-chrome treatment for compact utility controls. Text fields keep
    their functional boundary; selects and shell actions use tone and elevation
    so the interface does not become a grid of outlined boxes. */
+/* Composite search fields own one stable boundary, including their input focus. */
+:is(.proto-search-form, .search-input-field) {
+    height: var(--experience-control-min);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    outline: 0;
+    box-shadow: none;
+}
+
+:is(.proto-search-form, .search-input-field):focus-within {
+    border-color: var(--focus);
+    box-shadow: inset 0 0 0 1px var(--focus);
+}
+
+:is(.proto-search-form, .search-input-field) input,
+:is(.proto-search-form, .search-input-field) input:is(:focus, :focus-visible) {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
 :where(.storefront-app, .sheet-layer) select:not([multiple]) {
     border: 0;
     border-radius: var(--skin-control-radius, var(--radius-sm));
@@ -97,6 +120,11 @@
 }
 
 @media (forced-colors: active) {
+    :is(.proto-search-form, .search-input-field):focus-within {
+        outline: var(--experience-focus-width) solid Highlight;
+        outline-offset: calc(-1 * var(--experience-focus-width));
+    }
+
     :where(.storefront-app, .sheet-layer) select:not([multiple]),
     :where(.storefront-app, .sheet-layer)
         :is(.topbar-capsule, .currency-select, .language-button, .notice-button, .proto-language-btn) {

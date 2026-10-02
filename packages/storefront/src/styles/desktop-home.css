@@ -748,37 +748,25 @@
         flex: 1;
         min-width: 0;
         width: auto;
-        height: var(--experience-control-min);
+        height: 100%;
         padding: 0 36px;
-        background: var(--proto-search-bg, rgba(15, 23, 42, 0.9));
-        border: 1px solid var(--proto-search-border, rgba(255, 255, 255, 0.1));
         border-radius: var(--skin-control-radius) 0 0 var(--skin-control-radius);
         color: var(--proto-search-text, #e2e8f0);
         font-size: 14px;
-        outline: none;
-        transition:
-            background-color 0.2s,
-            border-color 0.2s,
-            box-shadow 0.2s,
-            color 0.2s;
     }
     .proto-search-input::placeholder {
         color: var(--muted);
         font-size: 14px;
     }
-    .proto-search-input:focus {
-        border-color: var(--accent, #9333ea);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #9333ea) 25%, transparent);
-    }
     .proto-search-submit {
         flex: none;
         min-width: 68px;
-        height: var(--experience-control-min);
-        margin-left: -1px;
+        height: 100%;
+        margin: 0;
         padding: 0 16px;
         border: 0;
         border-radius: 0 var(--skin-control-radius) var(--skin-control-radius) 0;
-        background: var(--control-surface);
+        background: var(--accent-soft);
         color: var(--accent-ink);
         font-size: 14px;
         font-weight: 700;
