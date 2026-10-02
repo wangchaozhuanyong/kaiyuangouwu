@@ -155,24 +155,12 @@ export function AccountIdentity({
                     className="account-identity-promotion"
                     aria-label={isZh ? '邀请与推广' : 'Invite and share'}
                 >
-                    <div className="account-identity-promotion-title">
-                        <div>
-                            <h3>
-                                <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
-                                <span>{isZh ? '分享有礼' : 'Earn rewards'}</span>
-                            </h3>
-                            <p>{isZh ? '好友成功消费，即可获得奖励。' : 'Your friend buys, you earn.'}</p>
-                        </div>
-                        <img
-                            className="account-identity-promotion-gift"
-                            src="/storefront/illustrations/referral-gift.webp"
-                            alt=""
-                            width={384}
-                            height={384}
-                            decoding="async"
-                        />
-                    </div>
                     <div className="account-identity-promotion-actions">
+                        <button type="button" onClick={() => navigate({ name: 'referral' })}>
+                            <Share2 aria-hidden="true" />
+                            <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
+                            <ChevronRight aria-hidden="true" />
+                        </button>
                         <div className="account-identity-promotion-balance" aria-live="polite">
                             <p>{isZh ? '返利余额' : 'Referral balance'}</p>
                             {referralBalanceStatus === 'ready' && referralBalance != null ? (
@@ -208,10 +196,6 @@ export function AccountIdentity({
                                 </span>
                             )}
                         </div>
-                        <button type="button" onClick={() => navigate({ name: 'referral' })}>
-                            {isZh ? '邀请好友' : 'Invite friends'}
-                            <ChevronRight aria-hidden="true" />
-                        </button>
                     </div>
                 </section>
             )}
