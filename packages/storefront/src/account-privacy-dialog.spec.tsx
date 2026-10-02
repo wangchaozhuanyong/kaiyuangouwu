@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { AccountSecurityPage } from './account-security-page';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
-vi.mock('./storefront-ui/page-shell', () => ({ SubHeader: () => null, Subpage: () => null }));
+vi.mock('./storefront-ui/page-shell', () => ({
+    SubHeader: () => null,
+    Subpage: () => null,
+    SubpageBody: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 

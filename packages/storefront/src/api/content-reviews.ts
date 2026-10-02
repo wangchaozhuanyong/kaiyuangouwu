@@ -379,78 +379,78 @@ export class ContentReviewsApi extends BaseDomainApi {
             personalDataExport = true,
             accountRecommendations = true,
         ) => `
-            query StorefrontContent {
-                storefrontContentSettings {
-                    heroAutoplayIntervalSeconds
-                    configuredBlockTypes
-                    ${personalDataExport ? 'personalDataExportEnabled' : ''}
-                    ${accountRecommendations ? 'accountRecommendations { enabled titleZh titleEn limit }' : ''}
-                    auth {
-                        emailPasswordEnabled
-                        emailAutoRegistrationEnabled
-                        emailQuickRegistrationEnabled
-                        googleEnabled
-                        googleClientId
-                    }
-                }
-                activeStorefrontFlashSales {
-                    id
-                    startsAt
-                    endsAt
-                    items {
-                        productId
-                        productVariantId
-                        productName
-                        variantName
-                        originalPrice
-                        salePrice
-                        currencyCode
-                        imageUrl
-                    }
-                }
-                activeSystemAnnouncements {
-                    id
-                    ${announcementCreatedAt ? 'createdAt' : ''}
-                    title
-                    content
-                    linkUrl
-                    startsAt
-                    endsAt
-                }
-                storefrontContent {
-                    id
-                    code
-                    internalName
-                    type
-                    layoutVariant
-                    enabled
-                    position
-                    startsAt
-                    endsAt
-                    imageUrl
-                    imageAsset { width height }
-                    backgroundColor
-                    textColor
-                    targetType
-                    targetValue
-                    settings
-                    title
-                    subtitle
-                    body
-                    ctaLabel
-                    items {
-                        id
-                        enabled
-                        position
-                        imageUrl
-                        targetType
-                        targetValue
-                        settings
-                        label
-                        description
-                    }
-                }
-            }
+query StorefrontContent {
+storefrontContentSettings {
+heroAutoplayIntervalSeconds
+configuredBlockTypes
+${personalDataExport ? 'personalDataExportEnabled' : ''}
+${accountRecommendations ? 'accountRecommendations { enabled titleZh titleEn limit }' : ''}
+auth {
+emailPasswordEnabled
+emailAutoRegistrationEnabled
+emailQuickRegistrationEnabled
+googleEnabled
+googleClientId
+}
+}
+activeStorefrontFlashSales {
+id
+startsAt
+endsAt
+items {
+productId
+productVariantId
+productName
+variantName
+originalPrice
+salePrice
+currencyCode
+imageUrl
+}
+}
+activeSystemAnnouncements {
+id
+${announcementCreatedAt ? 'createdAt' : ''}
+title
+content
+linkUrl
+startsAt
+endsAt
+}
+storefrontContent {
+id
+code
+internalName
+type
+layoutVariant
+enabled
+position
+startsAt
+endsAt
+imageUrl
+imageAsset { width height }
+backgroundColor
+textColor
+targetType
+targetValue
+settings
+title
+subtitle
+body
+ctaLabel
+items {
+id
+enabled
+position
+imageUrl
+targetType
+targetValue
+settings
+label
+description
+}
+}
+}
         `;
         const result = await (async (): Promise<StorefrontContentQueryResult> => {
             try {
