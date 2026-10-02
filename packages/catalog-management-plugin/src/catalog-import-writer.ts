@@ -15,7 +15,7 @@ import { IsNull } from 'typeorm';
 
 import { CatalogImportCategoryService } from './catalog-import-category.service';
 import { catalogCategoryPath, catalogImportTypeError } from './catalog-import-classification';
-import { resolveCatalogFacetValues } from './catalog-import-facets';
+import { isCatalogImportFacetCode, resolveCatalogFacetValues } from './catalog-import-facets';
 import {
     dateString,
     effectiveVariantEnabled,
@@ -292,10 +292,12 @@ export class CatalogImportWriter {
             .filter(value => {
                 const code = value.facet?.code;
                 return !(
-                    (replaceBrand && code === 'catalog-brand') ||
-                    (replaceTags && code === 'catalog-tag') ||
+                    (replaceBrand && isCatalogImportFacetCode(ctx, code, 'catalog-brand')) ||
+                    (replaceTags && isCatalogImportFacetCode(ctx, code, 'catalog-tag')) ||
                     (replaceCategory &&
-                        ['catalog-import-category', 'catalog-import-primary-category'].includes(code ?? ''))
+                        ['catalog-import-category', 'catalog-import-primary-category'].some(base =>
+                            isCatalogImportFacetCode(ctx, code, base),
+                        ))
                 );
             })
             .map(value => value.id);

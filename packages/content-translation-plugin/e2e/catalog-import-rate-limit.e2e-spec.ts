@@ -1,4 +1,14 @@
 import {
+    ContentTranslationPlugin,
+    ContentTranslationRetryService,
+    ContentTranslationService,
+    ContentTranslationState,
+    GoogleCloudTranslationProvider,
+    NativeContentTranslationService,
+    TranslationProviderState,
+    type ContentTranslationProvider,
+} from '@vendure/content-translation-plugin';
+import {
     Collection,
     ConfigService,
     DefaultJobQueuePlugin,
@@ -14,6 +24,9 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,15 +41,7 @@ import {
     parseCatalogArrayBuffer,
     rowsForCatalogTransport,
 } from '../../catalog-management-plugin/src/dashboard/catalog-local-file';
-import { ContentTranslationRetryService } from '../src/content-translation-retry.service';
-import { ContentTranslationPlugin } from '../src/content-translation.plugin';
-import { ContentTranslationService } from '../src/content-translation.service';
-import { ContentTranslationState } from '../src/entities/content-translation-state.entity';
-import { TranslationProviderState } from '../src/entities/translation-provider-state.entity';
-import { NativeContentTranslationService } from '../src/native-content-translation.service';
-import { GoogleCloudTranslationProvider } from '../src/providers/google-cloud-translation.provider';
 import { translationResultCacheKey } from '../src/translation-result-cache.service';
-import { type ContentTranslationProvider } from '../src/types';
 
 const directory = mkdtempSync(join(tmpdir(), 'catalog-translation-'));
 let ready = false;
@@ -63,11 +68,15 @@ const config = mergeConfig(testConfig, {
         Channel: [{ name: 'commerceMode', type: 'string', defaultValue: 'HYBRID' }],
         Product: [{ name: 'fulfillmentType', type: 'string', defaultValue: 'digital' }],
     },
+    // Configure dependencies explicitly, with the cart schema defined before StoreManagement extends it.
     plugins: [
+        ContentTranslationPlugin.init({ provider }),
+        StorefrontContentPlugin,
+        StorefrontCartPlugin,
+        StoreManagementPlugin,
         CatalogManagementPlugin,
         DefaultJobQueuePlugin,
         DefaultSearchPlugin.init({ bufferUpdates: true }),
-        ContentTranslationPlugin.init({ provider }),
     ],
 });
 const { server } = createTestEnvironment(config);
@@ -188,7 +197,15 @@ describe('catalog import survives Google rate limits with a real isolated databa
         await imports.resolveRow(ctx, { rowId: failed.id, resolution: 'APPLY' });
         await imports.queueExecution(ctx, job.id);
         await imports.executeJob(ctx, job.id, () => undefined);
-        expect((await imports.findJob(ctx, job.id)).state).toBe('COMPLETED');
+        expect(
+            (await imports.findJob(ctx, job.id)).state,
+            JSON.stringify(
+                (await imports.findRows(ctx, job.id))
+                    .filter(row => row.action === 'ERROR')
+                    .slice(0, 3)
+                    .map(row => row.message),
+            ),
+        ).toBe('COMPLETED');
         expect(await connection.rawConnection.getRepository(ProductVariant).countBy({ sku: 'RETRY-0' })).toBe(
             1,
         );
@@ -200,7 +217,15 @@ describe('catalog import survives Google rate limits with a real isolated databa
         const job = await preview(362, 'BATCH');
         await imports.queueExecution(ctx, job.id);
         await imports.executeJob(ctx, job.id, () => undefined);
-        expect((await imports.findJob(ctx, job.id)).state).toBe('COMPLETED');
+        expect(
+            (await imports.findJob(ctx, job.id)).state,
+            JSON.stringify(
+                (await imports.findRows(ctx, job.id))
+                    .filter(row => row.action === 'ERROR')
+                    .slice(0, 3)
+                    .map(row => row.message),
+            ),
+        ).toBe('COMPLETED');
         const rows = await imports.findRows(ctx, job.id);
         expect(rows).toHaveLength(362);
         expect(rows.every(row => row.appliedAt && row.action === 'CREATE')).toBe(true);

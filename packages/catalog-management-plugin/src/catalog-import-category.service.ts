@@ -9,9 +9,11 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { normalizeIdentity } from './catalog-file-parser.service';
 import { splitCatalogCategoryPath } from './catalog-import-classification';
+import { catalogImportFacetCode } from './catalog-import-facets';
 import { parseIdList, shortCode } from './catalog-import-helpers';
 
 @Injectable()
@@ -180,7 +182,10 @@ export class CatalogImportCategoryService {
         name: string,
     ): Promise<ID | undefined> {
         const values = await this.connection.getRepository(ctx, FacetValue).find({
-            where: { facet: { code: facetCode }, channels: { id: ctx.channelId } },
+            where: {
+                facet: { code: In([catalogImportFacetCode(ctx, facetCode), facetCode]) },
+                channels: { id: ctx.channelId },
+            },
             relations: ['translations'],
         });
         return values.find(value =>

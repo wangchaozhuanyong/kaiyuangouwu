@@ -18,6 +18,18 @@ interface CatalogFacetServices {
     facetValueService: FacetValueService;
 }
 
+export function catalogImportFacetCode(ctx: RequestContext, facetCode: string): string {
+    return `${facetCode}-store-${ctx.channelId}`;
+}
+
+export function isCatalogImportFacetCode(
+    ctx: RequestContext,
+    actual: string | undefined,
+    base: string,
+): boolean {
+    return actual === base || actual === catalogImportFacetCode(ctx, base);
+}
+
 export async function resolveCatalogFacetValues(
     services: CatalogFacetServices,
     ctx: RequestContext,
@@ -62,7 +74,7 @@ async function ensureFacetValue(
     value: string,
     isPrivate = false,
 ): Promise<ID> {
-    facetCode = `${facetCode}-store-${ctx.channelId}`;
+    facetCode = catalogImportFacetCode(ctx, facetCode);
     let facet = await services.facetService.findByCode(ctx, facetCode, ctx.languageCode);
     if (!facet) {
         facet = await services.facetService.create(ctx, {
