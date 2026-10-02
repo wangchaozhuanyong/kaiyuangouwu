@@ -32,6 +32,12 @@ import {
 } from './platform-store-notification.service';
 import { ONLINE_WINDOW_MS, StorefrontPresenceService } from './storefront-presence.service';
 
+// Fixtures load source services while consumers can resolve separately compiled private declarations.
+// This bridge keeps fixture typing independent of whether plugin dist has been built.
+function fixtureDependency<T>(service: unknown): T {
+    return service as T;
+}
+
 const base = {
     id: { type: Number, primary: true, generated: true },
     createdAt: { type: Date, createDate: true },
@@ -238,14 +244,14 @@ describe('unified store notifications with real persistence and additive migrati
         reviews = new CustomerServiceReviewService(
             connection,
             customers as never,
-            notifications as never,
-            signals as never,
+            fixtureDependency(notifications),
+            fixtureDependency(signals),
             { signingSecret: 'test-notification-signing-secret' } as never,
             new CustomerServiceFeedbackService(
                 connection,
                 customers as never,
-                notifications as never,
-                signals as never,
+                fixtureDependency(notifications),
+                fixtureDependency(signals),
             ),
         );
     });
@@ -358,7 +364,7 @@ describe('unified store notifications with real persistence and additive migrati
             new CustomerServiceReviewService(
                 connection,
                 { findOneByUserId: () => Promise.resolve(undefined) } as never,
-                notifications as never,
+                fixtureDependency(notifications),
                 new NotificationSignalService(connection) as never,
                 { signingSecret: 'test-notification-signing-secret' } as never,
                 {} as never,
@@ -375,7 +381,7 @@ describe('unified store notifications with real persistence and additive migrati
                     throw new Error('outbox write rejected');
                 },
             } as never,
-            signals as never,
+            fixtureDependency(signals),
             { signingSecret: 'test-notification-signing-secret' } as never,
             {} as never,
         );
@@ -482,7 +488,7 @@ describe('unified store notifications with real persistence and additive migrati
                 {} as never,
                 presence,
                 {} as never,
-                notifications as never,
+                fixtureDependency(notifications),
                 {} as never,
             );
         await createTask().promotions(ctx(), now);
@@ -520,7 +526,7 @@ describe('unified store notifications with real persistence and additive migrati
             { create: ({ channelOrToken }: any) => Promise.resolve(ctx(channelOrToken.id)) } as never,
             presence,
             { get: () => Promise.resolve({ enabled: true, notifyOnlineReports: true }) } as never,
-            notifications as never,
+            fixtureDependency(notifications),
             {} as never,
         );
         vi.spyOn(task, 'stores').mockResolvedValue(channels);

@@ -4,6 +4,7 @@ import { ArrowUpRight, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } 
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
 import { storefrontVisitorId } from '../referral-attribution';
+import { storefrontErrorMessage } from '../storefront-errors';
 
 import '../styles/modals-and-support.css';
 
@@ -584,11 +585,11 @@ function CustomerServiceEvaluationSection({
             );
         } catch (error) {
             setLoadError(
-                isZh
-                    ? error instanceof Error && /[\u4e00-\u9fff]/u.test(error.message)
-                        ? error.message
-                        : '评价提交失败，请稍后重试'
-                    : 'Unable to submit feedback. Please try again.',
+                storefrontErrorMessage(
+                    error,
+                    isZh ? 'zh' : 'en',
+                    isZh ? '评价提交失败，请稍后重试' : 'Unable to submit feedback. Please try again.',
+                ),
             );
         } finally {
             setSaving(false);

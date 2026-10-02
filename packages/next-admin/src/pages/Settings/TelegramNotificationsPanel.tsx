@@ -563,7 +563,10 @@ export function TelegramNotificationsPanel() {
             </section>
 
             <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <h2 className="text-sm font-bold">全店客服服务评价</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold">
+                    全店客服服务评价
+                    <FeatureHelpButton topic="settings.telegram" title="全店客服服务评价" />
+                </h2>
                 {reviewQuery.loading && <p role="status">正在读取评价…</p>}
                 {reviewQuery.error && <p role="alert">评价读取失败，请刷新后重试</p>}
                 {!reviewQuery.loading &&
