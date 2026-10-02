@@ -1029,6 +1029,13 @@ describe('storefront skin system', () => {
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,
         );
+        expect(source).toMatch(/\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*max-height:\s*none;/);
+        expect(source).toMatch(
+            /data-copy-layout='below'\] \.hero-rich-content\s*\{[^}]*position:\s*relative;/,
+        );
+        expect(source).toMatch(
+            /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
+        );
     });
 
     it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {

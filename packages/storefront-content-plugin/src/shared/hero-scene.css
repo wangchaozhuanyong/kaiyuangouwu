@@ -327,7 +327,7 @@
     }
 }
 
-/* Uploaded artwork keeps its own ratio. Desktop copy overlays it; phone copy follows it. */
+/* Uploaded artwork keeps its ratio. Desktop copy overlays only when all content fits. */
 .hero.hero-image-overlay {
     display: block;
     min-height: 0;
@@ -384,16 +384,16 @@
 .hero.hero-image-overlay .hero-rich-content {
     position: absolute;
     z-index: 2;
-    top: 50%;
+    top: 24px;
     left: clamp(28px, 3vw, 44px);
     bottom: auto;
-    transform: translateY(-50%);
+    transform: none;
     width: min(450px, calc(100% - 170px));
-    max-height: calc(100% - 88px);
+    max-height: none;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 12px;
     padding: 0;
     overflow: visible;
@@ -402,10 +402,6 @@
     background: transparent;
     color: var(--hero-image-copy-foreground, #fff);
     box-shadow: none;
-}
-
-.hero.hero-image-overlay.has-service-overlay .hero-rich-content {
-    top: calc(50% - 28px);
 }
 
 .hero.hero-image-overlay .hero-rich-copy-surface {
@@ -431,7 +427,9 @@
     font-size: 15px;
     line-height: 1.7;
     font-weight: 500;
-    -webkit-line-clamp: 3;
+    display: block;
+    overflow: visible;
+    overflow-wrap: anywhere;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -459,13 +457,42 @@
     font-size: 14px;
 }
 
+@media (min-width: 1024px) {
+    /* Insufficient native image height moves the intact copy below the photo. */
+    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-content {
+        position: relative;
+        top: auto;
+        left: auto;
+        margin-left: clamp(28px, 3vw, 44px);
+        padding: 24px 0;
+        color: var(--hero-copy-foreground);
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-image-link::after {
+        display: none;
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-copy-layout='below']
+        :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
+        color: var(--hero-copy-foreground);
+        text-shadow: none;
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-copy-layout='below']
+        :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
+        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        text-shadow: none;
+    }
+}
+
 @media (max-width: 1023px) {
     .hero.hero-image-overlay .hero-rich-image-link::after {
         display: none;
     }
 
-    .hero.hero-image-overlay .hero-rich-content,
-    .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
+    .hero.hero-image-overlay .hero-rich-content {
         position: relative;
         top: auto;
         left: auto;
@@ -507,7 +534,6 @@
     .hero.hero-image-overlay .hero-rich-desc {
         font-size: 12px;
         line-height: 1.6;
-        -webkit-line-clamp: 2;
     }
 
     .hero.hero-image-overlay .hero-rich-stats-row {

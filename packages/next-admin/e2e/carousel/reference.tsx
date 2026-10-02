@@ -19,12 +19,20 @@ hero.imageAsset = {
     id: 'replacement-asset',
     name: '替换轮播横幅',
     mimeType: 'image/svg+xml',
-    preview: '/assets/replacement-carousel.svg',
-    source: '/assets/replacement-carousel.svg',
+    preview: `/assets/replacement-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`,
+    source: `/assets/replacement-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`,
     width: 1600,
-    height: 520,
+    height: params.has('tallHero') ? 1000 : 520,
 };
 if (params.has('managedImages')) {
+    if (params.has('heroStats')) {
+        hero.items = Array.from({ length: 8 }, (_, position) => {
+            const item = newContentItem(position);
+            item.translations[0].label = `布局示例 ${position + 1}`;
+            item.translations[0].description = `已配置统计说明 ${position + 1}`;
+            return item;
+        });
+    }
     Object.assign(hero.translations[0], {
         title: '为马来西亚的家，甄选舒适好物',
         subtitle: 'FLASH CAST · HOME & LIVING',
@@ -62,8 +70,8 @@ const account = newAccountHeroBlock(0);
 account.imageAsset = {
     ...hero.imageAsset,
     id: 'fixture-asset',
-    preview: '/assets/fixture-carousel.svg',
-    source: '/assets/fixture-carousel.svg',
+    preview: `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`,
+    source: `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`,
 };
 const blocks = [
     notice,

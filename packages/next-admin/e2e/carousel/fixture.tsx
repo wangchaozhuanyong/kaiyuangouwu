@@ -95,6 +95,23 @@ if (params.has('original')) {
 }
 if (params.has('managedImages')) {
     const hero = blocks.find(block => block.id === 'hero-a')!;
+    if (params.has('tallHero')) {
+        asset.height = 1000;
+        hero.imageAsset = {
+            ...asset,
+            preview: '/assets/fixture-carousel.svg?tall=1',
+            source: '/assets/fixture-carousel.svg?tall=1',
+        };
+    }
+    if (params.has('heroStats')) {
+        hero.items = Array.from({ length: 8 }, (_, position) => {
+            const item = newContentItem(position);
+            item.translations[0].label = `布局示例 ${position + 1}`;
+            item.translations[0].description = `已配置统计说明 ${position + 1}`;
+            return item;
+        });
+    }
+    for (const block of blocks) if (block.id === 'hero-b') block.enabled = false;
     Object.assign(hero.translations[0], {
         title: '为马来西亚的家，甄选舒适好物',
         subtitle: 'FLASH CAST · HOME & LIVING',
@@ -406,7 +423,7 @@ const channel = params.has('platform-channel')
     : storeChannel;
 // Public Shop responses for the isolated parity exercise. No real store is contacted.
 if (params.has('parity')) {
-    asset.preview = '/assets/fixture-carousel.svg';
+    asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (input, init) => {
