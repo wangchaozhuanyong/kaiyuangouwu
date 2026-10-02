@@ -7,9 +7,11 @@ describe('early logo restoration under production CSP', () => {
     it('keeps logo restoration in the app entry instead of a parser-blocking request', () => {
         const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
         const entry = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
-        expect(html).toContain('<link rel="icon" href="/apple-touch-icon.png" type="image/png" />');
+        expect(html).toContain(
+            '<link rel="icon" href="/storefront/neutral-store.png?storefront-icon=2" type="image/png" />',
+        );
         expect(html).not.toContain('<script src="/storefront/restore-logo.js"></script>');
-        expect(entry).toContain("sessionStorage.getItem('__storefront_logo_url__')");
+        expect(entry).toContain('restoreStorefrontIcons();');
         expect(html).not.toMatch(/<script>\s*\(function/);
     });
     it.each(['/assets/store-logo.png', null, 'javascript:alert(1)'])(
