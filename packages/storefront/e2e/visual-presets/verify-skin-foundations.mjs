@@ -21,6 +21,7 @@ const routes = [
     ['account', '/account'],
     ['orders', '/orders'],
     ['order-detail', '/order-detail?id=order-1'],
+    ['order-cancel', '/order-detail?id=order-1'],
     ['coupons', '/coupons'],
     ['legal', '/legal?id=privacy'],
     ['login', '/login'],
@@ -57,21 +58,25 @@ async function worker() {
         await page.route('**/*', async request => {
             const url = new URL(request.request().url());
             if (!['localhost', '127.0.0.1'].includes(url.hostname)) return request.abort();
-            if (url.pathname.includes('shop-api'))
+            if (url.pathname.includes('shop-api')) {
+                const data = fixtureData(
+                    preset,
+                    routeName !== 'login',
+                    ['orders', 'order-detail'].includes(routeName)
+                        ? 'aftercare'
+                        : routeName === 'coupons'
+                          ? 'coupons'
+                          : 'dense',
+                );
+                if (routeName === 'order-cancel') {
+                    data.order.state = 'PaymentAuthorized';
+                    data.order.fulfillments = [];
+                }
                 return request.fulfill({
                     contentType: 'application/json',
-                    body: JSON.stringify({
-                        data: fixtureData(
-                            preset,
-                            routeName !== 'login',
-                            ['orders', 'order-detail'].includes(routeName)
-                                ? 'aftercare'
-                                : routeName === 'coupons'
-                                  ? 'coupons'
-                                  : 'dense',
-                        ),
-                    }),
+                    body: JSON.stringify({ data }),
                 });
+            }
             if (url.pathname.includes('storefront-realtime'))
                 return request.fulfill({ status: 204, body: '' });
             return request.continue();
@@ -173,6 +178,24 @@ async function worker() {
                         'border-radius',
                         '10px',
                     );
+                }
+                if (name === 'order-cancel') {
+                    await page.locator('.order-detail-actions .danger-action').click();
+                    const dialog = page.locator('.order-cancel-sheet');
+                    await expect(dialog).toBeVisible();
+                    await dialog.locator('textarea').fill('Synthetic visual acceptance');
+                    for (const selector of ['textarea', '.order-cancel-actions button']) {
+                        for (const control of await dialog.locator(selector).all()) {
+                            await expect(control).toHaveCSS('border-radius', '10px');
+                            const pair = await control.evaluate(el => [
+                                getComputedStyle(el).color,
+                                getComputedStyle(el).backgroundColor,
+                            ]);
+                            assert.ok(contrast(pair) >= 4.5, `${selector} text contrast`);
+                        }
+                    }
+                    await page.keyboard.press('Escape');
+                    await expect(dialog).toHaveCount(0);
                 }
                 if (name === '404')
                     await expect(page.locator('.not-found-actions button').first()).toHaveCSS(

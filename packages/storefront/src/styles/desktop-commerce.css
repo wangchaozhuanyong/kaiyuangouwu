@@ -1287,7 +1287,7 @@
     .desktop-local-navigation > button[aria-pressed='true']:hover:not(:disabled),
     .desktop-category-entry > button[aria-pressed='true']:hover:not(:disabled) {
         background: var(--interaction-hover);
-        color: var(--accent-ink);
+        color: var(--interaction-ink);
     }
     .desktop-category-navigation button:hover {
         color: var(--interaction-ink);
@@ -1299,7 +1299,7 @@
     }
     .desktop-local-navigation > button[aria-pressed='true']:hover,
     .desktop-category-entry > button[aria-pressed='true']:hover {
-        color: var(--accent-ink);
+        color: var(--interaction-ink);
         background: var(--interaction-hover);
     }
     .desktop-category-status {

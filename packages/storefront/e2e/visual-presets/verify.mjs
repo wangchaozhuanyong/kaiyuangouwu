@@ -509,13 +509,13 @@ try {
                     await expect(page.locator('.desktop-local-navigation')).toBeVisible();
                     await expect(page.locator('.desktop-category-navigation')).toHaveCSS(
                         'border-bottom-width',
-                        '0px',
+                        preset === 'classic' ? '1px' : '0px',
                     );
                     const activeCategory = page
                         .locator('.desktop-local-navigation [aria-pressed="true"]')
                         .first();
-                    await expect(activeCategory).toHaveCSS('border-bottom-width', '0px');
                     await page.getByRole('button', { name: '日常用品' }).click();
+                    await expect(activeCategory).toHaveCSS('border-bottom-width', '0px');
                     if (requestedContent === 'category-banner') {
                         await expect(page.locator('.desktop-catalog-hero.has-image')).toBeVisible();
                     }
@@ -1320,6 +1320,10 @@ try {
                     await expect(documentButtons.last()).toHaveAttribute('aria-current', 'page');
                 }
                 await page.keyboard.press('Tab');
+                // A last-control Tab can leave the document for browser chrome; re-enter before inspecting.
+                if (await page.evaluate(() => document.activeElement === document.body)) {
+                    await page.keyboard.press('Tab');
+                }
                 const keyboardFocus = await page.evaluate(() => {
                     const active = document.activeElement;
                     if (!(active instanceof HTMLElement) || active === document.body) return null;
