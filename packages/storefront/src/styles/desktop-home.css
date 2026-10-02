@@ -41,13 +41,18 @@
     .desktop-store-layout .homepage-modules .home-intro-grid:not(:has(.hero)) .quick-grid {
         grid-column: 1 / -1;
     }
-    .desktop-store-layout .home-intro-grid .hero {
+    .desktop-store-layout .home-intro-grid .hero-carousel {
         grid-column: 1;
         grid-row: 1;
         min-width: 0;
+        height: 100%;
+    }
+    .desktop-store-layout .home-intro-grid .hero {
+        min-width: 0;
         width: 100%;
         min-height: 320px;
-        height: 100%;
+        height: auto;
+        flex: 1 0 auto;
         align-self: stretch;
         border: 0;
         border-radius: var(--skin-hero-radius);
@@ -271,67 +276,6 @@
     .desktop-store-layout .home-page .hero-stat-badge .stat-lbl {
         font-size: 11px;
     }
-    .desktop-hero-navigation {
-        position: absolute;
-        z-index: 3;
-        right: 20px;
-        bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        padding: 4px;
-        border: 1px solid var(--hero-pagination-color);
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        color: var(--hero-pagination-active-color);
-        box-shadow: none;
-        text-shadow: var(--hero-image-text-shadow, var(--hero-title-shadow));
-    }
-    .desktop-hero-arrow {
-        width: 36px;
-        height: 36px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-        transition:
-            background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-            transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .desktop-hero-arrow:hover {
-        background: color-mix(in srgb, var(--hero-copy-foreground) 9%, transparent);
-        transform: translateY(-1px);
-    }
-    .desktop-hero-arrow:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-    }
-    .desktop-hero-arrow svg {
-        width: 18px;
-        height: 18px;
-    }
-    .desktop-hero-count {
-        display: flex;
-        align-items: baseline;
-        justify-content: center;
-        gap: 4px;
-        min-width: 58px;
-        color: inherit;
-        font-variant-numeric: tabular-nums;
-        font-size: 11px;
-    }
-    .desktop-hero-count strong {
-        font-size: 14px;
-        font-weight: 600;
-    }
-    .desktop-store-layout .hero-pagination {
-        display: none;
-    }
-
     /* Desktop merchandising floors share the page frame and readable content density. */
     .desktop-store-layout .home-page .content-section {
         margin-block: 0;
@@ -1463,9 +1407,6 @@
     }
 }
 @media (prefers-reduced-motion: reduce) {
-    .desktop-hero-arrow {
-        transition: none;
-    }
     .proto-product-skeleton {
         animation: none;
     }
