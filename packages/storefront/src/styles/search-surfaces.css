@@ -6,7 +6,7 @@
     top: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    grid-template-columns: var(--experience-control-min) minmax(0, 1fr) var(--experience-control-min);
     align-items: center;
     gap: 8px;
     height: 52px;
@@ -39,15 +39,15 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    height: 36px;
+    height: var(--experience-control-min);
     gap: 8px;
     padding: 0 10px;
     border-radius: var(--skin-control-radius);
     background: var(--control-surface, var(--soft));
 }
 .search-input-field:focus-within {
-    outline: 1px solid var(--focus);
-    outline-offset: 1px;
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 .search-input-field > svg {
     width: 16px;
@@ -77,8 +77,8 @@
     display: grid;
     place-items: center;
     flex: none;
-    width: 24px;
-    height: 36px;
+    width: var(--experience-control-min);
+    height: var(--experience-control-min);
     padding: 0;
     border: 0;
     background: transparent;
@@ -113,9 +113,9 @@
 .search-results-heading h2 {
     margin: 0;
     color: var(--text);
-    font-size: 15px;
+    font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.5;
+    line-height: var(--type-section-leading);
 }
 .search-page :is(.search-recent, .search-discover-terms, .search-browse) > header > span,
 .search-page .section-header-end-subtitle,

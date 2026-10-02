@@ -2142,18 +2142,18 @@ html[lang='en'] .quick-grid b {
 .section-header h2,
 .services-section h2 {
     margin: 0;
-    font-size: 15px;
-    font-weight: 800;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
     color: var(--text);
-    line-height: 1.2;
-    letter-spacing: -0.01em;
+    line-height: var(--type-section-leading);
+    letter-spacing: normal;
 }
 
 .section-header p {
     margin: 3px 0 0;
     color: var(--muted);
-    font-size: 11.5px;
-    line-height: 1.3;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .section-header.has-end-subtitle .section-header-title-lockup {

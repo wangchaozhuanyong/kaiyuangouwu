@@ -581,7 +581,7 @@ describe('product image navigation layers', () => {
             /\.topbar\.product-detail-header\s+button[\s\S]*?background:\s*rgba\(24,\s*28,\s*26,\s*0\.46\);/,
         );
         expect(stylesheet).toMatch(
-            /\.topbar\.product-detail-header\.is-scrolled[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.96\);/,
+            /\.topbar\.product-detail-header\.is-scrolled[\s\S]*?background:\s*color-mix\(in srgb, var\(--surface\) 96%, transparent\);/,
         );
     });
 

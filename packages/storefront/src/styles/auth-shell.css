@@ -499,8 +499,8 @@
 }
 
 .auth-page .wide-action:focus-visible {
-    outline: 3px solid rgba(13, 117, 104, 0.22);
-    outline-offset: 3px;
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .auth-page .wide-action:disabled {

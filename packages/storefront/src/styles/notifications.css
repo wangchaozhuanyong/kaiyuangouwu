@@ -13,7 +13,9 @@
     display: none;
     margin: 0;
     color: var(--text);
-    font-size: 20px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-semibold);
 }
 .notification-toolbar > div {
     display: flex;
@@ -49,7 +51,7 @@
     margin-left: auto;
     padding-inline: 6px;
     background: transparent;
-    color: var(--text-soft);
+    color: var(--muted);
     font-weight: 400;
 }
 .notification-count {
@@ -200,6 +202,9 @@
     .notification-toolbar h2 {
         display: block;
         margin-right: auto;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .notification-toolbar .notification-mark-all {
         margin-left: 0;

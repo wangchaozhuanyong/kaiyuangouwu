@@ -56,17 +56,17 @@
     margin: 4px 0 0;
     overflow-wrap: anywhere;
     color: var(--text);
-    font-size: 17px;
+    font-size: var(--type-card-size);
     font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
+    line-height: var(--type-card-leading);
 }
 .empty-state > :is(p, small) {
     max-width: 36em;
     margin: 0;
     overflow-wrap: anywhere;
     color: var(--muted);
-    font-size: 13px;
-    line-height: var(--line-height-relaxed);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .empty-state > button {
     min-width: 100px;

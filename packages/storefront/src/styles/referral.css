@@ -147,8 +147,9 @@
 }
 .referral-overview-heading h2 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 600;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 .referral-reward-help {
     position: relative;
@@ -191,7 +192,7 @@
     border: 1px solid var(--line);
     border-radius: var(--skin-control-radius);
     background: var(--surface);
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.8;
     text-align: start;
@@ -219,7 +220,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -248,7 +249,7 @@
     background: var(--soft);
 }
 .referral-reward-totals dt {
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
 }
 .referral-reward-totals dd {
@@ -278,7 +279,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
-    color: var(--text-soft);
+    color: var(--muted);
     font: inherit;
     font-size: 13px;
     font-weight: 500;

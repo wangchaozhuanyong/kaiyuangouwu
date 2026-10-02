@@ -6,16 +6,15 @@ const stylesDirectory = path.join(__dirname, 'styles');
 
 describe('shared interaction performance contract', () => {
     it('does not animate every CSS property on storefront controls and surfaces', () => {
-        const stylesheets = [
-            path.join(__dirname, 'styles.css'),
-            ...readdirSync(stylesDirectory)
-                .filter(fileName => fileName.endsWith('.css'))
-                .map(fileName => path.join(stylesDirectory, fileName)),
-        ];
-
-        for (const stylesheet of stylesheets) {
-            expect(readFileSync(stylesheet, 'utf8'), path.basename(stylesheet)).not.toMatch(
-                /\btransition\s*:\s*all\b/i,
+        const sources = readdirSync(__dirname, { recursive: true, withFileTypes: true })
+            .filter(
+                entry =>
+                    entry.isFile() && /\.(css|tsx?)$/.test(entry.name) && !/\.(spec|test)\./.test(entry.name),
+            )
+            .map(entry => path.join(entry.parentPath, entry.name));
+        for (const source of sources) {
+            expect(readFileSync(source, 'utf8'), path.relative(__dirname, source)).not.toMatch(
+                /\btransition(?:-property)?\s*:\s*(?:all\b|(?:\d*\.)?\d+m?s\b)|\btransition:all_|\btransition-all\b/i,
             );
         }
     });

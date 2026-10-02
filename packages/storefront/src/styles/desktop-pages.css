@@ -310,9 +310,9 @@
     }
     .desktop-product-buying .detail-summary h1 {
         margin: 0;
-        font-size: 26px;
-        line-height: 1.45;
-        font-weight: 600;
+        font-size: var(--type-product-detail-size);
+        line-height: var(--type-product-detail-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-product-buying .detail-price-line {
         padding: 0 0 14px;
@@ -321,8 +321,10 @@
     }
     .desktop-product-buying .detail-price {
         margin: 0;
-        font-size: 28px;
+        font-size: var(--type-price-detail-size);
         color: var(--text);
+        line-height: var(--type-price-detail-leading);
+        font-weight: var(--font-weight-bold);
     }
     .desktop-product-buying .detail-tags {
         display: flex;
@@ -452,8 +454,10 @@
         align-self: stretch;
     }
     .desktop-store-layout .detail-description h2 {
-        font-size: 20px;
+        font-size: var(--type-section-size);
         margin: 0 0 24px;
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
 
     /* Cart: dense merchandise workspace with one sticky decision panel. */
@@ -531,10 +535,11 @@
         margin-bottom: 26px;
     }
     .desktop-store-layout .cart-summary-header h2 {
-        font-size: 17px;
+        font-size: var(--type-section-size);
         font-weight: var(--font-weight-semibold);
         color: var(--text);
         margin: 0;
+        line-height: var(--type-section-leading);
     }
     .desktop-store-layout .cart-summary-breakdown {
         display: flex;
@@ -927,9 +932,10 @@
         padding: 24px;
     }
     .desktop-store-layout .checkout-page .checkout-section h2 {
-        font-size: 18px;
-        font-weight: 500;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-semibold);
         margin: 0 0 20px;
+        line-height: var(--type-section-leading);
     }
     .desktop-store-layout .checkout-page .checkout-address-heading h2 {
         margin: 0;
@@ -2126,7 +2132,9 @@
             padding: 24px;
         }
         .desktop-product-buying .detail-summary h1 {
-            font-size: 23px;
+            font-size: var(--type-product-detail-size);
+            line-height: var(--type-product-detail-leading);
+            font-weight: var(--font-weight-semibold);
         }
         .desktop-cart-columns,
         .desktop-cart-row {

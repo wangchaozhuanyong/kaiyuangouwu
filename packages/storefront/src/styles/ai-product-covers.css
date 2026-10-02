@@ -1260,7 +1260,7 @@
 .my-review-list article > p,
 .product-review-list article > p {
     margin: 6px 0 0;
-    color: var(--text-soft);
+    color: var(--muted);
     line-height: 1.6;
     white-space: pre-wrap;
 }
@@ -1315,7 +1315,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     background: var(--soft);
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 13px;
     line-height: 1.55;
 }
@@ -1365,7 +1365,7 @@
 
 .product-review-copy > p {
     margin: 6px 0 0;
-    color: var(--text-soft);
+    color: var(--muted);
     line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
