@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { filterSupportFaqs, SupportContent } from './pages/support-page';
 import {
@@ -156,6 +156,100 @@ describe('support content', () => {
             document.querySelector('.support-qr-sheet')?.remove();
         }
     });
+
+    it.each([
+        ['zh', 'success'],
+        ['en', 'success'],
+        ['zh', 'denied'],
+        ['zh', 'unavailable'],
+        ['zh', 'empty'],
+    ] as const)(
+        'copies only the configured WeChat ID with accurate feedback (%s, %s)',
+        async (language, outcome) => {
+            const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+            const writeText = vi.fn().mockResolvedValue(undefined);
+            if (outcome === 'denied') writeText.mockRejectedValue(new Error('Permission denied'));
+            Object.defineProperty(navigator, 'clipboard', {
+                configurable: true,
+                value: outcome === 'unavailable' ? undefined : { writeText },
+            });
+            const content = {
+                ...supportBlock,
+                items: supportBlock.items.map(item =>
+                    item.id === 'wechat'
+                        ? {
+                              ...item,
+                              settings: {
+                                  ...item.settings,
+                                  supportAccount: outcome === 'empty' ? '  ' : '  demo_support  ',
+                              },
+                          }
+                        : item,
+                ),
+            };
+            const container = document.createElement('div');
+            document.body.append(container);
+            const root = createRoot(container);
+            try {
+                void act(() => root.render(<SupportContent content={content} language={language} />));
+                const openQr = container.querySelector<HTMLButtonElement>('[data-channel="wechat"]');
+                if (!openQr) throw new Error('Expected the configured WeChat channel');
+                void act(() => openQr.click());
+                const copy = document.querySelector<HTMLButtonElement>('.support-qr-copy');
+                if (outcome === 'empty') {
+                    expect(copy).toBeNull();
+                    expect(document.querySelector('.support-qr-account')).toBeNull();
+                    expect(writeText).not.toHaveBeenCalled();
+                    return;
+                }
+                if (!copy) throw new Error('Expected the WeChat ID copy action');
+                expect(document.querySelector('.support-qr-account small')?.textContent).toContain(
+                    'demo_support',
+                );
+                await act(async () => {
+                    copy.click();
+                    await Promise.resolve();
+                });
+                if (outcome === 'success') {
+                    expect(writeText).toHaveBeenCalledExactlyOnceWith('demo_support');
+                    expect(copy.textContent).toContain(language === 'zh' ? '已复制' : 'Copied');
+                    expect(document.querySelector('.support-qr-account + [role="status"]')?.textContent).toBe(
+                        language === 'zh' ? '微信号已复制' : 'WeChat ID copied',
+                    );
+                    void act(() =>
+                        document.dispatchEvent(
+                            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+                        ),
+                    );
+                    void act(() => openQr.click());
+                    expect(document.querySelector('.support-qr-copy')?.textContent).toBe(
+                        language === 'zh' ? '复制' : 'Copy',
+                    );
+                } else {
+                    expect(copy.textContent).not.toContain('已复制');
+                    expect(document.querySelector('.support-qr-copy-result')?.textContent).toContain(
+                        '复制失败',
+                    );
+                    Object.defineProperty(navigator, 'clipboard', {
+                        configurable: true,
+                        value: { writeText },
+                    });
+                    writeText.mockResolvedValue(undefined);
+                    await act(async () => {
+                        copy.click();
+                        await Promise.resolve();
+                    });
+                    expect(copy.textContent).toContain('已复制');
+                    expect(document.querySelector('.support-qr-copy-result')).toBeNull();
+                }
+            } finally {
+                void act(() => root.unmount());
+                container.remove();
+                if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+                else Reflect.deleteProperty(navigator, 'clipboard');
+            }
+        },
+    );
 
     it('keeps the configured service details and direct contact actions in one shared panel', () => {
         const markup = renderToStaticMarkup(<SupportContent content={supportBlock} language="zh" />);

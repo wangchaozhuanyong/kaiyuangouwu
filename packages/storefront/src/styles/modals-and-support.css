@@ -619,10 +619,59 @@
     text-align: center;
 }
 
-.support-qr-sheet small {
-    margin-top: 6px;
+.support-qr-account {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    max-width: 100%;
+    margin-top: var(--space-8);
+}
+
+.support-qr-account small {
+    min-width: 0;
     color: var(--text);
     font-size: 12px;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.support-qr-copy {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: var(--experience-control-min);
+    padding: 0 var(--space-12);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    color: var(--accent-ink);
+    background: var(--control-surface);
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+
+.support-qr-copy svg {
+    width: 16px;
+    height: 16px;
+}
+
+.support-qr-copy:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+
+.support-qr-copy:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.support-qr-copy-result {
+    margin-top: var(--space-8);
+    color: var(--danger);
+    font-size: 13px;
+    text-align: center;
 }
 
 .support-qr-save {
