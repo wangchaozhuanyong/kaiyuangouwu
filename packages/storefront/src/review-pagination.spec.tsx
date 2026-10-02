@@ -94,7 +94,7 @@ it('shows old-order candidate images from the review API and loads the next page
         );
     });
     await act(() => vi.waitFor(() => expect(host.textContent).toContain('查看其余商品')));
-    expect(host.querySelector('.review-center-pending > header > span')?.textContent).toBe('20+');
+    expect(host.querySelector('.review-section-count')?.textContent).toContain('20+');
     expect(host.querySelector<HTMLImageElement>('.review-candidate-image img')?.src).toContain(
         'older-order-1.webp',
     );
