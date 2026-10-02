@@ -1,6 +1,6 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { ChevronRight, Clock3, Copy, Headphones, MessageCircle, QrCode, Star, ThumbsUp } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
 
@@ -210,28 +210,13 @@ export function SupportContent({
                               : 'Support information'}
                     </h2>
                     {channels.length ? (
-                        <section className="support-hours-card" aria-labelledby="support-hours-title">
-                            <div className="support-hours-heading">
-                                <div className="support-hours-title-wrap">
-                                    <div className="support-hours-rail" aria-hidden="true">
-                                        <Clock3 size={18} />
-                                    </div>
-                                    <h2 id="support-hours-title">
-                                        {isZh ? '客服服务时间' : 'Customer-service hours'}
-                                    </h2>
-                                </div>
+                        <div className="support-hours-card">
+                            <span className="support-hours-label">{isZh ? '服务时间' : 'Service hours'}</span>
+                            <div className="support-hours-value">
                                 <span>{service.days}</span>
-                            </div>
-                            <div className="support-hours-main">
                                 <strong className="support-hours-time">{service.time}</strong>
-                                {service.note ? (
-                                    <div className="support-hours-note">
-                                        <MessageCircle size={15} aria-hidden="true" />
-                                        <p>{service.note}</p>
-                                    </div>
-                                ) : null}
                             </div>
-                        </section>
+                        </div>
                     ) : null}
 
                     {channels.length ? (
@@ -256,13 +241,13 @@ export function SupportContent({
                                             {detail ? <small>{detail}</small> : null}
                                         </span>
                                         <span className="support-channel-action">
-                                            {isWeChat ? <QrCode aria-hidden="true" /> : null}
-                                            {isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'}
+                                            {isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '联系' : 'Contact'}
+                                            {isWeChat ? (
+                                                <QrCode aria-hidden="true" />
+                                            ) : (
+                                                <ArrowUpRight aria-hidden="true" />
+                                            )}
                                         </span>
-                                        <ChevronRight
-                                            className="support-channel-chevron"
-                                            aria-hidden="true"
-                                        />
                                     </>
                                 );
                                 return isWeChat ? (
@@ -273,7 +258,7 @@ export function SupportContent({
                                         data-channel={channel.key.toLowerCase()}
                                         disabled={disabled}
                                         aria-label={`${channel.item.label} ${
-                                            isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'
+                                            isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '联系' : 'Contact'
                                         }`}
                                         onClick={() => openChannel(channel)}
                                     >
@@ -288,7 +273,7 @@ export function SupportContent({
                                         target="_blank"
                                         rel="noreferrer"
                                         aria-disabled={disabled || undefined}
-                                        aria-label={`${channel.item.label} ${isZh ? '打开' : 'Open'}`}
+                                        aria-label={`${channel.item.label} ${isZh ? '联系' : 'Contact'}`}
                                     >
                                         {rowContent}
                                     </a>
@@ -301,6 +286,12 @@ export function SupportContent({
                             <p>{isZh ? '客服联系方式暂未启用' : 'No support channels are enabled yet'}</p>
                         </div>
                     )}
+                    {channels.length && service.note ? (
+                        <section className="support-contact-note">
+                            <h3>{isZh ? '咨询说明' : 'Before you contact us'}</h3>
+                            <p>{service.note}</p>
+                        </section>
+                    ) : null}
                 </div>
                 {faqs.length > 0 ? (
                     <section

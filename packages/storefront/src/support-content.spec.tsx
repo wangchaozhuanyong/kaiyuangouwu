@@ -93,9 +93,7 @@ describe('support content', () => {
             'WECHAT',
             'TELEGRAM',
         ]);
-        expect(supportChannelDetail(storefrontSupportChannels(supportBlock)[1], 'zh')).toBe(
-            'Telegram：@demo_support',
-        );
+        expect(supportChannelDetail(storefrontSupportChannels(supportBlock)[1], 'zh')).toBe('@demo_support');
     });
 
     it('hides legacy instructions that repeat the row action', () => {
@@ -159,19 +157,19 @@ describe('support content', () => {
         }
     });
 
-    it('renders the selected brand two-tone service strip and contact actions', () => {
+    it('keeps the configured service details and direct contact actions in one shared panel', () => {
         const markup = renderToStaticMarkup(<SupportContent content={supportBlock} language="zh" />);
 
-        expect(markup).toContain('support-hours-rail');
+        expect(markup).toContain('support-hours-label');
         expect(markup).toContain('客服副标题');
-        expect(markup).toContain('客服服务时间');
+        expect(markup).toContain('服务时间');
         expect(markup).toContain('08:30–19:00');
         expect(markup).toContain('微信客服');
         expect(markup).toContain('扫码');
         expect(markup).toContain('Telegram');
-        expect(markup).toContain('Telegram：@demo_support');
+        expect(markup).toContain('@demo_support');
         expect(markup).not.toContain('点击打开 Telegram 与我们联系');
-        expect(markup).toContain('打开');
+        expect(markup).toContain('联系');
         expect(markup).toContain('href="https://t.me/demo_support"');
         expect(markup).toContain('target="_blank"');
         expect(markup.indexOf('微信客服')).toBeLessThan(markup.indexOf('Telegram'));

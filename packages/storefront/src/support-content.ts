@@ -72,13 +72,7 @@ export function supportChannelDetail(
 
     const account = channel.item.settings?.supportAccount;
     if (typeof account === 'string' && account.trim()) {
-        const labels: Record<Exclude<SupportChannelKey, 'WECHAT'>, { zh: string; en: string }> = {
-            QQ: { zh: 'QQ号', en: 'QQ ID' },
-            WHATSAPP: { zh: 'WhatsApp', en: 'WhatsApp' },
-            TELEGRAM: { zh: 'Telegram', en: 'Telegram' },
-            QQ_GROUP: { zh: 'QQ群号', en: 'QQ group' },
-        };
-        return `${labels[channel.key][language]}：${account.trim()}`;
+        return account.trim();
     }
 
     const description = channel.item.description.trim();

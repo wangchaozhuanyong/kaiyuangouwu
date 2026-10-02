@@ -2003,18 +2003,6 @@
         gap: 24px;
         align-items: start;
     }
-    .desktop-store-layout .support-contact-panel {
-        min-width: 0;
-        padding: 24px;
-        background: var(--surface);
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        border: var(--skin-card-outline, 0);
-    }
-    .desktop-store-layout .support-contact-panel > h2 {
-        margin: 0 0 20px;
-        font-size: 18px;
-    }
     .desktop-store-layout .support-desktop-hero {
         grid-column: 1 / -1;
         display: flex;
@@ -2068,28 +2056,6 @@
         grid-column: 1 / -1;
         margin: 0;
         font-size: 15px;
-    }
-    .desktop-store-layout .support-hours-card {
-        margin: 0;
-        min-height: 0;
-        padding: 0 0 24px;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-    }
-    .desktop-store-layout .support-channel-list {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        margin: 0;
-        gap: 0;
-    }
-    .desktop-store-layout .support-channel-row {
-        min-height: 84px;
-        padding: 16px;
-    }
-    .desktop-store-layout .support-channel-row + .support-channel-row::before {
-        inset-inline: 66px 16px;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;
@@ -2171,9 +2137,6 @@
         }
         .desktop-store-layout .support-workspace {
             grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-        }
-        .desktop-store-layout .support-channel-list {
-            grid-template-columns: 1fr;
         }
     }
 }

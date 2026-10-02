@@ -318,7 +318,7 @@
 }
 
 /* ==========================================================================
-   客服中心：品牌双色服务时间条与直达渠道
+   客服中心：共用联系面板与直达渠道
    ========================================================================== */
 
 .support-center-content {
@@ -340,149 +340,103 @@
     line-height: 1.6;
 }
 
-.support-hours-card {
+/* One shared contact panel owns spacing and hierarchy on every screen and skin. */
+.support-contact-panel {
     min-width: 0;
-    overflow: hidden;
-    border-radius: 16px;
+    display: grid;
+    gap: 16px;
+    padding: 20px;
     background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
     border: var(--skin-card-outline, 0);
 }
 
-.support-hours-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.support-hours-title-wrap {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
-
-.support-hours-rail {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    background: var(--accent-soft, #f0fdf4);
-    color: var(--accent, #0d9488);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.support-hours-rail svg {
-    width: 18px;
-    height: 18px;
-    stroke-width: 2;
-}
-
-.support-hours-heading h2 {
-    min-width: 0;
+.support-contact-panel > h2 {
     margin: 0;
-    font-size: 15px;
+    color: var(--text);
+    font-size: 18px;
     font-weight: var(--font-weight-bold);
-    color: var(--text, #0f172a);
-    letter-spacing: -0.015em;
+    line-height: 1.4;
 }
 
-.support-hours-heading span {
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: var(--accent-soft, #f0fdf4);
-    color: var(--accent-ink, #0f766e);
-    font-size: 12px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.2;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.support-hours-main {
+.support-hours-card {
     min-width: 0;
-    padding: 0;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    margin: 0;
+}
+
+.support-hours-label {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.support-hours-value {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .support-hours-time {
-    margin-top: 2px;
-    display: block;
-    color: var(--text, #0f172a);
     font-family: var(--font-numeric);
-    font-size: clamp(24px, 6vw, 28px);
-    font-weight: var(--font-weight-bold);
-    line-height: 1.15;
-    letter-spacing: -0.025em;
+    font-size: 16px;
+    font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-.support-hours-main > i {
-    display: none;
-}
-
-.support-hours-note {
+.support-contact-note {
     min-width: 0;
-    padding: 12px 14px;
-    border-radius: 10px;
-    background: var(--module-action-surface);
+}
+
+.support-contact-note h3 {
+    margin: 0 0 8px;
     color: var(--muted);
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.5;
 }
 
-.support-hours-note svg {
-    width: 16px;
-    height: 16px;
-    margin-top: 2px;
-    flex-shrink: 0;
-    color: var(--muted, #64748b);
-    stroke-width: 1.8;
-}
-
-.support-hours-note p {
-    min-width: 0;
+.support-contact-note p {
     margin: 0;
-    font-size: 12px;
-    line-height: 1.6;
     color: var(--text);
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
 }
 
 .support-channel-list {
+    min-width: 0;
     display: grid;
-    gap: 0;
-    background: var(--surface);
-    border-radius: var(--skin-card-radius);
-}
-
-@media (max-width: 1023px) {
-    .support-channel-list {
-        border: var(--skin-card-outline, 0);
-    }
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin: 0;
 }
 
 .support-channel-row {
     position: relative;
+    min-width: 0;
     width: 100%;
-    min-height: 76px;
-    padding: 11px 11px 11px 13px;
+    min-height: 68px;
+    padding: 8px 0;
     border: 0;
-    border-radius: 0;
-    background: var(--module-action-surface);
+    border-radius: var(--skin-control-radius);
+    background: transparent;
     box-shadow: none;
     color: var(--text);
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) auto 18px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
     text-align: left;
@@ -490,38 +444,34 @@
     cursor: pointer;
 }
 
-.support-channel-row + .support-channel-row::before {
-    content: '';
-    position: absolute;
-    inset: 0 11px auto 63px;
-    border-top: 1px solid var(--skin-divider);
+.support-channel-row:hover:not(:disabled):not([aria-disabled='true']) {
+    background: var(--control-surface-hover);
 }
 
-.support-channel-row:hover:not(:disabled) {
-    background: var(--module-action-surface-hover);
-}
-.support-channel-row:hover:not(:disabled) :is(.support-channel-copy strong, .support-channel-chevron) {
-    color: var(--accent-ink);
-}
-.support-channel-row:active:not(:disabled) {
-    background: var(--accent-soft);
+.support-channel-row:active:not(:disabled):not([aria-disabled='true']) {
+    background: var(--interaction-pressed);
 }
 
-.support-channel-row:disabled {
+.support-channel-row:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.support-channel-row:disabled,
+.support-channel-row[aria-disabled='true'] {
     opacity: 0.52;
+    cursor: not-allowed;
 }
 
 .support-channel-row[aria-disabled='true'] {
-    opacity: 0.52;
     pointer-events: none;
 }
 
 .support-channel-icon {
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
     display: grid;
     place-items: center;
-    flex-shrink: 0;
     overflow: hidden;
 }
 
@@ -534,47 +484,51 @@
 
 .support-channel-copy {
     min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .support-channel-copy strong,
 .support-channel-copy small {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .support-channel-copy strong {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: var(--font-weight-semibold);
+    line-height: 1.45;
 }
 
 .support-channel-copy small {
-    margin-top: 3px;
+    margin-top: 4px;
     color: var(--muted);
-    font-size: 11.5px;
-    line-height: 1.4;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 .support-channel-action {
+    min-height: var(--experience-control-min);
+    padding: 0 12px;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
     color: var(--accent-ink);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 5px;
     font-size: 13px;
-    font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
 }
 
 .support-channel-action svg {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
 }
 
-.support-channel-chevron {
-    width: 18px;
-    height: 18px;
-    color: var(--muted);
+@media (min-width: 1024px) {
+    .support-contact-panel {
+        padding: 24px;
+    }
 }
 
 .support-channel-empty {
@@ -1086,15 +1040,6 @@
         padding-right: 10px;
         padding-left: 10px;
     }
-
-    .support-hours-card {
-        padding: 14px;
-    }
-
-    .support-channel-row {
-        grid-template-columns: 38px minmax(0, 1fr) auto 16px;
-        gap: 8px;
-    }
 }
 
 .spin {
@@ -1143,12 +1088,7 @@
     color: var(--muted);
     cursor: default;
 }
-.support-contact-panel > h2 {
-    margin: 0 0 16px;
-    font-size: 18px;
-}
-.support-workspace,
-.support-contact-panel {
+.support-workspace {
     min-width: 0;
 }
 @media (max-width: 1023px) {
