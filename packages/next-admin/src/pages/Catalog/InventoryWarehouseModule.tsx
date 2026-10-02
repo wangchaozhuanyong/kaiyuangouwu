@@ -21,7 +21,7 @@ import {
     Warehouse,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext } from '../../apollo';
@@ -175,6 +175,63 @@ interface StockRow {
     status: StockStatus;
 }
 
+interface InventorySkuSummary {
+    variantId: string;
+    productId: string;
+    productName: string;
+    variantName: string;
+    sku: string;
+    stockOnHand: number;
+    stockAllocated: number;
+    stockAvailable: number;
+    status: StockStatus;
+    locations: StockRow[];
+}
+
+// oxlint-disable-next-line react/only-export-components -- exported for inventory aggregation regressions
+export function inventorySkuSummaries(
+    variants: Array<Pick<ProductVariantItem, 'id' | 'product' | 'name' | 'sku' | 'trackInventory'>>,
+    stockRows: StockRow[],
+    globalTrackInventory: boolean,
+): InventorySkuSummary[] {
+    const locationsByVariant = new Map<string, StockRow[]>();
+    for (const row of stockRows) {
+        const locations = locationsByVariant.get(row.variantId) ?? [];
+        locations.push(row);
+        locationsByVariant.set(row.variantId, locations);
+    }
+    return variants.map(variant => {
+        const locations = locationsByVariant.get(variant.id) ?? [];
+        const stockOnHand = locations.reduce((total, level) => total + level.stockOnHand, 0);
+        const stockAllocated = locations.reduce((total, level) => total + level.stockAllocated, 0);
+        const stockAvailable = stockOnHand - stockAllocated;
+        const trackedStatus = inventoryStockStatus(
+            variant.trackInventory,
+            globalTrackInventory,
+            stockAvailable,
+            0,
+        );
+        // Match the alert overview: positive total with any depleted/low warehouse needs replenishment.
+        const status =
+            trackedStatus === 'NORMAL' &&
+            locations.some(level => level.status === 'LOW_STOCK' || level.status === 'OUT_OF_STOCK')
+                ? 'LOW_STOCK'
+                : trackedStatus;
+        return {
+            variantId: variant.id,
+            productId: variant.product.id,
+            productName: variant.product.name,
+            variantName: variant.name,
+            sku: variant.sku,
+            stockOnHand,
+            stockAllocated,
+            stockAvailable,
+            status,
+            locations,
+        };
+    });
+}
+
 interface MovementRow extends StockMovementItem {
     variantId: string;
     productName: string;
@@ -301,6 +358,7 @@ export function InventoryWarehouseModule() {
     const [lotDraft, setLotDraft] = useState<InventoryLotDraft | null>(null);
     const [lotTransferDraft, setLotTransferDraft] = useState<InventoryLotTransferDraft | null>(null);
     const [expandedAlertSkuIds, setExpandedAlertSkuIds] = useState<Set<string>>(() => new Set());
+    const [expandedStockSkuIds, setExpandedStockSkuIds] = useState<Set<string>>(() => new Set());
     const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
     const [savingThresholdKey, setSavingThresholdKey] = useState<string | null>(null);
     const loadingAllLocationsRef = useRef(false);
@@ -490,7 +548,10 @@ export function InventoryWarehouseModule() {
     const lotTotalVariants = lotQuery.data?.catalogExportRows.totalItems ?? 0;
     const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / pageSize));
 
-    const filteredStockList = stockList;
+    const stockSkuSummaries = useMemo(
+        () => inventorySkuSummaries(variants, stockList, globalTrackInventory),
+        [variants, stockList, globalTrackInventory],
+    );
     const alertItems = useMemo(() => {
         const targetStatus = activeTab === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : 'LOW_STOCK';
         const search = deferredSearchTerm.toLocaleLowerCase();
@@ -1375,8 +1436,8 @@ export function InventoryWarehouseModule() {
                     </div>
                 ) : activeTab === 'ALL' ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 p-4">
-                            <div className="relative">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 p-4">
+                            <div className="relative w-full sm:w-72">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <input
                                     value={searchTerm}
@@ -1384,176 +1445,40 @@ export function InventoryWarehouseModule() {
                                         setSearchTerm(event.target.value);
                                         setPage(0);
                                     }}
-                                    aria-label="搜索库存预警"
-                                    placeholder="按 SKU / 规格名称检索全部数据..."
-                                    className="w-72 rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-4 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                    aria-label="搜索库存总览"
+                                    placeholder="按 SKU / 规格名称搜索"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-4 text-xs outline-none focus:ring-1 focus:ring-blue-500"
                                 />
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-slate-500">
                                 当前页{' '}
                                 <strong className="font-mono text-slate-700">
-                                    {filteredStockList.length}
+                                    {stockSkuSummaries.length}
                                 </strong>{' '}
-                                条库存记录
+                                个 SKU · 展开查看各仓库库存
                             </div>
                         </div>
-                        {filteredStockList.length === 0 ? (
-                            <div className="space-y-2 p-16 text-center text-xs text-slate-400">
-                                <Boxes className="mx-auto h-10 w-10 text-slate-300" />
-                                <p>当前筛选条件下暂无真实库存记录</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1540px] border-collapse text-left text-xs">
-                                    <thead>
-                                        <tr className="whitespace-nowrap border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
-                                            <th
-                                                scope="col"
-                                                className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
-                                            >
-                                                商品名称
-                                            </th>
-                                            <SortableTableHeader
-                                                label="规格名称"
-                                                sortField="name"
-                                                activeSortField={sortField}
-                                                sortDirection={sortDirection}
-                                                onSort={changeSort}
-                                                className="w-56 whitespace-nowrap px-3 py-3"
-                                            />
-                                            <SortableTableHeader
-                                                label="SKU"
-                                                sortField="sku"
-                                                activeSortField={sortField}
-                                                sortDirection={sortDirection}
-                                                onSort={changeSort}
-                                                className="w-44 whitespace-nowrap px-3 py-3"
-                                            />
-                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
-                                                库存点
-                                            </th>
-                                            <SortableTableHeader
-                                                label="在手"
-                                                sortField="stockOnHand"
-                                                activeSortField={sortField}
-                                                sortDirection={sortDirection}
-                                                onSort={changeSort}
-                                                initialDirection="DESC"
-                                                className="w-20 whitespace-nowrap px-3 py-3"
-                                            />
-                                            <SortableTableHeader
-                                                label="已锁定"
-                                                sortField="stockAllocated"
-                                                activeSortField={sortField}
-                                                sortDirection={sortDirection}
-                                                onSort={changeSort}
-                                                initialDirection="DESC"
-                                                className="w-20 whitespace-nowrap px-3 py-3"
-                                            />
-                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
-                                                可售
-                                            </th>
-                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                补货预警值
-                                            </th>
-                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                状态
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
-                                            >
-                                                操作
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                                        {filteredStockList.map(stock => (
-                                            <tr
-                                                key={stock.id}
-                                                className="group h-[52px] hover:bg-slate-50/80"
-                                            >
-                                                <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <span
-                                                        className="block truncate font-bold text-slate-900"
-                                                        title={stock.productName}
-                                                    >
-                                                        {stock.productName}
-                                                    </span>
-                                                </td>
-                                                <td className="h-[52px] max-w-56 px-3 py-0">
-                                                    <span
-                                                        className="block truncate text-slate-500"
-                                                        title={stock.variantName}
-                                                    >
-                                                        {stock.variantName}
-                                                    </span>
-                                                </td>
-                                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-600">
-                                                    <span className="block truncate" title={stock.sku}>
-                                                        {stock.sku}
-                                                    </span>
-                                                </td>
-                                                <td className="h-[52px] max-w-44 px-3 py-0 font-medium">
-                                                    <span className="block truncate" title={stock.warehouse}>
-                                                        {stock.warehouse}
-                                                    </span>
-                                                </td>
-                                                <td className="h-[52px] px-3 py-0 font-mono text-xs font-bold text-slate-900">
-                                                    {stock.stockOnHand}
-                                                </td>
-                                                <td className="h-[52px] px-3 py-0 font-mono text-amber-600">
-                                                    {stock.stockAllocated}
-                                                </td>
-                                                <td className="h-[52px] px-3 py-0 font-mono text-xs font-bold text-emerald-600">
-                                                    {stock.status === 'NOT_TRACKED'
-                                                        ? '—'
-                                                        : stock.stockAvailable}
-                                                </td>
-                                                <td className="h-[52px] px-3 py-0 font-mono text-slate-500">
-                                                    {stock.status === 'NOT_TRACKED'
-                                                        ? '—'
-                                                        : stock.safetyThreshold}
-                                                </td>
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    {stock.status === 'NOT_TRACKED' ? (
-                                                        <span className="rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-600">
-                                                            不跟踪仓库库存
-                                                        </span>
-                                                    ) : stock.status === 'NORMAL' ? (
-                                                        <span className="rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
-                                                            充足
-                                                        </span>
-                                                    ) : stock.status === 'LOW_STOCK' ? (
-                                                        <span className="rounded bg-amber-100 px-2 py-0.5 font-bold text-amber-800">
-                                                            需补货
-                                                        </span>
-                                                    ) : (
-                                                        <span className="rounded bg-rose-100 px-2 py-0.5 font-bold text-rose-800">
-                                                            已售罄
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedStock(stock);
-                                                            setAdjustAmount('');
-                                                            setAdjustReason('');
-                                                            setActionError('');
-                                                        }}
-                                                        className="whitespace-nowrap rounded bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
-                                                    >
-                                                        盘点调整
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                        <InventoryStockOverview
+                            items={stockSkuSummaries}
+                            expandedSkuIds={expandedStockSkuIds}
+                            onToggle={variantId =>
+                                setExpandedStockSkuIds(current => {
+                                    const next = new Set(current);
+                                    if (next.has(variantId)) next.delete(variantId);
+                                    else next.add(variantId);
+                                    return next;
+                                })
+                            }
+                            sortField={sortField}
+                            sortDirection={sortDirection}
+                            onSort={changeSort}
+                            onAdjust={stock => {
+                                setSelectedStock(stock);
+                                setAdjustAmount('');
+                                setAdjustReason('');
+                                setActionError('');
+                            }}
+                        />
                         <InventoryPagination
                             loading={pageLoading}
                             pageSize={pageSize}
@@ -2170,6 +2095,273 @@ export function InventoryWarehouseModule() {
                     onSave={() => void saveLotTransfer()}
                 />
             )}
+        </div>
+    );
+}
+
+export function InventoryStockOverview({
+    items,
+    expandedSkuIds,
+    onToggle,
+    sortField,
+    sortDirection,
+    onSort,
+    onAdjust,
+}: {
+    items: InventorySkuSummary[];
+    expandedSkuIds: Set<string>;
+    onToggle: (variantId: string) => void;
+    sortField: InventorySortField;
+    sortDirection: SortDirection;
+    onSort: (field: InventorySortField, initialDirection?: SortDirection) => void;
+    onAdjust: (stock: StockRow) => void;
+}) {
+    const products = new Map<string, { name: string; items: InventorySkuSummary[] }>();
+    for (const item of items) {
+        const product = products.get(item.productId) ?? { name: item.productName, items: [] };
+        product.items.push(item);
+        products.set(item.productId, product);
+    }
+    if (!items.length) {
+        return (
+            <div className="space-y-2 p-12 text-center text-xs text-slate-400">
+                <Boxes className="mx-auto h-10 w-10 text-slate-300" />
+                <p>当前筛选条件下暂无 SKU</p>
+            </div>
+        );
+    }
+    return (
+        <div className="overflow-x-auto">
+            <table
+                aria-label="SKU 库存总览"
+                className="w-full min-w-[880px] border-collapse text-left text-xs"
+            >
+                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                    <tr>
+                        <SortableTableHeader
+                            label="规格"
+                            sortField="name"
+                            activeSortField={sortField}
+                            sortDirection={sortDirection}
+                            onSort={onSort}
+                            className="min-w-56 px-4 py-3"
+                        />
+                        <SortableTableHeader
+                            label="SKU"
+                            sortField="sku"
+                            activeSortField={sortField}
+                            sortDirection={sortDirection}
+                            onSort={onSort}
+                            className="px-3 py-3"
+                        />
+                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                            库存点
+                        </th>
+                        <SortableTableHeader
+                            label="总在手"
+                            sortField="stockOnHand"
+                            activeSortField={sortField}
+                            sortDirection={sortDirection}
+                            onSort={onSort}
+                            initialDirection="DESC"
+                            className="px-3 py-3"
+                        />
+                        <SortableTableHeader
+                            label="总锁定"
+                            sortField="stockAllocated"
+                            activeSortField={sortField}
+                            sortDirection={sortDirection}
+                            onSort={onSort}
+                            initialDirection="DESC"
+                            className="px-3 py-3"
+                        />
+                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                            总可售
+                        </th>
+                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                            库存状态
+                        </th>
+                        <th scope="col" className="whitespace-nowrap px-4 py-3 text-right">
+                            仓库明细
+                        </th>
+                    </tr>
+                </thead>
+                {Array.from(products, ([productId, product]) => (
+                    <tbody key={productId} className="divide-y divide-slate-100">
+                        <tr className="bg-slate-50/70">
+                            <th scope="rowgroup" colSpan={8} className="px-4 py-3 font-bold text-slate-900">
+                                {product.name}
+                                <span className="ml-3 font-normal text-slate-500">
+                                    本页 {product.items.length} 个 SKU
+                                </span>
+                            </th>
+                        </tr>
+                        {product.items.map(item => {
+                            const expanded = expandedSkuIds.has(item.variantId);
+                            const detailsId = `stock-sku-${item.variantId}`;
+                            const hasStock = item.locations.length > 0;
+                            const tracked = item.status !== 'NOT_TRACKED';
+                            const variantLabel = item.variantName.startsWith(item.productName)
+                                ? item.variantName
+                                      .slice(item.productName.length)
+                                      .replace(/^[\s·•:：/—-]+/u, '') || '默认规格'
+                                : item.variantName;
+                            return (
+                                <Fragment key={item.variantId}>
+                                    <tr className="h-14 hover:bg-slate-50/50">
+                                        <th scope="row" className="px-4 py-3 font-medium text-slate-800">
+                                            {variantLabel}
+                                        </th>
+                                        <td className="px-3 py-3 font-mono text-[11px] text-slate-600">
+                                            {item.sku}
+                                        </td>
+                                        <td className="px-3 py-3 text-slate-500">
+                                            {item.locations.length} 个
+                                        </td>
+                                        <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                                            {hasStock ? item.stockOnHand : '—'}
+                                        </td>
+                                        <td className="px-3 py-3 font-mono text-amber-700">
+                                            {hasStock ? item.stockAllocated : '—'}
+                                        </td>
+                                        <td
+                                            className={`px-3 py-3 font-mono font-bold ${item.stockAvailable <= 0 ? 'text-rose-700' : 'text-emerald-700'}`}
+                                        >
+                                            {hasStock && tracked ? item.stockAvailable : '—'}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-3">
+                                            {!tracked ? (
+                                                <span className="text-slate-500">不跟踪仓库库存</span>
+                                            ) : !hasStock ? (
+                                                <span className="text-slate-500">未关联库存点</span>
+                                            ) : (
+                                                <InventoryAlertBadge
+                                                    status={item.status as InventoryAlertStatus}
+                                                />
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={() => onToggle(item.variantId)}
+                                                aria-expanded={expanded}
+                                                aria-controls={expanded ? detailsId : undefined}
+                                                aria-label={`${expanded ? '收起' : '展开'} ${item.sku} 仓库明细`}
+                                                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded px-2 py-1.5 font-bold text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-500"
+                                            >
+                                                {expanded ? '收起' : '查看仓库'}
+                                                {expanded ? (
+                                                    <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+                                                ) : (
+                                                    <ChevronRight
+                                                        aria-hidden="true"
+                                                        className="h-3.5 w-3.5"
+                                                    />
+                                                )}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {expanded && (
+                                        <tr id={detailsId}>
+                                            <td colSpan={8} className="bg-slate-50/50 px-4 py-4">
+                                                {!hasStock ? (
+                                                    <p className="text-slate-500">
+                                                        该 SKU 尚未关联库存点，请进入商品编辑页建立库存记录。
+                                                    </p>
+                                                ) : (
+                                                    <>
+                                                        <p className="mb-3 text-[11px] text-slate-500">
+                                                            {item.sku} · 以下库存和状态仅对应各仓库
+                                                        </p>
+                                                        <table
+                                                            aria-label={`${item.sku} 仓库库存`}
+                                                            className="w-full text-left text-[11px]"
+                                                        >
+                                                            <thead className="border-b border-slate-200 text-slate-500">
+                                                                <tr>
+                                                                    {[
+                                                                        '库存点',
+                                                                        '在手',
+                                                                        '锁定',
+                                                                        '可售',
+                                                                        '补货预警值',
+                                                                        '仓库状态',
+                                                                        '操作',
+                                                                    ].map(label => (
+                                                                        <th
+                                                                            scope="col"
+                                                                            key={label}
+                                                                            className="px-3 pb-2"
+                                                                        >
+                                                                            {label}
+                                                                        </th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                                {item.locations.map(stock => (
+                                                                    <tr key={stock.id} className="h-12">
+                                                                        <th
+                                                                            scope="row"
+                                                                            className="px-3 py-2 font-medium text-slate-700"
+                                                                        >
+                                                                            {stock.warehouse}
+                                                                        </th>
+                                                                        <td className="px-3 py-2 font-mono">
+                                                                            {stock.stockOnHand}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 font-mono text-amber-700">
+                                                                            {stock.stockAllocated}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 font-mono font-bold">
+                                                                            {tracked
+                                                                                ? stock.stockAvailable
+                                                                                : '—'}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 font-mono text-slate-500">
+                                                                            {tracked
+                                                                                ? stock.safetyThreshold
+                                                                                : '—'}
+                                                                        </td>
+                                                                        <td className="whitespace-nowrap px-3 py-2">
+                                                                            {stock.status ===
+                                                                            'NOT_TRACKED' ? (
+                                                                                <span className="text-slate-500">
+                                                                                    不跟踪仓库库存
+                                                                                </span>
+                                                                            ) : (
+                                                                                <InventoryAlertBadge
+                                                                                    status={stock.status}
+                                                                                />
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 text-right">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() =>
+                                                                                    onAdjust(stock)
+                                                                                }
+                                                                                aria-label={`盘点调整 ${stock.sku} ${stock.warehouse}`}
+                                                                                className="whitespace-nowrap rounded bg-blue-50 px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
+                                                                            >
+                                                                                盘点调整
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </Fragment>
+                            );
+                        })}
+                    </tbody>
+                ))}
+            </table>
         </div>
     );
 }
