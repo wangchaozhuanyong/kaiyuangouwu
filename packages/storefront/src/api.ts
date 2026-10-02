@@ -15,6 +15,7 @@ import type {
     CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
     CustomerOrderCounts,
+    DailyRecommendations,
     DataSubjectExportPayload,
     DataSubjectRequest,
     FraudRiskAppeal,
@@ -184,6 +185,10 @@ export class ShopApi {
 
     async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
         return this.catalogApi.catalog(input, signal);
+    }
+
+    async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {
+        return this.catalogApi.dailyRecommendations(signal);
     }
 
     async productSales(productIds: string[]): Promise<Record<string, number>> {

@@ -1,5 +1,6 @@
 import type {
     CollectionSummary,
+    DailyRecommendations,
     Product,
     ProductSearchPage,
     ProductSearchSort,
@@ -256,6 +257,17 @@ export class CatalogApi extends BaseDomainApi {
         };
     }
 
+    async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {
+        const result = await this.request<{ storefrontDailyRecommendations: DailyRecommendations }>(
+            `query StorefrontDailyRecommendations {
+                storefrontDailyRecommendations { businessDate expiresAt items { ${productFields} } }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.storefrontDailyRecommendations;
+    }
+
     async productSales(productIds: string[]): Promise<Record<string, number>> {
         const uniqueProductIds = [...new Set(productIds)];
         const quantities: Record<string, number> = {};
@@ -285,10 +297,16 @@ export class CatalogApi extends BaseDomainApi {
     }
 
     async collections(signal?: AbortSignal): Promise<CollectionSummary[]> {
-        const result = await this.request<{ collections: { items: CollectionSummary[] } }>(
-            `
-            query StorefrontCollections {
-                collections(options: { take: 100, topLevelOnly: true, sort: { position: ASC } }) {
+        const items: CollectionSummary[] = [];
+        let totalItems = Infinity;
+        while (items.length < totalItems) {
+            const result = await this.request<{
+                collections: { items: CollectionSummary[]; totalItems?: number };
+            }>(
+                `
+            query StorefrontCollections($skip: Int!) {
+                collections(options: { take: 100, skip: $skip, topLevelOnly: true, sort: { position: ASC } }) {
+                    totalItems
                     items {
                         id
                         name
@@ -312,10 +330,14 @@ export class CatalogApi extends BaseDomainApi {
                 }
             }
         `,
-            undefined,
-            signal,
-        );
-        const items = result.collections?.items ?? [];
+                { skip: items.length },
+                signal,
+            );
+            const page = result.collections?.items ?? [];
+            items.push(...page);
+            totalItems = result.collections?.totalItems ?? items.length;
+            if (!page.length) break;
+        }
         return storefrontNavigationCollections(
             items
                 .slice()

@@ -95,7 +95,7 @@ export function ProductRow({
     locale: string;
     language: StorefrontLanguage;
     onOpen: () => void;
-    layout?: 'row' | 'catalog';
+    layout?: 'row' | 'catalog' | 'compact';
     showDescription?: boolean;
 }) {
     const isZh = language === 'zh';
@@ -105,7 +105,7 @@ export function ProductRow({
     const subtitle = resolveProductSubtitle(product, 48);
     return (
         <ProductDetailLink
-            className={`product-row product-row-detail-link${layout === 'catalog' ? ' product-catalog-card' : ''}`}
+            className={`product-row product-row-detail-link${layout === 'catalog' ? ' product-catalog-card' : ''}${layout === 'compact' ? ' is-compact' : ''}`}
             product={product}
             language={language}
             onOpen={onOpen}

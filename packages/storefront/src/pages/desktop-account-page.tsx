@@ -11,15 +11,15 @@ import {
 
 import { AccountIdentity } from '../components/common/account-identity';
 import { RouteState } from '../storefront-router';
+import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { LegalFooter, SectionIcon } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage } from '../storefront-ui/product-display';
-import { ProductSection } from '../storefront-ui/product-section';
 import { CustomerOrderCounts } from '../types';
 
 import { AccountPageProps } from './account-page';
 
-interface DesktopAccountPageProps extends Omit<AccountPageProps, 'api' | 'logoUrl' | 'onLogout'> {
+interface DesktopAccountPageProps extends Omit<AccountPageProps, 'logoUrl' | 'onLogout'> {
     pending: boolean;
     counts: CustomerOrderCounts | undefined;
     countsError: boolean;
@@ -34,9 +34,9 @@ interface DesktopAccountPageProps extends Omit<AccountPageProps, 'api' | 'logoUr
 }
 
 export function DesktopAccountPage({
+    api,
     pending,
     customer,
-    products,
     market,
     locale,
     language,
@@ -318,18 +318,15 @@ export function DesktopAccountPage({
                     </div>
                 </section>
             </div>
-            {products.length > 0 && (
-                <ProductSection
-                    className="desktop-account-recommendations"
-                    kind="recommendations"
-                    title={isZh ? '为你推荐' : 'Recommended for you'}
-                    products={products.slice(0, 6)}
-                    market={market}
-                    locale={locale}
-                    language={language}
-                    onProduct={product => navigate({ name: 'product', id: product.id })}
-                />
-            )}
+            <DailyRecommendationSection
+                api={api}
+                className="desktop-account-recommendations"
+                title={isZh ? '为你推荐' : 'Recommended for you'}
+                market={market}
+                locale={locale}
+                language={language}
+                onProduct={product => navigate({ name: 'product', id: product.id })}
+            />
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

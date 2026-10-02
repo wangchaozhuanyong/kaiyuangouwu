@@ -94,6 +94,13 @@ export class StorefrontCatalogService {
         };
     }
 
+    async recommendationProductIds(ctx: RequestContext): Promise<string[]> {
+        const rows = await this.createCandidateQuery(ctx, normalizeCatalogInput({}))
+            .andWhere('catalog_product.enabled = :recommendationsEnabled', { recommendationsEnabled: true })
+            .getRawMany<CatalogRow>();
+        return rows.map(row => String(row.productId));
+    }
+
     private createCandidateQuery(
         ctx: RequestContext,
         input: NormalizedStorefrontCatalogInput,

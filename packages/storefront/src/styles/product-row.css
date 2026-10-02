@@ -142,18 +142,17 @@
 }
 
 @media (min-width: 1024px) {
-    .product-row {
+    .product-row:not(.is-compact) {
         display: flex;
         flex-direction: column;
         gap: 0;
     }
 
-    .product-row-content {
+    .product-row:not(.is-compact) .product-row-content {
         width: 100%;
         flex: 1;
         padding: 12px 0 0;
     }
-
 }
 
 /* Narrow rows need the full card width for the currency and complete amount. */

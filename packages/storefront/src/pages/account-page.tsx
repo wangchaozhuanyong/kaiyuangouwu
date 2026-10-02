@@ -33,10 +33,10 @@ import {
 } from '../referral-client-feature';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
+import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { orderNotification, orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
-import { ProductSection } from '../storefront-ui/product-section';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -191,6 +191,7 @@ export function AccountPage() {
     if (desktop)
         return (
             <DesktopAccountPage
+                api={api}
                 pending={pagePending}
                 customer={customer}
                 products={products}
@@ -500,10 +501,10 @@ export function AccountPage() {
             )}
 
             {!desktop && (
-                <ProductSection
-                    centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                    className={`account-recommendations${products.length === 1 ? ' account-recommendations-single' : ''}`}
-                    products={products.slice(0, 4)}
+                <DailyRecommendationSection
+                    api={api}
+                    title={isZh ? '为你推荐' : 'Recommended for you'}
+                    className="account-recommendations"
                     market={market}
                     locale={locale}
                     language={language}

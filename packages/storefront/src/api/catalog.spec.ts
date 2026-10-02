@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CollectionSummary } from '../types';
 
-import { storefrontNavigationCollections } from './catalog';
+import { CatalogApi, storefrontNavigationCollections } from './catalog';
+import { ShopApiContext } from './client-context';
 
 const category = (id: string, overrides: Partial<CollectionSummary> = {}): CollectionSummary => ({
     id,
@@ -18,6 +19,39 @@ const category = (id: string, overrides: Partial<CollectionSummary> = {}): Colle
 });
 
 describe('configured category navigation', () => {
+    it('loads categories beyond the first page and preserves configured root and child order', async () => {
+        const items = Array.from({ length: 103 }, (_, index) =>
+            category(String(index), {
+                position: index,
+                productVariantCount: 1,
+                children: [
+                    category(`${index}-second`, { position: 2, productVariantCount: 1 }),
+                    category(`${index}-first`, { position: 1, productVariantCount: 1 }),
+                ],
+            }),
+        );
+        const request = vi.fn((_query: string, variables: { skip: number }) =>
+            Promise.resolve({
+                collections: {
+                    totalItems: items.length,
+                    items: items.slice(variables.skip, variables.skip + 100),
+                },
+            }),
+        );
+        const api = new CatalogApi({ request } as unknown as ShopApiContext);
+        const result = await api.collections();
+        expect(result).toHaveLength(103);
+        expect(request.mock.calls.map(call => call[1].skip)).toEqual([0, 100]);
+        expect(result[102].children?.map(child => child.id)).toEqual(['102-first', '102-second']);
+    });
+
+    it('propagates recommendation failures instead of treating them as zero sales', async () => {
+        const request = vi.fn().mockRejectedValue(new Error('Sales unavailable'));
+        const api = new CatalogApi({ request } as unknown as ShopApiContext);
+        await expect(api.dailyRecommendations()).rejects.toThrow('Sales unavailable');
+        expect(request).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps a published illustrated category while its first products are pending', () => {
         const claude = category('claude', {
             featuredAsset: { id: 'icon-claude', preview: '/assets/claude.webp' },
