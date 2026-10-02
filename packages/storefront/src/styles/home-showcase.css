@@ -1394,7 +1394,54 @@ html[lang='en'] .quick-grid b {
 }
 
 .managed-ad-carousel {
+    position: relative;
     min-width: 0;
+}
+
+.managed-ad-drag-hint {
+    display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .managed-ad-drag-hint {
+        position: absolute;
+        z-index: 2;
+        top: 18px;
+        right: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 13px;
+        border-radius: var(--skin-control-radius);
+        background: var(--text);
+        color: var(--surface);
+        font-size: 12px;
+        font-weight: var(--font-weight-medium);
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-4px);
+        transition:
+            opacity 160ms ease,
+            transform 160ms ease;
+    }
+
+    .managed-ad-carousel:hover:not(.is-manual) .managed-ad-drag-hint,
+    .managed-ad-carousel:focus-within:not(.is-manual) .managed-ad-drag-hint,
+    .managed-ad-carousel.is-dragging .managed-ad-drag-hint {
+        opacity: 1;
+        transform: none;
+    }
+
+    .managed-ad-carousel.has-overflow .managed-ad-carousel-rail,
+    .managed-ad-carousel.has-overflow .managed-ad-carousel-rail > button {
+        cursor: grab;
+        user-select: none;
+    }
+
+    .managed-ad-carousel.is-dragging .managed-ad-carousel-rail,
+    .managed-ad-carousel.is-dragging .managed-ad-carousel-rail > button {
+        cursor: grabbing;
+    }
 }
 
 .managed-ad-carousel-rail {
@@ -1410,6 +1457,23 @@ html[lang='en'] .quick-grid b {
 
 .managed-ad-carousel-rail::-webkit-scrollbar {
     display: none;
+}
+
+.managed-ad-carousel-rail[data-dragging='true'] {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+}
+
+.managed-ad-carousel-rail:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .managed-ad-drag-hint {
+        transition: none;
+    }
 }
 
 .managed-ad-carousel-rail > button {
