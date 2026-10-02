@@ -98,6 +98,8 @@ try {
     const expanded = page.getByRole('dialog', { name: '放大客户端装修预览' });
     await expect(expanded.locator('iframe')).toHaveAttribute('width', '390');
     await expanded.getByRole('button', { name: '关闭预览', exact: true }).click();
+    // The fixture replaces only a synthetic asset; respect the same explicit replacement gate as the editor.
+    await editor().getByRole('checkbox', { name: '我确认替换或清除以上图片' }).check();
     await editor().getByRole('button', { name: '保存并核对', exact: true }).click();
     await expect(editor()).toHaveCount(0);
     await page.reload();

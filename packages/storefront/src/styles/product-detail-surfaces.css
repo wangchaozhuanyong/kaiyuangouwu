@@ -92,8 +92,8 @@
 .detail-summary,
 .detail-options,
 .detail-description {
-    margin-top: 12px;
-    padding: 18px;
+    margin-top: var(--space-section);
+    padding: var(--space-card);
     background: var(--paper);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
@@ -102,9 +102,9 @@
 .detail-price {
     margin: 0;
     color: var(--text);
-    font-size: 27px;
+    font-size: var(--type-price-detail-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1.2;
+    line-height: var(--type-price-detail-leading);
 }
 
 .detail-price strong,
@@ -228,9 +228,9 @@
 
 .detail-summary h1 {
     margin: 0 0 10px;
-    font-size: 21px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.35;
+    font-size: var(--type-product-detail-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-product-detail-leading);
     text-wrap: pretty;
     overflow-wrap: anywhere;
 }
@@ -269,7 +269,7 @@
     border: 1px solid var(--skin-divider);
     border-radius: var(--skin-control-radius);
     background: var(--surface);
-    font-size: 13.5px;
+    font-size: var(--type-action-size);
     font-weight: 500;
     color: var(--text);
     transition:
@@ -774,11 +774,11 @@
 .detail-action-bar button:nth-last-child(2) {
     height: 44px;
     border: 0;
-    border-radius: 99px;
+    border-radius: var(--skin-control-radius);
     background: var(--accent-soft);
     color: var(--accent-ink);
     display: grid;
-    font-size: 13.5px;
+    font-size: var(--type-action-size);
     font-weight: 700;
     box-shadow: var(--shadow-sm);
     transition:
@@ -793,11 +793,11 @@
 .detail-action-bar button:last-child {
     height: 44px;
     border: 0;
-    border-radius: 99px;
+    border-radius: var(--skin-control-radius);
     background: var(--accent);
     color: var(--accent-foreground, #fff);
     display: grid;
-    font-size: 13.5px;
+    font-size: var(--type-action-size);
     font-weight: 700;
     box-shadow: var(--accent-shadow);
     transition:

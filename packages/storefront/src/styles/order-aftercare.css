@@ -149,7 +149,7 @@
     padding: 6px 10px;
     border-radius: var(--skin-control-radius);
     background: var(--soft);
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.6;
     font-style: normal;
@@ -258,7 +258,7 @@
     padding: 12px;
     border-radius: var(--skin-control-radius);
     background: var(--soft);
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 13px;
     line-height: 1.6;
 }

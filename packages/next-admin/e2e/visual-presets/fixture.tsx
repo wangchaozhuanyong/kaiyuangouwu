@@ -12,7 +12,7 @@ const presets: Record<string, { channelId: string; presetId: string; revision: s
     a: { channelId: 'a', presetId: 'classic', revision: 'default' },
     b: { channelId: 'b', presetId: 'classic', revision: 'default' },
 };
-const readbackFault = { enabled: false, successfulWrites: 0 };
+const readbackFault = { enabled: false, pendingReadback: false };
 
 export function Fixture() {
     const [channelId, setChannelId] = useState('a');
@@ -56,17 +56,33 @@ export function Fixture() {
                                             presetId: input.presetId,
                                             revision: String(Date.now()),
                                         };
-                                        readbackFault.successfulWrites++;
+                                        readbackFault.pendingReadback = readbackFault.enabled;
                                         observer.next({ data: { updateStorefrontVisualPreset: theme() } });
                                     }
                                 } else if (operation.operationName === 'NextAdminStorefrontVisualPreset') {
-                                    if (readbackFault.enabled && readbackFault.successfulWrites > 0) {
+                                    if (readbackFault.pendingReadback) {
+                                        readbackFault.pendingReadback = false;
                                         observer.error(new Error('模拟保存后的回读失败'));
                                         return;
                                     }
                                     observer.next({
                                         data: { activeChannel: channel, storefrontVisualPreset: theme() },
                                     });
+                                } else if (operation.operationName === 'NextAdminStorefrontPreviewDomains') {
+                                    observer.next({
+                                        data: {
+                                            storeDomains: [
+                                                {
+                                                    domain: 'fixture.invalid',
+                                                    isPrimary: true,
+                                                    status: 'ACTIVE',
+                                                    channel,
+                                                },
+                                            ],
+                                        },
+                                    });
+                                } else if (operation.operationName === 'NextAdminStorefrontPreviewUrl') {
+                                    observer.next({ data: { activeChannel: channel, storeProfiles: [] } });
                                 } else if (operation.operationName === 'NextAdminStorefrontContent') {
                                     observer.next({
                                         data: {

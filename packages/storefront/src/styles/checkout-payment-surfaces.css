@@ -288,8 +288,9 @@
 
 .payment-method-section h2 {
     margin: 0 0 12px;
-    font-size: 17px;
+    font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 
 .payment-method-section > .page-skeleton {
