@@ -1816,44 +1816,49 @@ describe('HomePage featured collection', () => {
         items: [],
     };
 
-    it.each([0, 1, 5, 6, 7])('keeps every configured desktop collection product (%i items)', count => {
-        const products = Array.from({ length: count }, (_, index) => ({
-            ...featuredProduct,
-            id: `count-${index}`,
-            name: `完整商品名称 ${index} Long product name with specifications`,
-        }));
-        const block = {
-            ...featuredCollectionBlock,
-            settings: { displayCount: Math.max(1, count), selectedProductIds: products.map(item => item.id) },
-            // Items are not separately rendered by collections and must not remove selected products.
-            items: count
-                ? [
-                      {
-                          ...coreCategoriesBlock.items[0],
-                          targetType: 'PRODUCT' as const,
-                          targetValue: products[0].id,
-                      },
-                  ]
-                : [],
-        };
-        const props = {
-            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION' as const],
-            contentBlocks: [block],
-            managedContentProducts: products,
-        };
-        const desktopMarkup = renderHome(props, true);
-        expect((desktopMarkup.match(/class="product-card"/g) ?? []).length).toBe(count);
-        for (const item of products)
-            expect(desktopMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
-        const mobileMarkup = renderHome(props, false);
-        expect(
-            (mobileMarkup.match(/class="featured-collection-product(?: is-featured)?"/g) ?? []).length,
-        ).toBe(Math.min(5, count));
-        if (count > 5) {
-            expect(mobileMarkup).toContain(`展开其余 ${count - 5} 件商品`);
-            expect(mobileMarkup).toContain('aria-expanded="false"');
-        }
-    });
+    it.each([0, 1, 5, 6, 7])(
+        'keeps every configured collection product visible at both widths (%i items)',
+        count => {
+            const products = Array.from({ length: count }, (_, index) => ({
+                ...featuredProduct,
+                id: `count-${index}`,
+                name: `完整商品名称 ${index} Long product name with specifications`,
+            }));
+            const block = {
+                ...featuredCollectionBlock,
+                settings: {
+                    displayCount: Math.max(1, count),
+                    selectedProductIds: products.map(item => item.id),
+                },
+                // Items are not separately rendered by collections and must not remove selected products.
+                items: count
+                    ? [
+                          {
+                              ...coreCategoriesBlock.items[0],
+                              targetType: 'PRODUCT' as const,
+                              targetValue: products[0].id,
+                          },
+                      ]
+                    : [],
+            };
+            const props = {
+                configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION' as const],
+                contentBlocks: [block],
+                managedContentProducts: products,
+            };
+            const desktopMarkup = renderHome(props, true);
+            expect((desktopMarkup.match(/class="product-card is-gallery"/g) ?? []).length).toBe(count);
+            for (const item of products)
+                expect(desktopMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
+            const mobileMarkup = renderHome(props, false);
+            expect((mobileMarkup.match(/class="product-card is-gallery"/g) ?? []).length).toBe(count);
+            for (const item of products) {
+                expect(mobileMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
+                expect(mobileMarkup).toContain(`/product?id=${item.id}`);
+            }
+            expect(mobileMarkup).not.toContain('展开其余');
+        },
+    );
 
     it('honors the configured total without filling empty slots or returning extra products', () => {
         const products = Array.from({ length: 7 }, (_, index) => ({
@@ -1907,29 +1912,17 @@ describe('HomePage featured collection', () => {
             contentBlocks: [collectionBlock],
             managedContentProducts: productsInCollection,
         });
-        const stylesheet = readStorefrontStylesheet();
 
-        expect(markup).toContain('class="featured-collection-mosaic"');
+        expect(markup).toContain('class="featured-collection-grid"');
         expect(markup).toContain('data-product-count="5"');
         expect(markup).toContain('aria-label="推荐集合"');
         expect(markup).not.toContain('左右滑动查看更多商品');
         expect(markup).toContain('Codex-Plus成品号');
-        expect(markup).not.toContain('这是一段会在移动端限制为两行的商品描述。');
+        expect(markup).not.toContain('class="product-card-subtitle"');
+        expect(markup).not.toContain('class="product-card-meta"');
+        expect(markup).not.toContain('class="product-card-stock"');
         expect(markup).not.toContain('本期策展');
         expect(markup).not.toContain('featured-collection-product-index');
-        expect(stylesheet).toMatch(
-            /\.featured-collection-mosaic\s*\{[^}]*aspect-ratio:\s*2 \/ 1;[^}]*border-radius:\s*16px;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.featured-collection-mosaic\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);/,
-        );
-        expect(stylesheet).toMatch(
-            new RegExp(
-                String.raw`\.featured-collection-mosaic\[data-product-count='5'\] ` +
-                    String.raw`\.featured-collection-product:first-child\s*\{` +
-                    String.raw`[^}]*grid-column:\s*1 \/ span 2;[^}]*grid-row:\s*1 \/ span 2;`,
-            ),
-        );
     });
 });
 

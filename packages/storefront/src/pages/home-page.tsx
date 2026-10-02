@@ -42,7 +42,6 @@ import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
-import { lowestPricedProductVariant } from '../product-pricing';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
@@ -67,10 +66,7 @@ import {
     contentNumberSetting,
     contentStringArraySetting,
     decodeStorefrontImage,
-    formatMoney,
     productImage,
-    ProductImagePlaceholder,
-    productImageUnavailableLabel,
     renderColorfulQuickIcon,
     SafeImage,
     shouldPrefetchMedia,
@@ -1810,10 +1806,7 @@ function FeaturedCollectionSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
-    const [expanded, setExpanded] = useState(false);
-    const mosaicProducts = desktop ? products : products.slice(0, 5);
 
     return (
         <section
@@ -1821,135 +1814,51 @@ function FeaturedCollectionSection({
             aria-labelledby={`${block.id}-title`}
         >
             <div className="featured-collection-layout">
-                <div
-                    className="featured-collection-intro"
-                    style={{
-                        ...managedContentStyle(block),
-                    }}
-                >
-                    <h2 id={`${block.id}-title`}>{block.title}</h2>
-                    {block.subtitle ? <p className="featured-collection-subtitle">{block.subtitle}</p> : null}
-                    {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
-                    {blockHasTarget ? (
-                        <button
-                            className="featured-collection-action"
-                            type="button"
-                            onClick={() => onContentTarget(block.targetType, block.targetValue)}
-                        >
-                            {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
-                            <ChevronRight aria-hidden="true" />
-                        </button>
+                <header className="featured-collection-intro" style={managedContentStyle(block)}>
+                    <div className="featured-collection-heading">
+                        <h2 id={`${block.id}-title`}>{block.title}</h2>
+                        {block.subtitle ? (
+                            <p className="featured-collection-subtitle">{block.subtitle}</p>
+                        ) : null}
+                    </div>
+                    {block.body || blockHasTarget ? (
+                        <div className="featured-collection-description">
+                            {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
+                            {blockHasTarget ? (
+                                <button
+                                    className="featured-collection-action"
+                                    type="button"
+                                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                                >
+                                    {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
+                                    <ChevronRight aria-hidden="true" />
+                                </button>
+                            ) : null}
+                        </div>
                     ) : null}
-                </div>
-
-                {mosaicProducts.length ? (
+                </header>
+                {products.length ? (
                     <div
-                        className={`featured-collection-mosaic${desktop ? ' desktop-product-rail' : ''}`}
-                        data-product-count={mosaicProducts.length}
+                        className="featured-collection-grid"
+                        data-product-count={products.length}
                         aria-label={block.title}
                     >
-                        {mosaicProducts.map((product, index) => {
-                            if (desktop)
-                                return (
-                                    <ProductCard
-                                        key={product.id}
-                                        product={product}
-                                        market={market}
-                                        locale={locale}
-                                        language={language}
-                                        imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
-                                        onOpen={() => onContentTarget('PRODUCT', product.id)}
-                                    />
-                                );
-                            const imageUrl = productImage(product);
-                            const pricedVariant = lowestPricedProductVariant(product);
-                            const priceLabel =
-                                product.customFields?.pricingMode === 'QUOTE_ONLY'
-                                    ? isZh
-                                        ? '联系客服询价'
-                                        : 'Request a quote'
-                                    : pricedVariant
-                                      ? formatMoney(
-                                            pricedVariant.priceWithTax,
-                                            pricedVariant.currencyCode,
-                                            locale,
-                                        )
-                                      : null;
-                            const productCopy = (
-                                <span className="featured-collection-product-overlay" aria-hidden="true">
-                                    <strong>{product.name}</strong>
-                                    {priceLabel ? (
-                                        <span className="featured-collection-product-price">
-                                            {priceLabel}
-                                        </span>
-                                    ) : null}
-                                </span>
-                            );
-                            return (
-                                <button
-                                    key={product.id}
-                                    className={`featured-collection-product${index === 0 ? ' is-featured' : ''}`}
-                                    type="button"
-                                    onClick={() => onContentTarget('PRODUCT', product.id)}
-                                    aria-label={priceLabel ? `${product.name} ${priceLabel}` : product.name}
-                                >
-                                    <span className="featured-collection-product-media">
-                                        {imageUrl ? (
-                                            <SafeImage
-                                                src={imageUrl}
-                                                alt={product.name}
-                                                fallbackLabel={productImageUnavailableLabel(language)}
-                                                sizes="(min-width: 1024px) 220px, 50vw"
-                                                imageKind="card"
-                                                loading="lazy"
-                                            />
-                                        ) : (
-                                            <ProductImagePlaceholder
-                                                language={language}
-                                                className="featured-collection-product-placeholder"
-                                            />
-                                        )}
-                                        {!desktop && productCopy}
-                                    </span>
-                                    {desktop && productCopy}
-                                </button>
-                            );
-                        })}
+                        {products.map(product => (
+                            <ProductCard
+                                key={product.id}
+                                product={product}
+                                market={market}
+                                locale={locale}
+                                language={language}
+                                appearance="gallery"
+                                imageSizes="(min-width: 1280px) 400px, (min-width: 768px) 30vw, 50vw"
+                                onOpen={() => onContentTarget('PRODUCT', product.id)}
+                            />
+                        ))}
                     </div>
                 ) : (
-                    <div className="featured-collection-empty" aria-hidden="true">
-                        <span>{isZh ? '精选内容' : 'Curated selection'}</span>
-                    </div>
-                )}
-                {!desktop && products.length > 5 && (
-                    <div className="featured-collection-overflow">
-                        <button
-                            className="featured-collection-action"
-                            type="button"
-                            aria-expanded={expanded}
-                            aria-controls={`${block.id}-remaining`}
-                            onClick={() => setExpanded(value => !value)}
-                        >
-                            {expanded
-                                ? isZh
-                                    ? '收起其余商品'
-                                    : 'Show fewer products'
-                                : isZh
-                                  ? `展开其余 ${products.length - 5} 件商品`
-                                  : `Show ${products.length - 5} more products`}
-                        </button>
-                        <div id={`${block.id}-remaining`} hidden={!expanded}>
-                            {expanded && (
-                                <ProductSection
-                                    products={products.slice(5)}
-                                    prioritizeFirstImage={false}
-                                    market={market}
-                                    locale={locale}
-                                    language={language}
-                                    onProduct={product => onContentTarget('PRODUCT', product.id)}
-                                />
-                            )}
-                        </div>
+                    <div className="featured-collection-empty">
+                        <span>{isZh ? '精选商品即将上架' : 'New selections coming soon'}</span>
                     </div>
                 )}
             </div>

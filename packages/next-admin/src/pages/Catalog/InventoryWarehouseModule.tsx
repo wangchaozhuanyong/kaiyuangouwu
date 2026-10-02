@@ -2208,7 +2208,7 @@ export function InventoryStockOverview({
                                 : item.variantName;
                             return (
                                 <Fragment key={item.variantId}>
-                                    <tr className="h-14 hover:bg-slate-50/50">
+                                    <tr className="h-14 hover:bg-slate-50">
                                         <th scope="row" className="px-4 py-3 font-medium text-slate-800">
                                             {variantLabel}
                                         </th>
