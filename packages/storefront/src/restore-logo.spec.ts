@@ -7,9 +7,9 @@ describe('early logo restoration under production CSP', () => {
     it('keeps logo restoration in the app entry instead of a parser-blocking request', () => {
         const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
         const entry = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
-        expect(html).toContain(
-            '<link rel="icon" href="/storefront/neutral-store.png?storefront-icon=2" type="image/png" />',
-        );
+        // Competing parser-time fallbacks can stick in Safari's independent icon cache.
+        expect(html).toContain('<!--# include virtual="/_storefront/lcp-preload" -->');
+        expect(html).not.toMatch(/<link\b[^>]*rel="(?:icon|apple-touch-icon)"/);
         expect(html).not.toContain('<script src="/storefront/restore-logo.js"></script>');
         expect(entry).toContain('restoreStorefrontIcons();');
         expect(html).not.toMatch(/<script>\s*\(function/);

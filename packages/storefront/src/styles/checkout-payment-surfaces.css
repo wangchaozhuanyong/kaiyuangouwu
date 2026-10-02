@@ -17,8 +17,8 @@
     font-weight: var(--font-weight-medium);
 }
 
-.form-grid input,
-.address-form input,
+.form-grid input:not([type="checkbox"], [type="radio"]),
+.address-form input:not([type="checkbox"], [type="radio"]),
 .form-grid select,
 .address-form select {
     width: 100%;
@@ -30,17 +30,17 @@
     transition: border-color 180ms ease;
 }
 
-.form-grid input:hover,
-.address-form input:hover,
+.form-grid input:not([type="checkbox"], [type="radio"]):hover,
+.address-form input:not([type="checkbox"], [type="radio"]):hover,
 .form-grid select:hover,
 .address-form select:hover {
     border-color: var(--line-strong);
 }
 
-.form-grid input:focus,
-.form-grid input:focus-visible,
-.address-form input:focus,
-.address-form input:focus-visible,
+.form-grid input:not([type="checkbox"], [type="radio"]):focus,
+.form-grid input:not([type="checkbox"], [type="radio"]):focus-visible,
+.address-form input:not([type="checkbox"], [type="radio"]):focus,
+.address-form input:not([type="checkbox"], [type="radio"]):focus-visible,
 .form-grid select:focus,
 .form-grid select:focus-visible,
 .address-form select:focus,
