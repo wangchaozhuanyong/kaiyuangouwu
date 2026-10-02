@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@vendure/storefront-content-plugin', async () => {
     const responsiveImage = await import('../../storefront-content-plugin/src/shared/responsive-image.js');
+    const icons = await import('../../storefront-content-plugin/src/shared/storefront-icons.js');
+    const { storefrontContentPermission } = await import('../../storefront-content-plugin/src/constants.js');
     return {
         ...responsiveImage,
+        ...icons,
+        storefrontContentPermission,
         StorefrontContentService: class StorefrontContentService {},
     };
 });
@@ -11,6 +15,7 @@ vi.mock('@vendure/storefront-content-plugin', async () => {
 import { StorefrontLcpPreloadController } from './storefront-lcp-preload.controller';
 import {
     renderHeroPreloadLink,
+    renderStorefrontIconLinks,
     storefrontContentCacheTag,
     StorefrontLcpPreloadService,
 } from './storefront-lcp-preload.service';
@@ -58,15 +63,30 @@ describe('storefront LCP preload', () => {
                 .fn()
                 .mockResolvedValue([{ type: 'HERO', imageUrl: '/assets/preview/store-a.png' }]),
         };
-        const service = new StorefrontLcpPreloadService(cache as never, content as never);
-        const ctx = { channelId: 'store-a', languageCode: 'zh_Hans' } as never;
+        const profile = { logoAsset: { preview: 'preview/store-a.webp' } };
+        const findOne = vi.fn().mockResolvedValue(profile);
+        const connection = { getRepository: vi.fn().mockReturnValue({ findOne }) };
+        const config = { assetOptions: { assetStorageStrategy: {} } };
+        const service = new StorefrontLcpPreloadService(
+            cache as never,
+            content as never,
+            connection as never,
+            config as never,
+        );
+        const ctx = { channelId: 'store-a', languageCode: 'zh_Hans', channel: { customFields: {} } } as never;
 
         const first = await service.render(ctx);
+        profile.logoAsset.preview = 'preview/store-a-new.webp';
         const second = await service.render(ctx);
         await service.invalidate('store-a');
 
         expect(first).toContain('storefront-hero-fit-480');
-        expect(second).toBe('<link cached />');
+        expect(first).toContain('/assets/preview/store-a.webp?');
+        expect(second).toContain('/assets/preview/store-a-new.webp?');
+        expect(second).not.toContain('/assets/preview/store-a.webp?');
+        expect(second).toContain('<link cached />');
+        expect(findOne).toHaveBeenCalledTimes(2);
+        expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { channelId: 'store-a' } }));
         expect(content.findPublished).toHaveBeenCalledTimes(1);
         expect(cache.set).toHaveBeenCalledWith(
             'StorefrontLcpPreload:store-a:zh_Hans',
@@ -74,6 +94,39 @@ describe('storefront LCP preload', () => {
             expect.objectContaining({ tags: [storefrontContentCacheTag('store-a')] }),
         );
         expect(cache.invalidateTags).toHaveBeenCalledWith([storefrontContentCacheTag('store-a')]);
+    });
+
+    it('renders separate Channel logos even when there is no published hero', async () => {
+        const service = new StorefrontLcpPreloadService(
+            { get: vi.fn(), set: vi.fn() } as never,
+            { findPublished: vi.fn().mockResolvedValue([]) } as never,
+            {
+                getRepository: (ctx: { channelId: string }) => ({
+                    findOne: () =>
+                        Promise.resolve({ logoAsset: { preview: `preview/${ctx.channelId}.webp` } }),
+                }),
+            } as never,
+            { assetOptions: { assetStorageStrategy: {} } } as never,
+        );
+        for (const channelId of ['store-a', 'store-b']) {
+            const fragment = await service.render({
+                channelId,
+                channel: { customFields: {} },
+                languageCode: 'en',
+            } as never);
+            expect(fragment).toContain(`/assets/preview/${channelId}.webp?`);
+            expect(fragment).toContain('format=png');
+            expect(fragment).not.toContain('rel="preload"');
+            expect(fragment).not.toContain(channelId === 'store-a' ? 'store-b' : 'store-a');
+        }
+    });
+
+    it('uses a neutral icon for an unconfigured store and escapes URL attributes', () => {
+        expect(renderStorefrontIconLinks(null)).toContain('/storefront/neutral-store.png?storefront-icon=2');
+        const html = renderStorefrontIconLinks('https://cdn.example/logo.png?label=\"<image>&a=1');
+        expect(html).toContain('&amp;');
+        expect(html).not.toContain('"<image>');
+        expect(html).toContain('data-storefront-icon="server"');
     });
 
     it('fails closed with an empty fragment when the host has no active store', async () => {

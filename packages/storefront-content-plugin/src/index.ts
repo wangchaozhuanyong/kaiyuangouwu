@@ -23,6 +23,8 @@ export {
     storefrontWebpUrl,
 } from './shared/responsive-image';
 export type { ResponsiveImageSources, StorefrontImageKind } from './shared/responsive-image';
+export { storefrontIcon } from './shared/storefront-icons';
+export type { StorefrontIconRel } from './shared/storefront-icons';
 export * from './storefront-auth-settings';
 export { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 export { StorefrontContentPlugin } from './storefront-content.plugin';

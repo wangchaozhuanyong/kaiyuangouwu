@@ -27,12 +27,29 @@ export const PUBLIC_CATALOG_ASSET_CACHE_CONTROL = 'public, max-age=300, s-maxage
 export const PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
 const PUBLIC_CATALOG_ASSET_AUTHORIZATION_LIMIT = 4096;
 
+class StorefrontIconPresetStrategy extends PresetOnlyStrategy {
+    private readonly pngStrategy = new PresetOnlyStrategy({
+        defaultPreset: 'storefront-original-preview',
+        permittedQuality: [75, 82, 90],
+        permittedFormats: ['png'],
+    });
+
+    override getImageTransformParameters(args: GetImageTransformParametersArgs) {
+        const iconPreset =
+            args.input.preset === 'storefront-icon-96' ||
+            args.input.preset === 'storefront-thumbnail-fit-320';
+        return iconPreset && args.input.format === 'png'
+            ? this.pngStrategy.getImageTransformParameters(args)
+            : super.getImageTransformParameters(args);
+    }
+}
+
 export function createCatalogImageTransformStrategies(
     bootstrapBaseSchema: boolean,
 ): ImageTransformStrategy[] {
     return [
         ...(!bootstrapBaseSchema ? [new CatalogAssetAccessStrategy()] : []),
-        new PresetOnlyStrategy({
+        new StorefrontIconPresetStrategy({
             defaultPreset: 'storefront-original-preview',
             permittedQuality: [75, 82, 90],
             permittedFormats: ['webp'],
