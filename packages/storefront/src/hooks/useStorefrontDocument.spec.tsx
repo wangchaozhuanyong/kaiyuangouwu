@@ -22,6 +22,7 @@ function Fixture({
     primary,
     presetId = 'classic',
     route,
+    ready = true,
 }: {
     logo: string | null;
     product?: Product;
@@ -29,6 +30,7 @@ function Fixture({
     primary?: string;
     presetId?: StorefrontVisualPresetId;
     route?: RouteState;
+    ready?: boolean;
 }) {
     useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
     useStorefrontBrandColors(
@@ -48,6 +50,7 @@ function Fixture({
         storefrontDescription: '',
         storefrontName: logo ? '当前店铺' : '店铺',
         logoUrl: logo,
+        brandingReady: ready,
     });
     return null;
 }
@@ -142,29 +145,51 @@ describe('runtime channel branding', () => {
             '/store-b.png',
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            '/store-b.png',
+            '/store-b.png?storefront-icon=2',
         );
         const migratedLogo = '/assets/preview/6e/store-icon__preview__webp_migrated_502.webp';
         act(() => root.render(<Fixture logo={migratedLogo} />));
         expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?v=webp-readable-1`,
+            `${migratedLogo}?preset=storefront-icon-96&format=png&q=82&v=webp-readable-1&storefront-icon=2`,
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?v=webp-readable-1`,
+            `${migratedLogo}?preset=storefront-thumbnail-fit-320&format=png&q=82&v=webp-readable-1&storefront-icon=2`,
         );
         act(() => root.render(<Fixture logo={null} />));
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/storefront/neutral-social.png',
         );
         expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-            '/storefront/neutral-store.png',
+            '/storefront/neutral-store.png?storefront-icon=2',
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            '/storefront/neutral-store.png',
+            '/storefront/neutral-store.png?storefront-icon=2',
         );
         expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
         expect(document.title).not.toContain('MOYAO');
         act(() => root.unmount());
+    });
+
+    it('preserves server branding while configuration is loading or only restored from cache', () => {
+        document.head.innerHTML = '<link rel="icon" href="/fresh-server.png" data-storefront-icon="server">';
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<Fixture logo={null} ready={false} />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+                '/fresh-server.png',
+            );
+            act(() => root.render(<Fixture logo="/cached-store.png" ready={false} />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+                '/fresh-server.png',
+            );
+            act(() => root.render(<Fixture logo="/current-store.png" />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+                '/current-store.png?storefront-icon=2',
+            );
+            expect(document.querySelector('link[rel="apple-touch-icon"]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
     });
 
     it('removes sensitive parameters from metadata and prevents private routes from being indexed', () => {

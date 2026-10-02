@@ -6,9 +6,9 @@ import {
     storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
-import { normalizeStorefrontAssetUrl } from '../responsive-image';
 import { productDescriptionText } from '../rich-text';
-import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
+import { applyStorefrontIcons } from '../storefront-icons';
+import { NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import { type RouteName, type RouteState } from '../storefront-router';
 import { cacheStorefrontTheme } from '../storefront-theme-cache';
@@ -69,6 +69,7 @@ export function useStorefrontMetadata({
     storefrontDescription,
     storefrontName,
     logoUrl,
+    brandingReady = true,
 }: {
     isZh: boolean;
     route: RouteState;
@@ -76,6 +77,7 @@ export function useStorefrontMetadata({
     storefrontDescription: string;
     storefrontName: string;
     logoUrl: string | null;
+    brandingReady?: boolean;
 }) {
     useEffect(() => {
         const routeLabels: Partial<Record<RouteName, string>> = {
@@ -172,16 +174,10 @@ export function useStorefrontMetadata({
     }, [isZh, route, selectedProduct, storefrontDescription, storefrontName, logoUrl]);
 
     useEffect(() => {
+        if (!brandingReady) return;
         cacheLogoUrl(logoUrl);
-        const iconUrl = logoUrl ? normalizeStorefrontAssetUrl(logoUrl) : NEUTRAL_STOREFRONT_IMAGE;
-        for (const rel of ['icon', 'apple-touch-icon']) {
-            const link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
-            if (link) {
-                link.href = iconUrl;
-                link.type = '';
-            }
-        }
-    }, [logoUrl]);
+        applyStorefrontIcons(logoUrl);
+    }, [logoUrl, brandingReady]);
 }
 
 export function storefrontShareImage(

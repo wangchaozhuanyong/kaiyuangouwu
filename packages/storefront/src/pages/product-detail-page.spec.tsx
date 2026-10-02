@@ -15,6 +15,18 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
     useRouter: () => ({ history: { back: vi.fn() } }),
 }));
 vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => true }));
+const posterLoad = vi.hoisted(() => ({ resolve: undefined as (() => void) | undefined }));
+vi.mock('../lazy-storefront-pages', async () => {
+    const { lazy } = await import('react');
+    return {
+        LazySharePosterModal: lazy(
+            () =>
+                new Promise<{ default: () => React.JSX.Element }>(resolve => {
+                    posterLoad.resolve = () => resolve({ default: () => <p>海报内容已就绪</p> });
+                }),
+        ),
+    };
+});
 vi.mock('../review-pages', () => ({ ProductReviewsSection: () => <section>真实评价内容</section> }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,6 +80,67 @@ describe('desktop product purchase controls', () => {
     afterEach(() => {
         act(() => root.unmount());
         host.remove();
+    });
+
+    it('keeps the same share dialog while its content loads and allows closing during loading', async () => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        act(() =>
+            root.render(
+                <ProductDetailPageContext.Provider
+                    value={{
+                        api: {} as never,
+                        product,
+                        products: [],
+                        cartQuantity: 0,
+                        market,
+                        locale: market.locale,
+                        language: 'zh',
+                        storefrontName: 'Store',
+                        logoUrl: null,
+                        flashSaleItems: [],
+                        couponCampaigns: [],
+                        customerCoupons: [],
+                        addingVariantId: null,
+                        favorite: false,
+                        onAdd: vi.fn(),
+                        onBuyNow: vi.fn(),
+                        onFavorite: vi.fn(),
+                        onNotify: vi.fn(),
+                    }}
+                >
+                    <ProductDetailPage />
+                </ProductDetailPageContext.Provider>,
+            ),
+        );
+        const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="分享"]');
+        if (!trigger) throw new Error('Missing share trigger');
+        trigger.focus();
+        const originalOverflow = document.body.style.overflow;
+        act(() => trigger.click());
+        const dialog = host.querySelector('[role="dialog"]');
+        expect(dialog).not.toBeNull();
+        expect(dialog?.textContent).toContain('正在加载分享海报');
+        expect(document.body.style.overflow).toBe('hidden');
+        act(() => host.querySelector<HTMLButtonElement>('.poster-close-btn')?.click());
+        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.body.style.overflow).toBe(originalOverflow);
+        expect(document.activeElement).toBe(trigger);
+        act(() => trigger.click());
+        const reopened = host.querySelector('[role="dialog"]');
+        await act(async () => {
+            posterLoad.resolve?.();
+            await Promise.resolve();
+        });
+        expect(host.querySelector('[role="dialog"]')).toBe(reopened);
+        expect(host.querySelectorAll('.poster-modal-overlay')).toHaveLength(1);
+        expect(reopened?.textContent).toContain('海报内容已就绪');
+        act(() => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        });
+        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.body.style.overflow).toBe(originalOverflow);
     });
 
     it('passes the selected quantity and variant to both purchase actions and switches real content', () => {

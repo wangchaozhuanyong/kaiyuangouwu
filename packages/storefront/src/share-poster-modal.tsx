@@ -28,6 +28,7 @@ export function SharePosterModal({
     formattedPrice,
     onClose,
     onNotify,
+    embedded = false,
 }: {
     product: Product;
     storefrontName: string;
@@ -36,6 +37,7 @@ export function SharePosterModal({
     formattedPrice: string;
     onClose: () => void;
     onNotify: (msg: string) => void;
+    embedded?: boolean;
 }) {
     const isZh = language === 'zh';
     const posterRef = useRef<HTMLDivElement>(null);
@@ -49,9 +51,10 @@ export function SharePosterModal({
     const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
 
     useEffect(() => {
+        if (embedded) return;
         const releaseBodyScrollLock = acquireBodyScrollLock();
         return releaseBodyScrollLock;
-    }, []);
+    }, [embedded]);
 
     useEffect(() => {
         if (!productUrl) return;
@@ -183,9 +186,77 @@ export function SharePosterModal({
         }
     };
 
+    const content = (
+        <>
+            <div className="poster-preview-wrapper" ref={posterRef}>
+                <div className="poster-brand-row">
+                    {storefrontLogo ? (
+                        <img className="poster-brand-logo" src={storefrontLogo} alt={storefrontName} />
+                    ) : null}
+                    <div className="poster-brand-info">
+                        <span className="poster-brand-name">{storefrontName}</span>
+                        <span className="poster-brand-trust">
+                            <Sparkles size={11} />
+                            {isZh ? '商品分享' : 'Product share'}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="poster-image-box">
+                    {mainImage ? (
+                        <img src={mainImage} alt={product.name} crossOrigin="anonymous" />
+                    ) : (
+                        <div className="poster-image-fallback" />
+                    )}
+                </div>
+
+                <div className="poster-info-row">
+                    <div className="poster-price-badge">{formattedPrice}</div>
+                    <h3 className="poster-title">{product.name}</h3>
+                </div>
+
+                <div className="poster-footer-row">
+                    <div className="poster-scan-prompt">
+                        <strong>{isZh ? '扫码直达选购' : 'Scan to explore'}</strong>
+                        <small>{isZh ? '支持微信 / 浏览器扫码' : 'WeChat / Browser direct scan'}</small>
+                    </div>
+                    {qrCodeUrl && <img className="poster-qrcode" src={qrCodeUrl} alt="QR Code" />}
+                </div>
+            </div>
+
+            <div className="poster-actions-row">
+                <button
+                    type="button"
+                    className="poster-action-btn primary"
+                    onClick={() => void downloadPoster()}
+                    disabled={downloading}
+                >
+                    <Download size={16} />
+                    <span>
+                        {downloading
+                            ? isZh
+                                ? '正在生成...'
+                                : 'Generating...'
+                            : isZh
+                              ? '保存海报图片'
+                              : 'Save poster'}
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    className="poster-action-btn secondary"
+                    onClick={() => void copyShareText()}
+                >
+                    {copied ? <Check size={16} /> : <Copy size={16} />}
+                    <span>{copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制图文口令' : 'Copy text'}</span>
+                </button>
+            </div>
+        </>
+    );
+    if (embedded) return content;
     return (
         <div className="poster-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
-            <div className="poster-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="poster-modal-card" onClick={event => event.stopPropagation()}>
                 <button
                     type="button"
                     className="poster-close-btn"
@@ -194,72 +265,7 @@ export function SharePosterModal({
                 >
                     <X size={18} />
                 </button>
-
-                <div className="poster-preview-wrapper" ref={posterRef}>
-                    <div className="poster-brand-row">
-                        {storefrontLogo ? (
-                            <img className="poster-brand-logo" src={storefrontLogo} alt={storefrontName} />
-                        ) : null}
-                        <div className="poster-brand-info">
-                            <span className="poster-brand-name">{storefrontName}</span>
-                            <span className="poster-brand-trust">
-                                <Sparkles size={11} />
-                                {isZh ? '商品分享' : 'Product share'}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="poster-image-box">
-                        {mainImage ? (
-                            <img src={mainImage} alt={product.name} crossOrigin="anonymous" />
-                        ) : (
-                            <div className="poster-image-fallback" />
-                        )}
-                    </div>
-
-                    <div className="poster-info-row">
-                        <div className="poster-price-badge">{formattedPrice}</div>
-                        <h3 className="poster-title">{product.name}</h3>
-                    </div>
-
-                    <div className="poster-footer-row">
-                        <div className="poster-scan-prompt">
-                            <strong>{isZh ? '扫码直达选购' : 'Scan to explore'}</strong>
-                            <small>{isZh ? '支持微信 / 浏览器扫码' : 'WeChat / Browser direct scan'}</small>
-                        </div>
-                        {qrCodeUrl && <img className="poster-qrcode" src={qrCodeUrl} alt="QR Code" />}
-                    </div>
-                </div>
-
-                <div className="poster-actions-row">
-                    <button
-                        type="button"
-                        className="poster-action-btn primary"
-                        onClick={() => void downloadPoster()}
-                        disabled={downloading}
-                    >
-                        <Download size={16} />
-                        <span>
-                            {downloading
-                                ? isZh
-                                    ? '正在生成...'
-                                    : 'Generating...'
-                                : isZh
-                                  ? '保存海报图片'
-                                  : 'Save poster'}
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        className="poster-action-btn secondary"
-                        onClick={() => void copyShareText()}
-                    >
-                        {copied ? <Check size={16} /> : <Copy size={16} />}
-                        <span>
-                            {copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制图文口令' : 'Copy text'}
-                        </span>
-                    </button>
-                </div>
+                {content}
             </div>
         </div>
     );
