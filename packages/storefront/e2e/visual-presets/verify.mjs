@@ -598,7 +598,9 @@ try {
                     await expect(page.locator('.search-discovery')).toBeVisible();
                     if (width >= 1024) {
                         const recent = await page.locator('.search-recent').boundingBox();
-                        const suggestions = await page.locator('.popular-searches').boundingBox();
+                        const suggestions = await page
+                            .locator('.search-discovery > .product-section')
+                            .boundingBox();
                         expect(recent.x + recent.width).toBeLessThan(suggestions.x);
                     }
                 }
