@@ -1973,7 +1973,8 @@ describe('unified storefront Admin API to Shop API', () => {
                                 '横幅子分类',
                             );
                         }
-                    } else if (width >= 1024) {
+                    } else if (width >= 1024 || route === 'services') {
+                        // The approved service design shares its managed header image on both viewports.
                         await browserExpect(shop.locator(selector + ' img')).toHaveAttribute(
                             'src',
                             /page-banner.svg/,
