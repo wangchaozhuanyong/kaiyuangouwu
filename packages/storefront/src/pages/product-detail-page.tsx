@@ -4,6 +4,7 @@ import {
     ChevronRight,
     CircleCheck,
     Heart,
+    MessageCircle,
     Package,
     RotateCcw,
     Share2,
@@ -771,46 +772,49 @@ export function ProductDetailPage() {
                     )}
                 </section>
             )}
-            {desktop && activeSection === 'after-sales' && (
+            {(!desktop || activeSection === 'after-sales') && (
                 <section className="detail-block detail-after-sales">
                     <h2>{isZh ? '配送与售后说明' : 'Delivery and returns'}</h2>
-                    <p>
-                        {quoteOnly
-                            ? isZh
-                                ? '此商品仅供展示。请联系客服确认报价、交期及售后条件。'
-                                : 'Display only. Contact support to confirm price, lead time and after-sales terms.'
-                            : isDigital
-                              ? isAutoCard
-                                  ? isZh
-                                      ? '付款成功后自动发送到下单邮箱。'
-                                      : 'Sent to your order email after payment.'
-                                  : isFileDownload
-                                    ? isZh
-                                        ? '付款成功后可在订单中下载。'
-                                        : 'Download from your order after payment.'
-                                    : isZh
-                                      ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
-                                      : `Merchant processed and emailed within ${manualSlaText}.`
-                              : isZh
-                                ? '配送方式与运费在结算页按收货地址确认。'
-                                : 'Shipping method and fee are confirmed at checkout.'}
-                    </p>
-                    {!quoteOnly && (
+                    <div className="detail-after-sales-copy">
                         <p>
-                            {refundPolicy === 'NON_REFUNDABLE'
+                            {quoteOnly
                                 ? isZh
-                                    ? '该商品不支持退款。'
-                                    : 'This product is non-refundable.'
-                                : refundPolicy === 'SEVEN_DAY_NO_REASON'
-                                  ? isZh
-                                      ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
-                                      : 'Seven-day returns apply subject to the order policy.'
+                                    ? '此商品仅供展示。请联系客服确认报价、交期及售后条件。'
+                                    : 'Display only. Contact support to confirm price, lead time and after-sales terms.'
+                                : isDigital
+                                  ? isAutoCard
+                                      ? isZh
+                                          ? '付款成功后自动发送到下单邮箱。'
+                                          : 'Sent to your order email after payment.'
+                                      : isFileDownload
+                                        ? isZh
+                                            ? '付款成功后可在订单中下载。'
+                                            : 'Download from your order after payment.'
+                                        : isZh
+                                          ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
+                                          : `Merchant processed and emailed within ${manualSlaText}.`
                                   : isZh
-                                    ? '退款申请由商家审核，具体结果以售后处理为准。'
-                                    : 'Refund requests are reviewed by the merchant.'}
+                                    ? '配送方式与运费在结算页按收货地址确认。'
+                                    : 'Shipping method and fee are confirmed at checkout.'}
                         </p>
-                    )}
+                        {!quoteOnly && (
+                            <p>
+                                {refundPolicy === 'NON_REFUNDABLE'
+                                    ? isZh
+                                        ? '该商品不支持退款。'
+                                        : 'This product is non-refundable.'
+                                    : refundPolicy === 'SEVEN_DAY_NO_REASON'
+                                      ? isZh
+                                          ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
+                                          : 'Seven-day returns apply subject to the order policy.'
+                                      : isZh
+                                        ? '退款申请由商家审核，具体结果以售后处理为准。'
+                                        : 'Refund requests are reviewed by the merchant.'}
+                            </p>
+                        )}
+                    </div>
                     <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                        <MessageCircle aria-hidden="true" />
                         {isZh ? '咨询客服' : 'Contact support'}
                         <ChevronRight aria-hidden="true" />
                     </button>

@@ -76,6 +76,7 @@ jobs:
                       packages/dev-server/scripts/production-runtime-artifact.spec.mjs \
                       packages/dev-server/scripts/production-runtime-audit.spec.mjs \
                       packages/dev-server/scripts/production-operations.spec.mjs \
+                      deploy/governance-preflight-transport.spec.mjs \
                       packages/dev-server/scripts/production-release-impact.spec.mjs \
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
