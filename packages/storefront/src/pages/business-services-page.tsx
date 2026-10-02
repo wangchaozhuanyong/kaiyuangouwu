@@ -75,7 +75,8 @@ export function BusinessServicesPage() {
     const heroImageUrl = clientPluginBlock?.enabled ? clientPluginBlock.imageUrl : null;
 
     return (
-        <main className="page business-services-page">
+        // SERVICES_WARM_B_20261002: approved complete B visual; retain across store skins.
+        <main className="page business-services-page" data-services-theme="warm-b">
             {!desktop && (
                 <MobilePageHeader
                     className="business-services-mobile-header"
@@ -113,7 +114,9 @@ export function BusinessServicesPage() {
                         <div className="business-services-hero-media">
                             <SafeImage src={heroImageUrl} alt="" imageKind="hero" />
                         </div>
-                    ) : null}
+                    ) : (
+                        <ServiceArchitectureMotif />
+                    )}
                 </header>
                 <ClientPluginSlot
                     block={clientPluginBlock}
@@ -138,5 +141,35 @@ export function BusinessServicesPage() {
                 </section>
             ) : null}
         </main>
+    );
+}
+
+// Abstract linework, not a merchant project photo or portfolio claim.
+function ServiceArchitectureMotif() {
+    return (
+        <svg
+            className="business-services-architecture"
+            viewBox="0 0 460 340"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="0.9"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <path d="M32 274 291 228 470 280M0 302 285 245 470 305M64 326 278 266 470 338" />
+            <path d="M180 245V150L430 65V271M190 243V158L430 78M180 150 167 144 430 49 460 60" />
+            <path d="M290 230V91L420 17 460 32M300 229V98L432 29M420 17V65" />
+            <path d="M221 240V164L278 146V232M230 238V171L268 159V234M278 146 292 151M268 159 278 162" />
+            <path d="M322 106V238M333 102V241M344 99V243M355 96V246M366 92V249M377 89V252M388 85V255M399 82V258M410 78V261" />
+            <path d="M180 203 124 216V273L180 262M124 216 112 211 180 196M112 211V264L124 273" />
+            <path d="M133 266V225L170 218V257M180 265 290 246 430 279M201 264 288 250 423 282" />
+            <path d="M138 267 163 263 165 295 141 300ZM141 300 133 294 130 264 138 267M130 264 155 260 163 263" />
+            <path d="M149 265C146 239 148 220 157 198M149 257C138 241 129 230 120 219M150 257C158 239 170 229 179 223M151 240C160 223 170 215 177 213" />
+            <path d="M157 198C146 207 140 221 146 235C155 226 160 210 157 198Z" />
+            <path d="M120 219C117 233 127 245 141 249C137 235 129 224 120 219Z" />
+            <path d="M179 223C164 223 155 236 153 246C167 245 175 234 179 223Z" />
+            <path d="M177 213C165 211 154 221 152 233C167 229 174 222 177 213Z" />
+        </svg>
     );
 }

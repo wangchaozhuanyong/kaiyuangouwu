@@ -249,6 +249,7 @@ describe('business services page', () => {
             expect(markup).toContain('后台提供的介绍内容');
             expect(markup).toContain('了解服务详情');
             expect(markup).toContain('/assets/managed-service.webp');
+            expect(markup).not.toContain('business-services-architecture');
             expect(markup.match(/category-client-plugin-two-factor/g)).toHaveLength(1);
             expect(markup).not.toContain('business-services-hero-shortcuts');
             expect(markup).not.toContain('直通服务');

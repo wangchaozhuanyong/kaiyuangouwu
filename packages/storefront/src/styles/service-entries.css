@@ -153,6 +153,16 @@
     line-height: 1.4;
 }
 
+/* SERVICES_WARM_B_20261002: the approved bronze heading accent. */
+.business-services-page[data-services-theme='warm-b'] .category-client-plugin-group-title::after {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 2px;
+    margin-top: 14px;
+    background: var(--services-bronze);
+}
+
 .category-client-plugin-group.is-assistance {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -166,7 +176,7 @@
     --service-card-action: var(--control-surface);
     --service-card-action-hover: var(--control-surface-hover);
 
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: var(--services-tool-icon-size, 28px) minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     min-width: 0;
@@ -241,11 +251,28 @@
 }
 
 .is-business-services-main .is-assistance .category-client-plugin {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
     min-height: 96px;
     padding: 18px 20px;
     border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius);
     box-shadow: var(--skin-card-shadow);
+}
+
+.business-services-page[data-services-theme='warm-b'] .category-client-plugin-support {
+    --service-card-ink: var(--services-support-ink);
+    --service-card-action: var(--services-support-surface);
+    --service-card-action-hover: var(--services-support-hover);
+}
+
+.business-services-page[data-services-theme='warm-b'] .category-client-plugin-coupon {
+    --service-card-ink: var(--services-coupon-ink);
+    --service-card-action: var(--services-coupon-surface);
+    --service-card-action-hover: var(--services-coupon-hover);
+}
+
+.business-services-page[data-services-theme='warm-b'] .is-assistance .category-client-plugin-copy strong {
+    color: var(--service-card-ink);
 }
 
 @media (min-width: 1024px) {
@@ -258,7 +285,7 @@
     .business-services-workspace .category-client-plugin-group.is-assistance {
         grid-column: 1 / -1;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 24px;
+        gap: 16px;
     }
 
     .category-client-plugin-group.is-assistance > :only-child {
@@ -271,9 +298,9 @@
     }
 
     .is-business-services-main .category-client-plugin {
-        grid-template-columns: 40px minmax(0, 1fr) auto;
+        grid-template-columns: var(--services-tool-icon-size, 40px) minmax(0, 1fr) auto;
         gap: 20px;
-        min-height: 128px;
+        min-height: 126px;
         padding: 24px 0;
     }
 
@@ -297,8 +324,25 @@
     }
 
     .is-business-services-main .is-assistance .category-client-plugin {
+        grid-template-columns: 40px minmax(0, 1fr) auto;
         min-height: 108px;
         padding: 24px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .business-services-page[data-services-theme='warm-b'] .is-assistance {
+        gap: 0;
+        overflow: hidden;
+        border: var(--skin-card-outline);
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+    }
+
+    .business-services-page[data-services-theme='warm-b'] .is-assistance .category-client-plugin {
+        min-height: 88px;
+        border: 0;
+        border-radius: 0;
     }
 }
 

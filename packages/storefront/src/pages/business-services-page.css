@@ -1,9 +1,58 @@
-/* Services layout B: one shared introduction and directory on desktop and mobile.
-   Page geometry lives here; reusable service rows live in service-entries.css. */
+/* SERVICES_WARM_B_20261002 — approved complete B visual, not only its layout.
+   Preserve this ivory/olive theme across storefront skins. Page and theme owner: this file;
+   directory rows: service-entries.css; icon frames: semantic-icons.css. */
+.business-services-page[data-services-theme='warm-b'] {
+    --bg: #f7f4ef;
+    --paper: #fffdfa;
+    --surface: #fffdfa;
+    --text: #302c26;
+    --text-soft: #554f44;
+    --muted: #6b665d;
+    --accent: #4b5638;
+    --accent-hover: #39442b;
+    --accent-ink: #414c2f;
+    --accent-foreground: #fffdf7;
+    --focus: #657344;
+    --line: #d7cdbc;
+    --line-subtle: #eae4da;
+    --control-surface: #eeeee2;
+    --control-surface-hover: #e3e5d3;
+    --skin-card-outline: 1px solid #e8e2d8;
+    --skin-card-radius: 12px;
+    --skin-control-radius: 8px;
+    --skin-card-shadow: none;
+    --skin-display-font: var(--font-ui);
+    --services-intro-start: #f1e9dd;
+    --services-intro-end: #faf6ef;
+    --services-line-art: #bf9d73;
+    --services-bronze: #9a783e;
+    --services-icon-surface: #f5f0e6;
+    --services-tool-icon-size: 44px;
+    --services-support-ink: #814529;
+    --services-support-surface: #f7e9e1;
+    --services-support-hover: #eedbd0;
+    --services-coupon-ink: #805516;
+    --services-coupon-surface: #f7edda;
+    --services-coupon-hover: #efe0c3;
+}
+
 .business-services-page {
     --page-surface: var(--bg);
     --page-section-inset: 16px;
+    position: relative;
+    isolation: isolate;
     padding-inline: var(--page-section-inset);
+    font-family: var(--font-ui);
+}
+
+/* Extend this route's warm canvas through the desktop shell gutters. */
+.business-services-page::before {
+    content: '';
+    position: absolute;
+    inset: 0 calc(50% - 50vw);
+    z-index: -1;
+    background: var(--page-surface);
+    pointer-events: none;
 }
 
 .business-services-mobile-header {
@@ -19,27 +68,45 @@
 }
 
 .business-services-heading {
+    position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     min-width: 0;
+    overflow: hidden;
     gap: 24px;
-    padding: 24px;
-    border: var(--skin-card-outline, 0);
+    padding: 24px 20px;
+    border: 0;
     border-radius: var(--skin-card-radius);
-    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
-    box-shadow: var(--skin-card-shadow);
+    background: linear-gradient(125deg, var(--services-intro-start), var(--services-intro-end));
 }
 
 .business-services-heading:has(.business-services-hero-media) {
     justify-content: space-between;
 }
 
-.business-services-page-title {
+.business-services-heading-copy {
+    position: relative;
+    z-index: 1;
+}
+
+.business-services-architecture {
+    position: absolute;
+    right: -24px;
+    bottom: -12px;
+    width: 56%;
+    height: auto;
+    color: var(--services-line-art);
+    stroke-width: 0.7;
+    opacity: 0.38;
+    pointer-events: none;
+}
+
+.business-services-page .business-services-page-title {
     margin: 0;
     color: var(--text);
     font-family: var(--skin-display-font, var(--font-ui));
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.3;
@@ -114,22 +181,38 @@
 
     .business-services-workspace {
         grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
-        gap: 24px;
+        gap: 20px;
         margin: 0;
     }
 
     .business-services-heading {
         grid-column: 1;
         grid-row: 1;
-        padding: 32px;
+        min-height: 470px;
+        padding: 40px 32px;
+    }
+
+    .business-services-page[data-services-theme='warm-b'] {
+        --services-tool-icon-size: 64px;
+    }
+
+    .business-services-architecture {
+        width: 105%;
+        right: -28px;
+        bottom: -6px;
     }
 
     .business-services-workspace:not(:has(.is-tools)) .business-services-heading {
         grid-column: 1 / -1;
+        min-height: 240px;
     }
 
-    .business-services-page-title {
-        font-size: clamp(30px, 2.5vw, 38px);
+    .business-services-workspace:not(:has(.is-tools)) .business-services-architecture {
+        width: min(420px, 55%);
+    }
+
+    .business-services-page .business-services-page-title {
+        font-size: clamp(32px, 2.9vw, 42px);
     }
 
     .business-services-heading p {
