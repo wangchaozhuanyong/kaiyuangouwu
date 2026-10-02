@@ -1412,27 +1412,26 @@
         background: var(--surface, var(--paper));
         border: var(--skin-card-outline, 0);
     }
+    .desktop-store-layout .review-center-section > header {
+        min-height: 0;
+        padding: 0 0 16px;
+    }
     .desktop-store-layout .review-candidate-list {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .desktop-store-layout .review-candidate-row {
+        grid-template-columns: 64px minmax(0, 1fr) 124px;
+        gap: 16px;
+        padding: 18px 0;
+    }
+    .desktop-store-layout .review-candidate-image {
+        width: 64px;
+        height: 64px;
     }
     .desktop-store-layout .review-candidate-more {
         grid-column: 1 / -1;
     }
-    .desktop-store-layout .review-composer {
-        max-width: none;
-        margin: 0;
-        padding: 28px;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        background: var(--surface, var(--paper));
-        border: var(--skin-card-outline, 0);
-    }
-    .desktop-store-layout .review-composer textarea {
-        min-height: 160px;
-    }
-
     /* Order detail and logistics show a main record and a compact information column. */
     .desktop-store-layout .order-detail-page {
         --page-bottom-fixed-height: 0px;

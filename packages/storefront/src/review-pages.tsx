@@ -23,7 +23,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
-import { EmptyState, SubHeader } from './storefront-ui/page-shell';
+import { EmptyState, Sheet, SubHeader } from './storefront-ui/page-shell';
 import { formatMoney, SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -44,6 +44,7 @@ function reviewVariantLabel(candidate: StorefrontReviewCandidate): string {
 }
 
 const REVIEW_PAGE_SIZE = 20;
+type ReviewDraft = Pick<SubmitStorefrontReviewInput, 'rating' | 'title' | 'body' | 'anonymous' | 'images'>;
 
 export function ReviewCenterPage({
     api,
@@ -102,11 +103,14 @@ export function ReviewCenterPage({
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
     const [activeList, setActiveList] = useState<'pending' | 'submitted'>('pending');
     const [showAllCandidates, setShowAllCandidates] = useState(false);
-    const composerRef = useRef<HTMLFormElement>(null);
+    // Drafts live only in this mounted page; they never enter storage or another customer/store scope.
+    const drafts = useRef(new Map<string, ReviewDraft>());
+    const draftScope = `${storefrontQueryKeys.market(market)}:${customer?.id ?? ''}`;
     const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, 4);
     useEffect(() => {
-        if (selected) composerRef.current?.scrollIntoView({ block: 'start' });
-    }, [selected]);
+        drafts.current.clear();
+        setSelected(null);
+    }, [draftScope]);
     const submit = async (input: SubmitStorefrontReviewInput) => {
         await api.submitReview(input);
         await Promise.all([
@@ -125,6 +129,7 @@ export function ReviewCenterPage({
                 ),
             }),
         ]);
+        drafts.current.delete(input.orderLineId);
         setSelected(null);
         setActiveList('submitted');
         onNotify(isZh ? '评价已提交，审核通过后将公开展示' : 'Review submitted for moderation');
@@ -198,7 +203,8 @@ export function ReviewCenterPage({
                     {selected && (
                         <ReviewComposer
                             key={selected.orderLineId}
-                            formRef={composerRef}
+                            draft={drafts.current.get(selected.orderLineId)}
+                            onDraftChange={draft => drafts.current.set(selected.orderLineId, draft)}
                             candidate={selected}
                             language={language}
                             locale={market.locale}
@@ -214,17 +220,20 @@ export function ReviewCenterPage({
                     >
                         <header>
                             <div>
-                                <strong>{isZh ? '待评价商品' : 'Ready to review'}</strong>
+                                <strong>
+                                    {isZh ? '待评价商品' : 'Ready to review'}
+                                    <span className="review-section-count">
+                                        {' '}
+                                        · {candidates.length}
+                                        {candidatesQuery.hasNextPage ? '+' : ''}
+                                    </span>
+                                </strong>
                                 <small>
                                     {isZh
                                         ? '选择一件商品，分享你的真实体验'
                                         : 'Choose an item and share your experience'}
                                 </small>
                             </div>
-                            <span>
-                                {candidates.length}
-                                {candidatesQuery.hasNextPage ? '+' : ''}
-                            </span>
                         </header>
                         {candidates.length ? (
                             <div className="review-candidate-list" id="review-candidate-list">
@@ -232,18 +241,7 @@ export function ReviewCenterPage({
                                     const imageUrl = candidate.imageUrl;
                                     const variantLabel = reviewVariantLabel(candidate);
                                     return (
-                                        <button
-                                            type="button"
-                                            key={candidate.orderLineId}
-                                            className="review-candidate-row"
-                                            aria-expanded={selected?.orderLineId === candidate.orderLineId}
-                                            aria-controls={
-                                                selected?.orderLineId === candidate.orderLineId
-                                                    ? 'review-composer'
-                                                    : undefined
-                                            }
-                                            onClick={() => setSelected(candidate)}
-                                        >
+                                        <article key={candidate.orderLineId} className="review-candidate-row">
                                             <span className="review-candidate-image">
                                                 {imageUrl ? (
                                                     <SafeImage
@@ -279,11 +277,20 @@ export function ReviewCenterPage({
                                                     {candidate.orderCode}
                                                 </small>
                                             </span>
-                                            <span className="review-candidate-action">
+                                            <button
+                                                type="button"
+                                                className="review-candidate-action"
+                                                aria-haspopup="dialog"
+                                                aria-expanded={
+                                                    selected?.orderLineId === candidate.orderLineId
+                                                }
+                                                aria-label={`${isZh ? '写评价' : 'Review'}: ${candidate.productName}`}
+                                                onClick={() => setSelected(candidate)}
+                                            >
                                                 {isZh ? '写评价' : 'Review'}
                                                 <ChevronRight aria-hidden="true" />
-                                            </span>
-                                        </button>
+                                            </button>
+                                        </article>
                                     );
                                 })}
                                 {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
@@ -571,14 +578,16 @@ function ReviewImageGallery({
 }
 
 function ReviewComposer({
-    formRef,
+    draft,
+    onDraftChange,
     candidate,
     language,
     locale,
     onCancel,
     onSubmit,
 }: {
-    formRef: React.RefObject<HTMLFormElement | null>;
+    draft?: ReviewDraft;
+    onDraftChange: (draft: ReviewDraft) => void;
     candidate: StorefrontReviewCandidate;
     language: StorefrontLanguage;
     locale: string;
@@ -586,14 +595,21 @@ function ReviewComposer({
     onSubmit: (input: SubmitStorefrontReviewInput) => Promise<void>;
 }) {
     const isZh = language === 'zh';
-    const [rating, setRating] = useState(0);
-    const [title, setTitle] = useState('');
-    const [body, setBody] = useState('');
-    const [anonymous, setAnonymous] = useState(false);
-    const [images, setImages] = useState<File[]>([]);
+    const [rating, setRating] = useState(draft?.rating ?? 0);
+    const [title, setTitle] = useState(draft?.title ?? '');
+    const [body, setBody] = useState(draft?.body ?? '');
+    const [anonymous, setAnonymous] = useState(draft?.anonymous ?? false);
+    const [images, setImages] = useState<File[]>(draft?.images ?? []);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [error, setError] = useState('');
+    const errorRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (error) errorRef.current?.focus();
+    }, [error]);
     const [submitting, setSubmitting] = useState(false);
+    useEffect(() => {
+        onDraftChange({ rating, title, body, anonymous, images });
+    }, [rating, title, body, anonymous, images, onDraftChange]);
     useEffect(() => {
         const urls = images.map(file => URL.createObjectURL(file));
         setImagePreviews(urls);
@@ -631,148 +647,178 @@ function ReviewComposer({
         }
     };
     return (
-        <form
-            id="review-composer"
-            ref={formRef}
-            className="review-composer"
-            onSubmit={event => void submit(event)}
+        <Sheet
+            title={isZh ? '写评价' : 'Write a review'}
+            language={language}
+            side="right"
+            className="review-composer-sheet"
+            onClose={() => {
+                if (!submitting) onCancel();
+            }}
         >
-            <header>
-                <span>
-                    <strong>{candidate.productName}</strong>
-                    {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
-                    <small>
-                        {formatMoney(candidate.unitPriceWithTax, candidate.currencyCode, locale)}
-                        {' · '}
-                        {isZh ? '订单行 ' : 'Line '}
-                        {candidate.orderLineId}
-                    </small>
-                </span>
-                <button type="button" onClick={onCancel} disabled={submitting}>
-                    {isZh ? '取消' : 'Cancel'}
-                </button>
-            </header>
-            <fieldset>
-                <legend>{isZh ? '商品评分' : 'Rating'}</legend>
-                <div className="review-rating-input">
-                    {[1, 2, 3, 4, 5].map(value => (
-                        <button
-                            type="button"
-                            key={value}
-                            className={value <= rating ? 'is-active' : undefined}
-                            onClick={() => setRating(value)}
-                            aria-label={isZh ? `${value} 星` : `${value} stars`}
-                            aria-pressed={value === rating}
-                        >
-                            <Star aria-hidden="true" />
-                        </button>
-                    ))}
-                </div>
-            </fieldset>
-            <label>
-                <span>{isZh ? '评价标题' : 'Title'}</span>
-                <input
-                    value={title}
-                    maxLength={120}
-                    onChange={event => setTitle(event.target.value)}
-                    disabled={submitting}
-                />
-            </label>
-            <label>
-                <span>{isZh ? '评价内容' : 'Review'}</span>
-                <textarea
-                    value={body}
-                    rows={5}
-                    maxLength={2000}
-                    onChange={event => setBody(event.target.value)}
-                    disabled={submitting}
-                />
-            </label>
-            <div className="review-image-picker">
-                <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
-                <div className="review-image-previews">
-                    {imagePreviews.map((url, index) => (
-                        <div className="review-image-preview" key={url}>
-                            <img
-                                src={url}
-                                alt={isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`}
-                            />
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setImages(current => current.filter((_, position) => position !== index))
-                                }
-                                disabled={submitting}
-                                aria-label={isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`}
-                            >
-                                <X aria-hidden="true" />
-                            </button>
+            <form
+                id="review-composer"
+                aria-busy={submitting}
+                className="review-composer"
+                onSubmit={event => void submit(event)}
+            >
+                <div className="review-composer-body">
+                    <header className="review-composer-summary">
+                        <span className="review-candidate-image">
+                            {candidate.imageUrl ? (
+                                <SafeImage src={candidate.imageUrl} alt="" imageKind="thumbnail" />
+                            ) : (
+                                <Package aria-hidden="true" />
+                            )}
+                        </span>
+                        <span>
+                            <strong>{candidate.productName}</strong>
+                            {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
+                            <small>
+                                {formatMoney(candidate.unitPriceWithTax, candidate.currencyCode, locale)}
+                                {' · '}
+                                {isZh ? '订单行 ' : 'Line '}
+                                {candidate.orderLineId}
+                            </small>
+                        </span>
+                    </header>
+                    <fieldset>
+                        <legend>{isZh ? '商品评分' : 'Rating'}</legend>
+                        <div className="review-rating-input">
+                            {[1, 2, 3, 4, 5].map(value => (
+                                <button
+                                    type="button"
+                                    key={value}
+                                    className={value <= rating ? 'is-active' : undefined}
+                                    onClick={() => setRating(value)}
+                                    disabled={submitting}
+                                    aria-label={isZh ? `${value} 星` : `${value} stars`}
+                                    aria-pressed={value === rating}
+                                >
+                                    <Star aria-hidden="true" />
+                                </button>
+                            ))}
                         </div>
-                    ))}
-                    {images.length < 4 && (
-                        <label className="review-image-add">
-                            <ImagePlus aria-hidden="true" />
-                            <span>{isZh ? '添加图片' : 'Add images'}</span>
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                multiple
-                                disabled={submitting}
-                                onChange={event => {
-                                    const selected = Array.from(event.target.files ?? []);
-                                    event.target.value = '';
-                                    if (images.length + selected.length > 4) {
-                                        setError(
-                                            isZh ? '每条评价最多上传 4 张图片' : 'Up to 4 images per review',
-                                        );
-                                        return;
-                                    }
-                                    if (
-                                        selected.some(
-                                            file =>
-                                                file.size > 5 * 1024 * 1024 ||
-                                                !['image/jpeg', 'image/png', 'image/webp'].includes(
-                                                    file.type,
-                                                ),
-                                        )
-                                    ) {
-                                        setError(
-                                            isZh
-                                                ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
-                                                : 'Use JPG, PNG or WebP images under 5 MB',
-                                        );
-                                        return;
-                                    }
-                                    setError('');
-                                    setImages(current => [...current, ...selected]);
-                                }}
-                            />
-                        </label>
+                    </fieldset>
+                    <label>
+                        <span>{isZh ? '评价标题' : 'Title'}</span>
+                        <input
+                            value={title}
+                            maxLength={120}
+                            onChange={event => setTitle(event.target.value)}
+                            disabled={submitting}
+                        />
+                    </label>
+                    <label>
+                        <span>{isZh ? '评价内容' : 'Review'}</span>
+                        <textarea
+                            value={body}
+                            rows={5}
+                            maxLength={2000}
+                            onChange={event => setBody(event.target.value)}
+                            disabled={submitting}
+                        />
+                    </label>
+                    <div className="review-image-picker">
+                        <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
+                        <div className="review-image-previews">
+                            {imagePreviews.map((url, index) => (
+                                <div className="review-image-preview" key={url}>
+                                    <img
+                                        src={url}
+                                        alt={
+                                            isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`
+                                        }
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setImages(current =>
+                                                current.filter((_, position) => position !== index),
+                                            )
+                                        }
+                                        disabled={submitting}
+                                        aria-label={
+                                            isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`
+                                        }
+                                    >
+                                        <X aria-hidden="true" />
+                                    </button>
+                                </div>
+                            ))}
+                            {images.length < 4 && (
+                                <label className="review-image-add">
+                                    <ImagePlus aria-hidden="true" />
+                                    <span>{isZh ? '添加图片' : 'Add images'}</span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        disabled={submitting}
+                                        onChange={event => {
+                                            const selected = Array.from(event.target.files ?? []);
+                                            event.target.value = '';
+                                            if (images.length + selected.length > 4) {
+                                                setError(
+                                                    isZh
+                                                        ? '每条评价最多上传 4 张图片'
+                                                        : 'Up to 4 images per review',
+                                                );
+                                                return;
+                                            }
+                                            if (
+                                                selected.some(
+                                                    file =>
+                                                        file.size > 5 * 1024 * 1024 ||
+                                                        !['image/jpeg', 'image/png', 'image/webp'].includes(
+                                                            file.type,
+                                                        ),
+                                                )
+                                            ) {
+                                                setError(
+                                                    isZh
+                                                        ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
+                                                        : 'Use JPG, PNG or WebP images under 5 MB',
+                                                );
+                                                return;
+                                            }
+                                            setError('');
+                                            setImages(current => [...current, ...selected]);
+                                        }}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                    </div>
+                    <label className="review-anonymous-option">
+                        <input
+                            type="checkbox"
+                            checked={anonymous}
+                            onChange={event => setAnonymous(event.target.checked)}
+                            disabled={submitting}
+                        />
+                        <span>
+                            {isZh
+                                ? '匿名展示（商家仍可核对订单归属）'
+                                : 'Display anonymously (the store can still verify your order)'}
+                        </span>
+                    </label>
+                    {error && (
+                        <small className="form-error" role="alert" ref={errorRef} tabIndex={-1}>
+                            {error}
+                        </small>
                     )}
                 </div>
-            </div>
-            <label className="review-anonymous-option">
-                <input
-                    type="checkbox"
-                    checked={anonymous}
-                    onChange={event => setAnonymous(event.target.checked)}
-                    disabled={submitting}
-                />
-                <span>
-                    {isZh
-                        ? '匿名展示（商家仍可核对订单归属）'
-                        : 'Display anonymously (the store can still verify your order)'}
-                </span>
-            </label>
-            {error && (
-                <small className="form-error" role="alert">
-                    {error}
-                </small>
-            )}
-            <button className="review-submit" type="submit" disabled={submitting}>
-                {submitting ? (isZh ? '提交中' : 'Submitting') : isZh ? '提交评价' : 'Submit review'}
-            </button>
-        </form>
+                <footer className="review-composer-footer">
+                    <button className="review-cancel" type="button" onClick={onCancel} disabled={submitting}>
+                        {isZh ? '取消' : 'Cancel'}
+                    </button>
+                    <button className="review-submit" type="submit" disabled={submitting}>
+                        {submitting ? (isZh ? '提交中' : 'Submitting') : isZh ? '提交评价' : 'Submit review'}
+                    </button>
+                </footer>
+            </form>
+        </Sheet>
     );
 }
 
