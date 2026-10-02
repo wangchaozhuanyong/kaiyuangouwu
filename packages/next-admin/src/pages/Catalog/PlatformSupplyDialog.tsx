@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const CONFIGS = gql`
@@ -73,7 +74,10 @@ export function PlatformSupplyDialog({
                 className="w-full max-w-xl space-y-4 rounded-xl bg-white p-6 shadow-xl"
             >
                 <div className="flex justify-between">
-                    <h2 className="font-bold text-lg">卡密供货授权</h2>
+                    <h2 className="flex items-center gap-2 font-bold text-lg">
+                        卡密供货授权
+                        <FeatureHelpButton topic="sales.card-supply" title="卡密供货授权" />
+                    </h2>
                     <button onClick={onClose}>关闭</button>
                 </div>
                 <p className="text-sm text-slate-500">

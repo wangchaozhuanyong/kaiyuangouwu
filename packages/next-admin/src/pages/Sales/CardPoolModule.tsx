@@ -298,7 +298,10 @@ export function CardPoolModule() {
                         )}
                         {config && (
                             <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
-                                <h2 className="font-bold">本店供货记录</h2>
+                                <h2 className="flex items-center gap-2 font-bold">
+                                    本店供货记录
+                                    <FeatureHelpButton topic="sales.card-supply" title="本店供货记录" />
+                                </h2>
                                 <p className="mt-1 text-xs text-slate-500">
                                     仅显示本卡池对授权销售店的供货数量。
                                 </p>

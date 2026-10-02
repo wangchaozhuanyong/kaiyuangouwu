@@ -556,7 +556,10 @@ function StorePaymentSwitches({
     };
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-bold">本店支付方式</h2>
+            <h2 className="flex items-center gap-2 text-sm font-bold">
+                本店支付方式
+                <FeatureHelpButton topic="settings.payment-shipping" title="本店支付方式" />
+            </h2>
             <p className="mt-1 text-xs text-slate-500">
                 支付系统由平台管理中心统一配置。本店开关只影响本店新订单，交易、退款和余额仍归本店。
             </p>

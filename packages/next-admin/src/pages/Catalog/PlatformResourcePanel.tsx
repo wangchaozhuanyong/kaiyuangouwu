@@ -1,6 +1,7 @@
 import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const RESOURCES = gql`
@@ -38,7 +39,10 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
     };
     return (
         <section className="rounded-xl bg-white p-5 space-y-4">
-            <h2 className="font-bold">资源归属与公共模板</h2>
+            <h2 className="flex items-center gap-2 font-bold">
+                资源归属与公共模板
+                <FeatureHelpButton topic="catalog.platform-resources" title="资源归属与公共模板" />
+            </h2>
             <p className="text-sm text-slate-500">
                 归属待核对的资源须按
                 ID、渠道关系及引用证据整理。公共模板发布为平台副本，经营店领取后独立维护。

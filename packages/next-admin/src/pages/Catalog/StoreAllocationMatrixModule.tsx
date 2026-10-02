@@ -1,6 +1,7 @@
 import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { PlatformResourcePanel } from './PlatformResourcePanel';
 import { PlatformSupplyDialog } from './PlatformSupplyDialog';
@@ -153,7 +154,10 @@ export function StoreAllocationMatrixModule() {
         <div className="h-full overflow-auto bg-slate-50 p-6 space-y-6">
             <header className="flex flex-wrap justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900">平台商品分配中心</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                        平台商品分配中心
+                        <FeatureHelpButton topic="catalog.platform-distribution" title="平台商品分配中心" />
+                    </h1>
                     <p className="mt-1 text-sm text-slate-500">
                         统筹商品维护归属、销售授权和各经营店覆盖情况；整类分配为一次性操作。
                     </p>
@@ -163,7 +167,7 @@ export function StoreAllocationMatrixModule() {
                 </button>
             </header>
             {query.error && (
-                <p role="alert" className="text-red-600">
+                <p role="alert" className="text-red-600 dark:text-red-400">
                     {toUserFacingError(query.error, '商品读取失败，请重试')}
                 </p>
             )}
@@ -185,7 +189,10 @@ export function StoreAllocationMatrixModule() {
                 ))}
             </div>
             <section className="rounded-xl bg-white p-5 space-y-4">
-                <h2 className="font-bold">1. 选择商品或整类</h2>
+                <h2 className="flex items-center gap-2 font-bold">
+                    1. 选择商品或整类
+                    <FeatureHelpButton topic="catalog.platform-distribution" title="1. 选择商品或整类" />
+                </h2>
                 <div className="flex flex-wrap gap-3">
                     <input
                         aria-label="搜索商品"
@@ -334,7 +341,10 @@ export function StoreAllocationMatrixModule() {
                 </div>
             </section>
             <section className="rounded-xl bg-white p-5 space-y-4">
-                <h2 className="font-bold">2. 目标店铺与处理方式</h2>
+                <h2 className="flex items-center gap-2 font-bold">
+                    2. 目标店铺与处理方式
+                    <FeatureHelpButton topic="catalog.platform-distribution" title="2. 目标店铺与处理方式" />
+                </h2>
                 <p className="text-sm text-slate-500">
                     同币种首次授权复制来源售价，已有目标售价保持不变。跨币种缺价格时进入待配置，完成价格与交付设置后才能销售。
                 </p>
@@ -400,7 +410,10 @@ export function StoreAllocationMatrixModule() {
             </section>
             {receipt && (
                 <section className="rounded-xl bg-white p-5 space-y-4">
-                    <h2 className="font-bold">3. 预览与实际结果 · {statusLabel(receipt.state)}</h2>
+                    <h2 className="flex items-center gap-2 font-bold">
+                        3. 预览与实际结果 · {statusLabel(receipt.state)}
+                        <FeatureHelpButton topic="catalog.platform-distribution" title="3. 预览与实际结果" />
+                    </h2>
                     <p className="text-sm text-slate-500">
                         批次 {receipt.id}：{receipt.items.length} 项，新增{' '}
                         {receipt.items.filter(i => !i.conflict && !i.alreadyAssigned).length}，已有{' '}

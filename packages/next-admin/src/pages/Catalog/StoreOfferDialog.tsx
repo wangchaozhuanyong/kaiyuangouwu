@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const OFFER = gql`
@@ -77,7 +78,10 @@ export function StoreOfferDialog({
                 className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-6 shadow-xl"
             >
                 <div className="flex justify-between gap-4">
-                    <h2 className="text-lg font-bold">本店商品经营设置</h2>
+                    <h2 className="flex items-center gap-2 text-lg font-bold">
+                        本店商品经营设置
+                        <FeatureHelpButton topic="catalog.store-offer" title="本店商品经营设置" />
+                    </h2>
                     <button onClick={onClose} aria-label="关闭经营设置">
                         关闭
                     </button>
@@ -87,7 +91,7 @@ export function StoreOfferDialog({
                 </p>
                 {query.loading && <p role="status">读取本店授权中…</p>}
                 {(query.error || error) && (
-                    <p role="alert" className="text-red-600 text-sm">
+                    <p role="alert" className="text-red-600 dark:text-red-400 text-sm">
                         {error || toUserFacingError(query.error, '授权读取失败，请重试')}
                     </p>
                 )}

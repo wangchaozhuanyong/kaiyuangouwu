@@ -94,7 +94,10 @@ export function MyStoreUsdtWallet({
 }) {
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-bold">平台统一 USDT 收款</h2>
+            <h2 className="flex items-center gap-2 text-sm font-bold">
+                平台统一 USDT 收款
+                <FeatureHelpButton topic="settings.platform-usdt" title="平台统一 USDT 收款" />
+            </h2>
             <p className="mt-2 text-xs text-slate-500">
                 收款地址由超级管理员在平台管理中心配置，本店通过支付选项开启或关闭。
             </p>
