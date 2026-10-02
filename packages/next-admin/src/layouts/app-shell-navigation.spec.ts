@@ -6,6 +6,7 @@ import {
     isAppShellPermissionLoading,
     isPlatformBusinessPath,
     isPlatformManagementChannel,
+    isPlatformOwnerPath,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
@@ -47,6 +48,13 @@ describe('admin channel switcher', () => {
 });
 
 describe('app shell navigation', () => {
+    it('recognizes global credentials and iCloud tools while preserving store AI settings', () => {
+        expect(isPlatformOwnerPath('/plugins/ai-access')).toBe(true);
+        expect(isPlatformOwnerPath('/plugins/icloud-relay')).toBe(true);
+        expect(isPlatformOwnerPath('/icloud-relay')).toBe(true);
+        expect(isPlatformOwnerPath('/plugins/ai-settings')).toBe(false);
+        expect(isPlatformOwnerPath('/plugins/icloud-relay-other')).toBe(false);
+    });
     it('treats the default Channel as platform management and blocks store business routes', () => {
         expect(isPlatformManagementChannel('__default_channel__')).toBe(true);
         expect(isPlatformManagementChannel('moyao-ai')).toBe(false);

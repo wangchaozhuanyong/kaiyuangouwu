@@ -95,6 +95,7 @@ import {
     isAppShellPermissionLoading,
     isPlatformBusinessPath,
     isPlatformManagementChannel,
+    isPlatformOwnerPath,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
@@ -302,6 +303,11 @@ export function AppShell() {
     const canAccessPath = useCallback(
         (path: string) => {
             if (path.startsWith('/platform/') && !isPlatformContext) return false;
+            if (
+                isPlatformOwnerPath(path) &&
+                (!isPlatformContext || !activePermissions.includes('SuperAdmin'))
+            )
+                return false;
             if (isPlatformContext && isPlatformBusinessPath(path)) return false;
             const extensionRoute = getNextAdminExtensionRoute(path);
             return extensionRoute

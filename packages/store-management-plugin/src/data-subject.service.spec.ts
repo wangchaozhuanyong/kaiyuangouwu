@@ -62,6 +62,7 @@ function createService() {
             customerService as never,
             {} as never,
             {} as never,
+            {} as never,
         ),
     };
 }
@@ -182,6 +183,7 @@ describe('DataSubjectService', () => {
         };
         const service = new DataSubjectService(
             connection as never,
+            {} as never,
             {} as never,
             {} as never,
             {} as never,

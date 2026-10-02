@@ -5,6 +5,7 @@ import {
     Asset,
     AssetService,
     AssetTranslation,
+    AuthenticatedSession,
     AutoIncrementIdStrategy,
     CatalogResourceOwnership,
     Channel,
@@ -12,7 +13,10 @@ import {
     Collection,
     CollectionService,
     CurrencyCode,
+    Customer,
+    CustomerService,
     dummyPaymentHandler,
+    EventBus,
     FacetService,
     LanguageCode,
     mergeConfig,
@@ -27,15 +31,22 @@ import {
     ProductVariantService,
     RequestContext,
     RequestContextService,
+    SessionService,
+    ShippingMethod,
+    ShippingMethodService,
     TagService,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { ClientRequest, request as httpRequest } from 'node:http';
+import { createConnection as connectTcp } from 'node:net';
 import { Duplex } from 'node:stream';
 // @ts-ignore Project-owned fixture lab verifies the Docker endpoint and container.
 import { fileURLToPath } from 'node:url';
@@ -64,7 +75,13 @@ import {
     verifyLab,
 } from '../../dev-server/scripts/store-isolation-mysql-lab.mjs';
 import { CatalogGovernanceService } from '../src/catalog-governance.service';
+import { DataRetentionService } from '../src/data-retention.service';
+import { DataSubjectService } from '../src/data-subject.service';
+import { DataRetentionRecord } from '../src/entities/data-retention-record.entity';
+import { DataSubjectRequest } from '../src/entities/data-subject-request.entity';
 import { GovernanceAuditEntry } from '../src/entities/governance-audit-entry.entity';
+import { StoreProfile } from '../src/entities/store-profile.entity';
+import { StorefrontDataChangedEvent } from '../src/realtime/storefront-data-changed.event';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 import { registerCardConcurrencyAcceptance } from './card-concurrency-acceptance';
@@ -75,6 +92,10 @@ const serverConfig = mergeConfig(testConfig, {
     authOptions: { requireVerification: false },
     paymentOptions: { paymentMethodHandlers: [dummyPaymentHandler] },
     plugins: [
+        StoreDomainPlugin.init({
+            cnameTarget: 'synthetic.example.test',
+            resolveTxt: () => Promise.resolve([]),
+        }),
         CatalogManagementPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({
@@ -372,11 +393,15 @@ describe('platform governance real database and API boundaries', () => {
             ],
         });
         categoryId = String(category.id);
+        // The real collection filter job may already have added these synthetic
+        // variants. Keep fixture seeding idempotent without weakening the relation.
         await connection.rawConnection
             .createQueryBuilder()
-            .relation(Collection, 'productVariants')
-            .of(category.id)
-            .add(variants.map(v => v.id));
+            .insert()
+            .into('collection_product_variants_product_variant')
+            .values(variants.map(v => ({ collectionId: category.id, productVariantId: v.id })))
+            .orIgnore()
+            .execute();
     }, 120000);
     afterAll(async () => {
         try {
@@ -1003,6 +1028,318 @@ describe('platform governance real database and API boundaries', () => {
         }
     });
 
+    it('enforces real retention holds, owner and store restore scope, and preserves restoration history', async () => {
+        const retention = server.app.get(DataRetentionService);
+        const record = await retention.quarantineAvatar(
+            a,
+            { id: '2147483000' } as Asset,
+            'synthetic-subject',
+            'REPLACED',
+        );
+        const past = new Date(Date.now() - 1000);
+        await connection.rawConnection
+            .getRepository(DataRetentionRecord)
+            .update(record.id, { purgeAfter: past, nextAttemptAt: past });
+        await retention.setLegalHold(platform, record.id, true, 'Synthetic acceptance hold');
+        expect(await retention.purgeDue(platform)).toMatchObject({ processed: 0, purged: 0, failed: 0 });
+        await expect(
+            connection.withTransaction(b, tx =>
+                retention.ownedAvatarRecordForRestore(tx, record.id, 'synthetic-subject'),
+            ),
+        ).rejects.toThrow('不可恢复');
+        await expect(
+            connection.withTransaction(a, tx =>
+                retention.ownedAvatarRecordForRestore(tx, record.id, 'foreign-subject'),
+            ),
+        ).rejects.toThrow('不可恢复');
+        await connection.withTransaction(a, async tx => {
+            const locked = await retention.ownedAvatarRecordForRestore(tx, record.id, 'synthetic-subject');
+            await retention.restoreAvatarRecord(tx, locked);
+        });
+        const restored = await connection.rawConnection
+            .getRepository(DataRetentionRecord)
+            .findOneByOrFail({ id: record.id });
+        expect(restored.status).toBe('RESTORED');
+        expect(restored.nextAttemptAt).toBeNull();
+        expect(await retention.purgeDue(platform)).toMatchObject({ processed: 0, purged: 0 });
+    });
+
+    it('closes one synthetic shared account across both stores without touching another customer', async () => {
+        const customers = server.app.get(CustomerService);
+        const password = `${randomUUID()}-Synthetic!42`;
+        const result = await customers.create(
+            platform,
+            {
+                emailAddress: `closure-${randomUUID()}@example.test`,
+                firstName: 'Synthetic',
+                lastName: 'Closure',
+            },
+            password,
+        );
+        if ('errorCode' in result) throw new Error('Synthetic customer setup failed');
+        const customer = await connection.rawConnection
+            .getRepository(Customer)
+            .findOneOrFail({ where: { id: result.id }, relations: ['user'] });
+        if (!customer.user) throw new Error('Synthetic account has no authentication identity');
+        const session = await connection.rawConnection.getRepository(AuthenticatedSession).save(
+            new AuthenticatedSession({
+                token: randomUUID(),
+                user: customer.user,
+                authenticationStrategy: 'native',
+                expires: new Date(Date.now() + 60000),
+                invalidated: false,
+            }),
+        );
+        const sessions = server.app.get(SessionService);
+        expect((await sessions.getSessionFromToken(session.token))?.user?.id).toBe(customer.user.id);
+        await connection.rawConnection
+            .createQueryBuilder()
+            .relation(Customer, 'channels')
+            .of(customer.id)
+            .add([a.channelId, b.channelId]);
+        const otherResult = await customers.create(platform, {
+            emailAddress: `preserved-${randomUUID()}@example.test`,
+            firstName: 'Preserved',
+            lastName: 'Customer',
+        });
+        if ('errorCode' in otherResult) throw new Error('Synthetic comparison customer setup failed');
+        const owner = new RequestContext({
+            apiType: 'shop',
+            channel: a.channel,
+            languageCode: LanguageCode.en,
+            isAuthorized: true,
+            authorizedAsOwnerOnly: true,
+        });
+        (owner as any)._session = {
+            user: {
+                id: customer.user.id,
+                channelPermissions: [{ id: a.channelId, permissions: [Permission.Authenticated] }],
+            },
+        };
+        const subjects = server.app.get(DataSubjectService);
+        await expect(subjects.requestAccountClosure(owner, 'incorrect-password')).rejects.toThrow(
+            '密码不正确',
+        );
+        const request = await subjects.requestAccountClosure(owner, password);
+        expect(request.status).toBe('PENDING');
+        await connection.rawConnection.getRepository(DataSubjectRequest).update(request.id, {
+            dueAt: new Date(Date.now() - 1000),
+            nextAttemptAt: new Date(Date.now() - 1000),
+            customerId: otherResult.id,
+        });
+        expect(await subjects.processDue(platform)).toMatchObject({ processed: 1, fulfilled: 0, failed: 1 });
+        expect((await customers.findOne(platform, otherResult.id))?.firstName).toBe('Preserved');
+        expect(
+            (
+                await connection.rawConnection
+                    .getRepository(DataSubjectRequest)
+                    .findOneByOrFail({ id: request.id })
+            ).lastError,
+        ).toContain('客户归属不一致');
+        await connection.rawConnection.getRepository(DataSubjectRequest).update(request.id, {
+            customerId: customer.id,
+            status: 'PENDING',
+            nextAttemptAt: new Date(Date.now() - 1000),
+        });
+        expect(await subjects.processDue(platform)).toMatchObject({ processed: 1, fulfilled: 1, failed: 0 });
+        const closed = await connection.rawConnection
+            .getRepository(Customer)
+            .findOneOrFail({ where: { id: customer.id }, withDeleted: true });
+        expect(closed.deletedAt).not.toBeNull();
+        expect(
+            (
+                await connection.rawConnection
+                    .getRepository(User)
+                    .findOneOrFail({ where: { id: customer.user.id }, withDeleted: true })
+            ).deletedAt,
+        ).not.toBeNull();
+        expect(await sessions.getSessionFromToken(session.token)).toBeUndefined();
+        expect(await customers.findOne(a, customer.id)).toBeUndefined();
+        expect(await customers.findOne(b, customer.id)).toBeUndefined();
+        expect((await customers.findOne(platform, otherResult.id))?.firstName).toBe('Preserved');
+        expect(await subjects.processDue(platform)).toMatchObject({ processed: 0, fulfilled: 0 });
+        expect(
+            (
+                await connection.rawConnection
+                    .getRepository(DataSubjectRequest)
+                    .findOneByOrFail({ id: request.id })
+            ).status,
+        ).toBe('FULFILLED');
+    });
+
+    it('preserves local shipping edits but rejects changes and deletion of historical shared methods', async () => {
+        const shipping = server.app.get(ShippingMethodService);
+        const method = await shipping.create(a, {
+            code: 'synthetic-isolation-shipping',
+            checker: {
+                code: 'default-shipping-eligibility-checker',
+                arguments: [{ name: 'orderMinimum', value: '0' }],
+            },
+            calculator: {
+                code: 'default-shipping-calculator',
+                arguments: [
+                    { name: 'rate', value: '1000' },
+                    { name: 'includesTax', value: 'auto' },
+                    { name: 'taxRate', value: '0' },
+                ],
+            },
+            fulfillmentHandler: 'manual-fulfillment',
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, name: 'A 店配送', description: '' },
+                { languageCode: LanguageCode.en, name: 'Store A local shipping', description: '' },
+            ],
+        });
+        expect((await shipping.findAll(b)).items.some(item => String(item.id) === String(method.id))).toBe(
+            false,
+        );
+        await shipping.update(a, {
+            id: method.id,
+            translations: [{ languageCode: LanguageCode.zh_Hans, name: 'A 店更新配送', description: '' }],
+        });
+        await connection.rawConnection
+            .createQueryBuilder()
+            .relation(ShippingMethod, 'channels')
+            .of(method.id)
+            .add(b.channelId);
+        await expect(
+            shipping.update(a, { id: method.id, code: 'cannot-change-shared', translations: [] }),
+        ).rejects.toThrow('共享配送方式');
+        await expect(shipping.softDelete(b, method.id)).rejects.toThrow('共享配送方式');
+        expect((await shipping.findOne(b, method.id))?.code).toBe('synthetic-isolation-shipping');
+        adminClient.setChannelToken(b.channel.token);
+        try {
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            updateShippingMethod(
+                                input: { id: $id, code: "cannot-change-shared", translations: [] }
+                            ) {
+                                id
+                            }
+                        }
+                    `,
+                    { id: String(method.id) },
+                ),
+            ).rejects.toThrow('共享配送方式');
+        } finally {
+            adminClient.setChannelToken(platform.channel.token);
+        }
+        await shipping.update(platform, {
+            id: method.id,
+            code: 'platform-maintained-shared',
+            translations: [],
+        });
+        expect((await shipping.findOne(a, method.id))?.code).toBe('platform-maintained-shared');
+    });
+
+    it('isolates real SSE connections by store and keeps private events out of guest streams', async () => {
+        for (const ctx of [a, b]) {
+            const repo = connection.rawConnection.getRepository(StoreProfile);
+            const existing = await repo.findOneBy({ channelId: ctx.channelId });
+            await repo.save(
+                new StoreProfile({
+                    ...existing,
+                    channelId: ctx.channelId,
+                    status: 'ACTIVE',
+                    descriptionZh: '测试店铺',
+                    descriptionEn: 'Synthetic store',
+                }),
+            );
+        }
+        const requests: ClientRequest[] = [];
+        const connect = (ctx: RequestContext) =>
+            new Promise<{ frames: string[]; waitFor: (marker: string) => Promise<void> }>(
+                (resolve, reject) => {
+                    const frames: string[] = [];
+                    const listeners: Array<() => void> = [];
+                    const request = httpRequest(
+                        {
+                            host: '127.0.0.1',
+                            port: 3477,
+                            path: '/storefront-realtime/events',
+                            headers: { 'vendure-token': ctx.channel.token },
+                        },
+                        response => {
+                            if (response.statusCode !== 200)
+                                return reject(new Error(`SSE status ${response.statusCode}`));
+                            response.on('data', chunk => {
+                                frames.push(chunk.toString());
+                                if (frames.join('').includes('event: ready')) resolve({ frames, waitFor });
+                                listeners.forEach(notify => notify());
+                            });
+                        },
+                    );
+                    const waitFor = (marker: string) =>
+                        new Promise<void>((done, failed) => {
+                            const timeout = setTimeout(
+                                () => failed(new Error('Missing synthetic SSE event')),
+                                2000,
+                            );
+                            const notify = () => {
+                                if (!frames.join('').includes(marker)) return;
+                                clearTimeout(timeout);
+                                done();
+                            };
+                            listeners.push(notify);
+                            notify();
+                        });
+                    requests.push(request);
+                    request.on('error', reject);
+                    request.end();
+                },
+            );
+        try {
+            const [first, second] = await Promise.all([connect(a), connect(b)]);
+            const events = server.app.get(EventBus);
+            await events.publish(
+                new StorefrontDataChangedEvent(a, ['catalog'], { entityIds: ['store-a-only'] }),
+            );
+            await events.publish(
+                new StorefrontDataChangedEvent(b, ['catalog'], { entityIds: ['store-b-only'] }),
+            );
+            await events.publish(
+                new StorefrontDataChangedEvent(a, ['customer'], {
+                    userIds: ['synthetic-private-user'],
+                    entityIds: ['private-not-for-guests'],
+                }),
+            );
+            await events.publish(
+                new StorefrontDataChangedEvent(platform, ['content'], {
+                    allChannels: true,
+                    entityIds: ['explicit-global-public'],
+                }),
+            );
+            await Promise.all([
+                first.waitFor('explicit-global-public'),
+                second.waitFor('explicit-global-public'),
+            ]);
+            expect(first.frames.join('')).toContain('store-a-only');
+            expect(second.frames.join('')).toContain('store-b-only');
+            expect(first.frames.join('')).not.toContain('store-b-only');
+            expect(second.frames.join('')).not.toContain('store-a-only');
+            expect(first.frames.join('') + second.frames.join('')).not.toContain('private-not-for-guests');
+            const unmappedStatus = await new Promise<number | undefined>((resolve, reject) => {
+                const socket = connectTcp({ host: '127.0.0.1', port: 3477 }, () => {
+                    socket.write(
+                        'GET /storefront-realtime/events HTTP/1.1\r\nHost: unknown.example.test\r\nConnection: close\r\n\r\n',
+                    );
+                });
+                socket.setTimeout(2000, () => socket.destroy(new Error('Missing unknown-host response')));
+                socket.on('error', reject);
+                socket.on('data', chunk => {
+                    const status = chunk.toString().match(/^HTTP\/1\.1 (\d+)/)?.[1];
+                    if (!status) return;
+                    resolve(Number(status));
+                    socket.destroy();
+                });
+            });
+            expect(unmappedStatus).toBe(404);
+        } finally {
+            requests.forEach(request => request.destroy());
+        }
+    });
+
     it('enforces the same scope through GraphQL, including native reference changes and direct platform APIs', async () => {
         adminClient.setChannelToken(b.channel.token);
         try {
@@ -1049,6 +1386,32 @@ describe('platform governance real database and API boundaries', () => {
                     }
                 `),
             ).rejects.toThrow('平台管理中心');
+            await expect(
+                adminClient.query(gql`
+                    query {
+                        dataRetentionRecords {
+                            id
+                        }
+                    }
+                `),
+            ).rejects.toThrow('平台管理中心');
+            await expect(
+                adminClient.query(gql`
+                    mutation {
+                        updateTaxCategory(input: { id: "0", name: "cross-store-write" }) {
+                            id
+                        }
+                    }
+                `),
+            ).rejects.toThrow('平台管理中心');
+            const dictionaries = await adminClient.query(gql`
+                query {
+                    countries {
+                        totalItems
+                    }
+                }
+            `);
+            expect(dictionaries.countries.totalItems).toBeGreaterThan(0);
             await expect(
                 adminClient.query(gql`
                     mutation {

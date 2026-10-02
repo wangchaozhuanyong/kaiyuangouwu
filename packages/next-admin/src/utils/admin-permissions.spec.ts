@@ -19,9 +19,11 @@ describe('admin permissions', () => {
         expect(canAccessAdminPath('/marketing/sharing', ['ReadReferral'])).toBe(true);
         expect(canAccessAdminPath('/marketing/sharing', ['ReadPromotion', 'ReadOrder'])).toBe(false);
     });
-    it('protects the iCloud relay route with its scoped read permission', () => {
-        expect(canAccessAdminPath('/plugins/icloud-relay', ['ReadIcloudRelay'])).toBe(true);
-        expect(canAccessAdminPath('/plugins/icloud-relay', ['ReadSettings'])).toBe(false);
+    it('reserves both iCloud relay routes for the platform owner despite historical role grants', () => {
+        for (const path of ['/plugins/icloud-relay', '/icloud-relay']) {
+            expect(canAccessAdminPath(path, ['ReadIcloudRelay', 'ReadSettings'])).toBe(false);
+            expect(canAccessAdminPath(path, ['SuperAdmin'])).toBe(true);
+        }
     });
     it('allows unrestricted routes without a permission rule', () => {
         expect(canAccessAdminPath('/dashboard', [])).toBe(true);
