@@ -1880,3 +1880,20 @@ void test('platform governance data preflight is pinned, read-only, and verifies
     );
     assert.equal(checkedHealth, 6);
 });
+
+void test('the workflow shell accepts the fixed read-only governance operation and rejects unknown operations', () => {
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    const validation = workflow.match(/case "\$OPS_OPERATION" in[\s\S]*?\besac/u)?.[0];
+    assert.ok(validation, 'Actual workflow shell allow-list required');
+    const invoke = (operation, plan = '') =>
+        spawnSync('bash', ['-c', validation], {
+            env: { OPS_OPERATION: operation, OPS_EXPECTED_PLAN_SHA256: plan },
+            encoding: 'utf8',
+        });
+    assert.equal(invoke('plan-platform-store-governance').status, 0);
+    assert.equal(invoke('unknown-operation').status, 1);
+    assert.equal(invoke('plan-platform-store-governance', 'a'.repeat(64)).status, 1);
+});
