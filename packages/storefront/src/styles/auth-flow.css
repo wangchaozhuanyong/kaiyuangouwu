@@ -2586,7 +2586,7 @@
     text-align: center;
     overflow-wrap: anywhere;
 }
-.auth-form-logo {
+.auth-form-brand .auth-form-logo {
     width: 180px;
     height: 48px;
 }
