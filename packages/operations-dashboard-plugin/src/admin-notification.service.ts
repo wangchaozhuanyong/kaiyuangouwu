@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { RequestContext, TransactionalConnection } from '@vendure/core';
+import { Channel, RequestContext, TransactionalConnection } from '@vendure/core';
 import { IsNull, LessThanOrEqual, Not } from 'typeorm';
 
-import { AdminNotificationConfigService } from './admin-notification-config.service';
+import {
+    AdminNotificationConfigService,
+    notificationCategoryEnabled,
+} from './admin-notification-config.service';
 import {
     DepartmentCode,
     DepartmentNotificationRouter,
@@ -35,6 +38,7 @@ export interface AdminNotificationInput {
     priority?: number;
     silent?: boolean;
     occurredAt?: Date;
+    expiresAt?: Date;
 }
 
 export interface NotificationDeliveryListOptions {
@@ -54,8 +58,13 @@ export class AdminNotificationService {
         private readonly incidentResponse: IncidentResponseService,
     ) {}
 
-    async enqueueOneOff(ctx: RequestContext | null, input: AdminNotificationInput, force = false) {
-        return this.enqueue(ctx, input, 'ONE_OFF', 'INFO', force);
+    async enqueueOneOff(
+        ctx: RequestContext | null,
+        input: AdminNotificationInput,
+        force = false,
+        dispatch = true,
+    ) {
+        return this.enqueue(ctx, input, 'ONE_OFF', 'INFO', force, dispatch);
     }
 
     async upsertIncident(ctx: RequestContext | null, input: AdminNotificationInput, force = false) {
@@ -74,17 +83,25 @@ export class AdminNotificationService {
                 : await repository.findOne({ where: { activeFingerprint: fingerprint } });
             if (!current) return null;
             const now = input.occurredAt ?? new Date();
+            const upgraded = severityPriority(input.severity) > severityPriority(current.severity);
             current.occurrenceCount += 1;
             current.lastOccurredAt = now;
-            current.payload = sanitizePayload(input.payload ?? {});
+            current.payload = sanitizePayload(await this.withStoreName(txCtx, input.payload ?? {}));
             current.title = boundedText(input.title, 300);
             current.severity = input.severity;
+            current.priority = input.priority ?? severityPriority(input.severity);
+            if (upgraded) current.silent = false;
             const repeatMinutes = input.severity === 'P0' ? config.p0RepeatMinutes : config.p1RepeatMinutes;
             const repeatDue =
                 (input.severity === 'P0' || input.severity === 'P1') &&
                 (!current.sentAt || now.getTime() - current.sentAt.getTime() >= repeatMinutes * 60_000);
-            if (repeatDue && shouldDeliver) {
-                current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+            const dispatchDue =
+                shouldDeliver &&
+                (repeatDue || upgraded) &&
+                !['PENDING', 'CLAIMED', 'RETRY'].includes(current.deliveryStatus);
+            if (dispatchDue) {
+                current.deliveryAction = 'SEND';
+                current.attempts = 0;
                 current.deliveryStatus = 'PENDING';
                 current.availableAt = now;
                 current.claimedAt = null;
@@ -103,10 +120,11 @@ export class AdminNotificationService {
                 },
                 now,
             );
-            return { incident: current, repeatDue };
+            return { incident: current, dispatchDue };
         });
         if (!updated) return this.enqueue(ctx, input, 'INCIDENT', 'FIRING', force);
-        if (updated.repeatDue && shouldDeliver) await this.worker.dispatch(updated.incident.id);
+        if (updated.dispatchDue)
+            await Promise.resolve(this.worker.dispatch(updated.incident.id)).catch(() => false);
         return updated.incident;
     }
 
@@ -147,7 +165,8 @@ export class AdminNotificationService {
                   )
                 : null;
             current.closedAt = severity ? null : resolvedAt;
-            current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+            current.deliveryAction = 'SEND';
+            current.attempts = 0;
             current.deliveryStatus = config.sendResolved && config.enabled ? 'PENDING' : 'SKIPPED';
             current.availableAt = resolvedAt;
             current.silent = true;
@@ -175,8 +194,15 @@ export class AdminNotificationService {
             return current;
         });
         if (!delivery) return null;
-        if (delivery.deliveryStatus === 'PENDING') await this.worker.dispatch(delivery.id);
+        if (delivery.deliveryStatus === 'PENDING')
+            await Promise.resolve(this.worker.dispatch(delivery.id)).catch(() => false);
         return delivery;
+    }
+
+    async activeIncidentCount(): Promise<number> {
+        return this.connection.rawConnection
+            .getRepository(AdminNotificationDelivery)
+            .count({ where: { activeFingerprint: Not(IsNull()) } });
     }
 
     async retryDelivery(id: ID): Promise<AdminNotificationDelivery> {
@@ -256,7 +282,8 @@ export class AdminNotificationService {
                     ...current.payload,
                     escalated: '已超时升级总经办',
                 });
-                current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+                current.deliveryAction = 'SEND';
+                current.attempts = 0;
                 current.deliveryStatus = 'PENDING';
                 current.availableAt = now;
                 await txRepository.save(current);
@@ -278,6 +305,7 @@ export class AdminNotificationService {
     }
 
     async sendTest(kind: string): Promise<AdminNotificationDelivery> {
+        const releaseId = /^RELEASE:[a-f0-9]{40}$/.test(kind) ? kind.slice(8) : null;
         const normalized = ['NORMAL', 'P0', 'ORDER', 'INVENTORY', 'RESOLVED'].includes(kind)
             ? kind
             : 'NORMAL';
@@ -299,17 +327,18 @@ export class AdminNotificationService {
                       : normalized === 'INVENTORY'
                         ? 'P1'
                         : 'P2',
-            dedupKey: `telegram.test:${normalized}:${Date.now()}`,
-            title:
-                normalized === 'RESOLVED'
-                    ? 'Telegram 恢复通知测试'
-                    : normalized === 'P0'
-                      ? 'Telegram P0 告警测试'
-                      : normalized === 'ORDER'
-                        ? '新订单通知测试'
-                        : normalized === 'INVENTORY'
-                          ? '低库存通知测试'
-                          : 'Telegram 内部通知测试',
+            dedupKey: `telegram.test:${normalized}:${releaseId ?? Date.now()}`,
+            title: releaseId
+                ? '全店铺统一中文通知自检'
+                : normalized === 'RESOLVED'
+                  ? 'Telegram 恢复通知测试'
+                  : normalized === 'P0'
+                    ? 'Telegram 危急告警测试'
+                    : normalized === 'ORDER'
+                      ? '新订单通知测试'
+                      : normalized === 'INVENTORY'
+                        ? '低库存通知测试'
+                        : 'Telegram 内部通知测试',
             payload: {
                 test: true,
                 source: '管理员连接测试',
@@ -338,6 +367,7 @@ export class AdminNotificationService {
         mode: NotificationMode,
         eventState: NotificationEventState,
         force: boolean,
+        dispatch = true,
     ): Promise<AdminNotificationDelivery | null> {
         const config = await this.configService.get();
         const shouldDeliver = force ? true : this.shouldEnqueue(config, input);
@@ -412,6 +442,7 @@ export class AdminNotificationService {
             deliveryAction: 'SEND',
             deliveryStatus: shouldDeliver ? 'PENDING' : 'SKIPPED',
             availableAt: now,
+            expiresAt: input.expiresAt ?? null,
             attempts: 0,
             maxAttempts: 6,
             claimedAt: null,
@@ -422,7 +453,7 @@ export class AdminNotificationService {
             lastError: null,
             sentAt: null,
         });
-        delivery.payload = sanitizePayload(input.payload ?? {});
+        delivery.payload = sanitizePayload(await this.withStoreName(ctx, input.payload ?? {}));
         let saved: AdminNotificationDelivery;
         try {
             saved = await this.inTransaction(ctx, async txCtx => {
@@ -462,7 +493,8 @@ export class AdminNotificationService {
             }
             throw error;
         }
-        if (shouldDeliver) await this.worker.dispatch(saved.id);
+        if (shouldDeliver && dispatch)
+            await Promise.resolve(this.worker.dispatch(saved.id)).catch(() => false);
         return saved;
     }
 
@@ -471,12 +503,26 @@ export class AdminNotificationService {
         input: AdminNotificationInput,
     ): boolean {
         if (!config.enabled || !this.configService.shouldDeliver(config, input.severity)) return false;
-        if (input.category === 'ORDER') return config.notifyOrderEvents;
-        if (input.category === 'PAYMENT') return config.notifyPaymentEvents;
-        if (input.category === 'FULFILLMENT') return config.notifyFulfillmentEvents;
-        if (input.category === 'REFUND') return config.notifyRefundEvents;
-        if (input.category === 'INVENTORY') return config.notifyInventoryEvents;
-        return true;
+        return notificationCategoryEnabled(config, input.category);
+    }
+
+    private async withStoreName(ctx: RequestContext | null, payload: Record<string, unknown>) {
+        if (typeof payload.channelId !== 'string' && typeof payload.channelId !== 'number') return payload;
+        const repository = ctx
+            ? this.connection.getRepository(ctx, Channel)
+            : this.connection.rawConnection.getRepository(Channel);
+        const channel = await repository.findOne({ where: { id: payload.channelId } });
+        const fields = channel?.customFields;
+        const name =
+            fields && 'storefrontNameZh' in fields && typeof fields.storefrontNameZh === 'string'
+                ? fields.storefrontNameZh.trim()
+                : '';
+        return {
+            ...payload,
+            storeName:
+                name ||
+                (/\p{Script=Han}/u.test(channel?.code ?? '') ? channel?.code : `店铺 ${payload.channelId}`),
+        };
     }
 
     private repository(ctx: RequestContext | null) {

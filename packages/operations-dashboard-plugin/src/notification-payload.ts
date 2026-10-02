@@ -23,6 +23,25 @@ export function sanitizeIncidentEvidence(input: Record<string, unknown>): Record
 function sanitizeValue(key: string, value: unknown, nested: boolean, depth: number): unknown {
     if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
     if (value instanceof Date) return value.toISOString();
+    if (key === 'shops' && Array.isArray(value) && !nested) {
+        return value.slice(0, 100).map(item => {
+            const shop = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+            return {
+                name: sanitizeValue('name', shop.name, false, 0),
+                available: shop.available === true,
+                ...Object.fromEntries(
+                    ['total', 'guests', 'customers'].map(field => [
+                        field,
+                        typeof shop[field] === 'number' &&
+                        Number.isInteger(shop[field]) &&
+                        Number(shop[field]) >= 0
+                            ? shop[field]
+                            : null,
+                    ]),
+                ),
+            };
+        });
+    }
     if (Array.isArray(value)) {
         return value.slice(0, 20).map(item => sanitizeValue(key, item, nested, depth + 1));
     }
@@ -42,6 +61,10 @@ function sanitizeValue(key: string, value: unknown, nested: boolean, depth: numb
         .replace(/\s+/gu, ' ')
         .trim();
     text = text
+        .replace(
+            /Bearer\s+\S+|(?:sk|rk)-[A-Za-z0-9_-]{8,}|(?:api[_-]?key|password|token)\s*[:=]\s*\S+/gi,
+            '敏感内容已隐藏',
+        )
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, match => maskEmail(match))
         .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/gu, match => maskIp(match));
     if (/email/iu.test(key) && !text.includes('***@')) text = maskEmail(text);

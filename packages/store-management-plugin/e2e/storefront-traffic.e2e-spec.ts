@@ -1,13 +1,13 @@
 import { expect as browserExpect, chromium } from '@playwright/test';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { mergeConfig, TransactionalConnection } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { createServer, type InlineConfig } from 'vite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -20,6 +20,7 @@ const config = mergeConfig(testConfig(), {
     apiOptions: { trustProxy: 'loopback' },
     authOptions: { requireVerification: false },
     plugins: [
+        OperationsDashboardPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({
             provider: {
@@ -76,9 +77,11 @@ const input = (visitorId = 'traffic-e2e-browser-0001') => ({
 
 describe('storefront traffic Shop/Admin API integration', () => {
     beforeAll(async () => {
+        const localFixtures = resolve(__dirname, '../../../.tmp');
+        mkdirSync(localFixtures, { recursive: true });
         registerInitializer(
             'sqljs',
-            new SqljsInitializer(mkdtempSync(join(tmpdir(), 'vendure-traffic-api-'))),
+            new SqljsInitializer(mkdtempSync(join(localFixtures, 'vendure-traffic-api-'))),
         );
         await server.init({
             initialData: { ...initialData, collections: [], paymentMethods: [] },
@@ -114,6 +117,88 @@ describe('storefront traffic Shop/Admin API integration', () => {
         const responseBody = (await response.json()) as { errors?: unknown[] };
         expect(responseBody.errors?.length).toBeGreaterThan(0);
         await expect(adminClient.query(REPORT, { days: 1000 })).rejects.toThrow();
+    });
+
+    it('serves persisted online and customer-review APIs without changing page views', async () => {
+        const visitorId = 'notification-api-browser-0001';
+        const heartbeat = gql`
+            mutation Heartbeat($visitorId: String!) {
+                recordStorefrontHeartbeat(visitorId: $visitorId) {
+                    recorded
+                }
+            }
+        `;
+        expect(await shopClient.query(heartbeat, { visitorId })).toMatchObject({
+            recordStorefrontHeartbeat: { recorded: true },
+        });
+        const online = gql`
+            query {
+                storefrontOnline {
+                    available
+                    total
+                    guests
+                    customers
+                }
+            }
+        `;
+        expect(await adminClient.query(online)).toMatchObject({
+            storefrontOnline: { available: true, total: 1, guests: 1, customers: 0 },
+        });
+        expect((await adminClient.query(REPORT, { days: 1 })).storefrontTraffic.firstRecordedAt).toBeNull();
+        shopClient.setRequestHeader('cookie', 'storefront_analytics_opt_out=1');
+        expect(await shopClient.query(heartbeat, { visitorId })).toMatchObject({
+            recordStorefrontHeartbeat: { recorded: false },
+        });
+        expect((await adminClient.query(online)).storefrontOnline.total).toBe(0);
+        shopClient.setRequestHeader('cookie', null);
+        const submit = gql`
+            mutation Review($input: SubmitCustomerServiceReviewInput!) {
+                submitCustomerServiceReview(input: $input) {
+                    id
+                    rating
+                    revision
+                    comment
+                }
+            }
+        `;
+        const reviewInput = { visitorId, rating: 1, tags: ['响应迅速'], comment: '需要客服跟进' };
+        const first = (await shopClient.query(submit, { input: reviewInput })).submitCustomerServiceReview;
+        const repeated = (await shopClient.query(submit, { input: reviewInput })).submitCustomerServiceReview;
+        expect(repeated).toEqual(first);
+        expect(first.revision).toBe(1);
+        const current = await shopClient.query(
+            gql`
+                query CurrentReview($visitorId: String!) {
+                    currentCustomerServiceReview(visitorId: $visitorId) {
+                        id
+                        rating
+                        comment
+                    }
+                }
+            `,
+            { visitorId },
+        );
+        expect(current.currentCustomerServiceReview.id).toBe(first.id);
+        const list = await adminClient.query(gql`
+            query {
+                customerServiceReviews {
+                    totalItems
+                    items {
+                        id
+                        rating
+                        tags
+                    }
+                }
+            }
+        `);
+        expect(list.customerServiceReviews.items).toContainEqual({
+            id: first.id,
+            rating: 1,
+            tags: ['响应迅速'],
+        });
+        await expect(
+            shopClient.query(submit, { input: { ...reviewInput, orderCode: 'NOT-OWNED' } }),
+        ).rejects.toThrow('请登录');
     });
 
     it('deduplicates retries and reports page views, unique browsers and trusted IPs consistently across both widgets', async () => {
@@ -229,7 +314,9 @@ describe('storefront traffic Shop/Admin API integration', () => {
         if (!address || typeof address === 'string') throw new Error('Traffic fixture server did not start');
         const port = address.port;
         const url = `http://traffic.localhost:${port}/e2e/traffic/index.html`;
-        const artifacts = mkdtempSync(join(tmpdir(), 'vendure-traffic-browser-'));
+        const artifactRoot = resolve(__dirname, '../../../.tmp');
+        mkdirSync(artifactRoot, { recursive: true });
+        const artifacts = mkdtempSync(join(artifactRoot, 'vendure-traffic-browser-'));
         const browser = await chromium.launch({ headless: true });
         try {
             const automated = await browser.newPage();

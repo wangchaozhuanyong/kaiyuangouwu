@@ -1,7 +1,10 @@
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 
+import { AiAccessNotificationService } from './ai-access-notification.service';
+import { reconcileAiAccessTask } from './ai-access-notification.tasks';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { IMAGE_GENERATION_OPTIONS, manageImageGenerationPermission } from './constants';
 import { DataSubjectImageHandlerService } from './data-subject-image-handler.service';
@@ -48,7 +51,7 @@ import { ImagePrivateController } from './storage/image-private.controller';
 import { ImageGenerationPluginOptions } from './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, StoreManagementPlugin, ContentTranslationPlugin],
+    imports: [OperationsDashboardPlugin, PluginCommonModule, StoreManagementPlugin, ContentTranslationPlugin],
     entities: [
         ImageGenerationConfig,
         ImageProviderCostAdjustment,
@@ -73,6 +76,7 @@ import { ImageGenerationPluginOptions } from './types';
     ],
     controllers: [ImagePrivateController, ImageGenerationHealthController],
     providers: [
+        AiAccessNotificationService,
         PromptRulesService,
         ImageProviderCipherService,
         SafeProviderUrlService,
@@ -92,8 +96,11 @@ import { ImageGenerationPluginOptions } from './types';
         },
     ],
     configuration: config => {
+        if (!config.plugins.includes(OperationsDashboardPlugin))
+            config.plugins.push(OperationsDashboardPlugin);
         config.authOptions.customPermissions.push(manageImageGenerationPermission);
         config.schedulerOptions.tasks.push(
+            reconcileAiAccessTask,
             reconcileImageGenerationsTask,
             purgeExpiredPrivateImagesTask,
             purgeImageGenerationSensitiveRecordsTask,

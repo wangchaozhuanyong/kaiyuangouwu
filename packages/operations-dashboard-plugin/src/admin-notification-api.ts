@@ -18,6 +18,11 @@ export const adminNotificationApiExtensions = gql`
         notifyFulfillmentEvents: Boolean!
         notifyRefundEvents: Boolean!
         notifyInventoryEvents: Boolean!
+        notifyOnlineReports: Boolean!
+        notifyServiceReviews: Boolean!
+        notifyPromotionExpiry: Boolean!
+        notifyAiCredentials: Boolean!
+        notifySecurityEvents: Boolean!
         inventoryLowThreshold: Int!
         p1EscalationMinutes: Int!
         p0RepeatMinutes: Int!
@@ -43,6 +48,11 @@ export const adminNotificationApiExtensions = gql`
         notifyFulfillmentEvents: Boolean
         notifyRefundEvents: Boolean
         notifyInventoryEvents: Boolean
+        notifyOnlineReports: Boolean
+        notifyServiceReviews: Boolean
+        notifyPromotionExpiry: Boolean
+        notifyAiCredentials: Boolean
+        notifySecurityEvents: Boolean
         inventoryLowThreshold: Int
         p1EscalationMinutes: Int
         p0RepeatMinutes: Int

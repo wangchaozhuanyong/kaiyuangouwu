@@ -9,6 +9,10 @@ import {
     customerServiceFeedbackCommonSchema,
     customerServiceFeedbackShopSchema,
 } from './customer-service-feedback.schema';
+import {
+    storeNotificationAdminSchema,
+    storeNotificationShopSchema,
+} from './notifications/store-notification.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { referralPosterFields } from './referral/referral-poster-fields';
 import { storePaymentApiSchema } from './store-payment-api.schema';
@@ -218,6 +222,7 @@ const commonTypes = gql`
 export const adminApiExtensions = gql`
     ${administratorAccessSchema}
     ${storefrontPreviewBrandingSchema}
+    ${storeNotificationAdminSchema}
     ${trafficAdminSchema}
     ${commonTypes}
     ${customerServiceFeedbackAdminSchema}
@@ -1102,6 +1107,7 @@ export const adminApiExtensions = gql`
 `;
 
 export const shopApiExtensions = gql`
+    ${storeNotificationShopSchema}
     ${trafficShopSchema}
     ${commonTypes}
     ${customerServiceFeedbackShopSchema}

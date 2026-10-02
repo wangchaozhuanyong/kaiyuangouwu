@@ -3,6 +3,7 @@ import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowUpRight, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
+import { storefrontVisitorId } from '../referral-attribution';
 
 import '../styles/modals-and-support.css';
 
@@ -23,7 +24,12 @@ import {
     supportPageTitle,
     supportServiceDetails,
 } from '../support-content';
-import { ActiveCustomer, StorefrontContentBlock, StorefrontLanguage } from '../types';
+import {
+    ActiveCustomer,
+    CustomerServiceReviewRecord,
+    StorefrontContentBlock,
+    StorefrontLanguage,
+} from '../types';
 
 // TODO: Fix internal imports later
 
@@ -65,12 +71,12 @@ export function SupportPage() {
         >
             {content ? (
                 <SupportContent
+                    api={api}
                     content={content}
                     language={language}
                     orderCode={orderCode}
                     focus={focus}
                     onNotify={onNotify}
-                    api={api}
                     customer={customer}
                     onSignIn={onSignIn}
                 />
@@ -479,21 +485,54 @@ function CustomerServiceEvaluationSection({
 }) {
     const isZh = language === 'zh';
     const sectionRef = useRef<HTMLElement>(null);
+    const [savedReview, setSavedReview] = useState<CustomerServiceReviewRecord | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(Boolean(api));
+    const [loadError, setLoadError] = useState('');
     const [rating, setRating] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [comment, setComment] = useState('');
     const [submitted, setSubmitted] = useState(false);
-    const [loading, setLoading] = useState(Boolean(api && customerId));
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+    useEffect(() => {
+        let active = true;
+        const visitorId = storefrontVisitorId();
+        if (!api || !visitorId) return;
+        setLoadError('');
+        setLoading(true);
+        void api.contentReviewsApi
+            .currentCustomerServiceReview(visitorId, orderCode)
+            .then(review => {
+                if (!active) return;
+                setSavedReview(review);
+                setSubmitted(Boolean(review));
+                if (review) {
+                    setRating(review.rating);
+                    setSelectedTags(review.tags);
+                    setComment(review.comment);
+                }
+            })
+            .catch(() => {
+                if (active)
+                    setLoadError(
+                        isZh ? '评价读取失败，请刷新后重试' : 'Unable to load feedback. Please refresh.',
+                    );
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, [api, customerId, orderCode, isZh]);
 
-    const tags = [
-        { code: 'FAST_RESPONSE', label: isZh ? '响应迅速' : 'Fast response' },
-        { code: 'FRIENDLY', label: isZh ? '态度热情' : 'Friendly' },
-        { code: 'PROFESSIONAL', label: isZh ? '耐心专业' : 'Professional' },
-        { code: 'RESOLVED', label: isZh ? '问题已解决' : 'Problem solved' },
-        { code: 'EFFICIENT', label: isZh ? '处理高效' : 'Efficient' },
-    ];
+    const tags = ['响应迅速', '态度热情', '耐心专业', '问题已解决', '处理高效'];
+    const tagLabels: Record<string, string> = {
+        响应迅速: 'Fast response',
+        态度热情: 'Friendly',
+        耐心专业: 'Professional',
+        问题已解决: 'Problem solved',
+        处理高效: 'Efficient',
+    };
 
     const ratingLabels = isZh
         ? ['', '非常不满意', '不满意', '一般', '满意', '非常满意']
@@ -508,72 +547,48 @@ function CustomerServiceEvaluationSection({
         return () => cancelAnimationFrame(frame);
     }, [focusOnMount]);
 
-    useEffect(() => {
-        if (!api || !customerId) return;
-        const controller = new AbortController();
-        setLoading(true);
-        setError('');
-        void api.contentReviewsApi
-            .myCustomerServiceFeedback(orderCode, controller.signal)
-            .then(record => {
-                if (controller.signal.aborted || !record) return;
-                setRating(record.rating);
-                setSelectedTags(record.tags);
-                setComment(record.comment ?? '');
-                setSubmitted(true);
-            })
-            .catch(() => {
-                if (!controller.signal.aborted) {
-                    setError(
-                        isZh ? '暂时无法读取评价，请重试。' : 'Could not load your feedback. Try again.',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [api, customerId, orderCode, isZh]);
-
     const toggleTag = (tag: string) => {
         setSelectedTags(prev => (prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!api || !customerId) {
-            setError(isZh ? '请先登录后提交客服评价。' : 'Sign in to submit feedback.');
+        const visitorId = storefrontVisitorId();
+        if (!api || !visitorId || saving || loading) return;
+        if (orderCode && !customerId) {
             onSignIn?.();
+            setLoadError(isZh ? '请登录后评价关联订单' : 'Sign in to rate an order.');
             return;
         }
-        if (saving || loading) return;
         if (rating < 1 || rating > 5) {
-            setError(isZh ? '请先选择服务评分。' : 'Choose a service rating before submitting.');
+            setLoadError(isZh ? '请先选择服务评分' : 'Choose a service rating.');
             return;
         }
         setSaving(true);
-        setError('');
+        setLoadError('');
         try {
-            const saved = await api.contentReviewsApi.submitCustomerServiceFeedback({
-                ...(orderCode ? { orderCode } : {}),
+            const review = await api.contentReviewsApi.submitCustomerServiceReview({
+                id: savedReview?.id,
+                visitorId,
                 rating,
                 tags: selectedTags,
                 comment,
+                orderCode,
             });
-            setRating(saved.rating);
-            setSelectedTags(saved.tags);
-            setComment(saved.comment ?? '');
+            setSavedReview(review);
             setSubmitted(true);
             onNotify?.(
                 isZh
                     ? '感谢您的评价，我们将持续优化服务质量！'
                     : 'Thank you! Your feedback has been recorded.',
             );
-        } catch {
-            setError(
+        } catch (error) {
+            setLoadError(
                 isZh
-                    ? '提交失败，请检查订单归属或稍后重试。'
-                    : 'Submission failed. Check your order or retry.',
+                    ? error instanceof Error && /[\u4e00-\u9fff]/u.test(error.message)
+                        ? error.message
+                        : '评价提交失败，请稍后重试'
+                    : 'Unable to submit feedback. Please try again.',
             );
         } finally {
             setSaving(false);
@@ -596,9 +611,9 @@ function CustomerServiceEvaluationSection({
             </header>
 
             {loading && <p role="status">{isZh ? '正在读取您的评价…' : 'Loading your feedback…'}</p>}
-            {error && (
+            {loadError && (
                 <p role="alert" className="support-evaluation-error">
-                    {error}
+                    {loadError}
                 </p>
             )}
 
@@ -617,6 +632,8 @@ function CustomerServiceEvaluationSection({
                     <strong>
                         {isZh ? '已收到您的服务评价，感谢支持！' : 'Thank you for rating our service!'}
                     </strong>
+                    {loadError && <p role="alert">{loadError}</p>}
+                    {!api && <p role="status">{isZh ? '评价服务暂不可用' : 'Feedback is unavailable'}</p>}
                     {orderCode ? (
                         <small>{isZh ? `关联订单号：${orderCode}` : `Order: ${orderCode}`}</small>
                     ) : null}
@@ -630,6 +647,8 @@ function CustomerServiceEvaluationSection({
                 </div>
             ) : (
                 <form className="support-evaluation-form" onSubmit={event => void handleSubmit(event)}>
+                    {loadError && <p role="alert">{loadError}</p>}
+                    {!api && <p role="status">{isZh ? '评价服务暂不可用' : 'Feedback is unavailable'}</p>}
                     {orderCode ? (
                         <div className="support-evaluation-order-badge">
                             <span>{isZh ? '当前服务订单：' : 'Order: '}</span>
@@ -668,16 +687,16 @@ function CustomerServiceEvaluationSection({
 
                         <div className="support-evaluation-tags">
                             {tags.map(tag => {
-                                const active = selectedTags.includes(tag.code);
+                                const active = selectedTags.includes(tag);
                                 return (
                                     <button
                                         type="button"
-                                        key={tag.code}
+                                        key={tag}
                                         className={`support-tag-btn ${active ? 'is-active' : ''}`}
-                                        onClick={() => toggleTag(tag.code)}
+                                        onClick={() => toggleTag(tag)}
                                         aria-pressed={active}
                                     >
-                                        {tag.label}
+                                        {isZh ? tag : tagLabels[tag]}
                                     </button>
                                 );
                             })}
@@ -692,15 +711,15 @@ function CustomerServiceEvaluationSection({
                                 : 'Share details about your customer service experience (optional)'
                         }
                         rows={3}
+                        maxLength={2000}
                         value={comment}
                         onChange={e => setComment(e.target.value)}
-                        maxLength={500}
                     />
 
                     <button
                         type="submit"
                         className="support-evaluation-submit-btn"
-                        disabled={saving || loading}
+                        disabled={saving || loading || !api}
                     >
                         {saving
                             ? isZh

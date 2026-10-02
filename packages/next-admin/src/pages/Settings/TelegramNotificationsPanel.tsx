@@ -12,7 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import {
     departmentDisplayLabel,
     eventTypeDisplayLabel,
@@ -21,6 +21,7 @@ import {
 } from '../../../../common/src/system-display-labels';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { CUSTOMER_SERVICE_REVIEWS_QUERY } from '../../graphql/telegram-notifications.graphql';
 
 import {
     ACKNOWLEDGE_ADMIN_INCIDENT,
@@ -54,6 +55,11 @@ type Draft = Pick<
     | 'notifyFulfillmentEvents'
     | 'notifyRefundEvents'
     | 'notifyInventoryEvents'
+    | 'notifyOnlineReports'
+    | 'notifyServiceReviews'
+    | 'notifyPromotionExpiry'
+    | 'notifyAiCredentials'
+    | 'notifySecurityEvents'
     | 'inventoryLowThreshold'
     | 'p1EscalationMinutes'
     | 'p0RepeatMinutes'
@@ -64,7 +70,7 @@ type Draft = Pick<
 
 const testKinds = [
     ['NORMAL', '普通测试'],
-    ['P0', 'P0 测试'],
+    ['P0', '危急告警测试'],
     ['ORDER', '订单测试'],
     ['INVENTORY', '库存测试'],
     ['RESOLVED', '恢复测试'],
@@ -85,6 +91,24 @@ interface IncidentDialogDraft {
 }
 
 export function TelegramNotificationsPanel() {
+    const [reviewPage, setReviewPage] = useState(0);
+    const reviewQuery = useQuery<{
+        customerServiceReviews: {
+            totalItems: number;
+            items: Array<{
+                id: string;
+                createdAt: string;
+                channelId: string;
+                rating: number;
+                tags: string[];
+                comment: string;
+                orderCode: string | null;
+            }>;
+        };
+    }>(CUSTOMER_SERVICE_REVIEWS_QUERY, {
+        variables: { skip: reviewPage * 25, take: 25, allStores: true },
+        fetchPolicy: 'cache-and-network',
+    });
     const [statusFilter, setStatusFilter] = useState('');
     const [editedDraft, setDraft] = useState<Draft | null>(null);
     const [notice, setNotice] = useState('');
@@ -293,13 +317,13 @@ export function TelegramNotificationsPanel() {
                     tone={config.enabled ? 'green' : 'slate'}
                 />
                 <Metric
-                    label="机器人令牌"
+                    label="机器人凭证"
                     value={config.tokenConfigured ? '已配置' : '未配置'}
                     detail="仅从服务端环境变量读取"
                     tone={config.tokenConfigured ? 'green' : 'rose'}
                 />
                 <Metric
-                    label="后台任务"
+                    label="工作进程"
                     value={runtime.running ? '运行中' : '未检测到'}
                     detail={runtime.processed + ' 成功 · ' + runtime.failures + ' 失败'}
                     tone={runtime.running ? 'green' : 'amber'}
@@ -334,7 +358,7 @@ export function TelegramNotificationsPanel() {
                                 <FeatureHelpButton topic="settings.telegram" title="Telegram 连接与策略" />
                             </h2>
                             <p className="mt-1 text-xs leading-5 text-slate-500">
-                                Token 不入库、不返回前端；所有部门共用同一个内部群，不创建多群或 Topics。
+                                机器人凭证仅由服务器安全配置；所有店铺共用现有接收群。
                             </p>
                         </div>
                     </div>
@@ -368,7 +392,7 @@ export function TelegramNotificationsPanel() {
                         checked={draft.enabled}
                         onChange={enabled => setDraft({ ...draft, enabled })}
                     />
-                    <Field label="群聊编号" hint={'来源：' + sourceLabel(config.chatIdSource)}>
+                    <Field label="接收群编号" hint={'来源：' + sourceLabel(config.chatIdSource)}>
                         <input
                             value={draft.chatId ?? ''}
                             onChange={event => setDraft({ ...draft, chatId: event.target.value || null })}
@@ -402,7 +426,9 @@ export function TelegramNotificationsPanel() {
                             className={inputClass}
                         >
                             {['P0', 'P1', 'P2', 'P3'].map(value => (
-                                <option key={value}>{value}</option>
+                                <option key={value} value={value}>
+                                    {displayState(value)}
+                                </option>
                             ))}
                         </select>
                     </Field>
@@ -413,19 +439,19 @@ export function TelegramNotificationsPanel() {
                         onChange={inventoryLowThreshold => setDraft({ ...draft, inventoryLowThreshold })}
                     />
                     <NumberField
-                        label="P1 超时升级（分钟）"
+                        label="重要告警超时升级（分钟）"
                         value={draft.p1EscalationMinutes}
                         minimum={1}
                         onChange={p1EscalationMinutes => setDraft({ ...draft, p1EscalationMinutes })}
                     />
                     <NumberField
-                        label="P0 重复提醒（分钟）"
+                        label="危急告警重复提醒（分钟）"
                         value={draft.p0RepeatMinutes}
                         minimum={1}
                         onChange={p0RepeatMinutes => setDraft({ ...draft, p0RepeatMinutes })}
                     />
                     <NumberField
-                        label="P1 重复提醒（分钟）"
+                        label="重要告警重复提醒（分钟）"
                         value={draft.p1RepeatMinutes}
                         minimum={1}
                         onChange={p1RepeatMinutes => setDraft({ ...draft, p1RepeatMinutes })}
@@ -459,6 +485,31 @@ export function TelegramNotificationsPanel() {
                         onChange={notifyInventoryEvents => setDraft({ ...draft, notifyInventoryEvents })}
                     />
                     <Toggle
+                        label="每小时全店在线汇报"
+                        checked={draft.notifyOnlineReports}
+                        onChange={notifyOnlineReports => setDraft({ ...draft, notifyOnlineReports })}
+                    />
+                    <Toggle
+                        label="客服评价"
+                        checked={draft.notifyServiceReviews}
+                        onChange={notifyServiceReviews => setDraft({ ...draft, notifyServiceReviews })}
+                    />
+                    <Toggle
+                        label="优惠到期提前三天"
+                        checked={draft.notifyPromotionExpiry}
+                        onChange={notifyPromotionExpiry => setDraft({ ...draft, notifyPromotionExpiry })}
+                    />
+                    <Toggle
+                        label="AI 调用凭证异常"
+                        checked={draft.notifyAiCredentials}
+                        onChange={notifyAiCredentials => setDraft({ ...draft, notifyAiCredentials })}
+                    />
+                    <Toggle
+                        label="账号与系统安全"
+                        checked={draft.notifySecurityEvents}
+                        onChange={notifySecurityEvents => setDraft({ ...draft, notifySecurityEvents })}
+                    />
+                    <Toggle
                         label="发送恢复通知"
                         checked={draft.sendResolved}
                         onChange={sendResolved => setDraft({ ...draft, sendResolved })}
@@ -479,10 +530,10 @@ export function TelegramNotificationsPanel() {
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                         <strong className="text-slate-800">连接状态</strong>
                         <span className={config.tokenConfigured ? badgeGreen : badgeRose}>
-                            机器人令牌 {config.tokenConfigured ? '已配置' : '未配置'}
+                            凭证 {config.tokenConfigured ? '已配置' : '未配置'}
                         </span>
                         <span className={config.chatId ? badgeGreen : badgeRose}>
-                            群聊编号 {config.chatId ? '已配置' : '未配置'}
+                            接收群编号 {config.chatId ? '已配置' : '未配置'}
                         </span>
                         {config.botUsername && <span className={badgeBlue}>@{config.botUsername}</span>}
                         {config.lastConnectionAt && (
@@ -511,6 +562,60 @@ export function TelegramNotificationsPanel() {
                 </div>
             </section>
 
+            <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <h2 className="text-sm font-bold">全店客服服务评价</h2>
+                {reviewQuery.loading && <p role="status">正在读取评价…</p>}
+                {reviewQuery.error && <p role="alert">评价读取失败，请刷新后重试</p>}
+                {!reviewQuery.loading &&
+                    !reviewQuery.error &&
+                    !reviewQuery.data?.customerServiceReviews?.items.length && (
+                        <p className="mt-3 text-sm text-slate-500">暂无服务评价</p>
+                    )}
+                <div className="mt-3 divide-y divide-slate-100">
+                    {reviewQuery.data?.customerServiceReviews?.items.map(review => (
+                        <article key={review.id} className="py-3 text-sm">
+                            <div className="flex flex-wrap gap-3 font-semibold">
+                                <span>店铺编号 {review.channelId}</span>
+                                <span>
+                                    {review.rating} 星{review.rating <= 2 ? ' · 需要处理' : ''}
+                                </span>
+                                <span>{review.orderCode ? `订单 ${review.orderCode}` : '未关联订单'}</span>
+                                <time className="font-normal text-slate-500">
+                                    {formatDateTime(review.createdAt)}
+                                </time>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">{review.tags.join('、')}</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words">
+                                {review.comment || '未填写文字意见'}
+                            </p>
+                        </article>
+                    ))}
+                </div>
+                <div className="mt-3 flex items-center gap-3 text-sm">
+                    <button
+                        className={secondaryButton}
+                        disabled={reviewPage === 0 || reviewQuery.loading}
+                        onClick={() => setReviewPage(page => page - 1)}
+                    >
+                        上一页
+                    </button>
+                    <span>
+                        第 {reviewPage + 1} 页，共 {reviewQuery.data?.customerServiceReviews?.totalItems ?? 0}{' '}
+                        条
+                    </span>
+                    <button
+                        className={secondaryButton}
+                        disabled={
+                            reviewQuery.loading ||
+                            (reviewPage + 1) * 25 >=
+                                (reviewQuery.data?.customerServiceReviews?.totalItems ?? 0)
+                        }
+                        onClick={() => setReviewPage(page => page + 1)}
+                    >
+                        下一页
+                    </button>
+                </div>
+            </section>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="border-b border-slate-100 p-5">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -518,7 +623,7 @@ export function TelegramNotificationsPanel() {
                         <FeatureHelpButton topic="settings.telegram" title="Telegram 配置变更审计" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        保留最近 10 次后台修改；Chat ID 在审计记录中脱敏，Bot Token 始终不入库。
+                        保留最近 10 次后台修改；接收群编号 在审计记录中脱敏，机器人凭证 始终不入库。
                     </p>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -532,7 +637,8 @@ export function TelegramNotificationsPanel() {
                                 操作人 {audit.actorUserId ?? '系统'}
                             </span>
                             <span className="text-slate-600">
-                                修改字段：{Object.keys(audit.changes).join('、') || '无'}
+                                修改字段：
+                                {Object.keys(audit.changes).map(configFieldLabel).join('、') || '无'}
                             </span>
                         </div>
                     ))}
@@ -547,13 +653,13 @@ export function TelegramNotificationsPanel() {
                         <FeatureHelpButton topic="settings.telegram" title="部门责任路由" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        P0 固定立即升级 EXEC；P1 按配置时限升级。提及对象只用于
-                        P0/P1。修改后需点击上方“保存配置”。
+                        危急告警立即升级至总经办；重要告警按配置时限升级。提及对象只用于
+                        危急和重要告警。修改后需点击上方“保存配置”。
                     </p>
                 </div>
                 <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                     {routing.departments.map(department => (
-                        <Field key={department.nameZh} label={department.nameZh}>
+                        <Field key={department.code} label={department.nameZh}>
                             <input
                                 value={draft.departmentMentions[department.code] ?? ''}
                                 onChange={event =>
@@ -606,16 +712,13 @@ export function TelegramNotificationsPanel() {
                                 const actionRequired =
                                     override?.actionRequired ?? route.defaultActionRequired;
                                 return (
-                                    <tr
-                                        key={eventTypeDisplayLabel(route.eventType)}
-                                        className="hover:bg-slate-50"
-                                    >
+                                    <tr key={eventLabel(route.eventType)} className="hover:bg-slate-50">
                                         <td className="px-4 py-3 font-mono text-[10px] text-slate-700">
-                                            {eventTypeDisplayLabel(route.eventType)}
+                                            {eventLabel(route.eventType)}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={severityBadge(route.severity)}>
-                                                {severityDisplayLabel(route.severity)}
+                                                {displayState(route.severity)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
@@ -632,7 +735,7 @@ export function TelegramNotificationsPanel() {
                                                 className={compactInputClass}
                                             >
                                                 {routing.departments.map(department => (
-                                                    <option key={department.nameZh} value={department.nameZh}>
+                                                    <option key={department.code} value={department.code}>
                                                         {department.nameZh}
                                                     </option>
                                                 ))}
@@ -658,10 +761,7 @@ export function TelegramNotificationsPanel() {
                                                 {routing.departments
                                                     .filter(department => department.code !== owner)
                                                     .map(department => (
-                                                        <option
-                                                            key={department.nameZh}
-                                                            value={department.nameZh}
-                                                        >
+                                                        <option key={department.code} value={department.code}>
                                                             {department.nameZh}
                                                         </option>
                                                     ))}
@@ -683,7 +783,7 @@ export function TelegramNotificationsPanel() {
                                             >
                                                 <option value="">不升级</option>
                                                 {routing.departments.map(department => (
-                                                    <option key={department.nameZh} value={department.nameZh}>
+                                                    <option key={department.code} value={department.code}>
                                                         {department.nameZh}
                                                     </option>
                                                 ))}
@@ -902,7 +1002,9 @@ export function TelegramNotificationsPanel() {
                     >
                         <option value="">全部状态</option>
                         {['PENDING', 'CLAIMED', 'RETRY', 'SENT', 'DEAD', 'SKIPPED'].map(value => (
-                            <option key={value}>{value}</option>
+                            <option key={value} value={value}>
+                                {displayState(value)}
+                            </option>
                         ))}
                     </select>
                 </div>
@@ -934,20 +1036,22 @@ export function TelegramNotificationsPanel() {
                                             {delivery.title}
                                         </strong>
                                         <code className="mt-1 block truncate text-[9px] text-slate-400">
-                                            {eventTypeDisplayLabel(delivery.eventType)}
+                                            {eventLabel(delivery.eventType)}
                                         </code>
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={severityBadge(delivery.severity)}>
-                                            {severityDisplayLabel(delivery.severity)}
+                                            {displayState(delivery.severity)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 font-bold text-slate-700">
-                                        {departmentDisplayLabel(delivery.ownerDepartmentCode)}
+                                        {routing.departments.find(
+                                            department => department.code === delivery.ownerDepartmentCode,
+                                        )?.nameZh ?? '运营调度中心'}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={statusBadge(delivery.deliveryStatus)}>
-                                            {systemStatusDisplayLabel(delivery.deliveryStatus)}
+                                            {displayState(delivery.deliveryStatus)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">
@@ -956,9 +1060,9 @@ export function TelegramNotificationsPanel() {
                                     <td className="max-w-72 px-4 py-3 text-[10px] text-rose-700">
                                         <span
                                             className="block truncate"
-                                            title={serviceMessageDisplay(delivery.lastError, 'zh') ?? ''}
+                                            title={chineseError(delivery.lastError)}
                                         >
-                                            {serviceMessageDisplay(delivery.lastError, 'zh') ?? '—'}
+                                            {chineseError(delivery.lastError)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-right">
@@ -1159,6 +1263,11 @@ function draftFromConfig(config: TelegramNotificationConfigRecord): Draft {
         notifyFulfillmentEvents: config.notifyFulfillmentEvents,
         notifyRefundEvents: config.notifyRefundEvents,
         notifyInventoryEvents: config.notifyInventoryEvents,
+        notifyOnlineReports: config.notifyOnlineReports ?? true,
+        notifyServiceReviews: config.notifyServiceReviews ?? true,
+        notifyPromotionExpiry: config.notifyPromotionExpiry ?? true,
+        notifyAiCredentials: config.notifyAiCredentials ?? true,
+        notifySecurityEvents: config.notifySecurityEvents ?? true,
         inventoryLowThreshold: config.inventoryLowThreshold,
         p1EscalationMinutes: config.p1EscalationMinutes,
         p0RepeatMinutes: config.p0RepeatMinutes,
@@ -1371,3 +1480,105 @@ const badgeGreen = 'rounded bg-emerald-100 px-2 py-1 text-[9px] font-bold text-e
 const badgeRose = 'rounded bg-rose-100 px-2 py-1 text-[9px] font-bold text-rose-700';
 const badgeBlue = 'rounded bg-blue-100 px-2 py-1 text-[9px] font-bold text-blue-700';
 const badgeAmber = 'rounded bg-amber-100 px-2 py-1 text-[9px] font-bold text-amber-700';
+
+function displayState(value: string) {
+    return (
+        (
+            {
+                P0: '危急',
+                P1: '重要',
+                P2: '提醒',
+                P3: '信息',
+                PENDING: '等待发送',
+                CLAIMED: '正在发送',
+                RETRY: '等待重试',
+                SENT: '已发送',
+                DEAD: '发送失败待处理',
+                SKIPPED: '已跳过',
+            } as Record<string, string>
+        )[value] ?? '其他状态'
+    );
+}
+function chineseError(value: string | null) {
+    return !value ? '—' : /\p{Script=Han}/u.test(value) ? value : '发送异常，请检查连接与发送记录';
+}
+
+function eventLabel(value: string): string {
+    const labels: Record<string, string> = {
+        'commerce.order.placed': '新订单',
+        'commerce.payment.authorized': '支付已授权',
+        'commerce.payment.settled': '支付成功',
+        'commerce.payment.failed': '支付失败',
+        'commerce.payment.declined': '支付被拒绝',
+        'commerce.payment.proof_mismatch': '支付凭证不匹配',
+        'commerce.payment.amount_mismatch': '支付金额异常',
+        'commerce.payment.manual_review': '支付需人工审核',
+        'commerce.payment.cancelled': '支付取消',
+        'commerce.fulfillment.created': '开始订单交付',
+        'commerce.fulfillment.shipped': '订单已发货',
+        'commerce.fulfillment.delivered': '订单已送达',
+        'commerce.fulfillment.cancelled': '交付取消',
+        'commerce.fulfillment.auto_card_failed': '自动发卡失败',
+        'commerce.fulfillment.manual_delivery_failed': '人工交付失败',
+        'commerce.fulfillment.manual_delivery_overdue': '人工交付超时',
+        'commerce.refund.pending': '退款待处理',
+        'commerce.refund.settled': '退款成功',
+        'commerce.refund.failed': '退款失败',
+        'inventory.variant.low': '缺货与低库存',
+        'inventory.variant.recovered': '库存恢复',
+        'inventory.auto_card.empty': '自动发卡缺货',
+        'system.notification.queue_lag': '重要通知积压',
+        'system.notification.dead_letter': '通知发送失败待处理',
+        'system.notification.test': '中文通知自检',
+        'platform.online.hourly': '每小时在线汇报',
+        'commerce.service_review.submitted': '客服评价',
+        'commerce.service_review.negative': '客服低分评价',
+        'commerce.promotion.expiring': '优惠活动到期提醒',
+        'ai.access.unavailable': '人工智能调用凭证异常',
+        'ai.service.unavailable': '人工智能服务无可用通道',
+        'security.login.failures': '后台异常登录尝试',
+        'security.admin.changed': '管理员与权限变更',
+        'security.factor.changed': '后台二次验证变更',
+        'security.api_key.changed': '后台接口凭证变更',
+        'system.database.down': '数据库连接中断',
+        'system.database.recovered': '数据库连接恢复',
+        'system.monitor.unavailable': '部分巡检不可用',
+        'system.store.unavailable': '店铺接口持续不可用',
+        'system.certificate.invalid': '网站证书失效',
+        'system.certificate.expiring': '网站证书到期提醒',
+    };
+    return labels[value] ?? '其他系统事件';
+}
+
+function configFieldLabel(value: string) {
+    return (
+        (
+            {
+                enabled: '通知总开关',
+                chatId: '接收群编号',
+                adminBaseUrl: '后台入口',
+                timezone: '通知时区',
+                minSeverity: '最低通知等级',
+                sendResolved: '恢复通知',
+                p2Silent: '提醒静默推送',
+                p3Silent: '信息静默推送',
+                notifyOrderEvents: '订单通知',
+                notifyPaymentEvents: '支付通知',
+                notifyFulfillmentEvents: '交付通知',
+                notifyRefundEvents: '退款通知',
+                notifyInventoryEvents: '库存通知',
+                notifyOnlineReports: '在线汇报',
+                notifyServiceReviews: '客服评价',
+                notifyPromotionExpiry: '活动到期',
+                notifyAiCredentials: '人工智能凭证告警',
+                notifySecurityEvents: '安全告警',
+                inventoryLowThreshold: '库存阈值',
+                p0RepeatMinutes: '危急重复间隔',
+                p1RepeatMinutes: '重要重复间隔',
+                p1EscalationMinutes: '重要升级时限',
+                departmentMentions: '部门提及对象',
+                routeOverrides: '部门责任路由',
+            } as Record<string, string>
+        )[value] ?? '通知策略'
+    );
+}

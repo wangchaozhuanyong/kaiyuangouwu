@@ -17,6 +17,7 @@ import {
     TransactionalConnection,
     VendurePlugin,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentChangedEvent, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
@@ -70,6 +71,7 @@ import { CustomerFollowUp } from './entities/customer-follow-up.entity';
 import { CustomerOperationsProfile } from './entities/customer-operations-profile.entity';
 import { CustomerProductActivity } from './entities/customer-product-activity.entity';
 import { CustomerServiceFeedback } from './entities/customer-service-feedback.entity';
+import { CustomerServiceReview } from './entities/customer-service-review.entity';
 import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
@@ -102,6 +104,7 @@ import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
 import { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity';
 import { StorefrontPageView } from './entities/storefront-page-view.entity';
+import { StorefrontPresence, StorefrontPresenceStatus } from './entities/storefront-presence.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
@@ -119,6 +122,18 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import { CustomerServiceReviewService } from './notifications/customer-service-review.service';
+import { PlatformStoreNotificationService } from './notifications/platform-store-notification.service';
+import { StoreAvailabilityService } from './notifications/store-availability.service';
+import {
+    StoreNotificationAdminResolver,
+    StoreNotificationShopResolver,
+} from './notifications/store-notification.resolver';
+import {
+    reconcileStoreAvailabilityTask,
+    reconcileStoreNotificationsTask,
+} from './notifications/store-notification.tasks';
+import { StorefrontPresenceService } from './notifications/storefront-presence.service';
 import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { PermissionPolicyRegistry } from './permission-policy';
@@ -225,10 +240,19 @@ import {
 } from './usdt/usdt-wallet-configuration.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, StorefrontContentPlugin],
+    imports: [
+        OperationsDashboardPlugin,
+        PluginCommonModule,
+        ContentTranslationPlugin,
+        StorefrontCartPlugin,
+        StorefrontContentPlugin,
+    ],
     entities: [
         AdministratorAccessProfile,
         AdministratorPermissionAudit,
+        StorefrontPresence,
+        StorefrontPresenceStatus,
+        CustomerServiceReview,
         StoreAdministratorAccess,
         StoreGovernanceChangeRequest,
         StoreProfile,
@@ -284,6 +308,10 @@ import {
         AdministratorPermissionAuditService,
         PermissionPolicyRegistry,
         StoreGovernanceService,
+        StoreAvailabilityService,
+        StorefrontPresenceService,
+        CustomerServiceReviewService,
+        PlatformStoreNotificationService,
         SystemWorkerHealthService,
         CartCouponCommandAdapter,
         MerchantCatalogAccessService,
@@ -359,6 +387,8 @@ import {
     ],
     exports: [ReferralWalletSpendService, FraudRiskService, ReferralService],
     configuration: config => {
+        if (!config.plugins.includes(OperationsDashboardPlugin))
+            config.plugins.push(OperationsDashboardPlugin);
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
             config.customFields.Order.push({
@@ -441,6 +471,7 @@ import {
         if (!config.orderOptions.process.includes(fraudRiskOrderProcess)) {
             config.orderOptions.process.push(fraudRiskOrderProcess);
         }
+        config.schedulerOptions.tasks.push(reconcileStoreAvailabilityTask, reconcileStoreNotificationsTask);
         config.schedulerOptions.tasks.push(reconcileStoreCouponsTask);
         config.schedulerOptions.tasks.push(reconcileReferralRewardsTask);
         config.schedulerOptions.tasks.push(auditReferralBalancesTask);
@@ -461,6 +492,7 @@ import {
         resolvers: [
             AdministratorAccessResolver,
             StoreGovernanceResolver,
+            StoreNotificationAdminResolver,
             StorefrontBrandingAdminResolver,
             MerchantInitialPasswordResolver,
             StoreProvisioningResolver,
@@ -487,6 +519,7 @@ import {
     shopApiExtensions: {
         schema: shopApiExtensions,
         resolvers: [
+            StoreNotificationShopResolver,
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,

@@ -1334,3 +1334,12 @@ export interface StoreCouponPage<T> {
     items: T[];
     totalItems: number;
 }
+
+export interface CustomerServiceReviewRecord {
+    id: string;
+    rating: number;
+    tags: string[];
+    comment: string;
+    orderCode: string | null;
+    revision: number;
+}

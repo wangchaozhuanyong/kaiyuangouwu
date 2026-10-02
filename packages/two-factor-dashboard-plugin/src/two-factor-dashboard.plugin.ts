@@ -1,5 +1,6 @@
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 
 import { adminApiExtensions } from './api-extensions';
 import { DashboardTwoFactorAccount } from './entities/dashboard-two-factor-account.entity';
@@ -18,7 +19,7 @@ import { TwoFactorAccountService } from './two-factor-account.service';
 import { TwoFactorCipherService } from './two-factor-cipher.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, OperationsDashboardPlugin],
     entities: [
         DashboardTwoFactorAccount,
         AdminTwoFactorCredential,
@@ -33,6 +34,8 @@ import { TwoFactorCipherService } from './two-factor-cipher.service';
         { provide: APP_INTERCEPTOR, useClass: AdminTwoFactorInterceptor },
     ],
     configuration: config => {
+        if (!config.plugins.includes(OperationsDashboardPlugin))
+            config.plugins.push(OperationsDashboardPlugin);
         config.authOptions.adminAuthenticationStrategy = (
             config.authOptions.adminAuthenticationStrategy ?? []
         )

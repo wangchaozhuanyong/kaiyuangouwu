@@ -46,6 +46,11 @@ const result: TelegramNotificationsResult = {
         notifyFulfillmentEvents: true,
         notifyRefundEvents: true,
         notifyInventoryEvents: true,
+        notifyOnlineReports: true,
+        notifyServiceReviews: true,
+        notifyPromotionExpiry: true,
+        notifyAiCredentials: true,
+        notifySecurityEvents: true,
         inventoryLowThreshold: 2,
         p1EscalationMinutes: 60,
         p0RepeatMinutes: 30,
@@ -178,13 +183,13 @@ describe('TelegramNotificationsPanel', () => {
 
         expect(html).toContain('Telegram 连接与策略');
         expect(html).toContain('12 成功 · 1 失败');
-        expect(html).toContain('数据库连接失败');
+        expect(html).toContain('数据库连接中断');
         expect(html).toContain('GOVERNANCE 部门');
         expect(html).not.toContain('>GOVERNANCE<');
         expect(html).toContain('配置变更审计');
         expect(html).toContain('事故响应与闭环');
         expect(html).toContain('确认接手');
-        expect(html).toContain('修改字段：enabled');
+        expect(html).toContain('修改字段：通知总开关');
         expect(html).toContain('重试');
     });
 

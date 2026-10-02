@@ -13,7 +13,10 @@ import { AdminNotificationConfigAudit } from './entities/admin-notification-conf
 import { AdminNotificationConfig } from './entities/admin-notification-config.entity';
 import { AdminNotificationDelivery } from './entities/admin-notification-delivery.entity';
 import { AdminNotificationRuntime } from './entities/admin-notification-runtime.entity';
+import { AdminNotificationSignal } from './entities/admin-notification-signal.entity';
 import { IncidentResponseService } from './incident-response.service';
+import { NotificationSignalService } from './notification-signal.service';
+import { SecurityNotificationService } from './security-notification.service';
 import { SystemDependencyWatchdog } from './system-dependency-watchdog.service';
 import { TelegramClient } from './telegram-client';
 import { TelegramNotificationWorkerService } from './telegram-notification-worker.service';
@@ -21,6 +24,7 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
 @VendurePlugin({
     imports: [PluginCommonModule],
     entities: [
+        AdminNotificationSignal,
         AdminNotificationConfig,
         AdminNotificationConfigAudit,
         AdminNotificationDelivery,
@@ -28,8 +32,16 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
         AdminIncidentEvidence,
         AdminIncidentAction,
     ],
+    exports: [
+        AdminNotificationService,
+        AdminNotificationConfigService,
+        NotificationSignalService,
+        SecurityNotificationService,
+    ],
     controllers: [AdminNotificationHealthController],
     providers: [
+        SecurityNotificationService,
+        NotificationSignalService,
         TelegramClient,
         AdminNotificationConfigService,
         TelegramNotificationWorkerService,

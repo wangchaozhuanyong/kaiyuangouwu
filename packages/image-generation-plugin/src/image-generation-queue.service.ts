@@ -673,10 +673,16 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 retries: 2,
             });
             const failureMessage = classified.publicMessage;
+            if (selectedCredential && failureDetails.accessFailure) {
+                await this.configService
+                    .notifyImageAccessResult(ctx, selectedCredential, failureDetails, false)
+                    .catch(() => undefined);
+            }
             if (selectedCredential && providerStage !== 'CLAIMED' && affectsCredentialHealth) {
                 await this.configService
                     .recordCredentialRuntimeFailure(ctx, selectedCredential, {
                         httpStatus: failureDetails.httpStatus,
+                        accessFailure: failureDetails.accessFailure,
                         retryAfterSeconds: failureDetails.retryAfterSeconds,
                         message: classified.rawMessage,
                     })

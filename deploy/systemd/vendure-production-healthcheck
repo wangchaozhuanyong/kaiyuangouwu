@@ -136,6 +136,11 @@ if [[ ! "${maximum_disk_usage_percent}" =~ ^([1-9][0-9]?|100)$ ||
     failures+=("root-disk-high")
 fi
 
+# Uses the existing bot and global database group; no secrets are printed.
+VENDURE_NOTIFICATION_STATE_FILE="${VENDURE_NOTIFICATION_STATE_FILE:-/var/lib/vendure-notifications/host-state.json}" \
+    node "${vendure_repo_dir}/deploy/monitor-notifications.mjs" --host "${failures[@]}" || \
+    printf '中文安全监测通知执行失败，业务健康结果仍独立保留\n' >&2
+
 if ((${#failures[@]} > 0)); then
     printf 'CRITICAL vendure production health check failed: %s\n' "${failures[*]}" >&2
     exit 1

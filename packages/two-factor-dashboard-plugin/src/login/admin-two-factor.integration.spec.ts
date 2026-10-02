@@ -10,6 +10,7 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import {
     createTestEnvironment,
     MysqlInitializer,
@@ -18,9 +19,8 @@ import {
     testConfig,
 } from '@vendure/testing';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import 'reflect-metadata';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -86,7 +86,9 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
     }
 
     beforeAll(async () => {
-        directory = await mkdtemp(path.join(tmpdir(), 'vendure-admin-2fa-test-'));
+        const testRoot = path.resolve(__dirname, '../../../../.tmp');
+        await mkdir(testRoot, { recursive: true });
+        directory = await mkdtemp(path.join(testRoot, 'vendure-admin-2fa-test-'));
         process.env.ADMIN_TWO_FACTOR_ENCRYPTION_KEY = randomBytes(32).toString('hex');
         password = randomBytes(20).toString('hex');
         const listener = createServer();
@@ -119,7 +121,7 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
                     superadminCredentials: { identifier: username, password },
                     tokenMethod: ['bearer', 'api-key'],
                 },
-                plugins: [TwoFactorDashboardPlugin],
+                plugins: [OperationsDashboardPlugin, TwoFactorDashboardPlugin],
             }),
         );
         await environment.server.init({ initialData, customerCount: 0 });

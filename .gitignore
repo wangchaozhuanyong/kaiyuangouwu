@@ -423,3 +423,5 @@ backups/
 playwright-report/
 test-results/
 reports/
+
+.notification-monitor-state/
