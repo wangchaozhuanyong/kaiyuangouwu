@@ -976,15 +976,9 @@ export function HomePage() {
                             style={groupedIntro ? { order: Math.min(...introOrders) } : undefined}
                         >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
-                                <section
-                                    className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
-                                    style={{
-                                        order: homepageModuleOrder('HERO'),
-                                        aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
-                                    }}
-                                    role="region"
-                                    aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
-                                    aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                <div
+                                    className="hero-carousel"
+                                    style={{ order: homepageModuleOrder('HERO') }}
                                     onMouseEnter={() => setHeroInteractionPaused(true)}
                                     onMouseLeave={() => setHeroInteractionPaused(false)}
                                     onFocus={() => setHeroInteractionPaused(true)}
@@ -993,125 +987,149 @@ export function HomePage() {
                                             setHeroInteractionPaused(false);
                                         }
                                     }}
-                                    onPointerDown={beginHeroSwipe}
-                                    onPointerMove={moveHeroSwipe}
-                                    onPointerUp={event => finishHeroSwipe(event)}
-                                    onPointerCancel={event => finishHeroSwipe(event, true)}
-                                    onDragStart={event => event.preventDefault()}
-                                    onKeyDown={event => {
-                                        if (
-                                            !desktop ||
-                                            heroCount < 2 ||
-                                            !['ArrowLeft', 'ArrowRight'].includes(event.key)
-                                        )
-                                            return;
-                                        event.preventDefault();
-                                        selectHeroManually(
-                                            heroIndexAfterManualMove(
-                                                heroIndex,
-                                                heroCount,
-                                                event.key === 'ArrowLeft' ? -1 : 1,
-                                            ),
-                                        );
-                                    }}
                                 >
-                                    {managedHero && (
-                                        <HeroScene
-                                            content={managedHero}
-                                            imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
-                                            onImageOpen={handleHeroImageOpen}
-                                            onOpen={openActiveHero}
-                                            image={
-                                                <SafeImage
-                                                    src={heroImage}
-                                                    alt={
-                                                        managedHero.title ||
-                                                        (isZh
-                                                            ? `${storefrontName}精选`
-                                                            : `${storefrontName} Featured`)
-                                                    }
-                                                    className="hero-rich-backdrop"
-                                                    imageKind="hero"
-                                                    width={heroImageWidth || undefined}
-                                                    height={heroImageHeight || undefined}
-                                                    loading="eager"
-                                                    fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
-                                                    onImageReady={() => setReadyHeroImage(heroImage)}
-                                                />
-                                            }
-                                        />
-                                    )}
-                                    {overlayTrustBar && (
-                                        <div className="hero-service-overlay">{trustBar}</div>
-                                    )}
-                                    {desktop && heroCount > 1 && (
-                                        <div
-                                            className="desktop-hero-navigation"
-                                            role="group"
-                                            aria-label={isZh ? '轮播切换' : 'Carousel navigation'}
-                                        >
-                                            <button
-                                                type="button"
-                                                className="desktop-hero-arrow is-previous"
-                                                aria-label={isZh ? '上一张轮播图' : 'Previous slide'}
-                                                onClick={() =>
-                                                    selectHeroManually(
-                                                        heroIndexAfterManualMove(heroIndex, heroCount, -1),
-                                                    )
-                                                }
-                                            >
-                                                <ChevronLeft aria-hidden="true" />
-                                            </button>
-                                            <span className="desktop-hero-count" aria-hidden="true">
-                                                <strong>{String(heroIndex + 1).padStart(2, '0')}</strong>
-                                                <span>/ {String(heroCount).padStart(2, '0')}</span>
-                                            </span>
-                                            <button
-                                                type="button"
-                                                className="desktop-hero-arrow is-next"
-                                                aria-label={isZh ? '下一张轮播图' : 'Next slide'}
-                                                onClick={() =>
-                                                    selectHeroManually(
-                                                        heroIndexAfterManualMove(heroIndex, heroCount, 1),
-                                                    )
-                                                }
-                                            >
-                                                <ChevronRight aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {heroCount > 1 && (
-                                        <div
-                                            className="hero-pagination"
-                                            aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
-                                        >
-                                            {managedHeroes.map((item, index) => (
-                                                <button
-                                                    type="button"
-                                                    key={item.id}
-                                                    className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
-                                                    aria-label={
-                                                        isZh
-                                                            ? `第${index + 1}张广告`
-                                                            : `Promotion ${index + 1}`
-                                                    }
-                                                    aria-current={index === heroIndex}
-                                                    onClick={() => selectHeroManually(index)}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                    <span
-                                        className="visually-hidden"
-                                        aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                    <section
+                                        className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
+                                        style={{
+                                            aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
+                                        }}
+                                        role="region"
+                                        aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                                        aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                        onPointerDown={beginHeroSwipe}
+                                        onPointerMove={moveHeroSwipe}
+                                        onPointerUp={event => finishHeroSwipe(event)}
+                                        onPointerCancel={event => finishHeroSwipe(event, true)}
+                                        onDragStart={event => event.preventDefault()}
+                                        onKeyDown={event => {
+                                            if (
+                                                !desktop ||
+                                                heroCount < 2 ||
+                                                !['ArrowLeft', 'ArrowRight'].includes(event.key)
+                                            )
+                                                return;
+                                            event.preventDefault();
+                                            selectHeroManually(
+                                                heroIndexAfterManualMove(
+                                                    heroIndex,
+                                                    heroCount,
+                                                    event.key === 'ArrowLeft' ? -1 : 1,
+                                                ),
+                                            );
+                                        }}
                                     >
-                                        {heroAutoplayStopped
-                                            ? isZh
-                                                ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
-                                                : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
-                                            : ''}
-                                    </span>
-                                </section>
+                                        {managedHero && (
+                                            <HeroScene
+                                                content={managedHero}
+                                                imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
+                                                onImageOpen={handleHeroImageOpen}
+                                                onOpen={openActiveHero}
+                                                image={
+                                                    <SafeImage
+                                                        src={heroImage}
+                                                        alt={
+                                                            managedHero.title ||
+                                                            (isZh
+                                                                ? `${storefrontName}精选`
+                                                                : `${storefrontName} Featured`)
+                                                        }
+                                                        className="hero-rich-backdrop"
+                                                        imageKind="hero"
+                                                        width={heroImageWidth || undefined}
+                                                        height={heroImageHeight || undefined}
+                                                        loading="eager"
+                                                        fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
+                                                        onImageReady={() => setReadyHeroImage(heroImage)}
+                                                    />
+                                                }
+                                            />
+                                        )}
+                                        {overlayTrustBar && (
+                                            <div className="hero-service-overlay">{trustBar}</div>
+                                        )}
+                                        <span
+                                            className="visually-hidden"
+                                            aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                        >
+                                            {heroAutoplayStopped
+                                                ? isZh
+                                                    ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
+                                                    : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
+                                                : ''}
+                                        </span>
+                                    </section>
+                                    {heroCount > 1 && (
+                                        <div className="hero-carousel-controls">
+                                            {desktop && heroCount > 1 && (
+                                                <div
+                                                    className="desktop-hero-navigation"
+                                                    role="group"
+                                                    aria-label={isZh ? '轮播切换' : 'Carousel navigation'}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="desktop-hero-arrow is-previous"
+                                                        aria-label={isZh ? '上一张轮播图' : 'Previous slide'}
+                                                        onClick={() =>
+                                                            selectHeroManually(
+                                                                heroIndexAfterManualMove(
+                                                                    heroIndex,
+                                                                    heroCount,
+                                                                    -1,
+                                                                ),
+                                                            )
+                                                        }
+                                                    >
+                                                        <ChevronLeft aria-hidden="true" />
+                                                    </button>
+                                                    <span className="desktop-hero-count" aria-hidden="true">
+                                                        <strong>
+                                                            {String(heroIndex + 1).padStart(2, '0')}
+                                                        </strong>
+                                                        <span>/ {String(heroCount).padStart(2, '0')}</span>
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="desktop-hero-arrow is-next"
+                                                        aria-label={isZh ? '下一张轮播图' : 'Next slide'}
+                                                        onClick={() =>
+                                                            selectHeroManually(
+                                                                heroIndexAfterManualMove(
+                                                                    heroIndex,
+                                                                    heroCount,
+                                                                    1,
+                                                                ),
+                                                            )
+                                                        }
+                                                    >
+                                                        <ChevronRight aria-hidden="true" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {heroCount > 1 && (
+                                                <div
+                                                    className="hero-pagination"
+                                                    aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
+                                                >
+                                                    {managedHeroes.map((item, index) => (
+                                                        <button
+                                                            type="button"
+                                                            key={item.id}
+                                                            className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
+                                                            aria-label={
+                                                                isZh
+                                                                    ? `第${index + 1}张广告`
+                                                                    : `Promotion ${index + 1}`
+                                                            }
+                                                            aria-current={index === heroIndex}
+                                                            onClick={() => selectHeroManually(index)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             )}
 
                             {!overlayTrustBar && trustBar}

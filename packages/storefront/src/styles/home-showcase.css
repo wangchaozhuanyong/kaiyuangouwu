@@ -3,11 +3,22 @@
 @import '../../../storefront-content-plugin/src/shared/hero-scene.css';
 @import './hero-mobile-overlay.css';
 
+.hero-carousel {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.hero-carousel-controls {
+    position: relative;
+    flex: none;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 .hero-pagination {
-    position: absolute;
+    position: static;
     z-index: 3;
-    right: 12px;
-    bottom: 8px;
     display: flex;
     align-items: center;
     gap: 0;
@@ -20,8 +31,8 @@
 }
 
 .hero-pagination button {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -144,22 +155,30 @@
 .home-page .hero .hero-service-overlay {
     position: relative;
     z-index: 2;
-    align-self: flex-start;
-    max-width: calc(100% - clamp(56px, 6vw, 88px));
-    margin: 0 clamp(28px, 3vw, 44px) 20px;
-}
-.home-page .hero:has(.desktop-hero-navigation) .hero-service-overlay {
-    max-width: calc(100% - clamp(28px, 3vw, 44px) - 178px);
+    align-self: center;
+    max-width: calc(100% - 40px);
+    margin: 0 auto 12px;
 }
 .home-page .hero .hero-service-overlay .home-trust-bar {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 8px 18px;
     margin: 0;
     padding: 10px 14px;
     border-radius: var(--skin-control-radius);
     background: color-mix(in srgb, var(--surface) 94%, transparent);
     box-shadow: none;
+}
+.home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 359px) {
+    .home-page .hero .hero-service-overlay .home-trust-bar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 .home-page .hero .hero-service-overlay .home-trust-item {
     justify-content: flex-start;
@@ -192,11 +211,7 @@
 
     .home-page .hero .hero-service-overlay {
         max-width: calc(100% - 40px);
-        margin: 0 20px 12px;
-    }
-
-    .home-page .hero:has(.hero-pagination) .hero-service-overlay {
-        margin-bottom: 44px;
+        margin: 0 auto 12px;
     }
 
     .home-page .hero .hero-service-overlay .home-trust-bar {

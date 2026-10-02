@@ -41,13 +41,18 @@
     .desktop-store-layout .homepage-modules .home-intro-grid:not(:has(.hero)) .quick-grid {
         grid-column: 1 / -1;
     }
-    .desktop-store-layout .home-intro-grid .hero {
+    .desktop-store-layout .home-intro-grid .hero-carousel {
         grid-column: 1;
         grid-row: 1;
         min-width: 0;
+        height: 100%;
+    }
+    .desktop-store-layout .home-intro-grid .hero {
+        min-width: 0;
         width: 100%;
         min-height: 320px;
-        height: 100%;
+        height: auto;
+        flex: 1;
         align-self: stretch;
         border: 0;
         border-radius: var(--skin-hero-radius);
@@ -274,22 +279,23 @@
     .desktop-hero-navigation {
         position: absolute;
         z-index: 3;
-        right: 20px;
-        bottom: 16px;
+        right: 0;
+        top: 0;
+        bottom: auto;
         display: flex;
         align-items: center;
         gap: 2px;
-        padding: 4px;
-        border: 1px solid var(--hero-pagination-color);
+        padding: 0;
+        border: 0;
         border-radius: var(--skin-control-radius);
         background: transparent;
-        color: var(--hero-pagination-active-color);
+        color: var(--text);
         box-shadow: none;
-        text-shadow: var(--hero-image-text-shadow, var(--hero-title-shadow));
+        text-shadow: none;
     }
     .desktop-hero-arrow {
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
         display: grid;
         place-items: center;
         padding: 0;
@@ -303,7 +309,7 @@
             transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .desktop-hero-arrow:hover {
-        background: color-mix(in srgb, var(--hero-copy-foreground) 9%, transparent);
+        background: var(--control-surface);
         transform: translateY(-1px);
     }
     .desktop-hero-arrow:focus-visible {
@@ -328,8 +334,13 @@
         font-size: 14px;
         font-weight: 600;
     }
+    .desktop-store-layout .hero-carousel-controls {
+        padding-inline: 148px;
+    }
     .desktop-store-layout .hero-pagination {
-        display: none;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: center;
     }
 
     /* Desktop merchandising floors share the page frame and readable content density. */
