@@ -1337,16 +1337,9 @@
     .desktop-store-layout .address-form .field-wide:has(input:is([name='fullName'], [name='phoneNumber'])) {
         grid-column: auto;
     }
-    .desktop-store-layout .security-page-body {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        align-items: start;
-        gap: 16px;
-        padding: 0;
-    }
     .desktop-store-layout .security-group {
         margin: 0;
-        padding: 20px;
+        padding: var(--space-card);
         background: var(--surface, var(--paper));
         border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
@@ -1986,18 +1979,8 @@
     .desktop-store-layout .desktop-announcements-content > section:only-child {
         grid-column: 1 / -1;
     }
-    .desktop-store-layout .support-center-content {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 24px;
-        padding: 0;
-        align-items: start;
-    }
     .desktop-store-layout .support-workspace {
-        display: grid;
         grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-        gap: 24px;
-        align-items: start;
     }
     .desktop-store-layout .support-desktop-hero {
         grid-column: 1 / -1;
@@ -2006,7 +1989,7 @@
         justify-content: space-between;
         gap: 24px;
         min-height: 164px;
-        padding: 24px 28px;
+        padding: var(--space-card);
         border-radius: var(--skin-hero-radius);
         background: var(--account-hero-bg, linear-gradient(120deg, #203446, #142630));
         color: #fffdf8;
@@ -2047,11 +2030,6 @@
     }
     .desktop-store-layout .support-page-intro {
         display: none;
-    }
-    .desktop-store-layout .support-page-intro {
-        grid-column: 1 / -1;
-        margin: 0;
-        font-size: 15px;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;

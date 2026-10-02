@@ -1,7 +1,9 @@
 /* One responsive owner for the notification toolbar and list in every skin. */
 .notification-workbench {
     min-width: 0;
-    margin: 12px 16px 24px;
+    display: grid;
+    gap: var(--space-title-content);
+    margin: 0;
 }
 .notification-toolbar {
     display: flex;
@@ -66,7 +68,7 @@
     outline-offset: 3px;
 }
 .notification-read-error {
-    margin: 12px 0;
+    margin: 0;
     color: var(--danger);
     font-size: 13px;
 }
@@ -81,7 +83,7 @@
 .notification-list {
     display: grid;
     gap: 0;
-    margin: 12px 0 0;
+    margin: 0;
     padding: 0;
     background: var(--surface);
     border: var(--skin-card-outline, 0);
@@ -342,7 +344,7 @@
 @media (min-width: 1024px) {
     .notification-workbench {
         margin: 0;
-        padding: 24px;
+        padding: var(--space-card);
         border-radius: var(--skin-card-radius);
         background: var(--surface);
         box-shadow: var(--skin-card-shadow);
@@ -363,7 +365,6 @@
     }
     .notification-list {
         gap: 0;
-        margin-top: 20px;
     }
     .notification-list > button {
         min-height: 88px;

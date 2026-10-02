@@ -323,9 +323,6 @@
 
 .support-center-content {
     width: 100%;
-    padding: 16px 14px var(--subpage-end-gap);
-    display: grid;
-    gap: 14px;
 }
 
 .support-desktop-hero {
@@ -344,20 +341,12 @@
 .support-contact-panel {
     min-width: 0;
     display: grid;
-    gap: 16px;
-    padding: 20px;
+    gap: var(--space-section);
+    padding: var(--space-card);
     background: var(--surface);
     border-radius: var(--skin-card-radius);
     box-shadow: var(--skin-card-shadow);
     border: var(--skin-card-outline, 0);
-}
-
-.support-contact-panel > h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: 18px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.4;
 }
 
 .support-hours-card {
@@ -525,12 +514,6 @@
     height: 16px;
 }
 
-@media (min-width: 1024px) {
-    .support-contact-panel {
-        padding: 24px;
-    }
-}
-
 .support-channel-empty {
     min-height: 132px;
     padding: 24px;
@@ -670,8 +653,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px 16px;
-    margin-bottom: 14px;
-    border-radius: 14px;
+    border-radius: var(--skin-card-radius);
     background: var(--surface);
 }
 
@@ -733,7 +715,9 @@
 
 .support-faq-card {
     min-width: 0;
-    padding: 18px 20px;
+    display: grid;
+    gap: var(--space-title-content);
+    padding: var(--space-card);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
@@ -741,18 +725,21 @@
 }
 
 .support-faq-card h2 {
-    margin: 0 0 12px;
+    margin: 0;
     color: var(--text);
     font-size: 16px;
     font-weight: 700;
+}
+
+.support-faq-card > p {
+    margin: 0;
 }
 
 .support-faq-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: var(--space-12);
 }
 
 .support-faq-header h2 {
@@ -834,16 +821,21 @@
    Customer Service Evaluation Card
    ========================================================================== */
 .support-evaluation-card {
-    margin-top: 24px;
-    padding: 18px;
-    border-radius: 16px;
+    display: grid;
+    gap: var(--space-title-content);
+    padding: var(--space-card);
+    border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
     border: var(--skin-card-outline, 0);
 }
 
+.support-evaluation-card > p,
 .support-evaluation-error {
-    margin: 0 0 14px;
+    margin: 0;
+}
+
+.support-evaluation-error {
     padding: 10px 12px;
     border-radius: 10px;
     background: color-mix(in srgb, var(--danger) 10%, var(--surface));
@@ -857,8 +849,6 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px 12px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
 }
 
 .support-evaluation-title {
@@ -887,7 +877,7 @@
 .support-evaluation-form {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--space-form);
 }
 
 .support-evaluation-order-badge {
@@ -1073,13 +1063,6 @@
     cursor: pointer;
 }
 
-@media (max-width: 360px) {
-    .support-center-content {
-        padding-right: 10px;
-        padding-left: 10px;
-    }
-}
-
 .spin {
     animation: ai-studio-spin 0.9s linear infinite;
 }
@@ -1093,7 +1076,6 @@
 .support-faq-search {
     display: grid;
     gap: 8px;
-    margin-bottom: 20px;
     color: var(--muted);
     font-size: 13px;
 }
@@ -1112,7 +1094,6 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    margin-top: 20px;
 }
 .support-faq-pagination button {
     min-height: 44px;
@@ -1128,9 +1109,8 @@
 }
 .support-workspace {
     min-width: 0;
-}
-@media (max-width: 1023px) {
-    .support-contact-panel {
-        margin-bottom: 20px;
-    }
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-section);
 }

@@ -13,7 +13,7 @@ import whatsappIcon from '../assets/support/whatsapp.svg';
 import { SafeImage } from '../safe-image';
 import { SupportPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
-import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
+import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
@@ -140,7 +140,7 @@ export function SupportContent({
 
     if (!channels.length && !faqs.length) {
         return (
-            <div className="support-center-content">
+            <SubpageBody className="support-center-content">
                 <EmptyState
                     icon={<Headphones />}
                     title={supportPageTitle(content, language)}
@@ -150,12 +150,12 @@ export function SupportContent({
                             : 'No contact channels or FAQs are available yet.'
                     }
                 />
-            </div>
+            </SubpageBody>
         );
     }
 
     return (
-        <div className="support-center-content">
+        <SubpageBody className="support-center-content">
             <header className="support-desktop-hero">
                 <div>
                     <span>{isZh ? '客户支持' : 'Customer support'}</span>
@@ -201,15 +201,6 @@ export function SupportContent({
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <div className="support-workspace">
                 <div className="support-contact-panel">
-                    <h2>
-                        {channels.length
-                            ? isZh
-                                ? '联系我们'
-                                : 'Contact us'
-                            : isZh
-                              ? '客服信息'
-                              : 'Support information'}
-                    </h2>
                     {channels.length ? (
                         <div className="support-hours-card">
                             <span className="support-hours-label">{isZh ? '服务时间' : 'Service hours'}</span>
@@ -440,7 +431,7 @@ export function SupportContent({
                     </div>
                 </Sheet>
             ) : null}
-        </div>
+        </SubpageBody>
     );
 }
 

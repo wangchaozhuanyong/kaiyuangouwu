@@ -406,6 +406,37 @@ describe('storefront skin system', () => {
         expect(findings).toEqual([]);
     });
 
+    it('prevents route containers from reintroducing shared page insets and stacked section margins', () => {
+        const violations: string[] = [];
+        const roots =
+            /\.(?:subpage-body|support-center-content|security-page-body|desktop-referral-content|delivery-overview|delivery-detail-page)$/u;
+        const cards =
+            /\.(?:support-contact-panel|support-faq-card|support-evaluation-card|coupon-center-workspace|coupon-center-guide)$/u;
+        for (const file of readdirSync(path.join(__dirname, 'styles')).filter(name =>
+            name.endsWith('.css'),
+        )) {
+            if (file === 'subpage-content.css') continue;
+            postcss.parse(stylesheet(`./styles/${file}`)).walkRules(rule => {
+                const isRoot = rule.selectors.some(selector => roots.test(selector.trim()));
+                const isCard = rule.selectors.some(selector => cards.test(selector.trim()));
+                rule.walkDecls(declaration => {
+                    const prop = declaration.prop;
+                    if (isRoot && /^(?:padding(?:-.+)?|gap|row-gap)$/u.test(prop)) {
+                        violations.push(`${file}: ${rule.selector}: ${prop}`);
+                    }
+                    if (
+                        (isRoot || isCard) &&
+                        /^(?:margin|margin-block(?:-.+)?|margin-top|margin-bottom)$/u.test(prop) &&
+                        !/^0(?:px)?$/u.test(declaration.value)
+                    ) {
+                        violations.push(`${file}: ${rule.selector}: ${prop}`);
+                    }
+                });
+            });
+        }
+        expect(violations).toEqual([]);
+    });
+
     it('keeps one page header implementation and one responsive spacing owner', () => {
         const visit = (directory: string) => {
             for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -414,7 +445,7 @@ describe('storefront skin system', () => {
                 else if (/\.tsx?$/.test(file) && !/\.spec\.|routeTree\.gen/.test(file)) {
                     if (file === path.join(__dirname, 'storefront-ui/page-shell.tsx')) continue;
                     expect(readFileSync(file, 'utf8'), file).not.toMatch(
-                        /function\s+(?:SubHeader|Subpage)\(/,
+                        /function\s+(?:SubHeader|Subpage|SubpageBody)\(/,
                     );
                 } else if (
                     file.endsWith('.css') &&

@@ -26,7 +26,7 @@ import { ReferralPosterModal } from '../referral-poster-modal';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { ReferralPageContext } from '../storefront-page-contexts';
-import { EmptyState, Subpage } from '../storefront-ui/page-shell';
+import { EmptyState, Subpage, SubpageBody } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
 import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
 
@@ -190,7 +190,7 @@ export function ReferralPage() {
             ) : (
                 // REFERRAL_CELEBRATION_20261002: user-approved campaign theme, independent of store skins.
                 // Keep this marker and the scoped palette in referral.css when repairing skin rules.
-                <div className="desktop-referral-content" data-referral-theme="celebration">
+                <SubpageBody className="desktop-referral-content" data-referral-theme="celebration">
                     <section className="referral-invite">
                         <div className="referral-invite-kicker">
                             <Gift aria-hidden="true" />
@@ -440,7 +440,7 @@ export function ReferralPage() {
                             )}
                         </div>
                     </section>
-                </div>
+                </SubpageBody>
             )}
             {showPoster && hasPosterTemplates && overview && programQuery.data && (
                 <ReferralPosterModal

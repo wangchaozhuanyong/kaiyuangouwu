@@ -63,8 +63,8 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    gap: 16px;
-    margin: 16px 0 24px;
+    gap: var(--space-section);
+    margin: var(--space-section) 0 0;
 }
 
 .business-services-heading {
@@ -176,12 +176,13 @@
 
 @media (min-width: 1024px) {
     .desktop-store-layout .business-services-page {
-        padding: 32px 0 64px;
+        padding-top: var(--space-major);
+        padding-inline: 0;
     }
 
     .business-services-workspace {
         grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
-        gap: 20px;
+        gap: var(--space-section);
         margin: 0;
     }
 
