@@ -22,7 +22,7 @@ describe('desktop catalog navigation', () => {
 
         expect(sharedStylesheet).toMatch(/\.section-heading-inline\s*\{[^}]*align-items:\s*baseline;/u);
         expect(sharedStylesheet).toMatch(
-            /\.section-header\.has-end-subtitle\s*\{[^}]*align-items:\s*flex-end;/u,
+            /\.section-header\.has-end-subtitle,\s*\.section-header\.has-end-subtitle \.section-header-title-row\s*\{[^}]*align-items:\s*last baseline;/u,
         );
         expect(desktopStylesheet).toMatch(/\.section-heading-inline\s*\{[^}]*align-items:\s*baseline;/u);
     });
