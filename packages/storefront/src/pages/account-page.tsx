@@ -61,6 +61,7 @@ export interface AccountPageProps {
     reviewEnabled?: boolean;
     storefrontName: string;
     logoUrl: string | null;
+    accountHeroImageUrl?: string | null;
     favoriteProductCount: number;
     couponCount: number;
     displayCurrencyCode?: string;
@@ -90,6 +91,7 @@ export function AccountPage() {
         accountRecommendations,
         storefrontName,
         logoUrl,
+        accountHeroImageUrl,
         favoriteProductCount,
         couponCount,
         displayCurrencyCode,
@@ -205,6 +207,7 @@ export function AccountPage() {
                 reviewEnabled={reviewEnabled}
                 accountRecommendations={recommendationSettings}
                 storefrontName={storefrontName}
+                accountHeroImageUrl={accountHeroImageUrl}
                 favoriteProductCount={favoriteProductCount}
                 couponCount={couponCount}
                 onContentTarget={onContentTarget}
@@ -242,6 +245,7 @@ export function AccountPage() {
                 />
             )}
             <AccountIdentity
+                heroImageUrl={accountHeroImageUrl}
                 customer={customer}
                 storefrontName={storefrontName}
                 language={language}

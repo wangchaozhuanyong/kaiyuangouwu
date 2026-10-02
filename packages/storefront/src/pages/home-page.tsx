@@ -31,7 +31,7 @@ import {
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
-import { desktopHeroAspectRatio, HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
@@ -996,12 +996,6 @@ export function HomePage() {
                                         ]
                                             .filter(Boolean)
                                             .join(' ')}
-                                        style={{
-                                            aspectRatio:
-                                                desktop && !overlayTrustBar
-                                                    ? String(desktopHeroAspectRatio)
-                                                    : undefined,
-                                        }}
                                         role="region"
                                         aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                         aria-roledescription={isZh ? '轮播' : 'carousel'}
@@ -1030,6 +1024,11 @@ export function HomePage() {
                                         {managedHero && (
                                             <HeroScene
                                                 content={managedHero}
+                                                mediaOverlay={
+                                                    overlayTrustBar && (
+                                                        <div className="hero-service-overlay">{trustBar}</div>
+                                                    )
+                                                }
                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                                 onImageOpen={handleHeroImageOpen}
                                                 onOpen={openActiveHero}
@@ -1052,9 +1051,6 @@ export function HomePage() {
                                                     />
                                                 }
                                             />
-                                        )}
-                                        {overlayTrustBar && (
-                                            <div className="hero-service-overlay">{trustBar}</div>
                                         )}
                                         <span
                                             className="visually-hidden"

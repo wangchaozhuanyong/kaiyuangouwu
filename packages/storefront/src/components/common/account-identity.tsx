@@ -12,6 +12,7 @@ export function maskedAccountEmail(email: string): string {
 
 export function AccountIdentity({
     customer,
+    heroImageUrl,
     storefrontName,
     language,
     favoriteCount,
@@ -26,6 +27,7 @@ export function AccountIdentity({
     navigate,
 }: {
     customer: ActiveCustomer | null;
+    heroImageUrl?: string | null;
     storefrontName: string;
     language: StorefrontLanguage;
     favoriteCount: number;
@@ -62,6 +64,16 @@ export function AccountIdentity({
 
     return (
         <div className="account-identity">
+            {heroImageUrl?.trim() && (
+                <SafeImage
+                    src={heroImageUrl.trim()}
+                    alt=""
+                    imageKind="hero"
+                    loading="eager"
+                    frameClassName="account-identity-artwork"
+                    sizes="(min-width: 1440px) 1280px, (min-width: 1024px) calc(100vw - 64px), calc(100vw - 24px)"
+                />
+            )}
             <section className="account-identity-card" aria-label={isZh ? '账户信息' : 'Account details'}>
                 <div className="account-identity-welcome">
                     <span>

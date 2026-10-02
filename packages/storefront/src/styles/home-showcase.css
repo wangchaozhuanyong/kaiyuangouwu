@@ -92,30 +92,15 @@
     color: #2f6feb;
 }
 
-/* Shared hero service position; skins only supply visual tokens. */
-.home-page .hero.hero-image-overlay.has-service-overlay {
-    display: flex;
-    flex-direction: column;
-    aspect-ratio: auto;
-}
-.home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
-    flex-shrink: 0;
-    position: relative;
-    top: auto;
-    left: auto;
-    transform: none;
-    max-height: none;
-    margin: auto 0;
-    padding: 28px 0 20px;
-    margin-left: clamp(28px, 3vw, 44px);
-}
+/* Trust content stays inside the uncropped media, independent of phone copy height. */
 .home-page .hero .hero-service-overlay {
-    flex-shrink: 0;
-    position: relative;
+    position: absolute;
     z-index: 2;
-    align-self: center;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     max-width: calc(100% - 40px);
-    margin: 0 auto 12px;
+    margin: 0;
 }
 .home-page .hero .hero-service-overlay .home-trust-bar {
     display: flex;
@@ -161,22 +146,16 @@
 }
 @media (min-width: 1024px) {
     .home-page .hero .hero-service-overlay {
-        align-self: flex-start;
+        left: clamp(28px, 3vw, 44px);
+        transform: none;
         max-width: calc(100% - clamp(28px, 3vw, 44px) - 20px);
-        margin: 0 0 12px clamp(28px, 3vw, 44px);
+        margin: 0;
     }
 }
 @media (max-width: 1023px) {
-    .home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
-        min-height: 0;
-        width: calc(100% - 40px);
-        margin: auto 20px;
-        padding: 24px 0 16px;
-    }
-
     .home-page .hero .hero-service-overlay {
         max-width: calc(100% - 40px);
-        margin: 0 auto 12px;
+        margin: 0;
     }
 
     .home-page .hero .hero-service-overlay .home-trust-bar {
@@ -1929,7 +1908,6 @@ html[lang='en'] .quick-grid b {
         min-height: var(--space-24);
         padding: 0;
     }
-
 }
 
 .content-story-layout {

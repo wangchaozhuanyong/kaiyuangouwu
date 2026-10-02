@@ -334,7 +334,7 @@ describe('HomePage hero carousel', () => {
         },
     );
 
-    it.each([false, true])('keeps managed copy on its image with desktop=%s', desktop => {
+    it.each([false, true])('keeps managed artwork and copy in the shared scene with desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
         expect(markup).toContain('class="hero hero-image-overlay"');
         expect(markup).toContain('后台配置的首页轮播');
@@ -1101,11 +1101,11 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('keeps the desktop carousel frame stable for different stores and slide dimensions', () => {
-        const frames = [
+    it('retains each uploaded slide dimensions without forcing a cropped frame', () => {
+        for (const dimensions of [
             { width: 1600, height: 800 },
             { width: 2200, height: 715 },
-        ].map(dimensions => {
+        ]) {
             const markup = renderHome(
                 {
                     contentBlocks: [
@@ -1118,11 +1118,9 @@ describe('HomePage desktop intro layout', () => {
                 true,
             );
             expect(markup).toContain(`width="${dimensions.width}" height="${dimensions.height}"`);
-            return markup.match(/<section class="hero[^>]+style="([^"]+)"/u)?.[1];
-        });
-        expect(frames[0]).toBeDefined();
-        expect(frames[0]).toBe(frames[1]);
-        expect(frames[0]).toContain('aspect-ratio:3');
+            expect(markup).not.toContain('aspect-ratio:3');
+            expect(markup).toContain('class="hero-rich-media"');
+        }
     });
 
     it('shows the service row only when a store publishes a guarantee block', () => {

@@ -1,7 +1,7 @@
 /* The storefront and the Admin iframe import this same mobile composition. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
-        min-height: 260px;
+        min-height: 0;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
@@ -10,9 +10,9 @@
         left: auto;
         transform: none;
         width: 100%;
-        min-height: 260px;
+        min-height: 0;
         max-height: none;
-        padding: 24px 20px 40px;
+        padding: 16px 20px 20px;
         gap: 10px;
         overflow-wrap: anywhere;
     }

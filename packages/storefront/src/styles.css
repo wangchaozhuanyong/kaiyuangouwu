@@ -8,6 +8,9 @@
 @import './styles/semantic-icons.css';
 @import './styles/experience-foundations.css';
 
+/* Admin also bundles this entry; always include the client's own utility classes. */
+@source './';
+
 @layer base {
     /* Keep default rules, dividers and portal edges independent of text color. */
     *,

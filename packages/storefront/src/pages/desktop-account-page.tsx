@@ -44,6 +44,7 @@ export function DesktopAccountPage({
     reviewEnabled = true,
     accountRecommendations,
     storefrontName,
+    accountHeroImageUrl,
     favoriteProductCount,
     couponCount,
     onContentTarget,
@@ -109,6 +110,7 @@ export function DesktopAccountPage({
         <main className="page desktop-account-page" data-page-pending={pending ? 'query' : undefined}>
             <h1 className="desktop-account-page-title">{isZh ? '账户概览' : 'Account overview'}</h1>
             <AccountIdentity
+                heroImageUrl={accountHeroImageUrl}
                 customer={customer}
                 storefrontName={storefrontName}
                 language={language}

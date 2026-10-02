@@ -66,7 +66,7 @@
     height: auto;
 }
 
-/* Marketing scenes fill their frame; catalog product media owns its separate contain rule. */
+/* Uploaded marketing artwork keeps its original ratio, as does its draft preview. */
 .hero-rich-backdrop {
     position: relative;
     width: 100%;
@@ -327,12 +327,18 @@
     }
 }
 
-/* Storefront and editor share one on-image composition, without a separate copy card. */
+/* Uploaded artwork keeps its own ratio. Desktop copy overlays it; phone copy follows it. */
 .hero.hero-image-overlay {
     display: block;
-    min-height: 320px;
-    aspect-ratio: 3;
-    background: var(--skin-hero-background, #10212f);
+    min-height: 0;
+    aspect-ratio: auto;
+    background: var(--hero-copy-background);
+}
+
+.hero.hero-image-overlay .hero-rich-media {
+    position: relative;
+    width: 100%;
+    min-width: 0;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link::after {
@@ -351,10 +357,11 @@
 
 .hero.hero-image-overlay .hero-rich-image-link,
 .hero.hero-image-overlay .safe-image-frame {
-    position: absolute;
-    inset: 0;
+    display: block;
+    position: relative;
+    inset: auto;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link,
@@ -364,14 +371,14 @@
 
 .hero.hero-image-overlay .hero-rich-backdrop {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: right center;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
 }
 
 .hero.hero-image-overlay .safe-image-preview {
-    object-fit: cover;
-    object-position: right center;
+    object-fit: contain;
+    object-position: center;
 }
 
 .hero.hero-image-overlay .hero-rich-content {
@@ -395,6 +402,10 @@
     background: transparent;
     color: var(--hero-image-copy-foreground, #fff);
     box-shadow: none;
+}
+
+.hero.hero-image-overlay.has-service-overlay .hero-rich-content {
+    top: calc(50% - 28px);
 }
 
 .hero.hero-image-overlay .hero-rich-copy-surface {
@@ -449,24 +460,12 @@
 }
 
 @media (max-width: 1023px) {
-    .hero.hero-image-overlay {
-        display: grid;
-        align-items: center;
-        min-height: 280px;
-        aspect-ratio: auto;
+    .hero.hero-image-overlay .hero-rich-image-link::after {
+        display: none;
     }
 
-    /* Marketing artwork fills the compact phone frame; product media is unaffected. */
-    .hero.hero-image-overlay .hero-rich-backdrop {
-        object-fit: cover;
-        object-position: center;
-    }
-
-    .hero.hero-image-overlay .safe-image-preview {
-        object-position: center;
-    }
-
-    .hero.hero-image-overlay .hero-rich-content {
+    .hero.hero-image-overlay .hero-rich-content,
+    .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
         position: relative;
         top: auto;
         left: auto;
@@ -474,11 +473,23 @@
         width: 100%;
         max-height: none;
         gap: 10px;
-        padding: 24px 20px 44px;
+        padding: 16px 20px 20px;
+        background: var(--hero-copy-background);
+        color: var(--hero-copy-foreground);
+    }
+
+    .hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
+        color: var(--hero-copy-foreground);
+        text-shadow: none;
+    }
+
+    .hero.hero-image-overlay :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
+        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        text-shadow: none;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
-        max-width: 88%;
+        max-width: 100%;
         gap: 6px;
     }
 

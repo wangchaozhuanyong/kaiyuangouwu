@@ -58,6 +58,7 @@ function renderAccount(
     referralEnabled: boolean,
     options: {
         desktop?: boolean;
+        accountHeroImageUrl?: string;
         prepareClient?: (client: ReturnType<typeof createStorefrontQueryClient>) => void;
     } = {},
 ): string {
@@ -127,6 +128,7 @@ function renderAccount(
                     language: 'zh',
                     storefrontName: '测试商城',
                     logoUrl: null,
+                    accountHeroImageUrl: options.accountHeroImageUrl,
                     favoriteProductCount: 0,
                     couponCount: 0,
                     displayCurrencyCode: market.currencyCode,
@@ -147,6 +149,17 @@ function renderAccount(
 }
 
 describe('account referral visibility', () => {
+    it.each([false, true])(
+        'keeps configured artwork and current account functions on desktop=%s',
+        desktop => {
+            const markup = renderAccount(true, { desktop, accountHeroImageUrl: '/managed-account.png' });
+            expect(markup).toContain('account-identity-artwork');
+            expect(markup).toContain('src="/managed-account.png"');
+            expect(markup).toContain('我的订单');
+            expect(markup).toContain('推广中心');
+            expect(renderAccount(true, { desktop })).not.toContain('account-identity-artwork');
+        },
+    );
     it('keeps three shortcuts and a real referral balance when enabled', () => {
         const markup = renderAccount(true);
 

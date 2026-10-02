@@ -5,11 +5,6 @@ import { normalizedHeroThemePreset } from '../content-visuals';
 
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
-// Storefront and editor use the same frame, regardless of the uploaded artwork dimensions.
-export const desktopHeroAspectRatio = 3;
-export const desktopHeroMinHeight = 320;
-export const mobileHeroMinHeight = 280;
-
 export interface HeroSceneData extends HeroThemeData {
     title: string;
     subtitle: string;
@@ -24,12 +19,14 @@ export interface HeroSceneData extends HeroThemeData {
 export function HeroScene({
     content,
     image,
+    mediaOverlay,
     imageLabel,
     onImageOpen,
     onOpen,
 }: {
     content: HeroSceneData;
     image: ReactNode;
+    mediaOverlay?: ReactNode;
     imageLabel: string;
     onImageOpen?: MouseEventHandler<HTMLButtonElement>;
     onOpen?: () => void;
@@ -48,14 +45,17 @@ export function HeroScene({
             className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
             style={adaptiveStyle}
         >
-            <button
-                type="button"
-                className="hero-rich-image-link"
-                onClick={onImageOpen}
-                aria-label={imageLabel}
-            >
-                {image}
-            </button>
+            <div className="hero-rich-media">
+                <button
+                    type="button"
+                    className="hero-rich-image-link"
+                    onClick={onImageOpen}
+                    aria-label={imageLabel}
+                >
+                    {image}
+                </button>
+                {mediaOverlay}
+            </div>
             <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
                 <div className="hero-rich-copy-surface">
                     {subtitle && (

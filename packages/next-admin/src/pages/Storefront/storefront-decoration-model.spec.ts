@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newContentBlock } from './storefront-content-utils';
+import { newAccountHeroBlock, newContentBlock } from './storefront-content-utils';
 import {
     applyDecorationDraft,
     decorationDraft,
@@ -8,6 +8,28 @@ import {
 } from './storefront-decoration-model';
 
 describe('decoration drafts follow the Shop publication contract', () => {
+    it('opens the actual account route with the configured asset and preserves neighbouring content', () => {
+        const block = newAccountHeroBlock(0);
+        block.imageAsset = {
+            id: 'account-art',
+            name: 'account.png',
+            preview: '/assets/account.png',
+            source: '/assets/account.png',
+            width: 1200,
+            height: 600,
+        };
+        const draft = decorationDraft(block, 'zh_Hans');
+        expect(draft.route).toBe('/account');
+        expect(draft.visible).toBe(true);
+        expect(draft.block).toMatchObject({
+            code: 'account-hero-visual',
+            imageUrl: '/assets/account.png',
+            imageAsset: { width: 1200, height: 600 },
+        });
+        const neighbour = decorationDraft(newContentBlock('HERO', 1, '首页'), 'zh_Hans').block;
+        if (!neighbour) throw new Error('Missing homepage fixture');
+        expect(applyDecorationDraft([neighbour], draft)).toEqual([draft.block, neighbour]);
+    });
     it('uses public Asset URLs, dimensions, selected language and only enabled items', () => {
         const block = newContentBlock('HERO', 2, '横幅');
         block.id = 'hero';

@@ -1012,7 +1012,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('fills the carousel frame for every theme without reintroducing original-image letterboxing', () => {
+    it('keeps uploaded carousel artwork complete and lets phone copy follow its native ratio', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1020,10 +1020,11 @@ describe('storefront skin system', () => {
         );
         expect(imageRules.length).toBeGreaterThan(0);
         for (const [, , declarations] of imageRules) {
-            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: cover;');
+            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: contain;');
+            expect(declarations).toContain('height: auto;');
         }
         expect(source).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/,
+            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*relative;[^}]*inset:\s*auto;/,
         );
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,

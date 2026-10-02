@@ -27,12 +27,14 @@ function ClientFrame({
     viewport,
     expanded = false,
     presetId,
+    route = '/',
 }: {
     block?: StorefrontContentBlock;
     language: StorefrontLanguageCode;
     viewport: 'mobile' | 'desktop';
     expanded?: boolean;
     presetId?: StorefrontVisualPresetId;
+    route?: '/' | '/account';
 }) {
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, { fetchPolicy: 'no-cache' });
     const channel = query.data?.activeChannel;
@@ -68,12 +70,12 @@ function ClientFrame({
                 : {
                       block: null,
                       visible: false,
-                      route: '/',
+                      route,
                       language: language === 'en' ? 'en' : 'zh',
                   }),
             presetId,
         }),
-        [block, language, presetId],
+        [block, language, presetId, route],
     );
     const latestDraft = useRef(draft);
     useEffect(() => {
@@ -277,6 +279,7 @@ export function StorefrontDecorationPreview({
     const [viewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
     const [expanded, setExpanded] = useState(false);
     const [revision, setRevision] = useState(0);
+    const [route, setRoute] = useState<'/' | '/account'>('/');
     const selectedViewport = fixedViewport ?? viewport;
     const publication = block ? contentPublicationStatus(block, undefined, language) : 'PUBLISHED';
     return (
@@ -321,17 +324,32 @@ export function StorefrontDecorationPreview({
                 客户端完整页面 · {selectedViewport === 'desktop' ? '1440' : '390'}px 等比缩放 ·{' '}
                 {block ? '未保存内容即时预览' : '当前店铺实际内容'}
             </p>
+            {!block && (
+                <label className="flex items-center gap-2 px-3 pb-3 text-xs text-slate-600">
+                    预览页面
+                    <select
+                        aria-label="预览页面"
+                        value={route}
+                        onChange={event => setRoute(event.target.value as '/' | '/account')}
+                        className="rounded border bg-white px-2 py-1"
+                    >
+                        <option value="/">首页</option>
+                        <option value="/account">个人中心</option>
+                    </select>
+                </label>
+            )}
             {publication !== 'PUBLISHED' && (
                 <p role="status" className="px-3 pb-3 text-xs text-amber-700">
                     当前模块{contentPublicationLabels[publication]}，按客户端规则不展示。
                 </p>
             )}
             <ClientFrame
-                key={revision}
+                key={`${revision}:${route}`}
                 block={block}
                 language={language}
                 viewport={selectedViewport}
                 presetId={presetId}
+                route={route}
             />
             {expanded && (
                 <AccessibleDialogSurface
@@ -350,11 +368,12 @@ export function StorefrontDecorationPreview({
                             </button>
                         </header>
                         <ClientFrame
-                            key={revision}
+                            key={`${revision}:${route}`}
                             block={block}
                             language={language}
                             viewport={selectedViewport}
                             presetId={presetId}
+                            route={route}
                             expanded
                         />
                     </div>

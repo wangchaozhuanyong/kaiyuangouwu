@@ -11,7 +11,10 @@ export default defineConfig(environment =>
                 configureServer(server) {
                     server.middlewares.use(async (request, response, next) => {
                         const url = new URL(request.url ?? '/', 'http://localhost');
-                        if (url.pathname === '/' && url.searchParams.has('parityClient')) {
+                        if (
+                            ['/', '/account'].includes(url.pathname) &&
+                            url.searchParams.has('parityClient')
+                        ) {
                             response.setHeader('content-type', 'text/html');
                             response.end(
                                 await server.transformIndexHtml(

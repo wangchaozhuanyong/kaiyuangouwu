@@ -2,7 +2,7 @@ import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-const output = fileURLToPath(new URL('./results/', import.meta.url));
+const output = process.env.PREVIEW_TEST_OUTPUT ?? fileURLToPath(new URL('./results/', import.meta.url));
 const base = process.env.PREVIEW_TEST_URL ?? 'http://127.0.0.1:5316';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
@@ -86,8 +86,8 @@ try {
     compare(desktop.client, desktop.preview);
     await editor().getByRole('button', { name: '手机', exact: true }).click();
     await client.setViewportSize({ width: 390, height: 844 });
-    await expect(client.locator('.hero img')).toHaveCSS('object-fit', 'cover');
-    await expect(frame().locator('.hero img')).toHaveCSS('object-fit', 'cover');
+    await expect(client.locator('.hero img')).toHaveCSS('object-fit', 'contain');
+    await expect(frame().locator('.hero img')).toHaveCSS('object-fit', 'contain');
     const mobile = {
         client: await client.locator('body').evaluate(measure),
         preview: await frame().locator('body').evaluate(measure),

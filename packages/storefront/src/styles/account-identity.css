@@ -1,4 +1,21 @@
 /* Approved account B: shared structure, skin-derived tones, no independent palette. */
+.account-identity > .account-identity-artwork {
+    display: block;
+    grid-column: 1 / -1;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    margin-bottom: var(--space-12);
+    overflow: hidden;
+    border-radius: var(--skin-media-radius);
+}
+.account-identity-artwork img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
 .account-identity-card {
     display: flex;
     min-width: 0;

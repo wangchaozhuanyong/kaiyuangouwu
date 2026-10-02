@@ -17,7 +17,11 @@ import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
-import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
+import {
+    newAccountHeroBlock,
+    newContentBlock,
+    newContentItem,
+} from '../../src/pages/Storefront/storefront-content-utils';
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
@@ -88,6 +92,36 @@ if (params.has('original')) {
     for (const block of blocks) {
         if (block.type === 'HERO') block.settings = { ...block.settings, themePreset: 'bright' };
     }
+}
+if (params.has('managedImages')) {
+    const hero = blocks.find(block => block.id === 'hero-a')!;
+    Object.assign(hero.translations[0], {
+        title: '为马来西亚的家，甄选舒适好物',
+        subtitle: 'FLASH CAST · HOME & LIVING',
+        body: '从卧室、客厅到餐厅与书房，为日常空间挑选耐看、实用的家具与家居。',
+        ctaLabel: '浏览家具',
+    });
+    hero.targetType = 'PAGE';
+    hero.targetValue = 'category';
+    const trust = newContentBlock('TRUST_BAR', 2, '服务保障');
+    trust.enabled = true;
+    trust.items = ['马币标价', '订单可查', '在马客服', '按需询价'].map((label, position) => {
+        const item = newContentItem(position);
+        item.translations[0].label = label;
+        return item;
+    });
+    const account = newAccountHeroBlock(0);
+    blocks.push(
+        ...[trust, account].map((block, index) => ({
+            ...block,
+            __typename: 'StorefrontContentBlock',
+            id: `managed-image-${index}`,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: '2026-09-01T00:00:00Z',
+            imageAsset: index === 1 ? asset : null,
+            imageUrl: index === 1 ? asset.preview : null,
+        })),
+    );
 }
 if (params.has('gallery')) {
     const gallery = newContentBlock('QUICK_LINKS', 3, '精选分类');
@@ -381,10 +415,16 @@ if (params.has('parity')) {
             const data = fixtureData(
                 params.get('preset') ?? 'classic',
                 false,
-                params.has('auth') ? 'auth-referral' : 'normal',
+                params.has('auth') || params.has('managedImages') ? 'auth-referral' : 'normal',
             );
             data.activeChannel = { ...data.activeChannel, id: channel.id, code: channel.code };
             data.storefrontVisualPreset.channelId = channel.id;
+            if (params.has('managedImages'))
+                data.storefrontDailyRecommendations = {
+                    businessDate: '2026-10-03',
+                    expiresAt: '2099-01-01T00:00:00Z',
+                    items: data.products.items,
+                };
             data.storefrontContent = blocks
                 .map(block =>
                     decorationDraft(block, url.searchParams.get('languageCode') === 'en' ? 'en' : 'zh_Hans'),
