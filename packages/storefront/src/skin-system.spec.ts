@@ -110,31 +110,28 @@ describe('storefront skin system', () => {
         expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
     });
 
-    it('protects the approved complete B visual within the service page only', () => {
-        const selector = ".business-services-page[data-services-theme='warm-b']";
+    it('preserves directory B without overriding the active storefront skin', () => {
+        const selector = ".business-services-page[data-services-layout='directory-b']";
         const css = postcss.parse(stylesheet('./pages/business-services-page.css'));
-        const tokens = new Map<string, string>();
         css.walkDecls(declaration => {
-            if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
-            expect(declaration.prop).toMatch(/^--/u);
-            expect((declaration.parent as postcss.Rule).selector).toBe(selector);
-            tokens.set(declaration.prop, declaration.value);
+            expect(declaration.value).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgb|hsl)a?\(/iu);
+            expect(declaration.prop).not.toMatch(
+                /^--(?:bg|paper|surface|text|muted|accent|focus|line|control|skin)(?:-|$)/u,
+            );
         });
-        expect(tokens.get('--bg')).toBe('#f7f4ef');
-        expect(tokens.get('--muted')).toBe('#6b665d');
-        expect(tokens.get('--accent')).toBe('#4b5638');
-        expect(tokens.get('--services-icon-surface')).toBe('#f5f0e6');
-        expect(stylesheet('./pages/business-services-page.tsx')).toContain('data-services-theme="warm-b"');
+        expect(stylesheet('./pages/business-services-page.tsx')).toContain(
+            'data-services-layout="directory-b"',
+        );
         const icons = postcss.parse(stylesheet('./styles/semantic-icons.css'));
         const grounds: string[] = [];
         icons.walkRules(rule => {
-            if (!rule.selector.includes('data-services-theme')) return;
+            if (!rule.selector.includes('data-services-layout')) return;
             rule.walkDecls('background', declaration => {
                 expect(rule.selector).toBe(`${selector} .is-tools .category-client-plugin-icon`);
                 grounds.push(declaration.value);
             });
         });
-        expect(grounds).toEqual(['var(--services-icon-surface)']);
+        expect(grounds).toEqual(['var(--control-surface)']);
     });
 
     it('owns transparent decorative icons globally without page or skin frames', () => {
@@ -348,14 +345,14 @@ describe('storefront skin system', () => {
                     }
                     const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);
                     const thinHeight = /(?:^|;)\s*height:\s*[1-4]px\s*;/.test(body);
-                    // SERVICES_WARM_B_20261002: one short bronze heading accent, not a row divider.
+                    // Directory B keeps one short skin-colored heading accent, not a row divider.
                     const approvedWarmHeading =
                         file === path.join(__dirname, 'styles/service-entries.css') &&
                         selector.trim() ===
-                            ".business-services-page[data-services-theme='warm-b'] .category-client-plugin-group-title::after" &&
+                            ".business-services-page[data-services-layout='directory-b'] .category-client-plugin-group-title::after" &&
                         /width:\s*28px;/.test(body) &&
                         /height:\s*2px;/.test(body) &&
-                        /background:\s*var\(--services-bronze\);/.test(body);
+                        /background:\s*var\(--accent\);/.test(body);
                     if (
                         !approvedWarmHeading &&
                         (thinWidth || thinHeight) &&
