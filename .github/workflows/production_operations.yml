@@ -69,6 +69,7 @@ on:
                     - verify-security-dependencies
                     - inspect-storefront-config
                     - audit-store-isolation-data
+                    - plan-platform-store-governance
                     - audit-administrator-product-readiness
                     - plan-order-sales-ownership-backfill
                     - apply-order-sales-ownership-backfill-reviewed
@@ -170,7 +171,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -206,7 +207,7 @@ jobs:
                   set -Eeuo pipefail
                   [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
                   test -z "$(git status --porcelain --untracked-files=no)"
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
                     git cat-file -e "${OPS_EXPECTED_RUNTIME_SHA}^{commit}"
                     git merge-base --is-ancestor "$OPS_EXPECTED_RUNTIME_SHA" "$OPS_SOURCE_SHA"
                   fi
@@ -285,6 +286,12 @@ jobs:
                       lines.extend([
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
+                      ])
+                  if operation_name == 'plan-platform-store-governance':
+                      lines.extend(transport(f'packages/dev-server/scripts/{name}', f'repository/packages/dev-server/scripts/{name}') for name in [
+                          'platform-governance-data-preflight.mjs', 'platform-catalog-data-plan.mjs',
+                          'platform-payment-data-plan.mjs', 'store-isolation-data-preflight.mjs',
+                          'store-isolation-ownership-evidence.mjs', 'store-isolation-customer-dependencies.mjs',
                       ])
                   if operation_name == 'audit-store-isolation-data':
                       lines.extend([
@@ -420,6 +427,31 @@ jobs:
                         printf 'storefront_sha=%s\nadmin_sha=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
                     fi
                   fi
+
+            - name: Save read-only governance plan
+              if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
+              run: |
+                  python3 - <<'PYTHON'
+                  import base64, gzip, hashlib, json, os
+                  from pathlib import Path
+                  result = json.loads(Path(os.environ['RUNNER_TEMP'], 'production-operations-result.json').read_text())
+                  report = next(json.loads(line) for line in result['Output'].splitlines() if line.startswith('{'))
+                  audit = report['audit']
+                  plan_bytes = gzip.decompress(base64.b64decode(audit['compressedPlan'], validate=True))
+                  assert hashlib.sha256(plan_bytes).hexdigest() == audit['snapshotHash']
+                  plan = json.loads(plan_bytes)
+                  assert plan['mode'] == 'READ_ONLY' and plan['productionApply'] is False
+                  Path(os.environ['RUNNER_TEMP'], 'platform-governance-data-plan.json').write_text(json.dumps(plan, indent=2) + '\n')
+                  PYTHON
+
+            - name: Upload read-only governance plan
+              if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: platform-governance-data-plan
+                  path: ${{ runner.temp }}/platform-governance-data-plan.json
+                  if-no-files-found: error
+                  retention-days: 7
 
             - name: Record production operation result
               if: ${{ always() }}
