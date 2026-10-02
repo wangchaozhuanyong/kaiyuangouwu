@@ -39,15 +39,8 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    height: var(--experience-control-min);
     gap: 8px;
     padding: 0 10px;
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface, var(--soft));
-}
-.search-input-field:focus-within {
-    outline: var(--experience-focus-width) solid var(--focus);
-    outline-offset: var(--experience-focus-offset);
 }
 .search-input-field > svg {
     width: 16px;
@@ -60,15 +53,8 @@
     min-width: 0;
     height: 100%;
     padding: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
     color: var(--text);
     font-size: 13px;
-}
-.search-input-field input:focus-visible {
-    outline: 0;
-    box-shadow: none;
 }
 .search-input-field input::-webkit-search-cancel-button {
     display: none;

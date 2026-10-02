@@ -153,14 +153,14 @@
     line-height: 1.4;
 }
 
-/* SERVICES_WARM_B_20261002: the approved bronze heading accent. */
-.business-services-page[data-services-theme='warm-b'] .category-client-plugin-group-title::after {
+/* Directory B keeps its short heading accent in the active skin's color. */
+.business-services-page[data-services-layout='directory-b'] .category-client-plugin-group-title::after {
     content: '';
     display: block;
     width: 28px;
     height: 2px;
     margin-top: 14px;
-    background: var(--services-bronze);
+    background: var(--accent);
 }
 
 .category-client-plugin-group.is-assistance {
@@ -169,13 +169,15 @@
     gap: 12px;
 }
 
-.is-business-services-main .category-client-plugin {
+.is-business-services-main .is-tools .category-client-plugin {
     --service-card-surface: var(--surface);
     --service-card-ink: var(--accent-ink);
     --service-card-description: var(--muted);
     --service-card-action: var(--control-surface);
     --service-card-action-hover: var(--control-surface-hover);
+}
 
+.is-business-services-main .category-client-plugin {
     grid-template-columns: var(--services-tool-icon-size, 28px) minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
@@ -192,6 +194,10 @@
     transform: none;
     background: var(--control-surface);
     box-shadow: none;
+}
+
+.is-business-services-main .is-tools .category-client-plugin:hover .category-client-plugin-action {
+    color: var(--interaction-ink);
 }
 
 .is-business-services-main .category-client-plugin:focus-visible {
@@ -259,19 +265,7 @@
     box-shadow: var(--skin-card-shadow);
 }
 
-.business-services-page[data-services-theme='warm-b'] .category-client-plugin-support {
-    --service-card-ink: var(--services-support-ink);
-    --service-card-action: var(--services-support-surface);
-    --service-card-action-hover: var(--services-support-hover);
-}
-
-.business-services-page[data-services-theme='warm-b'] .category-client-plugin-coupon {
-    --service-card-ink: var(--services-coupon-ink);
-    --service-card-action: var(--services-coupon-surface);
-    --service-card-action-hover: var(--services-coupon-hover);
-}
-
-.business-services-page[data-services-theme='warm-b'] .is-assistance .category-client-plugin-copy strong {
+.business-services-page .is-assistance .category-client-plugin-copy strong {
     color: var(--service-card-ink);
 }
 
@@ -331,7 +325,7 @@
 }
 
 @media (max-width: 1023px) {
-    .business-services-page[data-services-theme='warm-b'] .is-assistance {
+    .business-services-page .is-assistance {
         gap: 0;
         overflow: hidden;
         border: var(--skin-card-outline);
@@ -339,7 +333,7 @@
         background: var(--surface);
     }
 
-    .business-services-page[data-services-theme='warm-b'] .is-assistance .category-client-plugin {
+    .business-services-page .is-assistance .category-client-plugin {
         min-height: 88px;
         border: 0;
         border-radius: 0;

@@ -189,17 +189,17 @@
     visibility: hidden;
 }
 
-/* SERVICES_WARM_B_20261002: only the approved B tools have cream circular grounds.
+/* Directory B tool circles use the active skin's control surface.
    Frame ownership stays here; category placements and other icons remain transparent. */
-.business-services-page[data-services-theme='warm-b'] .is-tools .category-client-plugin-icon {
+.business-services-page[data-services-layout='directory-b'] .is-tools .category-client-plugin-icon {
     width: var(--services-tool-icon-size);
     height: var(--services-tool-icon-size);
     min-width: var(--services-tool-icon-size);
     border-radius: 50%;
-    background: var(--services-icon-surface);
+    background: var(--control-surface);
 }
 
-.business-services-page[data-services-theme='warm-b'] .is-tools .category-client-plugin-icon > svg {
+.business-services-page[data-services-layout='directory-b'] .is-tools .category-client-plugin-icon > svg {
     width: clamp(22px, 2.2vw, 30px);
     height: clamp(22px, 2.2vw, 30px);
 }

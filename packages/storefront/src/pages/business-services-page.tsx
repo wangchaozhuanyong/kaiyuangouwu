@@ -75,8 +75,8 @@ export function BusinessServicesPage() {
     const heroImageUrl = clientPluginBlock?.enabled ? clientPluginBlock.imageUrl : null;
 
     return (
-        // SERVICES_WARM_B_20261002: approved complete B visual; retain across store skins.
-        <main className="page business-services-page" data-services-theme="warm-b">
+        // SERVICES_SKIN_B_20261002: retain layout B while the active skin owns appearance.
+        <main className="page business-services-page" data-services-layout="directory-b">
             {!desktop && (
                 <MobilePageHeader
                     className="business-services-mobile-header"
