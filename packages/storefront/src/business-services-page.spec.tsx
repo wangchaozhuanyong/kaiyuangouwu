@@ -134,7 +134,7 @@ describe('business services page', () => {
     it('shows the default navigation name and a module empty state before services are enabled', () => {
         const markup = renderPage([]);
 
-        expect(markup).toContain('<h1 class="business-services-page-title">发现更多商业能力</h1>');
+        expect(markup).toContain('<h1 class="business-services-page-title">智能服务</h1>');
         expect(renderPage([], 'zh', true)).toContain(
             '<h1 class="business-services-page-title">智能服务</h1>',
         );
@@ -206,8 +206,8 @@ describe('business services page', () => {
         linkedBlock.targetValue = 'https://example.com/services';
 
         expect(renderPage([linkedBlock])).toContain('business-services-heading-link');
-        expect(renderPage([linkedBlock])).toContain('直通服务');
-        expect(renderPage([linkedBlock], 'en')).toContain('Open service');
+        expect(renderPage([linkedBlock])).toContain('打开服务网站');
+        expect(renderPage([linkedBlock], 'en')).toContain('Open service website');
     });
 
     it('does not render the jump action without a managed URL target', () => {
@@ -225,7 +225,33 @@ describe('business services page', () => {
 
         const markup = renderPage([legacyBlock]);
 
-        expect(markup).toContain('发现更多商业能力');
+        expect(markup).toContain('智能服务');
         expect(markup).not.toContain('客户端插件配置');
+    });
+    it('uses the same configured introduction, CTA and image across viewports without duplicate tools', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1 };
+        block.title = '商家服务介绍';
+        block.body = '后台提供的介绍内容';
+        block.ctaLabel = '了解服务详情';
+        block.targetType = 'URL';
+        block.targetValue = 'https://example.invalid/service';
+        block.imageUrl = '/assets/managed-service.webp';
+        block.items.push({
+            ...block.items[0],
+            id: 'two-factor-tool',
+            position: 1,
+            settings: { ...block.items[0].settings, pluginCode: 'two-factor-code-tool' },
+        });
+        for (const desktop of [false, true]) {
+            const markup = renderPage([block], 'zh', desktop);
+            expect(markup).toContain('商家服务介绍');
+            expect(markup).toContain('后台提供的介绍内容');
+            expect(markup).toContain('了解服务详情');
+            expect(markup).toContain('/assets/managed-service.webp');
+            expect(markup.match(/category-client-plugin-two-factor/g)).toHaveLength(1);
+            expect(markup).not.toContain('business-services-hero-shortcuts');
+            expect(markup).not.toContain('直通服务');
+        }
     });
 });

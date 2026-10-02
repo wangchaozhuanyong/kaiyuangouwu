@@ -245,6 +245,16 @@ describe('storefront skin system', () => {
                             border[2].trim() === '1px solid var(--line-subtle)'
                         )
                             continue;
+                        // Layout B's shared tool directory separates adjacent actionable rows.
+                        if (
+                            file === path.join(__dirname, 'styles/service-entries.css') &&
+                            selector.trim() ===
+                                '.is-tools .category-client-plugin + .category-client-plugin' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&

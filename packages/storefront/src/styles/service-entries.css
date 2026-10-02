@@ -124,111 +124,112 @@
     background: var(--service-card-action-hover, var(--interaction-hover));
 }
 
-/* Expanded service cards share the same colors and behavior as compact category entries. */
+/* Layout B directory. Compact category placements above retain their own palette and geometry. */
 .is-business-services-main.category-client-plugin-slot {
-    display: grid;
-    gap: 10px;
+    display: contents;
     padding: 0;
-    margin: 0 0 18px;
 }
 
 .category-client-plugin-group {
+    min-width: 0;
+}
+
+.category-client-plugin-group.is-tools {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: inherit;
-    min-width: 0;
+    align-content: start;
+    padding: 20px;
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
+}
+
+.category-client-plugin-group-title {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-family: var(--skin-display-font, var(--font-ui));
+    font-size: 20px;
+    line-height: 1.4;
 }
 
 .category-client-plugin-group.is-assistance {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.category-client-plugin-group > :only-child {
-    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
 }
 
 .is-business-services-main .category-client-plugin {
-    grid-template-columns: 30px minmax(0, 1fr);
-    grid-template-rows: 1fr auto;
-    align-content: start;
-    align-items: start;
+    --service-card-surface: var(--surface);
+    --service-card-ink: var(--accent-ink);
+    --service-card-description: var(--muted);
+    --service-card-action: var(--control-surface);
+    --service-card-action-hover: var(--control-surface-hover);
+
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
     min-width: 0;
-    min-height: 0;
-    gap: 0 12px;
-    padding: 12px 16px;
-    border: 1px solid
-        color-mix(
-            in srgb,
-            var(--service-card-ink, var(--text)) 24%,
-            var(--service-card-surface, var(--paper))
-        );
-    border-radius: var(--skin-card-radius, 16px);
-    box-shadow: var(--skin-card-shadow, var(--shadow-sm));
+    min-height: 112px;
+    padding: 18px 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color 150ms ease;
 }
 
 .is-business-services-main .category-client-plugin:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(
-        in srgb,
-        var(--service-card-ink, var(--text)) 34%,
-        var(--service-card-surface, var(--paper))
-    );
-    box-shadow: var(--skin-card-hover-shadow, var(--shadow-md));
+    transform: none;
+    background: var(--control-surface);
+    box-shadow: none;
 }
 
 .is-business-services-main .category-client-plugin:focus-visible {
     outline: 2px solid var(--focus);
-    outline-offset: 4px;
+    outline-offset: -2px;
+}
+
+.is-tools .category-client-plugin + .category-client-plugin {
+    border-top: 1px solid var(--line-subtle);
 }
 
 .is-business-services-main .category-client-plugin-icon {
-    grid-column: 1;
-    grid-row: 1;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 32px;
 }
 
 .is-business-services-main .category-client-plugin-copy {
-    grid-column: 2;
-    grid-row: 1;
-    gap: 4px;
+    gap: 6px;
 }
 
 .is-business-services-main .category-client-plugin-copy strong {
-    font-size: 17px;
+    color: var(--text);
+    font-size: 15px;
     font-weight: 650;
-    line-height: 28px;
-    letter-spacing: -0.02em;
+    line-height: 1.5;
     overflow-wrap: anywhere;
 }
 
 .is-business-services-main .category-client-plugin-copy > span {
-    min-height: 21px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13px;
-    line-height: 21px;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.6;
 }
 
 .is-business-services-main .category-client-plugin-action {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    align-self: end;
-    gap: 10px;
-    min-width: 0;
+    justify-content: center;
+    gap: 8px;
     min-height: 44px;
-    margin-top: 10px;
-    padding: 10px 14px;
-    border-radius: var(--skin-control-radius, 10px);
-    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: var(--skin-control-radius);
+    font-size: 12px;
     font-weight: 600;
-    line-height: 22px;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    line-height: 1.5;
 }
 
 .is-business-services-main .category-client-plugin-action::after {
@@ -239,112 +240,84 @@
     line-height: 1;
 }
 
-.is-business-services-main :is(.category-client-plugin-coupon, .category-client-plugin-support) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
-    gap: 10px;
-    padding: 18px 16px;
-}
-
-.is-assistance .category-client-plugin-copy {
-    grid-column: 1;
-    grid-row: 2;
-    gap: 5px;
-}
-
-.is-assistance .category-client-plugin-copy strong {
-    font-size: 15px;
-    line-height: 24px;
-}
-
-.is-assistance .category-client-plugin-copy > span {
-    min-height: 40px;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    font-size: 12px;
-    line-height: 20px;
-}
-
-.is-assistance .category-client-plugin-action {
-    grid-column: 1;
-    grid-row: 3;
-    margin-top: 2px;
-    padding: 10px 12px;
+.is-business-services-main .is-assistance .category-client-plugin {
+    min-height: 96px;
+    padding: 18px 20px;
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
 }
 
 @media (min-width: 1024px) {
-    .is-business-services-main.category-client-plugin-slot {
-        gap: 14px;
-        margin-bottom: 24px;
+    .business-services-workspace .category-client-plugin-group.is-tools {
+        grid-column: 2;
+        grid-row: 1;
+        padding: 28px;
     }
 
-    .category-client-plugin-group.is-tools {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    .business-services-workspace .category-client-plugin-group.is-assistance {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+    }
+
+    .category-client-plugin-group.is-assistance > :only-child {
+        grid-column: 1 / -1;
+    }
+
+    .category-client-plugin-group-title {
+        margin-bottom: 12px;
+        font-size: 24px;
     }
 
     .is-business-services-main .category-client-plugin {
-        grid-template-columns: 32px minmax(0, 1fr);
-        gap: 0 14px;
-        padding: 18px 20px;
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        gap: 20px;
+        min-height: 128px;
+        padding: 24px 0;
     }
 
     .is-business-services-main .category-client-plugin-icon {
-        width: 32px;
-        height: 32px;
-    }
-
-    .is-business-services-main .category-client-plugin-copy {
-        gap: 6px;
+        width: 40px;
+        height: 40px;
     }
 
     .is-business-services-main .category-client-plugin-copy strong {
         font-size: 18px;
-        line-height: 32px;
     }
 
     .is-business-services-main .category-client-plugin-copy > span {
-        min-height: 22px;
         font-size: 13px;
-        line-height: 22px;
     }
 
     .is-business-services-main .category-client-plugin-action {
-        margin-top: 12px;
-        padding: 11px 16px;
+        min-width: 100px;
+        padding: 10px 14px;
+        font-size: 13px;
     }
 
-    .is-business-services-main :is(.category-client-plugin-coupon, .category-client-plugin-support) {
-        grid-template-columns: 32px minmax(0, 1fr) 132px;
-        grid-template-rows: auto;
-        align-items: center;
-        gap: 16px;
-        padding: 22px 24px;
+    .is-business-services-main .is-assistance .category-client-plugin {
+        min-height: 108px;
+        padding: 24px;
+    }
+}
+
+@media (max-width: 359px) {
+    .category-client-plugin-group.is-tools {
+        padding: 16px;
     }
 
-    .is-assistance .category-client-plugin-copy {
-        grid-column: 2;
-        grid-row: 1;
-        gap: 3px;
+    .is-business-services-main .category-client-plugin {
+        column-gap: 8px;
     }
 
-    .is-assistance .category-client-plugin-copy strong {
-        font-size: 16px;
-        line-height: 28px;
+    .is-business-services-main .is-assistance .category-client-plugin {
+        padding: 16px;
     }
 
-    .is-assistance .category-client-plugin-copy > span {
-        min-height: 0;
-        font-size: 12px;
-        line-height: 20px;
-    }
-
-    .is-assistance .category-client-plugin-action {
-        grid-column: 3;
-        grid-row: 1;
-        margin: 0;
-        align-self: center;
+    .is-business-services-main .category-client-plugin-action {
+        gap: 4px;
+        padding-inline: 8px;
     }
 }
 
