@@ -82,7 +82,7 @@ describe.skipIf(process.env.PLATFORM_GOVERNANCE_CI_MYSQL !== '1')(
             config.dbConnectionOptions = { ...(await createCiGovernanceDatabase()), synchronize: true };
             registerInitializer('mysql', {
                 init: (_file, options) => Promise.resolve(options),
-                populate: async work => work(),
+                populate: work => work(),
                 destroy: () => Promise.resolve(),
             });
             await server.init({
