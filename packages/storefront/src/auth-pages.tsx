@@ -1,25 +1,29 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
+    ChevronDown,
     CircleAlert,
     CircleCheck,
+    Compass,
     Eye,
     EyeOff,
     Fingerprint,
     Headphones,
     LockKeyhole,
     Mail,
+    MapPin,
     ShieldCheck,
     ShoppingBag,
     Sparkles,
+    Store,
     Ticket,
     UserRound,
-    Zap,
 } from 'lucide-react';
 import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import {
     authOriginalImageUrl,
+    authPresentation,
     authVisualStyle,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
 import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
@@ -148,6 +152,7 @@ interface AuthPageBaseProps {
     storefrontName: string;
     logoUrl?: string | null;
     onBack: () => void;
+    onToggleLanguage?: () => void;
 }
 
 interface AuthLegalProps {
@@ -188,13 +193,43 @@ function googleAuthErrorMessage(error: unknown, language: StorefrontLanguage): s
     if (error instanceof ShopApiError && error.authenticationError === 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE') {
         return language === 'zh' ? 'Google 登录尚未配置' : 'Google sign-in is not configured';
     }
+    if (error instanceof ShopApiError) {
+        if (error.authenticationError === 'STOREFRONT_GOOGLE_CONSENT_REQUIRED')
+            return language === 'zh'
+                ? '首次使用 Google 注册，请先勾选同意条款与隐私政策'
+                : 'To create your account with Google, accept the terms and privacy policy first';
+        if (error.authenticationError === 'STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED')
+            return language === 'zh'
+                ? '请使用 Gmail 或 Google Workspace 账号，其他邮箱请使用邮箱注册或登录'
+                : 'Use a Gmail or Google Workspace account, or register or sign in with your email';
+        if (error.authenticationError === 'STOREFRONT_GOOGLE_INVITE_INVALID')
+            return language === 'zh'
+                ? '邀请码无效，请修改或清空后重试'
+                : 'The invitation code is invalid. Change or remove it and try again';
+    }
     return language === 'zh' ? 'Google 登录失败，请重试' : 'Google sign-in failed. Try again';
 }
 
 function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
     return (
         <div className="auth-method-divider" role="separator">
-            <span>{language === 'zh' ? '或' : 'or'}</span>
+            <span>{language === 'zh' ? '或使用 Google 账号继续' : 'or continue with Google'}</span>
+        </div>
+    );
+}
+
+function AuthBrand({ logoUrl, storefrontName }: { logoUrl?: string | null; storefrontName: string }) {
+    return (
+        <div className="auth-form-brand">
+            {logoUrl ? (
+                <SafeImage
+                    src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                    alt={storefrontName}
+                    frameClassName="auth-form-logo"
+                />
+            ) : (
+                <strong>{storefrontName}</strong>
+            )}
         </div>
     );
 }
@@ -202,74 +237,30 @@ function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
 function AuthFormIntro({
     variant,
     language,
+    content,
 }: {
     variant: 'login' | 'register';
     language: StorefrontLanguage;
+    content?: StorefrontContentBlock;
 }) {
-    const isZh = language === 'zh';
-    const isLogin = variant === 'login';
+    const presentation = authPresentation(content, variant, language);
     return (
         <header className={`auth-form-heading auth-form-heading-${language}`}>
-            <h1>{isLogin ? (isZh ? '欢迎回来' : 'Welcome back') : isZh ? '创建账户' : 'Create account'}</h1>
-            <p>
-                {isLogin
-                    ? isZh
-                        ? '登录账户，查看订单与店铺服务。'
-                        : 'Sign in to manage orders and store services.'
-                    : isZh
-                      ? '验证邮箱，开启购物与店铺服务。'
-                      : 'Verify your email to start shopping.'}
-            </p>
+            <h1>{presentation.title}</h1>
+            <p>{presentation.subtitle}</p>
         </header>
     );
 }
 
-function AuthAssuranceRail({ language }: { language: StorefrontLanguage }) {
-    const isZh = language === 'zh';
-    const items = [
-        {
-            icon: ShieldCheck,
-            tone: 'security',
-            title: isZh ? '账户安全' : 'Security',
-        },
-        {
-            icon: ShoppingBag,
-            tone: 'mail',
-            title: isZh ? '订单可查' : 'Orders',
-        },
-        {
-            icon: Sparkles,
-            tone: 'studio',
-            title: isZh ? '统一账户' : 'Account',
-        },
-        {
-            icon: Headphones,
-            tone: 'support',
-            title: isZh ? '客服支持' : 'Support',
-        },
-    ];
-
-    return (
-        <section
-            className="auth-assurance-rail"
-            aria-label={isZh ? '账户服务保障' : 'Account service benefits'}
-        >
-            {items.map(item => {
-                const Icon = item.icon;
-                return (
-                    <div className={`auth-assurance-item auth-assurance-${item.tone}`} key={item.title}>
-                        <span className="auth-assurance-icon" aria-hidden="true">
-                            <Icon />
-                        </span>
-                        <span>
-                            <strong>{item.title}</strong>
-                        </span>
-                    </div>
-                );
-            })}
-        </section>
-    );
-}
+const benefitIconComponents = {
+    'shopping-bag': ShoppingBag,
+    'map-pin': MapPin,
+    store: Store,
+    compass: Compass,
+    'shield-check': ShieldCheck,
+    headphones: Headphones,
+    sparkles: Sparkles,
+};
 
 function useAuthNavigate(
     returnTo?: RouteState['returnTo'],
@@ -303,6 +294,7 @@ export function LoginPage({
     authVisualContent,
     authSettings = defaultAuthSettings,
     onBack,
+    onToggleLanguage,
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps & AuthMethodsProps) {
@@ -311,6 +303,7 @@ export function LoginPage({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -320,7 +313,7 @@ export function LoginPage({
         setSubmitting(true);
         setError('');
         try {
-            await api.login(emailAddress, password);
+            await api.login(emailAddress, password, rememberMe);
             await onSuccess();
         } catch (requestError) {
             if (authSettings.emailAutoRegistrationEnabled && isInvalidCredentials(requestError)) {
@@ -353,9 +346,16 @@ export function LoginPage({
         setSubmitting(true);
         setError('');
         try {
+            const captured = captureReferralAttribution();
+            const program = captured ? await api.referralProgram() : null;
+            const attribution =
+                program && isReferralClientFeatureEnabled(program)
+                    ? attributionWithinWindow(captured, program.attributionWindowDays)
+                    : null;
             await api.authenticateWithGoogle(
                 credential,
                 registrationConsent(registrationConsentAccepted, language),
+                { rememberMe, inviteCode: attribution?.code, referralSource: attribution?.source },
             );
             await onSuccess();
         } catch (requestError) {
@@ -373,7 +373,7 @@ export function LoginPage({
             title={isZh ? '登录' : 'Sign in'}
             heroVariant="login"
             heroContent={authVisualContent}
-            {...{ language, storefrontName, logoUrl, onBack }}
+            {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             {autoRegistrationEmail ? (
                 <AuthResult
@@ -402,7 +402,7 @@ export function LoginPage({
                 </AuthResult>
             ) : (
                 <>
-                    <AuthFormIntro variant="login" language={language} />
+                    <AuthFormIntro variant="login" language={language} content={authVisualContent} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -426,28 +426,54 @@ export function LoginPage({
                                 revealPassword
                                 language={language}
                                 showLabel={false}
-                                labelAction={
-                                    <button
-                                        className="auth-inline-link"
-                                        type="button"
-                                        onClick={() => navigateTo({ name: 'forgot-password' })}
-                                    >
-                                        {isZh ? '忘记密码？' : 'Forgot password?'}
-                                    </button>
-                                }
                             />
+                            <div className="auth-login-options">
+                                <label className="auth-remember">
+                                    <input
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={event => setRememberMe(event.target.checked)}
+                                    />
+                                    {isZh ? '记住我' : 'Remember me'}
+                                </label>
+                                <button
+                                    className="auth-inline-link"
+                                    type="button"
+                                    onClick={() => navigateTo({ name: 'forgot-password' })}
+                                >
+                                    {isZh ? '忘记密码？' : 'Forgot password?'}
+                                </button>
+                            </div>
                             {error && (
                                 <small className="form-error" role="alert">
                                     {error}
                                 </small>
                             )}
+                            {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
+                                <RegistrationConsentControl
+                                    accepted={registrationConsentAccepted}
+                                    language={language}
+                                    content={legalContent}
+                                    onChange={setRegistrationConsentAccepted}
+                                    onContentTarget={onContentTarget}
+                                />
+                            )}
                             <SubmitButton
                                 submitting={submitting}
-                                idle={isZh ? '登录' : 'Sign in'}
+                                idle={isZh ? '登录账户' : 'Sign in'}
                                 busy={isZh ? '登录中' : 'Signing in'}
                             />
                         </form>
                     ) : null}
+                    {!authSettings.emailPasswordEnabled && googleAvailable && (
+                        <RegistrationConsentControl
+                            accepted={registrationConsentAccepted}
+                            language={language}
+                            content={legalContent}
+                            onChange={setRegistrationConsentAccepted}
+                            onContentTarget={onContentTarget}
+                        />
+                    )}
                     {googleClientId ? (
                         <>
                             {authSettings.emailPasswordEnabled ? (
@@ -474,15 +500,6 @@ export function LoginPage({
                     </p>
                 </>
             )}
-            {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
-                <RegistrationConsentControl
-                    accepted={registrationConsentAccepted}
-                    language={language}
-                    content={legalContent}
-                    onChange={setRegistrationConsentAccepted}
-                    onContentTarget={onContentTarget}
-                />
-            )}
             {!authSettings.emailAutoRegistrationEnabled && !googleAvailable && (
                 <AuthLegalNotice content={legalContent} onContentTarget={onContentTarget} />
             )}
@@ -502,6 +519,7 @@ export function RegisterPage({
     authVisualContent,
     authSettings = defaultAuthSettings,
     onBack,
+    onToggleLanguage,
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthVisualProps & AuthMethodsProps & Partial<AuthCompletionProps>) {
@@ -514,6 +532,7 @@ export function RegisterPage({
     const [resendSeconds, setResendSeconds] = useState(0);
     const [referralEnabled, setReferralEnabled] = useState(false);
     const [inviteCode, setInviteCode] = useState('');
+    const [inviteExpanded, setInviteExpanded] = useState(false);
     const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
@@ -533,6 +552,7 @@ export function RegisterPage({
                 );
                 if (captured) {
                     setInviteCode(captured.code);
+                    setInviteExpanded(true);
                     setInviteSource(captured.source);
                 }
             })
@@ -617,9 +637,22 @@ export function RegisterPage({
         setSubmitting(true);
         setError('');
         try {
+            // Resolve URL attribution even if the initial program request is still loading.
+            const captured = !referralEnabled ? captureReferralAttribution() : null;
+            const program = captured ? await api.referralProgram() : null;
+            const attribution =
+                program && isReferralClientFeatureEnabled(program)
+                    ? attributionWithinWindow(captured, program.attributionWindowDays)
+                    : null;
             await api.authenticateWithGoogle(
                 credential,
                 registrationConsent(registrationConsentAccepted, language),
+                {
+                    inviteCode: referralEnabled
+                        ? normalizeReferralCode(inviteCode) || undefined
+                        : attribution?.code,
+                    referralSource: referralEnabled ? inviteSource : attribution?.source,
+                },
             );
             await onSuccess?.();
         } catch (requestError) {
@@ -628,6 +661,65 @@ export function RegisterPage({
             setSubmitting(false);
         }
     };
+
+    const invitationControl = referralEnabled ? (
+        <details
+            className="auth-invitation"
+            open={inviteExpanded}
+            onToggle={event => setInviteExpanded(event.currentTarget.open)}
+        >
+            <summary>
+                <Ticket aria-hidden="true" />
+                {isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
+                <ChevronDown aria-hidden="true" />
+            </summary>
+            <Field
+                name="inviteCode"
+                label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
+                autoComplete="off"
+                icon={<Ticket />}
+                maxLength={12}
+                required={false}
+                showLabel={false}
+                value={inviteCode}
+                onChange={value => {
+                    setInviteCode(normalizeReferralCode(value));
+                    setInviteSource('CODE');
+                    setInviteStatus('idle');
+                }}
+                onBlur={value => {
+                    const code = normalizeReferralCode(value);
+                    if (!code) {
+                        setInviteStatus('idle');
+                        return;
+                    }
+                    setInviteStatus('checking');
+                    void api
+                        .validateReferralInviteCode(code)
+                        .then(valid => setInviteStatus(valid ? 'valid' : 'invalid'))
+                        .catch(() => setInviteStatus('idle'));
+                }}
+            />
+            {inviteStatus !== 'idle' && (
+                <small
+                    className={inviteStatus === 'invalid' ? 'form-error' : 'auth-success-message'}
+                    role={inviteStatus === 'invalid' ? 'alert' : 'status'}
+                >
+                    {inviteStatus === 'checking'
+                        ? isZh
+                            ? '正在验证邀请码…'
+                            : 'Checking invitation code…'
+                        : inviteStatus === 'valid'
+                          ? isZh
+                              ? '邀请码有效，注册后将自动绑定邀请关系'
+                              : 'Valid code. Your referral will be linked after registration.'
+                          : isZh
+                            ? '邀请码无效，不填写也可以正常注册'
+                            : 'Invalid code. You can leave this field empty.'}
+                </small>
+            )}
+        </details>
+    ) : null;
 
     const resend = async () => {
         if (resendSeconds > 0) return;
@@ -656,7 +748,7 @@ export function RegisterPage({
             title={isZh ? '注册' : 'Create account'}
             heroVariant="register"
             heroContent={authVisualContent}
-            {...{ language, storefrontName, logoUrl, onBack }}
+            {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             {registeredEmail ? (
                 <AuthResult
@@ -716,7 +808,7 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
-                    <AuthFormIntro variant="register" language={language} />
+                    <AuthFormIntro variant="register" language={language} content={authVisualContent} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -778,59 +870,7 @@ export function RegisterPage({
                                         : 'Set your password after verifying your email; no name is needed now'}
                                 </small>
                             )}
-                            {referralEnabled && (
-                                <>
-                                    <Field
-                                        name="inviteCode"
-                                        label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
-                                        autoComplete="off"
-                                        icon={<Ticket />}
-                                        maxLength={12}
-                                        required={false}
-                                        showLabel={false}
-                                        value={inviteCode}
-                                        onChange={value => {
-                                            setInviteCode(normalizeReferralCode(value));
-                                            setInviteSource('CODE');
-                                            setInviteStatus('idle');
-                                        }}
-                                        onBlur={value => {
-                                            const code = normalizeReferralCode(value);
-                                            if (!code) {
-                                                setInviteStatus('idle');
-                                                return;
-                                            }
-                                            setInviteStatus('checking');
-                                            void api
-                                                .validateReferralInviteCode(code)
-                                                .then(valid => setInviteStatus(valid ? 'valid' : 'invalid'))
-                                                .catch(() => setInviteStatus('idle'));
-                                        }}
-                                    />
-                                    {inviteStatus !== 'idle' && (
-                                        <small
-                                            className={
-                                                inviteStatus === 'invalid'
-                                                    ? 'form-error'
-                                                    : 'auth-success-message'
-                                            }
-                                            role={inviteStatus === 'invalid' ? 'alert' : 'status'}
-                                        >
-                                            {inviteStatus === 'checking'
-                                                ? isZh
-                                                    ? '正在验证邀请码…'
-                                                    : 'Checking invitation code…'
-                                                : inviteStatus === 'valid'
-                                                  ? isZh
-                                                      ? '邀请码有效，注册后将自动绑定邀请关系'
-                                                      : 'Valid code. Your referral will be linked after registration.'
-                                                  : isZh
-                                                    ? '邀请码无效，不填写也可以正常注册'
-                                                    : 'Invalid code. You can leave this field empty.'}
-                                        </small>
-                                    )}
-                                </>
-                            )}
+                            {invitationControl}
                             {error && (
                                 <small className="form-error" role="alert">
                                     {error}
@@ -858,6 +898,16 @@ export function RegisterPage({
                             />
                         </form>
                     ) : null}
+                    {!authSettings.emailPasswordEnabled && googleAvailable && invitationControl}
+                    {!authSettings.emailPasswordEnabled && googleAvailable && (
+                        <RegistrationConsentControl
+                            accepted={registrationConsentAccepted}
+                            language={language}
+                            content={legalContent}
+                            onChange={setRegistrationConsentAccepted}
+                            onContentTarget={onContentTarget}
+                        />
+                    )}
                     {googleClientId ? (
                         <>
                             {authSettings.emailPasswordEnabled ? (
@@ -901,6 +951,7 @@ export function VerifyAccountPage({
     logoUrl,
     token,
     onBack,
+    onToggleLanguage,
     onSuccess,
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
     const navigate = useNavigate();
@@ -1004,7 +1055,7 @@ export function VerifyAccountPage({
     return (
         <AuthLayout
             title={isZh ? '验证邮箱' : 'Verify email'}
-            {...{ language, storefrontName, logoUrl, onBack }}
+            {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             <AuthResult
                 icon={requiresPassword ? <LockKeyhole /> : error ? <CircleAlert /> : <Fingerprint />}
@@ -1341,6 +1392,7 @@ function AuthLayout({
     logoUrl,
     heroContent,
     onBack,
+    onToggleLanguage,
     children,
 }: {
     title: string;
@@ -1350,6 +1402,7 @@ function AuthLayout({
     logoUrl?: string | null;
     heroContent?: StorefrontContentBlock;
     onBack: () => void;
+    onToggleLanguage?: () => void;
     children: ReactNode;
 }) {
     const desktop = useDesktopLayout();
@@ -1357,6 +1410,7 @@ function AuthLayout({
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
         : null;
+    const presentation = authPresentation(heroContent, authVisualVariant ?? 'login', language);
     const heroStyle =
         authVisualVariant && heroContent
             ? ({
@@ -1380,6 +1434,7 @@ function AuthLayout({
         >
             <section
                 className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
+                data-copy-position={presentation.position}
                 data-image-tone={heroImageTone}
                 data-image-contrast={heroImageContrast.needsBacking ? 'backed' : 'direct'}
                 style={heroStyle}
@@ -1408,6 +1463,11 @@ function AuthLayout({
                             <ArrowLeft aria-hidden="true" />
                             <span>{language === 'zh' ? '返回' : 'Back'}</span>
                         </button>
+                    </div>
+                )}
+                {authVisualVariant && hasManagedHero && presentation.showLogo && (
+                    <div className="auth-hero-brand">
+                        <AuthBrand logoUrl={logoUrl} storefrontName={storefrontName} />
                     </div>
                 )}
                 <div
@@ -1454,53 +1514,38 @@ function AuthLayout({
                                     )}
                                 </div>
                             )}
-                            {hasManagedHero ? (
-                                heroMessage.tags.length > 0 && (
-                                    <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
+                            {heroMessage.benefits.length > 0 &&
+                                (presentation.benefitsStyle === 'tags' ? (
+                                    <div className="auth-hero-tags">
                                         {heroMessage.tags.map((tag, index) => (
                                             <span key={`${tag}-${index}`}>{tag}</span>
                                         ))}
                                     </div>
-                                )
-                            ) : heroMessage.benefits.length || heroMessage.serviceTypes.length ? (
-                                <div className="auth-hero-footer">
-                                    <div
-                                        className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
-                                        aria-label={heroMessage.tags.join('、')}
-                                    >
+                                ) : (
+                                    <div className="auth-hero-benefits">
                                         {heroMessage.benefits.map((benefit, index) => {
-                                            const Icon =
-                                                heroVariant === 'register'
-                                                    ? ([ShieldCheck, Zap, Headphones][index] ?? ShieldCheck)
-                                                    : ([Sparkles, ShoppingBag, Headphones][index] ??
-                                                      Sparkles);
+                                            const Icon = benefitIconComponents[benefit.icon];
                                             return (
-                                                <div className="auth-hero-benefit" key={benefit.title}>
+                                                <div
+                                                    className="auth-hero-benefit"
+                                                    key={`${benefit.title}-${index}`}
+                                                >
                                                     <span className="auth-hero-benefit-icon">
-                                                        <Icon aria-hidden="true" />
+                                                        {benefit.imageUrl ? (
+                                                            <SafeImage src={benefit.imageUrl} alt="" />
+                                                        ) : (
+                                                            <Icon aria-hidden="true" />
+                                                        )}
                                                     </span>
-                                                    <span className="auth-hero-benefit-copy">
-                                                        <strong>{benefit.title}</strong>
+                                                    <strong>{benefit.title}</strong>
+                                                    {benefit.description && (
                                                         <small>{benefit.description}</small>
-                                                    </span>
+                                                    )}
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                    {heroMessage.serviceTypes.length ? (
-                                        <div className="auth-hero-services">
-                                            <span className="auth-hero-services-label">
-                                                {language === 'zh' ? '支持服务类型' : 'Services available'}
-                                            </span>
-                                            <div className="auth-hero-service-list">
-                                                {heroMessage.serviceTypes.map(serviceType => (
-                                                    <span key={serviceType}>{serviceType}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            ) : null}
+                                ))}
                         </>
                     )}
                     {!heroMessage && <h2 className="auth-hero-title-fallback">{title}</h2>}
@@ -1519,11 +1564,31 @@ function AuthLayout({
                                 <ArrowLeft aria-hidden="true" />
                                 <span>{language === 'zh' ? '返回' : 'Back'}</span>
                             </button>
-                            <span className="auth-form-store-name">{storefrontName}</span>
+                            {onToggleLanguage && (
+                                <label className="auth-language-control">
+                                    <span className="sr-only">{language === 'zh' ? '语言' : 'Language'}</span>
+                                    <select
+                                        aria-label={language === 'zh' ? '语言' : 'Language'}
+                                        value={language}
+                                        onChange={event => {
+                                            if (event.target.value !== language) onToggleLanguage();
+                                        }}
+                                    >
+                                        <option value="zh">简体中文</option>
+                                        <option value="en">English</option>
+                                    </select>
+                                    <ChevronDown aria-hidden="true" />
+                                </label>
+                            )}
                         </div>
                     ) : null}
+                    {authVisualVariant && <AuthBrand logoUrl={logoUrl} storefrontName={storefrontName} />}
                     <div className="auth-card-content">{children}</div>
-                    {authVisualVariant ? <AuthAssuranceRail language={language} /> : null}
+                    {authVisualVariant && presentation.decorationUrl && (
+                        <div className="auth-mobile-decoration" aria-hidden="true">
+                            <SafeImage src={presentation.decorationUrl} alt="" />
+                        </div>
+                    )}
                 </div>
             </section>
         </main>

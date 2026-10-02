@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     authOriginalImageUrl,
+    authPresentation,
     AuthVisual,
     authVisualStyle,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
@@ -66,9 +67,9 @@ describe('managed auth visuals', () => {
             description: '后台说明',
             tags: ['卖点1', '卖点2', '卖点3'],
             benefits: [
-                { title: '卖点1', description: '' },
-                { title: '卖点2', description: '' },
-                { title: '卖点3', description: '' },
+                { title: '卖点1', description: '', icon: 'shopping-bag', imageUrl: null },
+                { title: '卖点2', description: '', icon: 'map-pin', imageUrl: null },
+                { title: '卖点3', description: '', icon: 'store', imageUrl: null },
             ],
             serviceTypes: [],
         });
@@ -167,4 +168,28 @@ describe('shared auth presentation', () => {
             '--auth-hero-secondary-text': 'var(--muted, #475569)',
         });
     });
+});
+
+it('resolves bilingual form copy and conservative managed presentation settings', () => {
+    const content = {
+        settings: {
+            formTitleZh: '欢迎登录',
+            formTitleEn: 'Welcome',
+            formSubtitleZh: '生活更方便',
+            heroCopyPosition: 'bottom',
+            heroBenefitsStyle: 'tags',
+            heroLogoEnabled: false,
+            mobileDecorationImageUrl: 'javascript:alert(1)',
+        },
+    };
+    expect(authPresentation(content, 'login', 'zh')).toMatchObject({
+        title: '欢迎登录',
+        subtitle: '生活更方便',
+        position: 'bottom',
+        benefitsStyle: 'tags',
+        showLogo: false,
+        decorationUrl: undefined,
+    });
+    expect(authPresentation(content, 'login', 'en').title).toBe('Welcome');
+    expect(authPresentation(undefined, 'register', 'zh').title).toBe('注册账户');
 });

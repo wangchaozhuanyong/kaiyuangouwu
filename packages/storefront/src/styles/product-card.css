@@ -107,6 +107,8 @@
 .product-card-meta,
 .product-card-content > footer {
     padding-inline: 0;
+    font-size: var(--type-product-subtitle-size);
+    line-height: var(--type-product-subtitle-leading);
 }
 
 .product-card-name {
@@ -114,9 +116,9 @@
     min-width: 0;
     margin-top: 10px;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-product-name-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.4;
+    line-height: var(--type-product-name-leading);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -128,8 +130,8 @@
     margin-top: 4px;
     overflow: hidden;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-product-subtitle-size);
+    line-height: var(--type-product-subtitle-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -166,9 +168,9 @@
 }
 
 .product-card-price .price-lockup {
-    font-size: 18px;
+    font-size: var(--type-price-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1.2;
+    line-height: var(--type-price-leading);
     letter-spacing: -0.02em;
 }
 
@@ -192,6 +194,8 @@
     color: transparent;
     background: var(--soft);
     border-radius: var(--skin-control-radius);
+    font-size: var(--type-product-subtitle-size);
+    line-height: var(--type-product-subtitle-leading);
 }
 
 .product-card-skeleton .product-card-subtitle {
@@ -249,11 +253,13 @@
 
     .product-card-name {
         margin-top: 14px;
-        font-size: 15px;
+        font-size: var(--type-product-name-size);
+        line-height: var(--type-product-name-leading);
     }
 
     .product-card-subtitle {
-        font-size: 13px;
+        font-size: var(--type-product-subtitle-size);
+        line-height: var(--type-product-subtitle-leading);
     }
 }
 

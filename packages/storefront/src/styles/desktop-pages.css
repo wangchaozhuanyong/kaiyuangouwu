@@ -310,9 +310,9 @@
     }
     .desktop-product-buying .detail-summary h1 {
         margin: 0;
-        font-size: 26px;
-        line-height: 1.45;
-        font-weight: 600;
+        font-size: var(--type-product-detail-size);
+        line-height: var(--type-product-detail-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-product-buying .detail-price-line {
         padding: 0 0 14px;
@@ -321,8 +321,10 @@
     }
     .desktop-product-buying .detail-price {
         margin: 0;
-        font-size: 28px;
+        font-size: var(--type-price-detail-size);
         color: var(--text);
+        line-height: var(--type-price-detail-leading);
+        font-weight: var(--font-weight-bold);
     }
     .desktop-product-buying .detail-tags {
         display: flex;
@@ -452,8 +454,10 @@
         align-self: stretch;
     }
     .desktop-store-layout .detail-description h2 {
-        font-size: 20px;
+        font-size: var(--type-section-size);
         margin: 0 0 24px;
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
 
     /* Cart: dense merchandise workspace with one sticky decision panel. */
@@ -531,10 +535,11 @@
         margin-bottom: 26px;
     }
     .desktop-store-layout .cart-summary-header h2 {
-        font-size: 17px;
+        font-size: var(--type-section-size);
         font-weight: var(--font-weight-semibold);
         color: var(--text);
         margin: 0;
+        line-height: var(--type-section-leading);
     }
     .desktop-store-layout .cart-summary-breakdown {
         display: flex;
@@ -927,9 +932,10 @@
         padding: 24px;
     }
     .desktop-store-layout .checkout-page .checkout-section h2 {
-        font-size: 18px;
-        font-weight: 500;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-semibold);
         margin: 0 0 20px;
+        line-height: var(--type-section-leading);
     }
     .desktop-store-layout .checkout-page .checkout-address-heading h2 {
         margin: 0;
@@ -1456,19 +1462,19 @@
         --page-bottom-fixed-height: 0px;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
+        gap: var(--space-section);
         align-content: start;
     }
     .desktop-store-layout .order-detail-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 300px;
         align-items: start;
-        gap: 20px;
+        gap: var(--space-section);
     }
     .desktop-store-layout .order-detail-record {
         display: grid;
         min-width: 0;
-        gap: 20px;
+        gap: var(--space-section);
     }
     .desktop-store-layout .order-status {
         padding: 24px;
@@ -1518,6 +1524,7 @@
     }
     .desktop-store-layout .desktop-order-purchase-row .order-detail-summary {
         padding: 0;
+        border: 0;
         border-radius: 0;
         box-shadow: none;
         background: transparent;
@@ -1668,24 +1675,73 @@
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero .safe-image-preview {
         object-position: center;
     }
-    /* Copy overlays the photograph; the gradient follows its height, including longer translations. */
-    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message {
-        position: absolute;
-        inset: auto 0 0;
+    /* Managed typography remains inside the existing full-height photograph. */
+    .desktop-store-layout .auth-page:is(.auth-page-login, .auth-page-register) .auth-hero {
+        padding: 0;
+    }
+    .desktop-store-layout .auth-page:is(.auth-page-login, .auth-page-register) .auth-hero-message {
+        position: relative;
+        inset: 0;
+        transform: none;
         width: 100%;
         max-width: none;
-        min-width: 0;
+        min-height: 100%;
         margin: 0;
-        padding: 88px clamp(28px, 3vw, 40px) 40px;
-        display: grid;
-        align-content: end;
-        grid-template-rows: auto auto auto;
-        gap: 12px;
-        background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.84) 88px, rgba(7, 11, 20, 0.94));
+        padding: 116px clamp(28px, 3vw, 40px) 72px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 28px;
+    }
+    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message {
+        background: linear-gradient(90deg, rgba(7, 11, 20, 0.78), rgba(7, 11, 20, 0.3));
         color: #ffffff;
         text-shadow: none;
     }
-    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-copy {
+    .desktop-store-layout
+        .auth-page.auth-page-has-image
+        .auth-hero:has(> .safe-image-frame:not(.is-loaded))
+        .auth-hero-message {
+        background: linear-gradient(90deg, rgba(7, 11, 20, 0.9), rgba(7, 11, 20, 0.74));
+    }
+    .desktop-store-layout .auth-page .auth-hero[data-copy-position='bottom'] .auth-hero-message {
+        justify-content: flex-end;
+        padding-bottom: 40px;
+    }
+    .desktop-store-layout
+        .auth-page.auth-page-has-image
+        .auth-hero[data-copy-position='bottom']
+        .auth-hero-message {
+        background: linear-gradient(
+            180deg,
+            rgba(7, 11, 20, 0.18),
+            rgba(7, 11, 20, 0.3) 25%,
+            rgba(7, 11, 20, 0.9)
+        );
+    }
+    .desktop-store-layout .auth-page .auth-hero-brand {
+        position: absolute;
+        z-index: 4;
+        top: 36px;
+        left: clamp(28px, 3vw, 40px);
+        right: 40px;
+    }
+    .desktop-store-layout .auth-hero-brand .auth-form-brand {
+        justify-content: flex-start;
+        margin: 0;
+        color: inherit;
+    }
+    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-brand {
+        color: #ffffff;
+    }
+    .desktop-store-layout .auth-hero-brand .auth-form-logo {
+        width: 160px;
+        height: 44px;
+    }
+    .desktop-store-layout .auth-hero-brand img.safe-image {
+        object-position: left;
+    }
+    .desktop-store-layout .auth-page .auth-hero-copy {
         width: 100%;
         margin: 0;
         padding: 0;
@@ -1694,11 +1750,61 @@
         border: 0;
         box-shadow: none;
     }
-    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message :is(h2, p),
-    .desktop-store-layout .auth-page.auth-page-has-image .auth-brand-lockup strong,
+    .desktop-store-layout .auth-page .auth-hero-copy h2 {
+        font-size: clamp(32px, 2.8vw, 42px);
+        line-height: 1.3;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
+        white-space: pre-line;
+    }
+    .desktop-store-layout .auth-page .auth-hero-copy p {
+        margin-top: 14px;
+        font-size: 16px;
+        line-height: 1.7;
+        white-space: pre-line;
+    }
+    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message :is(h2, p, strong, small),
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-eyebrow {
-        color: #ffffff;
-        text-shadow: none;
+        color: inherit;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefits {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 20px 12px;
+        margin: 8px 0 0;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit-icon {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        color: inherit;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit-icon svg {
+        width: 25px;
+        height: 25px;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit-icon .safe-image-frame {
+        width: 28px;
+        height: 28px;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit strong {
+        font-size: 15px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+    .desktop-store-layout .auth-page .auth-hero-benefit small {
+        font-size: 12px;
+        line-height: 1.6;
+        opacity: 0.88;
+        overflow-wrap: anywhere;
     }
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-tags {
         margin: 0;
@@ -1708,8 +1814,13 @@
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-tags > span {
         border-color: rgba(255, 255, 255, 0.28);
         background: rgba(255, 255, 255, 0.1);
-        color: #ffffff;
+        color: inherit;
         box-shadow: none;
+    }
+    @media (max-width: 1180px) {
+        .desktop-store-layout .auth-page .auth-hero-benefits {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
     .desktop-store-layout .auth-page .login-content {
         min-width: 0;
@@ -1719,6 +1830,9 @@
         background: var(--surface, var(--paper));
         grid-column: 2;
         grid-row: 1;
+    }
+    .desktop-store-layout .auth-page-register:has(.google-auth-button) .login-content {
+        padding-block: 24px;
     }
     .desktop-store-layout .auth-form-column {
         width: 100%;
@@ -1739,11 +1853,11 @@
         width: 100%;
         max-width: none;
         margin: 12px 0 0;
-        text-align: left;
+        text-align: center;
     }
     .desktop-store-layout .auth-form-heading h1 {
-        font-size: 26px;
-        font-weight: 500;
+        font-size: 30px;
+        font-weight: var(--font-weight-bold);
     }
     .desktop-store-layout .auth-input-shell {
         min-height: 46px;
@@ -2007,7 +2121,9 @@
             padding: 24px;
         }
         .desktop-product-buying .detail-summary h1 {
-            font-size: 23px;
+            font-size: var(--type-product-detail-size);
+            line-height: var(--type-product-detail-leading);
+            font-weight: var(--font-weight-semibold);
         }
         .desktop-cart-columns,
         .desktop-cart-row {

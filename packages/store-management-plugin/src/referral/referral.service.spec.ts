@@ -397,3 +397,73 @@ describe('managed system poster content', () => {
         expect(result[2]).not.toMatchObject({ headlineZh: '不应显示的内容' });
     });
 });
+
+describe('external registration referral attribution', () => {
+    function fixture(
+        existingCustomer: object | null = null,
+        enabled = true,
+        inviter: object | null = { id: 'inviter' },
+    ) {
+        const ctx = { channelId: 'store-1' };
+        const tx = { channelId: 'store-1', transaction: true };
+        const query = {
+            where: vi.fn().mockReturnThis(),
+            getOne: vi.fn().mockResolvedValue(existingCustomer),
+        };
+        const bindRelationship = vi.fn().mockResolvedValue(undefined);
+        const create = vi.fn().mockResolvedValue({ id: 'new-user' });
+        const service = Object.assign(Object.create(ReferralService.prototype), {
+            connection: {
+                withTransaction: vi.fn((_ctx, work) => work(tx)),
+                getRepository: vi.fn(() => ({ createQueryBuilder: () => query })),
+            },
+            customerService: { findOneByUserId: vi.fn().mockResolvedValue({ id: 'new-customer' }) },
+            getConfig: vi.fn().mockResolvedValue({ enabled }),
+            findAccountByCode: vi.fn().mockResolvedValue(inviter),
+            bindRelationship,
+        }) as ReferralService;
+        return { ctx, tx, service, create, bindRelationship, query };
+    }
+    it('creates and binds a new customer using the same transaction and current store', async () => {
+        const { service, ctx, tx, create, bindRelationship } = fixture();
+        await service.registerExternalCustomer(ctx as never, 'new@gmail.com', 'ABC123', 'LINK', create);
+        expect(create).toHaveBeenCalledWith(tx);
+        expect(bindRelationship).toHaveBeenCalledWith(tx, { id: 'inviter' }, { id: 'new-customer' }, 'LINK');
+    });
+    it.each([true, false])(
+        'never attributes existing accounts or disabled programs (existing=%s)',
+        async existing => {
+            const { service, ctx, create, bindRelationship } = fixture(
+                existing ? { id: 'existing' } : null,
+                existing,
+            );
+            await service.registerExternalCustomer(ctx as never, 'buyer@gmail.com', 'ABC123', 'CODE', create);
+            expect(create).toHaveBeenCalledOnce();
+            expect(bindRelationship).not.toHaveBeenCalled();
+        },
+    );
+    it('rejects an invalid code before creating an account and propagates binding errors for rollback', async () => {
+        const invalid = fixture(null, true, null);
+        await expect(
+            invalid.service.registerExternalCustomer(
+                invalid.ctx as never,
+                'new@gmail.com',
+                'BAD',
+                'CODE',
+                invalid.create,
+            ),
+        ).rejects.toThrow('STOREFRONT_GOOGLE_INVITE_INVALID');
+        expect(invalid.create).not.toHaveBeenCalled();
+        const failure = fixture();
+        failure.bindRelationship.mockRejectedValue(new Error('storage unavailable'));
+        await expect(
+            failure.service.registerExternalCustomer(
+                failure.ctx as never,
+                'new@gmail.com',
+                'ABC123',
+                'CODE',
+                failure.create,
+            ),
+        ).rejects.toThrow('storage unavailable');
+    });
+});

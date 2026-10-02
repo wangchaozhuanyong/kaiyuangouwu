@@ -410,11 +410,11 @@ export class AccountApi extends BaseDomainApi {
         return result.confirmMyFulfillmentDelivery;
     }
 
-    async login(emailAddress: string, password: string): Promise<void> {
+    async login(emailAddress: string, password: string, rememberMe = true): Promise<void> {
         const result = await this.authenticationRequest<{ login: ErrorResult }>(
             `
-                mutation StorefrontLogin($emailAddress: String!, $password: String!) {
-                    login(username: $emailAddress, password: $password, rememberMe: true) {
+                mutation StorefrontLogin($emailAddress: String!, $password: String!, $rememberMe: Boolean!) {
+                    login(username: $emailAddress, password: $password, rememberMe: $rememberMe) {
                         __typename
                         ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
@@ -422,7 +422,7 @@ export class AccountApi extends BaseDomainApi {
                     }
                 }
             `,
-            { emailAddress, password },
+            { emailAddress, password, rememberMe },
         );
         this.assertNoError(result.login);
     }
@@ -430,14 +430,18 @@ export class AccountApi extends BaseDomainApi {
     async authenticateWithGoogle(
         credential: string,
         consent: StorefrontRegistrationConsentInput,
+        options: { rememberMe?: boolean; inviteCode?: string; referralSource?: string } = {},
     ): Promise<void> {
-        const result = await this.request<{ authenticate: ErrorResult }>(
+        const result = await this.authenticationRequest<{ authenticate: ErrorResult }>(
             `
                 mutation StorefrontGoogleAuthenticate(
                     $credential: String!
                     $termsAccepted: Boolean!
                     $privacyAcknowledged: Boolean!
                     $locale: String!
+                    $rememberMe: Boolean!
+                    $inviteCode: String
+                    $referralSource: String
                 ) {
                     authenticate(
                         input: {
@@ -446,9 +450,11 @@ export class AccountApi extends BaseDomainApi {
                                 termsAccepted: $termsAccepted
                                 privacyAcknowledged: $privacyAcknowledged
                                 locale: $locale
+                                inviteCode: $inviteCode
+                                referralSource: $referralSource
                             }
                         }
-                        rememberMe: true
+                        rememberMe: $rememberMe
                     ) {
                         __typename
                         ... on CurrentUser { id identifier }
@@ -457,7 +463,13 @@ export class AccountApi extends BaseDomainApi {
                     }
                 }
             `,
-            { credential, ...consent },
+            {
+                credential,
+                ...consent,
+                rememberMe: options.rememberMe ?? true,
+                inviteCode: options.inviteCode,
+                referralSource: options.referralSource,
+            },
         );
         this.assertNoError(result.authenticate);
     }

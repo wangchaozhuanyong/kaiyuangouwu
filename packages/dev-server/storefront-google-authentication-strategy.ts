@@ -6,6 +6,7 @@ import {
     SettingsStoreService,
     User,
 } from '@vendure/core';
+import { ReferralService } from '@vendure/store-management-plugin';
 import { readStorefrontAuthSettings } from '@vendure/storefront-content-plugin';
 import { OAuth2Client } from 'google-auth-library';
 import { DocumentNode } from 'graphql';
@@ -14,6 +15,8 @@ import gql from 'graphql-tag';
 export const STOREFRONT_GOOGLE_AUTH_UNAVAILABLE = 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE';
 export const STOREFRONT_GOOGLE_AUTH_INVALID = 'STOREFRONT_GOOGLE_AUTH_INVALID';
 export const STOREFRONT_GOOGLE_CONSENT_REQUIRED = 'STOREFRONT_GOOGLE_CONSENT_REQUIRED';
+export const STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED = 'STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED';
+export const STOREFRONT_GOOGLE_INVITE_INVALID = 'STOREFRONT_GOOGLE_INVITE_INVALID';
 const DATA_CONSENT_SERVICE_TOKEN = 'STORE_DATA_CONSENT_SERVICE';
 
 interface RegistrationConsentRecorder {
@@ -42,6 +45,8 @@ export type StorefrontGoogleAuthenticationData = {
     termsAccepted: boolean;
     privacyAcknowledged: boolean;
     locale: string;
+    inviteCode?: string;
+    referralSource?: string;
 };
 
 export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStrategy<StorefrontGoogleAuthenticationData> {
@@ -50,12 +55,14 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
     private externalAuthenticationService: ExternalAuthenticationService;
     private settingsStore: SettingsStoreService;
     private consents: RegistrationConsentRecorder;
+    private referrals: ReferralService;
     private readonly clients = new Map<string, OAuth2Client>();
 
     init(injector: Injector): void {
         this.externalAuthenticationService = injector.get(ExternalAuthenticationService);
         this.settingsStore = injector.get(SettingsStoreService);
         this.consents = injector.get(DATA_CONSENT_SERVICE_TOKEN);
+        this.referrals = injector.get(ReferralService);
     }
 
     defineInputType(): DocumentNode {
@@ -65,6 +72,8 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
                 termsAccepted: Boolean!
                 privacyAcknowledged: Boolean!
                 locale: String!
+                inviteCode: String
+                referralSource: String
             }
         `;
     }
@@ -94,7 +103,13 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
                 payload.sub,
             );
             if (existing) return existing;
+            // Google can attest current email ownership for Gmail and Workspace only.
+            // Other Google accounts use the existing email verification/password flow.
+            if (!payload.email.toLowerCase().endsWith('@gmail.com') && !payload.hd) {
+                return STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED;
+            }
 
+            const emailAddress = payload.email;
             let consentSnapshots;
             try {
                 consentSnapshots = await this.consents.assertRegistrationConsent(ctx, data);
@@ -102,22 +117,36 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
                 return STOREFRONT_GOOGLE_CONSENT_REQUIRED;
             }
 
-            const user = await this.externalAuthenticationService.createCustomerAndUser(ctx, {
-                strategy: this.name,
-                externalIdentifier: payload.sub,
-                verified: true,
-                emailAddress: payload.email,
-                firstName: payload.given_name || payload.name || '',
-                lastName: payload.family_name || '',
-            });
-            await this.consents.recordRegistrationByEmail(
+            return await this.referrals.registerExternalCustomer(
                 ctx,
                 payload.email,
-                'GOOGLE_REGISTRATION',
-                consentSnapshots,
+                data.inviteCode,
+                data.referralSource,
+                async transactionContext => {
+                    const user = await this.externalAuthenticationService.createCustomerAndUser(
+                        transactionContext,
+                        {
+                            strategy: this.name,
+                            externalIdentifier: payload.sub,
+                            verified: true,
+                            emailAddress,
+                            firstName: payload.given_name || payload.name || '',
+                            lastName: payload.family_name || '',
+                        },
+                    );
+                    await this.consents.recordRegistrationByEmail(
+                        transactionContext,
+                        emailAddress,
+                        'GOOGLE_REGISTRATION',
+                        consentSnapshots,
+                    );
+                    return user;
+                },
             );
-            return user;
-        } catch {
+        } catch (error) {
+            if (error instanceof Error && error.message === STOREFRONT_GOOGLE_INVITE_INVALID) {
+                return STOREFRONT_GOOGLE_INVITE_INVALID;
+            }
             return STOREFRONT_GOOGLE_AUTH_INVALID;
         }
     }

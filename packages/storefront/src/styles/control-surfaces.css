@@ -148,6 +148,8 @@
     background: transparent;
     color: var(--accent-ink);
     box-shadow: none;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 :is(.secondary-action, .desktop-outline-button, .order-btn.secondary-btn, .order-secondary-action):hover:not(

@@ -49,6 +49,7 @@ export function ItemEditor({
     const accountCopy = supportAccountCopy(supportChannel, automaticSupportLink);
     const coreCategories = blockType === 'CORE_CATEGORIES';
     const legal = blockType === 'LEGAL';
+    const auth = blockType === 'AUTH_LOGIN' || blockType === 'AUTH_REGISTER';
     const updateLocalizedSetting = (field: 'badgeLabel' | 'ctaLabel', value: string) =>
         onChange({
             ...item,
@@ -116,6 +117,29 @@ export function ItemEditor({
                         )}
                     </Field>
                 </div>
+                {auth && (
+                    <Field label="卖点图标（已选子项图片优先）">
+                        <select
+                            className={inputClass}
+                            value={stringSetting(item.settings?.authIcon, '')}
+                            onChange={event =>
+                                onChange({
+                                    ...item,
+                                    settings: { ...(item.settings ?? {}), authIcon: event.target.value },
+                                })
+                            }
+                        >
+                            <option value="">按位置自动选择</option>
+                            <option value="shopping-bag">购物袋</option>
+                            <option value="map-pin">本地生活</option>
+                            <option value="store">商家</option>
+                            <option value="compass">发现</option>
+                            <option value="shield-check">安全</option>
+                            <option value="headphones">客服</option>
+                            <option value="sparkles">精选</option>
+                        </select>
+                    </Field>
+                )}
                 {coreCategories && (
                     <>
                         <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}角标文案`}>

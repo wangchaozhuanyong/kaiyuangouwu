@@ -446,33 +446,28 @@ try {
                     await expect(page.locator('.auth-form-heading')).toBeVisible();
                     await expect(page.locator('.auth-form-toolbar')).toBeVisible();
                     await expect(page.locator('.auth-form-back-button')).toBeVisible();
-                    await expect(page.locator('.auth-form-store-name')).toHaveText('店铺皮肤验收');
-                    const [toolbarBox, brandBox, headingBox] = await Promise.all([
+                    await expect(page.locator('.auth-form-column > .auth-form-brand')).toHaveText(
+                        '店铺皮肤验收',
+                    );
+                    const [toolbarBox, headingBox] = await Promise.all([
                         page.locator('.auth-form-toolbar').boundingBox(),
-                        page.locator('.auth-form-store-name').boundingBox(),
                         page.locator('.auth-form-heading').boundingBox(),
                     ]);
                     expect(Math.abs(toolbarBox.x - headingBox.x)).toBeLessThanOrEqual(1);
-                    expect(
-                        Math.abs(toolbarBox.x + toolbarBox.width - brandBox.x - brandBox.width),
-                    ).toBeLessThanOrEqual(1);
                     expect(headingBox.y).toBeGreaterThanOrEqual(toolbarBox.y + toolbarBox.height);
-                    await expect(page.locator('.auth-assurance-item')).toHaveCount(4);
+                    await expect(page.locator('.auth-language-control select')).toBeVisible();
                     await expect(page.locator('.auth-route-tabs')).toHaveCount(0);
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
                         const heroImage = page.locator('.auth-hero img.safe-image');
                         await expect(heroImage).toBeVisible();
                         await expect(heroImage).toHaveCSS('object-fit', 'cover');
-                        const [columnBox, heroBox, formBox, assuranceBox, imageBox, copyBox] =
-                            await Promise.all([
-                                page.locator('.auth-form-column').boundingBox(),
-                                page.locator('.auth-hero').boundingBox(),
-                                page.locator('.login-content').boundingBox(),
-                                page.locator('.auth-assurance-rail').boundingBox(),
-                                heroImage.boundingBox(),
-                                page.locator('.auth-hero-copy').boundingBox(),
-                            ]);
+                        const [heroBox, formBox, imageBox, copyBox] = await Promise.all([
+                            page.locator('.auth-hero').boundingBox(),
+                            page.locator('.login-content').boundingBox(),
+                            heroImage.boundingBox(),
+                            page.locator('.auth-hero-copy').boundingBox(),
+                        ]);
                         for (const dimension of ['x', 'y', 'width', 'height']) {
                             expect(
                                 Math.abs(imageBox[dimension] - heroBox[dimension]),
@@ -487,10 +482,6 @@ try {
                         expect(
                             Math.abs((heroBox?.x ?? 0) + (heroBox?.width ?? 0) - (formBox?.x ?? 0)),
                             `${preset}/${width}/${name} split alignment`,
-                        ).toBeLessThanOrEqual(1);
-                        expect(
-                            Math.abs((columnBox?.width ?? 0) - (assuranceBox?.width ?? 0)),
-                            `${preset}/${width}/${name} assurance span`,
                         ).toBeLessThanOrEqual(1);
                     } else {
                         await expect(page.locator('.auth-hero')).toBeHidden();
@@ -518,13 +509,13 @@ try {
                     await expect(page.locator('.desktop-local-navigation')).toBeVisible();
                     await expect(page.locator('.desktop-category-navigation')).toHaveCSS(
                         'border-bottom-width',
-                        '0px',
+                        preset === 'classic' ? '1px' : '0px',
                     );
                     const activeCategory = page
                         .locator('.desktop-local-navigation [aria-pressed="true"]')
                         .first();
-                    await expect(activeCategory).toHaveCSS('border-bottom-width', '0px');
                     await page.getByRole('button', { name: '日常用品' }).click();
+                    await expect(activeCategory).toHaveCSS('border-bottom-width', '0px');
                     if (requestedContent === 'category-banner') {
                         await expect(page.locator('.desktop-catalog-hero.has-image')).toBeVisible();
                     }
@@ -607,7 +598,9 @@ try {
                     await expect(page.locator('.search-discovery')).toBeVisible();
                     if (width >= 1024) {
                         const recent = await page.locator('.search-recent').boundingBox();
-                        const suggestions = await page.locator('.popular-searches').boundingBox();
+                        const suggestions = await page
+                            .locator('.search-discovery > .product-section')
+                            .boundingBox();
                         expect(recent.x + recent.width).toBeLessThan(suggestions.x);
                     }
                 }
@@ -831,7 +824,11 @@ try {
                         '.home-page .quick-grid',
                     ]) {
                         const element = page.locator(selector);
-                        if (await element.count()) await expect(element).toHaveCSS('border-top-width', '0px');
+                        if (await element.count())
+                            await expect(element).toHaveCSS(
+                                'border-top-width',
+                                selector === '.home-page .quick-grid' && preset === 'classic' ? '1px' : '0px',
+                            );
                     }
                 }
                 if (name === 'search' && width < 1024) {
@@ -941,11 +938,17 @@ try {
                         '.cart-line-swipe',
                         '.cart-checkout-bar',
                     ]) {
-                        await expect(page.locator(selector).first()).toHaveCSS('border-bottom-width', '0px');
+                        await expect(page.locator(selector).first()).toHaveCSS(
+                            'border-bottom-width',
+                            preset === 'classic' && selector === '.cart-group' ? '1px' : '0px',
+                        );
                     }
                     const couponRow = page.locator('.cart-page > .coupon-row');
                     if (await couponRow.count()) {
-                        await expect(couponRow).toHaveCSS('border-bottom-width', '0px');
+                        await expect(couponRow).toHaveCSS(
+                            'border-bottom-width',
+                            preset === 'classic' ? '1px' : '0px',
+                        );
                     }
                     await expect(page.locator('.cart-checkout-bar')).toHaveCSS('border-top-width', '0px');
                 }
@@ -1042,12 +1045,24 @@ try {
                 }
                 if (width >= 1024 && name === 'order-detail') {
                     await expect(page.locator('.order-detail-page > .subpage-header')).toBeHidden();
+                    const heading = await page.locator('.delivery-linked-order-heading').boundingBox();
                     const status = await page.locator('.order-status').boundingBox();
                     const rail = await page.locator('.desktop-account-navigation').boundingBox();
                     expect(
-                        Math.abs(status.y - rail.y),
-                        'order detail starts beside the account rail',
+                        Math.abs(heading.y - rail.y),
+                        'order detail heading starts beside the account rail',
                     ).toBeLessThanOrEqual(1);
+                    expect(status.y - heading.y - heading.height).toBeCloseTo(24, 0);
+                    await expect(page.locator('.desktop-order-purchase-row .order-detail-summary')).toHaveCSS(
+                        'border-width',
+                        '0px',
+                    );
+                    const delivery = await page.locator('.order-delivery-panel').boundingBox();
+                    if (delivery) expect(delivery.y - status.y - status.height).toBeCloseTo(24, 0);
+                    await expect(page.locator('.delivery-linked-order-heading h1')).toHaveCSS(
+                        'font-size',
+                        '28px',
+                    );
                 }
                 if (width >= 1024 && name === 'account') {
                     // Account order thumbnails must constrain the SafeImage frame, not only its img.
@@ -1068,7 +1083,7 @@ try {
                 if (width < 1024 && name === 'account') {
                     await expect(page.locator('.account-page .account-section').first()).toHaveCSS(
                         'border-bottom-width',
-                        '0px',
+                        preset === 'classic' ? '1px' : '0px',
                     );
                     if (requestedContent === 'dense') {
                         for (const selector of [
@@ -1193,7 +1208,7 @@ try {
                     );
                     await expect(page.locator('.price-summary .summary-total')).toHaveCSS(
                         'border-top-width',
-                        '0px',
+                        '1px',
                     );
                     await expect(page.locator('.submit-order-bar')).toHaveCSS('border-top-width', '0px');
                 }
@@ -1319,6 +1334,10 @@ try {
                     await expect(documentButtons.last()).toHaveAttribute('aria-current', 'page');
                 }
                 await page.keyboard.press('Tab');
+                // A last-control Tab can leave the document for browser chrome; re-enter before inspecting.
+                if (await page.evaluate(() => document.activeElement === document.body)) {
+                    await page.keyboard.press('Tab');
+                }
                 const keyboardFocus = await page.evaluate(() => {
                     const active = document.activeElement;
                     if (!(active instanceof HTMLElement) || active === document.body) return null;

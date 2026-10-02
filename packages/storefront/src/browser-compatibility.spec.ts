@@ -55,7 +55,7 @@ describe('browser compatibility policy', () => {
 
     it('prevents mobile WebKit input focus from zooming the storefront', () => {
         expect(stylesheet).toMatch(
-            /@media \(max-width:\s*1023px\)[\s\S]*?input:not\(\[type='checkbox'\]\)[\s\S]*?font-size:\s*16px\s*!important;/u,
+            /@media \(max-width:\s*1023px\)[\s\S]*?input:not\(\[type='checkbox'\]\)[\s\S]*?font-size:\s*var\(--type-input-size\)\s*!important;/u,
         );
     });
 

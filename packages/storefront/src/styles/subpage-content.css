@@ -5,9 +5,9 @@
 
 .subpage-header > strong {
     overflow: hidden;
-    font-size: 16px;
+    font-size: var(--type-topbar-size);
     font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
+    line-height: var(--type-topbar-leading);
     text-align: center;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -77,9 +77,9 @@
 .product-detail-header.is-scrolled,
 .topbar.product-detail-header.is-scrolled,
 .product-detail-page > .subpage-header.is-scrolled {
-    background: rgba(255, 255, 255, 0.96);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
     color: var(--text);
-    box-shadow: 0 4px 14px rgba(35, 43, 39, 0.06);
+    box-shadow: var(--skin-header-shadow);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
 }
@@ -166,7 +166,7 @@
     min-height: 46px;
     padding: 0 16px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--skin-control-radius);
     background: var(--accent);
     color: white;
     display: flex;
@@ -243,7 +243,7 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: var(--text-soft);
+    color: var(--muted);
     font: inherit;
     font-size: 13px;
     text-align: left;
@@ -370,8 +370,8 @@
 
 .legal-managed-body {
     color: var(--text);
-    font-size: 15px;
-    line-height: 1.9;
+    font-size: var(--type-reading-size);
+    line-height: var(--type-reading-leading);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
@@ -455,9 +455,10 @@
         display: block;
         flex: 1;
         text-align: left;
-        font-size: 24px;
-        font-weight: 500;
+        font-size: var(--type-page-size);
+        font-weight: var(--font-weight-semibold);
         opacity: 1;
+        line-height: var(--type-page-leading);
     }
     .desktop-store-layout .subpage-header > button {
         position: static;

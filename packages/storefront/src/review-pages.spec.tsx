@@ -94,6 +94,7 @@ describe('product review rating', () => {
             });
             const candidateRows = host.querySelectorAll<HTMLButtonElement>('.review-candidate-row');
             expect(candidateRows).toHaveLength(2);
+            expect(host.textContent).not.toContain('QA-SKU');
             expect(candidateRows[0].textContent).toContain('含税单价');
             expect(candidateRows[0].textContent).toContain('MYR 810');
             expect(candidateRows[0].textContent).toContain('订单行 line-1');

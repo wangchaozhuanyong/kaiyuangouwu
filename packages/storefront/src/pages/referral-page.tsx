@@ -373,7 +373,7 @@ export function ReferralPage() {
                                                     </small>
                                                 </div>
                                                 <span
-                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--text-soft)]'}`}
+                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
                                                 >
                                                     {invitee.firstPaidOrderAt
                                                         ? isZh
@@ -627,7 +627,7 @@ function ListPagination({
                     disabled={currentPage <= 1}
                     onClick={() => onPageChange(currentPage - 1)}
                     aria-label={isZh ? '上一页' : 'Previous page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="size-3.5" aria-hidden="true" />
                     <span>{isZh ? '上一页' : 'Prev'}</span>
@@ -637,7 +637,7 @@ function ListPagination({
                     disabled={currentPage >= totalPages}
                     onClick={() => onPageChange(currentPage + 1)}
                     aria-label={isZh ? '下一页' : 'Next page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <span>{isZh ? '下一页' : 'Next'}</span>
                     <ChevronRight className="size-3.5" aria-hidden="true" />
