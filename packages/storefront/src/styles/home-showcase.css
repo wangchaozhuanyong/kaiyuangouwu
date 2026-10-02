@@ -126,6 +126,89 @@
     color: #2f6feb;
 }
 
+/* Shared hero service position; skins only supply visual tokens. */
+.home-page .hero.hero-image-overlay.has-service-overlay {
+    display: flex;
+    flex-direction: column;
+}
+.home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    max-height: none;
+    margin: auto 0;
+    padding: 28px 0 20px;
+    margin-left: clamp(28px, 3vw, 44px);
+}
+.home-page .hero .hero-service-overlay {
+    position: relative;
+    z-index: 2;
+    align-self: flex-start;
+    max-width: calc(100% - clamp(56px, 6vw, 88px));
+    margin: 0 clamp(28px, 3vw, 44px) 20px;
+}
+.home-page .hero:has(.desktop-hero-navigation) .hero-service-overlay {
+    max-width: calc(100% - clamp(28px, 3vw, 44px) - 178px);
+}
+.home-page .hero .hero-service-overlay .home-trust-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: var(--skin-control-radius);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: none;
+}
+.home-page .hero .hero-service-overlay .home-trust-item {
+    justify-content: flex-start;
+    gap: 6px;
+    max-width: 100%;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: var(--text);
+}
+.home-page .hero .hero-service-overlay .trust-icon {
+    width: 15px;
+    height: 15px;
+}
+.home-page .hero .hero-service-overlay .home-trust-copy {
+    gap: 2px;
+    max-width: 220px;
+}
+@media (max-width: 1023px) {
+    .home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
+        min-height: 0;
+        width: calc(100% - 40px);
+        margin: auto 20px;
+        padding: 24px 0 16px;
+    }
+
+    .home-page .hero .hero-service-overlay {
+        max-width: calc(100% - 40px);
+        margin: 0 20px 12px;
+    }
+
+    .home-page .hero:has(.hero-pagination) .hero-service-overlay {
+        margin-bottom: 44px;
+    }
+
+    .home-page .hero .hero-service-overlay .home-trust-bar {
+        gap: 6px 12px;
+        padding: 8px 10px;
+    }
+
+    .home-page .hero .hero-service-overlay .home-trust-item {
+        font-size: 11px;
+    }
+}
+
 .quick-grid {
     margin: 0 12px 10px;
     padding: 14px 8px;

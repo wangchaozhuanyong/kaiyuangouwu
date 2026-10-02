@@ -271,61 +271,6 @@
     .desktop-store-layout .home-page .hero-stat-badge .stat-lbl {
         font-size: 11px;
     }
-    .desktop-store-layout .home-intro-grid .hero.has-service-overlay {
-        display: flex;
-        flex-direction: column;
-    }
-    .desktop-store-layout .home-page .hero.has-service-overlay .hero-rich-content {
-        position: relative;
-        top: auto;
-        left: auto;
-        transform: none;
-        max-height: none;
-        margin: auto 0;
-        padding: 28px 0 20px;
-        margin-left: clamp(28px, 3vw, 44px);
-    }
-    .desktop-store-layout .hero-service-overlay {
-        position: relative;
-        z-index: 2;
-        align-self: flex-start;
-        max-width: calc(100% - clamp(56px, 6vw, 88px));
-        margin: 0 clamp(28px, 3vw, 44px) 20px;
-    }
-    .desktop-store-layout .hero:has(.desktop-hero-navigation) .hero-service-overlay {
-        max-width: calc(100% - clamp(28px, 3vw, 44px) - 178px);
-    }
-    .desktop-store-layout .hero-service-overlay .home-trust-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 18px;
-        margin: 0;
-        padding: 10px 14px;
-        border-radius: var(--skin-control-radius);
-        background: color-mix(in srgb, var(--surface) 94%, transparent);
-        box-shadow: none;
-    }
-    .desktop-store-layout .hero-service-overlay .home-trust-item {
-        justify-content: flex-start;
-        gap: 6px;
-        max-width: 100%;
-        min-height: 0;
-        padding: 0;
-        background: transparent;
-        font-size: 12px;
-        line-height: 1.5;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        color: var(--text);
-    }
-    .desktop-store-layout .hero-service-overlay .trust-icon {
-        width: 15px;
-        height: 15px;
-    }
-    .desktop-store-layout .hero-service-overlay .home-trust-copy {
-        gap: 2px;
-        max-width: 220px;
-    }
     .desktop-hero-navigation {
         position: absolute;
         z-index: 3;

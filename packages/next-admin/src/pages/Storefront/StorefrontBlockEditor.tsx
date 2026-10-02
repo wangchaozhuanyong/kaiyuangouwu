@@ -463,27 +463,6 @@ export function StorefrontBlockEditor({
                                             </select>
                                         </Field>
                                     )}
-                                    {draft.type === 'TRUST_BAR' && (
-                                        <Field
-                                            label="桌面端展示位置"
-                                            helpText="手机端始终独立展示；选择主图下方后，请在首页楼层顺序中将服务保障栏移到主图后。"
-                                        >
-                                            <select
-                                                className={inputClass}
-                                                value={
-                                                    draft.settings?.placement === 'belowHero'
-                                                        ? 'belowHero'
-                                                        : 'heroOverlay'
-                                                }
-                                                onChange={event =>
-                                                    updateSettings({ placement: event.target.value })
-                                                }
-                                            >
-                                                <option value="heroOverlay">主图内</option>
-                                                <option value="belowHero">主图下方</option>
-                                            </select>
-                                        </Field>
-                                    )}
                                     {draft.type === 'CORE_CATEGORIES' && (
                                         <Field
                                             label="双卡片颜色模板"

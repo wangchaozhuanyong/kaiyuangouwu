@@ -878,14 +878,9 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    const overlayTrustBar =
-        desktop &&
-        trustBlock?.settings?.placement !== 'belowHero' &&
-        hasHomepageModule('HERO') &&
-        heroCount > 0 &&
-        Boolean(trustBar);
-    // Each store can keep the desktop overlay or place its trust bar in the
-    // homepage floor order; mobile always follows the saved floor order.
+    const overlayTrustBar = hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
+    // All stores and viewports share the hero overlay. A standalone service
+    // floor is only needed when the merchant has no published hero.
     const introOrders = (overlayTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
