@@ -159,6 +159,13 @@
     gap: 2px;
     max-width: 220px;
 }
+@media (min-width: 1024px) {
+    .home-page .hero .hero-service-overlay {
+        align-self: flex-start;
+        max-width: calc(100% - clamp(28px, 3vw, 44px) - 20px);
+        margin: 0 0 12px clamp(28px, 3vw, 44px);
+    }
+}
 @media (max-width: 1023px) {
     .home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
         min-height: 0;
