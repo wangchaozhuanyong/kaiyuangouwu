@@ -35,7 +35,7 @@ import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfi
 import gql from 'graphql-tag';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { Duplex } from 'node:stream';
 // @ts-ignore Project-owned fixture lab verifies the Docker endpoint and container.
 import { fileURLToPath } from 'node:url';
@@ -104,6 +104,7 @@ let variantIds: string[];
 let categoryId: string;
 describe('platform governance real database and API boundaries', () => {
     beforeAll(async () => {
+        await mkdir(new URL('../../../artifacts/platform-governance/', import.meta.url), { recursive: true });
         if (process.env.PLATFORM_GOVERNANCE_MYSQL === '1') {
             mysqlLab = await createLab({ subnet: 'synthetic-auto' });
             const caseFile = await createCase(mysqlLab);
@@ -144,7 +145,7 @@ describe('platform governance real database and API boundaries', () => {
             };
             registerInitializer('mysql', {
                 init: (_file, databaseOptions) => Promise.resolve(databaseOptions),
-                populate: async work => work(),
+                populate: work => work(),
                 destroy: () => Promise.resolve(),
             });
             await writeFile(
@@ -158,10 +159,15 @@ describe('platform governance real database and API boundaries', () => {
                 { mode: 0o600 },
             );
         } else if (process.env.PLATFORM_GOVERNANCE_CI_MYSQL === '1') {
-            serverConfig.dbConnectionOptions = { ...(await createCiGovernanceDatabase()), synchronize: true };
+            serverConfig.dbConnectionOptions = {
+                ...(await createCiGovernanceDatabase()),
+                type: 'mysql',
+                connectorPackage: 'mysql2',
+                synchronize: true,
+            };
             registerInitializer('mysql', {
                 init: (_file, databaseOptions) => Promise.resolve(databaseOptions),
-                populate: async work => work(),
+                populate: work => work(),
                 destroy: () => Promise.resolve(),
             });
         } else {
@@ -395,6 +401,8 @@ describe('platform governance real database and API boundaries', () => {
             apiType: 'shop',
             channel: platform.channel,
             languageCode: platform.languageCode,
+            isAuthorized: false,
+            authorizedAsOwnerOnly: false,
         });
         const products = server.app.get(ProductService);
         expect((await products.findAll(shop)).totalItems).toBe(0);
@@ -962,7 +970,7 @@ describe('platform governance real database and API boundaries', () => {
             await writeFile(
                 fileURLToPath(
                     new URL(
-                        `../../../artifacts/platform-governance/payment-data-plan-${mysqlLab ? 'mysql' : 'sqljs'}.json`,
+                        `../../../artifacts/platform-governance/payment-data-plan-${connection.rawConnection.options.type === 'mysql' ? 'mysql' : 'sqljs'}.json`,
                         import.meta.url,
                     ),
                 ),
