@@ -1,6 +1,7 @@
 import { productAvailability } from '../product-availability';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
+    AccountRecommendationSettings,
     Product,
     StorefrontAuthSettings,
     StorefrontCatalogInput,
@@ -30,6 +31,7 @@ export interface StorefrontContentQueryResult {
         configuredBlockTypes?: Array<StorefrontContentBlock['type']>;
         auth?: StorefrontAuthSettings;
         personalDataExportEnabled?: boolean;
+        accountRecommendations?: AccountRecommendationSettings;
     };
 }
 

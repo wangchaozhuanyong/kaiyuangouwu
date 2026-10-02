@@ -21,6 +21,7 @@ import type {
 import type { StorefrontContentQueryResult } from './helpers';
 
 import { isAccountContentBlockType } from '../../../storefront-content-plugin/src/content-publication';
+import { resolveAccountRecommendationSettings } from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import {
     type StorefrontVisualPresetConfig,
     normalizeStorefrontDesktopLayout,
@@ -28,7 +29,7 @@ import {
 } from '../../../storefront-content-plugin/src/visual-presets';
 
 import { BaseDomainApi } from './base-domain-api';
-import { isSupportedContentSchemaFallback } from './content-compatibility';
+import { isSupportedContentSchemaFallback, unsupportedOptionalContentFields } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
 
 const defaultAuthSettings: StorefrontAuthSettings = {
@@ -373,12 +374,17 @@ export class ContentReviewsApi extends BaseDomainApi {
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
-        const modernQuery = (announcementCreatedAt: boolean, personalDataExport = true) => `
+        const modernQuery = (
+            announcementCreatedAt: boolean,
+            personalDataExport = true,
+            accountRecommendations = true,
+        ) => `
             query StorefrontContent {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
                     configuredBlockTypes
                     ${personalDataExport ? 'personalDataExportEnabled' : ''}
+                    ${accountRecommendations ? 'accountRecommendations { enabled titleZh titleEn limit }' : ''}
                     auth {
                         emailPasswordEnabled
                         emailAutoRegistrationEnabled
@@ -452,22 +458,22 @@ export class ContentReviewsApi extends BaseDomainApi {
             } catch (error) {
                 let fallbackError: unknown = error;
                 let personalDataExport = true;
-                if (isSupportedContentSchemaFallback(error, 'personalDataExport')) {
-                    personalDataExport = false;
+                let accountRecommendations = true;
+                let announcementCreatedAt = true;
+                // Remove only explicitly unsupported optional fields; preserve all other modern settings.
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    const unsupported = unsupportedOptionalContentFields(fallbackError);
+                    if (!unsupported.size) break;
+                    accountRecommendations &&= !unsupported.has(
+                        'StorefrontContentSettings.accountRecommendations',
+                    );
+                    personalDataExport &&= !unsupported.has(
+                        'StorefrontContentSettings.personalDataExportEnabled',
+                    );
+                    announcementCreatedAt &&= !unsupported.has('StorefrontSystemAnnouncement.createdAt');
                     try {
                         return await this.request<StorefrontContentQueryResult>(
-                            modernQuery(true, false),
-                            undefined,
-                            signal,
-                        );
-                    } catch (retryError) {
-                        fallbackError = retryError;
-                    }
-                }
-                if (isSupportedContentSchemaFallback(fallbackError, 'announcementsCreatedAt')) {
-                    try {
-                        return await this.request<StorefrontContentQueryResult>(
-                            modernQuery(false, personalDataExport),
+                            modernQuery(announcementCreatedAt, personalDataExport, accountRecommendations),
                             undefined,
                             signal,
                         );
@@ -530,6 +536,9 @@ export class ContentReviewsApi extends BaseDomainApi {
                 auth: result.storefrontContentSettings?.auth ?? defaultAuthSettings,
                 personalDataExportEnabled:
                     result.storefrontContentSettings?.personalDataExportEnabled === true,
+                accountRecommendations: resolveAccountRecommendationSettings(
+                    result.storefrontContentSettings?.accountRecommendations,
+                ),
             },
         };
     }

@@ -42,6 +42,7 @@ export function AccountRoutePage() {
                     market: runtime.market,
                     locale: runtime.locale,
                     language: runtime.language,
+                    accountRecommendations: runtime.contentQuery?.data?.settings.accountRecommendations,
                     reviewEnabled: runtime.reviewSettingsStatus === 'enabled',
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,

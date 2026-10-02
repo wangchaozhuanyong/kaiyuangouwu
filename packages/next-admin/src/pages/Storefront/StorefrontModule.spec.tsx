@@ -2,6 +2,7 @@
 import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultAccountRecommendationSettings } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import type { StorefrontContentBlock, StorefrontContentResult } from '../../graphql/storefront.graphql';
 import { newContentBlock, newContentItem } from './storefront-content-utils';
 import { StorefrontContentModule } from './StorefrontContentModule';
@@ -469,6 +470,96 @@ describe('personal-data export visibility', () => {
         await render();
         await click('个人数据导出入口');
         expect(button('个人数据导出入口').disabled).toBe(true);
+        expect(mocks.other).not.toHaveBeenCalled();
+    });
+});
+
+describe('account recommendation settings', () => {
+    async function openSettings() {
+        await render();
+        const open = Array.from(host.querySelectorAll('button')).find(
+            node => node.textContent?.trim() === '装修设置',
+        );
+        await act(async () => open!.click());
+    }
+    const form = () => host.querySelector<HTMLFormElement>('form[aria-label="账户推荐设置"]')!;
+    async function setLimit(value: string) {
+        const input = form().querySelector<HTMLInputElement>('input[type="number"]')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+    async function save() {
+        await act(async () => form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    }
+    it('defaults to eight and verifies saved values against the selected store', async () => {
+        mocks.other.mockImplementation(async ({ variables }) => ({
+            data: { updateStorefrontAccountRecommendations: variables.input },
+        }));
+        mocks.refetch.mockImplementation(async () => {
+            current = {
+                ...current,
+                storefrontContentSettings: {
+                    ...current.storefrontContentSettings,
+                    accountRecommendations: mocks.other.mock.calls.at(-1)![0].variables.input,
+                },
+            };
+            return { data: current };
+        });
+        await openSettings();
+        expect(form().querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('8');
+        expect(form().textContent).toContain('今日净销量');
+        await setLimit('6');
+        await save();
+        expect(mocks.other).toHaveBeenLastCalledWith({
+            context: { headers: { 'vendure-token': 'store-a' } },
+            variables: { input: { ...defaultAccountRecommendationSettings, limit: 6 } },
+        });
+        expect(host.textContent).toContain('账户推荐已保存');
+        await render();
+        expect(form().querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('6');
+        current = data('b');
+        mocks.token = 'store-b';
+        await render();
+        const open = Array.from(host.querySelectorAll('button')).find(
+            node => node.textContent?.trim() === '装修设置',
+        );
+        await act(async () => open!.click());
+        expect(form().querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('8');
+    });
+    it('reports a readback mismatch without claiming a save and preserves the draft', async () => {
+        mocks.other.mockImplementation(async ({ variables }) => ({
+            data: { updateStorefrontAccountRecommendations: variables.input },
+        }));
+        mocks.refetch.mockImplementation(async () => {
+            current = {
+                ...current,
+                storefrontContentSettings: {
+                    ...current.storefrontContentSettings,
+                    accountRecommendations: { ...defaultAccountRecommendationSettings, limit: 4 },
+                },
+            };
+            return { data: current };
+        });
+        await openSettings();
+        await setLimit('6');
+        await save();
+        expect(host.textContent).toContain('账户推荐重新读取结果不一致');
+        expect(host.textContent).not.toContain('账户推荐已保存');
+        expect(form().querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('6');
+    });
+    it('rejects invalid counts and prevents writes without update permission', async () => {
+        await openSettings();
+        await setLimit('11');
+        await save();
+        expect(form().textContent).toContain('1–10');
+        expect(mocks.other).not.toHaveBeenCalled();
+        mocks.canUpdate = false;
+        await render();
+        await setLimit('6');
+        await save();
+        expect(form().querySelector('fieldset')!.disabled).toBe(true);
         expect(mocks.other).not.toHaveBeenCalled();
     });
 });

@@ -8,6 +8,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import { accountRecommendationSettingsError } from './shared/account-recommendation-settings';
 import {
     STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE,
     StorefrontAccountSettingsService,
@@ -48,6 +49,15 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
         config.settingsStoreFields ??= {};
         config.settingsStoreFields[STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE] = [
             ...(config.settingsStoreFields[STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE] ?? []),
+            {
+                name: 'recommendations',
+                scope: SettingsStoreScopes.channel,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: storefrontContentPermission.Update,
+                },
+                validate: accountRecommendationSettingsError,
+            },
             {
                 name: 'personalDataExportEnabled',
                 scope: SettingsStoreScopes.channel,

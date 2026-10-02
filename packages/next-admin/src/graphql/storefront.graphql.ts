@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import type { AccountRecommendationSettings } from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 
 const STOREFRONT_BLOCK_FIELDS = gql`
     fragment NextAdminStorefrontBlockFields on StorefrontContentBlock {
@@ -85,6 +86,12 @@ export const STOREFRONT_CONTENT_QUERY = gql`
             heroAutoplayIntervalSeconds
             configuredBlockTypes
             personalDataExportEnabled
+            accountRecommendations {
+                enabled
+                titleZh
+                titleEn
+                limit
+            }
         }
         storefrontAuthConfiguration {
             emailPasswordEnabled
@@ -171,6 +178,19 @@ export const UPDATE_STOREFRONT_SETTINGS_MUTATION = gql`
         updateStorefrontContentSettings(input: $input) {
             heroAutoplayIntervalSeconds
             configuredBlockTypes
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_ACCOUNT_RECOMMENDATIONS_MUTATION = gql`
+    mutation NextAdminUpdateStorefrontAccountRecommendations(
+        $input: UpdateStorefrontAccountRecommendationsInput!
+    ) {
+        updateStorefrontAccountRecommendations(input: $input) {
+            enabled
+            titleZh
+            titleEn
+            limit
         }
     }
 `;
@@ -504,6 +524,7 @@ export interface StorefrontContentResult {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes: StorefrontBlockType[];
         personalDataExportEnabled?: boolean;
+        accountRecommendations?: AccountRecommendationSettings;
     };
     storefrontAuthConfiguration: StorefrontAuthConfigurationRecord;
     storefrontContentBlocks: StorefrontContentBlock[];

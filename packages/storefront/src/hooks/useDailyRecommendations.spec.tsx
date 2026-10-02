@@ -94,6 +94,57 @@ describe('shared daily recommendation query', () => {
         expect(html).not.toContain('Yesterday product');
     });
 
+    it('shows the first eight shared daily products under a centered account title and keeps search at ten', () => {
+        const client = new QueryClient();
+        clients.push(client);
+        const market = enabledMarkets[0];
+        const items = Array.from({ length: 10 }, (_, index) => ({
+            id: String(index + 1),
+            name: `Product ${index + 1}`,
+            slug: `product-${index + 1}`,
+            description: '',
+            featuredAsset: null,
+            assets: [],
+            collections: [],
+            variants: [],
+            customFields: { fulfillmentType: 'physical' as const },
+        }));
+        client.setQueryData(
+            [
+                ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), 'zh_Hans'),
+                'daily-recommendations',
+            ],
+            {
+                items,
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+                businessDate: '2026-10-02',
+            },
+        );
+        const render = (limit?: number, centered = false) =>
+            renderToStaticMarkup(
+                <QueryClientProvider client={client}>
+                    <DailyRecommendationSection
+                        api={{} as ShopApi}
+                        market={market}
+                        locale="zh-CN"
+                        language="zh"
+                        title={centered ? '专属推荐' : '今日推荐'}
+                        centered={centered}
+                        limit={limit}
+                        enabled={false}
+                        onProduct={() => undefined}
+                    />
+                </QueryClientProvider>,
+            );
+        const account = render(8, true);
+        expect(account.match(/class="product-card"/gu)).toHaveLength(8);
+        expect(account).toContain('class="section-header-center-label"');
+        expect(account).toContain('专属推荐');
+        expect(account).not.toContain('Product 9');
+        expect(render().match(/class="product-card"/gu)).toHaveLength(10);
+        expect(render(4, true).match(/class="product-card"/gu)).toHaveLength(4);
+    });
+
     it('isolates stores and retries a failed query without substituting a random or catalog list', async () => {
         const dailyRecommendations = vi.fn().mockRejectedValue(new Error('Unavailable'));
         const market = enabledMarkets[0];

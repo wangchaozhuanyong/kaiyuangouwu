@@ -2,6 +2,10 @@ import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/cli
 import { ApolloProvider } from '@apollo/client/react';
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+    defaultAccountRecommendationSettings,
+    type AccountRecommendationSettings,
+} from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsContext } from '../../src/hooks/use-admin-permissions';
 import '../../src/index.css';
@@ -11,6 +15,10 @@ import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 const presets: Record<string, { channelId: string; presetId: string; revision: string }> = {
     a: { channelId: 'a', presetId: 'classic', revision: 'default' },
     b: { channelId: 'b', presetId: 'classic', revision: 'default' },
+};
+const recommendations: Record<string, AccountRecommendationSettings> = {
+    a: { ...defaultAccountRecommendationSettings },
+    b: { ...defaultAccountRecommendationSettings },
 };
 const readbackFault = { enabled: false, pendingReadback: false };
 
@@ -83,6 +91,20 @@ export function Fixture() {
                                     });
                                 } else if (operation.operationName === 'NextAdminStorefrontPreviewUrl') {
                                     observer.next({ data: { activeChannel: channel, storeProfiles: [] } });
+                                } else if (
+                                    operation.operationName ===
+                                    'NextAdminUpdateStorefrontAccountRecommendations'
+                                ) {
+                                    setRequests(value => value + 1);
+                                    recommendations[channelId] = { ...operation.variables.input };
+                                    observer.next({
+                                        data: {
+                                            updateStorefrontAccountRecommendations: {
+                                                __typename: 'StorefrontAccountRecommendationsSettings',
+                                                ...recommendations[channelId],
+                                            },
+                                        },
+                                    });
                                 } else if (operation.operationName === 'NextAdminStorefrontContent') {
                                     observer.next({
                                         data: {
@@ -91,6 +113,11 @@ export function Fixture() {
                                                 __typename: 'StorefrontContentSettings',
                                                 heroAutoplayIntervalSeconds: 5,
                                                 configuredBlockTypes: [],
+                                                personalDataExportEnabled: false,
+                                                accountRecommendations: {
+                                                    __typename: 'StorefrontAccountRecommendationsSettings',
+                                                    ...recommendations[channelId],
+                                                },
                                             },
                                             storefrontContentBlocks: [],
                                         },

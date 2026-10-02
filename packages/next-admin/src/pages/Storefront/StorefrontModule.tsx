@@ -17,6 +17,11 @@ import {
     X,
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+    accountRecommendationSettingsEqual,
+    resolveAccountRecommendationSettings,
+    type AccountRecommendationSettings,
+} from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -25,6 +30,7 @@ import {
     DELETE_STOREFRONT_BLOCK_MUTATION,
     REORDER_STOREFRONT_BLOCKS_MUTATION,
     STOREFRONT_CONTENT_QUERY,
+    UPDATE_STOREFRONT_ACCOUNT_RECOMMENDATIONS_MUTATION,
     UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION,
     UPDATE_STOREFRONT_BLOCK_MUTATION,
     UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION,
@@ -39,6 +45,7 @@ import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { StorefrontAccountRecommendationsPanel } from './StorefrontAccountRecommendationsPanel';
 import {
     StorefrontAuthSettingsPanel,
     type StorefrontGooglePlatformSettingsInput,
@@ -113,6 +120,9 @@ export function StorefrontModule() {
     const [updateSettings, settingsState] = useMutation<{
         updateStorefrontContentSettings: StorefrontContentResult['storefrontContentSettings'];
     }>(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
+    const [updateAccountRecommendations, accountRecommendationsState] = useMutation<{
+        updateStorefrontAccountRecommendations: AccountRecommendationSettings;
+    }>(UPDATE_STOREFRONT_ACCOUNT_RECOMMENDATIONS_MUTATION, mutationOptions);
     const [updatePersonalDataExport, personalDataExportState] = useMutation<{
         updateStorefrontPersonalDataExportEnabled: boolean;
     }>(UPDATE_STOREFRONT_PERSONAL_DATA_EXPORT_MUTATION, mutationOptions);
@@ -161,6 +171,7 @@ export function StorefrontModule() {
         settingsState.loading ||
         authSettingsState.loading ||
         personalDataExportState.loading ||
+        accountRecommendationsState.loading ||
         googlePlatformSettingsState.loading ||
         query.loading ||
         Boolean(query.error) ||
@@ -344,6 +355,32 @@ export function StorefrontModule() {
             setDeleting(null);
             showNotice(`已删除《${block.internalName}》，已重新读取核对`);
         });
+    };
+
+    const saveAccountRecommendations = async (input: AccountRecommendationSettings) => {
+        if (!canUpdate) throw new Error('没有更新店铺内容的权限');
+        await runContentAction(async scope => {
+            const response = await updateAccountRecommendations({
+                context: scope.context,
+                variables: { input },
+            });
+            if (
+                !accountRecommendationSettingsEqual(
+                    response.data?.updateStorefrontAccountRecommendations,
+                    input,
+                )
+            )
+                throw new Error('账户推荐保存结果不一致');
+            const refreshed = await scope.reread();
+            if (
+                !accountRecommendationSettingsEqual(
+                    refreshed.storefrontContentSettings.accountRecommendations,
+                    input,
+                )
+            )
+                throw new Error('账户推荐重新读取结果不一致，请刷新确认');
+            showNotice('账户推荐已保存，并已重新读取核对');
+        }, true);
     };
 
     const changePersonalDataExport = async (enabled: boolean) => {
@@ -743,6 +780,14 @@ export function StorefrontModule() {
                         </p>
                     )}
                 </section>
+                <StorefrontAccountRecommendationsPanel
+                    key={channelId}
+                    value={resolveAccountRecommendationSettings(
+                        query.data?.storefrontContentSettings.accountRecommendations,
+                    )}
+                    disabled={pending || !canUpdate}
+                    onSave={saveAccountRecommendations}
+                />
                 <StorefrontVisualPresetPanel />
             </StorefrontSettingsDrawer>
 
