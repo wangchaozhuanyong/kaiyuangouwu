@@ -12,6 +12,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -79,6 +80,7 @@ const { server, adminClient, shopClient } = createTestEnvironment(
             ],
         },
         plugins: [
+            OperationsDashboardPlugin,
             CatalogManagementPlugin,
             StorefrontCartPlugin,
             ContentTranslationPlugin.init({

@@ -13,6 +13,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import {
     CustomerCoupon,
     StoreCouponLifecycleService,
@@ -58,6 +59,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        OperationsDashboardPlugin,
         CatalogManagementPlugin,
         ContentTranslationPlugin.init({
             provider: {

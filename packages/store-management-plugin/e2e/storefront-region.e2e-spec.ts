@@ -9,6 +9,7 @@ import {
     TransactionalConnection,
     Zone,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -33,6 +34,7 @@ const config = mergeConfig(testConfig(), {
         shippingEligibilityCheckers: [supportedDestinationEligibilityChecker],
     },
     plugins: [
+        OperationsDashboardPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({
             provider: {

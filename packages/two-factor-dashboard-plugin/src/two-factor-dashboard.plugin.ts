@@ -34,8 +34,6 @@ import { TwoFactorCipherService } from './two-factor-cipher.service';
         { provide: APP_INTERCEPTOR, useClass: AdminTwoFactorInterceptor },
     ],
     configuration: config => {
-        if (!config.plugins.includes(OperationsDashboardPlugin))
-            config.plugins.push(OperationsDashboardPlugin);
         config.authOptions.adminAuthenticationStrategy = (
             config.authOptions.adminAuthenticationStrategy ?? []
         )

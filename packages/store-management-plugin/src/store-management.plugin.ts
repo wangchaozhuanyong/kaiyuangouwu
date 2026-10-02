@@ -387,8 +387,6 @@ import {
     ],
     exports: [ReferralWalletSpendService, FraudRiskService, ReferralService],
     configuration: config => {
-        if (!config.plugins.includes(OperationsDashboardPlugin))
-            config.plugins.push(OperationsDashboardPlugin);
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
             config.customFields.Order.push({

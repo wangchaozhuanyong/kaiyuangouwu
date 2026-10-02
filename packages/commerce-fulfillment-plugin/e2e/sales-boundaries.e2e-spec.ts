@@ -22,6 +22,7 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -92,6 +93,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        OperationsDashboardPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({

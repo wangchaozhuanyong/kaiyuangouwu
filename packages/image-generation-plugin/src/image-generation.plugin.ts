@@ -96,8 +96,6 @@ import { ImageGenerationPluginOptions } from './types';
         },
     ],
     configuration: config => {
-        if (!config.plugins.includes(OperationsDashboardPlugin))
-            config.plugins.push(OperationsDashboardPlugin);
         config.authOptions.customPermissions.push(manageImageGenerationPermission);
         config.schedulerOptions.tasks.push(
             reconcileAiAccessTask,

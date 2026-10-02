@@ -119,3 +119,8 @@ The application cannot report its own complete process or host outage. Productio
 | 外部巡检                                                       | 故障分类、重复提醒、恢复和证书测试通过；脚本及工作流语法通过      |
 
 本轮只执行相关测试，没有运行全仓 CI。测试使用本地临时数据库与模拟发送，不向真实接收群发送通知；生产配置回读和群内消息仍待上线后验收。
+
+
+启用统一店铺通知的应用必须在 Vendure 的 `plugins` 列表中显式注册 `OperationsDashboardPlugin`，与 `StoreManagementPlugin`、`ImageGenerationPlugin`、`TwoFactorDashboardPlugin` 一起使用。生产配置已包含该插件；测试应用也需要显式注册。Vendure 在运行插件配置回调之前收集实体，不能在配置回调里临时追加数据库插件。
+
+新增在线、评价、活动、AI 凭证和安全开关初始关闭。生产启用操作先备份配置和验证 Bot，再统一开启并回读十类开关，最后发送按发布 SHA 去重的中文自检；单独部署代码不会启用这五类通知。

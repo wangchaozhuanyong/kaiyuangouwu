@@ -6,6 +6,7 @@ import {
     RequestContextService,
     SettingsStoreService,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -19,6 +20,7 @@ import { SYSTEM_WORKER_HEARTBEAT_KEY, SystemWorkerHealthService } from '../src/s
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
+        OperationsDashboardPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({
             provider: {

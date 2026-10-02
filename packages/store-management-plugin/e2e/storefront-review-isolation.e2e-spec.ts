@@ -10,6 +10,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { createTestEnvironment } from '@vendure/testing';
@@ -30,6 +31,7 @@ import { StoreManagementPlugin } from '../src/store-management.plugin';
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
+        OperationsDashboardPlugin,
         AssetServerPlugin.init({
             route: 'assets',
             assetUploadDir: path.resolve(
