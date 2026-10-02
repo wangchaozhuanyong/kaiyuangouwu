@@ -2958,7 +2958,7 @@ html[lang='en'] .primary-categories button {
 .all-primary-category-grid button > span:last-child {
     max-width: 100%;
     min-height: 0;
-    padding: 2px 6px;
+    padding: 2px 3px;
     overflow-wrap: anywhere;
     border-radius: var(--skin-control-radius);
     font-size: 12px;
