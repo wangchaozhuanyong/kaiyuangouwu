@@ -10,14 +10,14 @@ const testState = vi.hoisted(() => ({ runtime: null as Record<string, unknown> |
 vi.mock('./lazy-storefront-pages', () => ({
     LazyAccountSecurityPage: (props: {
         customer: { id: string };
-        avatarHistory: Array<{ id: string }>;
+        onDataExport?: (password: string) => Promise<unknown>;
         dataSubjectRequests: Array<{ id: string }>;
         fraudRiskCases: Array<{ id: string }>;
     }) => (
         <div>
             {JSON.stringify({
                 customer: props.customer?.id,
-                avatars: props.avatarHistory.map(item => item.id),
+                exportEnabled: Boolean(props.onDataExport),
                 requests: props.dataSubjectRequests.map(item => item.id),
                 cases: props.fraudRiskCases.map(item => item.id),
             })}
@@ -63,7 +63,7 @@ it('does not display the previous customer security records while another accoun
             root.render(<AccountSecurityRoutePage />);
             await Promise.resolve();
         });
-        expect(host.textContent).toContain('avatar-a-only');
+        expect(firstApi.customerAvatarHistory).not.toHaveBeenCalled();
         expect(host.textContent).toContain('privacy-a-only');
         expect(host.textContent).toContain('risk-a-only');
 
@@ -84,3 +84,39 @@ it('does not display the previous customer security records while another accoun
         act(() => root.unmount());
     }
 });
+
+it.each([undefined, false, true])(
+    'uses the store export setting %s and updates on config changes',
+    async enabled => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const api = {
+            dataSubjectRequests: vi.fn().mockResolvedValue([]),
+            fraudRiskCases: vi.fn().mockResolvedValue([]),
+            exportPersonalData: vi.fn(),
+        };
+        testState.runtime = {
+            language: 'zh',
+            customer: { id: 'customer-a' },
+            api,
+            notify: vi.fn(),
+            contentQuery: { data: { settings: { personalDataExportEnabled: enabled } } },
+        };
+        try {
+            await act(async () => {
+                root.render(<AccountSecurityRoutePage />);
+                await Promise.resolve();
+            });
+            expect(host.textContent).toContain(`"exportEnabled":${enabled === true}`);
+            testState.runtime.contentQuery = { data: { settings: { personalDataExportEnabled: false } } };
+            await act(async () => {
+                root.render(<AccountSecurityRoutePage />);
+                await Promise.resolve();
+            });
+            expect(host.textContent).toContain('"exportEnabled":false');
+            expect(api.exportPersonalData).not.toHaveBeenCalled();
+        } finally {
+            act(() => root.unmount());
+        }
+    },
+);

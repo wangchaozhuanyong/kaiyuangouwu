@@ -84,6 +84,7 @@ export const STOREFRONT_CONTENT_QUERY = gql`
         storefrontContentSettings {
             heroAutoplayIntervalSeconds
             configuredBlockTypes
+            personalDataExportEnabled
         }
         storefrontAuthConfiguration {
             emailPasswordEnabled
@@ -171,6 +172,12 @@ export const UPDATE_STOREFRONT_SETTINGS_MUTATION = gql`
             heroAutoplayIntervalSeconds
             configuredBlockTypes
         }
+    }
+`;
+
+export const UPDATE_STOREFRONT_PERSONAL_DATA_EXPORT_MUTATION = gql`
+    mutation NextAdminUpdateStorefrontPersonalDataExport($enabled: Boolean!) {
+        updateStorefrontPersonalDataExportEnabled(enabled: $enabled)
     }
 `;
 
@@ -496,6 +503,7 @@ export interface StorefrontContentResult {
     storefrontContentSettings: {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes: StorefrontBlockType[];
+        personalDataExportEnabled?: boolean;
     };
     storefrontAuthConfiguration: StorefrontAuthConfigurationRecord;
     storefrontContentBlocks: StorefrontContentBlock[];

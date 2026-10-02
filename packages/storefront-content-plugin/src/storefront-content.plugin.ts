@@ -9,6 +9,10 @@ import { StorefrontContentItemTranslation } from './entities/storefront-content-
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import {
+    STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE,
+    StorefrontAccountSettingsService,
+} from './storefront-account-settings';
+import {
     isGoogleWebClientId,
     normalizeGoogleClientId,
     STOREFRONT_AUTH_SETTINGS_NAMESPACE,
@@ -37,10 +41,24 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
         StorefrontExternalImageService,
         StorefrontVisualPresetService,
         StorefrontAuthSettingsService,
+        StorefrontAccountSettingsService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
         config.settingsStoreFields ??= {};
+        config.settingsStoreFields[STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE] = [
+            ...(config.settingsStoreFields[STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE] ?? []),
+            {
+                name: 'personalDataExportEnabled',
+                scope: SettingsStoreScopes.channel,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: storefrontContentPermission.Update,
+                },
+                validate: (value: unknown) =>
+                    typeof value === 'boolean' ? undefined : 'Value must be a boolean',
+            },
+        ];
         config.settingsStoreFields[STOREFRONT_AUTH_SETTINGS_NAMESPACE] = [
             ...(config.settingsStoreFields[STOREFRONT_AUTH_SETTINGS_NAMESPACE] ?? []),
             ...[

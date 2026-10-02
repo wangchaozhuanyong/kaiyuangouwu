@@ -373,11 +373,12 @@ export class ContentReviewsApi extends BaseDomainApi {
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
-        const modernQuery = (announcementCreatedAt: boolean) => `
+        const modernQuery = (announcementCreatedAt: boolean, personalDataExport = true) => `
             query StorefrontContent {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
                     configuredBlockTypes
+                    ${personalDataExport ? 'personalDataExportEnabled' : ''}
                     auth {
                         emailPasswordEnabled
                         emailAutoRegistrationEnabled
@@ -450,10 +451,23 @@ export class ContentReviewsApi extends BaseDomainApi {
                 return await this.request<StorefrontContentQueryResult>(modernQuery(true), undefined, signal);
             } catch (error) {
                 let fallbackError: unknown = error;
-                if (isSupportedContentSchemaFallback(error, 'announcementsCreatedAt')) {
+                let personalDataExport = true;
+                if (isSupportedContentSchemaFallback(error, 'personalDataExport')) {
+                    personalDataExport = false;
                     try {
                         return await this.request<StorefrontContentQueryResult>(
-                            modernQuery(false),
+                            modernQuery(true, false),
+                            undefined,
+                            signal,
+                        );
+                    } catch (retryError) {
+                        fallbackError = retryError;
+                    }
+                }
+                if (isSupportedContentSchemaFallback(fallbackError, 'announcementsCreatedAt')) {
+                    try {
+                        return await this.request<StorefrontContentQueryResult>(
+                            modernQuery(false, personalDataExport),
                             undefined,
                             signal,
                         );
@@ -514,6 +528,8 @@ export class ContentReviewsApi extends BaseDomainApi {
                     result.storefrontContentSettings?.heroAutoplayIntervalSeconds ?? 5,
                 configuredBlockTypes: result.storefrontContentSettings?.configuredBlockTypes ?? [],
                 auth: result.storefrontContentSettings?.auth ?? defaultAuthSettings,
+                personalDataExportEnabled:
+                    result.storefrontContentSettings?.personalDataExportEnabled === true,
             },
         };
     }

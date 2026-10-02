@@ -439,6 +439,60 @@ afterAll(async () => {
 });
 
 describe('unified storefront Admin API to Shop API', () => {
+    it('persists personal-data export opt-in per store and exposes it through Shop API', async () => {
+        const read = gql`
+            query {
+                storefrontContentSettings {
+                    personalDataExportEnabled
+                }
+            }
+        `;
+        const write = gql`
+            mutation SetExportEntry($enabled: Boolean!) {
+                updateStorefrontPersonalDataExportEnabled(enabled: $enabled)
+            }
+        `;
+        adminClient.setChannelToken(stores[0].token);
+        shopClient.setChannelToken(stores[0].token);
+        expect((await shopClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(
+            false,
+        );
+        expect(
+            (await adminClient.query(write, { enabled: true })).updateStorefrontPersonalDataExportEnabled,
+        ).toBe(true);
+        expect((await adminClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(
+            true,
+        );
+        const carousel = await adminClient.query(gql`
+            mutation {
+                updateStorefrontContentSettings(input: { heroAutoplayIntervalSeconds: 5 }) {
+                    personalDataExportEnabled
+                }
+            }
+        `);
+        expect(carousel.updateStorefrontContentSettings.personalDataExportEnabled).toBe(true);
+
+        expect((await shopClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(true);
+        shopClient.setChannelToken(stores[1].token);
+        expect((await shopClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(
+            false,
+        );
+        await adminClient.query(write, { enabled: false });
+        shopClient.setChannelToken(stores[0].token);
+        expect((await shopClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(
+            false,
+        );
+        const denied = await fetch('http://127.0.0.1:5299/admin-api', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ query: print(write), variables: { enabled: true } }),
+        }).then(response => response.json());
+        expect(denied.errors?.length).toBeGreaterThan(0);
+        expect((await shopClient.query(read)).storefrontContentSettings.personalDataExportEnabled).toBe(
+            false,
+        );
+    });
+
     it('shows configured dual cards in the actual homepage and follows Admin enable state and floor order', async () => {
         const cores = [] as Array<{ id: string; updatedAt: string }>;
         const originalOrders: string[][] = [];
