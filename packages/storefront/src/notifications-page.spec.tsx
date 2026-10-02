@@ -43,7 +43,7 @@ describe('recent notification chronology', () => {
         ).toEqual(['valid', 'missing', 'invalid']);
     });
     it('handles empty sources', () => expect(recentNotificationEntries([], [])).toEqual([]));
-    it('renders sorted rows and keeps the distinct order and after-sales destinations', () => {
+    it('opens messages in a drawer and keeps explicit order and after-sales destinations', async () => {
         (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
             true;
         mocks.navigate.mockClear();
@@ -59,7 +59,11 @@ describe('recent notification chronology', () => {
                         <NotificationsPageContext.Provider
                             value={
                                 {
-                                    api: {},
+                                    api: {
+                                        contentReviewsApi: {
+                                            markNotificationsRead: vi.fn().mockResolvedValue([]),
+                                        },
+                                    },
                                     customer: {
                                         id: '27',
                                         orders: { items: [order('ORDER-NEW', '2026-09-14T00:00:00Z')] },
@@ -82,14 +86,37 @@ describe('recent notification chronology', () => {
             const buttons = host.querySelectorAll('.notification-list button');
             expect(buttons[0].textContent).toContain('ORDER-NEW');
             expect(buttons[1].textContent).toContain('AS-OLD');
-            act(() => (buttons[0] as HTMLButtonElement).click());
+            await act(async () => {
+                (buttons[0] as HTMLButtonElement).click();
+                await Promise.resolve();
+            });
+            expect(mocks.navigate).not.toHaveBeenCalled();
+            expect(document.querySelector('.notification-detail-sheet')?.textContent).toContain('ORDER-NEW');
+            expect(document.querySelector('.notification-detail-sheet')?.getAttribute('data-side')).toBe(
+                'right',
+            );
+            act(() =>
+                (
+                    document.querySelector('.notification-detail-footer .primary-action') as HTMLButtonElement
+                ).click(),
+            );
             expect(mocks.navigate).toHaveBeenLastCalledWith(
                 expect.objectContaining({
                     to: '/order-detail',
                     search: expect.objectContaining({ id: 'ORDER-NEW' }),
                 }),
             );
-            act(() => (buttons[1] as HTMLButtonElement).click());
+            await act(async () => {
+                (buttons[1] as HTMLButtonElement).click();
+                await Promise.resolve();
+            });
+            expect(document.querySelector('.notification-detail-sheet')?.textContent).toContain('AS-OLD');
+            expect(mocks.navigate).toHaveBeenCalledTimes(1);
+            act(() =>
+                (
+                    document.querySelector('.notification-detail-footer .primary-action') as HTMLButtonElement
+                ).click(),
+            );
             expect(mocks.navigate).toHaveBeenLastCalledWith(
                 expect.objectContaining({
                     to: '/orders',

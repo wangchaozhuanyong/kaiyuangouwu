@@ -1344,18 +1344,6 @@
         gap: 16px;
         padding: 0;
     }
-    .desktop-store-layout .security-user-card {
-        grid-column: 1 / -1;
-        display: flex;
-        align-items: center;
-        padding: 22px 24px;
-        min-height: 104px;
-        margin: 0;
-        background: var(--surface, var(--paper));
-        border: var(--skin-card-outline, 0);
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-    }
     .desktop-store-layout .security-group {
         margin: 0;
         padding: 20px;

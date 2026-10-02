@@ -345,6 +345,7 @@ export function CouponCenterPage() {
                                             muted={!canClaim}
                                             action={action}
                                             meta={campaignValidity(campaign, language)}
+                                            scope={couponScopeSummary(campaign.kind, language)}
                                         />
                                     );
                                 })}
@@ -396,6 +397,7 @@ export function CouponCenterPage() {
                                                 )
                                             }
                                             meta={customerCouponValidity(coupon, language)}
+                                            scope={couponScopeSummary(coupon.campaignKind, language)}
                                         />
                                     );
                                 })}
@@ -431,6 +433,7 @@ export function CouponCenterPage() {
                                             </span>
                                         }
                                         meta={couponUsageRecord(record, language)}
+                                        scope={couponScopeSummary(record.campaignKind, language)}
                                     />
                                 ))}
                             </div>
@@ -622,14 +625,16 @@ function CouponTicket({
     muted,
     action,
     meta,
+    scope,
 }: {
     card: StorefrontCouponCard;
     muted?: boolean;
     action: ReactNode;
     meta?: string;
+    scope: string;
 }) {
     const desktop = useDesktopLayout();
-    if (desktop) return <DesktopCouponTicket card={card} action={action} meta={meta} />;
+    if (desktop) return <DesktopCouponTicket card={card} action={action} meta={meta} scope={scope} />;
     return (
         <article className="coupon-center-ticket-item">
             <div
@@ -685,11 +690,8 @@ function ActivityCoupon({
                     card={card}
                     action={action}
                     meta={campaignValidity(campaign, language)}
+                    scope={couponScopeSummary(campaign.kind, language)}
                 />
-                <details className="desktop-coupon-rules">
-                    <summary>{language === 'zh' ? '使用规则' : 'Terms of use'}</summary>
-                    <CampaignInstructions campaign={campaign} language={language} />
-                </details>
             </article>
         );
     return (
@@ -721,6 +723,10 @@ function ActivityCoupon({
             <CampaignInstructions campaign={campaign} language={language} />
         </article>
     );
+}
+
+function couponScopeSummary(kind: StorefrontCouponCampaign['kind'], language: StorefrontLanguage): string {
+    return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language)}`;
 }
 
 function CampaignInstructions({

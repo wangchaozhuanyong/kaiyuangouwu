@@ -29,6 +29,7 @@ export interface StorefrontContentQueryResult {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes?: Array<StorefrontContentBlock['type']>;
         auth?: StorefrontAuthSettings;
+        personalDataExportEnabled?: boolean;
     };
 }
 

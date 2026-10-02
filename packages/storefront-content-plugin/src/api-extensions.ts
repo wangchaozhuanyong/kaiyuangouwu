@@ -99,6 +99,7 @@ const commonTypes = gql`
         heroAutoplayIntervalSeconds: Int!
         configuredBlockTypes: [StorefrontContentBlockType!]!
         auth: StorefrontAuthSettings!
+        personalDataExportEnabled: Boolean!
     }
 
     type StorefrontAuthSettings {
@@ -289,6 +290,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        updateStorefrontPersonalDataExportEnabled(enabled: Boolean!): Boolean!
         updateStorefrontVisualPreset(input: UpdateStorefrontVisualPresetInput!): StorefrontVisualPreset!
         createStorefrontContentBlock(input: CreateStorefrontContentBlockInput!): StorefrontContentBlock!
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!

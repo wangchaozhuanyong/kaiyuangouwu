@@ -28,6 +28,8 @@ import { acquireBodyScrollLock } from '../scroll-lock';
 import { routeFromLocation, RouteName } from '../storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
 
+import '../styles/right-drawer.css';
+
 export function asyncRouteTitle(routeName: RouteName, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
     const routeTitles: Partial<Record<RouteName, string>> = {
@@ -536,6 +538,7 @@ export function Sheet({
     className,
     showHandle = false,
     initialFocus = 'first',
+    side,
 }: {
     title: string;
     language: StorefrontLanguage;
@@ -544,6 +547,7 @@ export function Sheet({
     className?: string;
     showHandle?: boolean;
     initialFocus?: 'first' | 'dialog';
+    side?: 'right';
 }) {
     const dialogRef = useRef<HTMLElement>(null);
     const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -577,7 +581,10 @@ export function Sheet({
             (initialFocus === 'dialog' ? dialog : (getFocusableElements()[0] ?? dialog)).focus();
         });
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
+            if (event.defaultPrevented || isInputMethodKey(event)) return;
+            // Only the frontmost modal owns keyboard navigation when a detail sheet opens a form.
+            const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+            if (dialogs[dialogs.length - 1] !== dialog) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onCloseRef.current();
@@ -616,7 +623,11 @@ export function Sheet({
     }, [initialFocus]);
 
     const content = (
-        <div className={`sheet-layer${className ? ` ${className}-layer` : ''}`} role="presentation">
+        <div
+            className={`sheet-layer${className ? ` ${className}-layer` : ''}`}
+            data-side={side}
+            role="presentation"
+        >
             <button
                 className="sheet-mask"
                 type="button"
@@ -626,6 +637,7 @@ export function Sheet({
             <section
                 ref={dialogRef}
                 className={className ? `sheet ${className}` : 'sheet'}
+                data-side={side}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}

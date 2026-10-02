@@ -6,14 +6,6 @@
 .delivery-detail-page {
     padding: 0 16px 24px;
 }
-.delivery-intro {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 12px 0 20px;
-}
-.delivery-intro p,
 .delivery-detail-heading p,
 .delivery-order-aside > p {
     margin: 0;
@@ -34,6 +26,44 @@
     justify-content: space-between;
     gap: 12px;
     padding: 16px 20px;
+}
+.delivery-toolbar-actions {
+    display: flex;
+    flex: 0 1 400px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+}
+.delivery-toolbar-actions .delivery-search {
+    flex: 1;
+    min-width: 0;
+}
+.delivery-refresh-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 96px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.delivery-refresh-button svg {
+    width: 16px;
+    height: 16px;
+}
+.delivery-refresh-button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
 }
 .delivery-filters {
     display: flex;
@@ -563,6 +593,69 @@
     gap: 24px;
     padding: 24px;
 }
+.delivery-detail-sheet-body {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+    padding: 16px 24px 24px;
+}
+.delivery-detail-sheet .delivery-detail-heading {
+    padding: 18px 20px;
+    border-radius: var(--skin-card-radius);
+    background: var(--soft);
+}
+.delivery-detail-sheet .delivery-detail-heading h2 {
+    font-size: 24px;
+}
+.delivery-detail-sheet .delivery-facts {
+    padding: 0;
+    gap: 16px 24px;
+}
+.delivery-detail-sheet .delivery-facts > div:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+.delivery-detail-sheet .delivery-events li {
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 16px;
+}
+.delivery-drawer-order {
+    margin-top: 28px;
+}
+.delivery-drawer-order > header {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+.delivery-drawer-order h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+.delivery-drawer-order > header > span {
+    color: var(--muted);
+    font: 12px/1.6 var(--font-numeric);
+}
+.delivery-drawer-order .delivery-product-name {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+}
+@media (max-width: 599px) {
+    .delivery-detail-sheet-body {
+        padding-inline: 16px;
+    }
+    .delivery-detail-sheet .delivery-facts {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .delivery-detail-sheet .delivery-events li {
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 12px;
+    }
+}
 .delivery-workspace :is(button, input):focus-visible,
 .logistics-sheet :is(button, input):focus-visible {
     outline: 2px solid var(--focus);
@@ -600,8 +693,8 @@
         gap: 5px;
         font-size: 12px;
     }
-    .delivery-search {
-        width: 100%;
+    .delivery-toolbar-actions {
+        flex-basis: 100%;
     }
     .delivery-list-caption {
         padding: 12px;
@@ -669,14 +762,6 @@
     .delivery-overview,
     .delivery-detail-page {
         padding-inline: 12px;
-    }
-    .delivery-intro {
-        align-items: flex-start;
-        padding: 12px 0;
-        gap: 8px;
-    }
-    .delivery-intro .delivery-text-button {
-        flex: none;
     }
     .delivery-detail-main,
     .delivery-order-aside {

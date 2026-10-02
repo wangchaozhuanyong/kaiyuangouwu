@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     create: vi.fn(),
     other: vi.fn(),
     token: 'store-a',
+    canUpdate: true,
 }));
 vi.mock('@apollo/client/react', () => ({
     useQuery: mocks.query,
@@ -40,7 +41,10 @@ vi.mock('react-router-dom', () => ({
 }));
 vi.mock('../../hooks/use-url-tab', () => ({ useUrlTab: () => ['PAGES', vi.fn()] }));
 vi.mock('../../hooks/use-admin-permissions', () => ({
-    useAdminPermissions: () => ({ hasAnyPermission: () => true }),
+    useAdminPermissions: () => ({
+        hasAnyPermission: (permissions: string[]) =>
+            !permissions.includes('UpdateStorefrontContent') || mocks.canUpdate,
+    }),
 }));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('./StorefrontVisualPresetPanel', () => ({ StorefrontVisualPresetPanel: () => null }));
@@ -148,6 +152,7 @@ async function click(label: string) {
 beforeEach(() => {
     vi.clearAllMocks();
     mocks.token = 'store-a';
+    mocks.canUpdate = true;
     current = data();
     mocks.query.mockImplementation((_document, options) => ({
         data: options?.skip ? undefined : current,
@@ -303,6 +308,7 @@ describe('store scoped verified content writes', () => {
         expect(host.querySelector('button[aria-label="保存测试草稿"]')).toBeNull();
         current = data();
         mocks.token = 'store-a';
+        mocks.canUpdate = true;
         await render();
         let resolve!: (value: unknown) => void;
         mocks.update.mockReturnValue(
@@ -417,4 +423,52 @@ it('refreshes the saved client preview after a verified content revision', async
     expect(host.querySelector('[data-client-preview]')?.getAttribute('data-client-preview')).not.toBe(
         instance,
     );
+});
+
+describe('personal-data export visibility', () => {
+    it('defaults off and verifies enable and disable writes in the selected store', async () => {
+        mocks.other.mockImplementation(async ({ variables }) => ({
+            data: { updateStorefrontPersonalDataExportEnabled: variables.enabled },
+        }));
+        mocks.refetch.mockImplementation(async () => {
+            current = {
+                ...current,
+                storefrontContentSettings: {
+                    ...current.storefrontContentSettings,
+                    personalDataExportEnabled: mocks.other.mock.calls.at(-1)?.[0].variables.enabled,
+                },
+            };
+            return { data: current };
+        });
+        await render();
+        expect(button('个人数据导出入口').getAttribute('aria-checked')).toBe('false');
+        await click('个人数据导出入口');
+        expect(mocks.other).toHaveBeenLastCalledWith({
+            context: { headers: { 'vendure-token': 'store-a' } },
+            variables: { enabled: true },
+        });
+        expect(host.textContent).toContain('个人数据导出入口已开启');
+        await render();
+        expect(button('个人数据导出入口').getAttribute('aria-checked')).toBe('true');
+        await click('个人数据导出入口');
+        await render();
+        expect(button('个人数据导出入口').getAttribute('aria-checked')).toBe('false');
+        expect(host.textContent).toContain('个人数据导出入口已关闭');
+    });
+    it('keeps the switch off and reports failed readback without a false success', async () => {
+        mocks.other.mockResolvedValue({ data: { updateStorefrontPersonalDataExportEnabled: true } });
+        mocks.refetch.mockResolvedValue({ data: current });
+        await render();
+        await click('个人数据导出入口');
+        expect(host.textContent).toContain('重新读取结果不一致');
+        expect(host.textContent).not.toContain('个人数据导出入口已开启');
+        expect(button('个人数据导出入口').getAttribute('aria-checked')).toBe('false');
+    });
+    it('disables the switch without update permission', async () => {
+        mocks.canUpdate = false;
+        await render();
+        await click('个人数据导出入口');
+        expect(button('个人数据导出入口').disabled).toBe(true);
+        expect(mocks.other).not.toHaveBeenCalled();
+    });
 });

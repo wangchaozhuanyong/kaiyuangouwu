@@ -28,6 +28,7 @@ import {
     UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION,
     UPDATE_STOREFRONT_BLOCK_MUTATION,
     UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION,
+    UPDATE_STOREFRONT_PERSONAL_DATA_EXPORT_MUTATION,
     UPDATE_STOREFRONT_SETTINGS_MUTATION,
     type StorefrontAuthConfigurationRecord,
     type StorefrontContentBlock,
@@ -112,6 +113,9 @@ export function StorefrontModule() {
     const [updateSettings, settingsState] = useMutation<{
         updateStorefrontContentSettings: StorefrontContentResult['storefrontContentSettings'];
     }>(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
+    const [updatePersonalDataExport, personalDataExportState] = useMutation<{
+        updateStorefrontPersonalDataExportEnabled: boolean;
+    }>(UPDATE_STOREFRONT_PERSONAL_DATA_EXPORT_MUTATION, mutationOptions);
     const [updateAuthSettings, authSettingsState] = useMutation<{
         updateStorefrontAuthSettings: StorefrontAuthConfigurationRecord;
     }>(UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION, mutationOptions);
@@ -156,6 +160,7 @@ export function StorefrontModule() {
         deleteState.loading ||
         settingsState.loading ||
         authSettingsState.loading ||
+        personalDataExportState.loading ||
         googlePlatformSettingsState.loading ||
         query.loading ||
         Boolean(query.error) ||
@@ -338,6 +343,24 @@ export function StorefrontModule() {
             }
             setDeleting(null);
             showNotice(`已删除《${block.internalName}》，已重新读取核对`);
+        });
+    };
+
+    const changePersonalDataExport = async (enabled: boolean) => {
+        if (!canUpdate) return;
+        await runContentAction(async scope => {
+            const response = await updatePersonalDataExport({
+                context: scope.context,
+                variables: { enabled },
+            });
+            if (response.data?.updateStorefrontPersonalDataExportEnabled !== enabled) {
+                throw new Error('个人数据导出入口保存结果不一致');
+            }
+            const refreshed = await scope.reread();
+            if (refreshed.storefrontContentSettings.personalDataExportEnabled !== enabled) {
+                throw new Error('个人数据导出入口重新读取结果不一致，请刷新确认');
+            }
+            showNotice(`个人数据导出入口已${enabled ? '开启' : '关闭'}，已重新读取核对`);
         });
     };
 
@@ -667,6 +690,56 @@ export function StorefrontModule() {
                         onSavePlatform={saveGooglePlatformSettings}
                     />
                 ) : null}
+                <section className="rounded-xl border border-slate-200 bg-white p-5" aria-label="账户功能">
+                    <h3 className="text-sm font-semibold text-slate-900">账户功能</h3>
+                    <div className="mt-4 flex items-center gap-4">
+                        <div className="min-w-0 flex-1">
+                            <strong className="block text-xs text-slate-800">个人数据导出入口</strong>
+                            <p
+                                id="personal-data-export-description"
+                                className="mt-1 text-xs leading-5 text-slate-500"
+                            >
+                                默认关闭。开启后，电脑和手机的“账户设置 →
+                                数据与隐私”中显示“导出我的个人数据”。
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-label="个人数据导出入口"
+                            aria-describedby="personal-data-export-description"
+                            aria-checked={
+                                query.data?.storefrontContentSettings.personalDataExportEnabled === true
+                            }
+                            disabled={pending || !canUpdate}
+                            onClick={() =>
+                                void changePersonalDataExport(
+                                    query.data?.storefrontContentSettings.personalDataExportEnabled !== true,
+                                )
+                            }
+                            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${query.data?.storefrontContentSettings.personalDataExportEnabled === true ? 'bg-blue-600' : 'bg-slate-300'} disabled:cursor-not-allowed disabled:opacity-50`}
+                        >
+                            <span
+                                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${query.data?.storefrontContentSettings.personalDataExportEnabled === true ? 'translate-x-5' : 'translate-x-0'}`}
+                            />
+                        </button>
+                    </div>
+                    {personalDataExportState.loading && (
+                        <p role="status" className="mt-3 text-xs text-slate-500">
+                            正在保存…
+                        </p>
+                    )}
+                    {actionError && (
+                        <p role="alert" className="mt-3 text-xs text-red-600">
+                            {actionError}
+                        </p>
+                    )}
+                    {notice && (
+                        <p role="status" className="mt-3 text-xs text-emerald-700">
+                            {notice}
+                        </p>
+                    )}
+                </section>
                 <StorefrontVisualPresetPanel />
             </StorefrontSettingsDrawer>
 
