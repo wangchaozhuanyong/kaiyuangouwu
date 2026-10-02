@@ -37,8 +37,8 @@ describe('additive unified notification migration', () => {
                 enabled: 1,
                 chatId: 'test-existing-group',
                 inventoryLowThreshold: 2,
-                notifyOnlineReports: 1,
-                notifySecurityEvents: 1,
+                notifyOnlineReports: 0,
+                notifySecurityEvents: 0,
             });
             for (const name of [
                 'storefront_presence',

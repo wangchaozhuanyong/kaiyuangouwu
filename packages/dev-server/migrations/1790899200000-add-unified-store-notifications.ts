@@ -19,7 +19,8 @@ export class AddUnifiedStoreNotifications1790899200000 implements MigrationInter
             if (!(await runner.hasColumn('admin_notification_config', name))) {
                 await runner.addColumn(
                     'admin_notification_config',
-                    new TableColumn({ name, type: boolType, default: type === 'postgres' ? true : 1 }),
+                    // Activate only after configuration backup, Bot validation and explicit readback.
+                    new TableColumn({ name, type: boolType, default: type === 'postgres' ? false : 0 }),
                 );
             }
         }
