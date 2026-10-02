@@ -20,7 +20,7 @@ export async function collectPlatformGovernanceDataPreflight(adapter) {
     };
     const bytes = Buffer.from(JSON.stringify(plan));
     const compressed = gzipSync(bytes).toString('base64');
-    if (compressed.length > 18000) throw new Error('SAFE_PLAN_EXCEEDS_TRANSPORT_LIMIT');
+    if (compressed.length > 512000) throw new Error('SAFE_PLAN_EXCEEDS_TRANSPORT_LIMIT');
     return {
         schema: plan.schema,
         mode: plan.mode,

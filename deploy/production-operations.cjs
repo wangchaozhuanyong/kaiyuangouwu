@@ -2142,6 +2142,7 @@ function runPlatformGovernanceDataPreflight(
         spawn = spawnSync,
         health = productionHealthSnapshot,
         script = path.join(__dirname, 'repository', 'packages', 'dev-server', 'scripts', 'platform-governance-data-preflight.mjs'),
+        persistPlan = compressed => require('./governance-preflight-transport.cjs').persist(__dirname, compressed),
     } = {},
 ) {
     assert.equal(request.operation, 'plan-platform-store-governance');
@@ -2170,7 +2171,7 @@ function runPlatformGovernanceDataPreflight(
         assert.match(payload.snapshotHash, /^[a-f0-9]{64}$/u);
         assert.ok(['resourceCount', 'unresolvedResourceCount', 'paymentMethodCount', 'enabledStoreSwitchCount']
             .every(key => Number.isSafeInteger(payload[key]) && payload[key] >= 0));
-        assert.ok(typeof payload.compressedPlan === 'string' && payload.compressedPlan.length <= 18000);
+        assert.ok(typeof payload.compressedPlan === 'string' && payload.compressedPlan.length <= 512000);
         assert.match(payload.compressedPlan, /^[A-Za-z0-9+/]+={0,2}$/u);
         assert.deepEqual(Object.keys(payload).sort(), [
             'schema', 'mode', 'productionApply', 'snapshotHash', 'resourceCount',
@@ -2181,7 +2182,9 @@ function runPlatformGovernanceDataPreflight(
     assert.deepEqual(inspect(), before, 'Production release state changed during the governance preflight');
     assertProductionHealthSnapshot(health(), 'after');
     if (auditError) throw auditError;
-    return { sourceSha: request.sourceSha, runtimeSha: before.markerSha, audit: payload };
+    const { compressedPlan, ...audit } = payload;
+    const planTransport = persistPlan(compressedPlan);
+    return { sourceSha: request.sourceSha, runtimeSha: before.markerSha, audit, planTransport };
 }
 
 function runAdministratorProductReadinessAudit(
