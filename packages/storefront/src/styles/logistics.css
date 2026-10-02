@@ -331,6 +331,7 @@
 .delivery-text-button:hover,
 .delivery-back-link:hover {
     background: var(--control-surface-hover);
+    color: var(--interaction-ink);
 }
 .delivery-back-link {
     margin-bottom: 16px;
@@ -799,7 +800,8 @@
     .delivery-desktop-title {
         display: block;
         margin: 0 0 8px;
-        font-size: 24px;
+        font-size: var(--type-page-size);
+        line-height: var(--type-page-leading);
         font-weight: 600;
         color: var(--text);
     }
@@ -816,7 +818,8 @@
     }
     .delivery-linked-order-heading h1 {
         margin: 0;
-        font-size: 24px;
+        font-size: var(--type-page-size);
+        line-height: var(--type-page-leading);
         font-weight: 600;
     }
     .delivery-linked-order-heading .delivery-back-link {

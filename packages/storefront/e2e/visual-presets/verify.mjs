@@ -1045,12 +1045,18 @@ try {
                 }
                 if (width >= 1024 && name === 'order-detail') {
                     await expect(page.locator('.order-detail-page > .subpage-header')).toBeHidden();
+                    const heading = await page.locator('.delivery-linked-order-heading').boundingBox();
                     const status = await page.locator('.order-status').boundingBox();
                     const rail = await page.locator('.desktop-account-navigation').boundingBox();
                     expect(
-                        Math.abs(status.y - rail.y),
-                        'order detail starts beside the account rail',
+                        Math.abs(heading.y - rail.y),
+                        'order detail heading starts beside the account rail',
                     ).toBeLessThanOrEqual(1);
+                    expect(status.y - heading.y - heading.height).toBeCloseTo(24, 0);
+                    await expect(page.locator('.delivery-linked-order-heading h1')).toHaveCSS(
+                        'font-size',
+                        '28px',
+                    );
                 }
                 if (width >= 1024 && name === 'account') {
                     // Account order thumbnails must constrain the SafeImage frame, not only its img.
