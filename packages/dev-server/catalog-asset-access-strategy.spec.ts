@@ -28,6 +28,7 @@ import {
     createCatalogImageTransformStrategies,
     PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
 } from './catalog-asset-access-strategy';
+import { storefrontAssetPresets } from './storefront-asset-presets';
 
 function harness(userId?: string) {
     const ctx = { channelId: 'shop-a', languageCode: 'en' };
@@ -86,17 +87,28 @@ describe('catalog media boundary', () => {
         const metadata = await sharp(png).metadata();
         expect(metadata).toMatchObject({ format: 'png', width: 96, height: 96 });
     });
-    it.each(['storefront-icon-96', 'storefront-thumbnail-fit-320'])(
-        'allows PNG only for the bounded icon variant %s',
-        async preset => {
-            const strategy = createCatalogImageTransformStrategies(true)[0];
-            const result = await strategy.getImageTransformParameters({
-                input: { preset, format: 'png', width: 10000, height: 10000, quality: 82 },
-                availablePresets: [{ name: preset, width: 96, height: 96, mode: 'resize' }],
-            } as never);
-            expect(result).toMatchObject({ format: 'png', width: 96, height: 96, quality: 82 });
-        },
-    );
+    it.each([
+        ['storefront-icon-96', 96],
+        ['storefront-thumbnail-fit-320', 320],
+    ] as const)('allows PNG only for the bounded icon variant %s', async (preset, size) => {
+        const strategy = createCatalogImageTransformStrategies(true)[0];
+        const result = await strategy.getImageTransformParameters({
+            input: { preset, format: 'png', width: 10000, height: 10000, quality: 82 },
+            availablePresets: storefrontAssetPresets,
+        } as never);
+        expect(result).toMatchObject({ format: 'png', width: size, height: size, quality: 82 });
+        const webp = await sharp({
+            create: { width: 512, height: 512, channels: 4, background: '#997a37' },
+        })
+            .webp()
+            .toBuffer();
+        const png = await (await transformImage(webp, result)).toBuffer();
+        expect(await sharp(png).metadata()).toMatchObject({
+            format: 'png',
+            width: size,
+            height: size,
+        });
+    });
     it('retains the existing format restriction for other catalog images', async () => {
         const strategy = createCatalogImageTransformStrategies(true)[0];
         const result = await strategy.getImageTransformParameters({
