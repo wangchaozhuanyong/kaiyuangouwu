@@ -90,6 +90,12 @@ export interface Product {
 
 export type ProductSearchSort = 'recommended' | 'sales' | 'newest' | 'name' | 'price-asc' | 'price-desc';
 
+export interface DailyRecommendations {
+    items: Product[];
+    businessDate: string;
+    expiresAt: string;
+}
+
 export interface ProductSearchPage {
     items: Product[];
     totalItems: number;

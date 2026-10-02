@@ -502,6 +502,38 @@ describe('HomePage hero carousel', () => {
 });
 
 describe('HomePage localized trust bar layout', () => {
+    it.each([
+        [false, undefined],
+        [false, 'heroOverlay'],
+        [false, 'belowHero'],
+        [true, undefined],
+        [true, 'heroOverlay'],
+        [true, 'belowHero'],
+    ] as const)(
+        'keeps trust information inside the hero (desktop=%s, legacy placement=%s)',
+        (desktop, placement) => {
+            const markup = renderHome(
+                {
+                    contentBlocks: [heroBlock, { ...trustBarBlock, settings: { placement } }],
+                },
+                desktop,
+            );
+            expect(markup).toMatch(
+                /<section class="hero[\s\S]*?hero-service-overlay[\s\S]*?home-trust-label[\s\S]*?<\/section>/,
+            );
+            expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
+        },
+    );
+
+    it.each([false, true])('preserves trust information without a published hero (desktop=%s)', desktop => {
+        const markup = renderHome(
+            { contentBlocks: [{ ...trustBarBlock, settings: { placement: 'belowHero' } }] },
+            desktop,
+        );
+        expect(markup).not.toContain('hero-service-overlay');
+        expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
+    });
+
     it('shows saved service descriptions on desktop while preserving compact mobile labels', () => {
         const block = {
             ...trustBarBlock,

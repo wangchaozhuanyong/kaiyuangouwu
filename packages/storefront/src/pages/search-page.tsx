@@ -10,7 +10,15 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+    type KeyboardEvent as ReactKeyboardEvent,
+    type RefObject,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps route types after packages.
 import type { RouteState } from '../storefront-router';
 
@@ -39,6 +47,7 @@ import { storefrontErrorMessage } from '../storefront-errors';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from '../storefront-storage';
+import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import '../styles/search-surfaces.css';
@@ -58,7 +67,20 @@ export interface SearchPageProps {
 }
 const emptyFilters = catalogRouteState({ name: 'search' });
 
-export function SearchPage() {
+export interface EmbeddedSearchControl {
+    query: string;
+    submittedQuery: string;
+    submission: number;
+    composing: boolean;
+    active: boolean;
+    inputRef: RefObject<HTMLInputElement | null>;
+    keyDownRef: RefObject<((event: ReactKeyboardEvent<HTMLInputElement>) => void) | null>;
+    setQuery: (value: string) => void;
+    setSubmittedQuery: (value: string) => void;
+    close: () => void;
+}
+
+export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = {}) {
     const navigate = useNavigate();
     const router = useRouter();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
@@ -76,17 +98,23 @@ export function SearchPage() {
     } = SearchPageContext.useValue();
     const isZh = language === 'zh';
     const desktop = useDesktopLayout();
-    const inputRef = useRef<HTMLInputElement>(null);
+    const localInputRef = useRef<HTMLInputElement>(null);
+    const inputRef = embedded?.inputRef ?? localInputRef;
     const listId = useId();
-    const [query, setQuery] = useState(initialQuery);
-    const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
+    const [localQuery, setLocalQuery] = useState(initialQuery);
+    const [localSubmittedQuery, setLocalSubmittedQuery] = useState(initialQuery);
+    const query = embedded?.query ?? localQuery;
+    const setQuery = embedded?.setQuery ?? setLocalQuery;
+    const submittedQuery = embedded?.submittedQuery ?? localSubmittedQuery;
+    const setSubmittedQuery = embedded?.setSubmittedQuery ?? setLocalSubmittedQuery;
     const [filters, setFilters] = useState(() => ({ ...emptyFilters, ...initialFilters }));
     const [filterOpen, setFilterOpen] = useState(false);
     const [draftFilters, setDraftFilters] = useState<CatalogFilterValues>(emptyFilters);
     const [history, setHistory] = useState<string[]>([]);
     const [clearedHistory, setClearedHistory] = useState<string[] | null>(null);
     const [historyExpanded, setHistoryExpanded] = useState(false);
-    const [composing, setComposing] = useState(false);
+    const [localComposing, setComposing] = useState(false);
+    const composing = embedded?.composing ?? localComposing;
     const [debouncedTerm, setDebouncedTerm] = useState('');
     const [activeSuggestion, setActiveSuggestion] = useState(-1);
     const storeHistoryKey = scopedStorageKey(SEARCH_HISTORY_STORAGE_KEY, storefrontCode);
@@ -104,6 +132,7 @@ export function SearchPage() {
         collection => !collection.parentId || !collections.some(parent => parent.id === collection.parentId),
     );
     useEffect(() => {
+        if (embedded) return;
         setQuery(initialQuery);
         setSubmittedQuery(initialQuery);
         setActiveSuggestion(-1);
@@ -139,7 +168,7 @@ export function SearchPage() {
             const loaded = pages.reduce((total, page) => total + page.items.length, 0);
             return loaded < lastPage.totalItems ? loaded : undefined;
         },
-        enabled: !!term,
+        enabled: !!term && (!embedded || embedded.active),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         placeholderData: keepPreviousData,
@@ -230,14 +259,15 @@ export function SearchPage() {
     };
     const updateFilters = (next: typeof filters) => {
         setFilters(next);
-        void navigate({
-            ...routeNavigateOptions({
-                name: 'search',
-                term,
-                ...catalogRouteSearch({ name: 'search', ...next }),
-            }),
-            replace: true,
-        } as never);
+        if (!embedded)
+            void navigate({
+                ...routeNavigateOptions({
+                    name: 'search',
+                    term,
+                    ...catalogRouteSearch({ name: 'search', ...next }),
+                }),
+                replace: true,
+            } as never);
     };
     const clearFilters = () => updateFilters({ ...emptyFilters, sort: filters.sort });
     const submit = (value = query) => {
@@ -246,24 +276,28 @@ export function SearchPage() {
         setQuery(next);
         setSubmittedQuery(next);
         setActiveSuggestion(-1);
-        inputRef.current?.blur();
-        void navigate({
-            ...routeNavigateOptions({
-                name: 'search',
-                term: next,
-                ...catalogRouteSearch({ name: 'search', ...filters }),
-            }),
-            replace: true,
-        } as never);
+        if (!embedded) inputRef.current?.blur();
+        if (!embedded)
+            void navigate({
+                ...routeNavigateOptions({
+                    name: 'search',
+                    term: next,
+                    ...catalogRouteSearch({ name: 'search', ...filters }),
+                }),
+                replace: true,
+            } as never);
         persistHistory([next, ...history.filter(item => item !== next)].slice(0, 8));
         setClearedHistory(null);
     };
+    useEffect(() => {
+        if (embedded?.submission) submit(embedded.query);
+    }, [embedded?.submission]);
     const clearQuery = () => {
         setQuery('');
         setSubmittedQuery('');
         setFilters(emptyFilters);
         setActiveSuggestion(-1);
-        void navigate({ ...routeNavigateOptions({ name: 'search' }), replace: true } as never);
+        if (!embedded) void navigate({ ...routeNavigateOptions({ name: 'search' }), replace: true } as never);
     };
     const chooseSuggestion = (index: number) => {
         const option = suggestionOptions[index];
@@ -272,11 +306,12 @@ export function SearchPage() {
         else submit(option.term);
     };
     const closeSearch = () => {
+        if (embedded) return embedded.close();
         if (router.history.canGoBack()) router.history.back();
         else navigateTo({ name: 'home' });
     };
     useEffect(() => {
-        if (!desktop) return;
+        if (!desktop || embedded) return;
         const onEscape = (event: KeyboardEvent) => {
             if (
                 event.key !== 'Escape' ||
@@ -292,6 +327,46 @@ export function SearchPage() {
         window.addEventListener('keydown', onEscape);
         return () => window.removeEventListener('keydown', onEscape);
     }, [desktop, navigate, router.history]);
+    const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (isInputMethodKey(event.nativeEvent) || composing) return;
+        if (event.key === 'Escape' && embedded) {
+            event.preventDefault();
+            embedded.close();
+            return;
+        }
+        if (showSuggestions && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            setActiveSuggestion(index =>
+                index < 0
+                    ? event.key === 'ArrowDown'
+                        ? 0
+                        : suggestionOptions.length - 1
+                    : (index + (event.key === 'ArrowDown' ? 1 : -1) + suggestionOptions.length) %
+                      suggestionOptions.length,
+            );
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            if (showSuggestions && activeSuggestion >= 0 && activeSuggestion < suggestionOptions.length)
+                chooseSuggestion(activeSuggestion);
+            else submit();
+        } else if (event.key === 'Escape' && showSuggestions) {
+            event.preventDefault();
+            setQuery(submittedQuery);
+            setActiveSuggestion(-1);
+        }
+    };
+    useEffect(() => {
+        if (!embedded) return;
+        embedded.keyDownRef.current = handleInputKeyDown;
+        const input = inputRef.current;
+        if (input && showSuggestions && activeSuggestion >= 0)
+            input.setAttribute('aria-activedescendant', `${listId}-${activeSuggestion}`);
+        else input?.removeAttribute('aria-activedescendant');
+        return () => {
+            embedded.keyDownRef.current = null;
+        };
+    });
+    const Page = embedded ? 'div' : 'main';
     const categoryLinks = (
         <section className="search-browse">
             <header>
@@ -303,125 +378,117 @@ export function SearchPage() {
                     <img src={allCategoriesIcon} width={28} height={28} alt="" />
                     <span>{isZh ? '全部分类' : 'All categories'}</span>
                 </button>
-                {rootCollections.slice(0, 3).map(collection => (
-                    <button
-                        type="button"
-                        key={collection.id}
-                        title={collection.name}
-                        onClick={() => navigateTo({ name: 'category', collectionId: collection.id })}
-                    >
-                        {collection.featuredAsset?.preview ? (
-                            <SafeImage
-                                src={collection.featuredAsset.preview}
-                                imageKind="icon"
-                                width={28}
-                                height={28}
-                                alt=""
-                                loading="lazy"
-                            />
-                        ) : (
-                            <LayoutGrid aria-hidden="true" />
-                        )}
-                        <span>{collection.name}</span>
-                    </button>
+                {rootCollections.map(collection => (
+                    <div className="search-category-group" key={collection.id}>
+                        <button
+                            type="button"
+                            key={collection.id}
+                            title={collection.name}
+                            onClick={() => navigateTo({ name: 'category', collectionId: collection.id })}
+                        >
+                            {collection.featuredAsset?.preview ? (
+                                <SafeImage
+                                    src={collection.featuredAsset.preview}
+                                    imageKind="icon"
+                                    width={28}
+                                    height={28}
+                                    alt=""
+                                    loading="lazy"
+                                />
+                            ) : (
+                                <LayoutGrid aria-hidden="true" />
+                            )}
+                            <span>{collection.name}</span>
+                        </button>
+                        {(collection.children ?? []).map(child => (
+                            <button
+                                type="button"
+                                key={child.id}
+                                className="search-child-category"
+                                onClick={() =>
+                                    navigateTo({
+                                        name: 'category',
+                                        collectionId: collection.id,
+                                        childId: child.id,
+                                    })
+                                }
+                            >
+                                <span>{child.name}</span>
+                            </button>
+                        ))}
+                    </div>
                 ))}
             </nav>
         </section>
     );
     return (
-        <main
-            className="page subpage search-page"
+        <Page
+            className={embedded ? 'search-page is-embedded-search' : 'page subpage search-page'}
             data-page-pending={
                 term && !showSuggestions && (searching || searchQuery.isPlaceholderData) ? 'query' : undefined
             }
         >
             <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
-            <header className="search-header">
-                <button type="button" onClick={closeSearch} aria-label={isZh ? '返回' : 'Back'}>
-                    <ArrowLeft />
-                </button>
-                <div className="search-input-field">
-                    <Search aria-hidden="true" />
-                    <input
-                        ref={inputRef}
-                        autoFocus
-                        type="search"
-                        role="combobox"
-                        aria-label={isZh ? '搜索商品、分类' : 'Search products and categories'}
-                        aria-autocomplete="list"
-                        aria-expanded={showSuggestions}
-                        aria-controls={showSuggestions ? listId : undefined}
-                        aria-activedescendant={
-                            showSuggestions &&
-                            activeSuggestion >= 0 &&
-                            activeSuggestion < suggestionOptions.length
-                                ? listId + '-' + activeSuggestion
-                                : undefined
-                        }
-                        autoComplete="off"
-                        value={query}
-                        onCompositionStart={() => setComposing(true)}
-                        onCompositionEnd={() => setComposing(false)}
-                        onChange={event => {
-                            const next = event.target.value;
-                            if (!next) clearQuery();
-                            else setQuery(next);
-                        }}
-                        onKeyDown={event => {
-                            if (isInputMethodKey(event.nativeEvent) || composing) return;
-                            if (showSuggestions && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-                                event.preventDefault();
-                                setActiveSuggestion(index =>
-                                    index < 0
-                                        ? event.key === 'ArrowDown'
-                                            ? 0
-                                            : suggestionOptions.length - 1
-                                        : (index +
-                                              (event.key === 'ArrowDown' ? 1 : -1) +
-                                              suggestionOptions.length) %
-                                          suggestionOptions.length,
-                                );
-                            } else if (event.key === 'Enter') {
-                                event.preventDefault();
-                                if (
-                                    showSuggestions &&
-                                    activeSuggestion >= 0 &&
-                                    activeSuggestion < suggestionOptions.length
-                                )
-                                    chooseSuggestion(activeSuggestion);
-                                else submit();
-                            } else if (event.key === 'Escape' && showSuggestions) {
-                                event.preventDefault();
-                                setQuery(submittedQuery);
-                                setActiveSuggestion(-1);
+            {!embedded && (
+                <header className="search-header">
+                    <button type="button" onClick={closeSearch} aria-label={isZh ? '返回' : 'Back'}>
+                        <ArrowLeft />
+                    </button>
+                    <div className="search-input-field">
+                        <Search aria-hidden="true" />
+                        <input
+                            ref={inputRef}
+                            autoFocus
+                            type="search"
+                            role="combobox"
+                            aria-label={isZh ? '搜索商品、分类' : 'Search products and categories'}
+                            aria-autocomplete="list"
+                            aria-expanded={showSuggestions}
+                            aria-controls={showSuggestions ? listId : undefined}
+                            aria-activedescendant={
+                                showSuggestions &&
+                                activeSuggestion >= 0 &&
+                                activeSuggestion < suggestionOptions.length
+                                    ? listId + '-' + activeSuggestion
+                                    : undefined
                             }
-                        }}
-                        placeholder={isZh ? '搜索商品、分类' : 'Search products'}
-                    />
-                    {!!query && (
-                        <button
-                            className="search-clear"
-                            type="button"
-                            aria-label={isZh ? '清空输入' : 'Clear input'}
-                            onClick={() => {
-                                clearQuery();
-                                inputRef.current?.focus();
+                            autoComplete="off"
+                            value={query}
+                            onCompositionStart={() => setComposing(true)}
+                            onCompositionEnd={() => setComposing(false)}
+                            onChange={event => {
+                                const next = event.target.value;
+                                if (!next) clearQuery();
+                                else setQuery(next);
                             }}
-                        >
-                            <X />
+                            onKeyDown={handleInputKeyDown}
+                            placeholder={isZh ? '搜索商品、分类' : 'Search products'}
+                        />
+                        {!!query && (
+                            <button
+                                className="search-clear"
+                                type="button"
+                                aria-label={isZh ? '清空输入' : 'Clear input'}
+                                onClick={() => {
+                                    clearQuery();
+                                    inputRef.current?.focus();
+                                }}
+                            >
+                                <X />
+                            </button>
+                        )}
+                    </div>
+                    <button className="search-submit" type="button" onClick={() => submit()}>
+                        <span>{isZh ? '搜索' : 'Search'}</span>
+                    </button>
+                    {desktop && (
+                        <button className="search-close" type="button" onClick={closeSearch}>
+                            <X size={18} aria-hidden="true" />
+                            <span>{isZh ? '关闭搜索' : 'Close search'}</span>
                         </button>
                     )}
-                </div>
-                <button className="search-submit" type="button" onClick={() => submit()}>
-                    <span>{isZh ? '搜索' : 'Search'}</span>
-                </button>
-                {desktop && (
-                    <button className="search-close" type="button" onClick={closeSearch}>
-                        <X size={18} aria-hidden="true" />
-                        <span>{isZh ? '关闭搜索' : 'Close search'}</span>
-                    </button>
-                )}
-            </header>
+                </header>
+            )}
             {showSuggestions ? (
                 <section className="search-suggestions" aria-label={isZh ? '搜索建议' : 'Search suggestions'}>
                     <ul id={listId} role="listbox" aria-label={isZh ? '搜索建议' : 'Search suggestions'}>
@@ -520,7 +587,7 @@ export function SearchPage() {
                             )}
                         </div>
                     </section>
-                    {!!suggestedProducts.length && (
+                    {!embedded && !!suggestedProducts.length && (
                         <section className="search-discover-terms">
                             <header>
                                 <h2>{isZh ? '你可能在找' : 'You might be looking for'}</h2>
@@ -542,12 +609,12 @@ export function SearchPage() {
                         </section>
                     )}
                     {categoryLinks}
-                    <ProductSection
+                    <DailyRecommendationSection
+                        api={api}
+                        enabled={!embedded || embedded.active}
+                        plain
+                        compact={Boolean(embedded)}
                         title={isZh ? '今日推荐' : "Today's picks"}
-                        subtitle={isZh ? '从店内在售商品开始' : 'Available from this store'}
-                        subtitlePlacement="end"
-                        appearance="plain"
-                        products={products.slice(0, desktop ? 10 : 2)}
                         market={market}
                         locale={locale}
                         language={language}
@@ -647,7 +714,7 @@ export function SearchPage() {
                         />
                     ) : results.length ? (
                         <div className="product-list" aria-busy={searchQuery.isPlaceholderData}>
-                            {desktop ? (
+                            {desktop && !embedded ? (
                                 <ProductSection
                                     products={results}
                                     appearance="plain"
@@ -661,6 +728,7 @@ export function SearchPage() {
                                     <ProductRow
                                         key={product.id}
                                         product={product}
+                                        layout={embedded ? 'compact' : 'row'}
                                         showDescription={false}
                                         market={market}
                                         locale={locale}
@@ -759,6 +827,6 @@ export function SearchPage() {
                     onClose={() => setFilterOpen(false)}
                 />
             )}
-        </main>
+        </Page>
     );
 }

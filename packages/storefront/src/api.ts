@@ -186,6 +186,8 @@ export class ShopApi {
         return this.catalogApi.catalog(input, signal);
     }
 
+    dailyRecommendations = (signal?: AbortSignal) => this.catalogApi.dailyRecommendations(signal);
+
     async productSales(productIds: string[]): Promise<Record<string, number>> {
         return this.catalogApi.productSales(productIds);
     }

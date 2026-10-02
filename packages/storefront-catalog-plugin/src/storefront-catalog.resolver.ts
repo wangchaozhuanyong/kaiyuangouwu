@@ -3,6 +3,7 @@ import { Allow, Ctx, ID, Permission, RequestContext } from '@vendure/core';
 
 import { StorefrontCatalogService } from './storefront-catalog.service';
 import { StorefrontProductSalesService } from './storefront-product-sales.service';
+import { StorefrontRecommendationsService } from './storefront-recommendations.service';
 import { StorefrontCatalogInput } from './types';
 
 @Resolver()
@@ -10,7 +11,14 @@ export class StorefrontCatalogShopResolver {
     constructor(
         private readonly catalogService: StorefrontCatalogService,
         private readonly productSalesService: StorefrontProductSalesService,
+        private readonly recommendations: StorefrontRecommendationsService,
     ) {}
+
+    @Query()
+    @Allow(Permission.Public)
+    storefrontDailyRecommendations(@Ctx() ctx: RequestContext) {
+        return this.recommendations.find(ctx);
+    }
 
     @Query()
     @Allow(Permission.Public)

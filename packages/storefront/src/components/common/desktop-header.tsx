@@ -1,6 +1,6 @@
 import { createLink, Link } from '@tanstack/react-router';
-import { Search, ShoppingCart, UserRound } from 'lucide-react';
-import { type AnchorHTMLAttributes, forwardRef, useEffect, useState } from 'react';
+import { ShoppingCart, UserRound } from 'lucide-react';
+import { type AnchorHTMLAttributes, forwardRef, lazy, Suspense, useState } from 'react';
 
 import { BrandLogo } from '../../storefront-ui/content-ui';
 import { useStorefront } from '../../StorefrontContext';
@@ -8,6 +8,8 @@ import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
+
+const DesktopSearch = lazy(() => import('./desktop-search'));
 
 // The router's destination can be active while the previous page is still visible.
 const DesktopNavigationLink = createLink(
@@ -64,24 +66,6 @@ export function DesktopHeader({
     );
     const visibleRoute = context.displayedRoute ?? context.route;
     const activeRoute = activeNavigationRoute(visibleRoute.name);
-    const openSearch = () => {
-        context.navigate({ name: 'search' });
-    };
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-                event.preventDefault();
-                if (visibleRoute.name === 'search') {
-                    document.querySelector<HTMLInputElement>('.search-page .search-header input')?.focus();
-                } else {
-                    context.navigate({ name: 'search' });
-                }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [context.navigate, context.route.name]);
 
     return (
         <header className={`proto-desktop-header${visibleRoute.name === 'search' ? ' is-search-page' : ''}`}>
@@ -109,22 +93,11 @@ export function DesktopHeader({
                     </nav>
                 </div>
 
-                {visibleRoute.name !== 'search' && (
-                    <div className="proto-header-search">
-                        <button
-                            type="button"
-                            className="proto-search-open"
-                            aria-label={isZh ? '打开商品搜索' : 'Open product search'}
-                            onClick={openSearch}
-                        >
-                            <Search aria-hidden="true" />
-                            <span>{isZh ? '搜索商品、分类' : 'Search products and categories'}</span>
-                            <span className="proto-search-open-action" aria-hidden="true">
-                                {isZh ? '搜索' : 'Search'}
-                            </span>
-                        </button>
-                    </div>
-                )}
+                <div className="proto-header-search">
+                    <Suspense fallback={<div className="proto-search-placeholder" aria-busy="true" />}>
+                        <DesktopSearch />
+                    </Suspense>
+                </div>
 
                 <div className="proto-header-right">
                     <LocalePreferencesTrigger

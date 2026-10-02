@@ -37,7 +37,15 @@ export const shopApiExtensions = gql`
         quantity: Int!
     }
 
+    type StorefrontDailyRecommendations {
+        items: [Product!]!
+        businessDate: String!
+        expiresAt: DateTime!
+    }
+
     extend type Query {
+        storefrontDailyRecommendations: StorefrontDailyRecommendations!
+
         storefrontCatalog(input: StorefrontCatalogInput!): StorefrontCatalogPage!
         storefrontProductSales(productIds: [ID!]!): [StorefrontProductSales!]!
     }

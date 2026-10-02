@@ -14,7 +14,7 @@ import {
     Truck,
     Waypoints,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import { publishedContentItems } from '../../../storefront-content-plugin/src/content-publication';
 import { dualCardTemplateId } from '../../../storefront-content-plugin/src/dual-card-template-options';
@@ -801,6 +801,8 @@ export function ManagedContentSection({
     );
 }
 
+const ManagedAdCarouselRail = lazy(() => import('./managed-ad-carousel'));
+
 /** Repeatable, per-block carousel: its content and timing come entirely from Admin. */
 export function ManagedAdCarousel({
     block,
@@ -814,56 +816,37 @@ export function ManagedAdCarousel({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const items = block.items.filter(item => item.enabled !== false);
-    const railRef = useRef<HTMLDivElement>(null);
-    const [current, setCurrent] = useState(0);
-    const [paused, setPaused] = useState(false);
-    const seconds = Math.min(30, Math.max(3, contentNumberSetting(block.settings?.scrollIntervalSeconds, 6)));
-    const selected = items.length ? current % items.length : 0;
-
-    useEffect(() => {
-        if (items.length < 2 || paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-            return;
-        const timer = window.setInterval(
-            () => setCurrent(index => (index + 1) % items.length),
-            seconds * 1000,
-        );
-        return () => window.clearInterval(timer);
-    }, [items.length, paused, seconds]);
-
-    useEffect(() => {
-        const rail = railRef.current;
-        const card = rail?.children[selected] as HTMLElement | undefined;
-        if (!rail || !card) return;
-        rail.scrollTo({
-            left: card.offsetLeft,
-            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-        });
-    }, [selected]);
-
     if (!items.length) return null;
+    const productMedia = items.every(item => item.targetType === 'PRODUCT');
+    const cards = items.map(item => (
+        <ManagedContentItemButton
+            key={item.id ?? `${item.position}-${item.label}`}
+            item={item}
+            products={products}
+            onContentTarget={onContentTarget}
+        />
+    ));
     return (
-        <div
-            className={`managed-ad-carousel${items.every(item => item.targetType === 'PRODUCT') ? ' is-product-carousel' : ''}`}
-            role="region"
-            aria-label={block.title}
-            onMouseEnter={() => setPaused(true)}
-            onMouseLeave={() => setPaused(false)}
-            onFocusCapture={() => setPaused(true)}
-            onBlurCapture={event => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
-            }}
+        <Suspense
+            fallback={
+                <div className={`managed-ad-carousel${productMedia ? ' is-product-carousel' : ''}`}>
+                    <div className="managed-ad-carousel-rail">{cards}</div>
+                </div>
+            }
         >
-            <div className="managed-ad-carousel-rail" ref={railRef}>
-                {items.map(item => (
-                    <ManagedContentItemButton
-                        key={item.id ?? `${item.position}-${item.label}`}
-                        item={item}
-                        products={products}
-                        onContentTarget={onContentTarget}
-                    />
-                ))}
-            </div>
-        </div>
+            <ManagedAdCarouselRail
+                itemCount={items.length}
+                title={block.title}
+                language={language}
+                seconds={Math.min(
+                    30,
+                    Math.max(3, contentNumberSetting(block.settings?.scrollIntervalSeconds, 6)),
+                )}
+                productMedia={productMedia}
+            >
+                {cards}
+            </ManagedAdCarouselRail>
+        </Suspense>
     );
 }
 

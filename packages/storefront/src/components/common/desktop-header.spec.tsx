@@ -7,6 +7,10 @@ import { StorefrontContext } from '../../StorefrontContext';
 
 import { DesktopHeader } from './desktop-header';
 
+vi.mock('./desktop-search', () => ({
+    default: () => <input className="proto-search-input" aria-label="Search" />,
+}));
+
 vi.mock('@tanstack/react-router', () => ({
     createLink:
         (Component: React.ElementType) =>
@@ -27,11 +31,12 @@ describe('desktop header search', () => {
     const switchCurrency = vi.fn();
     const toggleLanguage = vi.fn();
 
-    function renderHeader(
+    async function renderHeader(
         route: { name: 'home' } | { name: 'search'; term?: string },
         displayedRoute = route,
     ) {
-        act(() => {
+        await act(async () => {
+            await import('./desktop-search');
             root.render(
                 <StorefrontContext.Provider
                     value={
@@ -59,11 +64,11 @@ describe('desktop header search', () => {
         });
     }
 
-    beforeEach(() => {
+    beforeEach(async () => {
         host = document.createElement('div');
         document.body.append(host);
         root = createRoot(host);
-        renderHeader({ name: 'home' });
+        await renderHeader({ name: 'home' });
     });
 
     afterEach(() => {
@@ -74,32 +79,16 @@ describe('desktop header search', () => {
         toggleLanguage.mockReset();
     });
 
-    it('opens the dedicated search page when the header search is clicked', () => {
-        const trigger = host.querySelector<HTMLButtonElement>('.proto-search-open');
-        expect(trigger?.textContent).toContain('搜索商品、分类');
-        expect(host.querySelector('.proto-search-input')).toBeNull();
-
-        act(() => trigger?.click());
-
-        expect(navigate).toHaveBeenCalledWith({ name: 'search' });
+    it('keeps the original search field available on the search route', async () => {
+        const input = host.querySelector('.proto-search-input');
+        expect(input).not.toBeNull();
+        await renderHeader({ name: 'search', term: 'gemini' });
+        expect(host.querySelector('.proto-search-input')).toBe(input);
+        expect(navigate).not.toHaveBeenCalled();
     });
 
-    it('opens the dedicated search page with the keyboard shortcut', () => {
-        act(() => {
-            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
-        });
-
-        expect(navigate).toHaveBeenCalledWith({ name: 'search' });
-    });
-
-    it('leaves one search form on the dedicated search page', () => {
-        renderHeader({ name: 'search', term: 'gemini' });
-        expect(host.querySelector('.proto-header-search')).toBeNull();
-        expect(host.querySelector('.proto-desktop-header.is-search-page')).not.toBeNull();
-    });
-
-    it('keeps navigation and search controls aligned with the page still visible during loading', () => {
-        renderHeader({ name: 'search', term: 'cup' }, { name: 'home' });
+    it('keeps navigation and search controls aligned with the page still visible during loading', async () => {
+        await renderHeader({ name: 'search', term: 'cup' }, { name: 'home' });
         expect(host.querySelector('[aria-current="page"]')?.textContent).toBe('首页');
         expect(host.querySelector('.proto-header-search')).not.toBeNull();
     });
