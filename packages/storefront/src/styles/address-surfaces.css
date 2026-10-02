@@ -1,4 +1,19 @@
 /* Address book and checkout address selection own their shared surface here. */
+.address-workbench-title {
+    display: none;
+}
+
+@media (min-width: 1024px) {
+    .desktop-store-layout .address-workbench-title {
+        display: block;
+        margin: 0 0 0 12px;
+        color: var(--text);
+        font-size: 17px;
+        font-weight: var(--font-weight-semibold);
+        line-height: 1.35;
+    }
+}
+
 .address-list {
     margin-top: 9px;
     margin-bottom: 24px;
