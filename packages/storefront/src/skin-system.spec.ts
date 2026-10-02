@@ -198,6 +198,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // User-approved centered referral totals have one campaign-colored divider.
+                        if (
+                            functionalKey === 'styles/referral.css|.referral-reward-totals::before' &&
+                            border[1] === 'inline' &&
+                            border[2].trim() === '1px solid var(--line)'
+                        ) {
+                            continue;
+                        }
                         // The quantity stepper's seams identify its editable value between +/- controls.
                         if (
                             selector.trim() === '.detail-quantity-controls output' &&

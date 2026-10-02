@@ -278,10 +278,12 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    text-align: center;
 }
 .referral-stat dt {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     color: var(--text-soft);
     font-size: 12px;
@@ -292,7 +294,7 @@
 }
 .referral-stat dd {
     margin: auto 0 0;
-    padding-top: 8px;
+    padding-top: 10px;
     overflow-wrap: anywhere;
     font-size: 22px;
     font-weight: 600;
@@ -308,20 +310,36 @@
     color: var(--referral-gold-ink);
 }
 .referral-reward-totals {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
     margin: auto 0 0;
-    padding: 14px;
+    padding: 14px 0;
     border-radius: var(--skin-control-radius);
     background: var(--referral-gold-soft);
+}
+.referral-reward-totals > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0 12px;
+    text-align: center;
+}
+/* Approved summary reading separator; retain the campaign's red/gold palette. */
+.referral-reward-totals::before {
+    content: '';
+    position: absolute;
+    inset-block: 14px;
+    inset-inline-start: 50%;
+    border-inline-start: 1px solid var(--line);
 }
 .referral-reward-totals dt {
     color: var(--text-soft);
     font-size: 12px;
 }
 .referral-reward-totals dd {
-    margin: 4px 0 0;
+    margin: auto 0 0;
+    padding-top: 10px;
     overflow-wrap: anywhere;
     font-size: 14px;
     font-weight: 600;
