@@ -451,6 +451,7 @@ try {
                         const logo = formBrand.locator('.auth-form-logo');
                         await expect(logo).toHaveAttribute('data-safe-image', 'ready');
                         await expect(logo).toHaveCSS('width', '180px');
+                        await expect(logo).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
                         const logoBox = await logo.boundingBox();
                         expect(logoBox.height).toBeGreaterThanOrEqual(40);
                         expect(logoBox.height).toBeLessThanOrEqual(48);

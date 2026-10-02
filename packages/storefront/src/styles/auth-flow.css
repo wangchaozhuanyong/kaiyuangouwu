@@ -2589,6 +2589,7 @@
 .auth-form-brand .auth-form-logo {
     width: 180px;
     height: 48px;
+    background: transparent;
 }
 .auth-form-logo img.safe-image {
     width: 100%;
