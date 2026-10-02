@@ -513,9 +513,7 @@ describe('storefront skin system', () => {
             /\.topbar\s*\{[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--shadow-sm\);/,
         );
         expect(stylesheet('./styles/desktop-commerce.css')).not.toContain('.cart-topbar');
-        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
-            /\.desktop-store-layout \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/,
-        );
+        expect(stylesheet('./styles/desktop-pages.css')).not.toContain('.desktop-store-layout .cart-topbar');
     });
 
     it('keeps cart surfaces in their owner with shallow separators only between merchandise rows', () => {
