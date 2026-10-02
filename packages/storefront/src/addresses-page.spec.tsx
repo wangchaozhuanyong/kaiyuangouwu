@@ -251,7 +251,7 @@ describe('AddressesPage zero-flicker rendering', () => {
 });
 
 describe('AccountSecurityPage commerceMode adaptation', () => {
-    it('explains active-avatar protection and exposes recoverable replacements', () => {
+    it('keeps avatar controls without exposing retention or recovery details', () => {
         const markup = renderToStaticMarkup(
             createElement(AccountSecurityPage, {
                 customer: { ...mockCustomer, avatar: { id: 'current', preview: '/current.webp' } },
@@ -260,25 +260,19 @@ describe('AccountSecurityPage commerceMode adaptation', () => {
                 commerceMode: 'HYBRID',
                 onBack: vi.fn(),
                 onAvatarChange: vi.fn(),
-                avatarHistory: [
-                    {
-                        id: 'retention-1',
-                        status: 'PENDING',
-                        quarantinedAt: '2026-09-20T00:00:00.000Z',
-                        purgeAfter: '2026-10-20T00:00:00.000Z',
-                        legalHold: false,
-                        asset: { id: 'old', preview: '/old.webp' },
-                    },
-                ],
-                onAvatarRestore: vi.fn(),
                 onAvatarRemove: vi.fn(),
                 onLogout: vi.fn(),
             }),
         );
 
-        expect(markup).toContain('当前头像不会因时间自动删除');
-        expect(markup).toContain('可恢复头像');
-        expect(markup).toContain('恢复');
+        expect(markup).not.toContain('头像保护');
+        expect(markup).not.toContain('安全与保护');
+        expect(markup).not.toContain('登录保护');
+        expect(markup).not.toContain('导出我的个人数据');
+        expect(markup).not.toContain('30 天可恢复保护');
+        expect(markup).not.toContain('可恢复头像');
+        expect(markup).toContain('更换头像');
+        expect(markup).toContain('aria-label="头像操作"');
         expect(markup).toContain('移除');
     });
 

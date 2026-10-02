@@ -188,8 +188,14 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="desktop-referral-content">
+                // REFERRAL_CELEBRATION_20261002: user-approved campaign theme, independent of store skins.
+                // Keep this marker and the scoped palette in referral.css when repairing skin rules.
+                <div className="desktop-referral-content" data-referral-theme="celebration">
                     <section className="referral-invite">
+                        <div className="referral-invite-kicker">
+                            <Gift aria-hidden="true" />
+                            <span>{isZh ? '分享有礼' : 'SHARE & EARN'}</span>
+                        </div>
                         <h1 className="referral-invite-title">
                             {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
                         </h1>
@@ -367,7 +373,7 @@ export function ReferralPage() {
                                                     </small>
                                                 </div>
                                                 <span
-                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--text-soft)]'}`}
+                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
                                                 >
                                                     {invitee.firstPaidOrderAt
                                                         ? isZh
@@ -390,6 +396,7 @@ export function ReferralPage() {
                                 </>
                             ) : (
                                 <p className="referral-record-empty">
+                                    <Gift aria-hidden="true" />
                                     {isZh
                                         ? '还没有邀请记录，分享给第一位好友吧'
                                         : 'No invitees yet. Share with your first friend.'}
@@ -427,6 +434,7 @@ export function ReferralPage() {
                                 </>
                             ) : (
                                 <p className="referral-record-empty">
+                                    <WalletCards aria-hidden="true" />
                                     {isZh ? '暂无奖励流水' : 'No reward activity yet'}
                                 </p>
                             )}
@@ -619,7 +627,7 @@ function ListPagination({
                     disabled={currentPage <= 1}
                     onClick={() => onPageChange(currentPage - 1)}
                     aria-label={isZh ? '上一页' : 'Previous page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="size-3.5" aria-hidden="true" />
                     <span>{isZh ? '上一页' : 'Prev'}</span>
@@ -629,7 +637,7 @@ function ListPagination({
                     disabled={currentPage >= totalPages}
                     onClick={() => onPageChange(currentPage + 1)}
                     aria-label={isZh ? '下一页' : 'Next page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <span>{isZh ? '下一页' : 'Next'}</span>
                     <ChevronRight className="size-3.5" aria-hidden="true" />

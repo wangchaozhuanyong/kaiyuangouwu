@@ -13,7 +13,9 @@
     display: none;
     margin: 0;
     color: var(--text);
-    font-size: 20px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-semibold);
 }
 .notification-toolbar > div {
     display: flex;
@@ -49,7 +51,7 @@
     margin-left: auto;
     padding-inline: 6px;
     background: transparent;
-    color: var(--text-soft);
+    color: var(--muted);
     font-weight: 400;
 }
 .notification-count {
@@ -185,6 +187,158 @@
     clip-path: inset(50%);
     white-space: nowrap;
 }
+.notification-detail-body {
+    flex: 1;
+    display: grid;
+    align-content: start;
+    gap: 24px;
+    min-height: 0;
+    min-width: 0;
+    padding: 16px 24px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+}
+.notification-detail-heading {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+}
+.notification-detail-heading .notification-icon {
+    grid-area: auto;
+    align-self: start;
+}
+.notification-detail-kind {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+.notification-detail-heading h2 {
+    margin: 8px 0 12px;
+    font-size: 22px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.5;
+}
+.notification-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+.notification-detail-copy {
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+.notification-detail-related {
+    min-width: 0;
+    padding: 18px;
+    border-radius: var(--skin-card-radius);
+    background: var(--control-surface);
+}
+.notification-detail-body h3 {
+    margin: 0 0 16px;
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+}
+.notification-detail-related dl {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.notification-detail-related dl > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 16px;
+}
+.notification-detail-related dt {
+    color: var(--muted);
+}
+.notification-detail-related dd {
+    min-width: 0;
+    margin: 0;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+.notification-detail-related ul {
+    display: grid;
+    gap: 12px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+}
+.notification-detail-related li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.7;
+}
+.notification-detail-related li small {
+    color: var(--muted);
+    font-size: 12px;
+}
+.notification-detail-note p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+.notification-detail-footer {
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px 24px max(16px, env(safe-area-inset-bottom));
+    background: var(--surface);
+}
+.notification-detail-footer button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    cursor: pointer;
+}
+.notification-detail-footer .primary-action {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+.notification-detail-footer button:hover {
+    background: var(--control-surface-hover);
+}
+.notification-detail-footer .primary-action:hover {
+    background: var(--accent-hover);
+}
+.notification-detail-footer svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+@media (max-width: 599px) {
+    .notification-detail-body {
+        padding-inline: 16px;
+    }
+    .notification-detail-footer {
+        padding-inline: 16px;
+    }
+}
 @media (min-width: 1024px) {
     .notification-workbench {
         margin: 0;
@@ -200,6 +354,9 @@
     .notification-toolbar h2 {
         display: block;
         margin-right: auto;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .notification-toolbar .notification-mark-all {
         margin-left: 0;

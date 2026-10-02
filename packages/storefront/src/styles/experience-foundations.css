@@ -4,9 +4,61 @@
         'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
     --font-numeric:
         -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Segoe UI', Roboto, sans-serif;
+    --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
+    /* Semantic type roles: components own their role, skins never change density. */
+    --type-topbar-size: 16px;
+    --type-topbar-leading: 20px;
+    --type-page-size: 24px;
+    --type-page-leading: 32px;
+    --type-section-size: 16px;
+    --type-section-leading: 22px;
+    --type-section-compact-size: 14px;
+    --type-section-compact-leading: 20px;
+    --type-card-size: 16px;
+    --type-card-leading: 24px;
+    --type-product-name-size: 13px;
+    --type-product-name-leading: 1.4;
+    --type-product-subtitle-size: 12px;
+    --type-product-subtitle-leading: 1.5;
+    --type-product-detail-size: 22px;
+    --type-product-detail-leading: 30px;
+    --type-body-size: 14px;
+    --type-body-leading: 21px;
+    --type-reading-size: 16px;
+    --type-reading-leading: 26px;
+    --type-label-size: 14px;
+    --type-label-leading: 20px;
+    --type-action-size: 15px;
+    --type-action-leading: 22px;
+    --type-input-size: 16px;
+    --type-input-leading: 24px;
+    --type-helper-size: 13px;
+    --type-helper-leading: 20px;
+    --type-meta-size: 12px;
+    --type-meta-leading: 18px;
+    --type-badge-size: 10px;
+    --type-badge-leading: 12px;
+    --type-price-size: 18px;
+    --type-price-leading: 24px;
+    --type-price-detail-size: 28px;
+    --type-price-detail-leading: 36px;
+    /* Four-pixel rhythm; compact product/service exceptions stay component-owned. */
+    --space-4: 4px;
+    --space-8: 8px;
+    --space-12: 12px;
+    --space-16: 16px;
+    --space-24: 24px;
+    --space-32: 32px;
+    --space-40: 40px;
+    --space-48: 48px;
+    --space-section: var(--space-16);
+    --space-major: var(--space-24);
+    --space-card: var(--space-16);
+    --space-title-content: var(--space-12);
+    --space-form: var(--space-16);
     --line-height-tight: 1.25;
     --line-height-body: 1.5;
     --line-height-relaxed: 1.65;
@@ -105,4 +157,29 @@
     color: var(--text);
     background: var(--bg);
     accent-color: var(--accent);
+}
+
+@media (min-width: 1024px) {
+    :root {
+        --type-page-size: 28px;
+        --type-page-leading: 36px;
+        --type-section-size: 18px;
+        --type-section-leading: 26px;
+        --type-section-compact-size: 16px;
+        --type-section-compact-leading: 22px;
+        --type-product-name-size: 15px;
+        --type-product-name-leading: 1.4;
+        --type-product-subtitle-size: 13px;
+        --type-product-subtitle-leading: 1.5;
+        --type-product-detail-size: 28px;
+        --type-product-detail-leading: 38px;
+        --type-action-size: 16px;
+        --type-action-leading: 24px;
+        --type-price-detail-size: 32px;
+        --type-price-detail-leading: 40px;
+        --space-section: var(--space-24);
+        --space-major: var(--space-32);
+        --space-card: var(--space-24);
+        --space-title-content: var(--space-16);
+    }
 }

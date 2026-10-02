@@ -822,7 +822,7 @@
     color: var(--text);
     font: inherit;
     font-size: 16px;
-    font-weight: var(--font-weight-regular);
+    font-weight: var(--font-weight-normal);
     line-height: 1.55;
     outline: none;
 }
@@ -836,7 +836,7 @@
     justify-self: end;
     color: var(--muted);
     font-size: 11px;
-    font-weight: var(--font-weight-regular);
+    font-weight: var(--font-weight-normal);
 }
 
 .ai-studio-reference-sheet-done {

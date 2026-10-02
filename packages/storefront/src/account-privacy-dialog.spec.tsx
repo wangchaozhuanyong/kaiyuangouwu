@@ -26,6 +26,10 @@ beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
+    renderPage();
+});
+
+function renderPage(exportEnabled = true) {
     act(() => {
         root.render(
             <AccountSecurityPage
@@ -42,13 +46,13 @@ beforeEach(() => {
                 storefrontName="Fixture store"
                 onBack={vi.fn()}
                 onAvatarChange={vi.fn()}
-                onDataExport={exportData}
+                onDataExport={exportEnabled ? exportData : undefined}
                 onRequestAccountClosure={requestClosure}
                 onLogout={vi.fn()}
             />,
         );
     });
-});
+}
 
 afterEach(() => {
     act(() => root.unmount());
@@ -134,5 +138,26 @@ it('ignores IME confirmation and duplicate Enter while a fixture request is pend
         '操作暂时未能完成，请稍后重试。',
     );
     key(document, 'Escape');
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it('keeps account closure working when personal-data export is not exposed', async () => {
+    renderPage(false);
+    expect(host.textContent).not.toContain('导出我的个人数据');
+    requestClosure.mockResolvedValue(undefined);
+    const { dialog, input } = openDialog('申请注销账户');
+    act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+            input,
+            'local-test-password',
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+        dialog.querySelector<HTMLButtonElement>('.security-privacy-dialog-actions .is-danger')?.click();
+        await Promise.resolve();
+    });
+    expect(requestClosure).toHaveBeenCalledWith('local-test-password');
+    expect(exportData).not.toHaveBeenCalled();
     expect(host.querySelector('[role="dialog"]')).toBeNull();
 });

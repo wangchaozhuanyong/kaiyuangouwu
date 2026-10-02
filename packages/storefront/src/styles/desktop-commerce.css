@@ -351,8 +351,9 @@
         margin-bottom: 16px;
     }
     .desktop-store-layout .section-header h2 {
-        font-size: 23px;
-        font-weight: 500;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-section-leading);
     }
     .desktop-store-layout .section-header-icon-pill {
         display: inline-flex;
@@ -577,17 +578,17 @@
         gap: 16px;
     }
     .desktop-account-heading h1 {
-        font-size: 24px;
-        font-weight: 600;
-        line-height: 30px;
+        font-size: var(--type-page-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-page-leading);
     }
     .desktop-account-page header h2 {
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 18px;
-        font-weight: 600;
-        line-height: 24px;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-section-leading);
     }
     .desktop-account-page .section-header .section-header-title-row {
         gap: 10px;
@@ -1053,7 +1054,9 @@
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
     }
     .desktop-account-page .section-header h2 {
-        font-size: 18px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-account-page .legal-footer {
         margin: 0;
@@ -1284,7 +1287,7 @@
     .desktop-local-navigation > button[aria-pressed='true']:hover:not(:disabled),
     .desktop-category-entry > button[aria-pressed='true']:hover:not(:disabled) {
         background: var(--interaction-hover);
-        color: var(--accent-ink);
+        color: var(--interaction-ink);
     }
     .desktop-category-navigation button:hover {
         color: var(--interaction-ink);
@@ -1296,7 +1299,7 @@
     }
     .desktop-local-navigation > button[aria-pressed='true']:hover,
     .desktop-category-entry > button[aria-pressed='true']:hover {
-        color: var(--accent-ink);
+        color: var(--interaction-ink);
         background: var(--interaction-hover);
     }
     .desktop-category-status {

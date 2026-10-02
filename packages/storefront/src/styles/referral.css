@@ -1,32 +1,90 @@
+/* REFERRAL_CELEBRATION_20261002 — explicitly approved by the user.
+ * Independent red/gold campaign theme across every store skin, scoped to this page only.
+ * Do not normalize these tokens back to the storefront palette during skin repairs.
+ * Ownership and regression contract: DESKTOP_SKIN_DESIGN_CONTRACT.md, skin-system.spec.ts.
+ */
+.desktop-referral-content[data-referral-theme='celebration'] {
+    --text: #45241f;
+    --text-soft: #694a3e;
+    --muted: #83685c;
+    --surface: #fffdf9;
+    --soft: #fff2e3;
+    --control-surface: #f8ecdf;
+    --control-surface-hover: #f3e2ce;
+    --accent: #b92f32;
+    --accent-hover: #a32528;
+    --accent-foreground: #fffaf0;
+    --accent-soft: #fff0df;
+    --accent-ink: #9d272b;
+    --selection: #b92f32;
+    --selection-foreground: #fffaf0;
+    --line: #dfbaa0;
+    --focus: #9d272b;
+    --success: #27754a;
+    --skin-card-radius: 22px;
+    --skin-control-radius: 12px;
+    --skin-card-outline: 1px solid #f0ddc7;
+    --skin-card-shadow: 0 6px 20px rgb(92 43 21 / 5%);
+    --skin-card-hover-shadow: 0 8px 24px rgb(92 43 21 / 12%);
+    --referral-hero-start: #b02930;
+    --referral-hero-end: #8f1e2b;
+    --referral-hero-ink: #fff9ee;
+    --referral-hero-muted: #ffe2c0;
+    --referral-hero-highlight: rgb(255 221 154 / 4%);
+    --referral-gold: #ffe0a0;
+    --referral-gold-hover: #ffe9ba;
+    --referral-gold-ink: #71381b;
+    --referral-gold-soft: #fff2db;
+}
 .referral-invite {
     min-width: 0;
     display: flex;
     flex-direction: column;
     padding: 24px 20px 20px;
     border-radius: var(--skin-card-radius);
-    background: var(--accent-soft);
-    color: var(--text);
+    background:
+        radial-gradient(circle at 100% 0, var(--referral-hero-highlight) 0 22%, transparent 22.3%),
+        radial-gradient(circle at 100% 0, var(--referral-hero-highlight) 0 36%, transparent 36.3%),
+        linear-gradient(135deg, var(--referral-hero-start), var(--referral-hero-end));
+    color: var(--referral-hero-ink);
 }
-.referral-invite-title {
+.referral-invite-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    color: var(--referral-gold);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+.referral-invite-kicker svg {
+    width: 20px;
+    height: 20px;
+}
+.desktop-referral-content .referral-invite-title {
     margin: 0;
-    color: var(--accent-ink);
-    font-size: 23px;
+    color: var(--referral-hero-ink);
+    font-family: var(--skin-display-font, var(--font-ui));
+    font-size: clamp(24px, 2.1vw, 28px);
     font-weight: 700;
     line-height: 1.4;
     letter-spacing: -0.02em;
 }
 .referral-invite-description {
     margin: 10px 0 0;
-    color: color-mix(in srgb, var(--text) 75%, var(--muted));
+    color: var(--referral-hero-muted);
     font-size: 13px;
     line-height: 1.8;
 }
 .referral-invite-code {
     margin-top: 22px;
-    padding-top: 18px;
+    padding: 14px 16px;
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
 }
 .referral-invite-code-label {
-    color: var(--accent-ink);
+    color: var(--muted);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.03em;
@@ -67,7 +125,7 @@
 .referral-invite-url {
     margin: 6px 0 0;
     overflow: hidden;
-    color: var(--accent-ink);
+    color: var(--muted);
     font-size: 11px;
     line-height: 1.6;
     text-overflow: ellipsis;
@@ -97,23 +155,29 @@
     flex-shrink: 0;
 }
 .referral-invite-share {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--referral-gold);
+    color: var(--referral-gold-ink);
 }
 .referral-invite-share:hover {
-    background: var(--accent-hover);
+    background: var(--referral-gold-hover);
 }
-.referral-invite-poster {
-    background: var(--control-surface);
-    color: var(--accent-ink);
+.referral-invite-actions .referral-invite-poster {
+    border: 1px solid var(--referral-hero-muted);
+    background: transparent;
+    color: var(--referral-hero-ink);
 }
-.referral-invite-poster:hover,
+.referral-invite-poster:hover {
+    background: var(--referral-hero-highlight);
+}
 .referral-invite-copy:hover {
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    background: var(--accent-soft);
 }
 .referral-invite button:focus-visible {
-    outline: 2px solid var(--accent-ink);
+    outline: 2px solid var(--referral-gold);
     outline-offset: 3px;
+}
+.referral-invite .referral-invite-copy:focus-visible {
+    outline-color: var(--focus);
 }
 
 .desktop-referral-content {
@@ -121,6 +185,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     padding: 12px 16px 32px;
+    font-family: var(--font-ui);
 }
 .desktop-referral-content > section {
     min-width: 0;
@@ -132,11 +197,12 @@
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--skin-card-shadow);
-    border: var(--skin-card-outline, 0);
+    border: var(--skin-card-outline);
 }
 .referral-overview {
     display: flex;
     flex-direction: column;
+    background: linear-gradient(140deg, var(--surface) 45%, var(--referral-gold-soft));
 }
 .referral-overview-heading {
     display: flex;
@@ -147,8 +213,11 @@
 }
 .referral-overview-heading h2 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 600;
+    font-family: var(--skin-display-font, var(--font-ui));
+    letter-spacing: 0;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 .referral-reward-help {
     position: relative;
@@ -191,7 +260,7 @@
     border: 1px solid var(--line);
     border-radius: var(--skin-control-radius);
     background: var(--surface);
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.8;
     text-align: start;
@@ -214,12 +283,14 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    text-align: center;
 }
 .referral-stat dt {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -228,7 +299,7 @@
 }
 .referral-stat dd {
     margin: auto 0 0;
-    padding-top: 8px;
+    padding-top: 10px;
     overflow-wrap: anywhere;
     font-size: 22px;
     font-weight: 600;
@@ -236,23 +307,44 @@
     font-variant-numeric: tabular-nums;
 }
 .referral-stat.is-prominent dd {
+    color: var(--accent-ink);
     font-size: clamp(24px, 2.2vw, 32px);
 }
+.referral-stat.is-prominent:nth-child(2) dd,
+.referral-stat.is-prominent:nth-child(2) .referral-stat-icon {
+    color: var(--referral-gold-ink);
+}
 .referral-reward-totals {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
     margin: auto 0 0;
-    padding: 12px;
+    padding: 14px 0;
     border-radius: var(--skin-control-radius);
-    background: var(--soft);
+    background: var(--referral-gold-soft);
+}
+.referral-reward-totals > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0 12px;
+    text-align: center;
+}
+/* Approved summary reading separator; retain the campaign's red/gold palette. */
+.referral-reward-totals::before {
+    content: '';
+    position: absolute;
+    inset-block: 14px;
+    inset-inline-start: 50%;
+    border-inline-start: 1px solid var(--line);
 }
 .referral-reward-totals dt {
-    color: var(--text-soft);
+    color: var(--muted);
     font-size: 12px;
 }
 .referral-reward-totals dd {
-    margin: 4px 0 0;
+    margin: auto 0 0;
+    padding-top: 10px;
     overflow-wrap: anywhere;
     font-size: 14px;
     font-weight: 600;
@@ -278,7 +370,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
-    color: var(--text-soft);
+    color: var(--muted);
     font: inherit;
     font-size: 13px;
     font-weight: 500;
@@ -330,11 +422,21 @@
     font-variant-numeric: tabular-nums;
 }
 .referral-record-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
     margin: 0;
     padding: 28px 12px;
     color: var(--muted);
     font-size: 14px;
     text-align: center;
+}
+.referral-record-empty > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--accent-ink);
+    stroke-width: 1.4;
 }
 @media (min-width: 1024px) {
     .desktop-referral-content {

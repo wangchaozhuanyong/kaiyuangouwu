@@ -75,7 +75,13 @@
     text-decoration: none;
     padding: 6px 12px;
     border-radius: var(--radius-sm);
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     background: var(--soft);
     border: none;
     cursor: pointer;
@@ -219,7 +225,13 @@
     border: 0;
     border-radius: var(--radius);
     outline: none;
-    transition: all 0.2s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     text-transform: uppercase;
 }
 
@@ -258,7 +270,13 @@
     border-radius: 50%;
     font-size: 12px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .clear-btn:hover {
@@ -278,7 +296,13 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .paste-btn:hover {
@@ -300,7 +324,13 @@
     justify-content: center;
     gap: 8px;
     box-shadow: 0 4px 12px rgba(179, 57, 40, 0.25);
-    transition: all 0.2s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .query-btn:hover {
@@ -391,7 +421,13 @@
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     border: 1px solid transparent;
 }
 
@@ -513,7 +549,13 @@
     border: 0;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .recent-item:hover {
@@ -597,7 +639,13 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     box-shadow: var(--skin-card-shadow);
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .back-query-btn:hover {
@@ -638,7 +686,13 @@
     right: 0;
     bottom: 0;
     background-color: #cbd5e1;
-    transition: 0.2s;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     border-radius: 18px;
 }
 
@@ -650,7 +704,13 @@
     left: 2px;
     bottom: 2px;
     background-color: white;
-    transition: 0.2s;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     border-radius: 50%;
 }
 
@@ -719,7 +779,13 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    transition: all 0.15s;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .refresh-now-btn:hover {
@@ -776,12 +842,18 @@
     padding: 20px;
     box-shadow: var(--skin-card-shadow);
     border: 0;
-    transition: all 0.2s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .mail-card:hover {
     border-color: var(--primary-border);
-    box-shadow: var(--shadow);
+    box-shadow: var(--skin-card-hover-shadow);
 }
 
 /* Highlighted OTP Container */
@@ -827,7 +899,13 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
     white-space: nowrap;
     box-shadow: var(--accent-shadow);
 }
@@ -948,7 +1026,13 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard),
+        border-color var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        transform var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .empty-autorefresh-btn:hover {

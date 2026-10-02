@@ -42,7 +42,7 @@ import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { DeliveryDetails, physicalDeliveryLines, TrackingCode } from './storefront-ui/delivery-details';
 import { orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
-import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, Sheet, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
     productImageUnavailableLabel,
@@ -51,6 +51,7 @@ import {
 import './styles/checkout-payment-surfaces.css';
 import './styles/logistics.css';
 import './styles/order-aftercare.css';
+import './styles/order-detail-drawer.css';
 import './styles/order-navigation.css';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
@@ -84,6 +85,7 @@ export function OrdersPage({
     onBack,
     onBuyAgain,
     onNotify,
+    onOpenOrder,
 }: {
     api: ShopApi;
     customer: ActiveCustomer | null;
@@ -95,9 +97,11 @@ export function OrdersPage({
     onBack: () => void;
     onBuyAgain: (order: OrderSummary) => Promise<void>;
     onNotify: (message: string) => void;
+    onOpenOrder?: (orderId: string) => void;
 }) {
     const navigate = useNavigate();
     const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
+    const openOrder = onOpenOrder ?? ((id: string) => navigateTo({ name: 'order-detail', id }));
     const isZh = language === 'zh';
     const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
@@ -363,7 +367,7 @@ export function OrdersPage({
                     locale={locale}
                     language={language}
                     onRetry={() => void afterSalesQuery.refetch()}
-                    onOpenOrder={orderId => navigateTo({ name: 'order-detail', id: orderId })}
+                    onOpenOrder={openOrder}
                     onCancel={id => void cancelAfterSales(id)}
                     onSubmitReturn={(id, carrier, trackingCode) =>
                         void submitAfterSalesReturn(id, carrier, trackingCode)
@@ -390,7 +394,7 @@ export function OrdersPage({
                             locale={locale}
                             language={language}
                             storefrontName={storefrontName}
-                            onOpen={() => navigateTo({ name: 'order-detail', id: order.id })}
+                            onOpen={() => openOrder(order.id)}
                             onBuyAgain={() => void onBuyAgain(order)}
                         />
                     ))}
@@ -470,6 +474,8 @@ function AfterSalesList({
     onConfirmReplacement: (id: string) => void;
 }) {
     const isZh = language === 'zh';
+    const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+    const request = requests.find(item => item.id === selectedRequestId);
     const [shipmentDrafts, setShipmentDrafts] = useState<
         Record<string, { carrier: string; trackingCode: string }>
     >({});
@@ -501,218 +507,357 @@ function AfterSalesList({
         );
     }
     return (
-        <section
-            className={orderPageClassName('after-sales-list')}
-            aria-label={isZh ? '售后申请' : 'Return requests'}
-        >
-            {requests.map(request => (
-                <article
-                    key={request.id}
-                    className={orderPageClassName(`after-sales-card is-${request.state.toLowerCase()}`)}
-                >
-                    <header>
-                        <span>
-                            {afterSalesStateIcon(request.state)}
-                            <strong>{afterSalesStateLabel(request.state, language)}</strong>
-                        </span>
-                        <small>{request.code}</small>
-                    </header>
-                    <button
-                        type="button"
-                        className={orderPageClassName('after-sales-order-link')}
-                        onClick={() => onOpenOrder(request.order.id)}
-                    >
-                        <span>{isZh ? `订单 ${request.order.code}` : `Order ${request.order.code}`}</span>
-                        <ChevronRight aria-hidden="true" />
-                    </button>
-                    <div className={orderPageClassName('after-sales-items')}>
-                        {request.items.map(item => (
-                            <span key={item.id}>
-                                <strong>{item.productName}</strong>
-                                <small>
-                                    {isZh ? '数量' : 'Qty'} × {item.quantity}
-                                </small>
+        <>
+            <section className="after-sales-list" aria-label={isZh ? '售后申请' : 'Return requests'}>
+                {requests.map(item => (
+                    <article key={item.id} className={`after-sales-card is-${item.state.toLowerCase()}`}>
+                        <header>
+                            <span className="after-sales-status">
+                                {afterSalesStateIcon(item.state)}
+                                <strong>{afterSalesStateLabel(item.state, language)}</strong>
                             </span>
-                        ))}
-                    </div>
-                    <AfterSalesEvidenceGallery
-                        items={request.evidence ?? []}
-                        language={language}
-                        onRefresh={onRetry}
-                    />
-                    <dl>
-                        <div>
-                            <dt>{isZh ? '类型' : 'Type'}</dt>
-                            <dd>{afterSalesTypeLabel(request.type, language)}</dd>
-                        </div>
-                        <div>
-                            <dt>{isZh ? '申请金额' : 'Requested'}</dt>
-                            <dd>{formatMoney(request.requestedAmount, request.currencyCode, locale)}</dd>
-                        </div>
-                        {request.approvedAmount != null && (
+                            <small>{afterSalesTypeLabel(item.type, language)}</small>
+                        </header>
+                        <div className="after-sales-summary">
                             <div>
-                                <dt>{isZh ? '通过金额' : 'Approved'}</dt>
-                                <dd>{formatMoney(request.approvedAmount, request.currencyCode, locale)}</dd>
+                                <strong>
+                                    {item.items[0]?.productName ?? (isZh ? '售后商品' : 'Requested items')}
+                                </strong>
+                                <small>
+                                    {isZh
+                                        ? `共 ${item.items.reduce((total, product) => total + product.quantity, 0)} 件商品`
+                                        : `${item.items.reduce((total, product) => total + product.quantity, 0)} items`}
+                                    {item.items.length > 1
+                                        ? isZh
+                                            ? ` · ${item.items.length} 款`
+                                            : ` · ${item.items.length} products`
+                                        : ''}
+                                </small>
                             </div>
-                        )}
-                        <div>
-                            <dt>{isZh ? '更新时间' : 'Updated'}</dt>
-                            <dd>{formatOrderDate(request.updatedAt, locale)}</dd>
-                        </div>
-                        <div>
-                            <dt>{isZh ? '退货进度' : 'Return'}</dt>
-                            <dd>{afterSalesReturnStatusLabel(request.returnStatus, language)}</dd>
-                        </div>
-                        <div>
-                            <dt>{isZh ? '换货/补发进度' : 'Replacement'}</dt>
-                            <dd>{afterSalesReplacementStatusLabel(request.replacementStatus, language)}</dd>
-                        </div>
-                        {request.nextActionDueAt && (
-                            <div>
-                                <dt>{isZh ? '下一步时限' : 'Next action due'}</dt>
-                                <dd>
-                                    {formatOrderDate(request.nextActionDueAt, locale)}
-                                    {request.overdue ? (isZh ? '（已超时）' : ' (overdue)') : ''}
-                                </dd>
+                            <div className="after-sales-summary-amount">
+                                <small>{isZh ? '申请金额' : 'Requested'}</small>
+                                <strong>
+                                    {formatMoney(item.requestedAmount, item.currencyCode, locale)}
+                                </strong>
                             </div>
-                        )}
-                    </dl>
-                    {request.returnInstructions && (
-                        <div className={orderPageClassName('after-sales-instructions')}>
-                            <strong>{isZh ? '退货说明' : 'Return instructions'}</strong>
-                            <p>{request.returnInstructions}</p>
                         </div>
-                    )}
-                    {request.returnTrackingCode && (
-                        <p className={orderPageClassName('after-sales-tracking')}>
-                            {isZh ? '退货物流' : 'Return shipment'}: {request.returnCarrier} ·{' '}
-                            {request.returnTrackingCode}
-                        </p>
-                    )}
-                    {request.replacementTrackingCode && (
-                        <p className={orderPageClassName('after-sales-tracking')}>
-                            {isZh ? '换货/补发物流' : 'Replacement shipment'}: {request.replacementCarrier} ·{' '}
-                            {request.replacementTrackingCode}
-                        </p>
-                    )}
-                    {request.replacementException && (
-                        <p className={orderPageClassName('after-sales-exception')}>
-                            {request.replacementException}
-                        </p>
-                    )}
-                    <details>
-                        <summary>{isZh ? '查看处理时间线' : 'View timeline'}</summary>
-                        <ol>
-                            {request.events.map(event => (
-                                <li key={event.id}>
-                                    <span />
-                                    <div>
-                                        <strong>{afterSalesStateLabel(event.state, language)}</strong>
-                                        <p>{event.note}</p>
-                                        <small>{formatOrderDate(event.createdAt, locale)}</small>
-                                    </div>
-                                </li>
-                            ))}
-                        </ol>
-                    </details>
-                    {request.state === 'PENDING' && (
-                        <button
-                            type="button"
-                            className={orderPageClassName('after-sales-cancel')}
-                            disabled={Boolean(cancellingId)}
-                            onClick={() => onCancel(request.id)}
-                        >
-                            {cancellingId === request.id
-                                ? isZh
-                                    ? '正在撤销'
-                                    : 'Cancelling'
-                                : isZh
-                                  ? '撤销申请'
-                                  : 'Cancel request'}
-                        </button>
-                    )}
-                    {request.state === 'APPROVED' && request.returnStatus === 'AWAITING_SHIPMENT' && (
-                        <form
-                            className={orderPageClassName('after-sales-return-form')}
-                            onSubmit={event => {
-                                event.preventDefault();
-                                const draft = shipmentDrafts[request.id];
-                                if (!draft?.carrier.trim() || !draft.trackingCode.trim()) return;
-                                onSubmitReturn(request.id, draft.carrier.trim(), draft.trackingCode.trim());
-                            }}
-                        >
-                            <label>
-                                <span>{isZh ? '物流公司' : 'Carrier'}</span>
-                                <input
-                                    value={shipmentDrafts[request.id]?.carrier ?? ''}
-                                    maxLength={120}
-                                    disabled={Boolean(updatingId)}
-                                    onChange={event =>
-                                        setShipmentDrafts(current => ({
-                                            ...current,
-                                            [request.id]: {
-                                                carrier: event.target.value,
-                                                trackingCode: current[request.id]?.trackingCode ?? '',
-                                            },
-                                        }))
-                                    }
-                                />
-                            </label>
-                            <label>
-                                <span>{isZh ? '退货单号' : 'Return tracking code'}</span>
-                                <input
-                                    value={shipmentDrafts[request.id]?.trackingCode ?? ''}
-                                    maxLength={160}
-                                    disabled={Boolean(updatingId)}
-                                    onChange={event =>
-                                        setShipmentDrafts(current => ({
-                                            ...current,
-                                            [request.id]: {
-                                                carrier: current[request.id]?.carrier ?? '',
-                                                trackingCode: event.target.value,
-                                            },
-                                        }))
-                                    }
-                                />
-                            </label>
-                            <button
-                                type="submit"
-                                disabled={
-                                    Boolean(updatingId) ||
-                                    !shipmentDrafts[request.id]?.carrier.trim() ||
-                                    !shipmentDrafts[request.id]?.trackingCode.trim()
-                                }
-                            >
-                                {updatingId === request.id
-                                    ? isZh
-                                        ? '正在提交'
-                                        : 'Submitting'
-                                    : isZh
-                                      ? '提交退货物流'
-                                      : 'Submit return shipment'}
-                            </button>
-                        </form>
-                    )}
-                    {request.state === 'APPROVED' &&
-                        ['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus) && (
+                        {item.state === 'APPROVED' &&
+                            (item.returnStatus === 'AWAITING_SHIPMENT' ||
+                                ['SHIPPED', 'EXCEPTION'].includes(item.replacementStatus)) && (
+                                <p className="after-sales-next-action">
+                                    {item.returnStatus === 'AWAITING_SHIPMENT'
+                                        ? isZh
+                                            ? '待填写退货物流'
+                                            : 'Return shipment needed'
+                                        : item.replacementStatus === 'EXCEPTION'
+                                          ? isZh
+                                              ? '换货物流异常，请查看详情'
+                                              : 'Replacement issue · view details'
+                                          : isZh
+                                            ? '待确认换货/补发收货'
+                                            : 'Confirm replacement receipt'}
+                                    {item.nextActionDueAt
+                                        ? ` · ${formatOrderDate(item.nextActionDueAt, locale)}${item.overdue ? (isZh ? '（已超时）' : ' (overdue)') : ''}`
+                                        : ''}
+                                </p>
+                            )}
+                        <footer>
+                            <small>
+                                {isZh ? '更新于 ' : 'Updated '}
+                                {formatOrderDate(item.updatedAt, locale)}
+                            </small>
                             <button
                                 type="button"
-                                className={orderPageClassName('after-sales-confirm-delivery')}
-                                disabled={Boolean(updatingId)}
-                                onClick={() => onConfirmReplacement(request.id)}
+                                className="after-sales-details-button"
+                                aria-haspopup="dialog"
+                                onClick={() => setSelectedRequestId(item.id)}
                             >
-                                {updatingId === request.id
-                                    ? isZh
-                                        ? '正在确认'
-                                        : 'Confirming'
-                                    : isZh
-                                      ? '确认已收到换货/补发商品'
-                                      : 'Confirm replacement received'}
+                                {isZh ? '查看详情' : 'View details'}
+                                <ChevronRight aria-hidden="true" />
                             </button>
-                        )}
-                </article>
-            ))}
-        </section>
+                        </footer>
+                    </article>
+                ))}
+            </section>
+            {request && (
+                <Sheet
+                    title={isZh ? '售后详情' : 'After-sales details'}
+                    language={language}
+                    side="right"
+                    className="after-sales-detail-sheet"
+                    onClose={() => setSelectedRequestId(null)}
+                >
+                    <div className="after-sales-detail-body">
+                        <div className="after-sales-detail-status">
+                            <span className="after-sales-status">
+                                {afterSalesStateIcon(request.state)}
+                                <strong>{afterSalesStateLabel(request.state, language)}</strong>
+                            </span>
+                            <small>
+                                {isZh ? '售后单号 ' : 'Request '}
+                                {request.code}
+                            </small>
+                        </div>
+                        <section
+                            className="after-sales-detail-section"
+                            aria-label={isZh ? '申请信息' : 'Request information'}
+                        >
+                            <h3>{isZh ? '申请信息' : 'Request information'}</h3>
+                            <button
+                                type="button"
+                                className="after-sales-order-link"
+                                onClick={() => {
+                                    setSelectedRequestId(null);
+                                    onOpenOrder(request.order.id);
+                                }}
+                            >
+                                <span>
+                                    {isZh ? `订单 ${request.order.code}` : `Order ${request.order.code}`}
+                                </span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                            <div className="after-sales-items">
+                                {request.items.map(item => (
+                                    <span key={item.id}>
+                                        <strong>{item.productName}</strong>
+                                        <small>
+                                            {isZh ? '数量' : 'Qty'} × {item.quantity}
+                                        </small>
+                                    </span>
+                                ))}
+                            </div>
+                            <dl className="after-sales-facts">
+                                <div>
+                                    <dt>{isZh ? '售后类型' : 'Type'}</dt>
+                                    <dd>{afterSalesTypeLabel(request.type, language)}</dd>
+                                </div>
+                                <div>
+                                    <dt>{isZh ? '申请原因' : 'Reason'}</dt>
+                                    <dd>{afterSalesReasonLabel(request.reason, language)}</dd>
+                                </div>
+                                <div>
+                                    <dt>{isZh ? '申请金额' : 'Requested'}</dt>
+                                    <dd>
+                                        {formatMoney(request.requestedAmount, request.currencyCode, locale)}
+                                    </dd>
+                                </div>
+                                {request.approvedAmount != null && (
+                                    <div>
+                                        <dt>{isZh ? '通过金额' : 'Approved'}</dt>
+                                        <dd>
+                                            {formatMoney(
+                                                request.approvedAmount,
+                                                request.currencyCode,
+                                                locale,
+                                            )}
+                                        </dd>
+                                    </div>
+                                )}
+                                <div>
+                                    <dt>{isZh ? '申请时间' : 'Submitted'}</dt>
+                                    <dd>{formatOrderDate(request.createdAt, locale)}</dd>
+                                </div>
+                                <div>
+                                    <dt>{isZh ? '更新时间' : 'Updated'}</dt>
+                                    <dd>{formatOrderDate(request.updatedAt, locale)}</dd>
+                                </div>
+                            </dl>
+                            {request.description && (
+                                <div className="after-sales-detail-note">
+                                    <strong>{isZh ? '问题描述' : 'Description'}</strong>
+                                    <p>{request.description}</p>
+                                </div>
+                            )}
+                            <AfterSalesEvidenceGallery
+                                items={request.evidence ?? []}
+                                language={language}
+                                onRefresh={onRetry}
+                            />
+                        </section>
+                        <section
+                            className="after-sales-detail-section"
+                            aria-label={isZh ? '处理进度' : 'Progress'}
+                        >
+                            <h3>{isZh ? '处理进度' : 'Progress'}</h3>
+                            <dl className="after-sales-facts">
+                                <div>
+                                    <dt>{isZh ? '退货进度' : 'Return'}</dt>
+                                    <dd>{afterSalesReturnStatusLabel(request.returnStatus, language)}</dd>
+                                </div>
+                                <div>
+                                    <dt>{isZh ? '换货/补发进度' : 'Replacement'}</dt>
+                                    <dd>
+                                        {afterSalesReplacementStatusLabel(
+                                            request.replacementStatus,
+                                            language,
+                                        )}
+                                    </dd>
+                                </div>
+                                {request.nextActionDueAt && (
+                                    <div>
+                                        <dt>{isZh ? '下一步时限' : 'Next action due'}</dt>
+                                        <dd>
+                                            {formatOrderDate(request.nextActionDueAt, locale)}
+                                            {request.overdue ? (isZh ? '（已超时）' : ' (overdue)') : ''}
+                                        </dd>
+                                    </div>
+                                )}
+                            </dl>
+                            {request.resolution && (
+                                <div className="after-sales-detail-note">
+                                    <strong>{isZh ? '处理说明' : 'Resolution'}</strong>
+                                    <p>{request.resolution}</p>
+                                </div>
+                            )}
+                            {request.returnInstructions && (
+                                <div className="after-sales-instructions">
+                                    <strong>{isZh ? '退货说明' : 'Return instructions'}</strong>
+                                    <p>{request.returnInstructions}</p>
+                                </div>
+                            )}
+                            {request.returnTrackingCode && (
+                                <p className="after-sales-tracking">
+                                    {isZh ? '退货物流' : 'Return shipment'}: {request.returnCarrier} ·{' '}
+                                    {request.returnTrackingCode}
+                                </p>
+                            )}
+                            {request.replacementTrackingCode && (
+                                <p className="after-sales-tracking">
+                                    {isZh ? '换货/补发物流' : 'Replacement shipment'}:{' '}
+                                    {request.replacementCarrier} · {request.replacementTrackingCode}
+                                </p>
+                            )}
+                            {request.replacementException && (
+                                <p className="after-sales-exception">{request.replacementException}</p>
+                            )}
+                            {request.state === 'PENDING' && (
+                                <button
+                                    type="button"
+                                    className={orderPageClassName('after-sales-cancel')}
+                                    disabled={Boolean(cancellingId)}
+                                    onClick={() => onCancel(request.id)}
+                                >
+                                    {cancellingId === request.id
+                                        ? isZh
+                                            ? '正在撤销'
+                                            : 'Cancelling'
+                                        : isZh
+                                          ? '撤销申请'
+                                          : 'Cancel request'}
+                                </button>
+                            )}
+                            {request.state === 'APPROVED' && request.returnStatus === 'AWAITING_SHIPMENT' && (
+                                <form
+                                    className={orderPageClassName('after-sales-return-form')}
+                                    onSubmit={event => {
+                                        event.preventDefault();
+                                        const draft = shipmentDrafts[request.id];
+                                        if (!draft?.carrier.trim() || !draft.trackingCode.trim()) return;
+                                        onSubmitReturn(
+                                            request.id,
+                                            draft.carrier.trim(),
+                                            draft.trackingCode.trim(),
+                                        );
+                                    }}
+                                >
+                                    <label>
+                                        <span>{isZh ? '物流公司' : 'Carrier'}</span>
+                                        <input
+                                            value={shipmentDrafts[request.id]?.carrier ?? ''}
+                                            maxLength={120}
+                                            disabled={Boolean(updatingId)}
+                                            onChange={event =>
+                                                setShipmentDrafts(current => ({
+                                                    ...current,
+                                                    [request.id]: {
+                                                        carrier: event.target.value,
+                                                        trackingCode: current[request.id]?.trackingCode ?? '',
+                                                    },
+                                                }))
+                                            }
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>{isZh ? '退货单号' : 'Return tracking code'}</span>
+                                        <input
+                                            value={shipmentDrafts[request.id]?.trackingCode ?? ''}
+                                            maxLength={160}
+                                            disabled={Boolean(updatingId)}
+                                            onChange={event =>
+                                                setShipmentDrafts(current => ({
+                                                    ...current,
+                                                    [request.id]: {
+                                                        carrier: current[request.id]?.carrier ?? '',
+                                                        trackingCode: event.target.value,
+                                                    },
+                                                }))
+                                            }
+                                        />
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        disabled={
+                                            Boolean(updatingId) ||
+                                            !shipmentDrafts[request.id]?.carrier.trim() ||
+                                            !shipmentDrafts[request.id]?.trackingCode.trim()
+                                        }
+                                    >
+                                        {updatingId === request.id
+                                            ? isZh
+                                                ? '正在提交'
+                                                : 'Submitting'
+                                            : isZh
+                                              ? '提交退货物流'
+                                              : 'Submit return shipment'}
+                                    </button>
+                                </form>
+                            )}
+                            {request.state === 'APPROVED' &&
+                                ['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus) && (
+                                    <button
+                                        type="button"
+                                        className={orderPageClassName('after-sales-confirm-delivery')}
+                                        disabled={Boolean(updatingId)}
+                                        onClick={() => onConfirmReplacement(request.id)}
+                                    >
+                                        {updatingId === request.id
+                                            ? isZh
+                                                ? '正在确认'
+                                                : 'Confirming'
+                                            : isZh
+                                              ? '确认已收到换货/补发商品'
+                                              : 'Confirm replacement received'}
+                                    </button>
+                                )}
+                        </section>
+                        <section
+                            className="after-sales-detail-section"
+                            aria-label={isZh ? '处理时间线' : 'Timeline'}
+                        >
+                            <h3>{isZh ? '处理时间线' : 'Timeline'}</h3>
+                            {request.events.length ? (
+                                <ol className="after-sales-timeline">
+                                    {request.events.map(event => (
+                                        <li key={event.id}>
+                                            <span aria-hidden="true" />
+                                            <div>
+                                                <strong>{afterSalesStateLabel(event.state, language)}</strong>
+                                                {event.note && <p>{event.note}</p>}
+                                                <small>{formatOrderDate(event.createdAt, locale)}</small>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ol>
+                            ) : (
+                                <p className="after-sales-timeline-empty">
+                                    {isZh ? '暂无处理记录' : 'No updates yet'}
+                                </p>
+                            )}
+                        </section>
+                    </div>
+                </Sheet>
+            )}
+        </>
     );
 }
 
@@ -732,7 +877,9 @@ export function OrderDetailPage({
     onConfirmDelivery,
     onUnavailable,
     onNotify,
+    presentation = 'page',
 }: {
+    presentation?: 'page' | 'drawer';
     api?: ShopApi;
     order: Order | null;
     market: MarketConfig;
@@ -752,7 +899,8 @@ export function OrderDetailPage({
 }) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
+    const isDrawer = presentation === 'drawer';
+    const desktop = useDesktopLayout() && !isDrawer;
     const [cancelOpen, setCancelOpen] = useState(false);
     const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
@@ -837,7 +985,7 @@ export function OrderDetailPage({
         </section>
     );
     const orderActions = !inCart && (
-        <div className={orderPageClassName('order-detail-actions')}>
+        <div className={isDrawer ? 'order-detail-actions' : orderPageClassName('order-detail-actions')}>
             {canCancel && (
                 <button
                     type="button"
@@ -904,21 +1052,8 @@ export function OrderDetailPage({
             </span>
         </article>
     ));
-    return (
-        <main className={orderPageClassName('page subpage order-detail-page')}>
-            <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
-            <header className="delivery-linked-order-heading">
-                <h1>{isZh ? '订单详情' : 'Order details'}</h1>
-                <button className="delivery-back-link" type="button" onClick={onBack}>
-                    <ArrowLeft aria-hidden="true" />
-                    {backLabel ?? (isZh ? '返回' : 'Back')}
-                </button>
-            </header>
-            <section className={orderPageClassName('order-status')}>
-                <strong>{orderStateLabel(order.state, language)}</strong>
-                <span>{statusHint}</span>
-                <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
-            </section>
+    const deliveryPanel = (
+        <>
             {(physicalDeliveryLines(order).length > 0 || fulfillments.length > 0) && (
                 <section className="order-delivery-panel" id="order-logistics">
                     <header>
@@ -953,7 +1088,7 @@ export function OrderDetailPage({
                                 <tbody>
                                     {fulfillments.map((fulfillment, index) => (
                                         <tr key={fulfillment.id}>
-                                            <td>
+                                            <td data-label={isZh ? '包裹 / 配送方式' : 'Package / method'}>
                                                 <strong>
                                                     {isZh ? `包裹 ${index + 1}` : `Package ${index + 1}`}
                                                 </strong>
@@ -961,13 +1096,13 @@ export function OrderDetailPage({
                                                     {fulfillmentMethodLabel(fulfillment.method, language)}
                                                 </small>
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '运单号' : 'Tracking number'}>
                                                 <TrackingCode
                                                     code={fulfillment.trackingCode}
                                                     language={language}
                                                 />
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '配送状态' : 'Status'}>
                                                 <strong>
                                                     {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
                                                         ? isZh
@@ -984,7 +1119,7 @@ export function OrderDetailPage({
                                                     </p>
                                                 )}
                                             </td>
-                                            <td>
+                                            <td data-label={isZh ? '操作' : 'Action'}>
                                                 {fulfillment.state === 'Shipped' &&
                                                     fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
                                                         <button
@@ -1031,6 +1166,28 @@ export function OrderDetailPage({
                     )}
                 </section>
             )}
+        </>
+    );
+    const content = (
+        <>
+            {!isDrawer && (
+                <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
+            )}
+            {!isDrawer && (
+                <header className="delivery-linked-order-heading">
+                    <h1>{isZh ? '订单详情' : 'Order details'}</h1>
+                    <button className="delivery-back-link" type="button" onClick={onBack}>
+                        <ArrowLeft aria-hidden="true" />
+                        {backLabel ?? (isZh ? '返回' : 'Back')}
+                    </button>
+                </header>
+            )}
+            <section className={orderPageClassName('order-status')}>
+                <strong>{orderStateLabel(order.state, language)}</strong>
+                <span>{statusHint}</span>
+                <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
+            </section>
+            {!isDrawer && deliveryPanel}
             <section className={orderPageClassName('order-detail-products')}>
                 <header>
                     <strong>{storefrontName}</strong>
@@ -1043,9 +1200,13 @@ export function OrderDetailPage({
                         {orderActions}
                     </div>
                 ) : (
-                    orderProductRows
+                    <>
+                        {orderProductRows}
+                        {isDrawer && orderSummary}
+                    </>
                 )}
             </section>
+            {isDrawer && deliveryPanel}
             {!!digitalDeliveries.length && (
                 <section
                     className={orderPageClassName('digital-delivery-panel')}
@@ -1165,11 +1326,24 @@ export function OrderDetailPage({
                     </div>
                 )}
             </section>
-            {!desktop && (
+            {!desktop && !isDrawer && (
                 <>
                     {orderSummary}
                     {orderActions}
                 </>
+            )}
+        </>
+    );
+    const Container = isDrawer ? 'div' : 'main';
+    return (
+        <Container
+            className={
+                isDrawer ? 'order-detail-content' : orderPageClassName('page subpage order-detail-page')
+            }
+        >
+            {isDrawer ? <div className="order-detail-sheet-body">{content}</div> : content}
+            {isDrawer && orderActions && (
+                <footer className="order-detail-sheet-footer">{orderActions}</footer>
             )}
             {afterSalesOpen && (
                 <AfterSalesRequestSheet
@@ -1206,7 +1380,7 @@ export function OrderDetailPage({
                     onNotify={onNotify}
                 />
             )}
-        </main>
+        </Container>
     );
 }
 

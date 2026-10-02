@@ -238,7 +238,7 @@
 }
 .account-page .account-section {
     margin: 0 var(--page-section-inset, 20px);
-    padding: 18px 0;
+    padding: var(--space-card);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -262,9 +262,9 @@
 .account-page .account-section h2 {
     margin: 0;
     color: var(--text);
-    font-size: 17px;
-    font-weight: 650;
-    line-height: 1.4;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 .account-page .account-latest-logistics > button {
     border: 0;
@@ -421,8 +421,9 @@
         border-bottom: 0;
     }
     .account-orders .section-header h2 {
-        font-size: 14px;
-        font-weight: 700;
+        font-size: var(--type-section-compact-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-section-compact-leading);
     }
     .account-orders .section-header-action-btn {
         display: inline-flex;
@@ -506,8 +507,8 @@
         white-space: normal;
     }
     .account-page .account-section {
-        margin: 10px var(--page-section-inset, 20px) 0;
-        padding: 16px;
+        margin: var(--space-section) var(--page-section-inset, 20px) 0;
+        padding: var(--space-card);
         border: var(--skin-card-outline, 0);
         border-radius: var(--radius-md);
         background: var(--surface);
@@ -529,10 +530,10 @@
         background: transparent;
         color: var(--text);
         font-family: var(--font-display, var(--font-ui));
-        font-size: 18px;
+        font-size: var(--type-section-size);
         font-weight: var(--font-weight-semibold);
-        letter-spacing: 0.12em;
-        line-height: 1.25;
+        letter-spacing: normal;
+        line-height: var(--type-section-leading);
         text-align: center;
     }
     .account-page .account-recommendations .section-header-center-label::before,

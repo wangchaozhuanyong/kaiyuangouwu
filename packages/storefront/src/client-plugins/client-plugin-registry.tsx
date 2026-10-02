@@ -253,7 +253,15 @@ export function ClientPluginSlot({
             {toolsFirst ? (
                 <>
                     {tools.length > 0 && (
-                        <div className="category-client-plugin-group is-tools">{renderPlugins(tools)}</div>
+                        <section
+                            className="category-client-plugin-group is-tools"
+                            aria-label={language === 'zh' ? '实用工具' : 'Useful tools'}
+                        >
+                            <h2 className="category-client-plugin-group-title">
+                                {language === 'zh' ? '实用工具' : 'Useful tools'}
+                            </h2>
+                            {renderPlugins(tools)}
+                        </section>
                     )}
                     {assistance.length > 0 && (
                         <div className="category-client-plugin-group is-assistance">

@@ -8,6 +8,7 @@ export function DesktopCouponTicket({
     card,
     action,
     meta,
+    scope,
     selected = false,
     unavailable = false,
     role,
@@ -15,6 +16,7 @@ export function DesktopCouponTicket({
     card: StorefrontCouponCard;
     action: ReactNode;
     meta?: string;
+    scope?: string;
     selected?: boolean;
     unavailable?: boolean;
     role?: 'listitem';
@@ -34,7 +36,7 @@ export function DesktopCouponTicket({
             </div>
             <div className="desktop-coupon-info">
                 <strong>{card.title}</strong>
-                <span>{card.tag}</span>
+                <span>{scope ?? card.tag}</span>
                 {meta && <small>{meta}</small>}
                 <div className="desktop-coupon-action">{action}</div>
             </div>

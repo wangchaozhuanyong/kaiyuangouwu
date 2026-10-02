@@ -13,20 +13,23 @@
 
 /* User Card */
 .security-user-card {
-    background: var(--surface);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: var(--skin-card-shadow);
-    display: flex;
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 20px;
     border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
 }
 
 .security-user-avatar {
     position: relative;
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     background: var(--accent);
     color: var(--accent-foreground);
@@ -62,8 +65,8 @@
     position: absolute;
     right: -3px;
     bottom: -2px;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     border: 2px solid var(--surface);
     background: var(--accent-soft);
@@ -74,8 +77,8 @@
 }
 
 .security-avatar-edit svg {
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
 }
 
 .security-user-avatar[aria-busy='true'] .security-avatar-edit svg {
@@ -87,9 +90,10 @@
 }
 
 .security-avatar-message {
-    margin: 1px 0 0;
+    grid-column: 1 / -1;
+    margin: 0;
     color: var(--accent-ink);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     line-height: 1.35;
 }
@@ -99,34 +103,85 @@
 }
 
 .security-avatar-actions {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 2px;
+    gap: 12px;
 }
 
-.security-avatar-actions button,
-.security-avatar-restore {
-    border: 0;
-    background: transparent;
-    color: var(--accent-ink);
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 0;
+.security-avatar-actions button {
     display: inline-flex;
+    flex: 1;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
     cursor: pointer;
 }
 
+.security-avatar-actions svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+
+.security-avatar-actions button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+
+.security-avatar-actions button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+
 .security-avatar-actions button.is-danger {
+    background: transparent;
     color: var(--danger);
 }
 
-.security-avatar-actions button:disabled,
-.security-avatar-restore:disabled {
+.security-avatar-actions button.is-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.security-avatar-actions button:disabled {
     cursor: wait;
     opacity: 0.55;
+}
+
+.security-avatar-actions .lucide-loader-circle {
+    animation: security-avatar-spin 0.8s linear infinite;
+}
+
+@media (min-width: 600px) {
+    .security-user-card {
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        gap: 20px;
+        min-height: 120px;
+        padding: 24px;
+    }
+    .security-user-avatar {
+        width: 72px;
+        height: 72px;
+    }
+    .security-avatar-actions {
+        grid-column: auto;
+        margin-inline-start: 12px;
+    }
+    .security-avatar-actions button {
+        flex: none;
+    }
+    .security-avatar-message {
+        grid-column: 2 / -1;
+    }
 }
 
 @keyframes security-avatar-spin {
@@ -151,8 +206,9 @@
 
 .security-user-name {
     margin: 0;
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
     color: var(--text);
     letter-spacing: -0.01em;
     overflow-wrap: anywhere;
@@ -234,9 +290,6 @@
     inset: 0 var(--security-row-end) auto var(--security-row-inset);
     border-top: 1px solid var(--skin-divider);
 }
-.security-avatar-history-row + .security-avatar-history-row {
-    border-top: 1px solid var(--line-subtle);
-}
 .security-item-btn {
     cursor: pointer;
 }
@@ -263,68 +316,6 @@
 
 .security-item-icon.icon-shield {
     color: var(--accent-ink);
-}
-
-.security-item-icon.icon-avatar-history {
-    color: var(--accent-ink);
-}
-
-.security-avatar-history {
-    padding: 4px 14px;
-}
-
-.security-avatar-history-loading,
-.security-avatar-history-row {
-    min-height: 52px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.security-avatar-history-loading svg,
-.security-avatar-actions button[disabled] svg,
-.security-avatar-restore[disabled] svg {
-    animation: security-avatar-spin 0.8s linear infinite;
-}
-
-.security-avatar-history-image {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 34px;
-    border-radius: 50%;
-    object-fit: cover;
-    overflow: hidden;
-}
-
-.security-avatar-history-image.is-empty {
-    display: grid;
-    place-items: center;
-    background: var(--soft);
-    color: var(--muted);
-}
-
-.security-avatar-history-copy {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-
-.security-avatar-history-copy strong {
-    color: var(--text);
-    font-size: 12px;
-}
-
-.security-avatar-history-copy small {
-    color: var(--muted);
-    font-size: 10px;
-}
-
-.security-avatar-restore {
-    flex: 0 0 auto;
 }
 
 .security-item-info {

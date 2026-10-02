@@ -538,6 +538,7 @@ describe('ShopApi storefront mutations', () => {
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 8,
+                personalDataExportEnabled: false,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -555,6 +556,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('storefrontContent');
         expect(request.query).toContain('imageAsset { width height }');
         expect(request.query).toContain('storefrontContentSettings');
+        expect(request.query).toContain('personalDataExportEnabled');
         expect(request.query).not.toContain('activeStorefrontCoupons');
         expect(request.query).toContain('activeStorefrontFlashSales');
         expect(request.query).not.toMatch(/activeStorefrontFlashSales\s*\{\s*id\s+name\b/u);
@@ -856,6 +858,7 @@ describe('ShopApi storefront mutations', () => {
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 5,
+                personalDataExportEnabled: false,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -955,6 +958,7 @@ describe('ShopApi storefront mutations', () => {
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 7,
+                personalDataExportEnabled: false,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -2557,5 +2561,58 @@ describe('stock-aware cart selection commands', () => {
                 ],
             },
         });
+    });
+});
+
+describe('personal-data export visibility configuration', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    it.each([true, false, undefined])('reads the saved opt-in %s', async enabled => {
+        mockGraphQlResponse({
+            storefrontContent: [],
+            storefrontContentSettings: { personalDataExportEnabled: enabled },
+        });
+        expect((await new ShopApi(market).storefrontContent()).settings.personalDataExportEnabled).toBe(
+            enabled === true,
+        );
+    });
+    it('hides the entry on an older API without dropping the other modern settings', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message:
+                                    'Cannot query field "personalDataExportEnabled" on type "StorefrontContentSettings".',
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            storefrontContent: [],
+                            storefrontContentSettings: {
+                                heroAutoplayIntervalSeconds: 9,
+                                auth: { ...defaultAuthSettings, googleEnabled: true },
+                            },
+                        },
+                    }),
+                    { status: 200 },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const content = await new ShopApi(market).storefrontContent();
+        expect(content.settings.personalDataExportEnabled).toBe(false);
+        expect(content.settings.auth.googleEnabled).toBe(true);
+        expect(content.settings.heroAutoplayIntervalSeconds).toBe(9);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const retry = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1]));
+        expect(retry.query).not.toContain('personalDataExportEnabled');
+        expect(retry.query).toContain('configuredBlockTypes');
     });
 });

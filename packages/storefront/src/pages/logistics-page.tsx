@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, ArrowUpRight, Package, RefreshCw, Search, UserRound, WifiOff } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Package, RefreshCw, Search, UserRound, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -23,7 +23,7 @@ import {
     physicalFulfillments,
     type DeliveryFilter,
 } from '../storefront-ui/delivery-details';
-import { EmptyState, InlineError, SubHeader } from '../storefront-ui/page-shell';
+import { EmptyState, InlineError, Sheet, SubHeader } from '../storefront-ui/page-shell';
 import { ActiveCustomer, MarketConfig, StorefrontLanguage } from '../types';
 
 export function LogisticsPage({
@@ -33,6 +33,7 @@ export function LogisticsPage({
     locale,
     language,
     onBack,
+    onOpenOrder,
     route = { name: 'logistics' },
 }: {
     api: ShopApi;
@@ -41,13 +42,16 @@ export function LogisticsPage({
     locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
+    onOpenOrder?: (orderId: string) => void;
     route?: RouteState;
 }) {
     const navigate = useNavigate();
     const zh = language === 'zh';
     const filter = route.deliveryStatus ?? 'all';
     const [search, setSearch] = useState(route.term ?? '');
+    const [deliveryOrderId, setDeliveryOrderId] = useState<string | null>(null);
     useEffect(() => setSearch(route.term ?? ''), [route.term]);
+    useEffect(() => setDeliveryOrderId(null), [customer?.id, market.code, route.id]);
     const go = (next: RouteState, replace = false) =>
         void navigate({ ...routeNavigateOptions(next), replace } as never);
     const listRoute: RouteState = { name: 'logistics', deliveryStatus: filter, term: route.term };
@@ -74,10 +78,11 @@ export function LogisticsPage({
                 : false,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
+    const detailId = route.id ?? deliveryOrderId ?? '';
     const detail = useQuery({
-        queryKey: storefrontQueryKeys.order(marketKey, languageCode, customer?.id ?? '', route.id ?? ''),
-        queryFn: ({ signal }) => api.order(route.id ?? '', signal),
-        enabled: Boolean(customer && route.id),
+        queryKey: storefrontQueryKeys.order(marketKey, languageCode, customer?.id ?? '', detailId),
+        queryFn: ({ signal }) => api.order(detailId, signal),
+        enabled: Boolean(customer && detailId),
         staleTime: 0,
         refetchOnMount: 'always',
         refetchInterval: query => orderStatusRefreshInterval(query.state.data?.state),
@@ -117,8 +122,18 @@ export function LogisticsPage({
                 ].some(value => value?.toLocaleLowerCase().includes(term))),
     );
     const selectedOrder = detail.data;
+    const detailError = detail.isPaused
+        ? offlineLoadError(language)
+        : detail.error
+          ? storefrontErrorMessage(detail.error, language)
+          : '';
     const filters: DeliveryFilter[] = ['all', 'preparing', 'transit', 'delivered', 'cancelled'];
-    const toOrder = (id: string) =>
+    const toOrder = (id: string) => {
+        setDeliveryOrderId(null);
+        if (onOpenOrder) {
+            onOpenOrder(id);
+            return;
+        }
         go({
             name: 'order-detail',
             id,
@@ -126,6 +141,7 @@ export function LogisticsPage({
             deliveryStatus: filter,
             term: route.term,
         });
+    };
 
     return (
         <main className="page subpage logistics-page delivery-workspace">
@@ -194,7 +210,7 @@ export function LogisticsPage({
                                         onClick={() => toOrder(selectedOrder.id)}
                                     >
                                         {zh ? '查看订单详情' : 'View order details'}
-                                        <ArrowUpRight aria-hidden="true" />
+                                        <ChevronRight aria-hidden="true" />
                                     </button>
                                     <button
                                         className="delivery-text-button"
@@ -217,25 +233,7 @@ export function LogisticsPage({
                 </div>
             ) : (
                 <div className="delivery-overview">
-                    <div className="delivery-intro">
-                        <div>
-                            <h1 className="delivery-desktop-title">{zh ? '物流动态' : 'Delivery updates'}</h1>
-                            <p>
-                                {zh
-                                    ? '查看配送进度、运单和每个包裹的更新记录。'
-                                    : 'Track deliveries, shipment numbers and package updates.'}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            className="delivery-text-button"
-                            disabled={list.isFetching}
-                            onClick={() => void list.refetch()}
-                        >
-                            <RefreshCw aria-hidden="true" />
-                            {list.isFetching ? (zh ? '更新中' : 'Updating') : zh ? '刷新' : 'Refresh'}
-                        </button>
-                    </div>
+                    <h1 className="sr-only">{zh ? '物流动态' : 'Delivery updates'}</h1>
                     <div className="delivery-list-surface">
                         <div className="delivery-toolbar">
                             <nav
@@ -265,26 +263,40 @@ export function LogisticsPage({
                                     </button>
                                 ))}
                             </nav>
-                            <form
-                                className="delivery-search"
-                                onSubmit={event => {
-                                    event.preventDefault();
-                                    go({ ...listRoute, term: search.trim() || undefined }, true);
-                                }}
-                            >
-                                <Search aria-hidden="true" />
-                                <input
-                                    aria-label={
-                                        zh
-                                            ? '搜索已加载的订单、商品或运单号'
-                                            : 'Search loaded orders, products or tracking numbers'
-                                    }
-                                    placeholder={zh ? '订单、商品、运单号' : 'Order, item or tracking no.'}
-                                    value={search}
-                                    onChange={event => setSearch(event.target.value)}
-                                />
-                                <button type="submit">{zh ? '搜索' : 'Search'}</button>
-                            </form>
+                            <div className="delivery-toolbar-actions">
+                                <form
+                                    className="delivery-search"
+                                    onSubmit={event => {
+                                        event.preventDefault();
+                                        go({ ...listRoute, term: search.trim() || undefined }, true);
+                                    }}
+                                >
+                                    <Search aria-hidden="true" />
+                                    <input
+                                        aria-label={
+                                            zh
+                                                ? '搜索已加载的订单、商品或运单号'
+                                                : 'Search loaded orders, products or tracking numbers'
+                                        }
+                                        placeholder={
+                                            zh ? '订单、商品、运单号' : 'Order, item or tracking no.'
+                                        }
+                                        value={search}
+                                        onChange={event => setSearch(event.target.value)}
+                                    />
+                                    <button type="submit">{zh ? '搜索' : 'Search'}</button>
+                                </form>
+                                <button
+                                    type="button"
+                                    className="delivery-refresh-button"
+                                    disabled={list.isFetching}
+                                    aria-busy={list.isFetching}
+                                    onClick={() => void list.refetch()}
+                                >
+                                    <RefreshCw aria-hidden="true" />
+                                    {list.isFetching ? (zh ? '更新中' : 'Updating') : zh ? '刷新' : 'Refresh'}
+                                </button>
+                            </div>
                         </div>
                         <div className="delivery-list-caption">
                             <span>
@@ -385,14 +397,16 @@ export function LogisticsPage({
                                                     <td className="delivery-row-actions">
                                                         <button
                                                             type="button"
-                                                            onClick={() => go({ ...listRoute, id: item.id })}
+                                                            onClick={() => setDeliveryOrderId(item.id)}
+                                                            aria-haspopup="dialog"
                                                         >
                                                             {zh ? '查看物流' : 'Track delivery'}
-                                                            <ArrowUpRight aria-hidden="true" />
+                                                            <ChevronRight aria-hidden="true" />
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => toOrder(item.id)}
+                                                            aria-haspopup={onOpenOrder ? 'dialog' : undefined}
                                                         >
                                                             {zh ? '订单详情' : 'Order details'}
                                                         </button>
@@ -466,6 +480,82 @@ export function LogisticsPage({
                         </footer>
                     </div>
                 </div>
+            )}
+            {deliveryOrderId && customer && (
+                <Sheet
+                    title={zh ? '物流详情' : 'Delivery details'}
+                    language={language}
+                    side="right"
+                    className="delivery-detail-sheet"
+                    onClose={() => setDeliveryOrderId(null)}
+                >
+                    <div className="delivery-detail-sheet-body">
+                        {detailError && !selectedOrder ? (
+                            <EmptyState
+                                icon={<WifiOff />}
+                                title={zh ? '物流详情加载失败' : 'Could not load delivery'}
+                                detail={detailError}
+                                action={zh ? '重试' : 'Retry'}
+                                onAction={() => void detail.refetch()}
+                            />
+                        ) : detail.isLoading ? (
+                            <PageSkeleton label={zh ? '正在加载物流详情' : 'Loading delivery details'} />
+                        ) : !selectedOrder || !physicalDeliveryLines(selectedOrder).length ? (
+                            <EmptyState
+                                icon={<Package />}
+                                title={zh ? '暂无可查看的配送信息' : 'No delivery information'}
+                                detail={
+                                    zh
+                                        ? '该订单不存在或不包含实物商品'
+                                        : 'This order is unavailable or has no physical products'
+                                }
+                            />
+                        ) : (
+                            <>
+                                {detailError && (
+                                    <InlineError
+                                        message={detailError}
+                                        action={zh ? '重试' : 'Retry'}
+                                        onAction={() => void detail.refetch()}
+                                    />
+                                )}
+                                <DeliveryDetails
+                                    key={selectedOrder.id}
+                                    order={selectedOrder}
+                                    locale={locale}
+                                    language={language}
+                                />
+                                <section className="delivery-drawer-order">
+                                    <header>
+                                        <h3>{zh ? '关联订单' : 'Related order'}</h3>
+                                        <span>{selectedOrder.code}</span>
+                                    </header>
+                                    <DeliveryProducts order={selectedOrder} language={language} />
+                                </section>
+                            </>
+                        )}
+                    </div>
+                    {selectedOrder && physicalDeliveryLines(selectedOrder).length > 0 && (
+                        <footer className="order-detail-sheet-footer">
+                            <div className="order-detail-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => go({ name: 'support', orderCode: selectedOrder.code })}
+                                >
+                                    {zh ? '联系商家' : 'Contact merchant'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="primary-action"
+                                    onClick={() => toOrder(selectedOrder.id)}
+                                >
+                                    {zh ? '查看订单详情' : 'View order details'}
+                                    <ChevronRight aria-hidden="true" />
+                                </button>
+                            </div>
+                        </footer>
+                    )}
+                </Sheet>
             )}
         </main>
     );

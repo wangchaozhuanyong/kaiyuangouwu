@@ -79,9 +79,62 @@ describe('storefront skin system', () => {
         }
         for (const page of ['notifications', 'referral']) {
             const css = stylesheet(`./styles/${page}.css`);
-            expect(css).not.toMatch(/#[\da-f]{3,8}\b|!important|data-storefront-preset/iu);
+            expect(css).not.toMatch(/!important|data-storefront-preset/iu);
+            // REFERRAL_CELEBRATION_20261002: only the approved local theme may own fixed colors.
+            postcss.parse(css).walkDecls(declaration => {
+                if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
+                expect(page).toBe('referral');
+                expect(declaration.prop).toMatch(/^--/u);
+                expect((declaration.parent as postcss.Rule).selector).toBe(
+                    ".desktop-referral-content[data-referral-theme='celebration']",
+                );
+            });
             expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
         }
+    });
+
+    it('preserves the approved referral campaign palette independently of storefront skins', () => {
+        const css = postcss.parse(stylesheet('./styles/referral.css'));
+        const tokens = new Map<string, string>();
+        css.walkRules(".desktop-referral-content[data-referral-theme='celebration']", rule => {
+            rule.walkDecls(declaration => {
+                tokens.set(declaration.prop, declaration.value);
+            });
+        });
+        // These approved campaign roles must not be replaced with store/skin-derived values.
+        expect(tokens.get('--accent')).toBe('#b92f32');
+        expect(tokens.get('--surface')).toBe('#fffdf9');
+        expect(tokens.get('--referral-gold')).toBe('#ffe0a0');
+        expect(tokens.get('--skin-card-radius')).toBe('22px');
+        expect([...tokens.values()].join(' ')).not.toContain('var(');
+        expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
+    });
+
+    it('protects the approved complete B visual within the service page only', () => {
+        const selector = ".business-services-page[data-services-theme='warm-b']";
+        const css = postcss.parse(stylesheet('./pages/business-services-page.css'));
+        const tokens = new Map<string, string>();
+        css.walkDecls(declaration => {
+            if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
+            expect(declaration.prop).toMatch(/^--/u);
+            expect((declaration.parent as postcss.Rule).selector).toBe(selector);
+            tokens.set(declaration.prop, declaration.value);
+        });
+        expect(tokens.get('--bg')).toBe('#f7f4ef');
+        expect(tokens.get('--muted')).toBe('#6b665d');
+        expect(tokens.get('--accent')).toBe('#4b5638');
+        expect(tokens.get('--services-icon-surface')).toBe('#f5f0e6');
+        expect(stylesheet('./pages/business-services-page.tsx')).toContain('data-services-theme="warm-b"');
+        const icons = postcss.parse(stylesheet('./styles/semantic-icons.css'));
+        const grounds: string[] = [];
+        icons.walkRules(rule => {
+            if (!rule.selector.includes('data-services-theme')) return;
+            rule.walkDecls('background', declaration => {
+                expect(rule.selector).toBe(`${selector} .is-tools .category-client-plugin-icon`);
+                grounds.push(declaration.value);
+            });
+        });
+        expect(grounds).toEqual(['var(--services-icon-surface)']);
     });
 
     it('owns transparent decorative icons globally without page or skin frames', () => {
@@ -167,11 +220,16 @@ describe('storefront skin system', () => {
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
                         if (
                             border[1] === 'top' &&
-                            ((functionalSeparators.includes(functionalKey) &&
-                                border[2].trim() === '1px solid var(--skin-divider)') ||
-                                (functionalKey ===
-                                    'styles/account-security.css|.security-avatar-history-row + .security-avatar-history-row' &&
-                                    border[2].trim() === '1px solid var(--line-subtle)'))
+                            functionalSeparators.includes(functionalKey) &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
+                        ) {
+                            continue;
+                        }
+                        // User-approved centered referral totals have one campaign-colored divider.
+                        if (
+                            functionalKey === 'styles/referral.css|.referral-reward-totals::before' &&
+                            border[1] === 'inline' &&
+                            border[2].trim() === '1px solid var(--line)'
                         ) {
                             continue;
                         }
@@ -222,6 +280,16 @@ describe('storefront skin system', () => {
                             border[2].trim() === '1px solid var(--line-subtle)'
                         )
                             continue;
+                        // Layout B's shared tool directory separates adjacent actionable rows.
+                        if (
+                            file === path.join(__dirname, 'styles/service-entries.css') &&
+                            selector.trim() ===
+                                '.is-tools .category-client-plugin + .category-client-plugin' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
@@ -280,7 +348,16 @@ describe('storefront skin system', () => {
                     }
                     const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);
                     const thinHeight = /(?:^|;)\s*height:\s*[1-4]px\s*;/.test(body);
+                    // SERVICES_WARM_B_20261002: one short bronze heading accent, not a row divider.
+                    const approvedWarmHeading =
+                        file === path.join(__dirname, 'styles/service-entries.css') &&
+                        selector.trim() ===
+                            ".business-services-page[data-services-theme='warm-b'] .category-client-plugin-group-title::after" &&
+                        /width:\s*28px;/.test(body) &&
+                        /height:\s*2px;/.test(body) &&
+                        /background:\s*var\(--services-bronze\);/.test(body);
                     if (
+                        !approvedWarmHeading &&
                         (thinWidth || thinHeight) &&
                         !(thinWidth && thinHeight) &&
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
@@ -606,7 +683,7 @@ describe('storefront skin system', () => {
     it('routes account security actions and status copy through semantic colors', () => {
         const source = stylesheet('./styles/account-security.css');
 
-        expect(source).toMatch(/\.security-avatar-actions button,[\s\S]*?color:\s*var\(--accent-ink\);/);
+        expect(source).toMatch(/\.security-avatar-actions button\s*\{[^}]*color:\s*var\(--accent-ink\);/);
         expect(source).toMatch(
             /\.security-item-danger \.security-item-title\s*\{[^}]*color:\s*var\(--danger\);/,
         );
@@ -844,7 +921,11 @@ describe('storefront skin system', () => {
             expect(block).not.toContain('opacity');
         }
         const card = stylesheet('./styles/product-card.css');
-        expect(card).toMatch(/\.product-card-price \.price-lockup\s*\{[^}]*font-size:\s*18px;/);
+        expect(card).toMatch(
+            /\.product-card-price \.price-lockup\s*\{[^}]*font-size:\s*var\(--type-price-size\);/,
+        );
+        expect(stylesheet('./styles/experience-foundations.css')).toContain('--type-price-size: 18px;');
+        expect(stylesheet('./styles/experience-foundations.css')).toContain('--type-input-size: 16px;');
         expect(card).not.toContain('.product-card-price b');
     });
 

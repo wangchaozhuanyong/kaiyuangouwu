@@ -2,6 +2,7 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { storefrontContentPermission } from './constants';
+import { StorefrontAccountSettingsService } from './storefront-account-settings';
 import {
     StorefrontAuthSettingsService,
     UpdateStorefrontAuthSettingsInput,
@@ -20,6 +21,7 @@ export class StorefrontContentShopResolver {
     constructor(
         private readonly storefrontContentService: StorefrontContentService,
         private readonly storefrontAuthSettingsService: StorefrontAuthSettingsService,
+        private readonly storefrontAccountSettingsService: StorefrontAccountSettingsService,
     ) {}
 
     /**
@@ -41,7 +43,9 @@ export class StorefrontContentShopResolver {
     async storefrontContentSettings(@Ctx() ctx: RequestContext) {
         const settings = await this.storefrontContentService.getSettings(ctx);
         const auth = await this.storefrontAuthSettingsService.get(ctx);
-        return { ...settings, auth };
+        const personalDataExportEnabled =
+            await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
+        return { ...settings, auth, personalDataExportEnabled };
     }
 }
 
@@ -50,6 +54,7 @@ export class StorefrontContentAdminResolver {
     constructor(
         private readonly storefrontContentService: StorefrontContentService,
         private readonly storefrontAuthSettingsService: StorefrontAuthSettingsService,
+        private readonly storefrontAccountSettingsService: StorefrontAccountSettingsService,
     ) {}
 
     @Query()
@@ -69,7 +74,16 @@ export class StorefrontContentAdminResolver {
     async storefrontContentSettings(@Ctx() ctx: RequestContext) {
         const settings = await this.storefrontContentService.getSettings(ctx);
         const auth = await this.storefrontAuthSettingsService.get(ctx);
-        return { ...settings, auth };
+        const personalDataExportEnabled =
+            await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
+        return { ...settings, auth, personalDataExportEnabled };
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storefrontContentPermission.Update)
+    updateStorefrontPersonalDataExportEnabled(@Ctx() ctx: RequestContext, @Args('enabled') enabled: boolean) {
+        return this.storefrontAccountSettingsService.updatePersonalDataExportEnabled(ctx, enabled);
     }
 
     @Query()
@@ -130,11 +144,14 @@ export class StorefrontContentAdminResolver {
     @Transaction()
     @Mutation()
     @Allow(storefrontContentPermission.Update)
-    updateStorefrontContentSettings(
+    async updateStorefrontContentSettings(
         @Ctx() ctx: RequestContext,
         @Args('input') input: UpdateStorefrontContentSettingsInput,
     ) {
-        return this.storefrontContentService.updateSettings(ctx, input);
+        const settings = await this.storefrontContentService.updateSettings(ctx, input);
+        const personalDataExportEnabled =
+            await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
+        return { ...settings, personalDataExportEnabled };
     }
 
     @Transaction()

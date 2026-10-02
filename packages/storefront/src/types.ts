@@ -987,6 +987,7 @@ export interface StorefrontContentSettings {
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes?: StorefrontContentBlockType[];
     auth: StorefrontAuthSettings;
+    personalDataExportEnabled?: boolean;
 }
 
 export interface StorefrontAuthSettings {

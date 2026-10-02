@@ -1020,7 +1020,7 @@
     "nodemailer": "10.0.10",
     "nx": "23.1.1",
     "pacote": "21.5.1",
-    "piscina": "4.9.3",
+    "piscina": "4.9.4",
     "postcss": "8.5.26",
     "protobufjs": "7.6.5",
     "qs": "6.16.0",
@@ -5226,7 +5226,7 @@
 
     "pino-std-serializers": ["pino-std-serializers@7.1.0", "", {}, "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw=="],
 
-    "piscina": ["piscina@4.9.3", "", { "optionalDependencies": { "@napi-rs/nice": "^1.0.1" } }, "sha512-3e3ka9QCE8RJ5I9uszdAADZnkcYi21cqmF3gxox3u884N72qpFHCsIVhHt8cEQ9t3Auq/NqoiCEuhxlxxQuDWA=="],
+    "piscina": ["piscina@4.9.4", "", { "optionalDependencies": { "@napi-rs/nice": "^1.0.1" } }, "sha512-RyBDr2VheQ8ZfH3N8SzQZHztqVyOtadTwLnUYof6gdj5161/eu2wNhCbGl5GHnNKDpnkicJYpKtL2J+y/gk6XA=="],
 
     "pkce-challenge": ["pkce-challenge@5.0.1", "", {}, "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="],
 
