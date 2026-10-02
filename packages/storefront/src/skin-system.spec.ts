@@ -20,6 +20,22 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('preserves the approved sidebar identity palette independently of skins', () => {
+        const css = postcss.parse(stylesheet('./styles/desktop-commerce.css'));
+        const tokens = new Map<string, string>();
+        css.walkRules(".desktop-account-profile[data-identity-theme='mist']", rule => {
+            rule.walkDecls(declaration => {
+                tokens.set(declaration.prop, declaration.value);
+            });
+        });
+        expect(tokens.get('--identity-surface')).toBe('#f4f7fb');
+        expect(tokens.get('--identity-text')).toBe('#243247');
+        expect(tokens.get('--identity-muted')).toBe('#66758a');
+        expect(stylesheet('./components/common/desktop-account-navigation.tsx')).toContain(
+            'data-identity-theme="mist"',
+        );
+    });
+
     it('reserves the same classic border before and after theme hydration', () => {
         const css = presetRootBlock(stylesheet('./styles/visual-presets.css'), 'classic');
         expect(css).toContain(
@@ -282,6 +298,15 @@ describe('storefront skin system', () => {
                             file === path.join(__dirname, 'styles/service-entries.css') &&
                             selector.trim() ===
                                 '.is-tools .category-client-plugin + .category-client-plugin' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // ACCOUNT_READING_SURFACES_20261002: approved recent-order reading separators.
+                        if (
+                            file === path.join(__dirname, 'styles/desktop-commerce.css') &&
+                            selector.trim() === '.desktop-recent-orders article + article' &&
                             border[1] === 'top' &&
                             border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
@@ -788,7 +813,7 @@ describe('storefront skin system', () => {
         const borderlessSelectors = [
             '.section-header',
             '.review-center-section > header',
-            '.review-composer > header',
+            '.review-composer-summary',
             '.my-review-list article',
             '.product-review-list article',
             '.coupon-center-cart-link',

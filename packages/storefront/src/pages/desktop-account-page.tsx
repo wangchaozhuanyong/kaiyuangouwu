@@ -149,7 +149,9 @@ export function DesktopAccountPage({
                                 <status.Icon />
                             </span>
                             <span>{status.label}</span>
-                            <strong>{customer ? (status.count ?? '—') : '—'}</strong>
+                            <strong data-has-items={Boolean(customer && (status.count ?? 0) > 0)}>
+                                {customer ? (status.count ?? '—') : '—'}
+                            </strong>
                         </button>
                     ))}
                 </nav>

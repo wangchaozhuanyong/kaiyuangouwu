@@ -130,7 +130,7 @@ export function DesktopAccountNavigation() {
             className="desktop-account-navigation"
             aria-label={language === 'zh' ? '账户导航' : 'Account navigation'}
         >
-            <div className="desktop-account-profile">
+            <div className="desktop-account-profile" data-identity-theme="mist">
                 <span className="desktop-account-profile-avatar" aria-hidden="true">
                     {customer?.avatar?.preview ? (
                         <SafeImage src={customer.avatar.preview} alt="" />
