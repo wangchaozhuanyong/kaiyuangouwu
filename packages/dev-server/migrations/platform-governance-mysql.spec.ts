@@ -141,6 +141,14 @@ describe('platform governance MySQL schema rehearsal and row isolation', () => {
                 await runner.query('CREATE TABLE product (id INT PRIMARY KEY)');
             if (!(await runner.hasTable('product_channels_channel')))
                 await runner.query('CREATE TABLE product_channels_channel (productId INT, channelId INT)');
+            if (!(await runner.hasTable('channel')))
+                await runner.query('CREATE TABLE channel (id INT PRIMARY KEY, code VARCHAR(255))');
+            if (!(await runner.hasTable('product_variant')))
+                await runner.query('CREATE TABLE product_variant (id INT PRIMARY KEY, productId INT)');
+            if (!(await runner.hasTable('product_variant_channels_channel')))
+                await runner.query(
+                    'CREATE TABLE product_variant_channels_channel (productVariantId INT, channelId INT)',
+                );
             const originalProducts = await runner.query('SELECT id FROM product WHERE id=100');
             if (!originalProducts.length) await runner.query('INSERT INTO product(id) VALUES (100)');
             // QueryBuilder SQL is validated by MySQL (not by a string assertion or a mocked database).

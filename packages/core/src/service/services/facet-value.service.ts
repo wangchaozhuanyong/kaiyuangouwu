@@ -118,7 +118,12 @@ export class FacetValueService {
         return this.connection
             .getRepository(ctx, FacetValue)
             .findOne({
-                where: { id, channels: { id: ctx.channelId } },
+                where: {
+                    id,
+                    ...(this.connection.platformStoreGovernanceEnabled
+                        ? { channels: { id: ctx.channelId } }
+                        : {}),
+                },
                 relations: ['facet'],
             })
             .then(
@@ -146,7 +151,9 @@ export class FacetValueService {
             .find({
                 where: {
                     facet: { id },
-                    channels: { id: ctx.channelId },
+                    ...(this.connection.platformStoreGovernanceEnabled
+                        ? { channels: { id: ctx.channelId } }
+                        : {}),
                 },
             })
             .then(values => values.map(facetValue => this.translator.translate(facetValue, ctx)));

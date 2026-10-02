@@ -133,7 +133,8 @@ export class FacetService {
             .findOne({
                 where: {
                     code: facetCode,
-                    ...(ctxOrFacetCode instanceof RequestContext
+                    ...(this.connection.platformStoreGovernanceEnabled &&
+                    ctxOrFacetCode instanceof RequestContext
                         ? { channels: { id: ctxOrFacetCode.channelId } }
                         : {}),
                 },
