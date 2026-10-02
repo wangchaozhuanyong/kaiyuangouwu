@@ -469,6 +469,32 @@ try {
                     await expect(page.locator('.auth-route-tabs')).toHaveCount(0);
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
+                        await expect(page.locator('.auth-hero-copy')).toHaveCSS(
+                            'color',
+                            'rgb(255, 255, 255)',
+                        );
+                        await expect(page.locator('.auth-hero-copy h2')).toHaveCSS(
+                            'color',
+                            'rgb(255, 255, 255)',
+                        );
+                        await expect(page.locator('.auth-hero-copy p')).toHaveCSS(
+                            'color',
+                            'rgb(255, 255, 255)',
+                        );
+                        const gradient = await page
+                            .locator('.auth-hero-message')
+                            .evaluate(element => getComputedStyle(element).backgroundImage);
+                        const stops = [...gradient.matchAll(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/g)];
+                        expect(stops.length).toBeGreaterThanOrEqual(2);
+                        for (const stop of stops) {
+                            const alpha = Number(stop[4]);
+                            const backdrop = stop
+                                .slice(1, 4)
+                                .map(channel => Math.round(Number(channel) * alpha + 255 * (1 - alpha)));
+                            expect(
+                                textContrast('rgb(255, 255, 255)', `rgb(${backdrop.join(', ')})`),
+                            ).toBeGreaterThanOrEqual(4.5);
+                        }
                         const heroImage = page.locator('.auth-hero > .safe-image-frame > img.safe-image');
                         await expect(heroImage).toBeVisible();
                         await expect(heroImage).toHaveCSS('object-fit', 'cover');
