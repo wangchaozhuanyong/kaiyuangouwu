@@ -549,7 +549,7 @@
     .desktop-account-page {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: var(--space-section);
         padding-bottom: 32px;
     }
     .desktop-account-page-title,
@@ -1060,7 +1060,6 @@
     }
     .desktop-account-page .legal-footer {
         margin: 0;
-        padding-block: 24px;
     }
     .desktop-account-page button:hover {
         color: var(--accent-ink);

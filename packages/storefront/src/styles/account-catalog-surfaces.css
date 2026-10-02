@@ -400,8 +400,7 @@
     font-size: 12px;
 }
 .account-page .legal-footer {
-    margin-inline: var(--page-section-inset, 20px);
-    padding-top: 10px;
+    margin: 0 var(--page-section-inset, 20px);
 }
 
 @media (max-width: 1023px) {

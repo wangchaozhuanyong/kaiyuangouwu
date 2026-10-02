@@ -124,10 +124,6 @@
         position: fixed;
         inset: 0;
     }
-    .desktop-store-layout .legal-footer {
-        padding: 20px 24px;
-    }
-
     /* Tools use a desktop workbench: the task canvas and its settings are
        separate surfaces, while tabs remain compact navigation instead of a
        full-width mobile divider. */

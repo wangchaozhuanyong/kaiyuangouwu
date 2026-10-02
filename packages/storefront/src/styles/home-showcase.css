@@ -2588,8 +2588,8 @@ html[lang='en'] .quick-grid b {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
     column-gap: 24px;
-    margin: 0 var(--page-section-inset, var(--experience-page-gutter-mobile));
-    padding: 16px 0 var(--footer-end-gap);
+    margin: var(--space-section) var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
+    padding: 0;
     color: var(--muted);
     text-align: start;
     font-size: 12px;
