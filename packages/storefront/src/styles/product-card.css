@@ -276,3 +276,42 @@
         row-gap: 6px;
     }
 }
+
+/* Gallery is the shared, quiet merchandising variant; commerce cards stay unchanged. */
+.product-card.is-gallery {
+    --product-card-inset: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.product-card.is-gallery:hover {
+    background: transparent;
+}
+
+.product-card.is-gallery .product-card-media {
+    border-radius: var(--skin-media-radius);
+}
+
+.product-card.is-gallery .product-card-name {
+    margin-top: 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.55;
+}
+
+.product-card.is-gallery .product-card-content > footer {
+    padding-top: 8px;
+}
+
+.product-card.is-gallery .product-card-price {
+    color: var(--text);
+}
+
+.product-card.is-gallery .price-lockup {
+    font-size: 16px;
+    font-weight: var(--font-weight-semibold);
+}

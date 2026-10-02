@@ -417,15 +417,23 @@
         box-shadow: var(--skin-card-shadow);
         border: var(--skin-card-outline, 0);
     }
-    .desktop-account-profile {
+    /* ACCOUNT_SIDEBAR_IDENTITY_20261002: approved independent palette; shared by every store. */
+    .desktop-account-profile[data-identity-theme='mist'] {
+        --identity-surface: #f4f7fb;
+        --identity-text: #243247;
+        --identity-muted: #66758a;
+        --identity-avatar: #e7edf5;
+        --identity-radius: 12px;
         display: flex;
         align-items: center;
         gap: 12px;
         min-width: 0;
         margin: 0 12px 16px;
         padding: 12px;
-        border-radius: var(--skin-control-radius);
-        background: var(--control-surface);
+        background: var(--identity-surface);
+        color: var(--identity-text);
+        border-radius: var(--identity-radius);
+        box-shadow: none;
     }
     .desktop-account-profile-avatar {
         display: grid;
@@ -435,8 +443,8 @@
         flex: none;
         overflow: hidden;
         border-radius: 50%;
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--identity-avatar);
+        color: var(--identity-text);
     }
     .desktop-account-profile-avatar :is(.safe-image-frame, img) {
         width: 100%;
@@ -451,18 +459,22 @@
     .desktop-account-profile-copy > strong {
         overflow-wrap: anywhere;
         font-size: 14px;
-        color: var(--text);
+        color: var(--identity-text);
     }
     .desktop-account-profile-copy > span {
         overflow-wrap: anywhere;
-        font-size: 11px;
-        color: var(--muted);
+        font-size: 12px;
+        color: var(--identity-muted);
     }
     .desktop-account-navigation .desktop-account-profile-copy > a {
         min-height: 32px;
         padding: 0;
         font-size: 12px;
-        color: var(--accent-ink);
+        color: var(--identity-text);
+    }
+    .desktop-account-navigation .desktop-account-profile-copy > a:focus-visible {
+        outline: 2px solid var(--identity-text);
+        outline-offset: 2px;
     }
     .desktop-account-navigation a {
         display: flex;
@@ -753,15 +765,12 @@
         padding: 10px 12px;
         border: 0;
         border-radius: var(--skin-control-radius);
-        background: var(--soft);
+        background: transparent;
         font-size: 14px;
-        transition:
-            background-color 160ms ease,
-            transform 160ms ease;
+        transition: color 160ms ease;
     }
     .desktop-order-statuses button:hover {
-        background: var(--accent-soft);
-        transform: translateY(-2px);
+        color: var(--accent-ink);
     }
     .desktop-order-statuses button:focus-visible {
         outline: 2px solid var(--focus);
@@ -785,9 +794,12 @@
     }
     .desktop-order-statuses strong {
         margin-left: auto;
-        color: var(--accent-ink);
+        color: var(--muted);
         font-size: 16px;
         font-weight: 600;
+    }
+    .desktop-order-statuses strong[data-has-items='true'] {
+        color: var(--accent-ink);
     }
     .desktop-orders-empty {
         display: flex;
@@ -844,14 +856,14 @@
         grid-template-columns: minmax(0, 1fr) 90px 100px 84px;
         gap: 16px;
         align-items: center;
-        margin-block: 8px;
-        padding: 18px;
-        border-radius: var(--skin-control-radius);
-        background: var(--soft);
+        margin: 0;
+        padding: 18px 0;
+        border-radius: 0;
+        background: transparent;
         font-size: 13px;
     }
     .desktop-recent-orders article + article {
-        border-top: 0;
+        border-top: 1px solid var(--line-subtle);
     }
     .desktop-recent-orders article > button {
         border: 0;
@@ -888,6 +900,13 @@
         display: block;
         margin-top: 8px;
         color: var(--muted);
+    }
+    .desktop-recent-orders article > button:hover {
+        color: var(--accent-ink);
+    }
+    .desktop-recent-orders article > button:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
     }
     .desktop-account-detail-grid {
         display: grid;
@@ -1968,5 +1987,28 @@
         .desktop-sort {
             gap: 0 12px;
         }
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+    .desktop-order-statuses button {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px 6px;
+        padding: 8px 4px;
+    }
+    .desktop-order-statuses button > span:nth-child(2) {
+        order: 1;
+        flex: 0 0 100%;
+        text-align: center;
+        white-space: nowrap;
+        font-size: 12px;
+    }
+    .desktop-order-statuses strong {
+        margin-left: 0;
+    }
+    .desktop-recent-orders article {
+        grid-template-columns: minmax(0, 1fr) 84px 88px 72px;
+        gap: 12px;
     }
 }

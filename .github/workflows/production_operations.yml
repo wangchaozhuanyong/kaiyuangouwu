@@ -69,6 +69,7 @@ on:
                     - verify-security-dependencies
                     - inspect-storefront-config
                     - audit-store-isolation-data
+                    - plan-platform-store-governance
                     - audit-administrator-product-readiness
                     - plan-order-sales-ownership-backfill
                     - apply-order-sales-ownership-backfill-reviewed
@@ -145,7 +146,7 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-platform-store-governance|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
@@ -170,7 +171,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -206,7 +207,7 @@ jobs:
                   set -Eeuo pipefail
                   [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
                   test -z "$(git status --porcelain --untracked-files=no)"
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
                     git cat-file -e "${OPS_EXPECTED_RUNTIME_SHA}^{commit}"
                     git merge-base --is-ancestor "$OPS_EXPECTED_RUNTIME_SHA" "$OPS_SOURCE_SHA"
                   fi
@@ -236,7 +237,7 @@ jobs:
                       'set -Eeuo pipefail',
                       'umask 077',
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
-                      "trap 'rm -rf -- \"$operations_dir\"' EXIT",
+                      f"trap 'code=$?; if [ {operation} != plan-platform-store-governance ] || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
                       'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts"',
                       transport('deploy/production-operations.cjs', 'production-operations.cjs'),
                       transport('deploy/systemd/vendure-production-release-retention.cjs', 'systemd/vendure-production-release-retention.cjs'),
@@ -285,6 +286,14 @@ jobs:
                       lines.extend([
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
+                      ])
+                  if operation_name == 'plan-platform-store-governance':
+                      lines.append(transport('deploy/governance-preflight-transport.cjs', 'governance-preflight-transport.cjs'))
+                      lines.extend(transport(f'packages/dev-server/scripts/{name}', f'repository/packages/dev-server/scripts/{name}') for name in [
+                          'platform-governance-data-preflight.mjs', 'platform-catalog-data-plan.mjs',
+                          'platform-payment-data-plan.mjs', 'store-isolation-data-preflight.mjs',
+                          'platform-governance-reconciliation-plan.mjs',
+                          'store-isolation-ownership-evidence.mjs', 'store-isolation-customer-dependencies.mjs',
                       ])
                   if operation_name == 'audit-store-isolation-data':
                       lines.extend([
@@ -420,6 +429,20 @@ jobs:
                         printf 'storefront_sha=%s\nadmin_sha=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
                     fi
                   fi
+
+            - name: Save read-only governance plan
+              if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
+              run: |
+                  python3 deploy/collect-governance-preflight.py
+
+            - name: Upload read-only governance plan
+              if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: platform-governance-data-plan
+                  path: ${{ runner.temp }}/platform-governance-data-plan.json
+                  if-no-files-found: error
+                  retention-days: 7
 
             - name: Record production operation result
               if: ${{ always() }}

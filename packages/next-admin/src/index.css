@@ -302,7 +302,7 @@
         background-color: rgb(30 41 59 / 82%);
     }
 
-    .dark :where(.hover\:bg-slate-50, .hover\:bg-slate-50\/80, .hover\:bg-slate-50\/70):hover {
+    .dark :where(.hover\:bg-slate-50, .hover\:bg-slate-50\/80, .hover\:bg-slate-50\/70, .hover\:bg-slate-50\/50):hover {
         background-color: var(--admin-surface-subtle);
     }
 

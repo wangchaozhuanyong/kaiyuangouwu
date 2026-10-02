@@ -222,30 +222,16 @@ export function CartPage() {
     );
 
     return (
-        <main className={`page cart-page${!lines.length ? ' is-empty' : ''}`}>
-            <header className="topbar cart-topbar">
-                {desktop ? (
-                    <>
-                        <div className="desktop-cart-heading">
-                            <h1 className="topbar-title">{isZh ? '购物车' : 'My Cart'}</h1>
-                            {selectAllControl}
-                        </div>
-                        <button
-                            className="desktop-cart-continue"
-                            type="button"
-                            onClick={() => navigateTo({ name: 'category' })}
-                        >
-                            {isZh ? '继续选购' : 'Continue shopping'}
-                            <ChevronRight aria-hidden="true" />
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
-                        {selectAllControl}
-                    </>
-                )}
-            </header>
+        <main
+            className={`page cart-page${!lines.length ? ' is-empty' : ''}`}
+            aria-label={isZh ? '购物车' : 'Shopping cart'}
+        >
+            {!desktop && (
+                <header className="topbar cart-topbar">
+                    <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
+                    {selectAllControl}
+                </header>
+            )}
 
             {commandUnknown && (
                 <button type="button" className="secondary-button" onClick={onCancelPending}>
@@ -427,6 +413,7 @@ export function CartPage() {
                         <aside className={`cart-summary-panel${coupons.length ? ' has-coupons' : ''}`}>
                             <div className="cart-summary-header">
                                 <h2>{isZh ? '订单摘要' : 'Order Summary'}</h2>
+                                {desktop && selectAllControl}
                             </div>
                             <div className="cart-summary-breakdown">
                                 <div className="summary-row">

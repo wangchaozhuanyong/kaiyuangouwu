@@ -11,6 +11,7 @@ import {
     watchPublicQueryCache,
 } from './query-client';
 import { router } from './router';
+import { restoreStorefrontIcons } from './storefront-icons';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './storefront-styles';
 
@@ -21,17 +22,8 @@ if (!rootElement) {
 }
 const appRootElement = rootElement;
 
+restoreStorefrontIcons();
 try {
-    // Restore the cached brand within the CSP-approved module entry, without a
-    // separate parser-blocking script or an inline-script CSP exception.
-    const cachedLogoUrl = sessionStorage.getItem('__storefront_logo_url__');
-    if (cachedLogoUrl) {
-        for (const icon of document.querySelectorAll<HTMLLinkElement>(
-            'link[rel="icon"], link[rel="apple-touch-icon"]',
-        )) {
-            icon.href = cachedLogoUrl;
-        }
-    }
     restorePublicQueryCache(storefrontQueryClient);
     watchPublicQueryCache(storefrontQueryClient);
     window.addEventListener('pagehide', () => {

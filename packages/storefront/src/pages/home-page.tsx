@@ -42,7 +42,6 @@ import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
-import { lowestPricedProductVariant } from '../product-pricing';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
@@ -67,10 +66,7 @@ import {
     contentNumberSetting,
     contentStringArraySetting,
     decodeStorefrontImage,
-    formatMoney,
     productImage,
-    ProductImagePlaceholder,
-    productImageUnavailableLabel,
     renderColorfulQuickIcon,
     SafeImage,
     shouldPrefetchMedia,
@@ -740,7 +736,7 @@ export function HomePage() {
         const interactiveTarget =
             event.target instanceof Element ? event.target.closest('button, a, input, label') : null;
         const isHeroImageLink = interactiveTarget?.classList.contains('hero-rich-image-link');
-        if (heroCount < 2 || event.button !== 0 || (interactiveTarget && !isHeroImageLink)) {
+        if (!desktop || heroCount < 2 || event.button !== 0 || (interactiveTarget && !isHeroImageLink)) {
             return;
         }
         heroGestureRef.current = {
@@ -980,15 +976,9 @@ export function HomePage() {
                             style={groupedIntro ? { order: Math.min(...introOrders) } : undefined}
                         >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
-                                <section
-                                    className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
-                                    style={{
-                                        order: homepageModuleOrder('HERO'),
-                                        aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
-                                    }}
-                                    role="region"
-                                    aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
-                                    aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                <div
+                                    className="hero-carousel"
+                                    style={{ order: homepageModuleOrder('HERO') }}
                                     onMouseEnter={() => setHeroInteractionPaused(true)}
                                     onMouseLeave={() => setHeroInteractionPaused(false)}
                                     onFocus={() => setHeroInteractionPaused(true)}
@@ -997,125 +987,87 @@ export function HomePage() {
                                             setHeroInteractionPaused(false);
                                         }
                                     }}
-                                    onPointerDown={beginHeroSwipe}
-                                    onPointerMove={moveHeroSwipe}
-                                    onPointerUp={event => finishHeroSwipe(event)}
-                                    onPointerCancel={event => finishHeroSwipe(event, true)}
-                                    onDragStart={event => event.preventDefault()}
-                                    onKeyDown={event => {
-                                        if (
-                                            !desktop ||
-                                            heroCount < 2 ||
-                                            !['ArrowLeft', 'ArrowRight'].includes(event.key)
-                                        )
-                                            return;
-                                        event.preventDefault();
-                                        selectHeroManually(
-                                            heroIndexAfterManualMove(
-                                                heroIndex,
-                                                heroCount,
-                                                event.key === 'ArrowLeft' ? -1 : 1,
-                                            ),
-                                        );
-                                    }}
                                 >
-                                    {managedHero && (
-                                        <HeroScene
-                                            content={managedHero}
-                                            imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
-                                            onImageOpen={handleHeroImageOpen}
-                                            onOpen={openActiveHero}
-                                            image={
-                                                <SafeImage
-                                                    src={heroImage}
-                                                    alt={
-                                                        managedHero.title ||
-                                                        (isZh
-                                                            ? `${storefrontName}精选`
-                                                            : `${storefrontName} Featured`)
-                                                    }
-                                                    className="hero-rich-backdrop"
-                                                    imageKind="hero"
-                                                    width={heroImageWidth || undefined}
-                                                    height={heroImageHeight || undefined}
-                                                    loading="eager"
-                                                    fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
-                                                    onImageReady={() => setReadyHeroImage(heroImage)}
-                                                />
-                                            }
-                                        />
-                                    )}
-                                    {overlayTrustBar && (
-                                        <div className="hero-service-overlay">{trustBar}</div>
-                                    )}
-                                    {desktop && heroCount > 1 && (
-                                        <div
-                                            className="desktop-hero-navigation"
-                                            role="group"
-                                            aria-label={isZh ? '轮播切换' : 'Carousel navigation'}
-                                        >
-                                            <button
-                                                type="button"
-                                                className="desktop-hero-arrow is-previous"
-                                                aria-label={isZh ? '上一张轮播图' : 'Previous slide'}
-                                                onClick={() =>
-                                                    selectHeroManually(
-                                                        heroIndexAfterManualMove(heroIndex, heroCount, -1),
-                                                    )
-                                                }
-                                            >
-                                                <ChevronLeft aria-hidden="true" />
-                                            </button>
-                                            <span className="desktop-hero-count" aria-hidden="true">
-                                                <strong>{String(heroIndex + 1).padStart(2, '0')}</strong>
-                                                <span>/ {String(heroCount).padStart(2, '0')}</span>
-                                            </span>
-                                            <button
-                                                type="button"
-                                                className="desktop-hero-arrow is-next"
-                                                aria-label={isZh ? '下一张轮播图' : 'Next slide'}
-                                                onClick={() =>
-                                                    selectHeroManually(
-                                                        heroIndexAfterManualMove(heroIndex, heroCount, 1),
-                                                    )
-                                                }
-                                            >
-                                                <ChevronRight aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {heroCount > 1 && (
-                                        <div
-                                            className="hero-pagination"
-                                            aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
-                                        >
-                                            {managedHeroes.map((item, index) => (
-                                                <button
-                                                    type="button"
-                                                    key={item.id}
-                                                    className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
-                                                    aria-label={
-                                                        isZh
-                                                            ? `第${index + 1}张广告`
-                                                            : `Promotion ${index + 1}`
-                                                    }
-                                                    aria-current={index === heroIndex}
-                                                    onClick={() => selectHeroManually(index)}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                    <span
-                                        className="visually-hidden"
-                                        aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                    <section
+                                        className={[
+                                            'hero hero-image-overlay',
+                                            desktop && heroCount > 1 ? 'is-swipeable' : '',
+                                            overlayTrustBar ? 'has-service-overlay' : '',
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' ')}
+                                        style={{
+                                            aspectRatio:
+                                                desktop && !overlayTrustBar
+                                                    ? String(desktopHeroAspectRatio)
+                                                    : undefined,
+                                        }}
+                                        role="region"
+                                        aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                                        aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                        onPointerDown={beginHeroSwipe}
+                                        onPointerMove={moveHeroSwipe}
+                                        onPointerUp={event => finishHeroSwipe(event)}
+                                        onPointerCancel={event => finishHeroSwipe(event, true)}
+                                        onDragStart={event => event.preventDefault()}
+                                        onKeyDown={event => {
+                                            if (
+                                                !desktop ||
+                                                heroCount < 2 ||
+                                                !['ArrowLeft', 'ArrowRight'].includes(event.key)
+                                            )
+                                                return;
+                                            event.preventDefault();
+                                            selectHeroManually(
+                                                heroIndexAfterManualMove(
+                                                    heroIndex,
+                                                    heroCount,
+                                                    event.key === 'ArrowLeft' ? -1 : 1,
+                                                ),
+                                            );
+                                        }}
                                     >
-                                        {heroAutoplayStopped
-                                            ? isZh
-                                                ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
-                                                : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
-                                            : ''}
-                                    </span>
-                                </section>
+                                        {managedHero && (
+                                            <HeroScene
+                                                content={managedHero}
+                                                imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
+                                                onImageOpen={handleHeroImageOpen}
+                                                onOpen={openActiveHero}
+                                                image={
+                                                    <SafeImage
+                                                        src={heroImage}
+                                                        alt={
+                                                            managedHero.title ||
+                                                            (isZh
+                                                                ? `${storefrontName}精选`
+                                                                : `${storefrontName} Featured`)
+                                                        }
+                                                        className="hero-rich-backdrop"
+                                                        imageKind="hero"
+                                                        width={heroImageWidth || undefined}
+                                                        height={heroImageHeight || undefined}
+                                                        loading="eager"
+                                                        fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
+                                                        onImageReady={() => setReadyHeroImage(heroImage)}
+                                                    />
+                                                }
+                                            />
+                                        )}
+                                        {overlayTrustBar && (
+                                            <div className="hero-service-overlay">{trustBar}</div>
+                                        )}
+                                        <span
+                                            className="visually-hidden"
+                                            aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                        >
+                                            {heroAutoplayStopped
+                                                ? isZh
+                                                    ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
+                                                    : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
+                                                : ''}
+                                        </span>
+                                    </section>
+                                </div>
                             )}
 
                             {!overlayTrustBar && trustBar}
@@ -1810,10 +1762,7 @@ function FeaturedCollectionSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
-    const [expanded, setExpanded] = useState(false);
-    const mosaicProducts = desktop ? products : products.slice(0, 5);
 
     return (
         <section
@@ -1843,115 +1792,28 @@ function FeaturedCollectionSection({
                         </button>
                     ) : null}
                 </div>
-
-                {mosaicProducts.length ? (
+                {products.length ? (
                     <div
-                        className={`featured-collection-mosaic${desktop ? ' desktop-product-rail' : ''}`}
-                        data-product-count={mosaicProducts.length}
+                        className="featured-collection-grid"
+                        data-product-count={products.length}
                         aria-label={block.title}
                     >
-                        {mosaicProducts.map((product, index) => {
-                            if (desktop)
-                                return (
-                                    <ProductCard
-                                        key={product.id}
-                                        product={product}
-                                        market={market}
-                                        locale={locale}
-                                        language={language}
-                                        imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
-                                        onOpen={() => onContentTarget('PRODUCT', product.id)}
-                                    />
-                                );
-                            const imageUrl = productImage(product);
-                            const pricedVariant = lowestPricedProductVariant(product);
-                            const priceLabel =
-                                product.customFields?.pricingMode === 'QUOTE_ONLY'
-                                    ? isZh
-                                        ? '联系客服询价'
-                                        : 'Request a quote'
-                                    : pricedVariant
-                                      ? formatMoney(
-                                            pricedVariant.priceWithTax,
-                                            pricedVariant.currencyCode,
-                                            locale,
-                                        )
-                                      : null;
-                            const productCopy = (
-                                <span className="featured-collection-product-overlay" aria-hidden="true">
-                                    <strong>{product.name}</strong>
-                                    {priceLabel ? (
-                                        <span className="featured-collection-product-price">
-                                            {priceLabel}
-                                        </span>
-                                    ) : null}
-                                </span>
-                            );
-                            return (
-                                <button
-                                    key={product.id}
-                                    className={`featured-collection-product${index === 0 ? ' is-featured' : ''}`}
-                                    type="button"
-                                    onClick={() => onContentTarget('PRODUCT', product.id)}
-                                    aria-label={priceLabel ? `${product.name} ${priceLabel}` : product.name}
-                                >
-                                    <span className="featured-collection-product-media">
-                                        {imageUrl ? (
-                                            <SafeImage
-                                                src={imageUrl}
-                                                alt={product.name}
-                                                fallbackLabel={productImageUnavailableLabel(language)}
-                                                sizes="(min-width: 1024px) 220px, 50vw"
-                                                imageKind="card"
-                                                loading="lazy"
-                                            />
-                                        ) : (
-                                            <ProductImagePlaceholder
-                                                language={language}
-                                                className="featured-collection-product-placeholder"
-                                            />
-                                        )}
-                                        {!desktop && productCopy}
-                                    </span>
-                                    {desktop && productCopy}
-                                </button>
-                            );
-                        })}
+                        {products.map(product => (
+                            <ProductCard
+                                key={product.id}
+                                product={product}
+                                market={market}
+                                locale={locale}
+                                language={language}
+                                appearance="gallery"
+                                imageSizes="(min-width: 1280px) 400px, (min-width: 768px) 30vw, 50vw"
+                                onOpen={() => onContentTarget('PRODUCT', product.id)}
+                            />
+                        ))}
                     </div>
                 ) : (
-                    <div className="featured-collection-empty" aria-hidden="true">
-                        <span>{isZh ? '精选内容' : 'Curated selection'}</span>
-                    </div>
-                )}
-                {!desktop && products.length > 5 && (
-                    <div className="featured-collection-overflow">
-                        <button
-                            className="featured-collection-action"
-                            type="button"
-                            aria-expanded={expanded}
-                            aria-controls={`${block.id}-remaining`}
-                            onClick={() => setExpanded(value => !value)}
-                        >
-                            {expanded
-                                ? isZh
-                                    ? '收起其余商品'
-                                    : 'Show fewer products'
-                                : isZh
-                                  ? `展开其余 ${products.length - 5} 件商品`
-                                  : `Show ${products.length - 5} more products`}
-                        </button>
-                        <div id={`${block.id}-remaining`} hidden={!expanded}>
-                            {expanded && (
-                                <ProductSection
-                                    products={products.slice(5)}
-                                    prioritizeFirstImage={false}
-                                    market={market}
-                                    locale={locale}
-                                    language={language}
-                                    onProduct={product => onContentTarget('PRODUCT', product.id)}
-                                />
-                            )}
-                        </div>
+                    <div className="featured-collection-empty">
+                        <span>{isZh ? '精选商品即将上架' : 'New selections coming soon'}</span>
                     </div>
                 )}
             </div>

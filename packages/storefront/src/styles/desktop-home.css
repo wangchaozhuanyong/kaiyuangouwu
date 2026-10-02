@@ -41,13 +41,18 @@
     .desktop-store-layout .homepage-modules .home-intro-grid:not(:has(.hero)) .quick-grid {
         grid-column: 1 / -1;
     }
-    .desktop-store-layout .home-intro-grid .hero {
+    .desktop-store-layout .home-intro-grid .hero-carousel {
         grid-column: 1;
         grid-row: 1;
         min-width: 0;
+        height: 100%;
+    }
+    .desktop-store-layout .home-intro-grid .hero {
+        min-width: 0;
         width: 100%;
         min-height: 320px;
-        height: 100%;
+        height: auto;
+        flex: 1 0 auto;
         align-self: stretch;
         border: 0;
         border-radius: var(--skin-hero-radius);
@@ -271,67 +276,6 @@
     .desktop-store-layout .home-page .hero-stat-badge .stat-lbl {
         font-size: 11px;
     }
-    .desktop-hero-navigation {
-        position: absolute;
-        z-index: 3;
-        right: 20px;
-        bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        padding: 4px;
-        border: 1px solid var(--hero-pagination-color);
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        color: var(--hero-pagination-active-color);
-        box-shadow: none;
-        text-shadow: var(--hero-image-text-shadow, var(--hero-title-shadow));
-    }
-    .desktop-hero-arrow {
-        width: 36px;
-        height: 36px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-        transition:
-            background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-            transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .desktop-hero-arrow:hover {
-        background: color-mix(in srgb, var(--hero-copy-foreground) 9%, transparent);
-        transform: translateY(-1px);
-    }
-    .desktop-hero-arrow:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-    }
-    .desktop-hero-arrow svg {
-        width: 18px;
-        height: 18px;
-    }
-    .desktop-hero-count {
-        display: flex;
-        align-items: baseline;
-        justify-content: center;
-        gap: 4px;
-        min-width: 58px;
-        color: inherit;
-        font-variant-numeric: tabular-nums;
-        font-size: 11px;
-    }
-    .desktop-hero-count strong {
-        font-size: 14px;
-        font-weight: 600;
-    }
-    .desktop-store-layout .hero-pagination {
-        display: none;
-    }
-
     /* Desktop merchandising floors share the page frame and readable content density. */
     .desktop-store-layout .home-page .content-section {
         margin-block: 0;
@@ -521,66 +465,6 @@
         height: 100%;
         object-fit: contain;
     }
-    .desktop-store-layout .home-page .featured-collection-layout {
-        width: 100%;
-        margin: 0;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
-        padding: 0;
-        border-radius: var(--radius-md);
-        background: transparent;
-    }
-    .desktop-store-layout .home-page .featured-collection-intro {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-        align-items: end;
-        gap: var(--space-8) var(--space-24);
-        padding: 0;
-    }
-    .desktop-store-layout .home-page .featured-collection-intro h2 {
-        grid-column: 1;
-        grid-row: 1;
-        font-size: 22px;
-        line-height: 1.4;
-    }
-    .desktop-store-layout
-        .home-page
-        .featured-collection-intro
-        > :is(.featured-collection-subtitle, .featured-collection-body) {
-        min-width: 0;
-        max-width: none;
-        margin: 0;
-        overflow-wrap: anywhere;
-    }
-    .desktop-store-layout .home-page .featured-collection-subtitle {
-        grid-column: 1;
-        grid-row: 2;
-    }
-    .desktop-store-layout .home-page .featured-collection-body {
-        grid-column: 2;
-        grid-row: 1;
-        justify-self: end;
-        text-align: right;
-    }
-    .desktop-store-layout .home-page .featured-collection-action {
-        grid-column: 2;
-        grid-row: 2;
-        min-height: var(--space-24);
-        align-items: flex-end;
-        padding: 0;
-    }
-    .desktop-store-layout .home-page .featured-collection-mosaic {
-        grid-template-rows: auto;
-        aspect-ratio: auto;
-        align-items: stretch;
-        overflow: auto;
-        mask-image: none;
-        -webkit-mask-image: none;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-    }
     .desktop-store-layout .home-page .content-story-layout {
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
         min-height: 340px;
@@ -769,37 +653,25 @@
         flex: 1;
         min-width: 0;
         width: auto;
-        height: var(--experience-control-min);
+        height: 100%;
         padding: 0 36px;
-        background: var(--proto-search-bg, rgba(15, 23, 42, 0.9));
-        border: 1px solid var(--proto-search-border, rgba(255, 255, 255, 0.1));
         border-radius: var(--skin-control-radius) 0 0 var(--skin-control-radius);
         color: var(--proto-search-text, #e2e8f0);
         font-size: 14px;
-        outline: none;
-        transition:
-            background-color 0.2s,
-            border-color 0.2s,
-            box-shadow 0.2s,
-            color 0.2s;
     }
     .proto-search-input::placeholder {
         color: var(--muted);
         font-size: 14px;
     }
-    .proto-search-input:focus {
-        border-color: var(--accent, #9333ea);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #9333ea) 25%, transparent);
-    }
     .proto-search-submit {
         flex: none;
         min-width: 68px;
-        height: var(--experience-control-min);
-        margin-left: -1px;
+        height: 100%;
+        margin: 0;
         padding: 0 16px;
         border: 0;
         border-radius: 0 var(--skin-control-radius) var(--skin-control-radius) 0;
-        background: var(--control-surface);
+        background: var(--accent-soft);
         color: var(--accent-ink);
         font-size: 14px;
         font-weight: 700;
@@ -1529,9 +1401,6 @@
     }
 }
 @media (prefers-reduced-motion: reduce) {
-    .desktop-hero-arrow {
-        transition: none;
-    }
     .proto-product-skeleton {
         animation: none;
     }

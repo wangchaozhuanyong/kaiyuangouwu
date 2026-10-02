@@ -279,9 +279,6 @@ describe('CartPage guest cart', () => {
             /\.desktop-store-layout \.cart-checkout-bar\s*\{[^}]*position:\s*static;[^}]*transform:\s*none;/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-store-layout \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
-        );
-        expect(stylesheet).toMatch(
             /\.desktop-store-layout \.cart-checkout-bar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
         );
         expect(stylesheet).toMatch(/\.cart-summary-panel > \.coupon-row,[\s\S]*?border:\s*0;/u);

@@ -1805,3 +1805,96 @@ void test('a symlink substituted for a reviewed directory cannot delete its dest
     assert.ok(existsSync(path.join(outside, 'keep')));
     assert.ok(existsSync(path.join(f.releasesDir, f.releases[4])));
 });
+
+void test('platform governance data preflight is pinned, read-only, and verifies runtime and health after failures', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'plan-platform-store-governance',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+    });
+    const runtime = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime' };
+    const audit = {
+        schema: 'vendure-platform-governance-production-preflight-v1',
+        mode: 'READ_ONLY',
+        productionApply: false,
+        snapshotHash: 'a'.repeat(64),
+        resourceCount: 10,
+        unresolvedResourceCount: 2,
+        paymentMethodCount: 1,
+        enabledStoreSwitchCount: 0,
+        compressedPlan: 'YWJj',
+    };
+    let checkedHealth = 0;
+    const dependencies = {
+        inspect: () => structuredClone(runtime),
+        health: () => {
+            checkedHealth++;
+            return { status: 'ok', output: 'Result=success\nExecMainStatus=0\nActiveState=inactive' };
+        },
+        spawn: (_command, args, options) => {
+            assert.deepEqual(args, [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                '/fixed/preflight.mjs',
+            ]);
+            assert.equal(options.env.STORE_ISOLATION_MODULE_ROOT, runtime.currentRuntime);
+            return { status: 0, stdout: JSON.stringify(audit), stderr: 'PRIVATE_ERROR' };
+        },
+        script: '/fixed/preflight.mjs',
+        persistPlan: compressed => ({ sha256: createHash('sha256').update(compressed).digest('hex') }),
+    };
+    assert.equal(
+        operations.runPlatformGovernanceDataPreflight(request, dependencies).audit.snapshotHash,
+        audit.snapshotHash,
+    );
+    assert.equal(checkedHealth, 2);
+    assert.throws(
+        () => operations.validateRequest({ OPS_OPERATION: request.operation, OPS_SOURCE_SHA: sourceSha }),
+        /runtime SHA/u,
+    );
+    assert.throws(
+        () =>
+            operations.runPlatformGovernanceDataPreflight(request, {
+                ...dependencies,
+                spawn: () => ({
+                    status: 1,
+                    stdout: '',
+                    stderr: 'PRIVATE_ERROR\nREAD_ONLY_AUDIT_FAILURE code=ER_BAD_FIELD_ERROR digest=0123456789ab\n',
+                }),
+            }),
+        error => {
+            assert.ok(error.message.includes('ER_BAD_FIELD_ERROR'));
+            assert.ok(!error.message.includes('PRIVATE_ERROR'));
+            return true;
+        },
+    );
+    assert.equal(checkedHealth, 4);
+    assert.throws(() =>
+        operations.runPlatformGovernanceDataPreflight(request, {
+            ...dependencies,
+            spawn: () => ({
+                status: 0,
+                stdout: JSON.stringify({ ...audit, productionApply: true }),
+                stderr: '',
+            }),
+        }),
+    );
+    assert.equal(checkedHealth, 6);
+});
+
+void test('the workflow shell accepts the fixed read-only governance operation and rejects unknown operations', () => {
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    const validation = workflow.match(/case "\$OPS_OPERATION" in[\s\S]*?\besac/u)?.[0];
+    assert.ok(validation, 'Actual workflow shell allow-list required');
+    const invoke = (operation, plan = '') =>
+        spawnSync('bash', ['-c', validation], {
+            env: { OPS_OPERATION: operation, OPS_EXPECTED_PLAN_SHA256: plan },
+            encoding: 'utf8',
+        });
+    assert.equal(invoke('plan-platform-store-governance').status, 0);
+    assert.equal(invoke('unknown-operation').status, 1);
+    assert.equal(invoke('plan-platform-store-governance', 'a'.repeat(64)).status, 1);
+});

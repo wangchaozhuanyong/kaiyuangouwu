@@ -12,6 +12,7 @@ import {
     dualCardTemplates,
 } from '../../../../storefront-content-plugin/src/dual-card-template-options';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
+import { authHeroCopyPosition } from '../../../../storefront/src/auth-visual';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -525,11 +526,7 @@ export function StorefrontBlockEditor({
                                             <Field label="电脑端图片上的文字位置">
                                                 <select
                                                     className={inputClass}
-                                                    value={
-                                                        draft.settings?.heroCopyPosition === 'bottom'
-                                                            ? 'bottom'
-                                                            : 'center'
-                                                    }
+                                                    value={authHeroCopyPosition(draft.settings)}
                                                     onChange={event =>
                                                         updateSettings({
                                                             heroCopyPosition: event.target.value,

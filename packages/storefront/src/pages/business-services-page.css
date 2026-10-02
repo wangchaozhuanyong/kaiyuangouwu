@@ -1,42 +1,7 @@
-/* SERVICES_WARM_B_20261002 — approved complete B visual, not only its layout.
-   Preserve this ivory/olive theme across storefront skins. Page and theme owner: this file;
-   directory rows: service-entries.css; icon frames: semantic-icons.css. */
-.business-services-page[data-services-theme='warm-b'] {
-    --bg: #f7f4ef;
-    --paper: #fffdfa;
-    --surface: #fffdfa;
-    --text: #302c26;
-    --text-soft: #554f44;
-    --muted: #6b665d;
-    --accent: #4b5638;
-    --accent-hover: #39442b;
-    --accent-ink: #414c2f;
-    --accent-foreground: #fffdf7;
-    --focus: #657344;
-    --line: #d7cdbc;
-    --line-subtle: #eae4da;
-    --control-surface: #eeeee2;
-    --control-surface-hover: #e3e5d3;
-    --skin-card-outline: 1px solid #e8e2d8;
-    --skin-card-radius: 12px;
-    --skin-control-radius: 8px;
-    --skin-card-shadow: none;
-    --skin-display-font: var(--font-ui);
-    --services-intro-start: #f1e9dd;
-    --services-intro-end: #faf6ef;
-    --services-line-art: #bf9d73;
-    --services-bronze: #9a783e;
-    --services-icon-surface: #f5f0e6;
-    --services-tool-icon-size: 44px;
-    --services-support-ink: #814529;
-    --services-support-surface: #f7e9e1;
-    --services-support-hover: #eedbd0;
-    --services-coupon-ink: #805516;
-    --services-coupon-surface: #f7edda;
-    --services-coupon-hover: #efe0c3;
-}
-
+/* SERVICES_SKIN_B_20261002: preserve directory B geometry; inherit the active skin.
+   Page layout: this file; directory rows: service-entries.css; icon frames: semantic-icons.css. */
 .business-services-page {
+    --services-tool-icon-size: 44px;
     --page-surface: var(--bg);
     --page-section-inset: 16px;
     position: relative;
@@ -45,7 +10,7 @@
     font-family: var(--font-ui);
 }
 
-/* Extend this route's warm canvas through the desktop shell gutters. */
+/* Extend the active skin's page canvas through the desktop shell gutters. */
 .business-services-page::before {
     content: '';
     position: absolute;
@@ -78,7 +43,7 @@
     padding: 24px 20px;
     border: 1px solid var(--line);
     border-radius: var(--skin-card-radius);
-    background: linear-gradient(125deg, var(--services-intro-start), var(--services-intro-end));
+    background: linear-gradient(125deg, var(--soft), var(--surface));
 }
 
 .business-services-heading:has(.business-services-hero-media) {
@@ -104,7 +69,7 @@
     bottom: -12px;
     width: 56%;
     height: auto;
-    color: var(--services-line-art);
+    color: var(--accent);
     stroke-width: 0.7;
     opacity: 0.38;
     pointer-events: none;
@@ -205,7 +170,7 @@
         padding: 40px 32px;
     }
 
-    .business-services-page[data-services-theme='warm-b'] {
+    .business-services-page {
         --services-tool-icon-size: 64px;
     }
 

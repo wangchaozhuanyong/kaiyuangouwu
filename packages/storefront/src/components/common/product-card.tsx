@@ -29,9 +29,10 @@ export function ProductCard({
     onFavorite?: () => void;
     priority?: boolean;
     imageSizes?: string;
-    appearance?: 'card' | 'plain';
+    appearance?: 'card' | 'plain' | 'gallery';
 }) {
     const isZh = language === 'zh';
+    const gallery = appearance === 'gallery';
     const variant = lowestPricedProductVariant(product);
     const availability = productListingAvailability(product.variants, language);
     const stockLabel = availability.label;
@@ -39,7 +40,7 @@ export function ProductCard({
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
-        <article className={`product-card${appearance === 'plain' ? ' is-plain' : ''}`}>
+        <article className={`product-card${appearance !== 'card' ? ` is-${appearance}` : ''}`}>
             <ProductDetailLink
                 className="product-card-detail-link"
                 product={product}
@@ -59,13 +60,15 @@ export function ProductCard({
 
                 <div className="product-card-content">
                     <strong className="product-card-name">{product.name}</strong>
-                    {subtitle && appearance !== 'plain' ? (
+                    {subtitle && appearance === 'card' ? (
                         <span className="product-card-subtitle">{subtitle}</span>
                     ) : null}
-                    <div className="product-card-meta">
-                        <span className="product-card-delivery">{smartInfo.primary}</span>
-                        {smartInfo.secondary ? <span>{smartInfo.secondary}</span> : null}
-                    </div>
+                    {!gallery && (
+                        <div className="product-card-meta">
+                            <span className="product-card-delivery">{smartInfo.primary}</span>
+                            {smartInfo.secondary ? <span>{smartInfo.secondary}</span> : null}
+                        </div>
+                    )}
 
                     <footer>
                         <div className="product-card-price">
@@ -81,13 +84,14 @@ export function ProductCard({
                                 '--'
                             )}
                         </div>
-                        {product.customFields?.pricingMode !== 'QUOTE_ONLY' && (
-                            <small
-                                className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}
-                            >
-                                {stockLabel}
-                            </small>
-                        )}
+                        {product.customFields?.pricingMode !== 'QUOTE_ONLY' &&
+                            (!gallery || availability.soldOut) && (
+                                <small
+                                    className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}
+                                >
+                                    {stockLabel}
+                                </small>
+                            )}
                     </footer>
                 </div>
             </ProductDetailLink>

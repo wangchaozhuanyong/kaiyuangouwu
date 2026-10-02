@@ -84,6 +84,22 @@ describe('storefront skin system', () => {
         ).toEqual([]);
     });
 
+    it('preserves the approved sidebar identity palette independently of skins', () => {
+        const css = postcss.parse(stylesheet('./styles/desktop-commerce.css'));
+        const tokens = new Map<string, string>();
+        css.walkRules(".desktop-account-profile[data-identity-theme='mist']", rule => {
+            rule.walkDecls(declaration => {
+                tokens.set(declaration.prop, declaration.value);
+            });
+        });
+        expect(tokens.get('--identity-surface')).toBe('#f4f7fb');
+        expect(tokens.get('--identity-text')).toBe('#243247');
+        expect(tokens.get('--identity-muted')).toBe('#66758a');
+        expect(stylesheet('./components/common/desktop-account-navigation.tsx')).toContain(
+            'data-identity-theme="mist"',
+        );
+    });
+
     it('reserves the same classic border before and after theme hydration', () => {
         const css = presetRootBlock(stylesheet('./styles/visual-presets.css'), 'classic');
         expect(css).toContain(
@@ -174,31 +190,28 @@ describe('storefront skin system', () => {
         expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
     });
 
-    it('protects the approved complete B visual within the service page only', () => {
-        const selector = ".business-services-page[data-services-theme='warm-b']";
+    it('preserves directory B without overriding the active storefront skin', () => {
+        const selector = ".business-services-page[data-services-layout='directory-b']";
         const css = postcss.parse(stylesheet('./pages/business-services-page.css'));
-        const tokens = new Map<string, string>();
         css.walkDecls(declaration => {
-            if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
-            expect(declaration.prop).toMatch(/^--/u);
-            expect((declaration.parent as postcss.Rule).selector).toBe(selector);
-            tokens.set(declaration.prop, declaration.value);
+            expect(declaration.value).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgb|hsl)a?\(/iu);
+            expect(declaration.prop).not.toMatch(
+                /^--(?:bg|paper|surface|text|muted|accent|focus|line|control|skin)(?:-|$)/u,
+            );
         });
-        expect(tokens.get('--bg')).toBe('#f7f4ef');
-        expect(tokens.get('--muted')).toBe('#6b665d');
-        expect(tokens.get('--accent')).toBe('#4b5638');
-        expect(tokens.get('--services-icon-surface')).toBe('#f5f0e6');
-        expect(stylesheet('./pages/business-services-page.tsx')).toContain('data-services-theme="warm-b"');
+        expect(stylesheet('./pages/business-services-page.tsx')).toContain(
+            'data-services-layout="directory-b"',
+        );
         const icons = postcss.parse(stylesheet('./styles/semantic-icons.css'));
         const grounds: string[] = [];
         icons.walkRules(rule => {
-            if (!rule.selector.includes('data-services-theme')) return;
+            if (!rule.selector.includes('data-services-layout')) return;
             rule.walkDecls('background', declaration => {
                 expect(rule.selector).toBe(`${selector} .is-tools .category-client-plugin-icon`);
                 grounds.push(declaration.value);
             });
         });
-        expect(grounds).toEqual(['var(--services-icon-surface)']);
+        expect(grounds).toEqual(['var(--control-surface)']);
     });
 
     it('owns transparent decorative icons globally without page or skin frames', () => {
@@ -348,6 +361,15 @@ describe('storefront skin system', () => {
                             file === path.join(__dirname, 'styles/service-entries.css') &&
                             selector.trim() ===
                                 '.is-tools .category-client-plugin + .category-client-plugin' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // ACCOUNT_READING_SURFACES_20261002: approved recent-order reading separators.
+                        if (
+                            file === path.join(__dirname, 'styles/desktop-commerce.css') &&
+                            selector.trim() === '.desktop-recent-orders article + article' &&
                             border[1] === 'top' &&
                             border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
@@ -628,9 +650,7 @@ describe('storefront skin system', () => {
             /\.topbar\s*\{[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--shadow-sm\);/,
         );
         expect(stylesheet('./styles/desktop-commerce.css')).not.toContain('.cart-topbar');
-        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
-            /\.desktop-store-layout \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/,
-        );
+        expect(stylesheet('./styles/desktop-pages.css')).not.toContain('.desktop-store-layout .cart-topbar');
     });
 
     it('keeps cart surfaces in their owner with shallow separators only between merchandise rows', () => {

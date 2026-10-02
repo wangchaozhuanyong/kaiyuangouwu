@@ -54,12 +54,12 @@ describe('shared product navigation', () => {
         return match;
     }
 
-    function render(layout: 'card' | 'row' | 'catalog', item = product) {
+    function render(layout: 'card' | 'gallery' | 'row' | 'catalog', item = product) {
         const props = { product: item, market, language: 'zh' as const, locale: market.locale, onOpen };
         act(() =>
             root.render(
-                layout === 'card' ? (
-                    <ProductCard {...props} onFavorite={onFavorite} />
+                layout === 'card' || layout === 'gallery' ? (
+                    <ProductCard {...props} appearance={layout} onFavorite={onFavorite} />
                 ) : (
                     <ProductRow {...props} layout={layout} />
                 ),
@@ -68,7 +68,7 @@ describe('shared product navigation', () => {
         return element<HTMLAnchorElement>('a');
     }
 
-    it.each(['card', 'row', 'catalog'] as const)(
+    it.each(['card', 'gallery', 'row', 'catalog'] as const)(
         '%s opens once from image, name, price and card space through the same real link',
         layout => {
             const link = render(layout);
@@ -88,6 +88,24 @@ describe('shared product navigation', () => {
             expect(onFavorite).not.toHaveBeenCalled();
         },
     );
+
+    it('keeps quote-only and sold-out states in the gallery', () => {
+        render('gallery', {
+            ...product,
+            customFields: {
+                fulfillmentType: 'physical',
+                pricingMode: 'QUOTE_ONLY',
+                refundPolicy: 'MERCHANT_REVIEW',
+                manualDeliverySlaMinutes: 0,
+            },
+        });
+        expect(element('.product-card-price').textContent).toContain('联系客服询价');
+        expect(host.querySelector('.product-card-stock')).toBeNull();
+        render('gallery');
+        expect(element('.product-card-stock').textContent).toContain('已售罄');
+        expect(host.querySelector('.product-card-meta')).toBeNull();
+        expect(host.querySelector('.product-card-subtitle')).toBeNull();
+    });
 
     it('keeps favorite independent from navigation', () => {
         const link = render('card');

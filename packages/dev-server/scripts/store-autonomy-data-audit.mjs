@@ -8,6 +8,7 @@ import {
     FORBIDDEN_SHARED_ASSOCIATION_KEYS,
     collectStoreIsolationSnapshot,
     createStoreIsolationAdapter,
+    safeReadOnlyAuditFailure,
 } from './store-isolation-data-preflight.mjs';
 
 const DIRECT_CHANNEL_TABLES = [
@@ -669,7 +670,7 @@ async function main() {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
     main().catch(error => {
-        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`${safeReadOnlyAuditFailure(error)}\n`);
         process.exitCode = 1;
     });
 }

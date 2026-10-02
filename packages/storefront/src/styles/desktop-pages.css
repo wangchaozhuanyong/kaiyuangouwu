@@ -467,37 +467,6 @@
         --page-bottom-fixed-offset: 0px;
         padding-bottom: 48px;
     }
-    .desktop-store-layout .cart-topbar {
-        height: 56px;
-        padding: 0;
-        background: transparent;
-        box-shadow: none;
-        border-bottom: 0;
-    }
-    .desktop-store-layout .cart-topbar .topbar-title {
-        font-size: 28px;
-        font-weight: var(--font-weight-semibold);
-    }
-    .desktop-cart-heading {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-    }
-    .desktop-cart-continue {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-height: 40px;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--muted);
-        font-size: 13px;
-    }
-    .desktop-cart-continue svg {
-        width: 14px;
-        height: 14px;
-    }
     .desktop-store-layout .cart-commerce-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 280px;
@@ -531,6 +500,8 @@
     }
     .desktop-store-layout .cart-summary-header {
         display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
         align-items: center;
         justify-content: space-between;
         margin-bottom: 26px;

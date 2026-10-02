@@ -397,6 +397,17 @@ export function AddressesPage({
             />
             {!selection && (
                 <div className="address-workbench-toolbar">
+                    {commerceMode !== 'HYBRID' && (
+                        <h2 className="address-workbench-title">
+                            {effectiveTab === 'email'
+                                ? isZh
+                                    ? '交付邮箱'
+                                    : 'Delivery emails'
+                                : isZh
+                                  ? '收货地址'
+                                  : 'Delivery addresses'}
+                        </h2>
+                    )}
                     {commerceMode === 'HYBRID' && (
                         <nav
                             className="address-type-tabs"

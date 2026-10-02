@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { CacheService, ID, RequestContext } from '@vendure/core';
+import { CacheService, ConfigService, ID, RequestContext, TransactionalConnection } from '@vendure/core';
 import {
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
     StorefrontContentService,
+    storefrontIcon,
 } from '@vendure/storefront-content-plugin';
+
+import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
 
 const PRELOAD_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -18,6 +21,16 @@ function escapeHtmlAttribute(value: string): string {
 
 export function storefrontContentCacheTag(channelId: ID): string {
     return `StorefrontLcpPreload:channel:${String(channelId)}`;
+}
+
+export function renderStorefrontIconLinks(source: string | null): string {
+    return (['icon', 'apple-touch-icon'] as const)
+        .map(rel => {
+            const icon = storefrontIcon(source, rel);
+            const type = icon.type ? ` type="${icon.type}"` : '';
+            return `<link rel="${rel}" href="${escapeHtmlAttribute(icon.href)}"${type} data-storefront-icon="server" />`;
+        })
+        .join('\n');
 }
 
 export function renderHeroPreloadLink(source: string): string {
@@ -42,9 +55,20 @@ export class StorefrontLcpPreloadService {
     constructor(
         private readonly cacheService: CacheService,
         private readonly contentService: StorefrontContentService,
+        private readonly connection: TransactionalConnection,
+        private readonly configService: ConfigService,
     ) {}
 
     async render(ctx: RequestContext): Promise<string> {
+        const [hero, branding] = await Promise.all([
+            this.renderHero(ctx),
+            new StorefrontBrandingShopResolver(this.connection, this.configService).loadBranding(ctx),
+        ]);
+        // Brand edits must not wait for the independent, cached hero preload.
+        return `${renderStorefrontIconLinks(branding.logoUrl)}\n${hero}`;
+    }
+
+    private async renderHero(ctx: RequestContext): Promise<string> {
         const cacheKey = `StorefrontLcpPreload:${String(ctx.channelId)}:${String(ctx.languageCode)}`;
         const cached = await this.cacheService.get<string>(cacheKey);
         if (cached !== undefined) return cached;

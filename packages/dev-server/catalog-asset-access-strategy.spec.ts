@@ -12,6 +12,7 @@ import {
     StorefrontPromotionService,
 } from '@vendure/store-management-plugin';
 import { StorefrontContentService } from '@vendure/storefront-content-plugin';
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@vendure/store-management-plugin', async () => ({
@@ -20,11 +21,14 @@ vi.mock('@vendure/store-management-plugin', async () => ({
     StorefrontPromotionService: class {},
 }));
 
+import { transformImage } from '../asset-server-plugin/src/transform-image';
+
 import {
     CatalogAssetAccessStrategy,
     createCatalogImageTransformStrategies,
     PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
 } from './catalog-asset-access-strategy';
+import { storefrontAssetPresets } from './storefront-asset-presets';
 
 function harness(userId?: string) {
     const ctx = { channelId: 'shop-a', languageCode: 'en' };
@@ -70,6 +74,49 @@ function harness(userId?: string) {
 }
 
 describe('catalog media boundary', () => {
+    it('encodes an existing WebP logo as a real bounded PNG', async () => {
+        const webp = await sharp({ create: { width: 512, height: 512, channels: 4, background: '#997a37' } })
+            .webp()
+            .toBuffer();
+        const strategy = createCatalogImageTransformStrategies(true)[0];
+        const parameters = await strategy.getImageTransformParameters({
+            input: { preset: 'storefront-icon-96', format: 'png', quality: 82 },
+            availablePresets: [{ name: 'storefront-icon-96', width: 96, height: 96, mode: 'resize' }],
+        } as never);
+        const png = await (await transformImage(webp, parameters)).toBuffer();
+        const metadata = await sharp(png).metadata();
+        expect(metadata).toMatchObject({ format: 'png', width: 96, height: 96 });
+    });
+    it.each([
+        ['storefront-icon-96', 96],
+        ['storefront-thumbnail-fit-320', 320],
+    ] as const)('allows PNG only for the bounded icon variant %s', async (preset, size) => {
+        const strategy = createCatalogImageTransformStrategies(true)[0];
+        const result = await strategy.getImageTransformParameters({
+            input: { preset, format: 'png', width: 10000, height: 10000, quality: 82 },
+            availablePresets: storefrontAssetPresets,
+        } as never);
+        expect(result).toMatchObject({ format: 'png', width: size, height: size, quality: 82 });
+        const webp = await sharp({
+            create: { width: 512, height: 512, channels: 4, background: '#997a37' },
+        })
+            .webp()
+            .toBuffer();
+        const png = await (await transformImage(webp, result)).toBuffer();
+        expect(await sharp(png).metadata()).toMatchObject({
+            format: 'png',
+            width: size,
+            height: size,
+        });
+    });
+    it('retains the existing format restriction for other catalog images', async () => {
+        const strategy = createCatalogImageTransformStrategies(true)[0];
+        const result = await strategy.getImageTransformParameters({
+            input: { preset: 'storefront-hero-fit-480', format: 'png' },
+            availablePresets: [{ name: 'storefront-hero-fit-480', width: 480 }],
+        } as never);
+        expect(result.format).toBeUndefined();
+    });
     it.each([Product, ProductVariant, Collection])(
         'allows images used by visible catalog entities',
         async entity => {
