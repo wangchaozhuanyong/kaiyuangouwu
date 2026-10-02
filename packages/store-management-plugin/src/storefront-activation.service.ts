@@ -20,11 +20,11 @@ export interface OperationalStorefrontInput {
 
 export function isOperationalStorefront(input: OperationalStorefrontInput): boolean {
     return (
-        input.isDefaultChannel ||
-        input.status === 'ACTIVE' ||
-        (input.status === 'DRAFT' &&
-            (input.isPlatformOwned || input.isPublished) &&
-            input.hasVerifiedPrimaryDomain)
+        !input.isDefaultChannel &&
+        (input.status === 'ACTIVE' ||
+            (input.status === 'DRAFT' &&
+                (input.isPlatformOwned || input.isPublished) &&
+                input.hasVerifiedPrimaryDomain))
     );
 }
 
@@ -43,6 +43,8 @@ export class StorefrontActivationService {
         ]);
         const isDefaultChannel = Boolean(channel && idsAreEqual(channel.id, defaultChannel.id));
         if (isDefaultChannel) {
+            // Legacy account and historical order reads remain available. Catalog
+            // access and starting new payments are blocked by their own guards.
             return;
         }
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({

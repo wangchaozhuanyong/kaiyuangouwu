@@ -133,6 +133,9 @@ export class FacetService {
             .findOne({
                 where: {
                     code: facetCode,
+                    ...(ctxOrFacetCode instanceof RequestContext
+                        ? { channels: { id: ctxOrFacetCode.channelId } }
+                        : {}),
                 },
                 relations,
             })
@@ -262,7 +265,8 @@ export class FacetService {
         do {
             const match = await this.connection
                 .getRepository(ctx, Facet)
-                .findOne({ where: { code: candidate } });
+                .manager.getRepository(Facet)
+                .findOne({ where: { code: candidate }, select: ['id'] });
 
             conflict = !!match && ((id != null && !idsAreEqual(match.id, id)) || id == null);
             if (conflict) {

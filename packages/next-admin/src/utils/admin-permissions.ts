@@ -7,6 +7,7 @@ interface RoutePermissionRule {
 
 // More-specific prefixes must be declared before their parent sections.
 const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
+    { prefix: '/platform/catalog', permissions: ['ManagePlatformCatalog'] },
     { prefix: '/sales/profit', permissions: ['ReadOrder', 'ReadCatalogOperations'] },
     { prefix: '/plugins/ai-access', permissions: ['SuperAdmin'] },
     {

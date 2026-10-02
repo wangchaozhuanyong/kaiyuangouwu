@@ -159,3 +159,6 @@ export { StorefrontPromotionAccessService } from './promotion/storefront-promoti
 export { StorefrontPromotionService } from './promotion/storefront-promotion.service.js';
 
 export { promotionAssetPaths } from './promotion/promotion-public-assets.js';
+
+export { CatalogGovernanceService } from './catalog-governance.service.js';
+export { managePlatformCatalogPermission } from './constants.js';

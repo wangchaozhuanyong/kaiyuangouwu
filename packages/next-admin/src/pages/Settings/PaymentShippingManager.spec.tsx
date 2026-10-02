@@ -24,7 +24,7 @@ vi.mock('./UsdtPaymentSetupPanel', () => ({
 }));
 
 const data = {
-    activeChannel: { id: 'channel-1', defaultCurrencyCode: 'CNY' },
+    activeChannel: { id: 'channel-1', code: '__default_channel__', defaultCurrencyCode: 'CNY' },
     paymentMethodHandlers: [],
     paymentMethods: {
         items: [
@@ -75,6 +75,46 @@ describe('PaymentShippingManager', () => {
         expect(html).not.toContain('测试配送');
     });
 
+    it('shows only independent payment switches in an operating store even for a SuperAdmin', () => {
+        apolloMocks.useQuery.mockReturnValue({
+            data: {
+                myStoreCommerceMode: { mode: 'HYBRID' },
+                myStorePaymentOptions: [
+                    {
+                        id: 'shared-1',
+                        name: '平台支付',
+                        description: '统一网关',
+                        enabled: true,
+                        platformEnabled: false,
+                        effectiveEnabled: false,
+                    },
+                ],
+            },
+            loading: false,
+        });
+        const html = renderToStaticMarkup(
+            <AdminPermissionsContext.Provider
+                value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
+            >
+                <ConfirmDialogContext.Provider value={async () => false}>
+                    <PaymentShippingManager
+                        section="payment"
+                        data={{ ...data, activeChannel: { ...data.activeChannel, code: 'store-b' } }}
+                        paymentMethodCustomFields={[]}
+                        shippingMethodCustomFields={[]}
+                        onChanged={async () => undefined}
+                        onError={() => undefined}
+                    />
+                </ConfirmDialogContext.Provider>
+            </AdminPermissionsContext.Provider>,
+        );
+        expect(html).toContain('本店支付方式');
+        expect(html).toContain('平台已停用');
+        expect(html).toContain('本店开关');
+        expect(html).not.toContain('新增');
+        expect(html).not.toContain('USDT 收款设置');
+        expect(html).not.toContain('编辑支付方式');
+    });
     it('shows only shipping configuration in the shipping section', () => {
         const html = renderManager('shipping');
 

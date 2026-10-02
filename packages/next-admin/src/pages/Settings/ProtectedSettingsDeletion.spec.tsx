@@ -36,7 +36,12 @@ vi.mock('./UsdtPaymentSetupPanel', () => ({ UsdtPaymentSetupPanel: () => null })
 
 const storeManagementData: StoreManagementResult = {
     activeAdministrator: null,
-    activeChannel: { id: 'channel-1', defaultLanguageCode: 'zh_Hans', defaultCurrencyCode: 'MYR' },
+    activeChannel: {
+        code: '__default_channel__',
+        id: 'channel-1',
+        defaultLanguageCode: 'zh_Hans',
+        defaultCurrencyCode: 'MYR',
+    },
     storeGovernanceChanges: [],
     administratorPermissionAudits: [],
     storeProfiles: [],

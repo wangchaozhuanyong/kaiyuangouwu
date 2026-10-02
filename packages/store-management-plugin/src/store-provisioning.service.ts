@@ -45,7 +45,6 @@ import { MerchantInitialPasswordService } from './merchant-initial-password.serv
 import { referralPermission } from './referral/referral.constants';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
-import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 
 const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
 const CONTROLLED_TEST_PAYMENT_METHOD_PREFIX = 'controlled-test-payment-';
@@ -191,12 +190,8 @@ export class StoreProvisioningService {
         if (!template.defaultShippingZone || !template.defaultTaxZone) {
             throw new UserInputError('基础店铺必须先配置默认配送区域和默认计税区域');
         }
-        const [templateStockLocations, templatePaymentMethods, templateShippingMethods] = await Promise.all([
+        const [templateStockLocations, templateShippingMethods] = await Promise.all([
             this.connection.getRepository(ctx, StockLocation).find({
-                where: { channels: { id: template.id } },
-                order: { createdAt: 'ASC' },
-            }),
-            this.connection.getRepository(ctx, PaymentMethod).find({
                 where: { channels: { id: template.id } },
                 order: { createdAt: 'ASC' },
             }),
@@ -276,11 +271,7 @@ export class StoreProvisioningService {
         for (const stockLocation of templateStockLocations) {
             stockLocations.push(await this.cloneStockLocation(channelCtx, channel, stockLocation));
         }
-        for (const paymentMethod of templatePaymentMethods.filter(method =>
-            this.canClonePaymentMethod(method),
-        )) {
-            await this.clonePaymentMethod(channelCtx, channel, paymentMethod);
-        }
+        // New shops consume platform payment definitions and explicitly opt in with their own switches.
         for (const shippingMethod of templateShippingMethods) {
             await this.cloneShippingMethod(channelCtx, channel, shippingMethod);
         }
@@ -542,38 +533,6 @@ export class StoreProvisioningService {
         });
         await this.removeDefaultChannelAssignment(ctx, channel, ShippingMethod, cloned.id);
         return cloned;
-    }
-
-    private async clonePaymentMethod(
-        ctx: RequestContext,
-        channel: Channel,
-        source: PaymentMethod,
-    ): Promise<PaymentMethod> {
-        const cloned = await this.paymentMethodService.create(ctx, {
-            code: source.code,
-            enabled: source.enabled,
-            ...(source.checker ? { checker: this.operationInput(source.checker) } : {}),
-            handler: this.operationInput(source.handler),
-            translations: source.translations.map(translation => ({
-                languageCode: translation.languageCode,
-                name: translation.name,
-                description: translation.description,
-                customFields: translation.customFields,
-            })),
-            customFields: source.customFields,
-        });
-        await this.removeDefaultChannelAssignment(ctx, channel, PaymentMethod, cloned.id);
-        return cloned;
-    }
-
-    private canClonePaymentMethod(method: PaymentMethod): boolean {
-        // Controlled test payments are bound to one encoded Channel ID in both their code and handler
-        // arguments. They must be configured explicitly for the new store rather than copied verbatim.
-        return (
-            method.code !== USDT_TRC20_PAYMENT_METHOD_CODE &&
-            method.handler.code !== CONTROLLED_TEST_PAYMENT_HANDLER_CODE &&
-            !method.code.startsWith(CONTROLLED_TEST_PAYMENT_METHOD_PREFIX)
-        );
     }
 
     private operationInput(operation: { code: string; args: Array<{ name: string; value: string }> }) {

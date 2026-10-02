@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Channel,
     ChannelService,
-    PaymentMethod,
     PaymentMethodService,
+    Permission,
     RequestContext,
     RequestContextService,
     TransactionalConnection,
@@ -15,12 +14,7 @@ import {
 import { StoreUsdtWalletAudit } from '../entities/store-usdt-wallet-audit.entity';
 import { StoreUsdtWallet } from '../entities/store-usdt-wallet.entity';
 
-import {
-    USDT_TRC20_CONTRACT_ADDRESS,
-    USDT_TRC20_NETWORK,
-    USDT_TRC20_PAYMENT_HANDLER_CODE,
-    USDT_TRC20_PAYMENT_METHOD_CODE,
-} from './usdt-payment.constants';
+import { USDT_TRC20_CONTRACT_ADDRESS, USDT_TRC20_NETWORK } from './usdt-payment.constants';
 import {
     ConfiguredUsdtWalletConfiguration,
     fingerprintReceivingAddress,
@@ -65,6 +59,9 @@ export class StoreUsdtWalletService {
         ctx: RequestContext,
         channelId: ID = ctx.channelId,
     ): Promise<UsdtWalletConfiguration> {
+        // New collection always uses the platform wallet; existing intents retain their recorded address.
+        const platform = await this.channelService.getDefaultChannel(ctx);
+        channelId = platform.id;
         const wallet = await this.connection.getRepository(ctx, StoreUsdtWallet).findOne({
             where: { channelId },
         });
@@ -105,24 +102,30 @@ export class StoreUsdtWalletService {
     }
 
     async status(ctx: RequestContext, channelId: ID = ctx.channelId): Promise<StoreUsdtWalletView> {
+        const platform = await this.channelService.getDefaultChannel(ctx);
+        channelId = platform.id;
         const repository = this.connection.getRepository(ctx, StoreUsdtWallet);
         const wallet = await repository.findOne({ where: { channelId }, relations: { channel: true } });
         const channel = wallet?.channel ?? (await this.connection.getEntityOrThrow(ctx, Channel, channelId));
-        return this.toView(wallet, channel, ctx.activeUserId);
+        const view = this.toView(wallet, channel, ctx.activeUserId);
+        if (ctx.channel.code !== '__default_channel__')
+            return {
+                ...view,
+                pendingReceivingAddress: null,
+                pendingReceivingAddressFingerprint: null,
+                canReview: false,
+            };
+        return view;
     }
 
     async list(ctx: RequestContext): Promise<StoreUsdtWalletView[]> {
-        const channels = await this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
-        const wallets = await this.connection.getRepository(ctx, StoreUsdtWallet).find({
-            relations: { channel: true },
-        });
-        const byChannelId = new Map(wallets.map(wallet => [String(wallet.channelId), wallet]));
-        return channels.map(channel =>
-            this.toView(byChannelId.get(String(channel.id)) ?? null, channel, ctx.activeUserId),
-        );
+        this.assertPlatformConfiguration(ctx);
+        // Legacy store wallets are preserved in the read-only migration audit, not presented as new setup.
+        return [await this.status(ctx)];
     }
 
     async submit(ctx: RequestContext, receivingAddressInput: string): Promise<StoreUsdtWalletView> {
+        this.assertPlatformConfiguration(ctx);
         const receivingAddress = receivingAddressInput.trim();
         if (!isValidTronMainnetAddress(receivingAddress)) {
             throw new UserInputError('请输入有效的 TRON 主网收款地址');
@@ -160,6 +163,9 @@ export class StoreUsdtWalletService {
     }
 
     async review(ctx: RequestContext, input: ReviewStoreUsdtWalletInput): Promise<StoreUsdtWalletView> {
+        this.assertPlatformConfiguration(ctx);
+        if (String(input.channelId) !== String(ctx.channelId))
+            throw new UserInputError('只能审核平台统一收款地址');
         const repository = this.connection.getRepository(ctx, StoreUsdtWallet);
         const wallet = await this.findWalletForUpdate(ctx, input.channelId);
         if (!wallet?.pendingReceivingAddressEncrypted || !wallet.pendingReceivingAddressFingerprint) {
@@ -208,7 +214,7 @@ export class StoreUsdtWalletService {
             reviewedFingerprint,
             input.approved ? null : wallet.rejectionReason,
         );
-        if (input.approved) await this.assignPaymentMethodToChannel(ctx, wallet.channelId);
+        // Payment definitions and shop switches are independent of wallet approval.
         const channel =
             wallet.channel ?? (await this.connection.getEntityOrThrow(ctx, Channel, wallet.channelId));
         return this.toView(saved, channel, ctx.activeUserId);
@@ -361,69 +367,13 @@ export class StoreUsdtWalletService {
         };
     }
 
-    private async assignPaymentMethodToChannel(ctx: RequestContext, channelId: ID): Promise<void> {
-        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
-        const assigned = await repository.find({
-            where: { code: USDT_TRC20_PAYMENT_METHOD_CODE, channels: { id: channelId } },
-            relations: { channels: true },
-        });
-        const exclusive = assigned.find(method => method.channels.length === 1);
-        if (exclusive) {
-            if (!exclusive.enabled) {
-                exclusive.enabled = true;
-                await repository.save(exclusive, { reload: false });
-            }
-            return;
-        }
-        const channel = await this.connection.getEntityOrThrow(ctx, Channel, channelId);
-        const channelCtx = await this.requestContextService.create({
-            apiType: 'admin',
-            channelOrToken: channel,
-        });
-        const source = assigned[0];
-        const created = await this.paymentMethodService.create(
-            channelCtx,
-            source
-                ? {
-                      code: source.code,
-                      enabled: true,
-                      ...(source.checker ? { checker: walletPaymentOperationInput(source.checker) } : {}),
-                      handler: walletPaymentOperationInput(source.handler),
-                      translations: source.translations.map(translation => ({
-                          languageCode: translation.languageCode,
-                          name: translation.name,
-                          description: translation.description,
-                          customFields: translation.customFields,
-                      })),
-                      customFields: source.customFields,
-                  }
-                : {
-                      code: USDT_TRC20_PAYMENT_METHOD_CODE,
-                      enabled: true,
-                      handler: { code: USDT_TRC20_PAYMENT_HANDLER_CODE, arguments: [] },
-                      translations: [
-                          {
-                              languageCode: LanguageCode.zh_Hans,
-                              name: 'USDT-TRC20 链上支付',
-                              description: '系统确认链上固化到账后自动更新订单为待发货',
-                          },
-                          {
-                              languageCode: LanguageCode.en,
-                              name: 'USDT-TRC20 on-chain payment',
-                              description: 'The order is paid after the transfer is solidified on TRON',
-                          },
-                      ],
-                  },
-        );
-        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        if (String(defaultChannel.id) !== String(channel.id)) {
-            await this.channelService.removeFromChannels(channelCtx, PaymentMethod, created.id, [
-                defaultChannel.id,
-            ]);
-        }
-        for (const previous of assigned) {
-            await this.channelService.removeFromChannels(ctx, PaymentMethod, previous.id, [channel.id]);
-        }
+    private assertPlatformConfiguration(ctx: RequestContext): void {
+        if (
+            ctx.apiType !== 'admin' ||
+            ctx.channel.code !== '__default_channel__' ||
+            !ctx.userHasPermissions([Permission.SuperAdmin])
+        )
+            throw new UserInputError('USDT 收款地址仅允许超级管理员在平台管理中心配置');
     }
 
     private async findWalletForUpdate(ctx: RequestContext, channelId: ID): Promise<StoreUsdtWallet | null> {

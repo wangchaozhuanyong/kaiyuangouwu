@@ -13,6 +13,7 @@ import {
     OrderLimitError,
     OrderService,
     PaymentMethod,
+    PaymentMethodService,
     ProductVariant,
     ProductVariantService,
     RequestContext,
@@ -179,6 +180,7 @@ export class StorefrontCartService {
         private readonly productVariantService: ProductVariantService,
         private readonly sessionService: SessionService,
         private readonly configService: ConfigService,
+        private readonly paymentMethodService: PaymentMethodService,
     ) {}
 
     async hasCart(ctx: RequestContext): Promise<boolean> {
@@ -571,10 +573,7 @@ export class StorefrontCartService {
         if (registeredHandlerCodes.size === 0) {
             return false;
         }
-        const methods = await this.connection.getRepository(ctx, PaymentMethod).find({
-            where: { enabled: true, channels: { id: ctx.channelId } },
-            relations: { channels: true, translations: true },
-        });
+        const methods = await this.paymentMethodService.getActivePaymentMethods(ctx);
         return methods.some(
             method =>
                 isRegisteredProductionPaymentMethod(method, registeredHandlerCodes, paymentCurrencyCode) &&

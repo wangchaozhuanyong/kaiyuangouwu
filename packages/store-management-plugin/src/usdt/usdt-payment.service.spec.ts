@@ -47,7 +47,10 @@ describe('UsdtPaymentService', () => {
         repository.createQueryBuilder.mockReturnValue(builder);
         const service = new UsdtPaymentService(
             {
-                getRepository: () => repository,
+                getRepository: (_ctx: any, entity: any) =>
+                    entity === StorefrontUsdtPaymentIntent
+                        ? repository
+                        : { findOne: vi.fn().mockResolvedValue({ id: 'platform-method', enabled: true }) },
                 getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'order-1', salesChannelId: 'channel-1' }),
             } as any,
             {} as any,

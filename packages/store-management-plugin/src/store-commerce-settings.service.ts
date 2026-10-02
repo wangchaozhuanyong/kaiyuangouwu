@@ -9,7 +9,6 @@ import {
     idsAreEqual,
     isGraphQlErrorResult,
     LanguageCode,
-    PaymentMethod,
     PaymentMethodService,
     RequestContext,
     ShippingMethod,
@@ -51,33 +50,12 @@ export class StoreCommerceSettingsService {
         private readonly translations: ContentTranslationService,
     ) {}
 
-    async paymentOptions(
-        ctx: RequestContext,
-    ): Promise<Array<Pick<PaymentMethod, 'id' | 'name' | 'code' | 'enabled'>>> {
-        const methods = await this.paymentMethodService.findAll(ctx, undefined, ['channels']);
-        return methods.items.map(method => ({
-            id: method.id,
-            name: method.name,
-            code: method.code,
-            enabled: method.enabled,
-        }));
+    paymentOptions(ctx: RequestContext) {
+        return this.paymentMethodService.getStorePaymentOptions(ctx);
     }
 
-    async setPaymentOptionEnabled(
-        ctx: RequestContext,
-        id: ID,
-        enabled: boolean,
-    ): Promise<Pick<PaymentMethod, 'id' | 'name' | 'code' | 'enabled'>> {
-        const method = await this.paymentMethodService.findOne(ctx, id, ['channels']);
-        if (!method) throw new UserInputError('该支付方式不属于当前店铺');
-        if (
-            method.channels.length !== 1 ||
-            !method.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))
-        ) {
-            throw new UserInputError('历史共享支付方式需先由平台完成独立迁移');
-        }
-        const updated = await this.paymentMethodService.update(ctx, { id, enabled });
-        return { id: updated.id, name: updated.name, code: updated.code, enabled: updated.enabled };
+    setPaymentOptionEnabled(ctx: RequestContext, id: ID, enabled: boolean) {
+        return this.paymentMethodService.setStorePaymentOptionEnabled(ctx, id, enabled);
     }
 
     async get(ctx: RequestContext): Promise<StoreCommerceConfiguration> {

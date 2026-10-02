@@ -12,17 +12,15 @@ describe('channel display helpers', () => {
         'turns the Vendure default channel code into a Chinese store name: %s',
         code => {
             expect(isDefaultChannelCode(code)).toBe(true);
-            expect(getChannelDisplayName(code)).toBe('平台管理（不经营）');
+            expect(getChannelDisplayName(code)).toBe('模钥平台管理中心');
         },
     );
 
     it('uses an English display name on an English page without exposing the technical code', () => {
-        expect(getChannelDisplayName('__default_channel__', 'en')).toBe(
-            'Platform management (non-operating)',
-        );
+        expect(getChannelDisplayName('__default_channel__', 'en')).toBe('MOYAO Platform Management Center');
         expect(
             getChannelDisplayLabel({ code: '__default_channel__', defaultCurrencyCode: 'CNY' }, 'en'),
-        ).toBe('Platform management (non-operating) · CNY');
+        ).toBe('MOYAO Platform Management Center');
     });
 
     it('keeps merchant-defined store names and adds their currency', () => {
@@ -65,7 +63,7 @@ describe('channel display helpers', () => {
         );
         expect(
             getCatalogEmptyStateDescription({ channelCode: '__default_channel__', searchTerm: '' }),
-        ).toContain('“平台管理（不经营）”当前暂无商品');
+        ).toContain('“模钥平台管理中心”当前暂无商品');
     });
 
     it('keeps search-result guidance focused on the search term', () => {

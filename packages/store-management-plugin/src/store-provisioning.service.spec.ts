@@ -361,14 +361,7 @@ describe('StoreProvisioningService', () => {
             expect.anything(),
             expect.objectContaining({ name: 'Warehouse B', description: 'Overflow' }),
         );
-        expect(paymentMethodService.create).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({
-                code: 'referral-balance',
-                handler: { code: 'referral-balance-payment', arguments: [] },
-            }),
-        );
-        expect(paymentMethodService.create).toHaveBeenCalledTimes(1);
+        expect(paymentMethodService.create).not.toHaveBeenCalled();
         expect(shippingMethodService.create).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
@@ -400,11 +393,8 @@ describe('StoreProvisioningService', () => {
             'cloned-shipping-method-1',
             ['default-channel'],
         );
-        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
-            expect.anything(),
-            PaymentMethod,
-            'cloned-payment-method-1',
-            ['default-channel'],
+        expect(channelService.removeFromChannels.mock.calls.some(call => call[1] === PaymentMethod)).toBe(
+            false,
         );
         expect(storeProfileService.createDraft).toHaveBeenCalledWith(ctx, channel);
         expect(contentTranslations.prepareLocalizedFields).toHaveBeenCalledWith([

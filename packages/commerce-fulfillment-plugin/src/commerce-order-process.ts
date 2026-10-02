@@ -1,12 +1,16 @@
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
+    CatalogResourceOwnership,
     ConfigService,
     GlobalSettingsService,
     isGraphQlErrorResult,
     Order,
     OrderProcess,
     OrderService,
+    ProductSalesAuthorization,
     ProductVariant,
+    ProductVariantPrice,
     ProductVariantService,
     StockLevel,
     StockMovementService,
@@ -16,6 +20,7 @@ import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
 import { CommerceModeService } from './commerce-mode.service';
+import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import {
     getOrderLineFulfillmentType,
@@ -26,6 +31,7 @@ import {
 import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 import { ProductPackagingService } from './product-packaging.service';
 
+let digitalTokens: DigitalDeliveryTokenService;
 let orderService: OrderService;
 let productVariantService: ProductVariantService;
 let stockMovementService: StockMovementService;
@@ -39,6 +45,7 @@ let manualDigitalDeliveryService: ManualDigitalDeliveryService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
+        digitalTokens = injector.get(DigitalDeliveryTokenService);
         orderService = injector.get(OrderService);
         productVariantService = injector.get(ProductVariantService);
         stockMovementService = injector.get(StockMovementService);
@@ -53,6 +60,9 @@ export const commerceOrderProcess: OrderProcess<string> = {
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
         const entersPayment = toState === 'ArrangingPayment';
+        if (entersPayment && ctx.channel?.code === DEFAULT_CHANNEL_CODE) {
+            return '平台管理中心不经营，请到经营店铺购买';
+        }
         const confirmsPayment =
             fromState === 'ArrangingPayment' &&
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled');
@@ -67,6 +77,48 @@ export const commerceOrderProcess: OrderProcess<string> = {
             });
             if (variants.some(variant => variant.product?.customFields?.pricingMode === 'QUOTE_ONLY')) {
                 return '询价展示商品不能下单，请联系客服获取报价';
+            }
+        }
+
+        if (entersPayment) {
+            for (const line of order.lines) {
+                const variant = await connection.getRepository(ctx, ProductVariant).findOne({
+                    where: { id: line.productVariantId, channels: { id: ctx.channelId } },
+                    relations: ['product', 'product.channels'],
+                });
+                if (!variant || variant.deletedAt || !variant.enabled || !variant.product.enabled)
+                    return '商品已不可销售，请刷新购物车';
+                const owner = await connection
+                    .getRepository(ctx, CatalogResourceOwnership)
+                    .findOne({ where: { resourceType: 'Product', resourceId: variant.productId } });
+                const grant = await connection
+                    .getRepository(ctx, ProductSalesAuthorization)
+                    .findOne({ where: { productId: variant.productId, channelId: ctx.channelId } });
+                const operating = variant.product.channels.filter(c => c.code !== DEFAULT_CHANNEL_CODE);
+                const legacyOwned =
+                    !owner && operating.length === 1 && String(operating[0].id) === String(ctx.channelId);
+                if (
+                    (!owner && !legacyOwned) ||
+                    (grant
+                        ? grant.state !== 'ACTIVE' ||
+                          !grant.variantIds.includes(String(variant.id)) ||
+                          grant.pendingVariantIds?.includes(String(variant.id))
+                        : !legacyOwned && String(owner?.ownerChannelId) !== String(ctx.channelId))
+                )
+                    return '本店销售授权未启用，请刷新购物车';
+                const price = await connection.getRepository(ctx, ProductVariantPrice).findOne({
+                    where: {
+                        variant: { id: variant.id },
+                        channelId: ctx.channelId,
+                        currencyCode: ctx.currencyCode,
+                    },
+                });
+                if (!price) return '本店售价未配置，请刷新购物车';
+                if (
+                    isFileDownloadOrderLine(line) &&
+                    !digitalTokens.resourceForSku(String(ctx.channelId), variant.sku)
+                )
+                    return '本店下载文件未配置，请联系店铺';
             }
         }
 

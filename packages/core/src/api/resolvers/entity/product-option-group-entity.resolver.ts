@@ -45,6 +45,15 @@ export class ProductOptionGroupEntityResolver {
         @Ctx() ctx: RequestContext,
         @Parent() optionGroup: Translated<ProductOptionGroup>,
     ): Promise<Array<Translated<ProductOption>>> {
+        const dependencyProductId = (optionGroup as ProductOptionGroup & { authorizedProductId?: string })
+            .authorizedProductId;
+        if (dependencyProductId) {
+            const groups = await this.productOptionGroupService.getOptionGroupsByProductId(
+                ctx,
+                dependencyProductId,
+            );
+            return groups.find(group => idsAreEqual(group.id, optionGroup.id))?.options ?? [];
+        }
         let options: Array<Translated<ProductOption>>;
         if (optionGroup.options) {
             options = optionGroup.options;
@@ -54,7 +63,9 @@ export class ProductOptionGroupEntityResolver {
             });
             options = group?.options ?? [];
         }
-        return options.filter(o => !o.deletedAt);
+        const visible = await this.productOptionGroupService.findOne(ctx, optionGroup.id);
+        const ids = new Set((visible?.options ?? []).map(o => String(o.id)));
+        return options.filter(o => !o.deletedAt && ids.has(String(o.id)));
     }
 }
 

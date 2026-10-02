@@ -289,6 +289,9 @@ jobs:
               run: node scripts/ci-run.mjs test
             - name: Validate affected database migrations
               if: needs.detect-changes.outputs.migration == 'true'
+              env:
+                  PLATFORM_GOVERNANCE_CI_MYSQL: '1'
+                  E2E_MYSQL_PORT: '33552'
               run: bun run --cwd packages/dev-server test:migrations
             - name: iCloud plugin and dashboard extension types
               if: needs.detect-changes.outputs.icloud == 'true'
@@ -608,6 +611,13 @@ jobs:
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: mysql
               run: node scripts/ci-run.mjs e2e
+            - name: Platform isolation, unified payment and cross-store card fulfillment
+              if: contains(fromJSON(needs.detect-changes.outputs.packages), 'store-management-plugin')
+              env:
+                  PLATFORM_GOVERNANCE_CI_MYSQL: '1'
+                  E2E_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+                  VENDURE_DISABLE_TELEMETRY: 'true'
+              run: bunx vitest run --config scripts/vitest.platform-governance.mts packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts
     e2e-postgres:
         name: e2e (postgres)
         needs: [detect-changes, build]

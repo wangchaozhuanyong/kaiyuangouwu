@@ -3,7 +3,6 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { CreatePaymentMethodInput } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
-    Channel,
     ChannelService,
     ConfigService,
     EventBus,
@@ -26,7 +25,11 @@ import { AdministratorAccessResolver } from './administrator-access.resolver';
 import { AdministratorAccessService } from './administrator-access.service';
 import { AdministratorPermissionAuditService } from './administrator-permission-audit.service';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
+import { CatalogGovernanceAccessStrategy } from './catalog-governance-access.strategy';
+import { CatalogGovernanceService } from './catalog-governance.service';
+import { CatalogOwnershipSubscriber } from './catalog-ownership.subscriber';
 import {
+    managePlatformCatalogPermission,
     managePlatformTeamPermission,
     manageStoreLifecyclePermission,
     manageStoreTeamPermission,
@@ -280,6 +283,8 @@ import {
         StorefrontLcpPreloadController,
     ],
     providers: [
+        CatalogOwnershipSubscriber,
+        CatalogGovernanceService,
         AdministratorAccessService,
         AdministratorPermissionAuditService,
         PermissionPolicyRegistry,
@@ -357,8 +362,15 @@ import {
             useClass: StorefrontPaymentCurrencyInterceptor,
         },
     ],
-    exports: [ReferralWalletSpendService, FraudRiskService, ReferralService],
+    exports: [
+        GovernanceService,
+        CatalogGovernanceService,
+        ReferralWalletSpendService,
+        FraudRiskService,
+        ReferralService,
+    ],
     configuration: config => {
+        config.authOptions.entityAccessControlStrategy = new CatalogGovernanceAccessStrategy();
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
             config.customFields.Order.push({
@@ -396,6 +408,7 @@ import {
             { name: 'workerHeartbeat', readonly: true, requiresPermission: Permission.ReadSystem },
         ];
         config.authOptions.customPermissions.push(
+            managePlatformCatalogPermission,
             storeProfilePermission,
             manageStoreTeamPermission,
             managePlatformTeamPermission,
@@ -580,130 +593,60 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
 
     private async ensureReferralPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
-        const channels = await this.connection.getRepository(ctx, Channel).find();
-        for (const channel of channels) {
-            await this.ensureIsolatedPaymentMethod(ctx, channel, true, {
-                code: REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
-                enabled: true,
-                handler: { code: referralBalancePaymentHandler.code, arguments: [] },
-                translations: [
-                    {
-                        languageCode: LanguageCode.zh_Hans,
-                        name: '邀请返利余额',
-                        description: '使用邀请返利可用余额抵扣订单',
-                    },
-                    {
-                        languageCode: LanguageCode.en,
-                        name: 'Referral reward balance',
-                        description: 'Pay using available referral reward balance',
-                    },
-                ],
-            });
-        }
+        await this.ensurePlatformPaymentMethod(ctx, {
+            code: REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
+            enabled: true,
+            handler: { code: referralBalancePaymentHandler.code, arguments: [] },
+            translations: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    name: '邀请返利余额',
+                    description: '使用邀请返利可用余额抵扣订单',
+                },
+                {
+                    languageCode: LanguageCode.en,
+                    name: 'Referral reward balance',
+                    description: 'Pay using available referral reward balance',
+                },
+            ],
+        });
     }
 
     private async ensureUsdtPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
-        const channels = await this.connection.getRepository(ctx, Channel).find();
+        const platform = await this.channelService.getDefaultChannel(ctx);
         await this.storeUsdtWallets.rotateEncryptionKey(ctx);
-        await this.storeUsdtWallets.seedLegacyWallet(ctx, channels, this.usdtWalletConfiguration.get());
-        const configuredChannelIds = new Set(
-            (await this.storeUsdtWallets.list(ctx))
-                .filter(wallet => wallet.configured)
-                .map(wallet => String(wallet.channelId)),
-        );
-        for (const channel of channels) {
-            await this.ensureIsolatedPaymentMethod(
-                ctx,
-                channel,
-                configuredChannelIds.has(String(channel.id)),
+        await this.storeUsdtWallets.seedLegacyWallet(ctx, [platform], this.usdtWalletConfiguration.get());
+        await this.ensurePlatformPaymentMethod(ctx, {
+            code: USDT_TRC20_PAYMENT_METHOD_CODE,
+            enabled: true,
+            handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
+            translations: [
                 {
-                    code: USDT_TRC20_PAYMENT_METHOD_CODE,
-                    enabled: true,
-                    handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
-                    translations: [
-                        {
-                            languageCode: LanguageCode.zh_Hans,
-                            name: 'USDT-TRC20 链上支付',
-                            description: '系统确认链上固化到账后自动更新订单为待发货',
-                        },
-                        {
-                            languageCode: LanguageCode.en,
-                            name: 'USDT-TRC20 on-chain payment',
-                            description: 'The order is paid after the transfer is solidified on TRON',
-                        },
-                    ],
+                    languageCode: LanguageCode.zh_Hans,
+                    name: 'USDT-TRC20 链上支付',
+                    description: '平台统一收款，链上固化到账后更新本店订单',
                 },
-            );
-        }
+                {
+                    languageCode: LanguageCode.en,
+                    name: 'USDT-TRC20 on-chain payment',
+                    description: 'Platform collection with store-scoped orders',
+                },
+            ],
+        });
     }
 
-    private async ensureIsolatedPaymentMethod(
+    private async ensurePlatformPaymentMethod(
         ctx: Awaited<ReturnType<RequestContextService['create']>>,
-        channel: Channel,
-        shouldAssign: boolean,
         defaults: CreatePaymentMethodInput,
-    ): Promise<PaymentMethod | undefined> {
-        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
-        const candidates = await repository.find({
-            where: { code: defaults.code },
-            relations: { channels: true },
+    ): Promise<PaymentMethod> {
+        const platform = await this.channelService.getDefaultChannel(ctx);
+        const existing = await this.connection.getRepository(ctx, PaymentMethod).findOne({
+            where: { code: defaults.code, channels: { id: platform.id } },
         });
-        const assigned = candidates.filter(method =>
-            method.channels.some(item => String(item.id) === String(channel.id)),
-        );
-        if (!shouldAssign) {
-            for (const method of assigned) {
-                await this.channelService.removeFromChannels(ctx, PaymentMethod, method.id, [channel.id]);
-            }
-            return;
-        }
-
-        const exclusive = assigned.find(method => method.channels.length === 1);
-        if (exclusive) {
-            if (!exclusive.enabled) {
-                exclusive.enabled = true;
-                await repository.save(exclusive, { reload: false });
-            }
-            for (const duplicate of assigned.filter(method => method.id !== exclusive.id)) {
-                await this.channelService.removeFromChannels(ctx, PaymentMethod, duplicate.id, [channel.id]);
-            }
-            return exclusive;
-        }
-
-        const source = assigned[0] ?? candidates[0];
-        const channelCtx = await this.requestContextService.create({
-            apiType: 'admin',
-            channelOrToken: channel,
-        });
-        const created = await this.paymentMethodService.create(
-            channelCtx,
-            source
-                ? {
-                      code: source.code,
-                      enabled: true,
-                      ...(source.checker ? { checker: paymentOperationInput(source.checker) } : {}),
-                      handler: paymentOperationInput(source.handler),
-                      translations: source.translations.map(translation => ({
-                          languageCode: translation.languageCode,
-                          name: translation.name,
-                          description: translation.description,
-                          customFields: translation.customFields,
-                      })),
-                      customFields: source.customFields,
-                  }
-                : defaults,
-        );
-        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        if (String(defaultChannel.id) !== String(channel.id)) {
-            await this.channelService.removeFromChannels(channelCtx, PaymentMethod, created.id, [
-                defaultChannel.id,
-            ]);
-        }
-        for (const previous of assigned) {
-            await this.channelService.removeFromChannels(ctx, PaymentMethod, previous.id, [channel.id]);
-        }
-        return created;
+        // Never reset a reviewed global kill switch or copy a legacy shop's credentials.
+        if (existing) return existing;
+        return this.paymentMethodService.create(ctx.copy({ channel: platform }), defaults);
     }
 
     private async ensurePrimaryStoreAdminPermissions(): Promise<void> {

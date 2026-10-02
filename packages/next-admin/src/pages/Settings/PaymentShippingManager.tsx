@@ -1,3 +1,4 @@
+import { gql } from '@apollo/client';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { Beaker, CreditCard, Info, Pencil, Plus, Sparkles, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -23,6 +24,7 @@ import {
     CREATE_SHIPPING_METHOD_MUTATION,
     DELETE_PAYMENT_METHOD_MUTATION,
     DELETE_SHIPPING_METHOD_MUTATION,
+    SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION,
     TEST_SHIPPING_METHOD_QUERY,
     UPDATE_PAYMENT_METHOD_MUTATION,
     UPDATE_SHIPPING_METHOD_MUTATION,
@@ -90,7 +92,7 @@ function TestPaymentAvailabilityNotice({
             </p>
             <p className="mt-1">
                 {available
-                    ? '可选择向本店所有订单开放，或只允许指定测试商品。模拟付款不会真实扣款，但订单会进入正常已付款、库存与交付流程。'
+                    ? '平台可设置测试订单范围，各店铺再独立开启。模拟付款不会真实扣款，但订单会进入正常已付款、库存与交付流程。'
                     : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
@@ -123,9 +125,11 @@ export function PaymentShippingManager({
     });
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
     const { hasAnyPermission } = useAdminPermissions();
-    const canCreatePayment = hasAnyPermission(['CreateSettings', 'CreatePaymentMethod']);
-    const canUpdatePayment = hasAnyPermission(['UpdateSettings', 'UpdatePaymentMethod']);
-    const canDeletePayment = hasAnyPermission(['DeleteSettings', 'DeletePaymentMethod']);
+    const isPlatform = data.activeChannel.code === '__default_channel__';
+    const canConfigurePayment = isPlatform && hasAnyPermission(['SuperAdmin']);
+    const canCreatePayment = canConfigurePayment;
+    const canUpdatePayment = canConfigurePayment;
+    const canDeletePayment = canConfigurePayment;
     const canCreateShipping = hasAnyPermission(['CreateSettings', 'CreateShippingMethod']);
     const canUpdateShipping = hasAnyPermission(['UpdateSettings', 'UpdateShippingMethod']);
     const canDeleteShipping = hasAnyPermission(['DeleteSettings', 'DeleteShippingMethod']);
@@ -196,7 +200,10 @@ export function PaymentShippingManager({
     return (
         <>
             <div className="space-y-4">
-                {section === 'payment' && (
+                {section === 'payment' && !isPlatform && (
+                    <StorePaymentSwitches onChanged={onChanged} onError={onError} />
+                )}
+                {section === 'payment' && isPlatform && (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                         <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
                             <div>
@@ -205,7 +212,7 @@ export function PaymentShippingManager({
                                     <FeatureHelpButton topic="settings.payment-shipping" title="支付方式" />
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-400">
-                                    管理名称、处理器、资格检查器与启停状态
+                                    平台统一配置支付系统；经营店铺独立选择开启或关闭
                                 </p>
                             </div>
                             {canCreatePayment && (
@@ -261,14 +268,25 @@ export function PaymentShippingManager({
                                             )}
                                             {systemManaged && (
                                                 <p className="mt-1 text-[10px] text-emerald-700">
-                                                    由下方 USDT 收款地址审核状态自动启停和分配。
+                                                    使用下方平台统一收款地址；各店铺独立启停。
                                                 </p>
                                             )}
                                         </div>
                                         <div className="flex shrink-0 items-center gap-2">
                                             {systemManaged ? (
                                                 <span className="text-[10px] font-bold text-slate-500">
-                                                    {item.enabled ? '已启用' : '等待系统启用'}
+                                                    {canUpdatePayment && (
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label="平台 USDT 全局开关"
+                                                            checked={item.enabled}
+                                                            disabled={toggleState.loading}
+                                                            onChange={e =>
+                                                                void changePayment(item.id, e.target.checked)
+                                                            }
+                                                        />
+                                                    )}{' '}
+                                                    {item.enabled ? '平台启用' : '平台停用'}
                                                 </span>
                                             ) : (
                                                 <>
@@ -457,7 +475,7 @@ export function PaymentShippingManager({
                     </section>
                 )}
             </div>
-            {section === 'payment' && (
+            {section === 'payment' && isPlatform && (
                 <details className="rounded-xl border border-slate-200 bg-white p-4">
                     <summary className="cursor-pointer text-sm font-bold">
                         USDT 收款配置 · 展开查看状态、汇率与收款地址
@@ -490,6 +508,101 @@ export function PaymentShippingManager({
     );
 }
 
+type StorePaymentOption = {
+    id: string;
+    name: string;
+    description: string;
+    code: string;
+    handlerCode: string;
+    enabled: boolean;
+    platformEnabled: boolean;
+    effectiveEnabled: boolean;
+};
+const STORE_PAYMENT_SWITCHES = gql`
+    query StorePaymentSwitches {
+        myStorePaymentOptions {
+            id
+            name
+            description
+            code
+            handlerCode
+            enabled
+            platformEnabled
+            effectiveEnabled
+        }
+    }
+`;
+function StorePaymentSwitches({
+    onChanged,
+    onError,
+}: {
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateStoreProfile']);
+    const query = useQuery<{ myStorePaymentOptions: StorePaymentOption[] }>(STORE_PAYMENT_SWITCHES, {
+        fetchPolicy: 'cache-and-network',
+    });
+    const [save, saving] = useMutation(SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION);
+    const toggle = async (item: StorePaymentOption, enabled: boolean) => {
+        try {
+            await save({ variables: { id: item.id, enabled } });
+            await query.refetch();
+            await onChanged(`本店${item.name}已${enabled ? '开启' : '关闭'}`);
+        } catch (error) {
+            onError(toUserFacingError(error, '本店支付开关更新失败'));
+        }
+    };
+    return (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-bold">本店支付方式</h2>
+            <p className="mt-1 text-xs text-slate-500">
+                支付系统由平台管理中心统一配置。本店开关只影响本店新订单，交易、退款和余额仍归本店。
+            </p>
+            {query.loading && !query.data && <p className="mt-4 text-xs">正在读取平台支付方式…</p>}
+            {query.error && (
+                <p role="alert" className="mt-4 text-xs text-rose-600">
+                    支付方式未获取，请刷新重试
+                </p>
+            )}
+            {query.data?.myStorePaymentOptions?.map(item => (
+                <div
+                    key={item.id}
+                    className="mt-4 flex items-center justify-between gap-4 border-t border-slate-100 pt-4"
+                >
+                    <div>
+                        <strong className="text-xs">{item.name}</strong>
+                        <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            {!item.platformEnabled
+                                ? '平台已停用'
+                                : item.effectiveEnabled
+                                  ? '本店已开启'
+                                  : '本店未开启'}
+                        </p>
+                    </div>
+                    {canUpdate && (
+                        <label className="flex shrink-0 items-center gap-2 text-xs">
+                            <input
+                                type="checkbox"
+                                aria-label={`本店${item.name}开关`}
+                                checked={item.enabled}
+                                disabled={saving.loading || (!item.platformEnabled && !item.enabled)}
+                                onChange={e => void toggle(item, e.target.checked)}
+                            />
+                            本店开关
+                        </label>
+                    )}
+                </div>
+            ))}
+            {query.data?.myStorePaymentOptions?.length === 0 && (
+                <p className="mt-4 text-xs text-slate-500">平台尚未配置支付方式</p>
+            )}
+        </section>
+    );
+}
+
 function MethodEditorDialog({
     data,
     customFieldDefinitions,
@@ -516,7 +629,7 @@ function MethodEditorDialog({
             ? selectablePaymentHandlers(data.paymentMethodHandlers)
             : data.shippingCalculators;
     const [code, setCode] = useState(
-        item?.code ?? (initialTestPayment ? `controlled-test-payment-${data.activeChannel.id}` : ''),
+        item?.code ?? (initialTestPayment ? 'controlled-test-payment-platform' : ''),
     );
     const [name, setName] = useState(
         selectedTranslation?.name ?? (item ? '' : initialTestPayment ? '测试支付' : ''),
@@ -749,7 +862,7 @@ function MethodEditorDialog({
                 }
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
-                    code: isControlledTest ? `controlled-test-payment-${data.activeChannel.id}` : code.trim(),
+                    code: isControlledTest ? 'controlled-test-payment-platform' : code.trim(),
                     enabled,
                     checker,
                     handler: operationInput(
@@ -911,7 +1024,7 @@ function MethodEditorDialog({
                                 onCodeChange={nextCode => {
                                     setHandlerCode(nextCode);
                                     if (nextCode === testPaymentHandler) {
-                                        setCode(`controlled-test-payment-${data.activeChannel.id}`);
+                                        setCode('controlled-test-payment-platform');
                                         setEnabled(false);
                                         setHandlerArgs({
                                             channelId: data.activeChannel.id,

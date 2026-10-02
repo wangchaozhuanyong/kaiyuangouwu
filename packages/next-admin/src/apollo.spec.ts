@@ -46,6 +46,46 @@ afterEach(async () => {
     vi.unstubAllGlobals();
 });
 
+it('rejects a late response before it can overwrite the new store root query or normalized entity', async () => {
+    const query = gql`
+        query LateScopedProduct {
+            product(id: "shared") {
+                id
+                name
+                __typename
+            }
+        }
+    `;
+    let resolveOld: (value: Response) => void = () => {};
+    request.mockImplementationOnce(
+        () =>
+            new Promise(resolve => {
+                resolveOld = resolve;
+            }),
+    );
+    const old = client.query({ query, fetchPolicy: 'network-only' }).then(
+        () => 'unexpected',
+        error => String(error.message),
+    );
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    setInitialActiveChannel('store-b');
+    client.cache.writeQuery({
+        query,
+        data: { product: { __typename: 'Product', id: 'shared', name: 'B own name' } },
+    });
+    resolveOld(
+        new Response(
+            JSON.stringify({
+                data: { product: { __typename: 'Product', id: 'shared', name: 'A stale name' } },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    expect(await old).toContain('旧请求');
+    expect(client.cache.readQuery<any>({ query })?.product.name).toBe('B own name');
+    expect(JSON.stringify(client.cache.extract())).not.toContain('A stale name');
+});
+
 describe('admin channel request routing', () => {
     it('keeps channel-specific payment report rows separate in the cache', () => {
         const query = gql`

@@ -378,6 +378,10 @@ export const adminApiExtensions = gql`
     }
 
     type StorePaymentOption {
+        description: String!
+        handlerCode: String!
+        platformEnabled: Boolean!
+        effectiveEnabled: Boolean!
         id: ID!
         name: String!
         code: String!

@@ -1,3 +1,5 @@
+import { getAdminDisplayLanguage } from '../utils/admin-language';
+import { getChannelDisplayName } from '../utils/channel-display';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useQuery } from '@apollo/client/react';
 import {
@@ -285,12 +287,21 @@ export function AppShell() {
             isPlatformContext ||
             !hasAnyAdminPermission(activePermissions, ['ReadStoreProfile']),
     });
-    const storeLogoUrl = profileContextQuery.data?.myStoreProfile?.logoAsset?.preview;
+    const storeLogoUrl =
+        !isPlatformContext &&
+        profileContextQuery.data?.myStoreProfile?.channelId === channelData?.activeChannel.id
+            ? profileContextQuery.data?.myStoreProfile?.logoAsset?.preview
+            : undefined;
+    const displayLanguage = getAdminDisplayLanguage();
+    const adminBrandName = isPlatformContext
+        ? getChannelDisplayName('__default_channel__', displayLanguage)
+        : `${channelData?.activeChannel ? getChannelDisplayName(channelData.activeChannel) : displayLanguage === 'en' ? 'Loading store…' : '读取店铺中…'} · ${displayLanguage === 'en' ? 'Admin' : '管理后台'}`;
     const commerceMode = commerceContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
     const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
     const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const canAccessPath = useCallback(
         (path: string) => {
+            if (path.startsWith('/platform/') && !isPlatformContext) return false;
             if (isPlatformContext && isPlatformBusinessPath(path)) return false;
             const extensionRoute = getNextAdminExtensionRoute(path);
             return extensionRoute
@@ -477,7 +488,7 @@ export function AppShell() {
             '/dashboard': '工作台',
             '/profile': '个人中心',
             '/catalog/list': '商品列表',
-            '/catalog/allocation': '店铺分配看板',
+            '/platform/catalog': '平台商品分配中心',
             '/catalog/products/new': '发布新商品',
             '/catalog/categories': '分类与属性',
             '/catalog/inventory': '库存与仓库',
@@ -508,7 +519,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
-            document.title = `${currentTitle} · MOYAO AI｜模钥管理后台`;
+            document.title = `${displayLanguage === 'en' ? (({ '/platform/catalog': 'Platform catalog', '/catalog/list': 'Products', '/catalog/categories': 'Categories and attributes', '/dashboard': 'Workspace' } as Record<string, string>)[location.pathname] ?? 'Admin') : currentTitle} · ${adminBrandName}`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -521,7 +532,7 @@ export function AppShell() {
                 );
             });
         }
-    }, [location.pathname, location.search]);
+    }, [location.pathname, location.search, adminBrandName, displayLanguage]);
 
     useEffect(() => {
         const frame = window.requestAnimationFrame(() => {
@@ -603,7 +614,7 @@ export function AppShell() {
             [
                 { title: '工作台经营大盘与待办', path: '/dashboard', cat: '工作台', icon: LayoutDashboard },
                 { title: '商品列表与多条件筛选', path: '/catalog/list', cat: '商品', icon: Package },
-                { title: '商品多店铺分配中心看板', path: '/catalog/allocation', cat: '商品', icon: Layers3 },
+                { title: '平台商品分配中心', path: '/platform/catalog', cat: '商品', icon: Layers3 },
                 {
                     title: '分类树、多规格模板与标签',
                     path: '/catalog/categories',
@@ -775,21 +786,20 @@ export function AppShell() {
                 <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+                            {!isPlatformContext && <span aria-hidden="true">{adminBrandName.charAt(0)}</span>}
                             <img
                                 key={storeLogoUrl ?? 'platform-admin'}
-                                src={storeLogoUrl ?? adminBrandIcon}
+                                src={storeLogoUrl ?? (isPlatformContext ? adminBrandIcon : undefined)}
                                 alt=""
                                 className="absolute inset-0 h-full w-full bg-white object-contain"
                                 onError={event => {
-                                    if (!event.currentTarget.src.endsWith(adminBrandIcon)) {
-                                        event.currentTarget.src = adminBrandIcon;
-                                    }
+                                    event.currentTarget.style.display = 'none';
                                 }}
                             />
                         </div>
                         {isSidebarOpen && (
                             <span className="font-bold text-white text-base tracking-wide">
-                                MOYAO AI｜模钥管理后台
+                                {adminBrandName}
                             </span>
                         )}
                     </div>
@@ -825,15 +835,25 @@ export function AppShell() {
                     <div className="pt-2 pb-1">
                         {isSidebarOpen ? (
                             <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                核心经营
+                                {isPlatformContext ? '平台统筹' : '核心经营'}
                             </span>
                         ) : (
                             <div className="h-px bg-white/10 mx-4"></div>
                         )}
                     </div>
 
+                    <NavLink
+                        allowed={canAccessPath('/platform/catalog')}
+                        to="/platform/catalog"
+                        className={navItemClass}
+                    >
+                        <Layers3 className="w-4 h-4 shrink-0" />
+                        <span className={`ml-3 text-xs ${isSidebarOpen ? 'block' : 'hidden'}`}>
+                            平台商品分配中心
+                        </span>
+                    </NavLink>
                     {/* 2. 🛍️ 商品 */}
-                    <div>
+                    <div hidden={isPlatformContext}>
                         <button
                             type="button"
                             aria-label="商品管理"
@@ -863,13 +883,7 @@ export function AppShell() {
                             >
                                 商品列表
                             </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/catalog/allocation')}
-                                to="/catalog/allocation"
-                                className={navItemClass}
-                            >
-                                店铺分配看板
-                            </NavLink>
+
                             <NavLink
                                 allowed={canAccessPath('/catalog/categories')}
                                 to="/catalog/categories"
@@ -914,7 +928,7 @@ export function AppShell() {
                     </div>
 
                     {/* 3. 📦 订单与售后 */}
-                    <div>
+                    <div hidden={isPlatformContext}>
                         <button
                             type="button"
                             aria-label="订单与售后"
@@ -1003,7 +1017,7 @@ export function AppShell() {
                     </NavLink>
 
                     {/* 5. 🎯 营销 */}
-                    <div>
+                    <div hidden={isPlatformContext}>
                         <button
                             type="button"
                             aria-label="营销管理"
@@ -1054,7 +1068,7 @@ export function AppShell() {
                     </div>
 
                     {/* 5. 🎨 店铺 */}
-                    <div>
+                    <div hidden={isPlatformContext}>
                         <button
                             type="button"
                             aria-label="店铺管理"

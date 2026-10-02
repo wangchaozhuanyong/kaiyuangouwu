@@ -58,3 +58,22 @@ test('rejects hard-coded merchant brands and store-code UI branches', () => {
         [],
     );
 });
+
+test('permits the exact platform channel title while still rejecting merchant defaults in its shared helper', () => {
+    const file = 'packages/next-admin/src/utils/channel-display.ts';
+    assert.deepEqual(
+        findStorefrontUnificationIssues(
+            "return languageCode === 'zh_Hans' ? '模钥平台管理中心' : 'MOYAO Platform Management Center';",
+            file,
+        ),
+        [],
+    );
+    assert.equal(findStorefrontUnificationIssues("return 'MOYAO AI';", file).length, 1);
+    assert.equal(
+        findStorefrontUnificationIssues(
+            "return 'MOYAO Platform Management Center';",
+            'packages/storefront/src/page.tsx',
+        ).length,
+        1,
+    );
+});

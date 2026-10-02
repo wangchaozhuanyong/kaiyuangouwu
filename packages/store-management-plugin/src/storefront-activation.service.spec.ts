@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { StorefrontActivationService } from './storefront-activation.service';
+import { isOperationalStorefront, StorefrontActivationService } from './storefront-activation.service';
 
 function createService(
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null,
@@ -26,6 +26,17 @@ function createService(
 }
 
 describe('StorefrontActivationService', () => {
+    it('never treats the platform management center as an operating store', () => {
+        expect(
+            isOperationalStorefront({
+                isDefaultChannel: true,
+                status: 'ACTIVE',
+                isPlatformOwned: true,
+                isPublished: true,
+                hasVerifiedPrimaryDomain: true,
+            }),
+        ).toBe(false);
+    });
     it.each(['DRAFT', 'SUSPENDED'] as const)('blocks Shop API access for %s stores', async status => {
         await expect(
             createService(status).assertActive({ apiType: 'shop', channelId: 'channel-1' } as any),

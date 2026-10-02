@@ -108,6 +108,9 @@ import { VendureEntity } from '../../entity/base/base.entity';
  * @experimental
  */
 export interface EntityAccessControlStrategy extends InjectableStrategy {
+    /** Enables the project platform catalog and unified payment rules. Native channels remain unchanged. */
+    readonly platformStoreGovernance?: boolean;
+
     /**
      * @description
      * Called once per request in the AuthGuard to determine whether the request

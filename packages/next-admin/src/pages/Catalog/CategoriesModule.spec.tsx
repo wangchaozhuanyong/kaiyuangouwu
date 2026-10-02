@@ -109,6 +109,11 @@ async function renderCategories({
             operation =>
                 new Observable(observer => {
                     requests(operation.operationName, operation.variables);
+                    if (operation.operationName === 'TemplateLibrary') {
+                        observer.next({ data: { catalogTemplateLibrary: [] } });
+                        observer.complete();
+                        return;
+                    }
                     if (operation.operationName === 'GetCatalogTaxonomy') {
                         const items = customCollections ?? [
                             {

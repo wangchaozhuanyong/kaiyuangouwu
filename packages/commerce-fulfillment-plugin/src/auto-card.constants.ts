@@ -1,3 +1,4 @@
+import { PermissionDefinition } from '@vendure/core';
 export const digitalDeliveryModes = ['manual_service', 'file_download', 'auto_card'] as const;
 export type DigitalDeliveryMode = (typeof digitalDeliveryModes)[number];
 
@@ -20,6 +21,7 @@ export const autoCardDeliveryEventTypes = [
     'EMAIL_FAILED',
     'EMAIL_SENT',
     'MANUAL_RETRY',
+    'SECRET_REVEALED',
     'MANUAL_REVIEW',
 ] as const;
 export type AutoCardDeliveryEventType = (typeof autoCardDeliveryEventTypes)[number];
@@ -29,3 +31,12 @@ export const AUTO_CARD_MAX_IMPORT_LINES = 10_000;
 export const AUTO_CARD_MAX_LINE_LENGTH = 8_000;
 export const AUTO_CARD_MAX_INSTRUCTIONS_LENGTH = 10_000;
 export const AUTO_CARD_MAX_DELIMITER_LENGTH = 16;
+
+export const manageAutoCardSecretsPermission = new PermissionDefinition({
+    name: 'ManageAutoCardSecrets',
+    description: 'Reveal credentials in the active store owned card pool',
+});
+export const readSoldAutoCardsPermission = new PermissionDefinition({
+    name: 'ReadSoldAutoCards',
+    description: 'Reveal only credentials allocated to an active store order, with an audit event',
+});

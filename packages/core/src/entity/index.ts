@@ -29,6 +29,7 @@ export * from './order-line-reference/refund-line.entity';
 export * from './order-line/order-line.entity';
 export * from './order/order.entity';
 export * from './payment-method/payment-method.entity';
+export * from './payment-method/store-payment-method-state.entity';
 export * from './payment/payment.entity';
 export * from './product-option-group/product-option-group-translation.entity';
 export * from './product-option-group/product-option-group.entity';
@@ -69,3 +70,6 @@ export * from './user/user.entity';
 export * from './zone/zone.entity';
 
 export * from './customer-store-entry/customer-store-entry.entity';
+
+export * from './catalog-governance/catalog-resource-ownership.entity';
+export * from './catalog-governance/product-sales-authorization.entity';

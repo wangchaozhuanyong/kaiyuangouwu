@@ -41,6 +41,7 @@ import {
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { GET_ACTIVE_CHANNEL } from '../../graphql/catalog.graphql';
 import {
     ADD_CUSTOMER_NOTE_MUTATION,
     ADD_CUSTOMER_TO_GROUP_MUTATION,
@@ -182,7 +183,10 @@ export function CustomersModule() {
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
     const canCreateCustomer = hasAnyPermission(['CreateCustomer']);
-    const canDeleteCustomer = hasAnyPermission(['DeleteCustomer']);
+    const contextQuery = useQuery<{ activeChannel: { code: string } }>(GET_ACTIVE_CHANNEL);
+    const canManageIdentity =
+        contextQuery.data?.activeChannel.code === '__default_channel__' && hasAnyPermission(['SuperAdmin']);
+    const canDeleteCustomer = canManageIdentity && hasAnyPermission(['DeleteCustomer']);
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
     const location = useLocation();
     const {
@@ -926,9 +930,12 @@ function CustomerDrawer({
     /* oxlint-enable react/set-state-in-effect */
 
     const { hasAnyPermission } = useAdminPermissions();
-    const canCreateAddress = hasAnyPermission(['CreateCustomer']);
+    const contextQuery = useQuery<{ activeChannel: { code: string } }>(GET_ACTIVE_CHANNEL);
+    const canManageIdentity =
+        contextQuery.data?.activeChannel.code === '__default_channel__' && hasAnyPermission(['SuperAdmin']);
+    const canCreateAddress = canManageIdentity;
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
-    const canDeleteAddress = hasAnyPermission(['DeleteCustomer']);
+    const canDeleteAddress = canManageIdentity;
     const requestConfirmation = useConfirmDialog();
     const countriesQuery = useQuery<CustomerAddressCountriesResult>(CUSTOMER_ADDRESS_COUNTRIES_QUERY, {
         skip: !addressEditor,
@@ -1164,7 +1171,7 @@ function CustomerDrawer({
                                             title="客户基础资料"
                                         />
                                     </h3>
-                                    {!editing && canUpdateCustomer && (
+                                    {!editing && canManageIdentity && (
                                         <button
                                             type="button"
                                             onClick={() => setEditing(true)}
@@ -1175,7 +1182,12 @@ function CustomerDrawer({
                                         </button>
                                     )}
                                 </div>
-                                {editing ? (
+                                {!canManageIdentity && (
+                                    <p className="mb-3 text-xs text-slate-500">
+                                        账号资料与地址由客户本人或平台维护，本店请使用上方客户运营资料。
+                                    </p>
+                                )}
+                                {editing && canManageIdentity ? (
                                     <CustomerEditForm
                                         form={form}
                                         setForm={setFormDraft}
@@ -1311,9 +1323,9 @@ function CustomerDrawer({
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {(canUpdateCustomer || canDeleteAddress) && (
+                                                    {(canManageIdentity || canDeleteAddress) && (
                                                         <div className="flex shrink-0 gap-1">
-                                                            {canUpdateCustomer && (
+                                                            {canManageIdentity && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setAddressEditor(address)}

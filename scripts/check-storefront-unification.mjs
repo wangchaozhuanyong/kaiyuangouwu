@@ -28,7 +28,13 @@ export function findStorefrontUnificationIssues(source, relativePath) {
     for (const [index, line] of source.split(/\r?\n/u).entries()) {
         if (merchantBrand.test(line)) {
             // The platform Admin's own title is not merchant storefront content.
-            if (!(platformAdminBrandFiles.has(relativePath) && line.includes('MOYAO AI｜模钥管理后台'))) {
+            const platformTitle =
+                platformAdminBrandFiles.has(relativePath) && line.includes('MOYAO AI｜模钥管理后台');
+            const platformChannelTitle =
+                relativePath === 'packages/next-admin/src/utils/channel-display.ts' &&
+                line.trim() ===
+                    "return languageCode === 'zh_Hans' ? '模钥平台管理中心' : 'MOYAO Platform Management Center';";
+            if (!platformTitle && !platformChannelTitle) {
                 issues.push(`${relativePath}:${index + 1}: merchant brand in shared runtime source`);
             }
         }

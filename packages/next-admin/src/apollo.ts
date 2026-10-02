@@ -1,4 +1,4 @@
-import { ApolloClient, ApolloLink, InMemoryCache, createHttpLink, gql } from '@apollo/client';
+import { ApolloClient, ApolloLink, InMemoryCache, Observable, createHttpLink, gql } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
@@ -44,7 +44,10 @@ export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
+let channelRevision = 0;
+
 const replaceActiveChannelToken = (channelToken: string | null) => {
+    if (getActiveChannelToken() !== channelToken) channelRevision++;
     if (channelToken?.trim()) {
         sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
     } else {
@@ -73,6 +76,7 @@ const persistAuthToken = (token: string) => {
 };
 
 export const prepareAuthSession = (rememberMe: boolean) => {
+    channelRevision++;
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -81,6 +85,7 @@ export const prepareAuthSession = (rememberMe: boolean) => {
 };
 
 export const clearAuthSession = () => {
+    channelRevision++;
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -89,10 +94,12 @@ export const clearAuthSession = () => {
 };
 
 const vendureFetch: typeof fetch = async (input, init) => {
+    const revision = channelRevision;
     const response = await fetch(input, {
         ...init,
         credentials: 'include',
     });
+    if (revision !== channelRevision) throw new Error('店铺已切换，旧请求结果已取消');
     const authToken = response.headers.get(AUTH_TOKEN_HEADER);
     if (authToken) persistAuthToken(authToken);
     return response;
@@ -138,6 +145,7 @@ export const uploadAdminFiles = async <T>(
             resolution: ['检查文件格式、大小和当前账号权限后重试'],
         },
         async () => {
+            const revision = channelRevision;
             const channelContext = channelRequestContext(
                 options?.channelToken ?? getActiveChannelToken() ?? '',
             );
@@ -162,6 +170,7 @@ export const uploadAdminFiles = async <T>(
                 body: formData,
             });
             const result = (await response.json()) as GraphqlUploadResponse<T>;
+            if (revision !== channelRevision) throw new Error('店铺已切换，旧上传结果已取消');
 
             if (!response.ok || result.errors?.length) {
                 throw new Error(
@@ -193,6 +202,7 @@ export const uploadAdminFile = async <T>(
             resolution: ['检查文件格式、大小和当前账号权限后重试'],
         },
         async () => {
+            const revision = channelRevision;
             const channelContext = channelRequestContext(
                 options?.channelToken ?? getActiveChannelToken() ?? '',
             );
@@ -211,6 +221,7 @@ export const uploadAdminFile = async <T>(
                 body: formData,
             });
             const result = (await response.json()) as GraphqlUploadResponse<T>;
+            if (revision !== channelRevision) throw new Error('店铺已切换，旧上传结果已取消');
             if (!response.ok || result.errors?.length) {
                 throw new Error(
                     result.errors?.map(error => error.message).join('；') ||
@@ -244,8 +255,32 @@ const authLink = setContext((_, { headers }) => {
     };
 });
 
+/** Reject stale responses before Apollo can write normalized entities or root query fields. */
+export const channelScopeResponseLink = new ApolloLink((operation, forward) => {
+    const revision = channelRevision;
+    const activeToken = getActiveChannelToken();
+    return new Observable(observer => {
+        const subscription = forward(operation).subscribe({
+            next(result) {
+                if (revision !== channelRevision || activeToken !== getActiveChannelToken()) {
+                    observer.error(new Error('店铺已切换，旧请求结果已取消'));
+                } else observer.next(result);
+            },
+            error: error => observer.error(error),
+            complete: () => observer.complete(),
+        });
+        return () => subscription.unsubscribe();
+    });
+});
+
 export const client = new ApolloClient({
-    link: ApolloLink.from([authLink, adminMutationFeedbackLink, sensitiveActionPasswordLink, httpLink]),
+    link: ApolloLink.from([
+        authLink,
+        adminMutationFeedbackLink,
+        channelScopeResponseLink,
+        sensitiveActionPasswordLink,
+        httpLink,
+    ]),
     cache: new InMemoryCache({
         possibleTypes: {
             ...CUSTOM_FIELD_POSSIBLE_TYPES,

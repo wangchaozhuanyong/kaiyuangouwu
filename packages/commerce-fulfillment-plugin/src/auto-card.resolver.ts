@@ -10,8 +10,12 @@ import {
     RequestContext,
     Transaction,
 } from '@vendure/core';
+import { managePlatformCatalogPermission } from '@vendure/store-management-plugin';
 
+import { AutoCardSupplyService } from './auto-card-supply.service';
+import { manageAutoCardSecretsPermission, readSoldAutoCardsPermission } from './auto-card.constants';
 import { AutoCardService } from './auto-card.service';
+import { StoreCatalogStatusService } from './store-catalog-status.service';
 import {
     AutoCardDeliveryListOptions,
     AutoCardImportInput,
@@ -21,7 +25,45 @@ import {
 
 @Resolver()
 export class AutoCardAdminResolver {
-    constructor(private readonly autoCardService: AutoCardService) {}
+    constructor(
+        private readonly autoCardService: AutoCardService,
+        private readonly supply: AutoCardSupplyService,
+        private readonly status: StoreCatalogStatusService,
+    ) {}
+
+    @Query()
+    @Allow(Permission.ReadProduct)
+    myAutoCardSupplySummary(@Ctx() ctx: RequestContext, @Args('productVariantId') id: ID) {
+        return this.supply.supplierSummary(ctx, id);
+    }
+
+    @Query()
+    @Allow(Permission.ReadProduct)
+    myStoreCatalogStatus(@Ctx() ctx: RequestContext) {
+        return this.status.summary(ctx);
+    }
+
+    @Query()
+    @Allow(managePlatformCatalogPermission.Permission)
+    platformAutoCardSupplyCatalog(@Ctx() ctx: RequestContext, @Args('productId') id: ID) {
+        return this.supply.catalog(ctx, id);
+    }
+
+    @Mutation()
+    @Transaction()
+    @Allow(managePlatformCatalogPermission.Permission)
+    setPlatformAutoCardSupply(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: Parameters<AutoCardSupplyService['setGrant']>[1],
+    ) {
+        return this.supply.setGrant(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(readSoldAutoCardsPermission.Permission)
+    revealMyOrderAutoCards(@Ctx() ctx: RequestContext, @Args('deliveryId') id: ID) {
+        return this.autoCardService.revealSoldCards(ctx, id);
+    }
 
     @Query()
     @Allow(Permission.ReadProduct)
@@ -72,7 +114,7 @@ export class AutoCardAdminResolver {
     }
 
     @Mutation()
-    @Allow(Permission.UpdateProduct, Permission.UpdateCatalog)
+    @Allow(manageAutoCardSecretsPermission.Permission)
     revealAutoCardPoolItem(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.autoCardService.revealPoolItem(ctx, id);
     }

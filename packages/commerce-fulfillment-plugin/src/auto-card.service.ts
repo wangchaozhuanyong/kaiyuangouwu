@@ -5,12 +5,14 @@ import {
     assertOrderSalesChannel,
     EventBus,
     isGraphQlErrorResult,
+    LanguageCode,
     Logger,
     Order,
     orderItemsAreDelivered,
     orderItemsArePartiallyDelivered,
     OrderLine,
     OrderService,
+    Permission,
     Product,
     ProductVariantService,
     RequestContext,
@@ -19,6 +21,12 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
+import {
+    CatalogGovernanceService,
+    GovernanceService,
+    StorefrontDataChangedEvent,
+} from '@vendure/store-management-plugin';
+import { randomUUID } from 'node:crypto';
 import { In, IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
@@ -33,11 +41,18 @@ import {
     validateAutoCardFields,
 } from './auto-card-format';
 import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
-import { AUTO_CARD_MAX_INSTRUCTIONS_LENGTH, AutoCardDeliveryEventType } from './auto-card.constants';
+import { AutoCardSupplyService } from './auto-card-supply.service';
+import {
+    AUTO_CARD_MAX_INSTRUCTIONS_LENGTH,
+    AutoCardDeliveryEventType,
+    manageAutoCardSecretsPermission,
+    readSoldAutoCardsPermission,
+} from './auto-card.constants';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+import { AutoCardSupplyGrant, AutoCardSupplySnapshot } from './entities/auto-card-supply-grant.entity';
 import { isAutoCardOrderLine } from './fulfillment-classification';
 import { orderLineProductName } from './order-line-snapshot';
 import {
@@ -102,6 +117,9 @@ export class AutoCardService {
         private readonly orderService: OrderService,
         private readonly requestContextService: RequestContextService,
         private readonly contentTranslations: ContentTranslationService,
+        private readonly supply: AutoCardSupplyService,
+        private readonly governance: CatalogGovernanceService,
+        private readonly audit: GovernanceService,
     ) {}
 
     async configForVariant(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfigView | null> {
@@ -110,7 +128,8 @@ export class AutoCardService {
     }
 
     async availableStockForVariant(ctx: RequestContext, productVariantId: ID): Promise<number | null> {
-        const config = await this.findConfig(ctx, productVariantId);
+        const source = await this.supply.resolve(ctx, productVariantId);
+        const config = source?.config;
         if (!config?.enabled) return null;
         return this.connection.getRepository(ctx, AutoCardPoolItem).count({
             where: { configId: config.id, state: 'AVAILABLE' },
@@ -144,6 +163,7 @@ export class AutoCardService {
         const product = await this.connection.getRepository(ctx, Product).findOne({
             where: { id: variant.productId },
         });
+        await this.governance.assertOwned(ctx, 'Product', variant.productId);
         if (product?.customFields?.fulfillmentType !== 'digital') {
             throw new UserInputError('只有虚拟商品 SKU 才能启用号池自动发卡');
         }
@@ -224,6 +244,7 @@ export class AutoCardService {
             productVariantId: variant.id,
         };
         config = await repository.save(config ? Object.assign(config, values) : new AutoCardConfig(values));
+        await this.publishSupplyStockChange(ctx, config.id, config.productVariantId);
         await this.contentTranslations.recordPreparedFields(
             ctx,
             {
@@ -248,6 +269,7 @@ export class AutoCardService {
         ]);
         if (config.enabled) {
             await this.reconcileVariant(ctx, config.productVariantId);
+            await this.publishSupplyStockChange(ctx, config.id, config.productVariantId);
         }
         return this.configView(ctx, config);
     }
@@ -330,6 +352,7 @@ export class AutoCardService {
         }
 
         await this.reconcileVariant(ctx, config.productVariantId);
+        await this.publishSupplyStockChange(ctx, config.id, config.productVariantId);
         return {
             importedCount: items.length,
             duplicateCount,
@@ -360,6 +383,9 @@ export class AutoCardService {
         return {
             items: items.map(item =>
                 Object.assign(item, {
+                    ...(item.delivery && String(item.delivery.channelId) !== String(ctx.channelId)
+                        ? { delivery: null, deliveryId: null }
+                        : {}),
                     maskedFields: maskAutoCardValues(this.cipher.decrypt(item.encryptedPayload), fields),
                 }),
             ),
@@ -367,8 +393,50 @@ export class AutoCardService {
         };
     }
 
+    async revealSoldCards(ctx: RequestContext, id: ID): Promise<AutoCardDisplayField[][]> {
+        if (
+            !ctx.activeUserId ||
+            !ctx.userHasPermissions([readSoldAutoCardsPermission.Permission, Permission.SuperAdmin])
+        )
+            throw new UserInputError('需要本单卡密查看专用权限');
+        const delivery = await this.deliveryOrThrow(ctx, id);
+        await this.audit.appendAudit(ctx, {
+            eventType: 'AUTO_CARD_SOLD_SECRET_REVEALED',
+            resourceType: 'AutoCardDelivery',
+            resourceId: String(delivery.id),
+            actorType: 'ADMIN',
+            actorUserId: String(ctx.activeUserId),
+            actorLabel: String(ctx.activeUserId),
+            reason: '查看本店订单已分配卡密',
+            payload: { orderId: String(delivery.orderId), quantity: delivery.poolItems.length },
+            idempotencyKey: randomUUID(),
+        });
+        await this.addEvent(ctx, delivery, 'SECRET_REVEALED', '经专用权限查看本店订单已分配卡密', 'ADMIN');
+        const fields = parseAutoCardFieldsJson(delivery.schemaSnapshot);
+        return delivery.poolItems.map(item => {
+            const values = this.cipher.decrypt(item.encryptedPayload);
+            return fields.map(field => ({ ...field, value: values[field.key] ?? '' }));
+        });
+    }
+
     async revealPoolItem(ctx: RequestContext, id: ID): Promise<AutoCardDisplayField[]> {
+        if (
+            !ctx.activeUserId ||
+            !ctx.userHasPermissions([manageAutoCardSecretsPermission.Permission, Permission.SuperAdmin])
+        )
+            throw new UserInputError('需要卡池明文查看专用权限');
         const item = await this.ownedPoolItemOrThrow(ctx, id);
+        await this.audit.appendAudit(ctx, {
+            eventType: 'AUTO_CARD_POOL_SECRET_REVEALED',
+            resourceType: 'AutoCardPoolItem',
+            resourceId: String(item.id),
+            actorType: 'ADMIN',
+            actorUserId: String(ctx.activeUserId),
+            actorLabel: String(ctx.activeUserId),
+            reason: '查看维护店铺卡池卡密',
+            payload: { configId: String(item.configId) },
+            idempotencyKey: randomUUID(),
+        });
         const fields = parseAutoCardFieldsJson(item.config.fieldsJson);
         const values = this.cipher.decrypt(item.encryptedPayload);
         return fields.map(field => ({ ...field, value: values[field.key] ?? '' }));
@@ -390,6 +458,7 @@ export class AutoCardService {
         if (enabled) {
             await this.reconcileVariant(ctx, item.config.productVariantId);
         }
+        await this.publishSupplyStockChange(ctx, item.configId, item.config.productVariantId);
         const fields = parseAutoCardFieldsJson(item.config.fieldsJson);
         return Object.assign(saved, {
             maskedFields: maskAutoCardValues(this.cipher.decrypt(saved.encryptedPayload), fields),
@@ -456,7 +525,7 @@ export class AutoCardService {
         };
     }
 
-    async availabilityError(ctx: RequestContext, order: Pick<Order, 'lines'>): Promise<string | undefined> {
+    async availabilityError(ctx: RequestContext, order: Order): Promise<string | undefined> {
         const requiredByVariant = new Map<string, { variantId: ID; name: string; quantity: number }>();
         for (const line of order.lines.filter(isAutoCardOrderLine)) {
             const key = String(line.productVariant.id);
@@ -468,7 +537,7 @@ export class AutoCardService {
             });
         }
         for (const required of requiredByVariant.values()) {
-            const config = await this.findConfig(ctx, required.variantId);
+            const config = (await this.supply.resolve(ctx, required.variantId))?.config;
             if (!config?.enabled) {
                 return `虚拟商品“${required.name}”的自动发卡未启用`;
             }
@@ -479,6 +548,10 @@ export class AutoCardService {
                 return `虚拟商品“${required.name}”号池库存不足，当前可用 ${available} 份`;
             }
         }
+        for (const line of order.lines.filter(isAutoCardOrderLine)) {
+            if (!(await this.supply.snapshotForPayment(ctx, order, line)))
+                return '销售或供货授权已变化，请重新确认';
+        }
     }
 
     async allocateSettledOrder(ctx: RequestContext, order: Order): Promise<AutoCardDelivery[]> {
@@ -486,6 +559,7 @@ export class AutoCardService {
             return [];
         }
         assertOrderSalesChannel(ctx, order);
+        if (!order.lines.some(isAutoCardOrderLine)) return [];
         const recipientEmail =
             order.customFields?.deliveryEmail?.trim() || order.customer?.emailAddress?.trim();
         if (!recipientEmail) {
@@ -493,9 +567,31 @@ export class AutoCardService {
         }
         const deliveries: AutoCardDelivery[] = [];
         for (const line of order.lines.filter(isAutoCardOrderLine)) {
+            const source = await this.supply.forPaidLine(ctx, order, line);
+            if (source?.config && ['mysql', 'mariadb'].includes(this.connection.rawConnection.options.type)) {
+                // Lock the common pool before delivery-index gaps, so A/B orders acquire locks in one order.
+                await this.connection
+                    .getRepository(ctx, AutoCardConfig)
+                    .findOne({ where: { id: source.config.id }, lock: { mode: 'pessimistic_write' } });
+            }
+            // Serialize duplicate paid events on the line and use a current locking read under MySQL REPEATABLE READ.
+            try {
+                await this.connection.getRepository(ctx, OrderLine).findOne({
+                    where: { id: line.id },
+                    loadEagerRelations: false,
+                    lock: { mode: 'pessimistic_write' },
+                });
+            } catch (error) {
+                if (!isLockNotSupportedError(error)) throw error;
+            }
+
             const existing = await this.connection.getRepository(ctx, AutoCardDelivery).findOne({
                 where: { orderLineId: line.id },
                 relations: { poolItems: true, config: true, order: true },
+                ...(this.connection.rawConnection.options.type === 'mysql' ||
+                this.connection.rawConnection.options.type === 'mariadb'
+                    ? { lock: { mode: 'pessimistic_write' as const }, relationLoadStrategy: 'join' as const }
+                    : {}),
             });
             if (existing) {
                 this.assertDeliveryScope(ctx, existing);
@@ -508,13 +604,20 @@ export class AutoCardService {
                 }
                 continue;
             }
-            const config = await this.findConfig(ctx, line.productVariant.id);
+            const config = source?.config;
             if (!config) {
                 throw new Error(`SKU ${line.productVariant.sku} 未配置自动发卡`);
             }
             let delivery: AutoCardDelivery;
             try {
-                delivery = await this.createAndAllocate(ctx, order, line, config, recipientEmail);
+                delivery = await this.createAndAllocate(
+                    ctx,
+                    order,
+                    line,
+                    config,
+                    recipientEmail,
+                    source?.snapshot ?? null,
+                );
             } catch (error) {
                 const concurrentDelivery = await this.connection
                     .getRepository(ctx, AutoCardDelivery)
@@ -585,7 +688,18 @@ export class AutoCardService {
         success: boolean,
         error?: Error,
     ): Promise<void> {
-        const delivery = await this.deliveryOrThrow(ctx, deliveryId);
+        return this.connection.withTransaction(ctx, tx =>
+            this.recordEmailResultInTransaction(tx, deliveryId, success, error),
+        );
+    }
+
+    private async recordEmailResultInTransaction(
+        ctx: RequestContext,
+        deliveryId: ID,
+        success: boolean,
+        error?: Error,
+    ): Promise<void> {
+        const delivery = await this.lockDeliveryOrThrow(ctx, deliveryId);
         const wasManualReview = delivery.state === 'MANUAL_REVIEW';
         if (!success && delivery.state === 'SENT') {
             await this.addEvent(ctx, delivery, 'EMAIL_FAILED', '重复投递失败，原发卡成功状态保持不变');
@@ -675,24 +789,26 @@ export class AutoCardService {
                 channelOrToken: item.channel,
             });
             try {
-                this.assertDeliveryScope(ctx, item);
-                let delivery = item;
-                if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
-                    await this.completeFulfillment(ctx, delivery);
-                    completedFulfillments++;
-                    continue;
-                }
-                if (delivery.state === 'WAITING_STOCK') {
-                    delivery = await this.allocateExistingDelivery(ctx, delivery);
-                    if (delivery.state === 'ALLOCATED') allocated++;
-                }
-                const stale =
-                    !delivery.lastDispatchedAt ||
-                    Date.now() - delivery.lastDispatchedAt.getTime() > 15 * 60_000;
-                if (['ALLOCATED', 'RETRYING'].includes(delivery.state) && stale) {
-                    await this.dispatch(ctx, delivery, 'EMAIL_QUEUED', '定时检查重新投递发卡邮件');
-                    redispatched++;
-                }
+                await this.connection.withTransaction(ctx, async tx => {
+                    let delivery = await this.lockDeliveryOrThrow(tx, item.id);
+                    if (delivery.order.state === 'Cancelled') return;
+                    if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
+                        await this.completeFulfillment(tx, delivery);
+                        completedFulfillments++;
+                        return;
+                    }
+                    if (delivery.state === 'WAITING_STOCK') {
+                        delivery = await this.allocateExistingDelivery(tx, delivery);
+                        if (delivery.state === 'ALLOCATED') allocated++;
+                    }
+                    const stale =
+                        !delivery.lastDispatchedAt ||
+                        Date.now() - delivery.lastDispatchedAt.getTime() > 15 * 60_000;
+                    if (['ALLOCATED', 'RETRYING'].includes(delivery.state) && stale) {
+                        await this.dispatch(tx, delivery, 'EMAIL_QUEUED', '定时检查重新投递发卡邮件');
+                        redispatched++;
+                    }
+                });
             } catch (error) {
                 Logger.error(error instanceof Error ? error.message : String(error), loggerCtx);
             }
@@ -700,17 +816,47 @@ export class AutoCardService {
         return { allocated, redispatched, completedFulfillments };
     }
 
+    private async publishSupplyStockChange(ctx: RequestContext, configId: ID, variantId: ID) {
+        const grants = await this.connection
+            .getRepository(ctx, AutoCardSupplyGrant)
+            .find({ where: { configId, enabled: true } });
+        await this.eventBus.publish(
+            new StorefrontDataChangedEvent(ctx, ['catalog'], {
+                channelIds: [
+                    (
+                        await this.connection
+                            .getRepository(ctx, AutoCardConfig)
+                            .findOneOrFail({ where: { id: configId } })
+                    ).channelId,
+                    ...grants.map(g => g.channelId),
+                ],
+                entityType: 'ProductVariant',
+                entityIds: [variantId],
+            }),
+        );
+    }
+
     private async reconcileVariant(ctx: RequestContext, productVariantId: ID): Promise<void> {
         const waiting = await this.connection.getRepository(ctx, AutoCardDelivery).find({
-            where: { channelId: ctx.channelId, state: 'WAITING_STOCK', config: { productVariantId } },
-            relations: { config: true, order: true, orderLine: { productVariant: true }, poolItems: true },
+            where: { state: 'WAITING_STOCK', config: { productVariantId, channelId: ctx.channelId } },
+            relations: {
+                channel: true,
+                config: true,
+                order: true,
+                orderLine: { productVariant: true },
+                poolItems: true,
+            },
             order: { createdAt: 'ASC' },
             take: 100,
         });
         for (const delivery of waiting) {
-            const allocated = await this.allocateExistingDelivery(ctx, delivery);
+            const salesCtx = ctx.copy({
+                channel: delivery.channel,
+                currencyCode: delivery.channel.defaultCurrencyCode,
+            });
+            const allocated = await this.allocateExistingDelivery(salesCtx, delivery);
             if (allocated.state === 'ALLOCATED') {
-                await this.dispatch(ctx, allocated, 'EMAIL_QUEUED', '补货后自动恢复发卡');
+                await this.dispatch(salesCtx, allocated, 'EMAIL_QUEUED', '补货后自动恢复发卡');
             }
         }
     }
@@ -721,10 +867,14 @@ export class AutoCardService {
         line: OrderLine,
         config: AutoCardConfig,
         recipientEmail: string,
+        supplySnapshot: AutoCardSupplySnapshot | null = null,
     ): Promise<AutoCardDelivery> {
         const delivery = await this.connection.getRepository(ctx, AutoCardDelivery).save(
             new AutoCardDelivery({
                 state: 'WAITING_STOCK',
+                sourceChannelId: config.channelId,
+                supplyGrantId: supplySnapshot?.grantId ?? null,
+                supplyGrantVersion: supplySnapshot?.grantVersion ?? null,
                 recipientEmail,
                 languageCode: String(ctx.languageCode),
                 productName: orderLineProductName(ctx, line),
@@ -756,7 +906,7 @@ export class AutoCardService {
         ctx: RequestContext,
         input: AutoCardDelivery,
     ): Promise<AutoCardDelivery> {
-        const delivery = await this.deliveryOrThrow(ctx, input.id);
+        const delivery = await this.lockDeliveryOrThrow(ctx, input.id);
         if (delivery.poolItems.length === delivery.quantity) {
             if (delivery.state !== 'SENT') {
                 delivery.state = 'ALLOCATED';
@@ -833,6 +983,7 @@ export class AutoCardService {
         ];
         await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
         await this.addEvent(ctx, delivery, 'ALLOCATED', `已按号池顺序分配 ${delivery.quantity} 份卡密`);
+        await this.publishSupplyStockChange(ctx, delivery.configId, delivery.config.productVariantId);
         if (wasWaitingForStock) await this.resolveStockShortage(ctx, delivery);
         return delivery;
     }
@@ -847,7 +998,12 @@ export class AutoCardService {
         delivery.lastDispatchedAt = new Date();
         await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
         await this.addEvent(ctx, delivery, eventType, note);
-        await this.eventBus.publish(new AutoCardDeliveryReadyEvent(ctx, String(delivery.id)));
+        await this.eventBus.publish(
+            new AutoCardDeliveryReadyEvent(
+                ctx.copy({ languageCode: delivery.languageCode as LanguageCode }),
+                String(delivery.id),
+            ),
+        );
     }
 
     private async completeFulfillment(ctx: RequestContext, delivery: AutoCardDelivery): Promise<void> {
@@ -971,7 +1127,10 @@ export class AutoCardService {
             String(delivery.order.id) !== String(delivery.orderId) ||
             String(delivery.channelId) !== String(ctx.channelId) ||
             !delivery.config ||
-            String(delivery.config.channelId) !== String(ctx.channelId)
+            (String(delivery.config.channelId) !== String(ctx.channelId) &&
+                (!delivery.supplyGrantId ||
+                    !delivery.supplyGrantVersion ||
+                    String(delivery.sourceChannelId) !== String(delivery.config.channelId)))
         ) {
             throw new UserInputError('发卡任务归属不一致，请核查');
         }

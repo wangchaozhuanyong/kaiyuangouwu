@@ -7,6 +7,7 @@
 <mj-section background-color="#ffffff" padding="12px 28px">
     <mj-column>
         <mj-text padding="0 0 8px">{{#if isChinese}}您好：{{else}}Hello,{{/if}}</mj-text>
+        <mj-text><a href="{{ storefrontUrl }}/orders">{{#if isChinese}}查看本店订单{{else}}View your store order{{/if}}</a></mj-text>
         <mj-text padding="0">
             {{#if isChinese}}
                 订单 {{ orderCode }} 中的虚拟商品已完成自动发货。请妥善保管下方账号与卡密信息。

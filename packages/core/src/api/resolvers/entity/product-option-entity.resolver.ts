@@ -36,6 +36,12 @@ export class ProductOptionEntityResolver {
         @Ctx() ctx: RequestContext,
         @Parent() option: Translated<ProductOption>,
     ): Promise<ProductOptionGroup> {
+        const productId = (option as ProductOption & { authorizedProductId?: string }).authorizedProductId;
+        if (productId) {
+            const groups = await this.productOptionGroupService.getOptionGroupsByProductId(ctx, productId);
+            const group = groups.find(g => g.options.some(o => String(o.id) === String(option.id)));
+            if (group) return group;
+        }
         if (option.group) {
             return option.group;
         }

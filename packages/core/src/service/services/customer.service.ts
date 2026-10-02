@@ -26,7 +26,7 @@ import { IsNull } from 'typeorm';
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { ErrorResultUnion, isGraphQlErrorResult } from '../../common/error/error-result';
-import { EntityNotFoundError, InternalServerError } from '../../common/error/errors';
+import { EntityNotFoundError, InternalServerError, UserInputError } from '../../common/error/errors';
 import { EmailAddressConflictError as EmailAddressConflictAdminError } from '../../common/error/generated-graphql-admin-errors';
 import {
     EmailAddressConflictError,
@@ -330,6 +330,16 @@ export class CustomerService {
         return this.connection.withTransaction(ctx, txCtx => this.updateInTransaction(txCtx, input));
     }
 
+    private assertGlobalCustomerWrite(ctx: RequestContext, customer: Customer): void {
+        if (!this.connection.platformStoreGovernanceEnabled) return;
+        if (ctx.apiType === 'admin' && !isPlatformAdminContext(ctx))
+            throw new UserInputError(
+                '共享客户账号资料与地址由客户本人或平台管理中心维护；本店请使用客户运营资料',
+            );
+        if (ctx.apiType === 'shop' && customer.user && !idsAreEqual(customer.user.id, ctx.activeUserId ?? ''))
+            throw new UserInputError('只能修改本人账号资料与地址');
+    }
+
     private async updateInTransaction(
         ctx: RequestContext,
         input: UpdateCustomerInput | (UpdateCustomerShopInput & { id: ID }),
@@ -340,6 +350,8 @@ export class CustomerService {
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, input.id, {
             channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
+
+        this.assertGlobalCustomerWrite(ctx, customer);
 
         if (hasEmailAddress(input)) {
             input.emailAddress = normalizeEmailAddress(input.emailAddress);
@@ -738,6 +750,13 @@ export class CustomerService {
                 // It is not permitted to modify an existing *registered* Customer
                 return new EmailAddressConflictError();
             }
+            if (
+                this.connection.platformStoreGovernanceEnabled &&
+                existing.user &&
+                !idsAreEqual(existing.user.id, ctx.activeUserId ?? '')
+            )
+                return existing;
+            if (ctx.apiType === 'admin') this.assertGlobalCustomerWrite(ctx, existing);
             customer = patchEntity(existing, input);
         } else {
             customer = await this.connection.getRepository(ctx, Customer).save(new Customer(input));
@@ -758,6 +777,7 @@ export class CustomerService {
             channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
 
+        this.assertGlobalCustomerWrite(ctx, customer);
         const country = await this.countryService.findOneByCode(ctx, input.countryCode);
         const address = new Address({
             ...input,
@@ -789,6 +809,7 @@ export class CustomerService {
             address.customer.id,
             ctx.channelId,
         );
+        this.assertGlobalCustomerWrite(ctx, address.customer);
         if (!customer) {
             throw new EntityNotFoundError('Address', input.id);
         }
@@ -826,6 +847,7 @@ export class CustomerService {
             address.customer.id,
             ctx.channelId,
         );
+        this.assertGlobalCustomerWrite(ctx, address.customer);
         if (!customer) {
             throw new EntityNotFoundError('Address', id);
         }
@@ -850,6 +872,7 @@ export class CustomerService {
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, customerId, {
             channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
+        this.assertGlobalCustomerWrite(ctx, customer);
         await this.connection
             .getRepository(ctx, Customer)
             .update({ id: customerId }, { deletedAt: new Date() });

@@ -30,7 +30,8 @@ function run(command, cwd = process.cwd(), environment = {}) {
     const result = spawnSync(command[0], command.slice(1), {
         cwd,
         stdio: 'inherit',
-        env: { ...process.env, ...environment },
+        // A nested Git worktree must build its own workspace, even when installed Nx resolves a parent root.
+        env: { ...process.env, NX_WORKSPACE_ROOT_PATH: process.cwd(), ...environment },
     });
     if (result.error) throw result.error;
     assert.equal(result.status, 0, `Failed: ${command.join(' ')}`);

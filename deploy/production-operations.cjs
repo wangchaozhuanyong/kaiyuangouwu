@@ -135,6 +135,7 @@ function validateRequest(environment) {
             'verify-security-dependencies',
             'inspect-storefront-config',
             'audit-store-isolation-data',
+            'plan-platform-store-governance',
             'audit-administrator-product-readiness',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -196,6 +197,7 @@ function validateRequest(environment) {
         [
             'backup-database',
             'audit-store-isolation-data',
+            'plan-platform-store-governance',
             'audit-administrator-product-readiness',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -2096,7 +2098,12 @@ function runStoreIsolationAudit(
                 },
             },
         );
-        assert.equal(result.status, 0, 'The fixed read-only store isolation audit failed');
+        if (result.status !== 0) {
+            const safeFailure = String(result.stderr || '').split(/\r?\n/u).find(line =>
+                /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+            );
+            throw new Error(`The fixed read-only store isolation audit failed${safeFailure ? ` (${safeFailure})` : ''}`);
+        }
         payload = validateStoreAutonomyAuditPayload(String(result.stdout || '').trim());
     } catch (error) {
         auditError = error;
@@ -2126,6 +2133,55 @@ function runStoreIsolationAudit(
         migrationState,
         audit: payload,
     };
+}
+
+function runPlatformGovernanceDataPreflight(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        spawn = spawnSync,
+        health = productionHealthSnapshot,
+        script = path.join(__dirname, 'repository', 'packages', 'dev-server', 'scripts', 'platform-governance-data-preflight.mjs'),
+    } = {},
+) {
+    assert.equal(request.operation, 'plan-platform-store-governance');
+    const before = inspect();
+    assert.equal(before.markerSha, request.expectedRuntimeSha, 'Production runtime SHA changed or was not reviewed');
+    assertProductionHealthSnapshot(health(), 'before');
+    let payload;
+    let auditError;
+    try {
+        const result = spawn('/usr/bin/node', ['--env-file=' + PRODUCTION_ENVIRONMENT_FILE, script], {
+            encoding: 'utf8', timeout: 540000, maxBuffer: 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
+        });
+        if (result.status !== 0) {
+            const safeFailure = String(result.stderr || '').split(/\r?\n/u).find(line =>
+                /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+            );
+            throw new Error(`The fixed platform governance data preflight failed${safeFailure ? ` (${safeFailure})` : ''}`);
+        }
+        try { payload = JSON.parse(String(result.stdout || '')); }
+        catch { throw new Error('Platform governance preflight returned invalid JSON'); }
+        assert.equal(payload.schema, 'vendure-platform-governance-production-preflight-v1');
+        assert.equal(payload.mode, 'READ_ONLY');
+        assert.equal(payload.productionApply, false);
+        assert.match(payload.snapshotHash, /^[a-f0-9]{64}$/u);
+        assert.ok(['resourceCount', 'unresolvedResourceCount', 'paymentMethodCount', 'enabledStoreSwitchCount']
+            .every(key => Number.isSafeInteger(payload[key]) && payload[key] >= 0));
+        assert.ok(typeof payload.compressedPlan === 'string' && payload.compressedPlan.length <= 18000);
+        assert.match(payload.compressedPlan, /^[A-Za-z0-9+/]+={0,2}$/u);
+        assert.deepEqual(Object.keys(payload).sort(), [
+            'schema', 'mode', 'productionApply', 'snapshotHash', 'resourceCount',
+            'unresolvedResourceCount', 'paymentMethodCount', 'enabledStoreSwitchCount', 'compressedPlan',
+        ].sort());
+    } catch (error) { auditError = error; }
+    // Always verify the runtime and health after a failed read as well.
+    assert.deepEqual(inspect(), before, 'Production release state changed during the governance preflight');
+    assertProductionHealthSnapshot(health(), 'after');
+    if (auditError) throw auditError;
+    return { sourceSha: request.sourceSha, runtimeSha: before.markerSha, audit: payload };
 }
 
 function runAdministratorProductReadinessAudit(
@@ -2516,6 +2572,12 @@ function runLocked(environment = process.env) {
         process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
         return;
     }
+    if (request.operation === 'plan-platform-store-governance') {
+        const result = runPlatformGovernanceDataPreflight(request);
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-platform-store-governance\n');
+        return;
+    }
     if (request.operation === 'audit-store-isolation-data') {
         const result = runStoreIsolationAudit(request);
         process.stdout.write(
@@ -2768,6 +2830,7 @@ module.exports = {
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
+    runPlatformGovernanceDataPreflight,
     runAdministratorProductReadinessAudit,
     runDatabaseBackup,
     runOrderSalesOwnershipBackfill,

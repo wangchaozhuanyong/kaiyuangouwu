@@ -36,6 +36,7 @@ import { EventBus } from '../../event-bus/event-bus';
 import { ProductChannelEvent } from '../../event-bus/events/product-channel-event';
 import { ProductEvent } from '../../event-bus/events/product-event';
 import { ProductOptionGroupChangeEvent } from '../../event-bus/events/product-option-group-change-event';
+import { assertCatalogProductMaintainer } from '../helpers/catalog-ownership';
 import { catalogReadChannelId } from '../helpers/catalog-read-scope';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
@@ -276,6 +277,7 @@ export class ProductService {
     }
 
     async update(ctx: RequestContext, input: UpdateProductInput): Promise<Translated<Product>> {
+        await assertCatalogProductMaintainer(this.connection, ctx, input.id);
         await this.lockProductForUpdate(ctx, input.id);
         const product = await this.connection.getEntityOrThrow(ctx, Product, input.id, {
             channelId: ctx.channelId,
@@ -335,6 +337,7 @@ export class ProductService {
     }
 
     async softDelete(ctx: RequestContext, productId: ID): Promise<DeletionResponse> {
+        await assertCatalogProductMaintainer(this.connection, ctx, productId);
         const product = await this.connection.getEntityOrThrow(ctx, Product, productId, {
             relationLoadStrategy: 'query',
             loadEagerRelations: false,
@@ -494,6 +497,7 @@ export class ProductService {
         optionGroupId: ID,
         expectedUpdatedAt?: Date | string | null,
     ): Promise<Translated<Product>> {
+        await assertCatalogProductMaintainer(this.connection, ctx, productId);
         await this.lockProductForUpdate(ctx, productId);
         const product = await this.getProductWithOptionGroups(ctx, productId);
         if (expectedUpdatedAt != null) {
@@ -534,6 +538,7 @@ export class ProductService {
             throw new UserInputError('要移除的商品规格组包含重复项');
         }
 
+        await assertCatalogProductMaintainer(this.connection, ctx, productId);
         await this.lockProductForUpdate(ctx, productId);
         const product = await this.getProductWithOptionGroups(ctx, productId);
         this.assertExpectedUpdatedAt(product.updatedAt, expectedUpdatedAt);

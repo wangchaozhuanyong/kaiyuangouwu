@@ -84,6 +84,11 @@ export class TransactionalConnection {
      * performed with this connection will not be performed within any outer
      * transactions.
      */
+    /** Project governance is enabled by the configured store access strategy, including worker contexts. */
+    get platformStoreGovernanceEnabled(): boolean {
+        return this.configService.authOptions.entityAccessControlStrategy.platformStoreGovernance === true;
+    }
+
     get rawConnection(): DataSource {
         return this.dataSource;
     }

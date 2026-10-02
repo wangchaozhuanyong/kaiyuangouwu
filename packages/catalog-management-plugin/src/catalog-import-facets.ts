@@ -62,6 +62,7 @@ async function ensureFacetValue(
     value: string,
     isPrivate = false,
 ): Promise<ID> {
+    facetCode = `${facetCode}-store-${ctx.channelId}`;
     let facet = await services.facetService.findByCode(ctx, facetCode, ctx.languageCode);
     if (!facet) {
         facet = await services.facetService.create(ctx, {
@@ -71,7 +72,7 @@ async function ensureFacetValue(
         });
     }
     const existing = await services.connection.getRepository(ctx, FacetValue).find({
-        where: { facet: { id: facet.id } },
+        where: { facet: { id: facet.id }, channels: { id: ctx.channelId } },
         relations: ['translations'],
     });
     const match = existing.find(item =>

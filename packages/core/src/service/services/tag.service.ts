@@ -84,13 +84,24 @@ export class TagService {
         return tags;
     }
 
-    getTagsForEntity(ctx: RequestContext, entity: Type<VendureEntity & Taggable>, id: ID): Promise<Tag[]> {
-        return this.connection
+    async getTagsForEntity(
+        ctx: RequestContext,
+        entity: Type<VendureEntity & Taggable>,
+        id: ID,
+    ): Promise<Tag[]> {
+        const tags = await this.connection
             .getRepository(ctx, entity)
             .createQueryBuilder()
             .relation(entity, 'tags')
             .of(id)
-            .loadMany();
+            .loadMany<Tag>();
+        if (!tags.length) return [];
+        return (
+            await this.findAll(ctx, {
+                filter: { id: { in: tags.map(tag => String(tag.id)) } },
+                take: tags.length,
+            })
+        ).items;
     }
 
     private async tagValueToTag(ctx: RequestContext, value: string): Promise<Tag> {
@@ -104,7 +115,9 @@ export class TagService {
         if (existing) {
             return existing;
         }
-        return await this.connection.getRepository(ctx, Tag).save(new Tag({ value }));
+        return await this.connection
+            .getRepository(ctx, Tag)
+            .save(new Tag({ value, ownerChannelId: ctx.channelId }));
     }
 
     private scopeToChannel<T extends { andWhere: (...args: any[]) => T }>(
@@ -132,7 +145,7 @@ export class TagService {
             .where('linkedTag.id = tag.id')
             .getQuery();
         return {
-            sql: `(tag.id IN (${currentChannelSubquery}) OR NOT EXISTS (${anyAssetSubquery}))`,
+            sql: `(tag.ownerChannelId = :tagChannelId OR (tag.ownerChannelId IS NULL AND tag.id IN (${currentChannelSubquery}) AND EXISTS (${anyAssetSubquery})))`,
             parameters: { tagChannelId: ctx.channelId },
         };
     }

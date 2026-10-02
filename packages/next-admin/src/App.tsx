@@ -298,10 +298,11 @@ function AppRoutes() {
                 <Route path="profile" element={<ProfileModule />} />
 
                 {/* 2. 🛍️ 商品管理 */}
+                <Route path="platform/catalog" element={<StoreAllocationMatrixModule />} />
                 <Route path="catalog">
                     <Route index element={<Navigate to="list" replace />} />
                     <Route path="list" element={<CatalogModule />} />
-                    <Route path="allocation" element={<StoreAllocationMatrixModule />} />
+                    <Route path="allocation" element={<Navigate to="/catalog/list" replace />} />
                     <Route path="products/new" element={<ProductEditor />} />
                     <Route path="products/:id" element={<ProductEditor />} />
                     <Route path="categories" element={<CategoriesModule />} />

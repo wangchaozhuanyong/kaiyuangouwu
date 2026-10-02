@@ -178,6 +178,7 @@ const autoCardAdminTypes = gql`
         EMAIL_FAILED
         EMAIL_SENT
         MANUAL_RETRY
+        SECRET_REVEALED
         MANUAL_REVIEW
     }
 
@@ -410,6 +411,7 @@ const manualDeliveryAdminTypes = gql`
         EMAIL_FAILED
         AUTO_RETRY
         MANUAL_RETRY
+        SECRET_REVEALED
         MANUAL_REVIEW
         CANCELLED
     }
@@ -874,5 +876,22 @@ export const adminApiExtensions = gql`
         retryAutoCardDelivery(id: ID!): AutoCardDelivery!
         updateProductPackaging(input: UpdateProductPackagingInput!): ProductPackagingRule!
         updateFulfillmentDelivery(input: UpdateFulfillmentDeliveryInput!): FulfillmentDeliveryRecord!
+    }
+
+    input PlatformAutoCardSupplyInput {
+        channelId: ID!
+        productVariantId: ID!
+        configId: ID!
+        enabled: Boolean!
+        version: Int!
+    }
+    extend type Mutation {
+        setPlatformAutoCardSupply(input: PlatformAutoCardSupplyInput!): JSON!
+        revealMyOrderAutoCards(deliveryId: ID!): [[AutoCardField!]!]!
+    }
+    extend type Query {
+        platformAutoCardSupplyCatalog(productId: ID!): JSON!
+        myStoreCatalogStatus: JSON!
+        myAutoCardSupplySummary(productVariantId: ID!): JSON!
     }
 `;

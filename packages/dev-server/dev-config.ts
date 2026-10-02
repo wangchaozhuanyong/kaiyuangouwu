@@ -395,6 +395,9 @@ async function storefrontUrlForChannel(
     const primaryDomain = await connection.getRepository(ctx, StoreDomain).findOne({
         where: { channelId: ctx.channelId, isPrimary: true, status: 'ACTIVE' },
     });
+    if (!primaryDomain && IS_PRODUCTION && ctx.channel.code !== '__default_channel__') {
+        throw new Error('Selling store primary domain is not configured for email links');
+    }
     return primaryDomain ? `https://${primaryDomain.domain}` : storefrontFallbackUrl;
 }
 
@@ -403,6 +406,7 @@ async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAd
     return {
         ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields),
         fromAddress,
+        storefrontUrl,
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
         verifyEmailAddressUrl: `${storefrontUrl}/promo/account-entry?route=verify-account`,
         passwordResetUrl: `${storefrontUrl}/promo/account-entry?route=reset-password`,

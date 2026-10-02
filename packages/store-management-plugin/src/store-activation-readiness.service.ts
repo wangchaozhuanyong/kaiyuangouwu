@@ -5,6 +5,7 @@ import {
     ConfigService,
     ID,
     PaymentMethod,
+    PaymentMethodService,
     ProductVariant,
     RequestContext,
     ShippingMethod,
@@ -162,6 +163,7 @@ export class StoreActivationReadinessService {
         private readonly connection: TransactionalConnection,
         private readonly configService: ConfigService,
         private readonly currencySettings: StoreCurrencySettingsService,
+        private readonly paymentMethodService: PaymentMethodService,
     ) {}
 
     async get(ctx: RequestContext, profile: StoreProfile): Promise<StoreActivationReadiness> {
@@ -201,10 +203,7 @@ export class StoreActivationReadinessService {
                 where: { channelId: profile.channelId, enabled: true },
                 relations: { items: { translations: true } },
             }),
-            this.connection.getRepository(ctx, PaymentMethod).find({
-                where: { enabled: true, channels: { id: profile.channelId } },
-                relations: { channels: true, translations: true },
-            }),
+            this.paymentMethodService.getActivePaymentMethods(ctx.copy({ channel })),
             this.connection.getRepository(ctx, ShippingMethod).find({
                 where: { channels: { id: profile.channelId }, deletedAt: IsNull() },
                 relations: { channels: true },

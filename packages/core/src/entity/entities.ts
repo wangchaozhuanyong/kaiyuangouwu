@@ -1,3 +1,5 @@
+import { CatalogResourceOwnership } from './catalog-governance/catalog-resource-ownership.entity';
+import { ProductSalesAuthorization } from './catalog-governance/product-sales-authorization.entity';
 /* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { Address } from './address/address.entity';
 import { Administrator } from './administrator/administrator.entity';
@@ -33,6 +35,7 @@ import { OrderModification } from './order-modification/order-modification.entit
 import { Order } from './order/order.entity';
 import { PaymentMethodTranslation } from './payment-method/payment-method-translation.entity';
 import { PaymentMethod } from './payment-method/payment-method.entity';
+import { StorePaymentMethodState } from './payment-method/store-payment-method-state.entity';
 import { Payment } from './payment/payment.entity';
 import { ProductOptionGroupTranslation } from './product-option-group/product-option-group-translation.entity';
 import { ProductOptionGroup } from './product-option-group/product-option-group.entity';
@@ -81,6 +84,9 @@ import { Zone } from './zone/zone.entity';
  * A map of all the core database entities.
  */
 export const coreEntitiesMap = {
+    StorePaymentMethodState,
+    CatalogResourceOwnership,
+    ProductSalesAuthorization,
     Address,
     Administrator,
     Allocation,

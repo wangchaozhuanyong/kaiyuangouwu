@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, Type } from '@vendure/common/lib/shared-types';
 import {
     Asset,
@@ -15,6 +16,7 @@ import {
     Order,
     OrderLine,
     Payment,
+    Permission,
     Product,
     ProductOption,
     ProductOptionGroup,
@@ -29,6 +31,7 @@ import {
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { CatalogGovernanceService } from './catalog-governance.service';
 import { sensitiveStoreFinancePermission } from './constants';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
@@ -72,6 +75,60 @@ const merchantManagedStockLocationMutations = new Set([
     'deleteStockLocation',
     'deleteStockLocations',
     'updateStockLocation',
+]);
+
+// These APIs return platform-wide data or operate shared infrastructure. Even a
+// SuperAdmin must switch to the management center rather than bypass store scope.
+const platformManagementFields = new Set([
+    'Query.job',
+    'Query.jobs',
+    'Query.jobsById',
+    'Query.jobQueues',
+    'Query.jobBufferSize',
+    'Mutation.removeSettledJobs',
+    'Mutation.cancelJob',
+    'Mutation.flushBufferedJobs',
+    'Query.storeUsdtWallets',
+    'Query.storeUsdtPaymentIntents',
+    'Query.storeUsdtPaymentStats',
+    'Query.storePaymentStats',
+    'Query.storePaymentDetails',
+    'Query.storeUsdtManualRefunds',
+    'Query.storeUsdtReconciliationActions',
+    'Mutation.reviewStoreUsdtWallet',
+    'Mutation.submitMyStoreUsdtWallet',
+    'Query.systemAnnouncements',
+    'Mutation.createSystemAnnouncement',
+    'Mutation.updateSystemAnnouncement',
+    'Mutation.deleteSystemAnnouncement',
+    'Query.telegramNotificationConfig',
+    'Query.telegramNotificationStatus',
+    'Query.telegramNotificationConfigAudits',
+    'Query.telegramNotificationDeliveries',
+    'Query.telegramDepartmentRouting',
+    'Query.adminIncidents',
+    'Query.adminIncident',
+    'Mutation.updateTelegramNotificationConfig',
+    'Mutation.testTelegramConnection',
+    'Mutation.sendTelegramNotificationTest',
+    'Mutation.retryTelegramNotificationDelivery',
+    'Mutation.acknowledgeAdminIncident',
+    'Mutation.validateAdminIncidentRecovery',
+    'Mutation.submitAdminIncidentReview',
+    'Mutation.completeAdminIncidentAction',
+    'Query.governanceApprovals',
+    'Query.governedConfigVersions',
+    'Query.governanceAuditEntries',
+    'Query.governanceAuditIntegrity',
+    'Query.governanceReports',
+    'Mutation.submitGovernedConfig',
+    'Mutation.reviewGovernanceApproval',
+]);
+const platformPaymentConfigurationMutations = new Set([
+    'createPaymentMethod',
+    'updatePaymentMethod',
+    'deletePaymentMethod',
+    'deletePaymentMethods',
 ]);
 
 const platformOrderMutations = new Set([
@@ -138,6 +195,7 @@ export class MerchantCatalogAccessService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly channelService: ChannelService,
+        private readonly governance: CatalogGovernanceService,
     ) {}
 
     async assertRootFieldAccess(
@@ -154,10 +212,86 @@ export class MerchantCatalogAccessService {
             return;
         }
 
+        if (
+            platformManagementFields.has(`${parentType}.${fieldName}`) &&
+            ctx.channel.code !== DEFAULT_CHANNEL_CODE
+        ) {
+            throw new UserInputError('平台功能请切换到平台管理中心操作');
+        }
+        if (parentType === 'Mutation' && platformPaymentConfigurationMutations.has(fieldName)) {
+            if (
+                ctx.channel.code !== DEFAULT_CHANNEL_CODE ||
+                !ctx.userHasPermissions([Permission.SuperAdmin])
+            ) {
+                throw new UserInputError('支付系统配置仅允许超级管理员在平台管理中心修改');
+            }
+        }
+
         if (parentType === 'Mutation') {
             await this.assertCouponManagementEntry(ctx, fieldName, args);
             if (crossStoreAssignmentMutations.has(fieldName)) {
-                throw new UserInputError('店铺经营数据禁止跨店共享，请在目标店铺重新创建或导入独立副本');
+                throw new UserInputError('跨店销售授权请使用平台商品分配中心，私有经营配置不能直接共享');
+            }
+        }
+
+        // Canonical metadata belongs to its maintainer even for SuperAdmin in a store context.
+        if (parentType === 'Mutation') {
+            const resource = fieldName.match(
+                /^(?:update|delete)(ProductOptionGroup|ProductOption|FacetValue|Facet|Collection|Asset|Tag|Product)(?:s)?$/,
+            )?.[1];
+            if (resource) {
+                const canonicalInputs = this.getInputs(args);
+                const ids = [
+                    args.id,
+                    ...((args.ids as ID[] | undefined) ?? []),
+                    ...canonicalInputs.map(input => input.id),
+                ].filter((id): id is ID => typeof id === 'string' || typeof id === 'number');
+                for (const id of new Set(ids)) await this.governance.assertOwned(ctx, resource as any, id);
+            }
+            const childInputs = this.getInputs(args);
+            if (['createProductOption', 'createProductOptions'].includes(fieldName))
+                for (const input of childInputs) {
+                    if (input.productOptionGroupId)
+                        await this.governance.assertOwned(
+                            ctx,
+                            'ProductOptionGroup',
+                            input.productOptionGroupId,
+                        );
+                }
+            if (['createFacetValue', 'createFacetValues'].includes(fieldName))
+                for (const input of childInputs) {
+                    if (input.facetId) await this.governance.assertOwned(ctx, 'Facet', input.facetId);
+                }
+            if (fieldName === 'moveCollection')
+                for (const collectionId of [args.collectionId, args.parentId].filter(
+                    (id): id is ID => typeof id === 'number' || typeof id === 'string',
+                )) {
+                    await this.governance.assertOwned(ctx, 'Collection', collectionId);
+                }
+            if (
+                [
+                    'updateProductVariant',
+                    'updateProductVariants',
+                    'deleteProductVariant',
+                    'deleteProductVariants',
+                    'createProductVariants',
+                ].includes(fieldName)
+            ) {
+                for (const input of [
+                    ...this.getInputs(args),
+                    ...this.directIds(args).map(id => ({ id })),
+                ] as CatalogMutationInput[]) {
+                    if (input.productId) await this.governance.assertOwned(ctx, 'Product', input.productId);
+                    if (input.id) {
+                        const variant = await this.connection.getEntityOrThrow(
+                            ctx,
+                            ProductVariant,
+                            input.id,
+                            { channelId: ctx.channelId },
+                        );
+                        await this.governance.assertOwned(ctx, 'Product', variant.productId);
+                    }
+                }
             }
         }
 
@@ -555,6 +689,32 @@ export class MerchantCatalogAccessService {
                 );
             }
             throw new ForbiddenError();
+        }
+        if (
+            containsForeignOrSharedEntity &&
+            [
+                'Product',
+                'ProductVariant',
+                'Asset',
+                'Facet',
+                'FacetValue',
+                'ProductOptionGroup',
+                'ProductOption',
+                'Collection',
+            ].includes(entity.name)
+        ) {
+            for (const item of entities) {
+                const productId =
+                    entity === (ProductVariant as any)
+                        ? (item as unknown as ProductVariant).productId
+                        : item.id;
+                await this.governance.assertOwned(
+                    ctx,
+                    (isProductEntity ? 'Product' : entity.name) as any,
+                    isProductEntity ? productId : item.id,
+                );
+            }
+            return;
         }
         if (containsForeignOrSharedEntity) {
             if (isProductEntity) {

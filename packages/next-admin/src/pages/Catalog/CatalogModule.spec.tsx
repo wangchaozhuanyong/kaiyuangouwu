@@ -50,6 +50,32 @@ async function renderCatalog({
             operation =>
                 new Observable(observer => {
                     requests?.push({ name: operation.operationName ?? '', variables: operation.variables });
+                    if (operation.operationName === 'StoreCatalogStatus') {
+                        observer.next({
+                            data: {
+                                myStoreCatalogStatus: {
+                                    authorized: empty ? 0 : 1,
+                                    listed: empty ? 0 : 1,
+                                    paused: 0,
+                                    pending: 0,
+                                    outOfStock: stockAllocated >= 105 ? 1 : 0,
+                                    items: empty
+                                        ? []
+                                        : [
+                                              {
+                                                  productId: 'product-1',
+                                                  listed: true,
+                                                  pending: false,
+                                                  paused: false,
+                                                  outOfStock: stockAllocated >= 105,
+                                              },
+                                          ],
+                                },
+                            },
+                        });
+                        observer.complete();
+                        return;
+                    }
                     if (operation.operationName === 'GetProducts') {
                         if (empty) {
                             observer.next({ data: { products: { totalItems: 0, items: [] } } });
@@ -71,6 +97,7 @@ async function renderCatalog({
                                             description: '',
                                             customFields: {
                                                 fulfillmentType: digital ? 'digital' : 'physical',
+                                                pricingMode: 'FIXED',
                                                 refundPolicy: null,
                                                 manualDeliverySlaMinutes: null,
                                             },
@@ -92,6 +119,7 @@ async function renderCatalog({
                                                     autoCardAvailableStock: null,
                                                     customFields: {
                                                         fulfillmentType: digital ? 'digital' : 'physical',
+                                                        pricingMode: 'FIXED',
                                                         digitalDeliveryMode: null,
                                                         digitalStockPolicy: null,
                                                     },
@@ -195,42 +223,34 @@ async function renderCatalog({
                             },
                         });
                     } else if (operation.operationName === 'GetCatalogChannelAssignments') {
+                        const channel = {
+                            id: 'channel-1',
+                            code: channelCode,
+                            displayName: '本店',
+                            isDefault: false,
+                        };
                         observer.next({
                             data: {
                                 catalogProductChannelAssignments: {
                                     totalItems: assignmentTotal,
-                                    channels: [
-                                        {
-                                            id: 'channel-default',
-                                            code: '__default_channel__',
-                                            displayName: '平台管理（不经营）',
-                                            isDefault: true,
-                                        },
-                                        {
-                                            id: 'channel-branch-1',
-                                            code: 'branch-store',
-                                            displayName: '分店',
-                                            isDefault: false,
-                                        },
-                                    ],
-                                    items:
-                                        assignmentTotal === 0
-                                            ? []
-                                            : [
-                                                  {
-                                                      id: 'product-1',
-                                                      name: '白利群2',
-                                                      enabled: true,
-                                                      channels: [
-                                                          {
-                                                              id: 'channel-default',
-                                                              code: '__default_channel__',
-                                                              displayName: '平台管理（不经营）',
-                                                              isDefault: true,
-                                                          },
-                                                      ],
-                                                  },
-                                              ],
+                                    channels: [channel],
+                                    scopeChannel: channel,
+                                    summary: {
+                                        totalItems: assignmentTotal,
+                                        unassignedItems: 0,
+                                        multiChannelItems: 0,
+                                        channelCounts: [{ channelId: 'channel-1', count: assignmentTotal }],
+                                    },
+                                    items: assignmentTotal
+                                        ? [
+                                              {
+                                                  id: 'product-1',
+                                                  name: '白利群2',
+                                                  enabled: true,
+                                                  channels: [channel],
+                                              },
+                                          ]
+                                        : [],
                                 },
                             },
                         });
@@ -328,19 +348,20 @@ describe('CatalogModule category columns', () => {
         expect(cells).toContain('香烟');
     });
 
-    it('renders sales channels column and detects unassigned products', async () => {
-        const container = await renderCatalog({ channelCode: '__default_channel__' });
+    it('renders local sales scope and keeps platform allocation tools out of the store', async () => {
+        const container = await renderCatalog();
         const headers = Array.from(container.querySelectorAll('thead th')).map(header =>
             header.textContent?.trim(),
         );
 
         expect(headers).toContain('销售店铺');
-        expect(container.textContent).toContain('平台归属异常');
-        expect(container.textContent).toContain('店铺归属检查');
+        expect(container.textContent).not.toContain('平台归属异常');
+        expect(container.textContent).not.toContain('店铺归属检查');
+        expect(container.textContent).toContain('本店已授权：1');
     });
 
-    it('explains that selected products cannot be shared across stores', async () => {
-        const container = await renderCatalog({ channelCode: '__default_channel__' });
+    it('directs selected cross-store sales authorization to the platform', async () => {
+        const container = await renderCatalog();
         const selectAllCheckbox = container.querySelector<HTMLInputElement>(
             'thead th input[type="checkbox"]',
         );
@@ -351,7 +372,7 @@ describe('CatalogModule category columns', () => {
         });
 
         expect(container.textContent).toContain('已选 1 个商品');
-        expect(container.textContent).toContain('跨店共享已停用');
+        expect(container.textContent).toContain('跨店销售授权由平台管理中心分配');
         expect(container.textContent).not.toContain('批量上架到店铺');
     });
 });
@@ -404,10 +425,10 @@ describe('CatalogModule filtered empty results', () => {
         expect(container.textContent).not.toContain('重置筛选');
     });
 
-    it('describes the default store as an independent store instead of an aggregate catalog', async () => {
-        const container = await renderCatalog({ channelCode: '__default_channel__' });
+    it('describes operating-store scope without global statistics', async () => {
+        const container = await renderCatalog();
 
-        expect(container.textContent).toContain('当前数据范围：平台管理（不经营）');
+        expect(container.textContent).toContain('当前数据范围：meiyijia');
         expect(container.textContent).toContain('仅显示分配到当前店铺的商品、库存和价格');
         expect(container.textContent).not.toContain('总目录');
         expect(container.textContent).not.toContain('汇总全部商品');

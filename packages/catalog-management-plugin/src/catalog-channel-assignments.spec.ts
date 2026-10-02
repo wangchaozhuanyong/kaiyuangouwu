@@ -1,4 +1,11 @@
-import { Channel, Permission, ProductService, RequestContext, TransactionalConnection } from '@vendure/core';
+import {
+    Channel,
+    Permission,
+    ProductSalesAuthorization,
+    ProductService,
+    RequestContext,
+    TransactionalConnection,
+} from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.service';
@@ -29,7 +36,11 @@ function setup(owner: boolean) {
     const channelRepository = { find: vi.fn().mockResolvedValue(owner ? channels : [channels[1]]) };
     const connection = {
         getRepository: vi.fn((_: unknown, entity: unknown) =>
-            entity === Channel ? channelRepository : { createQueryBuilder: () => query },
+            entity === ProductSalesAuthorization
+                ? { find: vi.fn().mockResolvedValue([]) }
+                : entity === Channel
+                  ? channelRepository
+                  : { createQueryBuilder: () => query },
         ),
     };
     const products = {
@@ -64,18 +75,14 @@ function setup(owner: boolean) {
 }
 
 describe('catalog channel assignments', () => {
-    it('shows the owner all real memberships from a non-default source store', async () => {
+    it('limits even SuperAdmin to the current operating store', async () => {
         const { service, ctx, products, query } = setup(true);
         const result = await service.list(ctx);
-        expect(result.items[0].channels.map(channel => channel.id)).toEqual([1, 2, 3]);
-        expect(result.items[0].channels[0].isDefault).toBe(true);
-        expect(result.summary).toMatchObject({ totalItems: 1, unassignedItems: 0, multiChannelItems: 1 });
+        expect(result.items[0].channels.map(channel => channel.id)).toEqual([2]);
+        expect(result.items[0].channels[0].isDefault).toBe(false);
+        expect(result.summary).toMatchObject({ totalItems: 1, unassignedItems: 0, multiChannelItems: 0 });
         expect(products.findAll).toHaveBeenCalledWith(ctx, { skip: 0, take: 100 }, ['translations']);
-        expect(result.channels.map(channel => channel.displayName)).toEqual([
-            '平台管理（不经营）',
-            '店铺 A',
-            '店铺 B',
-        ]);
+        expect(result.channels.map(channel => channel.displayName)).toEqual(['店铺 A']);
         expect(query.where).toHaveBeenCalledWith('product.id IN (:...ids)', { ids: [10] });
     });
 
@@ -85,11 +92,7 @@ describe('catalog channel assignments', () => {
 
         const result = await service.list(ctx);
 
-        expect(result.channels.map(channel => channel.displayName)).toEqual([
-            'Platform management (non-operating)',
-            'Store A',
-            'Store B',
-        ]);
+        expect(result.channels.map(channel => channel.displayName)).toEqual(['Store A']);
     });
 
     it('does not disclose other stores to staff with only one readable product channel', async () => {
@@ -97,14 +100,20 @@ describe('catalog channel assignments', () => {
         const result = await service.list(ctx);
         expect(result.channels.map(channel => channel.id)).toEqual([2]);
         expect(result.items[0].channels.map(channel => channel.id)).toEqual([2]);
-        expect(channelRepository.find.mock.calls[0][0]).toMatchObject({ where: { id: expect.anything() } });
-        expect(channelRepository.find.mock.calls[0][0]).not.toHaveProperty('select');
+        expect(channelRepository.find).not.toHaveBeenCalled();
         expect(result.channels[0]).toEqual({
             id: 2,
             code: 'store-a',
             displayName: '店铺 A',
             isDefault: false,
         });
+    });
+
+    it('rejects all-store access from the default channel and foreign filters from a store', async () => {
+        const { service, ctx } = setup(true);
+        await expect(service.list(ctx, {}, { mode: 'CHANNEL', channelId: '3' })).rejects.toThrow();
+        (ctx.channel as any).code = '__default_channel__';
+        await expect(service.list(ctx)).rejects.toThrow();
     });
 
     it('rejects an unbounded page before reading any products', async () => {

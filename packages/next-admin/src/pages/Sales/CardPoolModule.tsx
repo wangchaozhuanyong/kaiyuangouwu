@@ -1,3 +1,4 @@
+import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
@@ -34,6 +35,7 @@ import {
     type AutoCardVariantsResult,
     type AutoCardWorkspaceResult,
 } from '../../graphql/fulfillment.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
@@ -102,6 +104,28 @@ export function CardPoolModule() {
         fetchPolicy: 'cache-and-network',
         pollInterval: 15_000,
     });
+    const supplyQuery = useQuery<{
+        myAutoCardSupplySummary: Array<{
+            grantId: string;
+            channelId: string;
+            enabled: boolean;
+            deliveredQuantity: number;
+            waitingQuantity: number;
+            allocatedQuantity: number;
+        }>;
+    }>(
+        gql`
+            query MySupplySummary($productVariantId: ID!) {
+                myAutoCardSupplySummary(productVariantId: $productVariantId)
+            }
+        `,
+        {
+            variables: { productVariantId: selectedVariant?.id ?? '' },
+            skip: !selectedVariant,
+            fetchPolicy: 'cache-and-network',
+            pollInterval: 15000,
+        },
+    );
     const config = workspaceQuery.data?.autoCardConfig ?? null;
     const completed = async (message: string) => {
         setNotice(message);
@@ -272,6 +296,30 @@ export function CardPoolModule() {
                                 />
                             </section>
                         )}
+                        {config && (
+                            <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+                                <h2 className="font-bold">本店供货记录</h2>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    仅显示本卡池对授权销售店的供货数量。
+                                </p>
+                                {supplyQuery.error ? (
+                                    <p>供货记录未获取，请刷新重试。</p>
+                                ) : supplyQuery.loading ? (
+                                    <p>读取中…</p>
+                                ) : supplyQuery.data?.myAutoCardSupplySummary.length ? (
+                                    supplyQuery.data.myAutoCardSupplySummary.map(item => (
+                                        <p key={item.grantId} className="mt-2">
+                                            销售店 ID {item.channelId} ·{' '}
+                                            {item.enabled ? '供货启用' : '已停止新供货'} · 已发{' '}
+                                            {item.deliveredQuantity} · 已分配待发送 {item.allocatedQuantity} ·
+                                            待补货 {item.waitingQuantity}
+                                        </p>
+                                    ))
+                                ) : (
+                                    <p className="mt-2">暂无跨店供货记录</p>
+                                )}
+                            </section>
+                        )}
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
                                 <TabButton active={tab === 'POOL'} onClick={() => setTab('POOL')}>
@@ -367,6 +415,8 @@ function PoolTable({
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canReveal = hasAnyPermission(['ManageAutoCardSecrets']);
     const requestConfirmation = useConfirmDialog();
     const [revealed, setRevealed] = useState<{ id: string; fields: AutoCardFieldRecord[] } | null>(null);
     const [disableItem, setDisableItem] = useState<AutoCardPoolItemRecord | null>(null);
@@ -498,8 +548,8 @@ function PoolTable({
                                         <div className="flex justify-end gap-1">
                                             <button
                                                 type="button"
+                                                disabled={!canReveal || revealState.loading}
                                                 onClick={() => void revealItem(item)}
-                                                disabled={revealState.loading}
                                                 className={iconButton}
                                                 aria-label="查看明文"
                                             >
@@ -561,6 +611,36 @@ function DeliveriesTable({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
+    const { hasAnyPermission } = useAdminPermissions();
+    const [soldCards, setSoldCards] = useState<{ id: string; fields: AutoCardFieldRecord[] } | null>(null);
+    const [revealSold, soldState] = useMutation<{ revealMyOrderAutoCards: AutoCardFieldRecord[][] }>(gql`
+        mutation RevealSoldCards($deliveryId: ID!) {
+            revealMyOrderAutoCards(deliveryId: $deliveryId) {
+                key
+                label
+                value
+            }
+        }
+    `);
+    const showSoldCards = async (item: AutoCardDeliveryRecord) => {
+        try {
+            const result = await revealSold({ variables: { deliveryId: item.id } });
+            const cards = result.data?.revealMyOrderAutoCards;
+            if (!cards) throw new Error('未返回已分配卡密');
+            setSoldCards({
+                id: item.id,
+                fields: cards.flatMap((fields, index) =>
+                    fields.map(field => ({
+                        ...field,
+                        key: `${index}-${field.key}`,
+                        label: `${index + 1}. ${field.label}`,
+                    })),
+                ),
+            });
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
     const [retry, state] = useMutation(RETRY_AUTO_CARD_DELIVERY_MUTATION);
     const resend = async (item: AutoCardDeliveryRecord) => {
         if (
@@ -676,6 +756,19 @@ function DeliveriesTable({
                                     </span>
                                 </td>
                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                    {hasAnyPermission(['ReadSoldAutoCards']) &&
+                                        item.state !== 'WAITING_STOCK' && (
+                                            <button
+                                                type="button"
+                                                disabled={soldState.loading}
+                                                onClick={() => void showSoldCards(item)}
+                                                className={iconButton}
+                                                aria-label={`查看订单 ${item.order.code} 已分配卡密`}
+                                                title="查看本单卡密（记录审计）"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </button>
+                                        )}
                                     <button
                                         type="button"
                                         onClick={() => void resend(item)}
@@ -692,6 +785,7 @@ function DeliveriesTable({
                     </tbody>
                 </table>
             </div>
+            {soldCards && <RevealDialog value={soldCards} onClose={() => setSoldCards(null)} />}
         </section>
     );
 }

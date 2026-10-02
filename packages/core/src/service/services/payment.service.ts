@@ -241,6 +241,7 @@ export class PaymentService {
         const { paymentMethod, handler } = await this.paymentMethodService.getMethodAndOperations(
             ctx,
             payment.method,
+            true,
         );
         const settlePaymentResult = await handler.settlePayment(
             ctx,
@@ -269,6 +270,7 @@ export class PaymentService {
         const { paymentMethod, handler } = await this.paymentMethodService.getMethodAndOperations(
             ctx,
             payment.method,
+            true,
         );
         const cancelPaymentResult = await handler.cancelPayment(
             ctx,
@@ -444,6 +446,7 @@ export class PaymentService {
                 const methodAndHandler = await this.paymentMethodService.getMethodAndOperations(
                     ctx,
                     paymentToRefund.method,
+                    true,
                 );
                 paymentMethod = methodAndHandler.paymentMethod;
                 handler = methodAndHandler.handler;

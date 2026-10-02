@@ -32,3 +32,9 @@ export const sensitiveStoreFinancePermission = new PermissionDefinition({
 
 export const STOREFRONT_PROMOTION_OPTIONS = Symbol('STOREFRONT_PROMOTION_OPTIONS');
 export const STOREFRONT_ENTRY_COOKIE = 'storefront-entry';
+
+export const managePlatformCatalogPermission = new PermissionDefinition({
+    name: 'ManagePlatformCatalog',
+    description:
+        'Govern resource ownership and authorize sales in operating stores from the platform channel',
+});

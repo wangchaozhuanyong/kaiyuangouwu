@@ -21,6 +21,7 @@ import { ListQueryOptions } from '../../common/types/common-types';
 import { Translated } from '../../common/types/locale-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
+import { CatalogResourceOwnership } from '../../entity/catalog-governance/catalog-resource-ownership.entity';
 import { Channel } from '../../entity/channel/channel.entity';
 import { ProductOptionGroupTranslation } from '../../entity/product-option-group/product-option-group-translation.entity';
 import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
@@ -101,18 +102,66 @@ export class ProductOptionGroupService {
             });
     }
 
-    getOptionGroupsByProductId(ctx: RequestContext, id: ID): Promise<Array<Translated<ProductOptionGroup>>> {
-        return this.connection
+    async getOptionGroupsByProductId(
+        ctx: RequestContext,
+        id: ID,
+    ): Promise<Array<Translated<ProductOptionGroup>>> {
+        const owner = await this.connection
+            .getRepository(ctx, CatalogResourceOwnership)
+            .findOne({ where: { resourceType: 'Product', resourceId: id } });
+        if (!owner || idsAreEqual(owner.ownerChannelId, ctx.channelId)) {
+            const ownedGroups = await this.connection
+                .getRepository(ctx, ProductOptionGroup)
+                .createQueryBuilder('optionGroup')
+                .leftJoinAndSelect('optionGroup.translations', 'translations')
+                .leftJoinAndSelect('optionGroup.options', 'options')
+                .leftJoinAndSelect('options.translations', 'optionTranslations')
+                .innerJoin('optionGroup.products', 'product', 'product.id = :id', { id })
+                .innerJoin('product.channels', 'productChannel', 'productChannel.id = :channelId', {
+                    channelId: ctx.channelId,
+                })
+                .where('optionGroup.deletedAt IS NULL')
+                .getMany();
+            return ownedGroups.map(group => this.translator.translate(group, ctx, ['options']));
+        }
+        const variants = await this.connection
+            .getRepository(ctx, ProductVariant)
+            .find({ where: { productId: id, channels: { id: ctx.channelId } } });
+        if (!variants.length) return [];
+        // Read only the options used by variants explicitly available in this product/store.
+        // Do not expose the source's reusable template library through a shared product.
+        const groups = await this.connection
             .getRepository(ctx, ProductOptionGroup)
             .createQueryBuilder('optionGroup')
+            .comment('catalog-authorized-product-dependencies')
             .leftJoinAndSelect('optionGroup.translations', 'translations')
-            .leftJoinAndSelect('optionGroup.options', 'options')
+            .innerJoinAndSelect('optionGroup.options', 'options')
             .leftJoinAndSelect('options.translations', 'optionTranslations')
             .innerJoin('optionGroup.products', 'product', 'product.id = :productId', { productId: id })
-            .where('optionGroup.deletedAt IS NULL')
+            .innerJoin('product.channels', 'productChannel', 'productChannel.id = :dependencyChannel', {
+                dependencyChannel: ctx.channelId,
+            })
+            .innerJoin(
+                'options.productVariants',
+                'dependencyVariant',
+                'dependencyVariant.productId = product.id AND dependencyVariant.deletedAt IS NULL',
+            )
+            .innerJoin(
+                'dependencyVariant.channels',
+                'variantChannel',
+                'variantChannel.id = :dependencyChannel',
+            )
+            .where('optionGroup.deletedAt IS NULL AND options.deletedAt IS NULL')
+            .andWhere('dependencyVariant.id IN (:...dependencyVariantIds)', {
+                dependencyVariantIds: variants.map(v => v.id),
+            })
             .orderBy('optionGroup.id', 'ASC')
-            .getMany()
-            .then(groups => groups.map(group => this.translator.translate(group, ctx, ['options'])));
+            .getMany();
+        return groups.map(group => {
+            const translated = this.translator.translate(group, ctx, ['options']);
+            translated.options.forEach(option => Object.assign(option, { authorizedProductId: id }));
+            return Object.assign(translated, { authorizedProductId: id });
+        });
     }
 
     /**

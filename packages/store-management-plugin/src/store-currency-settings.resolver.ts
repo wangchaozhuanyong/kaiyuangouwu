@@ -149,14 +149,14 @@ export class StoreCurrencySettingsAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(storeProfilePermission.Update)
+    @Allow(Permission.SuperAdmin)
     submitMyStoreUsdtWallet(@Ctx() ctx: RequestContext, @Args('receivingAddress') receivingAddress: string) {
         return this.usdtWallets.submit(ctx, receivingAddress);
     }
 
     @Transaction()
     @Mutation()
-    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
+    @Allow(Permission.SuperAdmin)
     reviewStoreUsdtWallet(@Ctx() ctx: RequestContext, @Args('input') input: ReviewStoreUsdtWalletInput) {
         return this.usdtWallets.review(ctx, input);
     }

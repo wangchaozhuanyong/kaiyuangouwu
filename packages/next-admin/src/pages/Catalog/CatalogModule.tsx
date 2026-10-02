@@ -1,4 +1,6 @@
+import { gql } from '@apollo/client';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { StoreOfferDialog } from './StoreOfferDialog';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
@@ -10,7 +12,6 @@ import {
     ChevronRight,
     Edit3,
     Image as ImageIcon,
-    Layers3,
     Package,
     Plus,
     RefreshCw,
@@ -199,13 +200,35 @@ export function CatalogModule() {
     const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
         statusParameter === 'enabled' ? 'ENABLED' : statusParameter === 'disabled' ? 'DISABLED' : 'ALL';
+    const statusQuery = useQuery<{
+        myStoreCatalogStatus: {
+            authorized: number;
+            listed: number;
+            paused: number;
+            pending: number;
+            outOfStock: number;
+            items: Array<{
+                productId: string;
+                listed: boolean;
+                pending: boolean;
+                paused: boolean;
+                outOfStock: boolean;
+            }>;
+        };
+    }>(
+        gql`
+            query StoreCatalogStatus {
+                myStoreCatalogStatus
+            }
+        `,
+        { fetchPolicy: 'cache-and-network' },
+    );
+    const storeStatus = statusQuery.data?.myStoreCatalogStatus;
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
         setFilter('status', status.toLowerCase(), 'all');
     };
-    const setChannelFilter = (channel: string) => {
-        setFilter('channel', channel, 'ALL');
-    };
 
+    const [offerProductId, setOfferProductId] = useState<string | null>(null);
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(
@@ -254,16 +277,20 @@ export function CatalogModule() {
             filter.name = { contains: deferredSearchTerm.trim() };
         }
         if (statusFilter === 'ENABLED') {
-            filter.enabled = { eq: true };
+            filter.id = {
+                in: storeStatus?.items.filter(item => item.listed).map(item => item.productId) ?? [],
+            };
         } else if (statusFilter === 'DISABLED') {
-            filter.enabled = { eq: false };
+            filter.id = {
+                in: storeStatus?.items.filter(item => !item.listed).map(item => item.productId) ?? [],
+            };
         }
         if (categoryId) {
             filter.collectionId = { eq: categoryId };
         }
 
         return Object.keys(filter).length > 0 ? filter : undefined;
-    }, [categoryId, deferredSearchTerm, statusFilter]);
+    }, [categoryId, deferredSearchTerm, statusFilter, storeStatus]);
     const assignmentQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
         variables: {
             options: {
@@ -296,14 +323,21 @@ export function CatalogModule() {
 
     const productQuery = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
-        skip: isAssignmentFilter && (assignmentQuery.loading || assignmentIds.length === 0),
+        skip:
+            (statusFilter !== 'ALL' && !storeStatus) ||
+            (isAssignmentFilter && (assignmentQuery.loading || assignmentIds.length === 0)),
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
     });
     const { data } = productQuery;
-    const loading = assignmentQuery.loading || productQuery.loading;
-    const error = (isAssignmentFilter ? assignmentQuery.error : undefined) ?? productQuery.error;
+    const loading =
+        assignmentQuery.loading || productQuery.loading || (statusFilter !== 'ALL' && statusQuery.loading);
+    const error =
+        (statusFilter !== 'ALL' ? statusQuery.error : undefined) ??
+        (isAssignmentFilter ? assignmentQuery.error : undefined) ??
+        productQuery.error;
     const refetch = async () => {
+        await statusQuery.refetch();
         if (isAssignmentFilter) {
             await assignmentQuery.refetch();
             if (assignmentIds.length) await productQuery.refetch();
@@ -335,7 +369,10 @@ export function CatalogModule() {
     const channelAssignmentsByProduct = useMemo(() => {
         const map = new Map<string, AssignmentChannel[]>();
         for (const item of channelAssignmentsQuery.data?.catalogProductChannelAssignments.items ?? []) {
-            map.set(item.id, item.channels);
+            map.set(
+                item.id,
+                item.channels.filter(channel => !channel.isDefault),
+            );
         }
         return map;
     }, [channelAssignmentsQuery.data]);
@@ -421,14 +458,6 @@ export function CatalogModule() {
                 </div>
 
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => navigate('/catalog/allocation')}
-                        className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 cursor-pointer"
-                    >
-                        <Layers3 className="h-3.5 w-3.5 text-blue-600" />
-                        <span>店铺归属检查</span>
-                    </button>
                     <NextAdminActions pageId="product-list" collapseOnMobile />
                     <button
                         type="button"
@@ -477,6 +506,30 @@ export function CatalogModule() {
                     </div>
                 )}
 
+                <section
+                    className="flex flex-wrap gap-5 rounded-xl border border-slate-200 bg-white p-4 text-sm"
+                    aria-label="本店经营统计"
+                >
+                    <span>本店已授权：{storeStatus?.authorized ?? '未获取'}</span>
+                    <span>上架：{storeStatus?.listed ?? '未获取'}</span>
+                    <span>暂停：{storeStatus?.paused ?? '未获取'}</span>
+                    <span>待配置：{storeStatus?.pending ?? '未获取'}</span>
+                    <span>缺货：{storeStatus?.outOfStock ?? '未获取'}</span>
+                    <span>
+                        本店上架率：
+                        {storeStatus
+                            ? storeStatus.authorized
+                                ? `${Math.round((storeStatus.listed / storeStatus.authorized) * 100)}%`
+                                : '无授权商品'
+                            : '未获取'}
+                    </span>
+                    <p className="w-full text-xs text-slate-500">
+                        范围为本店已授权商品；上架要求本店售价与交付配置完整，缺货单列。其他店铺统计请在平台管理中心查看。
+                    </p>
+                    {statusQuery.error && (
+                        <p className="w-full text-xs text-rose-600">本店统计未获取，请刷新重试。</p>
+                    )}
+                </section>
                 {/* 错误态：真实 API 错误提示 (杜绝假数据回退) */}
                 {error && (
                     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-rose-800 text-xs animate-fadeIn">
@@ -533,16 +586,6 @@ export function CatalogModule() {
 
                         <div className="flex flex-wrap items-center gap-2">
                             <select
-                                value={channelParameter}
-                                onChange={event => setChannelFilter(event.target.value)}
-                                aria-label="按所属店铺筛选"
-                                className="max-w-44 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                                <option value="ALL">当前店铺全部商品</option>
-                                <option value="UNASSIGNED">⚠️ 平台归属异常</option>
-                                <option value="MULTI_STORE">⚠️ 多店共享异常</option>
-                            </select>
-                            <select
                                 value={categoryId}
                                 onChange={event => setFilter('category', event.target.value)}
                                 aria-label="按商品分类筛选"
@@ -598,8 +641,7 @@ export function CatalogModule() {
                     {selectedProductIds.length > 0 && (
                         <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800">
                             <span>
-                                已选 {selectedProductIds.length}{' '}
-                                个商品。跨店共享已停用，需要跨店时必须创建独立副本。
+                                已选 {selectedProductIds.length} 个商品。跨店销售授权由平台管理中心分配。
                             </span>
                             <button
                                 type="button"
@@ -839,6 +881,9 @@ export function CatalogModule() {
                                             );
                                         }, 0);
 
+                                        const localAssignment = storeStatus?.items.find(
+                                            item => item.productId === product.id,
+                                        );
                                         return (
                                             <tr
                                                 key={product.id}
@@ -946,8 +991,14 @@ export function CatalogModule() {
                                                     )}
                                                 </td>
 
-                                                {/* 销售店铺 */}
+                                                {/* 当前店铺销售授权与经营入口 */}
                                                 <td className="h-[52px] px-3 py-0 whitespace-nowrap">
+                                                    <button
+                                                        className="mr-2 text-xs font-medium text-blue-600"
+                                                        onClick={() => setOfferProductId(product.id)}
+                                                    >
+                                                        本店经营设置
+                                                    </button>
                                                     {(() => {
                                                         const assigned = channelAssignmentsByProduct.get(
                                                             product.id,
@@ -962,41 +1013,20 @@ export function CatalogModule() {
                                                         if (!assigned || assigned.length === 0) {
                                                             return (
                                                                 <span className="text-[11px] text-slate-400 italic">
-                                                                    未分配
+                                                                    授权信息未获取
                                                                 </span>
                                                             );
                                                         }
-                                                        const isOnlyDefault =
-                                                            assigned.length === 1 && assigned[0].isDefault;
                                                         return (
                                                             <div className="flex flex-wrap items-center gap-1 max-w-56">
-                                                                {isOnlyDefault ? (
+                                                                {assigned.map(ch => (
                                                                     <span
-                                                                        className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200"
-                                                                        title="该商品仅在默认主店铺中，尚未分发到任何分店"
+                                                                        key={ch.id}
+                                                                        className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700"
                                                                     >
-                                                                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-                                                                        仅默认店铺 (未分发)
+                                                                        {getChannelDisplayName(ch)}
                                                                     </span>
-                                                                ) : (
-                                                                    assigned.map(ch => (
-                                                                        <span
-                                                                            key={ch.id}
-                                                                            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                                                                ch.isDefault
-                                                                                    ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                                            }`}
-                                                                            title={
-                                                                                ch.isDefault
-                                                                                    ? '默认店铺'
-                                                                                    : `分店: ${getChannelDisplayName(ch)}`
-                                                                            }
-                                                                        >
-                                                                            {getChannelDisplayName(ch)}
-                                                                        </span>
-                                                                    ))
-                                                                )}
+                                                                ))}
                                                             </div>
                                                         );
                                                     })()}
@@ -1015,7 +1045,9 @@ export function CatalogModule() {
 
                                                 {/* Status */}
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    {product.enabled ? (
+                                                    {!localAssignment ? (
+                                                        <span className="text-xs text-slate-400">未获取</span>
+                                                    ) : localAssignment.listed ? (
                                                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded flex items-center gap-1 w-max">
                                                             <CheckCircle className="w-3 h-3" /> 已上架
                                                         </span>
@@ -1319,6 +1351,14 @@ export function CatalogModule() {
                         </form>
                     </AccessibleDialogSurface>
                 </div>
+            )}
+            {offerProductId && (
+                <StoreOfferDialog
+                    key={offerProductId}
+                    productId={offerProductId}
+                    onClose={() => setOfferProductId(null)}
+                    onSaved={() => void refetch()}
+                />
             )}
         </div>
     );

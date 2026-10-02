@@ -1,4 +1,5 @@
 import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 
 import { adminApiExtensions } from './api-extensions';
 import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.service';
@@ -11,6 +12,7 @@ import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { CatalogProfitService } from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
+import { CatalogTemplateLibraryService } from './catalog-template-library.service';
 import { CatalogVariantMatrixService } from './catalog-variant-matrix.service';
 import {
     manageCatalogExportPermission,
@@ -18,6 +20,7 @@ import {
     manageCatalogOperationsPermission,
     manageCatalogSupplierPermission,
 } from './constants';
+import { CatalogDistributionBatch } from './entities/catalog-distribution-batch.entity';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
@@ -40,12 +43,15 @@ import { PurchaseSupplierReturn } from './entities/purchase-supplier-return.enti
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import { InventoryControlService } from './inventory-control.service';
 import { InventoryLotLifecycleService } from './inventory-lot-lifecycle.service';
+import { PlatformCatalogResolver } from './platform-catalog.resolver';
+import { PlatformCatalogService } from './platform-catalog.service';
 import { PurchaseOrderService } from './purchase-order.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, StoreManagementPlugin],
     entities: [
+        CatalogDistributionBatch,
         CatalogImportJob,
         CatalogImportRow,
         CatalogSourceBinding,
@@ -68,6 +74,8 @@ import './types';
         PurchaseSupplierReturnLine,
     ],
     providers: [
+        PlatformCatalogService,
+        CatalogTemplateLibraryService,
         CatalogChannelAssignmentsService,
         CatalogFileParserService,
         CatalogOperationsService,
@@ -239,7 +247,7 @@ import './types';
     },
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [CatalogManagementAdminResolver],
+        resolvers: [CatalogManagementAdminResolver, PlatformCatalogResolver],
     },
     dashboard: './dashboard/index.tsx',
     compatibility: '^3.7.0',

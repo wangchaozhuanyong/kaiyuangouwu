@@ -96,7 +96,7 @@ describe('StoreManagementPlugin promotion options', () => {
         ).toThrow('must not repeat');
     });
 
-    it('splits a shared referral payment method into one entity per Channel at startup', async () => {
+    it('creates platform payment definitions without cloning legacy shop methods or resetting switches', async () => {
         const channels = [{ id: 'channel-a' }, { id: 'channel-b' }] as Channel[];
         const shared = {
             id: 'shared-referral',
@@ -109,6 +109,7 @@ describe('StoreManagementPlugin promotion options', () => {
             channels: [...channels],
         } as unknown as PaymentMethod;
         const paymentMethodRepository = {
+            findOne: vi.fn().mockResolvedValue(null),
             find: vi.fn(({ where }) => Promise.resolve(where.code === 'referral-balance' ? [shared] : [])),
             save: vi.fn((value: PaymentMethod) => Promise.resolve(value)),
         };
@@ -116,6 +117,7 @@ describe('StoreManagementPlugin promotion options', () => {
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
                 if (entity === Channel) return { find: vi.fn().mockResolvedValue(channels) };
+                if (entity === PaymentMethod) return paymentMethodRepository;
                 throw new Error(`Unexpected contextual repository ${String(entity)}`);
             }),
             rawConnection: {
@@ -141,7 +143,12 @@ describe('StoreManagementPlugin promotion options', () => {
             connection as any,
             {
                 create: vi.fn(({ channelOrToken }) =>
-                    Promise.resolve({ channelId: channelOrToken?.id ?? 'channel-a' }),
+                    Promise.resolve({
+                        channelId: channelOrToken?.id ?? 'channel-a',
+                        copy(options: any) {
+                            return { channelId: options.channel.id };
+                        },
+                    }),
                 ),
             } as any,
             paymentMethodService as any,
@@ -161,18 +168,13 @@ describe('StoreManagementPlugin promotion options', () => {
 
         await plugin.onApplicationBootstrap();
 
-        expect(paymentMethodService.create).toHaveBeenCalledTimes(1);
+        expect(paymentMethodService.create).toHaveBeenCalledTimes(2);
         expect(paymentMethodService.create).toHaveBeenCalledWith(
             expect.objectContaining({ channelId: 'channel-a' }),
-            expect.objectContaining({
-                code: 'referral-balance',
-                handler: { code: 'referral-balance-payment', arguments: [] },
-            }),
+            expect.objectContaining({ code: 'referral-balance' }),
         );
-        expect(removeFromChannels).toHaveBeenCalledWith(expect.anything(), PaymentMethod, 'shared-referral', [
-            'channel-a',
-        ]);
-        expect(shared.channels).toEqual([{ id: 'channel-b' }]);
+        expect(removeFromChannels).not.toHaveBeenCalled();
+        expect(shared.channels).toEqual(channels);
     });
 
     it('upgrades store administrators with referral permissions without granting them to employees', async () => {
@@ -187,6 +189,7 @@ describe('StoreManagementPlugin promotion options', () => {
             save: vi.fn().mockImplementation(role => Promise.resolve(role)),
         };
         const paymentMethodRepository = {
+            findOne: vi.fn().mockResolvedValue({ id: 'existing-platform-method', enabled: false }),
             find: vi.fn().mockImplementation(({ where }) =>
                 Promise.resolve([
                     where.code === 'usdt-trc20'
@@ -207,6 +210,7 @@ describe('StoreManagementPlugin promotion options', () => {
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
                 if (entity === Channel) return { find: vi.fn().mockResolvedValue([{ id: 'channel-1' }]) };
+                if (entity === PaymentMethod) return paymentMethodRepository;
                 throw new Error(`Unexpected contextual repository ${String(entity)}`);
             }),
             rawConnection: {
@@ -223,6 +227,7 @@ describe('StoreManagementPlugin promotion options', () => {
             { create: vi.fn().mockResolvedValue({}) } as any,
             { create: vi.fn() } as any,
             {
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'channel-1' }),
                 assignToChannels: vi.fn().mockResolvedValue(undefined),
                 removeFromChannels: vi.fn().mockResolvedValue(undefined),
             } as any,

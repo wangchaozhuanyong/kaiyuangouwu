@@ -3,14 +3,13 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     Channel,
     ListQueryOptions,
-    Permission,
     Product,
+    ProductSalesAuthorization,
     ProductService,
     RequestContext,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { In } from 'typeorm';
 
 export type CatalogChannelAssignmentFilter = {
     mode?: 'ALL' | 'UNASSIGNED' | 'MULTI' | 'CHANNEL';
@@ -39,18 +38,11 @@ export class CatalogChannelAssignmentsService {
         if (assignmentFilter.mode === 'CHANNEL' && !assignmentFilter.channelId) {
             throw new UserInputError('按店铺筛选时必须提供 channelId');
         }
-        const isOwner = ctx.userHasPermissions([Permission.SuperAdmin]);
-        const readableIds = (ctx.session?.user?.channelPermissions ?? [])
-            .filter(item => item.permissions.includes(Permission.ReadProduct))
-            .map(item => item.id);
-        const channels =
-            isOwner || readableIds.length
-                ? await this.connection.getRepository(ctx, Channel).find({
-                      ...(isOwner ? {} : { where: { id: In(readableIds) } }),
-                      order: { code: 'ASC' },
-                      loadEagerRelations: false,
-                  })
-                : [];
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE)
+            throw new UserInputError('平台汇总请使用平台商品分配中心');
+        if (assignmentFilter.channelId && String(assignmentFilter.channelId) !== String(ctx.channelId))
+            throw new UserInputError('只能查询当前店铺的销售授权');
+        const channels = [ctx.channel];
         const allowedIds = new Set(channels.map(channel => String(channel.id)));
         const aggregateOptions = { ...options };
         delete aggregateOptions.skip;
@@ -97,16 +89,22 @@ export class CatalogChannelAssignmentsService {
                 displayName:
                     (isDefault
                         ? isChinese
-                            ? '平台管理（不经营）'
-                            : 'Platform management (non-operating)'
+                            ? '模钥平台管理中心'
+                            : 'MOYAO Platform Management Center'
                         : localizedName) || (isChinese ? '未填写中文店名' : 'English store name not set'),
                 isDefault,
             };
         };
+        const grants = await this.connection
+            .getRepository(ctx, ProductSalesAuthorization)
+            .find({ where: { channelId: ctx.channelId } });
         const items = products.map(product => ({
             id: product.id,
             name: product.name,
-            enabled: product.enabled,
+            enabled:
+                product.enabled &&
+                (grants.find(g => String(g.productId) === String(product.id))?.state ?? 'ACTIVE') ===
+                    'ACTIVE',
             channels: (byId.get(String(product.id)) ?? [])
                 .filter(channel => allowedIds.has(String(channel.id)))
                 .map(toChannel),

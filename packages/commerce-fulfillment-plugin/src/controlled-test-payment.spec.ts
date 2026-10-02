@@ -1,4 +1,4 @@
-import { ConfigService, Order, TransactionalConnection } from '@vendure/core';
+import { ConfigService, Order, PaymentMethodService, TransactionalConnection } from '@vendure/core';
 import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +9,7 @@ describe('test payment configuration', () => {
     const method = {
         id: 3,
         enabled: true,
-        code: 'controlled-test-payment-T_2',
+        code: 'controlled-test-payment-platform',
         handler: {
             code: 'controlled-test-payment-handler',
             args: [
@@ -22,7 +22,11 @@ describe('test payment configuration', () => {
     const connection = { getEntityOrThrow: vi.fn().mockResolvedValue(method) };
     const config = { entityOptions: {}, entityIdStrategy: { encodeId: (id: unknown) => `T_${String(id)}` } };
     const service = new ControlledTestPaymentConfigService({} as any, connection as any, config as any);
-    const event = { ctx: { channelId: 2 }, entity: { id: 3 }, type: 'created' } as any;
+    const event = {
+        ctx: { channelId: 2, channel: { code: '__default_channel__' } },
+        entity: { id: 3 },
+        type: 'created',
+    } as any;
 
     it('accepts an explicitly enabled storewide method without a QA SKU or order note', async () => {
         await expect(service.validate(event)).resolves.toBeUndefined();
@@ -43,6 +47,7 @@ describe('test payments use the normal checkout workflow', () => {
     let order: any;
     let method: any;
     let ctx: any;
+    let storeEnabled = true;
     let registered: ReturnType<typeof createControlledTestPayment>;
     const carts = { lockForOrder: vi.fn() };
     const lockOrder = vi.fn();
@@ -55,6 +60,15 @@ describe('test payments use the normal checkout workflow', () => {
         get: (token: unknown) =>
             new Map<unknown, unknown>([
                 [TransactionalConnection, connection],
+                [
+                    PaymentMethodService,
+                    {
+                        getActivePaymentMethods: (current: any) =>
+                            Promise.resolve(
+                                storeEnabled && current.channelId === 2 && method.enabled ? [method] : [],
+                            ),
+                    },
+                ],
                 [ConfigService, config],
                 [StorefrontCartService, carts],
             ]).get(token),
@@ -62,6 +76,7 @@ describe('test payments use the normal checkout workflow', () => {
 
     beforeEach(async () => {
         vi.clearAllMocks();
+        storeEnabled = true;
         lockOrder.mockResolvedValue({ affected: 1 });
         order = {
             id: 1,
@@ -79,7 +94,7 @@ describe('test payments use the normal checkout workflow', () => {
         method = {
             id: 3,
             enabled: true,
-            code: 'controlled-test-payment-T_2',
+            code: 'controlled-test-payment-platform',
             handler: {
                 code: 'controlled-test-payment-handler',
                 args: [
@@ -160,7 +175,7 @@ describe('test payments use the normal checkout workflow', () => {
         await expect(pay()).rejects.toThrow('测试支付未开启');
     });
 
-    it('allows all products for every visitor only when explicitly configured for this Channel', async () => {
+    it('allows all products for every visitor only when the platform scope and local store switch allow it', async () => {
         method.handler.args = [
             { name: 'channelId', value: 'T_2' },
             { name: 'allowAllOrders', value: 'true' },
@@ -175,7 +190,7 @@ describe('test payments use the normal checkout workflow', () => {
         expect(await pay()).toMatchObject({ amount: 1000, state: 'Settled' });
         expect(await transition()).toBeUndefined();
 
-        method.handler.args[0].value = 'T_3';
+        storeEnabled = false;
         expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
     });
 
