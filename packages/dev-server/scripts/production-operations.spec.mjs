@@ -1841,6 +1841,7 @@ void test('platform governance data preflight is pinned, read-only, and verifies
             return { status: 0, stdout: JSON.stringify(audit), stderr: 'PRIVATE_ERROR' };
         },
         script: '/fixed/preflight.mjs',
+        persistPlan: compressed => ({ sha256: createHash('sha256').update(compressed).digest('hex') }),
     };
     assert.equal(
         operations.runPlatformGovernanceDataPreflight(request, dependencies).audit.snapshotHash,

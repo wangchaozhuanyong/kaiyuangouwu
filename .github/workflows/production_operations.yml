@@ -237,7 +237,7 @@ jobs:
                       'set -Eeuo pipefail',
                       'umask 077',
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
-                      "trap 'rm -rf -- \"$operations_dir\"' EXIT",
+                      f"trap 'code=$?; if [ {operation} != plan-platform-store-governance ] || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
                       'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts"',
                       transport('deploy/production-operations.cjs', 'production-operations.cjs'),
                       transport('deploy/systemd/vendure-production-release-retention.cjs', 'systemd/vendure-production-release-retention.cjs'),
@@ -288,6 +288,7 @@ jobs:
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
                       ])
                   if operation_name == 'plan-platform-store-governance':
+                      lines.append(transport('deploy/governance-preflight-transport.cjs', 'governance-preflight-transport.cjs'))
                       lines.extend(transport(f'packages/dev-server/scripts/{name}', f'repository/packages/dev-server/scripts/{name}') for name in [
                           'platform-governance-data-preflight.mjs', 'platform-catalog-data-plan.mjs',
                           'platform-payment-data-plan.mjs', 'store-isolation-data-preflight.mjs',
@@ -431,18 +432,7 @@ jobs:
             - name: Save read-only governance plan
               if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
               run: |
-                  python3 - <<'PYTHON'
-                  import base64, gzip, hashlib, json, os
-                  from pathlib import Path
-                  result = json.loads(Path(os.environ['RUNNER_TEMP'], 'production-operations-result.json').read_text())
-                  report = next(json.loads(line) for line in result['Output'].splitlines() if line.startswith('{'))
-                  audit = report['audit']
-                  plan_bytes = gzip.decompress(base64.b64decode(audit['compressedPlan'], validate=True))
-                  assert hashlib.sha256(plan_bytes).hexdigest() == audit['snapshotHash']
-                  plan = json.loads(plan_bytes)
-                  assert plan['mode'] == 'READ_ONLY' and plan['productionApply'] is False
-                  Path(os.environ['RUNNER_TEMP'], 'platform-governance-data-plan.json').write_text(json.dumps(plan, indent=2) + '\n')
-                  PYTHON
+                  python3 deploy/collect-governance-preflight.py
 
             - name: Upload read-only governance plan
               if: ${{ success() && inputs.operation == 'plan-platform-store-governance' }}
