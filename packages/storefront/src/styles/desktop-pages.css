@@ -201,7 +201,7 @@
         --page-bottom-fixed-offset: 0px;
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: var(--space-section);
         padding-bottom: 40px;
     }
     /* Desktop product pages use a compact utility row instead of stretching the
@@ -435,12 +435,17 @@
         gap: 5px;
     }
     .desktop-store-layout .product-detail-page > .detail-block {
-        padding: 28px;
+        padding: var(--space-card);
         margin: 0;
         background: var(--surface, var(--paper));
         border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
         box-shadow: var(--skin-card-shadow);
+    }
+    /* The page gap owns section spacing; do not add the generic merchandising inset. */
+    .desktop-store-layout .product-detail-page > .product-section {
+        margin: 0;
+        padding: 0;
     }
     .desktop-store-layout .detail-params dl {
         display: grid;
@@ -455,7 +460,7 @@
     }
     .desktop-store-layout .detail-description h2 {
         font-size: var(--type-section-size);
-        margin: 0 0 24px;
+        margin: 0;
         line-height: var(--type-section-leading);
         font-weight: var(--font-weight-semibold);
     }

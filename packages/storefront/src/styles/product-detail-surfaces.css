@@ -505,8 +505,8 @@
 }
 
 .detail-block {
-    margin-top: 9px;
-    padding: 14px;
+    margin-top: var(--space-section);
+    padding: var(--space-card);
     background: var(--surface);
 }
 
@@ -639,7 +639,7 @@
 
 .detail-description > p,
 .detail-rich-text {
-    margin: 10px 0 0;
+    margin: var(--space-title-content) 0 0;
     color: var(--muted);
     line-height: 1.7;
     overflow-wrap: anywhere;
@@ -836,6 +836,7 @@
     }
     .product-detail-page > .product-section {
         width: min(calc(100% - 2 * var(--page-section-inset)), 720px);
+        margin-block: var(--space-section) 0;
         margin-inline: auto;
         padding-inline: 0;
     }
@@ -863,7 +864,6 @@
         text-overflow: ellipsis;
     }
     .product-detail-page .detail-block {
-        margin-top: 9px;
         border-radius: var(--radius-md);
         background: var(--surface);
         box-shadow: var(--shadow-sm);
