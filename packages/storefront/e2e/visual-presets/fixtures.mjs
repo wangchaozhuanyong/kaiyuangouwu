@@ -905,7 +905,11 @@ export function fixtureData(presetId = 'neo-minimalist', signedIn = true, conten
                 subtitle: '本地布局验收配图与文案。',
                 body: '',
                 ctaLabel: '',
-                settings: {},
+                ...(content === 'auth-logo' ? { backgroundColor: '#f1f5f9', textColor: '#0f172a' } : {}),
+                settings:
+                    content === 'auth-logo'
+                        ? { heroCopyPosition: authVariant === 'register' ? 'bottom' : 'center' }
+                        : {},
             })),
             quickLinksBlock,
             servicesBlock,
