@@ -245,6 +245,8 @@ export async function collectPlatformCatalogDataPlan(adapter, mapping = []) {
     if (unknown.length) throw new Error('MAPPING_RESOURCE_NOT_FOUND');
     // Fixed relationship IDs only, to prepare copies/remapping without guessing from names.
     const referenceTables = {
+        variantProducts: ['product_variant', ['id', 'productId', 'deletedAt']],
+        assetKinds: ['asset', ['id', 'type', 'mimeType']],
         productGroups: ['product_option_groups_product_option_group', ['productId', 'productOptionGroupId']],
         optionGroups: ['product_option', ['id', 'groupId']],
         variantOptions: ['product_variant_options_product_option', ['productVariantId', 'productOptionId']],
@@ -255,6 +257,7 @@ export async function collectPlatformCatalogDataPlan(adapter, mapping = []) {
         variantAssets: ['product_variant_asset', ['id', 'productVariantId', 'assetId']],
         productFeaturedAssets: ['product', ['id', 'featuredAssetId']],
         variantFeaturedAssets: ['product_variant', ['id', 'featuredAssetId']],
+        collectionFeaturedAssets: ['collection', ['id', 'featuredAssetId']],
         assetTags: ['asset_tags_tag', ['assetId', 'tagId']],
         profileAssets: [
             'store_profile',

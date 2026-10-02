@@ -11,12 +11,15 @@ import {
     OrderService,
     PaymentMethodHandler,
     RequestContextService,
+    RoleService,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 import {
     CustomerCoupon,
     StoreCouponLifecycleService,
     StoreManagementPlugin,
+    StoreProfile,
 } from '@vendure/store-management-plugin';
 import {
     StorefrontCartLifecycleService,
@@ -102,6 +105,12 @@ const send = async (operation: object) => {
 };
 let variants: string[];
 let couponId: string;
+const cartChannelToken = 'cart-governance-operating-shop';
+function newCartShopClient() {
+    const client = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+    client.setChannelToken(cartChannelToken);
+    return client;
+}
 
 beforeAll(async () => {
     await server.init({
@@ -119,6 +128,169 @@ beforeAll(async () => {
     adminClient.setRequestHeader(
         'x-vendure-sensitive-action-password',
         config.authOptions.superadminCredentials?.password ?? '',
+    );
+    await adminClient.query(gql`
+        mutation {
+            updateGlobalSettings(input: { availableLanguages: [en, zh_Hans] }) {
+                ... on GlobalSettings {
+                    id
+                }
+            }
+        }
+    `);
+    const existingMethods = (
+        await adminClient.query(gql`
+            query {
+                paymentMethods {
+                    items {
+                        code
+                    }
+                }
+            }
+        `)
+    ).paymentMethods.items;
+    if (!existingMethods.some((m: any) => m.code === localPayment.code)) {
+        await adminClient.query(
+            gql`
+                mutation ($input: CreatePaymentMethodInput!) {
+                    createPaymentMethod(input: $input) {
+                        id
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: localPayment.code,
+                    enabled: true,
+                    handler: { code: localPayment.code, arguments: [] },
+                    translations: [
+                        { languageCode: 'zh_Hans', name: '本地验收支付', description: 'Synthetic fixture' },
+                    ],
+                },
+            },
+        );
+    }
+    const zones = (
+        await adminClient.query(gql`
+            query {
+                zones {
+                    items {
+                        id
+                    }
+                }
+            }
+        `)
+    ).zones.items;
+    const channel = (
+        await adminClient.query(
+            gql`
+                mutation ($input: CreateChannelInput!) {
+                    createChannel(input: $input) {
+                        ... on Channel {
+                            id
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: cartChannelToken,
+                    token: cartChannelToken,
+                    defaultLanguageCode: 'zh_Hans',
+                    currencyCode: 'USD',
+                    defaultTaxZoneId: zones[0].id,
+                    defaultShippingZoneId: zones[0].id,
+                    pricesIncludeTax: false,
+                },
+            },
+        )
+    ).createChannel;
+    expect(channel.id, channel.message).toBeTruthy();
+    // Built-in customer roles are deliberately absent from the restricted Admin role list.
+    const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+    if (!strategy) {
+        throw new Error('The cart fixture requires an entity ID strategy');
+    }
+    const context = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+    const customerRole = await server.app.get(RoleService).getCustomerRole(context);
+    await server.app
+        .get(RoleService)
+        .assignRoleToChannel(context, customerRole.id, strategy.decodeId(channel.id));
+    await server.app
+        .get(TransactionalConnection)
+        .rawConnection.getRepository(StoreProfile)
+        .save(
+            new StoreProfile({
+                channelId: strategy.decodeId(channel.id),
+                status: 'ACTIVE',
+                isPublished: false,
+                descriptionZh: '',
+                descriptionEn: '',
+            }),
+        );
+    adminClient.setChannelToken(cartChannelToken);
+    shopClient.setChannelToken(cartChannelToken);
+    await adminClient.query(gql`
+        mutation {
+            createStockLocation(input: { name: "Cart fixture local inventory" }) {
+                id
+            }
+        }
+    `);
+    await adminClient.query(
+        gql`
+            mutation ($input: CreateShippingMethodInput!) {
+                createShippingMethod(input: $input) {
+                    id
+                }
+            }
+        `,
+        {
+            input: {
+                code: 'cart-fixture-shipping',
+                fulfillmentHandler: 'manual-fulfillment',
+                translations: [{ languageCode: 'zh_Hans', name: '验收配送', description: 'Synthetic' }],
+                checker: {
+                    code: 'default-shipping-eligibility-checker',
+                    arguments: [{ name: 'orderMinimum', value: '0' }],
+                },
+                calculator: {
+                    code: 'default-shipping-calculator',
+                    arguments: [
+                        { name: 'rate', value: '500' },
+                        { name: 'includesTax', value: 'auto' },
+                        { name: 'taxRate', value: '0' },
+                    ],
+                },
+            },
+        },
+    );
+    const paymentOptions = (
+        await adminClient.query(gql`
+            query {
+                myStorePaymentOptions {
+                    id
+                    code
+                }
+            }
+        `)
+    ).myStorePaymentOptions;
+    const fixtureMethod = paymentOptions.find((m: any) => m.code === localPayment.code);
+    expect(fixtureMethod, JSON.stringify(paymentOptions)).toBeDefined();
+    await adminClient.query(
+        gql`
+            mutation ($id: ID!) {
+                setMyStorePaymentOptionEnabled(id: $id, enabled: true) {
+                    id
+                }
+            }
+        `,
+        {
+            id: fixtureMethod.id,
+        },
     );
     const product = await adminClient.query(gql`
         mutation {
@@ -194,7 +366,9 @@ beforeAll(async () => {
         },
     );
     variants = created.createProductVariants.map((variant: any) => variant.id);
-    await adminClient.query(gql`
+    adminClient.setChannelToken(null);
+    adminClient.setRequestHeader(config.apiOptions.channelTokenKey ?? 'vendure-token', null);
+    const cartCustomer = await adminClient.query(gql`
         mutation {
             createCustomer(
                 input: { firstName: "Cart", lastName: "QA", emailAddress: "cart-qa@example.test" }
@@ -202,10 +376,31 @@ beforeAll(async () => {
             ) {
                 ... on Customer {
                     id
+                    user {
+                        id
+                        verified
+                    }
+                }
+                ... on ErrorResult {
+                    message
                 }
             }
         }
     `);
+    expect(cartCustomer.createCustomer.user?.verified, JSON.stringify(cartCustomer)).toBe(true);
+    const savedUser = await server.app
+        .get(TransactionalConnection)
+        .rawConnection.getRepository(User)
+        .findOne({ where: { identifier: 'cart-qa@example.test' }, relations: ['roles', 'roles.channels'] });
+    expect(
+        savedUser?.roles.some(role =>
+            role.channels.some(c => String(c.id) === String(strategy.decodeId(channel.id))),
+        ),
+        JSON.stringify(
+            savedUser?.roles.map(role => ({ code: role.code, channels: role.channels.map(c => c.id) })),
+        ),
+    ).toBe(true);
+    adminClient.setChannelToken(cartChannelToken);
     await shopClient.asUserWithCredentials('cart-qa@example.test', 'local-cart-qa-password');
     await read();
 }, TEST_SETUP_TIMEOUT_MS);
@@ -389,7 +584,7 @@ describe('complete cart domain on MySQL', () => {
     });
 
     it('does not reveal another session cart or receipt', async () => {
-        const other = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        const other = newCartShopClient();
         const cart = (await other.query(query)).storefrontCart;
         expect(cart.lines).toEqual([]);
         expect(cart.id).not.toBe((await read()).id);
@@ -397,7 +592,7 @@ describe('complete cart domain on MySQL', () => {
 
     it('preserves a concurrent account edit during login merge and rejects an old guest command', async () => {
         const before = await read();
-        const guest = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        const guest = newCartShopClient();
         const empty = (await guest.query(query)).storefrontCart;
         const input = {
             cartId: empty.id,
@@ -627,9 +822,11 @@ describe('complete cart domain on MySQL', () => {
 // Controlled checkout uses the real cart, payment, fulfillment and store plugins against a disposable DB.
 describe('controlled test payments', () => {
     it('limits QA settlement to its marked item while preserving normal order and fulfillment steps', async () => {
-        const client = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
-        const guest = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
-        const other = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        adminClient.setChannelToken(null);
+        adminClient.setRequestHeader(config.apiOptions.channelTokenKey ?? 'vendure-token', null);
+        const client = newCartShopClient();
+        const guest = newCartShopClient();
+        const other = newCartShopClient();
         const channel = (
             await adminClient.query(gql`
                 query {
@@ -667,7 +864,7 @@ describe('controlled test payments', () => {
         });
         const customer = created.createCustomer;
         expect(customer.user?.verified, customer.message).toBe(true);
-        const code = `controlled-test-payment-${channel.id}`;
+        const code = 'controlled-test-payment-platform';
         const qaMarker = 'Controlled QA checkout marker';
         const input = {
             code,
@@ -825,6 +1022,19 @@ describe('controlled test payments', () => {
         );
         await expect(client.query(pay, { method: code })).rejects.toThrow();
         await adminClient.query(updateMethod, { input: { id: method.id, enabled: true } });
+        adminClient.setChannelToken(cartChannelToken);
+        await adminClient.query(
+            gql`
+                mutation ($id: ID!) {
+                    setMyStorePaymentOptionEnabled(id: $id, enabled: true) {
+                        id
+                    }
+                }
+            `,
+            { id: method.id },
+        );
+        adminClient.setChannelToken(null);
+        adminClient.setRequestHeader(config.apiOptions.channelTokenKey ?? 'vendure-token', null);
         await expect(
             adminClient.query(updateMethod, { input: { id: method.id, checker: null } }),
         ).rejects.toThrow('测试');
@@ -982,6 +1192,7 @@ describe('controlled test payments', () => {
         const physicalLine = mixedPaid.lines.find(
             (line: any) => line.productVariant.sku === 'CART-PHYSICAL-QA',
         );
+        adminClient.setChannelToken(cartChannelToken);
         const fulfillment = (
             await adminClient.query(
                 gql`
@@ -1025,6 +1236,8 @@ describe('controlled test payments', () => {
         expect(Number(deliveries[0].count)).toBeGreaterThan(
             Number((baseline.manual_digital_delivery as any[])[0].count),
         );
+        adminClient.setChannelToken(null);
+        adminClient.setRequestHeader(config.apiOptions.channelTokenKey ?? 'vendure-token', null);
         await adminClient.query(updateMethod, { input: { id: method.id, enabled: false } });
         expect(before.checkoutOrder.id).not.toBe(regular.id);
     }, 60_000);

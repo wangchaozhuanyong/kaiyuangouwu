@@ -1,7 +1,10 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
-import { GlobalFlag } from '@vendure/common/lib/generated-types';
+import { AssetType, GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
+    Asset,
+    AssetService,
+    AssetTranslation,
     AutoIncrementIdStrategy,
     CatalogResourceOwnership,
     Channel,
@@ -510,6 +513,54 @@ describe('platform governance real database and API boundaries', () => {
         const scoped = await server.app.get(CatalogChannelAssignmentsService).list(b);
         expect(scoped.channels.map(c => String(c.id))).toEqual([String(b.channelId)]);
         expect(scoped.items[0].channels.map(c => String(c.id))).toEqual([String(b.channelId)]);
+    });
+    it('keeps authorized product images readable while refusing source asset listing and mutation', async () => {
+        const assets = server.app.get(AssetService);
+        const image = await connection.rawConnection.getRepository(Asset).save(
+            new Asset({
+                type: AssetType.IMAGE,
+                mimeType: 'image/png',
+                width: 1,
+                height: 1,
+                fileSize: 1,
+                source: 'governance-source.png',
+                preview: 'governance-preview.png',
+                channels: [a.channel],
+                translations: [new AssetTranslation({ languageCode: LanguageCode.en, name: 'Source image' })],
+            }),
+        );
+        await connection.rawConnection.getRepository(AssetTranslation).save(
+            new AssetTranslation({
+                base: image,
+                languageCode: LanguageCode.en,
+                name: 'Source image',
+            }),
+        );
+        await connection.withTransaction(a, tx =>
+            server.app.get(ProductService).update(tx, {
+                id: productId,
+                assetIds: [image.id],
+                featuredAssetId: image.id,
+            }),
+        );
+        const preview = await catalog.preview(platform, {
+            idempotencyKey: randomUUID(),
+            action: 'GRANT',
+            productIds: [String(productId)],
+            targets: [{ channelId: String(b.channelId) }],
+        });
+        expect((await catalog.execute(platform, preview.id)).state).toBe('COMPLETE');
+        const offered = await server.app.get(ProductService).findOne(b, productId);
+        expect(offered).toBeDefined();
+        if (!offered) throw new Error('The authorized product must be visible in the selling store');
+        expect((await assets.getFeaturedAsset(b, offered))?.id).toBe(image.id);
+        expect((await assets.getEntityAssets(b, offered))?.map(asset => asset.id)).toContain(image.id);
+        expect(await assets.findOne(b, image.id)).toBeUndefined();
+        expect((await assets.findAll(b)).items.some(asset => asset.id === image.id)).toBe(false);
+        await expect(assets.update(b, { id: image.id, name: 'Unauthorized overwrite' })).rejects.toThrow();
+        await assets.delete(b, [image.id], true, true);
+        expect(await assets.findOne(a, image.id)).toBeDefined();
+        expect((await assets.findOne(a, image.id))?.name).toBe('Source image');
     });
     it('rejects stale previews, supports variant revocation and preserves remaining scopes', async () => {
         const input = {

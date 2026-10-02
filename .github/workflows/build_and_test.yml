@@ -618,7 +618,9 @@ jobs:
                   PLATFORM_GOVERNANCE_CI_MYSQL: '1'
                   E2E_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
                   VENDURE_DISABLE_TELEMETRY: 'true'
-              run: bunx vitest run --config scripts/vitest.platform-governance.mts packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts
+              run: |
+                  bunx vitest run --config scripts/vitest.platform-governance.mts packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts packages/dev-server/scripts/platform-governance-reconciliation-mysql.spec.ts
+                  DB=mysql bun run --cwd packages/dev-server test:cart-e2e
     e2e-postgres:
         name: e2e (postgres)
         needs: [detect-changes, build]

@@ -32,6 +32,8 @@ readonly release_base_sha="${VENDURE_RELEASE_BASE_SHA:-}"
 readonly release_data_risk="${VENDURE_RELEASE_DATA_RISK:-}"
 readonly release_backup_policy="${VENDURE_RELEASE_BACKUP_POLICY:-}"
 readonly release_affected_checks="${VENDURE_RELEASE_AFFECTED_CHECKS:-}"
+readonly governance_plan_sha256="${VENDURE_GOVERNANCE_DATA_PLAN_SHA256:-}"
+[[ -z "$governance_plan_sha256" || "$governance_plan_sha256" =~ ^[a-f0-9]{64}$ ]] || exit 1
 deploy_stage="input-validation"
 deploy_failure_reason=""
 deploy_failure_line=""
@@ -865,6 +867,13 @@ rm -f -- "${migration_failure_log}"
 migration_failure_log=""
 deploy_stage="migration-integrity-verification"
 node "${usdt_guard}" verify "${candidate}" "${usdt_snapshot}"
+if [[ -n "$governance_plan_sha256" ]]; then
+    deploy_stage="reviewed-platform-data-reconciliation"
+    load_verified_backup || fail 'reviewed platform reconciliation requires a verified fresh backup'
+    STORE_ISOLATION_MODULE_ROOT="${candidate}" VENDURE_GOVERNANCE_BACKUP_VERIFIED=true \
+        node "${candidate}/packages/dev-server/scripts/platform-governance-reconciliation.mjs" \
+        apply "$governance_plan_sha256"
+fi
 deploy_stage="server-readiness"
 NODE_ENV=production READINESS_PROCESS_ROLE=server RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"

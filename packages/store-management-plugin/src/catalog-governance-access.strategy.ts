@@ -17,7 +17,7 @@ export class CatalogGovernanceAccessStrategy extends DefaultEntityAccessControlS
         ctx: RequestContext,
     ): void {
         const type = entity.name;
-        const privateTypes = ['ProductOptionGroup', 'ProductOption', 'Facet', 'FacetValue', 'Tag'];
+        const privateTypes = ['ProductOptionGroup', 'ProductOption', 'Facet', 'FacetValue', 'Tag', 'Asset'];
         if (!ctx.channelId) return;
         if (ctx.channel.code === DEFAULT_CHANNEL_CODE) {
             // Keep historical account/order access, but never expose the management

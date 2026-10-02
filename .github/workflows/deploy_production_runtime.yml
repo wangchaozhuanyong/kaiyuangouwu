@@ -6,6 +6,10 @@ on:
             target_sha:
                 required: true
                 type: string
+            governance_plan_sha256:
+                required: false
+                default: ''
+                type: string
 
 permissions:
     actions: read
@@ -25,10 +29,12 @@ jobs:
             ARTIFACT_BUCKET: yunqiao-vendure-prod-backup-079740175286-apne1
             TARGET_SHA: ${{ inputs.target_sha }}
             SOURCE_RUN_ID: ${{ github.run_id }}
+            GOVERNANCE_PLAN_SHA256: ${{ inputs.governance_plan_sha256 || '' }}
 
         steps:
             - name: Validate release identity
               run: |
+                  [[ -z "$GOVERNANCE_PLAN_SHA256" || "$GOVERNANCE_PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]] || exit 1
                   if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
                     echo "target_sha is invalid" >&2
                     exit 1
@@ -240,6 +246,7 @@ jobs:
                           f"VENDURE_RELEASE_DATA_RISK={quote('RELEASE_DATA_RISK')}",
                           f"VENDURE_RELEASE_BACKUP_POLICY={quote('RELEASE_BACKUP_POLICY')}",
                           f"VENDURE_RELEASE_AFFECTED_CHECKS={quote('RELEASE_AFFECTED_CHECKS')}",
+                          f"VENDURE_GOVERNANCE_DATA_PLAN_SHA256={quote('GOVERNANCE_PLAN_SHA256')}",
                           f"VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS={quote('MEDIA_KEYS')}",
                           f"VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES={quote('MEDIA_CHANNEL_CODES')}",
                           f"VENDURE_REVIEWED_AUTH_VISUALS={quote('AUTH_VISUALS')}",

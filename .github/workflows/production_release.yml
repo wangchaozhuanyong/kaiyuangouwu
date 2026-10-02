@@ -6,11 +6,20 @@ on:
             target_sha:
                 required: true
                 type: string
+            governance_plan_sha256:
+                required: false
+                default: ''
+                type: string
     workflow_dispatch:
         inputs:
             target_sha:
                 description: 'Full 40-character SHA currently at origin/main'
                 required: true
+                type: string
+            governance_plan_sha256:
+                description: 'Separately approved platform reconciliation manifest SHA-256; blank keeps historical data unchanged'
+                required: false
+                default: ''
                 type: string
             media_keys:
                 description: 'Optional reviewed comma-separated storefront media keys or versioned group keys'
@@ -270,6 +279,7 @@ jobs:
         uses: ./.github/workflows/deploy_production_runtime.yml
         with:
             target_sha: ${{ inputs.target_sha || github.sha }}
+            governance_plan_sha256: ${{ inputs.governance_plan_sha256 || '' }}
         permissions:
             actions: read
             contents: read
