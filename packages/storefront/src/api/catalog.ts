@@ -30,6 +30,7 @@ function escapeRegExp(value: string): string {
  * collection with the same name and slug as an existing nested collection.
  * Prefer the existing nested collection in storefront navigation while keeping
  * unrelated same-name roots visible.
+ * Category artwork also configures an entry before its first product is added.
  */
 export function storefrontNavigationCollections(items: CollectionSummary[]): CollectionSummary[] {
     const nestedByName = new Map<string, CollectionSummary[]>();
@@ -37,13 +38,17 @@ export function storefrontNavigationCollections(items: CollectionSummary[]): Col
         .map(item => ({
             ...item,
             children: (item.children ?? []).filter(
-                child => child.productVariantCount == null || child.productVariantCount > 0,
+                child =>
+                    child.productVariantCount == null ||
+                    child.productVariantCount > 0 ||
+                    Boolean(child.featuredAsset?.preview?.trim()),
             ),
         }))
         .filter(
             item =>
                 item.productVariantCount == null ||
                 item.productVariantCount > 0 ||
+                Boolean(item.featuredAsset?.preview?.trim()) ||
                 (item.children?.length ?? 0) > 0,
         );
 
