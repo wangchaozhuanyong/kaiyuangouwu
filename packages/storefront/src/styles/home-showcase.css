@@ -8,54 +8,6 @@
     display: flex;
     flex-direction: column;
 }
-.hero-carousel-controls {
-    position: relative;
-    flex: none;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.hero-pagination {
-    position: static;
-    z-index: 3;
-    display: flex;
-    max-width: 100%;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 0 4px;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-}
-
-.hero-pagination button {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    display: grid;
-    place-items: center;
-}
-
-.hero-pagination .hero-dot::before {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--muted);
-    content: '';
-    transition: background 180ms ease;
-}
-
-.hero-pagination .hero-dot.is-active::before {
-    background: var(--accent);
-}
-
 /* Home Trust Guarantees Bar */
 .home-trust-bar {
     margin: 0 12px 10px;

@@ -736,7 +736,7 @@ export function HomePage() {
         const interactiveTarget =
             event.target instanceof Element ? event.target.closest('button, a, input, label') : null;
         const isHeroImageLink = interactiveTarget?.classList.contains('hero-rich-image-link');
-        if (heroCount < 2 || event.button !== 0 || (interactiveTarget && !isHeroImageLink)) {
+        if (!desktop || heroCount < 2 || event.button !== 0 || (interactiveTarget && !isHeroImageLink)) {
             return;
         }
         heroGestureRef.current = {
@@ -989,7 +989,13 @@ export function HomePage() {
                                     }}
                                 >
                                     <section
-                                        className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
+                                        className={[
+                                            'hero hero-image-overlay',
+                                            desktop && heroCount > 1 ? 'is-swipeable' : '',
+                                            overlayTrustBar ? 'has-service-overlay' : '',
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' ')}
                                         style={{
                                             aspectRatio:
                                                 desktop && !overlayTrustBar
@@ -1061,77 +1067,6 @@ export function HomePage() {
                                                 : ''}
                                         </span>
                                     </section>
-                                    {heroCount > 1 && (
-                                        <div className="hero-carousel-controls">
-                                            {desktop && heroCount > 1 && (
-                                                <div
-                                                    className="desktop-hero-navigation"
-                                                    role="group"
-                                                    aria-label={isZh ? '轮播切换' : 'Carousel navigation'}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        className="desktop-hero-arrow is-previous"
-                                                        aria-label={isZh ? '上一张轮播图' : 'Previous slide'}
-                                                        onClick={() =>
-                                                            selectHeroManually(
-                                                                heroIndexAfterManualMove(
-                                                                    heroIndex,
-                                                                    heroCount,
-                                                                    -1,
-                                                                ),
-                                                            )
-                                                        }
-                                                    >
-                                                        <ChevronLeft aria-hidden="true" />
-                                                    </button>
-                                                    <span className="desktop-hero-count" aria-hidden="true">
-                                                        <strong>
-                                                            {String(heroIndex + 1).padStart(2, '0')}
-                                                        </strong>
-                                                        <span>/ {String(heroCount).padStart(2, '0')}</span>
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        className="desktop-hero-arrow is-next"
-                                                        aria-label={isZh ? '下一张轮播图' : 'Next slide'}
-                                                        onClick={() =>
-                                                            selectHeroManually(
-                                                                heroIndexAfterManualMove(
-                                                                    heroIndex,
-                                                                    heroCount,
-                                                                    1,
-                                                                ),
-                                                            )
-                                                        }
-                                                    >
-                                                        <ChevronRight aria-hidden="true" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {heroCount > 1 && (
-                                                <div
-                                                    className="hero-pagination"
-                                                    aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
-                                                >
-                                                    {managedHeroes.map((item, index) => (
-                                                        <button
-                                                            type="button"
-                                                            key={item.id}
-                                                            className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
-                                                            aria-label={
-                                                                isZh
-                                                                    ? `第${index + 1}张广告`
-                                                                    : `Promotion ${index + 1}`
-                                                            }
-                                                            aria-current={index === heroIndex}
-                                                            onClick={() => selectHeroManually(index)}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
