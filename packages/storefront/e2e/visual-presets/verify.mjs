@@ -446,9 +446,19 @@ try {
                     await expect(page.locator('.auth-form-heading')).toBeVisible();
                     await expect(page.locator('.auth-form-toolbar')).toBeVisible();
                     await expect(page.locator('.auth-form-back-button')).toBeVisible();
-                    await expect(page.locator('.auth-form-column > .auth-form-brand')).toHaveText(
-                        '店铺皮肤验收',
-                    );
+                    const formBrand = page.locator('.auth-form-column > .auth-form-brand');
+                    if (requestedContent === 'auth-logo') {
+                        const logo = formBrand.locator('.auth-form-logo');
+                        await expect(logo).toHaveAttribute('data-safe-image', 'ready');
+                        await expect(logo).toHaveCSS('width', '180px');
+                        await expect(logo).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+                        const logoBox = await logo.boundingBox();
+                        expect(logoBox.height).toBeGreaterThanOrEqual(40);
+                        expect(logoBox.height).toBeLessThanOrEqual(48);
+                        await expect(logo.locator('img.safe-image')).toHaveCSS('object-fit', 'contain');
+                    } else {
+                        await expect(formBrand).toHaveText('店铺皮肤验收');
+                    }
                     const [toolbarBox, headingBox] = await Promise.all([
                         page.locator('.auth-form-toolbar').boundingBox(),
                         page.locator('.auth-form-heading').boundingBox(),
@@ -459,7 +469,7 @@ try {
                     await expect(page.locator('.auth-route-tabs')).toHaveCount(0);
                     if (width >= 1024) {
                         await expect(page.locator('.auth-hero')).toBeVisible();
-                        const heroImage = page.locator('.auth-hero img.safe-image');
+                        const heroImage = page.locator('.auth-hero > .safe-image-frame > img.safe-image');
                         await expect(heroImage).toBeVisible();
                         await expect(heroImage).toHaveCSS('object-fit', 'cover');
                         const [heroBox, formBox, imageBox, copyBox] = await Promise.all([
