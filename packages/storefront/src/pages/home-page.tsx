@@ -991,7 +991,10 @@ export function HomePage() {
                                     <section
                                         className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
                                         style={{
-                                            aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
+                                            aspectRatio:
+                                                desktop && !overlayTrustBar
+                                                    ? String(desktopHeroAspectRatio)
+                                                    : undefined,
                                         }}
                                         role="region"
                                         aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}

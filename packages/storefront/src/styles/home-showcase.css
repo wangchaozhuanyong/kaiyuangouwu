@@ -144,6 +144,7 @@
 .home-page .hero.hero-image-overlay.has-service-overlay {
     display: flex;
     flex-direction: column;
+    aspect-ratio: auto;
 }
 .home-page .hero.hero-image-overlay.has-service-overlay .hero-rich-content {
     flex-shrink: 0;
