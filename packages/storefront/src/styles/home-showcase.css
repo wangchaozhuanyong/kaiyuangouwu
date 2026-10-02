@@ -2169,8 +2169,14 @@ html[lang='en'] .quick-grid b {
     white-space: nowrap;
 }
 
-.section-header.has-end-subtitle {
-    align-items: flex-end;
+.section-header.has-end-subtitle,
+.section-header.has-end-subtitle .section-header-title-row {
+    align-items: last baseline;
+}
+
+/* Let the heading set the text baseline independently of the icon height. */
+.section-header.has-end-subtitle .section-header-icon-pill {
+    align-self: center;
 }
 
 .section-header.has-end-subtitle .section-header-end-subtitle {
