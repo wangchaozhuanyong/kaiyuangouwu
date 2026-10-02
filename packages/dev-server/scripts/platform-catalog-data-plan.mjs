@@ -243,9 +243,59 @@ export async function collectPlatformCatalogDataPlan(adapter, mapping = []) {
         m => !result.some(r => r.resourceType === m.resourceType && r.resourceId === String(m.resourceId)),
     );
     if (unknown.length) throw new Error('MAPPING_RESOURCE_NOT_FOUND');
+    // Fixed relationship IDs only, to prepare copies/remapping without guessing from names.
+    const referenceTables = {
+        productGroups: ['product_option_groups_product_option_group', ['productId', 'productOptionGroupId']],
+        optionGroups: ['product_option', ['id', 'groupId']],
+        variantOptions: ['product_variant_options_product_option', ['productVariantId', 'productOptionId']],
+        valueFacets: ['facet_value', ['id', 'facetId']],
+        productFacets: ['product_facet_values_facet_value', ['productId', 'facetValueId']],
+        variantFacets: ['product_variant_facet_values_facet_value', ['productVariantId', 'facetValueId']],
+        productAssets: ['product_asset', ['id', 'productId', 'assetId']],
+        variantAssets: ['product_variant_asset', ['id', 'productVariantId', 'assetId']],
+        productFeaturedAssets: ['product', ['id', 'featuredAssetId']],
+        variantFeaturedAssets: ['product_variant', ['id', 'featuredAssetId']],
+        assetTags: ['asset_tags_tag', ['assetId', 'tagId']],
+        profileAssets: [
+            'store_profile',
+            ['id', 'channelId', 'logoAssetId', 'logoOnLightAssetId', 'logoOnDarkAssetId'],
+        ],
+        blockAssets: ['storefront_content_block', ['id', 'channelId', 'imageAssetId']],
+        itemAssets: ['storefront_content_item', ['id', 'blockId', 'imageAssetId']],
+    };
+    const referenceEvidence = {};
+    for (const [key, [table, columns]] of Object.entries(referenceTables)) {
+        // Test/legacy adapters must provide column metadata before selecting any optional relationship.
+        referenceEvidence[key] = adapter.columnExists ? await optional(table, columns) : null;
+    }
+    const collectionFiltersAvailable =
+        adapter.kind === 'mysql' &&
+        adapter.columnExists &&
+        (await adapter.tableExists('collection')) &&
+        (await adapter.columnExists('collection', 'filters'));
+    referenceEvidence.collectionFilterDigests = collectionFiltersAvailable
+        ? await adapter.query(
+              'SELECT id, SHA2(CAST(filters AS CHAR), 256) AS filtersDigest FROM collection ORDER BY id',
+          )
+        : null;
+    referenceEvidence.collectionFacetIds = collectionFiltersAvailable
+        ? await adapter.query(`
+        SELECT c.id AS collectionId, ids.facetValueId
+        FROM collection c
+        JOIN JSON_TABLE(CASE WHEN JSON_VALID(c.filters) THEN c.filters ELSE JSON_ARRAY() END,
+            '$[*]' COLUMNS (filterCode VARCHAR(128) PATH '$.code',
+                NESTED PATH '$.args[*]' COLUMNS (argName VARCHAR(128) PATH '$.name', argValue LONGTEXT PATH '$.value'))) args
+        JOIN JSON_TABLE(CASE WHEN JSON_VALID(args.argValue) THEN args.argValue ELSE JSON_ARRAY() END,
+            '$[*]' COLUMNS (facetValueId VARCHAR(64) PATH '$')) ids
+        WHERE args.filterCode = 'facet-value-filter' AND args.argName = 'facetValueIds'
+            AND ids.facetValueId REGEXP '^[0-9]+$'
+        ORDER BY c.id, ids.facetValueId
+    `)
+        : null;
     const snapshotHash = digest({
         channels: channels.map(c => ({ id: String(c.id), isDefault: c.code === '__default_channel__' })),
         resources: result,
+        referenceEvidence,
     });
     return {
         schema: 'vendure-platform-catalog-data-plan-v2',
@@ -254,6 +304,7 @@ export async function collectPlatformCatalogDataPlan(adapter, mapping = []) {
         defaultChannelId: String(defaultId),
         snapshotHash,
         resources: result,
+        referenceEvidence,
         safeguards: [
             'NO_AUTOMATIC_CROSS_STORE_GRANTS',
             'NO_CHANNEL_DELETION',
