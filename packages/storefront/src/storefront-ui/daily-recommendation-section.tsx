@@ -34,8 +34,9 @@ export function DailyRecommendationSection({
     onProduct: (product: Product) => void;
 }) {
     const query = useDailyRecommendations(api, market, language, enabled);
-    // Yesterday's cached picks must not masquerade as today's recommendations after a failed refresh.
-    const data = query.data && Date.parse(query.data.expiresAt) > Date.now() ? query.data : undefined;
+    // This document keeps its first selection, including across midnight. A full
+    // reload fetches today's selection; recommendations are never persisted.
+    const data = query.data;
     const products = data?.items.slice(0, limit) ?? [];
     const unavailable = query.isError || query.isPaused;
     if (unavailable && !data)

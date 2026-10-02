@@ -22,6 +22,7 @@ import {
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
 import { CatalogImportAction } from '../../src/pages/Catalog/import/CatalogImportAction';
 import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
+import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { ProfitReportModule } from '../../src/pages/Sales/ProfitReportModule';
@@ -41,6 +42,7 @@ const viewLabels: Record<string, string> = {
     sales: '订单列表',
     reviews: '买家评价',
     catalog: '商品列表',
+    suppliers: '供货商',
     paymentSettings: '支付设置',
     product: '商品编辑',
     profit: '利润统计',
@@ -296,6 +298,9 @@ const data: Record<string, unknown> = {
     products: { items: [product], totalItems: 1 },
     catalogProductOperations: [],
     physicalFulfillmentTodoCount: 3,
+    fulfillmentDeliveryExceptions: empty,
+    storefrontReviewSettings: { enabled: true },
+    catalogProductChannelAssignments: empty,
     afterSalesRequests: { totalItems: 2, items: [] },
     storefrontReviews: {
         totalItems: 1,
@@ -343,7 +348,23 @@ const data: Record<string, unknown> = {
     productOptionGroups: empty,
     collections: { items: collections, totalItems: collections.length },
     selectedCollections: empty,
-    catalogSuppliers: empty,
+    catalogSuppliers: {
+        items: Array.from({ length: params.has('empty') ? 0 : params.has('multi') ? 3 : 1 }, (_, i) => ({
+            id: `supplier-${i}`,
+            name: `[QA] 模拟采购供货商 ${i + 1}`,
+            code: `QA-SUPPLIER-${i + 1}`,
+            enabled: false,
+            contactName: null,
+            phone: null,
+            email: null,
+            address: null,
+            notes: null,
+            linkedVariantCount: 0,
+            createdAt: now,
+            updatedAt: now,
+        })),
+        totalItems: params.has('empty') ? 0 : params.has('multi') ? 3 : 1,
+    },
     suppliers: empty,
     catalogProductWorkspace: {
         productId: product.id,
@@ -426,6 +447,7 @@ const data: Record<string, unknown> = {
     storePaymentStats: [{ ...payment, settledCount: 1, refundCount: 0, grossAmount: 5000 }],
     storePaymentDetails: { items: [payment], totalItems: 1 },
     storeUsdtManualRefunds: empty,
+    storeUsdtReconciliationActions: [],
     storeUsdtPaymentStats: [
         {
             channelId: channel.id,
@@ -550,7 +572,13 @@ class FixtureBoundary extends React.Component<React.PropsWithChildren, { error: 
         return { error: error.stack ?? error.message };
     }
     render() {
-        return this.state.error ? <pre role="alert">{this.state.error}</pre> : this.props.children;
+        return this.state.error ? (
+            <pre data-layout-fixture-error role="alert">
+                {this.state.error}
+            </pre>
+        ) : (
+            this.props.children
+        );
     }
 }
 const paymentSettingsData = {
@@ -568,6 +596,7 @@ const modules: Record<string, React.ReactNode> = {
     sales: <SalesModule />,
     reviews: <ReviewsModule />,
     catalog: <CatalogModule />,
+    suppliers: <SuppliersModule />,
     paymentSettings: (
         <div className="p-5">
             <PaymentShippingManager

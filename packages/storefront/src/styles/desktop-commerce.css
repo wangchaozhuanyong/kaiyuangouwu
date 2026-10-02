@@ -564,10 +564,11 @@
         white-space: nowrap;
         border: 0;
     }
-    .desktop-account-page :is(h1, h2, p) {
+    /* Page defaults must not override the shared components' typography and states. */
+    :where(.desktop-account-page) :is(h1, h2, p) {
         margin: 0;
     }
-    .desktop-account-page button {
+    :where(.desktop-account-page button) {
         cursor: pointer;
         font: inherit;
     }
@@ -1061,7 +1062,7 @@
     .desktop-account-page .legal-footer {
         margin: 0;
     }
-    .desktop-account-page button:hover {
+    :where(.desktop-account-page button:hover) {
         color: var(--accent-ink);
     }
 

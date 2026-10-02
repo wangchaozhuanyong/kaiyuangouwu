@@ -601,17 +601,6 @@
         border-top: 0;
     }
 
-    .payment-layout {
-        width: 100%;
-        max-width: none;
-        margin: 24px auto 0;
-        padding-bottom: 48px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
-        align-items: start;
-        gap: 20px;
-    }
-
     .payment-test-notice,
     .payment-method-section,
     .payment-summary {

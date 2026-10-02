@@ -3,6 +3,16 @@
 @source '../src/storefront-ui/page-shell.tsx';
 @source './main.tsx';
 
+@layer base {
+    /* The isolated tool uses the same neutral edge contract as the storefront. */
+    *,
+    ::before,
+    ::after,
+    ::backdrop {
+        border-color: var(--line-subtle, var(--line));
+    }
+}
+
 :root {
     --shadow-sm: var(--skin-card-shadow);
     font-family:

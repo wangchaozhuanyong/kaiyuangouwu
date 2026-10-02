@@ -433,6 +433,27 @@
     cursor: pointer;
 }
 
+/* Reading separators sit inside the existing gaps without enlarging the card. */
+.support-channel-list,
+.support-contact-note {
+    position: relative;
+}
+
+.support-hours-card + .support-channel-list::before,
+.support-channel-list + .support-contact-note::before,
+.support-channel-row + .support-channel-row::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: calc(var(--space-section) / -2);
+    border-top: 1px solid var(--line-subtle);
+    pointer-events: none;
+}
+
+.support-channel-row + .support-channel-row::before {
+    top: calc(var(--space-8) / -2);
+}
+
 .support-channel-row:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--control-surface-hover);
 }

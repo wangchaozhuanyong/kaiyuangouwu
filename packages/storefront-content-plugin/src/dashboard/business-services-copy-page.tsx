@@ -242,14 +242,14 @@ function BusinessServicesCopyPage() {
                                                         说明
                                                     </Label>
                                                     <span className="text-xs text-muted-foreground">
-                                                        {translation.body.length}/{isZh ? 100 : 180}
+                                                        {translation.body.length}/200
                                                     </span>
                                                 </div>
                                                 <Textarea
                                                     id={`business-services-body-${languageCode}`}
                                                     value={translation.body}
                                                     rows={4}
-                                                    maxLength={isZh ? 100 : 180}
+                                                    maxLength={200}
                                                     onChange={event =>
                                                         updateTranslation(languageCode, {
                                                             body: event.target.value,

@@ -13,7 +13,6 @@ import {
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
-import { useDesktopLayout } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import {
@@ -23,7 +22,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
-import { EmptyState, SubHeader } from './storefront-ui/page-shell';
+import { EmptyState, Sheet, SubHeader, SubpageBody } from './storefront-ui/page-shell';
 import { formatMoney, SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -44,6 +43,7 @@ function reviewVariantLabel(candidate: StorefrontReviewCandidate): string {
 }
 
 const REVIEW_PAGE_SIZE = 20;
+type ReviewDraft = Pick<SubmitStorefrontReviewInput, 'rating' | 'title' | 'body' | 'anonymous' | 'images'>;
 
 export function ReviewCenterPage({
     api,
@@ -67,7 +67,6 @@ export function ReviewCenterPage({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const queryClient = useQueryClient();
     const reviewsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReviews(
@@ -102,11 +101,14 @@ export function ReviewCenterPage({
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
     const [activeList, setActiveList] = useState<'pending' | 'submitted'>('pending');
     const [showAllCandidates, setShowAllCandidates] = useState(false);
-    const composerRef = useRef<HTMLFormElement>(null);
+    // Drafts live only in this mounted page; they never enter storage or another customer/store scope.
+    const drafts = useRef(new Map<string, ReviewDraft>());
+    const draftScope = `${storefrontQueryKeys.market(market)}:${customer?.id ?? ''}`;
     const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, 4);
     useEffect(() => {
-        if (selected) composerRef.current?.scrollIntoView({ block: 'start' });
-    }, [selected]);
+        drafts.current.clear();
+        setSelected(null);
+    }, [draftScope]);
     const submit = async (input: SubmitStorefrontReviewInput) => {
         await api.submitReview(input);
         await Promise.all([
@@ -125,6 +127,7 @@ export function ReviewCenterPage({
                 ),
             }),
         ]);
+        drafts.current.delete(input.orderLineId);
         setSelected(null);
         setActiveList('submitted');
         onNotify(isZh ? '评价已提交，审核通过后将公开展示' : 'Review submitted for moderation');
@@ -133,281 +136,314 @@ export function ReviewCenterPage({
     return (
         <main className="page subpage review-center-page">
             <SubHeader title={isZh ? '评价中心' : 'Reviews'} language={language} onBack={onBack} />
-            {!customer ? (
-                <EmptyState
-                    icon={<MessageSquare />}
-                    title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
-                    detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={onSignIn}
-                />
-            ) : reviewsQuery.isLoading || candidatesQuery.isLoading ? (
-                <div className="review-center-loading" aria-busy="true">
-                    <span />
-                    <span />
-                    <span />
-                </div>
-            ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
-              (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
-              reviewsQuery.isError ||
-              candidatesQuery.isError ? (
-                <EmptyState
-                    icon={<RefreshCw />}
-                    title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
-                    detail={
-                        reviewsQuery.isPaused || candidatesQuery.isPaused
-                            ? offlineLoadError(language)
-                            : reviewsQuery.error instanceof Error
-                              ? storefrontErrorMessage(reviewsQuery.error, language)
-                              : candidatesQuery.error instanceof Error
-                                ? storefrontErrorMessage(candidatesQuery.error, language)
-                                : ''
-                    }
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
-                />
-            ) : (
-                <>
-                    {desktop && (
-                        <div className="desktop-account-workbench-toolbar review-center-toolbar">
+            <SubpageBody>
+                {!customer ? (
+                    <EmptyState
+                        icon={<MessageSquare />}
+                        title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
+                        detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
+                        action={isZh ? '去登录' : 'Sign in'}
+                        onAction={onSignIn}
+                    />
+                ) : reviewsQuery.isLoading || candidatesQuery.isLoading ? (
+                    <div className="review-center-loading" aria-busy="true">
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
+                  (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
+                  reviewsQuery.isError ||
+                  candidatesQuery.isError ? (
+                    <EmptyState
+                        icon={<RefreshCw />}
+                        title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
+                        detail={
+                            reviewsQuery.isPaused || candidatesQuery.isPaused
+                                ? offlineLoadError(language)
+                                : reviewsQuery.error instanceof Error
+                                  ? storefrontErrorMessage(reviewsQuery.error, language)
+                                  : candidatesQuery.error instanceof Error
+                                    ? storefrontErrorMessage(candidatesQuery.error, language)
+                                    : ''
+                        }
+                        action={isZh ? '重试' : 'Retry'}
+                        onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
+                    />
+                ) : (
+                    <div className="review-center-workspace">
+                        <header className="review-center-header">
                             <h1>{isZh ? '评价中心' : 'Reviews'}</h1>
-                            <div role="tablist" aria-label={isZh ? '评价列表' : 'Review lists'}>
+                            <div
+                                className="review-center-tabs"
+                                role="tablist"
+                                aria-label={isZh ? '评价列表' : 'Review lists'}
+                                onKeyDown={event => {
+                                    const tabs = Array.from(
+                                        event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                                            '[role="tab"]',
+                                        ),
+                                    );
+                                    const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+                                    const next =
+                                        event.key === 'Home'
+                                            ? 0
+                                            : event.key === 'End'
+                                              ? tabs.length - 1
+                                              : event.key === 'ArrowRight'
+                                                ? (index + 1) % tabs.length
+                                                : event.key === 'ArrowLeft'
+                                                  ? (index + tabs.length - 1) % tabs.length
+                                                  : null;
+                                    if (next === null) return;
+                                    event.preventDefault();
+                                    tabs[next].focus();
+                                    tabs[next].click();
+                                }}
+                            >
                                 <button
                                     type="button"
                                     role="tab"
+                                    id="review-pending-tab"
                                     aria-selected={activeList === 'pending'}
+                                    tabIndex={activeList === 'pending' ? 0 : -1}
                                     aria-controls="review-pending-panel"
                                     onClick={() => setActiveList('pending')}
                                 >
-                                    {isZh
-                                        ? `待评价 ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`
-                                        : `To review ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`}
+                                    <span>{isZh ? '待评价' : 'To review'}</span>
+                                    <span className="review-section-count">
+                                        {candidates.length}
+                                        {candidatesQuery.hasNextPage ? '+' : ''}
+                                    </span>
                                 </button>
                                 <button
                                     type="button"
                                     role="tab"
+                                    id="review-submitted-tab"
                                     aria-selected={activeList === 'submitted'}
+                                    tabIndex={activeList === 'submitted' ? 0 : -1}
                                     aria-controls="review-submitted-panel"
                                     onClick={() => setActiveList('submitted')}
                                 >
-                                    {isZh ? `本次提交 ${reviews.length}` : `Submitted ${reviews.length}`}
+                                    <span>{isZh ? '我的评价' : 'My reviews'}</span>
+                                    <span className="review-section-count">{reviews.length}</span>
                                 </button>
                             </div>
-                        </div>
-                    )}
-                    {selected && (
-                        <ReviewComposer
-                            key={selected.orderLineId}
-                            formRef={composerRef}
-                            candidate={selected}
-                            language={language}
-                            locale={market.locale}
-                            onCancel={() => setSelected(null)}
-                            onSubmit={submit}
-                        />
-                    )}
-                    <section
-                        id="review-pending-panel"
-                        role={desktop ? 'tabpanel' : undefined}
-                        hidden={desktop && activeList !== 'pending'}
-                        className="review-center-section review-center-pending"
-                    >
-                        <header>
-                            <div>
-                                <strong>{isZh ? '待评价商品' : 'Ready to review'}</strong>
-                                <small>
-                                    {isZh
-                                        ? '选择一件商品，分享你的真实体验'
-                                        : 'Choose an item and share your experience'}
-                                </small>
-                            </div>
-                            <span>
-                                {candidates.length}
-                                {candidatesQuery.hasNextPage ? '+' : ''}
-                            </span>
                         </header>
-                        {candidates.length ? (
-                            <div className="review-candidate-list" id="review-candidate-list">
-                                {visibleCandidates.map(candidate => {
-                                    const imageUrl = candidate.imageUrl;
-                                    const variantLabel = reviewVariantLabel(candidate);
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={candidate.orderLineId}
-                                            className="review-candidate-row"
-                                            aria-expanded={selected?.orderLineId === candidate.orderLineId}
-                                            aria-controls={
-                                                selected?.orderLineId === candidate.orderLineId
-                                                    ? 'review-composer'
-                                                    : undefined
-                                            }
-                                            onClick={() => setSelected(candidate)}
-                                        >
-                                            <span className="review-candidate-image">
-                                                {imageUrl ? (
-                                                    <SafeImage
-                                                        src={imageUrl}
-                                                        alt=""
-                                                        imageKind="thumbnail"
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                    />
-                                                ) : (
-                                                    <Package aria-hidden="true" />
-                                                )}
-                                            </span>
-                                            <span className="review-candidate-copy">
-                                                <strong>{candidate.productName}</strong>
-                                                {variantLabel && <small>{variantLabel}</small>}
-                                                <small>
-                                                    {isZh ? '含税单价 ' : 'Unit price incl. tax '}
-                                                    {formatMoney(
-                                                        candidate.unitPriceWithTax,
-                                                        candidate.currencyCode,
-                                                        market.locale,
-                                                    )}
-                                                </small>
-                                                <small
-                                                    className="review-candidate-order"
-                                                    title={`${candidate.orderCode} · ${candidate.orderLineId}`}
-                                                >
-                                                    {isZh ? '订单行 ' : 'Line '}
-                                                    {candidate.orderLineId}
-                                                    {' · '}
-                                                    {isZh ? '订单 ' : 'Order '}
-                                                    {candidate.orderCode}
-                                                </small>
-                                            </span>
-                                            <span className="review-candidate-action">
-                                                {isZh ? '写评价' : 'Review'}
-                                                <ChevronRight aria-hidden="true" />
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                                {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
-                                    <button
-                                        type="button"
-                                        className="review-candidate-more"
-                                        aria-expanded={showAllCandidates}
-                                        aria-controls="review-candidate-list"
-                                        disabled={candidatesQuery.isFetchingNextPage}
-                                        onClick={() => {
-                                            if (!showAllCandidates) setShowAllCandidates(true);
-                                            else if (candidatesQuery.hasNextPage)
-                                                void candidatesQuery.fetchNextPage();
-                                            else setShowAllCandidates(false);
-                                        }}
-                                    >
-                                        {showAllCandidates
-                                            ? candidatesQuery.isFetchingNextPage
-                                                ? isZh
-                                                    ? '加载中…'
-                                                    : 'Loading…'
-                                                : candidatesQuery.hasNextPage
-                                                  ? isZh
-                                                      ? '加载更多商品'
-                                                      : 'Load more items'
-                                                  : isZh
-                                                    ? '收起列表'
-                                                    : 'Show fewer'
-                                            : isZh
-                                              ? '查看其余商品'
-                                              : 'Show more items'}
-                                        {!showAllCandidates || !candidatesQuery.hasNextPage ? (
-                                            <ChevronDown aria-hidden="true" />
-                                        ) : null}
-                                    </button>
-                                )}
-                                {candidatesQuery.isFetchNextPageError && (
-                                    <p className="review-center-hint" role="alert">
-                                        {isZh
-                                            ? '加载更多商品失败，请重试'
-                                            : 'Could not load more items. Try again.'}
-                                    </p>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="review-center-hint">
-                                {isZh
-                                    ? '付款成功的商品均可在此评价，欢迎分享真实体验'
-                                    : 'Paid items will appear here for you to share your experience'}
-                            </p>
-                        )}
-                    </section>
-                    <section
-                        id="review-submitted-panel"
-                        role={desktop ? 'tabpanel' : undefined}
-                        hidden={desktop && activeList !== 'submitted'}
-                        className="review-center-section"
-                    >
-                        <header>
-                            <div>
-                                <strong>{isZh ? '我的评价' : 'My reviews'}</strong>
-                                <small>
-                                    {isZh
-                                        ? '查看已提交的评价与审核状态'
-                                        : 'View submitted reviews and status'}
-                                </small>
-                            </div>
-                            <span>{reviews.length}</span>
-                        </header>
-                        {reviews.length ? (
-                            <div className="my-review-list">
-                                {reviews.map(review => (
-                                    <article key={review.id}>
-                                        <header>
-                                            <button
-                                                type="button"
-                                                disabled={!review.productId}
-                                                onClick={() =>
-                                                    review.productId && onProduct(review.productId)
-                                                }
-                                            >
-                                                {review.productName}
-                                            </button>
-                                            <ReviewStateBadge state={review.state} language={language} />
-                                        </header>
-                                        <ReviewStars rating={review.rating} />
-                                        <strong>{review.title}</strong>
-                                        <p>{review.body}</p>
-                                        {review.images?.length > 0 && (
-                                            <ReviewImageGallery images={review.images} language={language} />
-                                        )}
-                                        {review.merchantResponse && (
-                                            <blockquote>
-                                                <strong>{isZh ? '商家回复' : 'Store response'}</strong>
-                                                {review.merchantResponse}
-                                            </blockquote>
-                                        )}
-                                        <small>{formatReviewDate(review.createdAt, language)}</small>
-                                    </article>
-                                ))}
-                            </div>
-                        ) : candidates.length ? (
-                            <p className="review-center-hint">
-                                {isZh
-                                    ? '还没有提交评价。选择上方商品，写下第一条使用体验。'
-                                    : 'No submitted reviews yet. Choose an item above to write your first one.'}
-                            </p>
-                        ) : (
-                            <EmptyState
-                                compact
-                                icon={<MessageSquare />}
-                                title={isZh ? '还没有评价' : 'No reviews yet'}
-                                detail={
-                                    isZh
-                                        ? '完成购买后可以分享真实体验'
-                                        : 'Share your experience after a purchase'
-                                }
-                                action={isZh ? '去选购' : 'Shop now'}
-                                onAction={onShop}
+                        {selected && (
+                            <ReviewComposer
+                                key={selected.orderLineId}
+                                draft={drafts.current.get(selected.orderLineId)}
+                                onDraftChange={draft => drafts.current.set(selected.orderLineId, draft)}
+                                candidate={selected}
+                                language={language}
+                                locale={market.locale}
+                                onCancel={() => setSelected(null)}
+                                onSubmit={submit}
                             />
                         )}
-                    </section>
-                </>
-            )}
+                        <section
+                            id="review-pending-panel"
+                            role="tabpanel"
+                            aria-labelledby="review-pending-tab"
+                            tabIndex={0}
+                            hidden={activeList !== 'pending'}
+                            className="review-center-section review-center-pending"
+                        >
+                            {candidates.length ? (
+                                <div className="review-candidate-list" id="review-candidate-list">
+                                    {visibleCandidates.map(candidate => {
+                                        const imageUrl = candidate.imageUrl;
+                                        const variantLabel = reviewVariantLabel(candidate);
+                                        return (
+                                            <article
+                                                key={candidate.orderLineId}
+                                                className="review-candidate-row"
+                                            >
+                                                <span className="review-candidate-image">
+                                                    {imageUrl ? (
+                                                        <SafeImage
+                                                            src={imageUrl}
+                                                            alt=""
+                                                            imageKind="thumbnail"
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                        />
+                                                    ) : (
+                                                        <Package aria-hidden="true" />
+                                                    )}
+                                                </span>
+                                                <span className="review-candidate-copy">
+                                                    <strong>{candidate.productName}</strong>
+                                                    {variantLabel && <small>{variantLabel}</small>}
+                                                    <small>
+                                                        {isZh ? '含税单价 ' : 'Unit price incl. tax '}
+                                                        {formatMoney(
+                                                            candidate.unitPriceWithTax,
+                                                            candidate.currencyCode,
+                                                            market.locale,
+                                                        )}
+                                                    </small>
+                                                    <small
+                                                        className="review-candidate-order"
+                                                        title={`${candidate.orderCode} · ${candidate.orderLineId}`}
+                                                    >
+                                                        {isZh ? '订单行 ' : 'Line '}
+                                                        {candidate.orderLineId}
+                                                        {' · '}
+                                                        {isZh ? '订单 ' : 'Order '}
+                                                        {candidate.orderCode}
+                                                    </small>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className="review-candidate-action"
+                                                    aria-haspopup="dialog"
+                                                    aria-expanded={
+                                                        selected?.orderLineId === candidate.orderLineId
+                                                    }
+                                                    aria-label={`${isZh ? '写评价' : 'Review'}: ${candidate.productName}`}
+                                                    onClick={() => setSelected(candidate)}
+                                                >
+                                                    {isZh ? '写评价' : 'Review'}
+                                                    <ChevronRight aria-hidden="true" />
+                                                </button>
+                                            </article>
+                                        );
+                                    })}
+                                    {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
+                                        <button
+                                            type="button"
+                                            className="review-candidate-more"
+                                            aria-expanded={showAllCandidates}
+                                            aria-controls="review-candidate-list"
+                                            disabled={candidatesQuery.isFetchingNextPage}
+                                            onClick={() => {
+                                                if (!showAllCandidates) setShowAllCandidates(true);
+                                                else if (candidatesQuery.hasNextPage)
+                                                    void candidatesQuery.fetchNextPage();
+                                                else setShowAllCandidates(false);
+                                            }}
+                                        >
+                                            {showAllCandidates
+                                                ? candidatesQuery.isFetchingNextPage
+                                                    ? isZh
+                                                        ? '加载中…'
+                                                        : 'Loading…'
+                                                    : candidatesQuery.hasNextPage
+                                                      ? isZh
+                                                          ? '加载更多商品'
+                                                          : 'Load more items'
+                                                      : isZh
+                                                        ? '收起列表'
+                                                        : 'Show fewer'
+                                                : isZh
+                                                  ? '查看其余商品'
+                                                  : 'Show more items'}
+                                            {!showAllCandidates || !candidatesQuery.hasNextPage ? (
+                                                <ChevronDown aria-hidden="true" />
+                                            ) : null}
+                                        </button>
+                                    )}
+                                    {candidatesQuery.isFetchNextPageError && (
+                                        <p className="review-center-hint" role="alert">
+                                            {isZh
+                                                ? '加载更多商品失败，请重试'
+                                                : 'Could not load more items. Try again.'}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    compact
+                                    icon={<Package />}
+                                    title={isZh ? '暂无待评价商品' : 'No items to review'}
+                                    detail={
+                                        isZh
+                                            ? '购买后的可评价商品会显示在这里'
+                                            : 'Eligible purchases will appear here'
+                                    }
+                                    action={isZh ? '去选购' : 'Shop now'}
+                                    onAction={onShop}
+                                />
+                            )}
+                        </section>
+                        <section
+                            id="review-submitted-panel"
+                            role="tabpanel"
+                            aria-labelledby="review-submitted-tab"
+                            tabIndex={0}
+                            hidden={activeList !== 'submitted'}
+                            className="review-center-section"
+                        >
+                            {reviews.length ? (
+                                <div className="my-review-list">
+                                    {reviews.map(review => (
+                                        <article key={review.id}>
+                                            <header>
+                                                <button
+                                                    type="button"
+                                                    disabled={!review.productId}
+                                                    onClick={() =>
+                                                        review.productId && onProduct(review.productId)
+                                                    }
+                                                >
+                                                    {review.productName}
+                                                </button>
+                                                <ReviewStateBadge state={review.state} language={language} />
+                                            </header>
+                                            <ReviewStars rating={review.rating} />
+                                            <strong>{review.title}</strong>
+                                            <p>{review.body}</p>
+                                            {review.images?.length > 0 && (
+                                                <ReviewImageGallery
+                                                    images={review.images}
+                                                    language={language}
+                                                />
+                                            )}
+                                            {review.merchantResponse && (
+                                                <blockquote>
+                                                    <strong>{isZh ? '商家回复' : 'Store response'}</strong>
+                                                    {review.merchantResponse}
+                                                </blockquote>
+                                            )}
+                                            <small>{formatReviewDate(review.createdAt, language)}</small>
+                                        </article>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    compact
+                                    icon={<MessageSquare />}
+                                    title={isZh ? '还没有评价' : 'No reviews yet'}
+                                    detail={
+                                        isZh
+                                            ? '提交后的评价与审核状态会显示在这里'
+                                            : 'Your reviews and their status will appear here'
+                                    }
+                                    action={
+                                        candidates.length
+                                            ? isZh
+                                                ? '去评价'
+                                                : 'Review a purchase'
+                                            : isZh
+                                              ? '去选购'
+                                              : 'Shop now'
+                                    }
+                                    onAction={
+                                        candidates.length
+                                            ? () => {
+                                                  setActiveList('pending');
+                                                  document.getElementById('review-pending-tab')?.focus();
+                                              }
+                                            : onShop
+                                    }
+                                />
+                            )}
+                        </section>
+                    </div>
+                )}
+            </SubpageBody>
         </main>
     );
 }
@@ -571,14 +607,16 @@ function ReviewImageGallery({
 }
 
 function ReviewComposer({
-    formRef,
+    draft,
+    onDraftChange,
     candidate,
     language,
     locale,
     onCancel,
     onSubmit,
 }: {
-    formRef: React.RefObject<HTMLFormElement | null>;
+    draft?: ReviewDraft;
+    onDraftChange: (draft: ReviewDraft) => void;
     candidate: StorefrontReviewCandidate;
     language: StorefrontLanguage;
     locale: string;
@@ -586,14 +624,21 @@ function ReviewComposer({
     onSubmit: (input: SubmitStorefrontReviewInput) => Promise<void>;
 }) {
     const isZh = language === 'zh';
-    const [rating, setRating] = useState(0);
-    const [title, setTitle] = useState('');
-    const [body, setBody] = useState('');
-    const [anonymous, setAnonymous] = useState(false);
-    const [images, setImages] = useState<File[]>([]);
+    const [rating, setRating] = useState(draft?.rating ?? 0);
+    const [title, setTitle] = useState(draft?.title ?? '');
+    const [body, setBody] = useState(draft?.body ?? '');
+    const [anonymous, setAnonymous] = useState(draft?.anonymous ?? false);
+    const [images, setImages] = useState<File[]>(draft?.images ?? []);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [error, setError] = useState('');
+    const errorRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (error) errorRef.current?.focus();
+    }, [error]);
     const [submitting, setSubmitting] = useState(false);
+    useEffect(() => {
+        onDraftChange({ rating, title, body, anonymous, images });
+    }, [rating, title, body, anonymous, images, onDraftChange]);
     useEffect(() => {
         const urls = images.map(file => URL.createObjectURL(file));
         setImagePreviews(urls);
@@ -631,148 +676,178 @@ function ReviewComposer({
         }
     };
     return (
-        <form
-            id="review-composer"
-            ref={formRef}
-            className="review-composer"
-            onSubmit={event => void submit(event)}
+        <Sheet
+            title={isZh ? '写评价' : 'Write a review'}
+            language={language}
+            side="right"
+            className="review-composer-sheet"
+            onClose={() => {
+                if (!submitting) onCancel();
+            }}
         >
-            <header>
-                <span>
-                    <strong>{candidate.productName}</strong>
-                    {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
-                    <small>
-                        {formatMoney(candidate.unitPriceWithTax, candidate.currencyCode, locale)}
-                        {' · '}
-                        {isZh ? '订单行 ' : 'Line '}
-                        {candidate.orderLineId}
-                    </small>
-                </span>
-                <button type="button" onClick={onCancel} disabled={submitting}>
-                    {isZh ? '取消' : 'Cancel'}
-                </button>
-            </header>
-            <fieldset>
-                <legend>{isZh ? '商品评分' : 'Rating'}</legend>
-                <div className="review-rating-input">
-                    {[1, 2, 3, 4, 5].map(value => (
-                        <button
-                            type="button"
-                            key={value}
-                            className={value <= rating ? 'is-active' : undefined}
-                            onClick={() => setRating(value)}
-                            aria-label={isZh ? `${value} 星` : `${value} stars`}
-                            aria-pressed={value === rating}
-                        >
-                            <Star aria-hidden="true" />
-                        </button>
-                    ))}
-                </div>
-            </fieldset>
-            <label>
-                <span>{isZh ? '评价标题' : 'Title'}</span>
-                <input
-                    value={title}
-                    maxLength={120}
-                    onChange={event => setTitle(event.target.value)}
-                    disabled={submitting}
-                />
-            </label>
-            <label>
-                <span>{isZh ? '评价内容' : 'Review'}</span>
-                <textarea
-                    value={body}
-                    rows={5}
-                    maxLength={2000}
-                    onChange={event => setBody(event.target.value)}
-                    disabled={submitting}
-                />
-            </label>
-            <div className="review-image-picker">
-                <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
-                <div className="review-image-previews">
-                    {imagePreviews.map((url, index) => (
-                        <div className="review-image-preview" key={url}>
-                            <img
-                                src={url}
-                                alt={isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`}
-                            />
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setImages(current => current.filter((_, position) => position !== index))
-                                }
-                                disabled={submitting}
-                                aria-label={isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`}
-                            >
-                                <X aria-hidden="true" />
-                            </button>
+            <form
+                id="review-composer"
+                aria-busy={submitting}
+                className="review-composer"
+                onSubmit={event => void submit(event)}
+            >
+                <div className="review-composer-body">
+                    <header className="review-composer-summary">
+                        <span className="review-candidate-image">
+                            {candidate.imageUrl ? (
+                                <SafeImage src={candidate.imageUrl} alt="" imageKind="thumbnail" />
+                            ) : (
+                                <Package aria-hidden="true" />
+                            )}
+                        </span>
+                        <span>
+                            <strong>{candidate.productName}</strong>
+                            {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
+                            <small>
+                                {formatMoney(candidate.unitPriceWithTax, candidate.currencyCode, locale)}
+                                {' · '}
+                                {isZh ? '订单行 ' : 'Line '}
+                                {candidate.orderLineId}
+                            </small>
+                        </span>
+                    </header>
+                    <fieldset>
+                        <legend>{isZh ? '商品评分' : 'Rating'}</legend>
+                        <div className="review-rating-input">
+                            {[1, 2, 3, 4, 5].map(value => (
+                                <button
+                                    type="button"
+                                    key={value}
+                                    className={value <= rating ? 'is-active' : undefined}
+                                    onClick={() => setRating(value)}
+                                    disabled={submitting}
+                                    aria-label={isZh ? `${value} 星` : `${value} stars`}
+                                    aria-pressed={value === rating}
+                                >
+                                    <Star aria-hidden="true" />
+                                </button>
+                            ))}
                         </div>
-                    ))}
-                    {images.length < 4 && (
-                        <label className="review-image-add">
-                            <ImagePlus aria-hidden="true" />
-                            <span>{isZh ? '添加图片' : 'Add images'}</span>
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                multiple
-                                disabled={submitting}
-                                onChange={event => {
-                                    const selected = Array.from(event.target.files ?? []);
-                                    event.target.value = '';
-                                    if (images.length + selected.length > 4) {
-                                        setError(
-                                            isZh ? '每条评价最多上传 4 张图片' : 'Up to 4 images per review',
-                                        );
-                                        return;
-                                    }
-                                    if (
-                                        selected.some(
-                                            file =>
-                                                file.size > 5 * 1024 * 1024 ||
-                                                !['image/jpeg', 'image/png', 'image/webp'].includes(
-                                                    file.type,
-                                                ),
-                                        )
-                                    ) {
-                                        setError(
-                                            isZh
-                                                ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
-                                                : 'Use JPG, PNG or WebP images under 5 MB',
-                                        );
-                                        return;
-                                    }
-                                    setError('');
-                                    setImages(current => [...current, ...selected]);
-                                }}
-                            />
-                        </label>
+                    </fieldset>
+                    <label>
+                        <span>{isZh ? '评价标题' : 'Title'}</span>
+                        <input
+                            value={title}
+                            maxLength={120}
+                            onChange={event => setTitle(event.target.value)}
+                            disabled={submitting}
+                        />
+                    </label>
+                    <label>
+                        <span>{isZh ? '评价内容' : 'Review'}</span>
+                        <textarea
+                            value={body}
+                            rows={5}
+                            maxLength={2000}
+                            onChange={event => setBody(event.target.value)}
+                            disabled={submitting}
+                        />
+                    </label>
+                    <div className="review-image-picker">
+                        <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
+                        <div className="review-image-previews">
+                            {imagePreviews.map((url, index) => (
+                                <div className="review-image-preview" key={url}>
+                                    <img
+                                        src={url}
+                                        alt={
+                                            isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`
+                                        }
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setImages(current =>
+                                                current.filter((_, position) => position !== index),
+                                            )
+                                        }
+                                        disabled={submitting}
+                                        aria-label={
+                                            isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`
+                                        }
+                                    >
+                                        <X aria-hidden="true" />
+                                    </button>
+                                </div>
+                            ))}
+                            {images.length < 4 && (
+                                <label className="review-image-add">
+                                    <ImagePlus aria-hidden="true" />
+                                    <span>{isZh ? '添加图片' : 'Add images'}</span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        disabled={submitting}
+                                        onChange={event => {
+                                            const selected = Array.from(event.target.files ?? []);
+                                            event.target.value = '';
+                                            if (images.length + selected.length > 4) {
+                                                setError(
+                                                    isZh
+                                                        ? '每条评价最多上传 4 张图片'
+                                                        : 'Up to 4 images per review',
+                                                );
+                                                return;
+                                            }
+                                            if (
+                                                selected.some(
+                                                    file =>
+                                                        file.size > 5 * 1024 * 1024 ||
+                                                        !['image/jpeg', 'image/png', 'image/webp'].includes(
+                                                            file.type,
+                                                        ),
+                                                )
+                                            ) {
+                                                setError(
+                                                    isZh
+                                                        ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
+                                                        : 'Use JPG, PNG or WebP images under 5 MB',
+                                                );
+                                                return;
+                                            }
+                                            setError('');
+                                            setImages(current => [...current, ...selected]);
+                                        }}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                    </div>
+                    <label className="review-anonymous-option">
+                        <input
+                            type="checkbox"
+                            checked={anonymous}
+                            onChange={event => setAnonymous(event.target.checked)}
+                            disabled={submitting}
+                        />
+                        <span>
+                            {isZh
+                                ? '匿名展示（商家仍可核对订单归属）'
+                                : 'Display anonymously (the store can still verify your order)'}
+                        </span>
+                    </label>
+                    {error && (
+                        <small className="form-error" role="alert" ref={errorRef} tabIndex={-1}>
+                            {error}
+                        </small>
                     )}
                 </div>
-            </div>
-            <label className="review-anonymous-option">
-                <input
-                    type="checkbox"
-                    checked={anonymous}
-                    onChange={event => setAnonymous(event.target.checked)}
-                    disabled={submitting}
-                />
-                <span>
-                    {isZh
-                        ? '匿名展示（商家仍可核对订单归属）'
-                        : 'Display anonymously (the store can still verify your order)'}
-                </span>
-            </label>
-            {error && (
-                <small className="form-error" role="alert">
-                    {error}
-                </small>
-            )}
-            <button className="review-submit" type="submit" disabled={submitting}>
-                {submitting ? (isZh ? '提交中' : 'Submitting') : isZh ? '提交评价' : 'Submit review'}
-            </button>
-        </form>
+                <footer className="review-composer-footer">
+                    <button className="review-cancel" type="button" onClick={onCancel} disabled={submitting}>
+                        {isZh ? '取消' : 'Cancel'}
+                    </button>
+                    <button className="review-submit" type="submit" disabled={submitting}>
+                        {submitting ? (isZh ? '提交中' : 'Submitting') : isZh ? '提交评价' : 'Submit review'}
+                    </button>
+                </footer>
+            </form>
+        </Sheet>
     );
 }
 

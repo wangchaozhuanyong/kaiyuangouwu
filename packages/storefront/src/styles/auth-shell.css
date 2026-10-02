@@ -360,7 +360,7 @@
 }
 
 .auth-input-shell:hover {
-    border-color: var(--line-strong);
+    border-color: var(--line);
 }
 
 .auth-input-shell:focus-within {

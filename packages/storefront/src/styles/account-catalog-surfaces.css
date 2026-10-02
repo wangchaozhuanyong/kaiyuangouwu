@@ -585,7 +585,7 @@
 .coupon-center-pagination button {
     min-height: 40px;
     padding: 8px 12px;
-    border: 1px solid currentColor;
+    border: 1px solid var(--line);
     border-radius: 8px;
     background: transparent;
     color: inherit;

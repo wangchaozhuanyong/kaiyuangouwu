@@ -359,7 +359,6 @@
     }
     .desktop-product-buying .detail-quantity {
         box-shadow: none;
-        justify-content: flex-start;
     }
     .desktop-product-buying .detail-action-bar {
         position: static;
@@ -1070,11 +1069,6 @@
     .desktop-store-layout .checkout-options > button {
         min-height: 52px;
     }
-    .desktop-store-layout .payment-layout {
-        gap: 24px;
-        margin: 0;
-        grid-template-columns: minmax(0, 1fr) 340px;
-    }
     .desktop-store-layout :is(.payment-method-section, .payment-summary, .payment-test-notice) {
         padding: 24px;
         border: var(--skin-card-outline, 0);
@@ -1383,75 +1377,6 @@
         border-radius: var(--skin-control-radius);
         color: var(--danger);
     }
-    .desktop-store-layout :is(.my-review-list, .review-candidate-list) {
-        margin: 0;
-        padding: 0;
-        background: transparent;
-    }
-    .desktop-store-layout .review-center-page {
-        display: grid;
-        gap: 24px;
-        align-content: start;
-    }
-    .desktop-store-layout .review-center-toolbar {
-        margin-bottom: 0;
-    }
-    .desktop-store-layout .review-center-toolbar > div {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: flex-end;
-    }
-    .desktop-store-layout .review-center-toolbar button {
-        min-height: 40px;
-        padding: 8px 14px;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        background: var(--control-surface);
-        color: var(--text);
-        cursor: pointer;
-    }
-    .desktop-store-layout .review-center-toolbar button[aria-selected='true'] {
-        background: var(--selection);
-        color: var(--selection-foreground);
-        font-weight: 700;
-    }
-    .desktop-store-layout .review-center-toolbar button[aria-selected='true']:hover:not(:disabled) {
-        background: var(--selection-hover);
-        color: var(--selection-foreground);
-    }
-    .desktop-store-layout .review-center-section[hidden] {
-        display: none;
-    }
-    .desktop-store-layout .review-center-section {
-        margin: 0;
-        padding: 24px;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        background: var(--surface, var(--paper));
-        border: var(--skin-card-outline, 0);
-    }
-    .desktop-store-layout .review-candidate-list {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
-    }
-    .desktop-store-layout .review-candidate-more {
-        grid-column: 1 / -1;
-    }
-    .desktop-store-layout .review-composer {
-        max-width: none;
-        margin: 0;
-        padding: 28px;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        background: var(--surface, var(--paper));
-        border: var(--skin-card-outline, 0);
-    }
-    .desktop-store-layout .review-composer textarea {
-        min-height: 160px;
-    }
-
     /* Order detail and logistics show a main record and a compact information column. */
     .desktop-store-layout .order-detail-page {
         --page-bottom-fixed-height: 0px;
@@ -2088,8 +2013,7 @@
         .desktop-cart-product-link {
             gap: 12px;
         }
-        .desktop-store-layout .checkout-form,
-        .desktop-store-layout .payment-layout {
+        .desktop-store-layout .checkout-form {
             grid-template-columns: minmax(0, 1fr) 300px;
             gap: 20px;
         }

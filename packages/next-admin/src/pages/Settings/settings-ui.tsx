@@ -224,7 +224,7 @@ export function CheckboxControl({
     disabled?: boolean;
 }) {
     return (
-        <label className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 has-[:focus-visible]:border-blue-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-100 has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-slate-50 has-[:disabled]:text-slate-400">
+        <label className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 has-[:focus-visible]:border-blue-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-100 has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-slate-50 has-[:disabled]:text-slate-400">
             <input
                 type="checkbox"
                 checked={checked}

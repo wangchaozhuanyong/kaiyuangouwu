@@ -97,7 +97,6 @@ export function BusinessServicesPage() {
                     <div className="business-services-heading-copy">
                         {/* Both viewports render the same Admin-managed title, description and action. */}
                         <h1 className="business-services-page-title">{heroTitle}</h1>
-                        <p>{heroDescription}</p>
                         {heroLinkTarget ? (
                             <button
                                 type="button"
@@ -109,6 +108,7 @@ export function BusinessServicesPage() {
                                 <ExternalLink aria-hidden="true" />
                             </button>
                         ) : null}
+                        <p>{heroDescription}</p>
                     </div>
                     {heroImageUrl ? (
                         <div className="business-services-hero-media">

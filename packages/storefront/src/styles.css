@@ -8,6 +8,16 @@
 @import './styles/semantic-icons.css';
 @import './styles/experience-foundations.css';
 
+@layer base {
+    /* Keep default rules, dividers and portal edges independent of text color. */
+    *,
+    ::before,
+    ::after,
+    ::backdrop {
+        border-color: var(--line-subtle, var(--line));
+    }
+}
+
 * {
     box-sizing: border-box;
 }

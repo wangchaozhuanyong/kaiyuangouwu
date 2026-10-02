@@ -20,6 +20,70 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('prevents neutral borders from inheriting dark text throughout the storefront', () => {
+        for (const file of ['./styles.css', '../two-factor-tool/styles.css']) {
+            const css = postcss.parse(stylesheet(file));
+            const baseDefaults: string[] = [];
+            css.walkAtRules('layer', layer => {
+                if (layer.params !== 'base') return;
+                layer.walkRules(rule => {
+                    if (!rule.selectors.includes('*')) return;
+                    expect(rule.selectors).toEqual(['*', '::before', '::after', '::backdrop']);
+                    rule.walkDecls('border-color', declaration => {
+                        baseDefaults.push(declaration.value);
+                    });
+                });
+            });
+            expect(baseDefaults).toEqual(['var(--line-subtle, var(--line))']);
+        }
+
+        const violations: string[] = [];
+        const iconStrokes = new Set([
+            'styles.css|.btn-spinner',
+            'styles/skeletons.css|.page-loading-spinner',
+            'styles/image-studio-desktop.css|.ai-studio-desktop-ratios i',
+        ]);
+        const visit = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) {
+                    visit(file);
+                    continue;
+                }
+                if (!/\.(?:css|tsx?)$/u.test(file) || /\.spec\.|routeTree\.gen/u.test(file)) continue;
+                const relative = path.relative(__dirname, file);
+                const source = readFileSync(file, 'utf8');
+                if (file.endsWith('.css')) {
+                    postcss.parse(source).walkDecls(declaration => {
+                        if (
+                            !/^border(?:$|-)/u.test(declaration.prop) ||
+                            /radius|width|style/u.test(declaration.prop)
+                        )
+                            return;
+                        const selector = (declaration.parent as postcss.Rule).selector;
+                        if (iconStrokes.has(`${relative}|${selector}`)) return;
+                        // Translucent text mixes and state colors remain intentional; opaque text is never a neutral edge.
+                        if (
+                            /currentcolor|var\(--line-strong\)/iu.test(declaration.value) ||
+                            /(?:^|solid\s+)var\(--(?:text|muted)\)$/u.test(declaration.value)
+                        ) {
+                            violations.push(`${relative}:${declaration.source?.start?.line}: ${selector}`);
+                        }
+                    });
+                } else if (/border[^\s'"`]*\[var\(--(?:line-strong|text|muted)\)\]/u.test(source)) {
+                    violations.push(`${relative}: opaque text or strong border utility`);
+                }
+            }
+        };
+        visit(__dirname);
+        visit(path.resolve(__dirname, '../../storefront-content-plugin/src/shared'));
+        visit(path.resolve(__dirname, '../two-factor-tool'));
+        expect(
+            violations,
+            'Use --line for controls and --line-subtle / --skin-divider for reading separators.',
+        ).toEqual([]);
+    });
+
     it('reserves the same classic border before and after theme hydration', () => {
         const css = presetRootBlock(stylesheet('./styles/visual-presets.css'), 'classic');
         expect(css).toContain(
@@ -215,7 +279,6 @@ describe('storefront skin system', () => {
                             'styles/notifications.css|.notification-list > button + button::before',
                             'styles/order-aftercare.css|.order-detail-products article + article::before',
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
-                            'styles/modals-and-support.css|.support-channel-row + .support-channel-row::before',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
                         if (
@@ -335,12 +398,24 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // The user's fresh profile-card reference includes three separated shortcuts.
+                        // The approved account B design separates shortcuts using the current skin's divider.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
                             selector.trim() === '.account-identity-assets > button + button' &&
                             border[1] === 'left' &&
-                            border[2].trim() === '1px solid #d3e5fb'
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // User-requested support contact groups share one subtle reading rule.
+                        if (
+                            file === path.join(__dirname, 'styles/modals-and-support.css') &&
+                            selector.trim().replace(/\s+/g, ' ') ===
+                                '.support-hours-card + .support-channel-list::before, ' +
+                                    '.support-channel-list + .support-contact-note::before, ' +
+                                    '.support-channel-row + .support-channel-row::before' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
                             continue;
                         }
@@ -348,16 +423,7 @@ describe('storefront skin system', () => {
                     }
                     const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);
                     const thinHeight = /(?:^|;)\s*height:\s*[1-4]px\s*;/.test(body);
-                    // SERVICES_WARM_B_20261002: one short bronze heading accent, not a row divider.
-                    const approvedWarmHeading =
-                        file === path.join(__dirname, 'styles/service-entries.css') &&
-                        selector.trim() ===
-                            ".business-services-page[data-services-theme='warm-b'] .category-client-plugin-group-title::after" &&
-                        /width:\s*28px;/.test(body) &&
-                        /height:\s*2px;/.test(body) &&
-                        /background:\s*var\(--services-bronze\);/.test(body);
                     if (
-                        !approvedWarmHeading &&
                         (thinWidth || thinHeight) &&
                         !(thinWidth && thinHeight) &&
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
@@ -611,6 +677,10 @@ describe('storefront skin system', () => {
     });
 
     it('keeps color ownership in the shared semantic palette instead of preset CSS copies', () => {
+        // Account B replaces the former blue exception: prevent fixed colors returning on skin changes.
+        expect(stylesheet('./styles/account-identity.css')).not.toMatch(
+            /#[\da-f]{3,8}\b|rgba?\(|hsla?\(|data-storefront-preset|!important/iu,
+        );
         const source = stylesheet('./styles/visual-presets.css');
         const lineOwners = new Set([
             'styles/experience-foundations.css',
@@ -861,8 +931,7 @@ describe('storefront skin system', () => {
     it('keeps panel headings and non-review lists free of decorative rules across component and layout owners', () => {
         const borderlessSelectors = [
             '.section-header',
-            '.review-center-section > header',
-            '.review-composer > header',
+            '.review-composer-summary',
             '.my-review-list article',
             '.product-review-list article',
             '.coupon-center-cart-link',

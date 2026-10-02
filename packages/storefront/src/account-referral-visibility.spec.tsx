@@ -152,7 +152,7 @@ describe('account referral visibility', () => {
 
         expect(markup).toContain('account-mobile-header');
         expect(markup).toContain('locale-preferences-trigger');
-        expect(markup).toContain('我的订单中心');
+        expect(markup).toContain('我的订单');
         expect(markup).toContain('返利余额');
         expect(markup).toContain('CNY</span> <span>8.80');
         expect(markup).toContain('账户快捷入口');

@@ -259,7 +259,7 @@ export function AccountPage() {
 
             <section className={`account-orders ${accountSectionClass}`}>
                 <SectionHeader
-                    title={isZh ? '我的订单中心' : 'My orders'}
+                    title={isZh ? '我的订单' : 'My orders'}
                     action={isZh ? '全部订单' : 'View all'}
                     onAction={() => navigateTo({ name: 'orders', tab: 'all' })}
                 />

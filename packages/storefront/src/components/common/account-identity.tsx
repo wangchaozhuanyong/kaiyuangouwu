@@ -1,4 +1,4 @@
-import { ChevronRight, Heart, Share2, Smile, TicketPercent } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Heart, Share2, TicketPercent } from 'lucide-react';
 
 import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
@@ -101,11 +101,6 @@ export function AccountIdentity({
                                   : 'Sign in to manage orders and offers'}
                         </p>
                     </div>
-                    <div className="account-identity-greeting" aria-hidden="true">
-                        <span>Hello!</span>
-                        <small>NICE TO SEE YOU</small>
-                        <Smile />
-                    </div>
                 </div>
                 {customer ? (
                     <div
@@ -156,11 +151,6 @@ export function AccountIdentity({
                     aria-label={isZh ? '邀请与推广' : 'Invite and share'}
                 >
                     <div className="account-identity-promotion-actions">
-                        <button type="button" onClick={() => navigate({ name: 'referral' })}>
-                            <Share2 aria-hidden="true" />
-                            <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
-                            <ChevronRight aria-hidden="true" />
-                        </button>
                         <div className="account-identity-promotion-balance" aria-live="polite">
                             <p>{isZh ? '返利余额' : 'Referral balance'}</p>
                             {referralBalanceStatus === 'ready' && referralBalance != null ? (
@@ -196,6 +186,10 @@ export function AccountIdentity({
                                 </span>
                             )}
                         </div>
+                        <button type="button" onClick={() => navigate({ name: 'referral' })}>
+                            {isZh ? '邀请好友' : 'Invite friends'}
+                            <ArrowUpRight aria-hidden="true" />
+                        </button>
                     </div>
                 </section>
             )}
