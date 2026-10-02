@@ -863,7 +863,7 @@ export function fixtureData(presetId = 'neo-minimalist', signedIn = true, conten
         },
         availableCountries: [{ code: 'MY', name: 'Malaysia' }],
         storefrontBranding: {
-            logoUrl: null,
+            logoUrl: content === 'auth-logo' ? quickLinkImage : null,
             description: '本地测试数据',
             backgroundColor: '#070b14',
             primaryColor: '#3558aa',
