@@ -213,9 +213,15 @@
 .product-card.is-plain {
     --product-card-inset: 0;
     padding: 0;
+    border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+}
+
+/* Flat displays have no enclosing surface to clip the image corners. */
+.product-card.is-plain .product-card-media {
+    border-radius: var(--skin-control-radius);
 }
 
 .product-card.is-plain .product-card-delivery {

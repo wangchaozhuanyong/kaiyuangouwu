@@ -34,6 +34,15 @@ describe('product card subtitle', () => {
         expect(stylesheet).toContain('color: var(--availability-unavailable);');
     });
 
+    it('keeps plain cards and their skeletons free of the enclosing skin outline', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
+
+        expect(stylesheet).toMatch(/\.product-card\.is-plain\s*\{[^}]*border:\s*0;/u);
+        expect(stylesheet).toMatch(
+            /\.product-card\.is-plain \.product-card-media\s*\{[^}]*border-radius:\s*var\(--skin-control-radius\);/u,
+        );
+    });
+
     it('prefers a meaningful product description', () => {
         expect(
             resolveProductSubtitle(

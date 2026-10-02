@@ -691,7 +691,10 @@ export function StorefrontModule() {
                     />
                 ) : null}
                 <section className="rounded-xl border border-slate-200 bg-white p-5" aria-label="账户功能">
-                    <h3 className="text-sm font-semibold text-slate-900">账户功能</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        账户功能
+                        <FeatureHelpButton topic="storefront.account" title="账户功能" />
+                    </h3>
                     <div className="mt-4 flex items-center gap-4">
                         <div className="min-w-0 flex-1">
                             <strong className="block text-xs text-slate-800">个人数据导出入口</strong>
@@ -730,7 +733,7 @@ export function StorefrontModule() {
                         </p>
                     )}
                     {actionError && (
-                        <p role="alert" className="mt-3 text-xs text-red-600">
+                        <p role="alert" className="mt-3 text-xs text-rose-600">
                             {actionError}
                         </p>
                     )}
