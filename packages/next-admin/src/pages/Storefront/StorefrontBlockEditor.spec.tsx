@@ -27,6 +27,54 @@ vi.mock('./storefront-asset-picker', () => ({
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+it.each([
+    ['AUTH_LOGIN', undefined, 'bottom'],
+    ['AUTH_REGISTER', undefined, 'bottom'],
+    ['AUTH_LOGIN', 'center', 'center'],
+    ['AUTH_REGISTER', 'bottom', 'bottom'],
+] as const)(
+    'shows the shared auth position for %s without writing unset settings',
+    async (type, position, expected) => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const onSave = vi.fn(async () => undefined);
+        const value = {
+            ...newContentBlock(type, 0),
+            settings: position ? { heroCopyPosition: position } : {},
+        };
+        value.translations[0].title = 'Auth visual';
+        try {
+            await act(async () =>
+                root.render(
+                    <StorefrontBlockEditor
+                        value={value}
+                        saving={false}
+                        onClose={() => undefined}
+                        onSave={onSave}
+                    />,
+                ),
+            );
+            const select = Array.from(host.querySelectorAll('label'))
+                .find(label => label.textContent?.includes('电脑端图片上的文字位置'))!
+                .querySelector('select')!;
+            expect(select.value).toBe(expected);
+            await act(async () =>
+                Array.from(host.querySelectorAll('button'))
+                    .find(button => button.textContent === '保存并核对')!
+                    .click(),
+            );
+            expect(onSave).toHaveBeenLastCalledWith(
+                expect.objectContaining({ settings: value.settings }),
+                false,
+            );
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    },
+);
+
 it('requires image review, invalidates it after another image change, and preserves normal saves', async () => {
     const host = document.createElement('div');
     document.body.append(host);

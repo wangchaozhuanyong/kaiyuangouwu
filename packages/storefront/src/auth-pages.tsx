@@ -34,7 +34,7 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
-import { resolveAuthVisualMessage } from './auth-visual';
+import { authHeroCopyPosition, resolveAuthVisualMessage } from './auth-visual';
 import { useDesktopLayout } from './desktop-layout';
 import { GoogleAuthButton } from './google-auth-button';
 import {
@@ -1434,7 +1434,7 @@ function AuthLayout({
         >
             <section
                 className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
-                data-copy-position={presentation.position}
+                data-copy-position={authHeroCopyPosition(heroContent?.settings)}
                 data-image-tone={heroImageTone}
                 data-image-contrast={heroImageContrast.needsBacking ? 'backed' : 'direct'}
                 style={heroStyle}

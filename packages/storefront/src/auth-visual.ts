@@ -7,6 +7,11 @@ import { StorefrontContentBlock, StorefrontLanguage } from './types';
 
 export type AuthVisualVariant = 'login' | 'register';
 
+/** Shared client/editor default for the approved auth hero overlay. */
+export function authHeroCopyPosition(settings?: Record<string, unknown> | null) {
+    return settings?.heroCopyPosition === 'center' ? 'center' : 'bottom';
+}
+
 export interface AuthVisualBenefit {
     title: string;
     description: string;

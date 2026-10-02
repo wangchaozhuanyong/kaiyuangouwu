@@ -10,6 +10,7 @@ import {
 } from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import {
+    authHeroCopyPosition,
     authVisualAccentColor,
     authVisualOverlayColor,
     findAuthVisualContent,
@@ -133,6 +134,14 @@ describe('managed auth visuals', () => {
 });
 
 describe('shared auth presentation', () => {
+    it('defaults unset positions to the approved bottom overlay and preserves explicit center', () => {
+        for (const settings of [undefined, null, {}, { heroCopyPosition: 'invalid' }]) {
+            expect(authHeroCopyPosition(settings)).toBe('bottom');
+        }
+        expect(authHeroCopyPosition({ heroCopyPosition: 'center' })).toBe('center');
+        expect(authHeroCopyPosition({ heroCopyPosition: 'bottom' })).toBe('bottom');
+    });
+
     it('replaces a cropping preset with the existing proportional preset', () => {
         const url = new URL(
             authOriginalImageUrl(
