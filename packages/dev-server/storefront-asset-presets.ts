@@ -6,6 +6,7 @@ export const storefrontAssetPresets: ImageTransformPreset[] = [
     { name: 'storefront-placeholder-wide-64', width: 64, height: 64, mode: 'resize' },
     { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
     { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
+    { name: 'storefront-thumbnail-fit-320', width: 320, height: 320, mode: 'resize' },
     { name: 'storefront-icon-64', width: 64, height: 64, mode: 'crop' },
     { name: 'storefront-icon-96', width: 96, height: 96, mode: 'crop' },
     // Keep legacy card presets available while older storefront bundles are still cached.
