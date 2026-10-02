@@ -118,6 +118,91 @@ const merchantContext = {
 
 describe('MerchantCatalogAccessService', () => {
     it.each([
+        ['Query', 'imageProviderAdminConfigs'],
+        ['Mutation', 'saveImageProviderCredential'],
+        ['Mutation', 'testImageProviderCredential'],
+        ['Query', 'icloudPrimaryAccounts'],
+        ['Query', 'icloudReceivedMails'],
+        ['Mutation', 'resetIcloudVirtualEmailCode'],
+    ])(
+        'protects shared owner resources at %s.%s from store and legacy delegated roles',
+        async (type, field) => {
+            const { service, connection } = createService({ merchant: false });
+            const platform = { ...merchantContext, channel: { code: '__default_channel__' } };
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).rejects.toThrow('平台管理中心');
+            await expect(service.assertRootFieldAccess(platform, type, field, {})).rejects.toThrow(
+                '超级管理员',
+            );
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...platform, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).resolves.toBeUndefined();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+    it.each([
+        ['Mutation', 'updateTaxRate'],
+        ['Mutation', 'addMembersToZone'],
+        ['Mutation', 'deleteCountries'],
+        ['Query', 'dataRetentionRecords'],
+        ['Mutation', 'setDataRetentionLegalHold'],
+        ['Query', 'dataSubjectRequests'],
+        ['Mutation', 'retryDataSubjectRequest'],
+    ])(
+        'keeps global dictionary and privacy administration in the management center at %s.%s',
+        async (type, field) => {
+            const { service, connection } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).rejects.toThrow('平台管理中心');
+            expect(connection.getRepository).not.toHaveBeenCalled();
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, channel: { code: '__default_channel__' } },
+                    type,
+                    field,
+                    {},
+                ),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it.each(['imageGenerationJobs', 'imageAiUsageRecords', 'countries', 'taxCategories'])(
+        'preserves scoped business usage and shared dictionary reads for %s',
+        async field => {
+            const { service } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Query', field, {}),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it('preserves authenticated customer closure and public mailbox access through Shop API', async () => {
+        const { service, connection } = createService();
+        const ctx = { ...merchantContext, apiType: 'shop' };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'requestMyAccountClosure', {}),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Query', 'icloudQueryMails', {}),
+        ).resolves.toBeUndefined();
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+    it.each([
         'jobs',
         'storePaymentStats',
         'systemAnnouncements',

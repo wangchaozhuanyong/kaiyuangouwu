@@ -80,6 +80,29 @@ const merchantManagedStockLocationMutations = new Set([
 // These APIs return platform-wide data or operate shared infrastructure. Even a
 // SuperAdmin must switch to the management center rather than bypass store scope.
 const platformManagementFields = new Set([
+    'Mutation.createCountry',
+    'Mutation.updateCountry',
+    'Mutation.deleteCountry',
+    'Mutation.deleteCountries',
+    'Mutation.createZone',
+    'Mutation.updateZone',
+    'Mutation.deleteZone',
+    'Mutation.deleteZones',
+    'Mutation.addMembersToZone',
+    'Mutation.removeMembersFromZone',
+    'Mutation.createTaxCategory',
+    'Mutation.updateTaxCategory',
+    'Mutation.deleteTaxCategory',
+    'Mutation.deleteTaxCategories',
+    'Mutation.createTaxRate',
+    'Mutation.updateTaxRate',
+    'Mutation.deleteTaxRate',
+    'Mutation.deleteTaxRates',
+    'Query.dataRetentionRecords',
+    'Mutation.setDataRetentionLegalHold',
+    'Mutation.retryDataRetentionRecord',
+    'Query.dataSubjectRequests',
+    'Mutation.retryDataSubjectRequest',
     'Query.job',
     'Query.jobs',
     'Query.jobsById',
@@ -123,6 +146,43 @@ const platformManagementFields = new Set([
     'Query.governanceReports',
     'Mutation.submitGovernedConfig',
     'Mutation.reviewGovernanceApproval',
+]);
+// These shared secrets/mailboxes must not become accessible through historical
+// delegated permissions. Store business usage and access-code queries stay separate.
+const platformOwnerFields = new Set([
+    'Query.imageProviderAdminConfigs',
+    'Query.imagePromptRoutingConfig',
+    'Query.imagePromptModelConfigs',
+    'Mutation.saveImageProviderCredential',
+    'Mutation.saveImagePromptRoutingConfig',
+    'Mutation.testImagePromptRoute',
+    'Mutation.testImageProviderConnection',
+    'Mutation.testImageProviderCredential',
+    'Mutation.archiveImageProviderCredential',
+    'Mutation.activateImagePromptSkillRelease',
+    'Mutation.saveImagePromptModel',
+    'Mutation.testImagePromptModel',
+    'Mutation.archiveImagePromptModel',
+    'Mutation.anonymizeImageGenerationCustomerData',
+    'Query.icloudPrimaryAccounts',
+    'Query.icloudPrimaryAccount',
+    'Query.icloudVirtualEmails',
+    'Query.icloudVirtualEmail',
+    'Query.icloudReceivedMails',
+    'Mutation.reconcileIcloudMailHistory',
+    'Mutation.createIcloudPrimaryAccount',
+    'Mutation.updateIcloudPrimaryAccount',
+    'Mutation.deleteIcloudPrimaryAccount',
+    'Mutation.testIcloudConnection',
+    'Mutation.syncIcloudAccount',
+    'Mutation.resetIcloudMasterCode',
+    'Mutation.createIcloudVirtualEmail',
+    'Mutation.batchCreateIcloudVirtualEmails',
+    'Mutation.updateIcloudVirtualEmail',
+    'Mutation.deleteIcloudVirtualEmail',
+    'Mutation.resetIcloudVirtualEmailCode',
+    'Mutation.reassignIcloudMail',
+    'Mutation.deleteIcloudMail',
 ]);
 const platformPaymentConfigurationMutations = new Set([
     'createPaymentMethod',
@@ -212,6 +272,15 @@ export class MerchantCatalogAccessService {
             return;
         }
 
+        if (platformOwnerFields.has(`${parentType}.${fieldName}`)) {
+            if (
+                ctx.channel.code !== DEFAULT_CHANNEL_CODE ||
+                !ctx.userHasPermissions([Permission.SuperAdmin])
+            ) {
+                throw new UserInputError('共享平台资源仅允许超级管理员在平台管理中心管理');
+            }
+            return;
+        }
         if (
             platformManagementFields.has(`${parentType}.${fieldName}`) &&
             ctx.channel.code !== DEFAULT_CHANNEL_CODE
