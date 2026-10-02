@@ -1053,6 +1053,12 @@ try {
                         'order detail heading starts beside the account rail',
                     ).toBeLessThanOrEqual(1);
                     expect(status.y - heading.y - heading.height).toBeCloseTo(24, 0);
+                    await expect(page.locator('.desktop-order-purchase-row .order-detail-summary')).toHaveCSS(
+                        'border-width',
+                        '0px',
+                    );
+                    const delivery = await page.locator('.order-delivery-panel').boundingBox();
+                    if (delivery) expect(delivery.y - status.y - status.height).toBeCloseTo(24, 0);
                     await expect(page.locator('.delivery-linked-order-heading h1')).toHaveCSS(
                         'font-size',
                         '28px',
