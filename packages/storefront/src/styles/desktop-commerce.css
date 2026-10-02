@@ -1455,10 +1455,10 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 12px 20px;
-        min-height: 68px;
+        gap: var(--space-8) var(--space-16);
+        min-height: calc(var(--experience-control-min) + var(--space-8));
         margin: 0 0 20px;
-        padding: 10px 12px;
+        padding: var(--space-4) var(--space-12);
         border-radius: var(--skin-card-radius);
         background: var(--surface);
         box-shadow: var(--skin-card-shadow);
@@ -1485,7 +1485,7 @@
         flex-wrap: wrap;
         gap: 6px;
         margin-left: auto;
-        padding: 4px;
+        padding: 0;
         border-radius: 0;
         background: transparent;
     }
@@ -1538,7 +1538,7 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         padding: 4px 12px;
-        min-height: 32px;
+        min-height: var(--experience-control-min);
         color: var(--muted);
         cursor: pointer;
         font-size: 13px;
@@ -1568,6 +1568,7 @@
     }
     .desktop-stock-filter {
         display: flex;
+        min-height: var(--experience-control-min);
         gap: 7px;
         align-items: center;
         font-size: 13px;
