@@ -32,6 +32,7 @@ import {
     collectPackageInventory,
     DENIED_RUNTIME_PACKAGES,
     findDeniedPackages,
+    GOVERNANCE_RECONCILIATION_RUNTIME_FILES,
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
@@ -143,6 +144,13 @@ void test('runtime artifact includes release publishers and every media manifest
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-storefront-media-'));
     try {
         await copyStorefrontMediaReleaseInputs(fixtureRoot);
+        for (const file of GOVERNANCE_RECONCILIATION_RUNTIME_FILES) {
+            assert.ok(REQUIRED_RUNTIME_FILES.includes(file));
+            assert.deepEqual(
+                await readFile(path.join(fixtureRoot, file)),
+                await readFile(path.join(repositoryRoot, file)),
+            );
+        }
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/catalog-cigarette-media.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs'));
@@ -459,6 +467,104 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         );
     } finally {
         await rm(fixture, { recursive: true, force: true });
+    }
+});
+
+void test('copied runtime CLI validates governance imports and the database driver before deployment', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-governance-inputs-'));
+    const expectedSha = 'a'.repeat(40);
+    try {
+        await writeFile(path.join(root, 'package.json'), '{"name":"fixture-runtime","version":"1.0.0"}\n');
+        for (const file of GOVERNANCE_RECONCILIATION_RUNTIME_FILES) {
+            await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+            await cp(path.join(repositoryRoot, file), path.join(root, file));
+        }
+        for (const [source, destination] of [
+            ['production-runtime-verify.mjs', 'verify-runtime.mjs'],
+            ['production-runtime-audit.mjs', 'production-runtime-audit.mjs'],
+        ]) {
+            await cp(
+                path.join(repositoryRoot, 'packages/dev-server/scripts', source),
+                path.join(root, destination),
+            );
+        }
+        for (const name of ['@vendure/core', '@vendure/next-admin-plugin', 'dotenv', 'mysql2']) {
+            const directory = path.join(root, 'node_modules', name);
+            await mkdir(directory, { recursive: true });
+            await writeFile(
+                path.join(directory, 'package.json'),
+                JSON.stringify({ name, version: '1.0.0', main: 'index.js' }),
+            );
+            await writeFile(
+                path.join(directory, 'index.js'),
+                'throw new Error("PROBE_MUST_ONLY_RESOLVE_DRIVER");\n',
+            );
+        }
+        await writeFile(path.join(root, 'node_modules/dotenv/config.js'), '');
+        await cp(path.join(repositoryRoot, 'node_modules/semver'), path.join(root, 'node_modules/semver'), {
+            recursive: true,
+        });
+        await writeFile(
+            path.join(root, 'node_modules/mysql2/promise.js'),
+            'throw new Error("DATABASE_MUST_NOT_CONNECT");\n',
+        );
+        await mkdir(path.join(root, 'packages/dev-server/dist'), { recursive: true });
+        for (const name of ['index.js', 'index-worker.js', 'run-migrations.js', 'dev-config.js']) {
+            await writeFile(path.join(root, 'packages/dev-server/dist', name), '');
+        }
+        await writeFile(
+            path.join(root, 'RUNTIME-METADATA.json'),
+            JSON.stringify({
+                deniedPackages: DENIED_RUNTIME_PACKAGES,
+                gitSha: expectedSha,
+                platform: `${process.platform}/${process.arch}`,
+                sourceDirty: false,
+            }),
+        );
+        const refresh = async () => {
+            await writeFile(
+                path.join(root, 'RUNTIME-PACKAGES.json'),
+                JSON.stringify(await collectPackageInventory(root)),
+            );
+            await writeFile(
+                path.join(root, 'RUNTIME-AUDIT.json'),
+                JSON.stringify({
+                    findings: [],
+                    generatedAt: new Date().toISOString(),
+                    policy: { failOn: 'high' },
+                    summary: { critical: 0, high: 0, low: 0, moderate: 0, total: 0 },
+                }),
+            );
+            await writeIntegrityFiles(root);
+        };
+        const verify = () =>
+            spawnSync(process.execPath, ['verify-runtime.mjs', '--expected-sha', expectedSha], {
+                cwd: root,
+                encoding: 'utf8',
+            });
+        await refresh();
+        let result = verify();
+        assert.equal(result.status, 0, result.stderr);
+        for (const missing of [
+            'packages/dev-server/scripts/platform-governance-reconciliation.mjs',
+            'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
+            'node_modules/mysql2/promise.js',
+        ]) {
+            const file = path.join(root, missing);
+            const contents = await readFile(file);
+            await rm(file);
+            // A freshly generated integrity manifest cannot bless missing executable inputs.
+            await refresh();
+            result = verify();
+            assert.notEqual(result.status, 0, missing);
+            assert.match(result.stderr, /Cannot find (?:module|package)/u);
+            await writeFile(file, contents);
+        }
+        await refresh();
+        result = verify();
+        assert.equal(result.status, 0, result.stderr);
+    } finally {
+        await rm(root, { recursive: true, force: true });
     }
 });
 

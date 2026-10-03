@@ -14,6 +14,7 @@ import {
     collectPackageInventory,
     DENIED_RUNTIME_PACKAGES,
     findDeniedPackages,
+    GOVERNANCE_RECONCILIATION_RUNTIME_FILES,
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
@@ -121,6 +122,7 @@ export const CUSTOMER_IMAGE_WORKER_FILES = Object.freeze([
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     ...CUSTOMER_IMAGE_WORKER_FILES,
+    ...GOVERNANCE_RECONCILIATION_RUNTIME_FILES,
     'production-runtime-audit.mjs',
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
@@ -341,6 +343,7 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         'repair-inventory-inheritance.mjs',
         'repair-coupon-lifecycle.mjs',
         ...HOMEPAGE_CAROUSEL_RUNTIME_FILES.map(file => path.basename(file)),
+        ...GOVERNANCE_RECONCILIATION_RUNTIME_FILES.map(file => path.basename(file)),
     ];
     for (const scriptName of releaseScripts) {
         const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts', scriptName);
