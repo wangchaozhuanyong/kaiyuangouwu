@@ -23,6 +23,7 @@ import {
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
 import { CatalogImportAction } from '../../src/pages/Catalog/import/CatalogImportAction';
 import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
+import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModule';
 import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
@@ -55,6 +56,8 @@ const viewLabels: Record<string, string> = {
     plugins: '客户端插件',
     copy: '商业服务文案',
     categories: '商品分类',
+    suppliers: '供货商',
+    purchases: '采购与收货',
 };
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
@@ -355,7 +358,7 @@ const data: Record<string, unknown> = {
             id: `supplier-${i}`,
             name: `[QA] 模拟采购供货商 ${i + 1}`,
             code: `QA-SUPPLIER-${i + 1}`,
-            enabled: false,
+            enabled: view === 'suppliers' || view === 'purchases',
             contactName: null,
             phone: null,
             email: null,
@@ -367,6 +370,7 @@ const data: Record<string, unknown> = {
         })),
         totalItems: params.has('empty') ? 0 : params.has('multi') ? 3 : 1,
     },
+    catalogPurchaseOrders: empty,
     suppliers: empty,
     catalogProductWorkspace: {
         productId: product.id,
@@ -681,6 +685,8 @@ const modules: Record<string, React.ReactNode> = {
     plugins: <ClientPluginsModule />,
     copy: <BusinessServicesCopyModule />,
     categories: <CategoriesModule />,
+    suppliers: <SuppliersModule />,
+    purchases: <PurchaseOrdersModule />,
 };
 if (view === 'tabs') {
     createRoot(document.getElementById('root')!).render(
