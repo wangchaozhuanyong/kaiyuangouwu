@@ -90,9 +90,9 @@ export function TranslationsModule() {
     const statusOptions = ['ALL', ...new Set((audit?.counts ?? []).map(item => item.status))];
     const lastPage = Math.max(0, Math.ceil((audit?.filteredTotal ?? 0) / pageSize) - 1);
     if (!query.loading && !query.error && query.data && page > lastPage) setPage(lastPage);
-    const recordsRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLElement>(null);
     useEffect(() => {
-        if (recordsRef.current) recordsRef.current.scrollTop = 0;
+        if (contentRef.current) contentRef.current.scrollTop = 0;
     }, [page, pageSize, search, status, entityType]);
 
     return (
@@ -139,7 +139,10 @@ export function TranslationsModule() {
                     </div>
                 </div>
             </header>
-            <main className="w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main
+                ref={contentRef}
+                className="min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8"
+            >
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -262,11 +265,10 @@ export function TranslationsModule() {
                                     </div>
                                 </div>
                                 <div
-                                    className="max-h-[min(60vh,36rem)] overflow-auto"
+                                    className="overflow-x-auto"
                                     tabIndex={0}
                                     role="region"
                                     aria-label="翻译审计记录"
-                                    ref={recordsRef}
                                 >
                                     <table className="w-full min-w-[1660px] border-collapse text-left text-xs">
                                         <thead className="sticky top-0 z-30 bg-slate-50">

@@ -249,7 +249,7 @@ export function ClientPluginsModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-none min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -281,7 +281,7 @@ export function ClientPluginsModule() {
                         )}
                     </Message>
                 )}
-                <section className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-xs">
+                <section className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="text-slate-500">当前店铺</span>
                     <strong className="rounded bg-slate-100 px-2 py-1 text-slate-800">
                         {content.data ? getChannelDisplayName(content.data.activeChannel) : '—'}
@@ -302,9 +302,9 @@ export function ClientPluginsModule() {
                     />
                 ) : (
                     draft && (
-                        <div className="grid gap-6 xl:grid-cols-12 items-start">
+                        <div className="space-y-3">
                             {/* Left column: Installed Plugins */}
-                            <section className="rounded-xl border border-slate-200 bg-white xl:col-span-7">
+                            <section className="rounded-xl border border-slate-200 bg-white">
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -323,7 +323,7 @@ export function ClientPluginsModule() {
                                     </p>
                                 </div>
                                 {draft.items.length ? (
-                                    <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+                                    <div className="divide-y divide-slate-200 px-4">
                                         {draft.items.map((item, index) => {
                                             const code = pluginCode(item) ?? '';
                                             return (
@@ -375,14 +375,17 @@ export function ClientPluginsModule() {
                                             还没有装配客户端插件
                                         </h3>
                                         <p className="mt-1 text-xs text-slate-400">
-                                            在右侧“可用官方插件库”中选择需要的插件，点击【添加到客户端】即可启用。
+                                            展开下方“添加插件”，选择需要的插件，再保存配置。
                                         </p>
                                     </div>
                                 )}
                             </section>
 
                             {/* Right column: Available Plugin Catalog */}
-                            <section className="rounded-xl border border-slate-200 bg-white xl:col-span-5">
+                            <details className="rounded-xl border border-slate-200 bg-white">
+                                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">
+                                    添加插件 · 官方插件库（{catalog.length}）
+                                </summary>
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -415,7 +418,7 @@ export function ClientPluginsModule() {
                                         />
                                     ))}
                                 </div>
-                            </section>
+                            </details>
                         </div>
                     )
                 )}
@@ -516,7 +519,7 @@ function InstalledEditor({
     const patchSettings = (patch: Record<string, unknown>) =>
         onChange({ ...item, settings: { ...(item.settings ?? {}), ...patch } });
     return (
-        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <article className="grid items-start gap-3 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -545,10 +548,11 @@ function InstalledEditor({
                     <IconButton label="移除" disabled={false} onClick={onRemove} icon={Trash2} danger />
                 </div>
             </div>
-            <div className="mt-4 grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="展示位置">
                     <select
                         value={placement ?? ''}
+                        title={placementOptions.find(value => value[0] === placement)?.[2]}
                         onChange={event => patchSettings({ placement: event.target.value })}
                         className={inputClass}
                     >
@@ -559,26 +563,25 @@ function InstalledEditor({
                             </option>
                         ))}
                     </select>
-                    <p className="mt-1 text-[10px] text-slate-400">
-                        {placementOptions.find(value => value[0] === placement)?.[2]}
-                    </p>
                 </Field>
                 {placement !== 'BUSINESS_SERVICES_MAIN' && (
-                    <Field label="适用商品分类">
-                        <select
-                            value={scope}
-                            onChange={event =>
-                                patchSettings({
-                                    categoryScope: event.target.value,
-                                    categoryIds: event.target.value === 'ALL' ? [] : categoryIds,
-                                })
-                            }
-                            className={inputClass}
-                        >
-                            <option value="ALL">全部分类</option>
-                            <option value="SELECTED">仅指定分类</option>
-                        </select>
-                        <label className="mt-2 flex items-center gap-2 text-[10px] font-normal text-slate-500">
+                    <div className="relative">
+                        <Field label="适用商品分类">
+                            <select
+                                value={scope}
+                                onChange={event =>
+                                    patchSettings({
+                                        categoryScope: event.target.value,
+                                        categoryIds: event.target.value === 'ALL' ? [] : categoryIds,
+                                    })
+                                }
+                                className={inputClass}
+                            >
+                                <option value="ALL">全部分类</option>
+                                <option value="SELECTED">仅指定分类</option>
+                            </select>
+                        </Field>
+                        <label className="mt-1 flex items-center gap-2 text-[10px] font-normal text-slate-500 sm:absolute sm:right-0 sm:top-0 sm:mt-0">
                             <input
                                 type="checkbox"
                                 checked={pluginIncludeChildren(item)}
@@ -586,11 +589,11 @@ function InstalledEditor({
                             />
                             包含子分类
                         </label>
-                    </Field>
+                    </div>
                 )}
             </div>
             {placement !== 'BUSINESS_SERVICES_MAIN' && scope === 'SELECTED' && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3 lg:col-span-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                         <input

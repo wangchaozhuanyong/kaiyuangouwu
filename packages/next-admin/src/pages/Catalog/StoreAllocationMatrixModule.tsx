@@ -151,7 +151,7 @@ export function StoreAllocationMatrixModule() {
         }
     };
     return (
-        <div className="h-full overflow-auto bg-slate-50 p-6 space-y-6">
+        <div className="h-full overflow-auto bg-slate-50 p-4 space-y-3">
             <header className="flex flex-wrap justify-between gap-4">
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
@@ -171,7 +171,7 @@ export function StoreAllocationMatrixModule() {
                     {toUserFacingError(query.error, '商品读取失败，请重试')}
                 </p>
             )}
-            <div className="flex flex-wrap gap-8 text-sm">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <span>
                     归属待核对：<b>{data?.ownershipReviewCount ?? '未获取'}</b>
                 </span>
@@ -188,226 +188,235 @@ export function StoreAllocationMatrixModule() {
                     </span>
                 ))}
             </div>
-            <section className="rounded-xl bg-white p-5 space-y-4">
-                <h2 className="flex items-center gap-2 font-bold">
-                    1. 选择商品或整类
-                    <FeatureHelpButton topic="catalog.platform-distribution" title="1. 选择商品或整类" />
-                </h2>
-                <div className="flex flex-wrap gap-3">
-                    <input
-                        aria-label="搜索商品"
-                        className={control}
-                        placeholder="搜索商品"
-                        value={term}
-                        onChange={e => {
-                            setTerm(e.target.value);
-                            setPage(0);
-                        }}
-                    />
-                    <select
-                        aria-label="来源分类"
-                        className={control}
-                        value={categoryId}
-                        onChange={e => {
-                            setCategoryId(e.target.value);
-                            invalidate();
-                        }}
-                    >
-                        <option value="">使用勾选商品（已选 {selected.length} 个）</option>
-                        {data?.categories.map(c => (
-                            <option key={c.id} value={c.id}>
-                                {c.name} ·{' '}
-                                {data.channels.find(s => c.channelIds.includes(s.id))?.displayName ??
-                                    '待核对'}
-                            </option>
-                        ))}
-                    </select>
-                    <label className="flex items-center gap-2">
+            <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <section className="min-w-0 rounded-xl bg-white p-4 space-y-3">
+                    <h2 className="flex items-center gap-2 font-bold">
+                        1. 选择商品或整类
+                        <FeatureHelpButton topic="catalog.platform-distribution" title="1. 选择商品或整类" />
+                    </h2>
+                    <div className="flex flex-wrap gap-3">
                         <input
-                            type="checkbox"
-                            checked={descendants}
+                            aria-label="搜索商品"
+                            className={control}
+                            placeholder="搜索商品"
+                            value={term}
                             onChange={e => {
-                                setDescendants(e.target.checked);
-                                invalidate();
+                                setTerm(e.target.value);
+                                setPage(0);
                             }}
                         />
-                        包含子分类及全部分页
-                    </label>
-                </div>
-                <div className="overflow-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead>
-                            <tr className="border-b border-slate-100 text-slate-500">
-                                <th className="py-3">选择</th>
-                                <th>商品</th>
-                                <th>维护店铺</th>
-                                <th>销售店铺</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data?.items.map(p => (
-                                <tr key={p.id} className="border-b border-slate-100">
-                                    <td className="py-3">
-                                        <input
-                                            aria-label={`选择 ${p.name}`}
-                                            type="checkbox"
-                                            disabled={Boolean(categoryId) || !p.ownerChannelId}
-                                            checked={selected.includes(p.id)}
-                                            onChange={() => {
-                                                setSelected(toggle(selected, p.id));
-                                                setVariantSelections({
-                                                    ...variantSelections,
-                                                    [p.id]:
-                                                        variantSelections[p.id] ?? p.variants.map(v => v.id),
-                                                });
-                                                invalidate();
-                                            }}
-                                        />
-                                    </td>
-                                    <td>
-                                        {p.name}
-                                        {selected.includes(p.id) && (
-                                            <div className="mt-2 flex flex-wrap gap-3">
-                                                {p.variants.map(v => (
-                                                    <label
-                                                        key={v.id}
-                                                        className="flex items-center gap-1 text-xs"
-                                                    >
-                                                        <input
-                                                            aria-label={`授权规格 ${v.name}`}
-                                                            type="checkbox"
-                                                            checked={(variantSelections[p.id] ?? []).includes(
-                                                                v.id,
-                                                            )}
-                                                            onChange={() => {
-                                                                setVariantSelections({
-                                                                    ...variantSelections,
-                                                                    [p.id]: toggle(
-                                                                        variantSelections[p.id] ?? [],
-                                                                        v.id,
-                                                                    ),
-                                                                });
-                                                                invalidate();
-                                                            }}
-                                                        />
-                                                        {v.name}
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        )}{' '}
-                                        {p.ownerChannelId && (
-                                            <button
-                                                className="ml-3 text-xs text-blue-600"
-                                                onClick={() => setSupplyProduct(p)}
-                                            >
-                                                供货设置
-                                            </button>
-                                        )}
-                                    </td>
-                                    <td>
-                                        {data.channels.find(s => s.id === p.ownerChannelId)?.displayName ??
-                                            '归属待核对'}
-                                    </td>
-                                    <td>
-                                        {p.channelIds
-                                            .map(
-                                                id =>
-                                                    data.channels.find(s => s.id === id)?.displayName ??
-                                                    '待核对',
-                                            )
-                                            .join('、') || '未分配'}
-                                    </td>
-                                </tr>
+                        <select
+                            aria-label="来源分类"
+                            className={control}
+                            value={categoryId}
+                            onChange={e => {
+                                setCategoryId(e.target.value);
+                                invalidate();
+                            }}
+                        >
+                            <option value="">使用勾选商品（已选 {selected.length} 个）</option>
+                            {data?.categories.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name} ·{' '}
+                                    {data.channels.find(s => c.channelIds.includes(s.id))?.displayName ??
+                                        '待核对'}
+                                </option>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-                {query.loading && <p role="status">读取中…</p>}
-                {data && !data.items.length && <p className="text-slate-500">没有符合条件的商品</p>}
-                <div className="flex items-center gap-4">
-                    <button className={control} disabled={page === 0} onClick={() => setPage(page - 1)}>
-                        上一页
-                    </button>
-                    <span>
-                        第 {page + 1} 页 · {data?.totalItems ?? '未获取'} 个
-                    </span>
-                    <button
-                        className={control}
-                        disabled={!data || (page + 1) * 50 >= data.totalItems}
-                        onClick={() => setPage(page + 1)}
-                    >
-                        下一页
-                    </button>
-                </div>
-            </section>
-            <section className="rounded-xl bg-white p-5 space-y-4">
-                <h2 className="flex items-center gap-2 font-bold">
-                    2. 目标店铺与处理方式
-                    <FeatureHelpButton topic="catalog.platform-distribution" title="2. 目标店铺与处理方式" />
-                </h2>
-                <p className="text-sm text-slate-500">
-                    同币种首次授权复制来源售价，已有目标售价保持不变。跨币种缺价格时进入待配置，完成价格与交付设置后才能销售。
-                </p>
-                {data?.channels.map(store => (
-                    <div className="flex flex-wrap items-center gap-4" key={store.id}>
+                        </select>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
-                                checked={targets.includes(store.id)}
-                                onChange={() => {
-                                    setTargets(toggle(targets, store.id));
+                                checked={descendants}
+                                onChange={e => {
+                                    setDescendants(e.target.checked);
                                     invalidate();
                                 }}
                             />
-                            {store.displayName} · {store.currencyCode}
+                            包含子分类及全部分页
                         </label>
-                        {targets.includes(store.id) && (
-                            <select
-                                aria-label={`${store.displayName}目标分类`}
-                                className={control}
-                                value={categoryTargets[store.id] ?? ''}
-                                onChange={e => {
-                                    setCategoryTargets({ ...categoryTargets, [store.id]: e.target.value });
-                                    invalidate();
-                                }}
-                            >
-                                <option value="">不调整目标分类</option>
-                                {data.categories
-                                    .filter(c => c.channelIds.includes(store.id))
-                                    .map(c => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                            </select>
-                        )}
                     </div>
-                ))}
-                <select
-                    aria-label="授权操作"
-                    className={control}
-                    value={action}
-                    onChange={e => {
-                        setAction(e.target.value);
-                        invalidate();
-                    }}
-                >
-                    <option value="GRANT">新增销售授权</option>
-                    <option value="REVOKE">撤销销售授权（已付款订单继续履约）</option>
-                </select>
-                <button
-                    className="ml-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                    disabled={
-                        busy ||
-                        !targets.length ||
-                        (!categoryId &&
-                            (!selected.length || selected.some(id => !variantSelections[id]?.length)))
-                    }
-                    onClick={() => void createPreview()}
-                >
-                    生成预览
-                </button>
-            </section>
+                    <div className="overflow-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-100 text-slate-500">
+                                    <th className="py-3">选择</th>
+                                    <th>商品</th>
+                                    <th>维护店铺</th>
+                                    <th>销售店铺</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data?.items.map(p => (
+                                    <tr key={p.id} className="border-b border-slate-100">
+                                        <td className="py-3">
+                                            <input
+                                                aria-label={`选择 ${p.name}`}
+                                                type="checkbox"
+                                                disabled={Boolean(categoryId) || !p.ownerChannelId}
+                                                checked={selected.includes(p.id)}
+                                                onChange={() => {
+                                                    setSelected(toggle(selected, p.id));
+                                                    setVariantSelections({
+                                                        ...variantSelections,
+                                                        [p.id]:
+                                                            variantSelections[p.id] ??
+                                                            p.variants.map(v => v.id),
+                                                    });
+                                                    invalidate();
+                                                }}
+                                            />
+                                        </td>
+                                        <td>
+                                            {p.name}
+                                            {selected.includes(p.id) && (
+                                                <div className="mt-2 flex flex-wrap gap-3">
+                                                    {p.variants.map(v => (
+                                                        <label
+                                                            key={v.id}
+                                                            className="flex items-center gap-1 text-xs"
+                                                        >
+                                                            <input
+                                                                aria-label={`授权规格 ${v.name}`}
+                                                                type="checkbox"
+                                                                checked={(
+                                                                    variantSelections[p.id] ?? []
+                                                                ).includes(v.id)}
+                                                                onChange={() => {
+                                                                    setVariantSelections({
+                                                                        ...variantSelections,
+                                                                        [p.id]: toggle(
+                                                                            variantSelections[p.id] ?? [],
+                                                                            v.id,
+                                                                        ),
+                                                                    });
+                                                                    invalidate();
+                                                                }}
+                                                            />
+                                                            {v.name}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}{' '}
+                                            {p.ownerChannelId && (
+                                                <button
+                                                    className="ml-3 text-xs text-blue-600"
+                                                    onClick={() => setSupplyProduct(p)}
+                                                >
+                                                    供货设置
+                                                </button>
+                                            )}
+                                        </td>
+                                        <td>
+                                            {data.channels.find(s => s.id === p.ownerChannelId)
+                                                ?.displayName ?? '归属待核对'}
+                                        </td>
+                                        <td>
+                                            {p.channelIds
+                                                .map(
+                                                    id =>
+                                                        data.channels.find(s => s.id === id)?.displayName ??
+                                                        '待核对',
+                                                )
+                                                .join('、') || '未分配'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {query.loading && <p role="status">读取中…</p>}
+                    {data && !data.items.length && <p className="text-slate-500">没有符合条件的商品</p>}
+                    <div className="flex items-center gap-4">
+                        <button className={control} disabled={page === 0} onClick={() => setPage(page - 1)}>
+                            上一页
+                        </button>
+                        <span>
+                            第 {page + 1} 页 · {data?.totalItems ?? '未获取'} 个
+                        </span>
+                        <button
+                            className={control}
+                            disabled={!data || (page + 1) * 50 >= data.totalItems}
+                            onClick={() => setPage(page + 1)}
+                        >
+                            下一页
+                        </button>
+                    </div>
+                </section>
+                <section className="min-w-0 rounded-xl bg-white p-4 space-y-3">
+                    <h2 className="flex items-center gap-2 font-bold">
+                        2. 目标店铺与处理方式
+                        <FeatureHelpButton
+                            topic="catalog.platform-distribution"
+                            title="2. 目标店铺与处理方式"
+                        />
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                        同币种首次授权复制来源售价，已有目标售价保持不变。跨币种缺价格时进入待配置，完成价格与交付设置后才能销售。
+                    </p>
+                    {data?.channels.map(store => (
+                        <div className="flex flex-wrap items-center gap-4" key={store.id}>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={targets.includes(store.id)}
+                                    onChange={() => {
+                                        setTargets(toggle(targets, store.id));
+                                        invalidate();
+                                    }}
+                                />
+                                {store.displayName} · {store.currencyCode}
+                            </label>
+                            {targets.includes(store.id) && (
+                                <select
+                                    aria-label={`${store.displayName}目标分类`}
+                                    className={control}
+                                    value={categoryTargets[store.id] ?? ''}
+                                    onChange={e => {
+                                        setCategoryTargets({
+                                            ...categoryTargets,
+                                            [store.id]: e.target.value,
+                                        });
+                                        invalidate();
+                                    }}
+                                >
+                                    <option value="">不调整目标分类</option>
+                                    {data.categories
+                                        .filter(c => c.channelIds.includes(store.id))
+                                        .map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name}
+                                            </option>
+                                        ))}
+                                </select>
+                            )}
+                        </div>
+                    ))}
+                    <select
+                        aria-label="授权操作"
+                        className={`${control} w-full`}
+                        value={action}
+                        onChange={e => {
+                            setAction(e.target.value);
+                            invalidate();
+                        }}
+                    >
+                        <option value="GRANT">新增销售授权</option>
+                        <option value="REVOKE">撤销销售授权（已付款订单继续履约）</option>
+                    </select>
+                    <button
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        disabled={
+                            busy ||
+                            !targets.length ||
+                            (!categoryId &&
+                                (!selected.length || selected.some(id => !variantSelections[id]?.length)))
+                        }
+                        onClick={() => void createPreview()}
+                    >
+                        生成预览
+                    </button>
+                </section>
+            </div>
             {receipt && (
                 <section className="rounded-xl bg-white p-5 space-y-4">
                     <h2 className="flex items-center gap-2 font-bold">
@@ -489,7 +498,12 @@ export function StoreAllocationMatrixModule() {
                     {message}
                 </p>
             )}
-            <PlatformResourcePanel stores={data?.channels ?? []} />
+            <details className="rounded-xl bg-white">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
+                    资源归属与公共模板
+                </summary>
+                <PlatformResourcePanel stores={data?.channels ?? []} />
+            </details>
             {supplyProduct?.ownerChannelId && (
                 <PlatformSupplyDialog
                     productId={supplyProduct.id}

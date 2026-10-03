@@ -154,7 +154,7 @@ export function ProductEditorSidebar() {
                                     setAssetPickerMode('FEATURED');
                                     setIsAssetPickerOpen(true);
                                 }}
-                                className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <ImageIcon className="h-7 w-7 text-slate-300" />
                                 <span className="text-xs font-bold text-slate-600">选择商品主图</span>

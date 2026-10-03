@@ -1090,7 +1090,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 function EmptyState() {
     return (
-        <div className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+        <div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
             <PackageCheck className="h-9 w-9 text-slate-300" />
             <h2 className="mt-3 text-sm font-bold text-slate-700">没有自动发卡 SKU</h2>
             <p className="mt-1 max-w-lg text-xs leading-5 text-slate-400">
@@ -1110,7 +1110,7 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
 }
 function LoadingState({ text }: { text: string }) {
     return (
-        <div className="flex min-h-96 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
+        <div className="flex min-h-40 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
             <LoaderCircle className="h-4 w-4 animate-spin" />
             {text}
         </div>
@@ -1118,7 +1118,7 @@ function LoadingState({ text }: { text: string }) {
 }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
     return (
-        <div className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-rose-200 bg-white p-6 text-center">
+        <div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-rose-200 bg-white p-6 text-center">
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">卡密数据加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>

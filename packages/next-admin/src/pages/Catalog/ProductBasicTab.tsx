@@ -58,7 +58,7 @@ export function ProductBasicTab() {
 
     return (
         <div className="space-y-4">
-            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)]">
+            <div className="grid items-start gap-4 xl:grid-cols-2">
                 <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                     <div className="border-b border-slate-100 pb-3">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -75,7 +75,7 @@ export function ProductBasicTab() {
                             商品描述 <span className="text-rose-500">*</span>
                         </label>
                         <textarea
-                            rows={8}
+                            rows={4}
                             id={`${fieldId}-description`}
                             value={description}
                             onChange={event => {
@@ -122,7 +122,7 @@ export function ProductBasicTab() {
                         </p>
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
                         <div>
                             <div className="mb-2 text-xs font-bold text-slate-700">商品类型</div>
                             {fixedFulfillmentType ? (
@@ -302,7 +302,7 @@ export function ProductBasicTab() {
                             setAssetPickerMode('GALLERY');
                             setIsAssetPickerOpen(true);
                         }}
-                        className="mt-5 flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-5 flex min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <ImageIcon className="h-8 w-8 text-slate-300" />
                         <div className="text-xs font-bold text-slate-600">暂未添加详情图</div>

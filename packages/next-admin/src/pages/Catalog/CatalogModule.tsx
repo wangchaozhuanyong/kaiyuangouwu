@@ -485,7 +485,7 @@ export function CatalogModule() {
             </div>
 
             {/* Main Content */}
-            <div className="w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <div className="w-full max-w-none min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 <div className="flex flex-col gap-1 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900 sm:flex-row sm:items-center sm:justify-between">
                     <span>
                         当前数据范围：<strong>{activeChannelLabel}</strong>
@@ -507,7 +507,7 @@ export function CatalogModule() {
                 )}
 
                 <section
-                    className="flex flex-wrap gap-5 rounded-xl border border-slate-200 bg-white p-4 text-sm"
+                    className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs"
                     aria-label="本店经营统计"
                 >
                     <span>本店已授权：{storeStatus?.authorized ?? '未获取'}</span>
@@ -548,7 +548,7 @@ export function CatalogModule() {
                 )}
 
                 {/* Table Container */}
-                <div className="bg-white rounded-xl shadow-2xs border border-slate-200 flex flex-col min-h-[520px]">
+                <div className="bg-white rounded-xl shadow-2xs border border-slate-200 flex flex-col">
                     {/* Toolbar */}
                     <div
                         data-testid="catalog-filter-toolbar"
@@ -674,7 +674,7 @@ export function CatalogModule() {
 
                         {/* 空状态：真实无数据 */}
                         {!loading && !error && displayProducts.length === 0 && (
-                            <div className="flex flex-col items-center justify-center p-16 text-center space-y-3">
+                            <div className="flex flex-col items-center justify-center px-6 py-8 text-center space-y-3">
                                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                                     <Package className="w-6 h-6" />
                                 </div>
