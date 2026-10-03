@@ -448,7 +448,6 @@ const data: Record<string, unknown> = {
     storefrontReviewSettings: { enabled: true },
     customers: empty,
     eligibleShippingMethodsForDraftOrder: [],
-    catalogProductChannelAssignments: empty,
     afterSalesRequests: { totalItems: 2, items: [] },
     storefrontReviews: {
         totalItems: 1,
