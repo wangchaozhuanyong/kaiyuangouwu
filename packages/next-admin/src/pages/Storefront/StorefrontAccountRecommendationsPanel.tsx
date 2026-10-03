@@ -5,6 +5,7 @@ import {
     resolveAccountRecommendationSettings,
     type AccountRecommendationSettings,
 } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { errorText } from './storefront-content-utils';
 
 export function StorefrontAccountRecommendationsPanel({
@@ -51,7 +52,10 @@ export function StorefrontAccountRecommendationsPanel({
             aria-label="账户推荐设置"
             className="rounded-xl border border-slate-200 bg-white p-5"
         >
-            <h3 className="text-sm font-semibold text-slate-900">账户 · 专属推荐</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                账户 · 专属推荐
+                <FeatureHelpButton topic="storefront.account-recommendations" title="账户 · 专属推荐" />
+            </h3>
             <p className="mt-2 text-xs leading-5 text-slate-500">
                 电脑和手机的账户页共用以下设置，标题居中显示在商品上方。
                 按当前店铺今日净销量排序，销量不足时随机补齐；没有销量时随机推荐，同一天保持稳定。 默认展示 8

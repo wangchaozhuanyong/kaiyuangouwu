@@ -387,6 +387,12 @@ export const featureHelpContent = {
         example: '例如：预览中确认轮播图、入口宫格和商品楼层的先后顺序。',
         impact: '预览本身不保存、不发布。',
     },
+    'storefront.account-recommendations': {
+        purpose: '管理当前店铺电脑和手机账户页的推荐显隐、中英文标题及展示数量。',
+        requirements: ['选择当前店铺并具备装修内容管理权限', '标题不能为空，展示数量为 1 至 10 件'],
+        example: '例如：开启账户推荐，将中文标题设为“专属推荐”，展示 8 件商品。',
+        impact: '保存后仅更新当前店铺的账户推荐设置，不改变搜索推荐数量；未保存的草稿不会影响线上。',
+    },
     'storefront.block-basic': {
         purpose: '编辑当前楼层模块的名称、类型和基础识别信息。',
         requirements: ['模块标识保持唯一', '类型确定后再填写其他内容'],

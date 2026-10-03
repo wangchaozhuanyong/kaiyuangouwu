@@ -255,7 +255,7 @@ defineNextAdminExtension({
             path: '/plugins/icloud-relay',
             title: '邮件验证码查询',
             component: IcloudRelayModule,
-            permissions: ['ReadIcloudRelay'],
+            permissions: ['SuperAdmin'],
             navItem: {
                 label: '邮件验证码查询',
                 sectionId: 'plugins',
