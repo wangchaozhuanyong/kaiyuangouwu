@@ -993,6 +993,7 @@ export function HomePage() {
                                             'hero hero-image-overlay',
                                             desktop && heroCount > 1 ? 'is-swipeable' : '',
                                             overlayTrustBar ? 'has-service-overlay' : '',
+                                            desktop && heroCount > 1 ? 'has-page-picker' : '',
                                         ]
                                             .filter(Boolean)
                                             .join(' ')}
@@ -1025,9 +1026,44 @@ export function HomePage() {
                                             <HeroScene
                                                 content={managedHero}
                                                 mediaOverlay={
-                                                    overlayTrustBar && (
-                                                        <div className="hero-service-overlay">{trustBar}</div>
-                                                    )
+                                                    <>
+                                                        {overlayTrustBar && (
+                                                            <div className="hero-service-overlay">
+                                                                {trustBar}
+                                                            </div>
+                                                        )}
+                                                        {desktop && heroCount > 1 && (
+                                                            <div
+                                                                className="hero-page-picker"
+                                                                role="group"
+                                                                aria-label={
+                                                                    isZh ? '选择轮播图片' : 'Choose a slide'
+                                                                }
+                                                            >
+                                                                {managedHeroes.map((item, index) => (
+                                                                    <button
+                                                                        key={item.id}
+                                                                        type="button"
+                                                                        aria-label={
+                                                                            isZh
+                                                                                ? `切换到第 ${index + 1} 张图片`
+                                                                                : `Show slide ${index + 1}`
+                                                                        }
+                                                                        aria-current={
+                                                                            index === heroIndex
+                                                                                ? 'true'
+                                                                                : undefined
+                                                                        }
+                                                                        onClick={() =>
+                                                                            selectHeroManually(index)
+                                                                        }
+                                                                    >
+                                                                        {index + 1}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 }
                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                                 onImageOpen={handleHeroImageOpen}

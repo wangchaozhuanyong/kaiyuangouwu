@@ -75,7 +75,7 @@ export function BusinessServicesPage() {
     const heroImageUrl = clientPluginBlock?.enabled ? clientPluginBlock.imageUrl : null;
 
     return (
-        // SERVICES_SKIN_B_20261002: retain layout B while the active skin owns appearance.
+        // SERVICES_SCALABLE_DESKTOP_20261003: desktop stacks the introduction above the tool grid.
         <main className="page business-services-page" data-services-layout="directory-b">
             {!desktop && (
                 <MobilePageHeader

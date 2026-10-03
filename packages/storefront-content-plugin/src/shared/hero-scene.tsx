@@ -1,5 +1,12 @@
 import { ChevronRight, ShieldCheck, Zap } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type MouseEventHandler, type ReactNode } from 'react';
+import {
+    useLayoutEffect,
+    useRef,
+    useState,
+    type CSSProperties,
+    type MouseEventHandler,
+    type ReactNode,
+} from 'react';
 
 import { normalizedHeroThemePreset } from '../content-visuals';
 
@@ -40,54 +47,26 @@ export function HeroScene({
     const ctaLabel = content.ctaLabel.trim();
     const adaptiveStyle = heroThemeStyle(content);
     const mediaRef = useRef<HTMLDivElement>(null);
-    const copyRef = useRef<HTMLDivElement>(null);
-    const [copyBelow, setCopyBelow] = useState(true);
+    const [overlayHeight, setOverlayHeight] = useState(0);
 
     useLayoutEffect(() => {
         const media = mediaRef.current;
-        const copy = copyRef.current;
-        const view = media?.ownerDocument.defaultView;
-        if (!media || !copy || !view) return;
+        if (!media) return;
+        const overlays = Array.from(media.children).slice(1);
         const measure = () => {
-            if (view.innerWidth < 1024) {
-                setCopyBelow(true);
-                return;
-            }
-            const mediaBox = media.getBoundingClientRect();
-            const copyStyle = view.getComputedStyle(copy);
-            // Both layouts retain the same text width, so switching cannot change wrapping and oscillate.
-            const textHeight =
-                copy.getBoundingClientRect().height -
-                parseFloat(copyStyle.paddingTop || '0') -
-                parseFloat(copyStyle.paddingBottom || '0');
-            const overlaySpace = Math.max(
-                0,
-                ...Array.from(media.children)
-                    .slice(1)
-                    .map(child => mediaBox.bottom - child.getBoundingClientRect().top),
-            );
-            const availableHeight = mediaBox.height - 24 - Math.max(24, overlaySpace + 12);
-            setCopyBelow(textHeight <= 0 || textHeight > availableHeight);
+            setOverlayHeight(Math.max(0, ...overlays.map(child => child.getBoundingClientRect().height)));
         };
         const observer = new ResizeObserver(measure);
-        observer.observe(media);
-        observer.observe(copy);
-        Array.from(media.children)
-            .slice(1)
-            .forEach(child => observer.observe(child));
-        view.addEventListener('resize', measure);
+        overlays.forEach(child => observer.observe(child));
         measure();
-        return () => {
-            observer.disconnect();
-            view.removeEventListener('resize', measure);
-        };
-    }, [content, mediaOverlay]);
+        return () => observer.disconnect();
+    }, [mediaOverlay]);
 
     return (
         <div
             className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
-            style={adaptiveStyle}
-            data-copy-layout={copyBelow ? 'below' : 'overlay'}
+            style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
+            data-copy-layout="overlay"
         >
             <div className="hero-rich-media" ref={mediaRef}>
                 <button
@@ -100,7 +79,7 @@ export function HeroScene({
                 </button>
                 {mediaOverlay}
             </div>
-            <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`} ref={copyRef}>
+            <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
                 <div className="hero-rich-copy-surface">
                     {subtitle && (
                         <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
