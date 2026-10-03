@@ -1,7 +1,7 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { Kind, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
@@ -9,7 +9,7 @@ import { ConfirmDialogContext } from '../../src/components/confirm-dialog-contex
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
 import { defineNextAdminExtension } from '../../src/extensions/extension-api';
-import type { StoreManagementResult } from '../../src/graphql/management.graphql';
+import type { StoreManagementResult, StoreProfileRecord } from '../../src/graphql/management.graphql';
 import '../../src/index.css';
 import { CatalogExportAction } from '../../src/pages/Catalog/CatalogExportAction';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
@@ -29,6 +29,8 @@ import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule
 import { ProfitReportModule } from '../../src/pages/Sales/ProfitReportModule';
 import { SalesModule } from '../../src/pages/Sales/SalesModule';
 import { PaymentShippingManager } from '../../src/pages/Settings/PaymentShippingManager';
+import { StoreEditor } from '../../src/pages/Settings/StoreDialogs';
+import { StoresPanel } from '../../src/pages/Settings/StorePanels';
 import { SystemOpsModule } from '../../src/pages/Settings/SystemOpsModule';
 import { TranslationsModule } from '../../src/pages/Settings/TranslationsModule';
 import { UsdtPaymentManagementModule } from '../../src/pages/Settings/UsdtPaymentManagementModule';
@@ -55,6 +57,7 @@ const viewLabels: Record<string, string> = {
     categories: '商品分类',
     suppliers: '供货商',
     purchases: '采购与收货',
+    stores: '店铺设置',
 };
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
@@ -297,8 +300,51 @@ const fixtureOrder = {
     payments: [],
 };
 const data: Record<string, unknown> = {
-    products: { items: [product], totalItems: 1 },
+    products: {
+        items: [
+            {
+                ...product,
+                collections: params.has('categoryRegression')
+                    ? [
+                          {
+                              id: 'category-1',
+                              name: 'Codex订阅',
+                              slug: 'codex',
+                              parent: {
+                                  id: 'root',
+                                  name: '未填写中文名称',
+                                  slug: '__root_collection__',
+                              },
+                          },
+                          {
+                              id: 'category-2',
+                              name: '成品账号',
+                              slug: 'ready-account',
+                              parent: { id: 'category-1', name: 'Codex订阅', slug: 'codex' },
+                          },
+                      ]
+                    : product.collections,
+            },
+        ],
+        totalItems: 1,
+    },
     catalogProductOperations: [],
+    catalogProductChannelAssignments: {
+        items: [
+            {
+                id: product.id,
+                name: product.name,
+                enabled: true,
+                channels: [
+                    { id: channel.id, code: channel.code, displayName: '布局验收店铺', isDefault: false },
+                ],
+            },
+        ],
+        totalItems: 1,
+        channels: [{ id: channel.id, code: channel.code, displayName: '布局验收店铺', isDefault: false }],
+        scopeChannel: { id: channel.id, code: channel.code, isDefault: false },
+        summary: { totalItems: 1, unassignedItems: 0, multiChannelItems: 0, channelCounts: [] },
+    },
     physicalFulfillmentTodoCount: 3,
     afterSalesRequests: { totalItems: 2, items: [] },
     storefrontReviews: {
@@ -590,6 +636,129 @@ const paymentSettingsData = {
     shippingCalculators: [],
     fulfillmentHandlers: [],
 } as unknown as StoreManagementResult;
+
+const storeProfileSamples: StoreProfileRecord[] = [
+    '示例店铺一',
+    '示例店铺二',
+    '示例店铺三',
+    '正式营业示例',
+].map((name, index) => {
+    const ready = index === 3 || (index === 0 && params.has('ready'));
+    return {
+        id: `layout-store-${index + 1}`,
+        updatedAt: now,
+        status: index === 3 ? 'ACTIVE' : 'DRAFT',
+        isPublished: index === 1,
+        isOperational: index === 1 || index === 3,
+        sortOrder: index,
+        descriptionZh: index === 0 ? '' : '本地验收示例店铺',
+        descriptionEn: '',
+        taglineZh: null,
+        taglineEn: null,
+        brandBackgroundColor: null,
+        brandPrimaryColor: null,
+        brandAccentColor: null,
+        brandHighlightColor: null,
+        legalEntityName: null,
+        legalRegistrationCountry: null,
+        legalRegistrationNumber: null,
+        legalContactAddress: null,
+        supportEmail: null,
+        privacyEmail: null,
+        internalNote: null,
+        primaryDomain: index === 2 ? null : `store-${index + 1}.example.invalid`,
+        storefrontUrl: null,
+        activationReadiness: {
+            ready,
+            checks: ready
+                ? []
+                : index === 2
+                  ? [
+                        {
+                            code: 'DOMAIN',
+                            ready: false,
+                            message: '请配置并验证主域名',
+                            messageEn: 'Domain missing',
+                        },
+                    ]
+                  : [
+                        ...(index === 0
+                            ? [
+                                  {
+                                      code: 'PROFILE',
+                                      ready: false,
+                                      message: '请填写店铺简介',
+                                      messageEn: 'Profile missing',
+                                  },
+                              ]
+                            : []),
+                        {
+                            code: 'PAYMENT',
+                            ready: false,
+                            message: '请启用正式支付方式',
+                            messageEn: 'Payment missing',
+                        },
+                    ],
+        },
+        logoAsset: null,
+        logoOnLightAsset: null,
+        logoOnDarkAsset: null,
+        channel: {
+            ...channel,
+            id: `layout-channel-${index + 1}`,
+            code: `layout-shop-${index + 1}`,
+            token: `fixture-channel-${index + 1}`,
+            seller: null,
+            customFields: { storefrontNameZh: name, storefrontNameEn: `Fixture ${index + 1}` },
+        },
+    };
+});
+const storeFixtureWindow = window as Window & { storePreviewRequests: string[] };
+storeFixtureWindow.storePreviewRequests = [];
+
+function StoreManagementFixture() {
+    const [activeChannelId, setActiveChannelId] = useState('layout-channel-1');
+    const [editing, setEditing] = useState<StoreProfileRecord | null>(null);
+    return (
+        <div className="space-y-4 p-5">
+            <label className="block text-sm font-bold">
+                当前店铺（本地验收）
+                <select
+                    value={activeChannelId}
+                    onChange={event => setActiveChannelId(event.target.value)}
+                    className="ml-3 rounded-lg border border-slate-300 bg-white px-3 py-2"
+                >
+                    {storeProfileSamples.map(profile => (
+                        <option key={profile.id} value={profile.channel.id}>
+                            {profile.channel.customFields.storefrontNameZh}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <StoresPanel
+                profiles={storeProfileSamples}
+                activeChannelId={activeChannelId}
+                publicPreviewBusy={false}
+                onTogglePublicPreview={profile => {
+                    // Record the target only; no profile or storefront is changed.
+                    storeFixtureWindow.storePreviewRequests.push(profile.id);
+                }}
+                onEdit={setEditing}
+                onDeprovision={() => {}}
+                allowPermanentDeprovision={true}
+            />
+            {editing && (
+                <StoreEditor
+                    profile={editing}
+                    onClose={() => setEditing(null)}
+                    onCompleted={async () => {}}
+                    onError={() => {}}
+                />
+            )}
+        </div>
+    );
+}
+
 const modules: Record<string, React.ReactNode> = {
     dashboard: <DashboardModule />,
     sales: <SalesModule />,
@@ -618,6 +787,7 @@ const modules: Record<string, React.ReactNode> = {
     categories: <CategoriesModule />,
     suppliers: <SuppliersModule />,
     purchases: <PurchaseOrdersModule />,
+    stores: <StoreManagementFixture />,
 };
 createRoot(document.getElementById('root')!).render(
     <ApolloProvider client={client}>

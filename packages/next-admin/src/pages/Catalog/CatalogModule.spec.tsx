@@ -39,7 +39,7 @@ async function renderCatalog({
     const rootCollection = {
         __typename: 'Collection',
         id: 'root',
-        name: '__root_collection__',
+        name: '未填写中文名称',
         slug: '__root_collection__',
     };
     const tobacco = { __typename: 'Collection', id: 'tobacco', name: '正品烟草', slug: 'tobacco' };

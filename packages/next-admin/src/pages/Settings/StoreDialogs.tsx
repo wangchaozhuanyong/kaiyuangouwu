@@ -1,6 +1,6 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -57,6 +57,8 @@ export function StoreEditor({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
+    const statusHelpId = useId();
+    const pendingChecks = profile.activationReadiness.checks.filter(check => !check.ready);
     const [sellerId, setSellerId] = useState(profile.channel.seller?.id ?? '');
     const [originalEnglish] = useState(() => ({
         ...profile,
@@ -398,6 +400,8 @@ export function StoreEditor({
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="运行状态">
                     <select
+                        aria-label="运行状态"
+                        aria-describedby={statusHelpId}
                         value={status}
                         onChange={event => setStatus(event.target.value as StoreProfileRecord['status'])}
                         className={inputClass}
@@ -407,7 +411,7 @@ export function StoreEditor({
                             正常营业
                         </option>
                         <option value="SUSPENDED" disabled={profile.status !== 'SUSPENDED'}>
-                            暂停营业（请使用安全清退）
+                            暂停营业（从店铺卡片操作）
                         </option>
                     </select>
                 </Field>
@@ -419,6 +423,35 @@ export function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
+            </div>
+            <div
+                id={statusHelpId}
+                className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"
+            >
+                <p className="font-bold text-slate-800">
+                    {profile.activationReadiness.ready
+                        ? '上线检查已通过，可以选择正常营业。'
+                        : `正常营业暂不可选：上线检查${pendingChecks.length ? `还有 ${pendingChecks.length} 项待处理` : '尚未通过'}。`}
+                </p>
+                {pendingChecks.length > 0 && (
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                        {pendingChecks.map(check => (
+                            <li key={check.code}>{check.message}</li>
+                        ))}
+                    </ul>
+                )}
+                <p className="mt-2">
+                    上线检查以已保存的资料为准。修改后请先保存店铺档案，再查看最新检查结果并选择正常营业。
+                </p>
+                <p className="mt-1">
+                    暂停营业请返回店铺卡片，使用“暂停营业”或“暂停或清退”，先检查未完成订单与余额。
+                </p>
+                {profile.status === 'DRAFT' && (
+                    <p className="mt-1">
+                        {profile.isOperational ? '当前店铺可访问，但运行状态仍为草稿。' : ''}
+                        公开预览与正式营业是独立状态；开放预览不会自动通过上线检查。
+                    </p>
+                )}
             </div>
             {saveError && (
                 <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
