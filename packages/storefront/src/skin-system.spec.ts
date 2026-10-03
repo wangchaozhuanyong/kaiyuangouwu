@@ -359,8 +359,10 @@ describe('storefront skin system', () => {
                         // Layout B's shared tool directory separates adjacent actionable rows.
                         if (
                             file === path.join(__dirname, 'styles/service-entries.css') &&
-                            selector.trim() ===
-                                '.is-tools .category-client-plugin + .category-client-plugin' &&
+                            [
+                                '.is-tools .category-client-plugin + .category-client-plugin',
+                                '.business-services-workspace .is-tools .category-client-plugin:nth-child(n + 3)',
+                            ].includes(selector.trim()) &&
                             border[1] === 'top' &&
                             border[2].trim() === '1px solid var(--line-subtle)'
                         ) {

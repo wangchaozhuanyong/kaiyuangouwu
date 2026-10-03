@@ -254,9 +254,22 @@
 
 @media (min-width: 1024px) {
     .business-services-workspace .category-client-plugin-group.is-tools {
-        grid-column: 2;
-        grid-row: 1;
+        grid-column: 1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 32px;
         padding-inline: var(--space-24);
+    }
+
+    .business-services-workspace .is-tools .category-client-plugin + .category-client-plugin {
+        border-top: 0;
+    }
+
+    .business-services-workspace .is-tools .category-client-plugin:nth-child(n + 3) {
+        border-top: 1px solid var(--line-subtle);
+    }
+
+    .business-services-workspace .is-tools > :last-child:nth-child(odd) {
+        grid-column: 1 / -1;
     }
 
     .business-services-workspace .category-client-plugin-group.is-assistance {

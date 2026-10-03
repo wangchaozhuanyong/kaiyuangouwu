@@ -1,4 +1,5 @@
-/* SERVICES_SKIN_B_20261002: preserve directory B geometry; inherit the active skin.
+/* SERVICES_SCALABLE_DESKTOP_20261003: introduction above the growing tool directory on desktop.
+   Mobile retains directory B geometry; all viewports inherit the active skin.
    Page layout: this file; directory rows: service-entries.css; icon frames: semantic-icons.css. */
 .business-services-page {
     --services-tool-icon-size: 44px;
@@ -158,7 +159,6 @@
     }
 
     .business-services-workspace {
-        grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
         gap: var(--space-section);
         margin: 0;
     }
@@ -166,8 +166,29 @@
     .business-services-heading {
         grid-column: 1;
         grid-row: 1;
-        min-height: 470px;
-        padding: 40px 32px;
+        flex-direction: row;
+        align-items: center;
+        padding: 32px;
+    }
+
+    .business-services-heading-copy {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .business-services-heading-link {
+        grid-row: 1 / span 2;
+        align-self: center;
+    }
+
+    .business-services-heading p {
+        grid-column: 1;
+        max-width: 75ch;
+        font-size: 15px;
+    }
+
+    .business-services-hero-media {
+        flex: 0 0 min(28%, 280px);
     }
 
     .business-services-page {
@@ -175,22 +196,9 @@
     }
 
     .business-services-architecture {
-        width: 105%;
-        right: -28px;
-        bottom: -6px;
-    }
-
-    .business-services-workspace:not(:has(.is-tools)) .business-services-heading {
-        grid-column: 1 / -1;
-        min-height: 240px;
-    }
-
-    .business-services-workspace:not(:has(.is-tools)) .business-services-architecture {
-        width: min(420px, 55%);
-    }
-
-    .business-services-heading p {
-        font-size: 15px;
+        width: min(320px, 30%);
+        right: -20px;
+        bottom: -20px;
     }
 
     .business-services-empty {
