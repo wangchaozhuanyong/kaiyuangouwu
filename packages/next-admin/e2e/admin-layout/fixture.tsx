@@ -3,7 +3,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import { Kind, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
@@ -11,6 +11,7 @@ import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-conte
 import { defineNextAdminExtension } from '../../src/extensions/extension-api';
 import type { StoreManagementResult } from '../../src/graphql/management.graphql';
 import '../../src/index.css';
+import { AppShell } from '../../src/layouts/AppShell';
 import { CatalogExportAction } from '../../src/pages/Catalog/CatalogExportAction';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
 import {
@@ -33,6 +34,7 @@ import { TranslationsModule } from '../../src/pages/Settings/TranslationsModule'
 import { UsdtPaymentManagementModule } from '../../src/pages/Settings/UsdtPaymentManagementModule';
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
+import { ThemeProvider } from '../../src/theme/ThemeProvider';
 
 // Synthetic local data only. No HTTP link; every mutation is rejected.
 const params = new URLSearchParams(location.search);
@@ -518,6 +520,65 @@ const client = new ApolloClient({
                         .map(d => [d.name.value, d]),
                 );
                 let responseData = data;
+                if (view === 'tabs') {
+                    const productId = String(
+                        operation.variables.id ?? operation.variables.productId ?? product.id,
+                    );
+                    const selectedProduct = {
+                        ...product,
+                        id: productId,
+                        variants: product.variants.map(variant => ({
+                            ...variant,
+                            id: `${productId}-${variant.id}`,
+                        })),
+                    };
+                    responseData = {
+                        ...data,
+                        product: selectedProduct,
+                        catalogProductChannelAssignments: {
+                            items: [{ id: productId, channels: [channel] }],
+                            totalItems: 1,
+                        },
+                        catalogProductWorkspace: {
+                            ...(data.catalogProductWorkspace as object),
+                            productId,
+                            variants: [],
+                        },
+                        globalSettings: {
+                            availableLanguages: ['zh_Hans', 'en'],
+                            serverConfig: { entityCustomFields: [] },
+                        },
+                        me: {
+                            id: 'tabs-admin',
+                            identifier: 'local@example.invalid',
+                            channels: [{ ...channel, permissions: ['SuperAdmin'] }],
+                        },
+                        activeAdministrator: {
+                            id: 'tabs-admin',
+                            firstName: '模拟',
+                            lastName: '验收',
+                            emailAddress: 'local@example.invalid',
+                            createdAt: now,
+                            updatedAt: now,
+                            user: {
+                                id: 'tabs-admin',
+                                identifier: 'local@example.invalid',
+                                verified: true,
+                                lastLogin: null,
+                                authenticationMethods: [],
+                                roles: [
+                                    {
+                                        id: 'local-role',
+                                        code: '__super_admin_role__',
+                                        description: '',
+                                        channels: [channel],
+                                    },
+                                ],
+                            },
+                        },
+                    };
+                    tabOperations.push({ name: operation.operationName, variables: operation.variables });
+                }
                 if (operation.operationName === 'NextAdminContentTranslationAudit') {
                     const options = operation.variables.options ?? {};
                     const filtered = states.filter(
@@ -552,6 +613,8 @@ const client = new ApolloClient({
             }),
     ),
 });
+const tabOperations: Array<{ name: string; variables: Record<string, unknown> }> = [];
+if (view === 'tabs') Object.assign(window, { tabOperations });
 defineNextAdminExtension({
     id: 'admin-layout-fixture',
     actions: [CatalogImportAction, CatalogExportAction].map((component, i) => ({
@@ -619,78 +682,109 @@ const modules: Record<string, React.ReactNode> = {
     copy: <BusinessServicesCopyModule />,
     categories: <CategoriesModule />,
 };
-createRoot(document.getElementById('root')!).render(
-    <ApolloProvider client={client}>
-        <AdminPermissionsProvider permissions={['SuperAdmin']}>
-            <ConfirmDialogContext.Provider value={async () => false}>
-                <CustomFieldsContext.Provider
-                    value={{
-                        availableLanguages: ['zh_Hans', 'en'],
-                        entities: [
-                            {
-                                entityName: 'ProductVariant',
-                                customFields: [
-                                    {
-                                        name: 'deliveryNote',
-                                        type: 'text',
-                                        list: false,
-                                        nullable: true,
-                                        label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-                                    },
-                                ],
-                            },
-                        ],
-                    }}
-                >
+if (view === 'tabs') {
+    createRoot(document.getElementById('root')!).render(
+        <ThemeProvider>
+            <ApolloProvider client={client}>
+                <ConfirmDialogContext.Provider value={async () => false}>
                     <FeatureHelpProvider>
-                        <div className="flex h-screen min-w-0">
-                            <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-5 md:block">
-                                <strong>后台布局验收</strong>
-                                <nav className="mt-5 space-y-4">
-                                    {Object.keys(modules).map(name => (
-                                        <a
-                                            key={viewLabels[name]}
-                                            className="block text-sm text-blue-600"
-                                            href={`?view=${name}`}
+                        <MemoryRouter initialEntries={['/catalog/list']}>
+                            <nav
+                                aria-label="本地测试导航"
+                                className="fixed bottom-0 right-0 z-50 flex gap-3 bg-amber-100 p-2 text-xs"
+                            >
+                                本地模拟数据 · 写入已阻止
+                                <Link to="/catalog/list">测试商品列表</Link>
+                                <Link to="/catalog/products/layout-product">测试商品一</Link>
+                                <Link to="/catalog/products/layout-product-2">测试商品二</Link>
+                            </nav>
+                            <Routes>
+                                <Route element={<AppShell />}>
+                                    <Route path="dashboard" element={<DashboardModule />} />
+                                    <Route path="catalog/list" element={<CatalogModule />} />
+                                    <Route path="catalog/products/:id" element={<ProductEditor />} />
+                                </Route>
+                            </Routes>
+                        </MemoryRouter>
+                    </FeatureHelpProvider>
+                </ConfirmDialogContext.Provider>
+            </ApolloProvider>
+        </ThemeProvider>,
+    );
+} else {
+    createRoot(document.getElementById('root')!).render(
+        <ApolloProvider client={client}>
+            <AdminPermissionsProvider permissions={['SuperAdmin']}>
+                <ConfirmDialogContext.Provider value={async () => false}>
+                    <CustomFieldsContext.Provider
+                        value={{
+                            availableLanguages: ['zh_Hans', 'en'],
+                            entities: [
+                                {
+                                    entityName: 'ProductVariant',
+                                    customFields: [
+                                        {
+                                            name: 'deliveryNote',
+                                            type: 'text',
+                                            list: false,
+                                            nullable: true,
+                                            label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                                        },
+                                    ],
+                                },
+                            ],
+                        }}
+                    >
+                        <FeatureHelpProvider>
+                            <div className="flex h-screen min-w-0">
+                                <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-5 md:block">
+                                    <strong>后台布局验收</strong>
+                                    <nav className="mt-5 space-y-4">
+                                        {Object.keys(modules).map(name => (
+                                            <a
+                                                key={viewLabels[name]}
+                                                className="block text-sm text-blue-600"
+                                                href={`?view=${name}`}
+                                            >
+                                                {viewLabels[name]}
+                                            </a>
+                                        ))}
+                                    </nav>
+                                </aside>
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <div className="shrink-0 bg-amber-100 px-4 py-2 text-xs text-amber-900">
+                                        本地模拟数据 · 所有写入均已阻止
+                                    </div>
+                                    <div className="min-h-0 flex-1 overflow-auto">
+                                        <MemoryRouter
+                                            initialEntries={[
+                                                view === 'product'
+                                                    ? '/catalog/products/layout-product'
+                                                    : view === 'jobs'
+                                                      ? '/settings/system-ops?tab=jobs'
+                                                      : view === 'health'
+                                                        ? '/settings/system-ops?tab=health'
+                                                        : '/',
+                                            ]}
                                         >
-                                            {viewLabels[name]}
-                                        </a>
-                                    ))}
-                                </nav>
-                            </aside>
-                            <div className="flex min-w-0 flex-1 flex-col">
-                                <div className="shrink-0 bg-amber-100 px-4 py-2 text-xs text-amber-900">
-                                    本地模拟数据 · 所有写入均已阻止
-                                </div>
-                                <div className="min-h-0 flex-1 overflow-auto">
-                                    <MemoryRouter
-                                        initialEntries={[
-                                            view === 'product'
-                                                ? '/catalog/products/layout-product'
-                                                : view === 'jobs'
-                                                  ? '/settings/system-ops?tab=jobs'
-                                                  : view === 'health'
-                                                    ? '/settings/system-ops?tab=health'
-                                                    : '/',
-                                        ]}
-                                    >
-                                        <Routes>
-                                            <Route
-                                                path={view === 'product' ? '/catalog/products/:id' : '*'}
-                                                element={
-                                                    <FixtureBoundary>
-                                                        {modules[view] ?? modules.product}
-                                                    </FixtureBoundary>
-                                                }
-                                            />
-                                        </Routes>
-                                    </MemoryRouter>
+                                            <Routes>
+                                                <Route
+                                                    path={view === 'product' ? '/catalog/products/:id' : '*'}
+                                                    element={
+                                                        <FixtureBoundary>
+                                                            {modules[view] ?? modules.product}
+                                                        </FixtureBoundary>
+                                                    }
+                                                />
+                                            </Routes>
+                                        </MemoryRouter>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </FeatureHelpProvider>
-                </CustomFieldsContext.Provider>
-            </ConfirmDialogContext.Provider>
-        </AdminPermissionsProvider>
-    </ApolloProvider>,
-);
+                        </FeatureHelpProvider>
+                    </CustomFieldsContext.Provider>
+                </ConfirmDialogContext.Provider>
+            </AdminPermissionsProvider>
+        </ApolloProvider>,
+    );
+}

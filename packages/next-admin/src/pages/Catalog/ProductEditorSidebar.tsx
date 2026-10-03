@@ -1,5 +1,5 @@
 import { Boxes, Image as ImageIcon, Link2, Package, Sparkles, Tag, X } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
@@ -7,6 +7,7 @@ import { ProductAiImageDialog } from './ProductAiImageDialog';
 import { useProductEditor } from './ProductEditorContext';
 
 export function ProductEditorSidebar() {
+    const fieldId = useId();
     const [aiDialogOpen, setAiDialogOpen] = useState(false);
     const { hasAnyPermission } = useAdminPermissions();
     const canEditProduct = hasAnyPermission([
@@ -163,13 +164,16 @@ export function ProductEditorSidebar() {
                     </div>
 
                     <div>
-                        <label htmlFor="product-name" className="mb-1 block text-xs font-bold text-slate-700">
+                        <label
+                            htmlFor={`${fieldId}-name`}
+                            className="mb-1 block text-xs font-bold text-slate-700"
+                        >
                             名称 <span className="text-rose-500">*</span>
                         </label>
                         <input
                             type="text"
                             disabled={saving}
-                            id="product-name"
+                            id={`${fieldId}-name`}
                             value={productName}
                             onChange={event => {
                                 setProductName(event.target.value);
@@ -179,7 +183,7 @@ export function ProductEditorSidebar() {
                             }}
                             placeholder="输入名称"
                             aria-invalid={Boolean(formErrors.name)}
-                            aria-describedby={formErrors.name ? 'product-name-error' : undefined}
+                            aria-describedby={formErrors.name ? `${fieldId}-name-error` : undefined}
                             className={`w-full rounded-lg border bg-white p-2.5 text-xs font-bold outline-none focus:ring-1 ${
                                 formErrors.name
                                     ? 'border-rose-500 focus:ring-rose-500'
@@ -187,7 +191,7 @@ export function ProductEditorSidebar() {
                             }`}
                         />
                         {formErrors.name && (
-                            <p id="product-name-error" className="mt-1 text-[11px] text-rose-500">
+                            <p id={`${fieldId}-name-error`} className="mt-1 text-[11px] text-rose-500">
                                 {formErrors.name}
                             </p>
                         )}
@@ -195,7 +199,7 @@ export function ProductEditorSidebar() {
 
                     <div>
                         <label
-                            htmlFor="product-slug"
+                            htmlFor={`${fieldId}-slug`}
                             className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700"
                         >
                             <Link2 className="h-3.5 w-3.5 text-slate-400" />
@@ -204,7 +208,7 @@ export function ProductEditorSidebar() {
                         <input
                             type="text"
                             disabled={saving}
-                            id="product-slug"
+                            id={`${fieldId}-slug`}
                             value={slug}
                             onChange={event => setSlug(event.target.value)}
                             placeholder="留空按标题自动生成"

@@ -1,4 +1,5 @@
 import { ExternalLink, Image as ImageIcon, X } from 'lucide-react';
+import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
@@ -9,6 +10,7 @@ import { useProductEditor } from './ProductEditorContext';
 import { SOURCE_LANGUAGE_CODE } from './product-editor-types';
 
 export function ProductBasicTab() {
+    const fieldId = useId();
     const {
         isCreateMode,
         description,
@@ -67,14 +69,14 @@ export function ProductBasicTab() {
                     </div>
                     <div>
                         <label
-                            htmlFor="product-description"
+                            htmlFor={`${fieldId}-description`}
                             className="mb-1 block text-xs font-bold text-slate-700"
                         >
                             商品描述 <span className="text-rose-500">*</span>
                         </label>
                         <textarea
                             rows={8}
-                            id="product-description"
+                            id={`${fieldId}-description`}
                             value={description}
                             onChange={event => {
                                 setDescription(event.target.value);
@@ -88,7 +90,7 @@ export function ProductBasicTab() {
                             placeholder="输入商品描述、规格和包装说明..."
                             aria-invalid={Boolean(formErrors.description)}
                             aria-describedby={
-                                formErrors.description ? 'product-description-error' : undefined
+                                formErrors.description ? `${fieldId}-description-error` : undefined
                             }
                             className={`w-full resize-y rounded-lg border bg-white p-3 text-xs leading-relaxed outline-none focus:ring-1 ${
                                 formErrors.description
@@ -97,7 +99,7 @@ export function ProductBasicTab() {
                             }`}
                         />
                         {formErrors.description && (
-                            <p id="product-description-error" className="mt-1 text-[11px] text-rose-500">
+                            <p id={`${fieldId}-description-error`} className="mt-1 text-[11px] text-rose-500">
                                 {formErrors.description}
                             </p>
                         )}
@@ -176,13 +178,13 @@ export function ProductBasicTab() {
 
                         <div>
                             <label
-                                htmlFor="product-refund-policy"
+                                htmlFor={`${fieldId}-refund-policy`}
                                 className="mb-2 block text-xs font-bold text-slate-700"
                             >
                                 售后退款政策
                             </label>
                             <select
-                                id="product-refund-policy"
+                                id={`${fieldId}-refund-policy`}
                                 value={refundPolicy}
                                 onChange={event => setRefundPolicy(event.target.value as RefundPolicy)}
                                 className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -200,13 +202,13 @@ export function ProductBasicTab() {
                     {effectiveFulfillmentType === 'digital' && (
                         <div className="max-w-sm">
                             <label
-                                htmlFor="manual-delivery-sla"
+                                htmlFor={`${fieldId}-manual-delivery-sla`}
                                 className="mb-1 block text-xs font-bold text-slate-700"
                             >
                                 人工交付预计时长（分钟）
                             </label>
                             <input
-                                id="manual-delivery-sla"
+                                id={`${fieldId}-manual-delivery-sla`}
                                 type="number"
                                 min="5"
                                 max="525600"
