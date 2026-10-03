@@ -203,26 +203,26 @@ test('digital preflight reports symlinks and rejects a linked root', async () =>
     }
 });
 
-test('read-only SQL collection joins stock ownership and automatically hashes and matches a real local delivery file', async () => {
+async function verifyReadOnlyStockSchema(hasDisplayName) {
     const { default: initialize } = await import('sql.js');
     const SQL = await initialize();
     const database = new SQL.Database();
     const root = await fixtureDirectory();
     try {
         database.run(`
-            CREATE TABLE channel (id INTEGER, code TEXT);
-            INSERT INTO channel VALUES (1, 'store-a'), (2, 'store-b');
-            CREATE TABLE stock_location (id INTEGER, name TEXT);
-            INSERT INTO stock_location VALUES (1, 'shared');
-            CREATE TABLE stock_location_channels_channel (stockLocationId INTEGER, channelId INTEGER);
-            INSERT INTO stock_location_channels_channel VALUES (1, 1), (1, 2);
-            CREATE TABLE product_variant (id INTEGER, sku TEXT);
-            INSERT INTO product_variant VALUES (1, 'SHARED'), (2, 'SKU');
-            CREATE TABLE product_variant_channels_channel (productVariantId INTEGER, channelId INTEGER);
-            INSERT INTO product_variant_channels_channel VALUES (1, 1), (1, 2), (2, 2);
-            CREATE TABLE stock_level (stockLocationId INTEGER, productVariantId INTEGER, stockOnHand INTEGER, stockAllocated INTEGER);
-            INSERT INTO stock_level VALUES (1, 1, 7, 2), (1, 2, 3, 1);
-        `);
+        CREATE TABLE channel (id INTEGER, code TEXT);
+        INSERT INTO channel VALUES (1, 'store-a'), (2, 'store-b');
+        CREATE TABLE stock_location (id INTEGER${hasDisplayName ? ', name TEXT' : ''});
+        INSERT INTO stock_location VALUES (1${hasDisplayName ? ", 'shared'" : ''});
+        CREATE TABLE stock_location_channels_channel (stockLocationId INTEGER, channelId INTEGER);
+        INSERT INTO stock_location_channels_channel VALUES (1, 1), (1, 2);
+        CREATE TABLE product_variant (id INTEGER, sku TEXT);
+        INSERT INTO product_variant VALUES (1, 'SHARED'), (2, 'SKU');
+        CREATE TABLE product_variant_channels_channel (productVariantId INTEGER, channelId INTEGER);
+        INSERT INTO product_variant_channels_channel VALUES (1, 1), (1, 2), (2, 2);
+        CREATE TABLE stock_level (stockLocationId INTEGER, productVariantId INTEGER, stockOnHand INTEGER, stockAllocated INTEGER);
+        INSERT INTO stock_level VALUES (1, 1, 7, 2), (1, 2, 3, 1);
+    `);
         const query = async (sql, parameters = []) => {
             assert.match(sql.trim(), /^(SELECT|PRAGMA)\b/u, 'Collector attempted a write');
             const statement = database.prepare(sql);
@@ -246,6 +246,8 @@ test('read-only SQL collection joins stock ownership and automatically hashes an
         await writeFile(path.join(root, 'SKU.txt'), 'fixture delivery');
         const snapshot = await collectStoreIsolationSnapshot(adapter, root);
         const report = buildStoreIsolationPreflight(snapshot, 'fixture-key');
+        assert.equal(snapshot.associations.stockLocations.shared[0].label, hasDisplayName ? 'shared' : null);
+        assert.equal(report.blockers.sharedStockLocations, 1);
         const buckets = report.associations.stockLocations.shared[0].variantBuckets;
         assert.equal(
             buckets.reduce((sum, item) => sum + item.stockOnHand, 0),
@@ -264,4 +266,8 @@ test('read-only SQL collection joins stock ownership and automatically hashes an
         database.close();
         await rm(root, { recursive: true, force: true });
     }
-});
+}
+
+for (const hasDisplayName of [true, false])
+    test(`read-only SQL stock ownership preserves ambiguity with display name ${hasDisplayName}`, () =>
+        verifyReadOnlyStockSchema(hasDisplayName));

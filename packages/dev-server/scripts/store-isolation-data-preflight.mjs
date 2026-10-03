@@ -197,9 +197,12 @@ async function collectAssociation(adapter, definition) {
     ) {
         return { available: false, shared: [] };
     }
-    const label = definition.labelColumn
-        ? `entity.${quoted(definition.labelColumn)} AS label`
-        : 'NULL AS label';
+    // Display labels are optional on legacy schemas. Ownership still comes from
+    // the entity and Channel IDs, including every ambiguous association.
+    const label =
+        definition.labelColumn && (await adapter.columnExists(definition.entityTable, definition.labelColumn))
+            ? `entity.${quoted(definition.labelColumn)} AS label`
+            : 'NULL AS label';
     const rows = await adapter.query(
         `SELECT entity.${quoted('id')} AS entityId, ${label}, relation.${quoted('channelId')} AS channelId
          FROM ${quoted(definition.entityTable)} entity
