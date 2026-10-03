@@ -9,6 +9,18 @@ import { parseArgs } from 'node:util';
 
 import { isVerifiedFinding, verifyReportPatches } from './production-runtime-audit.mjs';
 
+export const GOVERNANCE_RECONCILIATION_RUNTIME_FILES = Object.freeze(
+    [
+        'platform-governance-reconciliation.mjs',
+        'platform-governance-reconciliation-plan.mjs',
+        'platform-catalog-data-plan.mjs',
+        'platform-payment-data-plan.mjs',
+        'store-isolation-data-preflight.mjs',
+        'store-isolation-ownership-evidence.mjs',
+        'store-isolation-customer-dependencies.mjs',
+    ].map(file => `packages/dev-server/scripts/${file}`),
+);
+
 export const DENIED_RUNTIME_PACKAGES = Object.freeze([
     'esbuild',
     'less',
@@ -402,7 +414,19 @@ function runNode(root, args, environment = process.env) {
     }
 }
 
+export function verifyGovernanceReleaseInputs(root) {
+    // Import the actual copied CLI and every static dependency without invoking
+    // its plan/apply entry point, opening a database connection or stopping writers.
+    const probe = [
+        "import { createRequire } from 'node:module'",
+        "await import('./packages/dev-server/scripts/platform-governance-reconciliation.mjs')",
+        "createRequire(process.cwd() + '/package.json').resolve('mysql2/promise')",
+    ].join(';');
+    runNode(root, ['--input-type=module', '-e', probe]);
+}
+
 function verifyRuntimeModules(root) {
+    verifyGovernanceReleaseInputs(root);
     runNode(root, ['--check', 'packages/dev-server/dist/index.js']);
     runNode(root, ['--check', 'packages/dev-server/dist/index-worker.js']);
     runNode(root, ['--check', 'packages/dev-server/dist/run-migrations.js']);
