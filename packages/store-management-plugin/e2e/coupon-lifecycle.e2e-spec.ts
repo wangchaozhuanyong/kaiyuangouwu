@@ -20,6 +20,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
@@ -79,6 +80,7 @@ const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     paymentOptions: { paymentMethodHandlers: [couponPaymentHandler] },
     plugins: [
+        OperationsDashboardPlugin,
         StorefrontCartPlugin,
         StorefrontContentPlugin,
         ContentTranslationPlugin.init({ provider: translationProvider }),

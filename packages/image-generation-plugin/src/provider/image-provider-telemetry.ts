@@ -1,5 +1,6 @@
 import { ProviderTelemetry } from '../types';
 
+import { classifyAiAccessFailure } from './ai-access-failure';
 import {
     AmbiguousImageProviderError,
     DefinitiveImageProviderError,
@@ -104,6 +105,9 @@ export function responseTelemetry(response: Response, payload: unknown): Provide
     const normalizedCurrency = currency && /^[A-Za-z]{3}$/u.test(currency) ? currency.toUpperCase() : null;
     return {
         ...details,
+        ...(classifyAiAccessFailure(payload, response.status)
+            ? { accessFailure: classifyAiAccessFailure(payload, response.status) }
+            : {}),
         providerRequestId: modelResponseId ?? details.providerRequestId,
         modelResponseId,
         // A generic gateway cost field is not a verified user charge. Retain

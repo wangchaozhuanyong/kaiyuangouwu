@@ -15,6 +15,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -47,6 +48,7 @@ const config = mergeConfig(testConfig, {
     apiOptions: { port: 3298, cors: { origin: 'http://127.0.0.1:5198', credentials: true } },
     defaultLanguageCode: LanguageCode.zh_Hans,
     plugins: [
+        OperationsDashboardPlugin,
         ContentTranslationPlugin.init({
             provider: { name: 'outbox-e2e', isConfigured: () => true, translate },
         }),

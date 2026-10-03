@@ -16,4 +16,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StateDirectory=vendure-notifications
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/vendure-notifications
 ReadOnlyPaths=/var/www/kaiyuangouwu/packages/dev-server/.env /var/backups/vendure-mysql /var/backups/vendure-files /var/lib/vendure-readiness

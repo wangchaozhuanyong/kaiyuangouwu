@@ -25,6 +25,9 @@ export class CustomerServiceFeedback extends VendureEntity {
     @Column({ type: 'varchar', length: 80, nullable: true })
     orderCode: string | null;
 
+    @Column({ type: 'int', default: 0 })
+    notificationRevision: number;
+
     @Column({ type: 'int' })
     rating: number;
 

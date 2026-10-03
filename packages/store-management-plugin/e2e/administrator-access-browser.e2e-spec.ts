@@ -19,6 +19,7 @@ import {
     User,
 } from '@vendure/core';
 import { NextAdminPlugin } from '@vendure/next-admin-plugin';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -74,6 +75,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        OperationsDashboardPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'administrator-access-browser-test',

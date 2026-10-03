@@ -32,6 +32,11 @@ export interface UpdateAdminNotificationConfigInput {
     notifyFulfillmentEvents?: boolean;
     notifyRefundEvents?: boolean;
     notifyInventoryEvents?: boolean;
+    notifyOnlineReports?: boolean;
+    notifyServiceReviews?: boolean;
+    notifyPromotionExpiry?: boolean;
+    notifyAiCredentials?: boolean;
+    notifySecurityEvents?: boolean;
     inventoryLowThreshold?: number;
     p1EscalationMinutes?: number;
     p0RepeatMinutes?: number;
@@ -57,6 +62,11 @@ export interface AdminNotificationRuntimeConfig {
     notifyFulfillmentEvents: boolean;
     notifyRefundEvents: boolean;
     notifyInventoryEvents: boolean;
+    notifyOnlineReports: boolean;
+    notifyServiceReviews: boolean;
+    notifyPromotionExpiry: boolean;
+    notifyAiCredentials: boolean;
+    notifySecurityEvents: boolean;
     inventoryLowThreshold: number;
     p1EscalationMinutes: number;
     p0RepeatMinutes: number;
@@ -98,6 +108,11 @@ export class AdminNotificationConfigService {
             notifyFulfillmentEvents: entity.notifyFulfillmentEvents,
             notifyRefundEvents: entity.notifyRefundEvents,
             notifyInventoryEvents: entity.notifyInventoryEvents,
+            notifyOnlineReports: entity.notifyOnlineReports,
+            notifyServiceReviews: entity.notifyServiceReviews,
+            notifyPromotionExpiry: entity.notifyPromotionExpiry,
+            notifyAiCredentials: entity.notifyAiCredentials,
+            notifySecurityEvents: entity.notifySecurityEvents,
             inventoryLowThreshold: entity.inventoryLowThreshold,
             p1EscalationMinutes: entity.p1EscalationMinutes,
             p0RepeatMinutes: entity.p0RepeatMinutes,
@@ -135,6 +150,11 @@ export class AdminNotificationConfigService {
             'notifyFulfillmentEvents',
             'notifyRefundEvents',
             'notifyInventoryEvents',
+            'notifyOnlineReports',
+            'notifyServiceReviews',
+            'notifyPromotionExpiry',
+            'notifyAiCredentials',
+            'notifySecurityEvents',
         ] as const) {
             if (input[key] !== undefined) entity[key] = input[key];
         }
@@ -218,7 +238,7 @@ export class AdminNotificationConfigService {
             await this.get();
             return {
                 ok: true,
-                message: `Bot ${identity.username ? `@${identity.username}` : identity.displayName} 连接正常`,
+                message: `机器人 ${identity.username ? `@${identity.username}` : identity.displayName} 连接正常`,
                 botUsername: identity.username,
                 testedAt,
             };
@@ -257,6 +277,11 @@ export class AdminNotificationConfigService {
                     notifyFulfillmentEvents: true,
                     notifyRefundEvents: true,
                     notifyInventoryEvents: true,
+                    notifyOnlineReports: false,
+                    notifyServiceReviews: false,
+                    notifyPromotionExpiry: false,
+                    notifyAiCredentials: false,
+                    notifySecurityEvents: false,
                     inventoryLowThreshold: 2,
                     p1EscalationMinutes: 60,
                     p0RepeatMinutes: 30,
@@ -361,6 +386,11 @@ function auditSnapshot(entity: AdminNotificationConfig): Record<string, unknown>
         notifyFulfillmentEvents: entity.notifyFulfillmentEvents,
         notifyRefundEvents: entity.notifyRefundEvents,
         notifyInventoryEvents: entity.notifyInventoryEvents,
+        notifyOnlineReports: entity.notifyOnlineReports,
+        notifyServiceReviews: entity.notifyServiceReviews,
+        notifyPromotionExpiry: entity.notifyPromotionExpiry,
+        notifyAiCredentials: entity.notifyAiCredentials,
+        notifySecurityEvents: entity.notifySecurityEvents,
         inventoryLowThreshold: entity.inventoryLowThreshold,
         p1EscalationMinutes: entity.p1EscalationMinutes,
         p0RepeatMinutes: entity.p0RepeatMinutes,
@@ -394,3 +424,22 @@ function escapeRegExp(value: string): string {
 }
 
 export { departmentCodes };
+
+export function notificationCategoryEnabled(
+    config: AdminNotificationRuntimeConfig,
+    category: string,
+): boolean {
+    const switches: Record<string, keyof AdminNotificationRuntimeConfig> = {
+        ORDER: 'notifyOrderEvents',
+        PAYMENT: 'notifyPaymentEvents',
+        FULFILLMENT: 'notifyFulfillmentEvents',
+        REFUND: 'notifyRefundEvents',
+        INVENTORY: 'notifyInventoryEvents',
+        ONLINE: 'notifyOnlineReports',
+        SERVICE_REVIEW: 'notifyServiceReviews',
+        PROMOTION: 'notifyPromotionExpiry',
+        AI_ACCESS: 'notifyAiCredentials',
+        SECURITY: 'notifySecurityEvents',
+    };
+    return !switches[category] || config[switches[category]] !== false;
+}

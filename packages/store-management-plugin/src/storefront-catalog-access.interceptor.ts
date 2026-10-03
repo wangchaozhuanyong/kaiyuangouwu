@@ -13,6 +13,8 @@ const publicQueries = new Set([
     'storefrontProductSales',
     'storefrontProductReviews',
     'storefrontReviewSettings',
+    // The review service verifies the browser identity, customer, order and active store.
+    'currentCustomerServiceReview',
     'activeStorefrontFlashSales',
     'activeStorefrontCoupons',
     'activeSystemAnnouncements',
@@ -42,6 +44,8 @@ const publicQueries = new Set([
 const publicMutations = new Set([
     'recordStorefrontPageView',
     'recordStorefrontAnalyticsConsent',
+    'recordStorefrontHeartbeat',
+    'submitCustomerServiceReview',
     'login',
     'authenticate',
     'logout',

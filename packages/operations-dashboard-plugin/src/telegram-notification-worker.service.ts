@@ -2,9 +2,12 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ID } from '@vendure/common/lib/shared-types';
 import { Job, JobQueue, JobQueueService, ProcessContext, TransactionalConnection } from '@vendure/core';
 import { hostname } from 'node:os';
-import { In, LessThan, LessThanOrEqual } from 'typeorm';
+import { In, IsNull, LessThan, LessThanOrEqual } from 'typeorm';
 
-import { AdminNotificationConfigService } from './admin-notification-config.service';
+import {
+    AdminNotificationConfigService,
+    notificationCategoryEnabled,
+} from './admin-notification-config.service';
 import {
     AdminNotificationDelivery,
     NotificationDeliveryStatus,
@@ -18,6 +21,7 @@ const QUEUE_NAME = 'telegram-internal-notification';
 const HIGH_PRIORITY_QUEUE_NAME = 'telegram-internal-notification-high';
 const CLAIM_LEASE_MS = 2 * 60_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const SEVERITIES = ['P0', 'P1', 'P2', 'P3'] as const;
 
 interface TelegramDeliveryJobData {
     deliveryId: string;
@@ -195,8 +199,18 @@ export class TelegramNotificationWorkerService implements OnApplicationBootstrap
         if (!delivery || delivery.deliveryStatus !== 'CLAIMED') {
             return { deliveryId: job.data.deliveryId, status: delivery?.deliveryStatus ?? 'MISSING' };
         }
+        if (delivery.expiresAt && delivery.expiresAt <= new Date()) {
+            await repository.update(this.claimSnapshot(delivery), {
+                deliveryStatus: 'SKIPPED',
+                lastErrorCode: 'EXPIRED',
+                lastError: '实时快照已过期',
+                claimedAt: null,
+                claimedBy: null,
+            });
+            return { deliveryId: job.data.deliveryId, status: 'SKIPPED' };
+        }
         const config = await this.configService.get();
-        if (!config.enabled) {
+        if (!config.enabled || !notificationCategoryEnabled(config, delivery.category)) {
             await repository.update(delivery.id, {
                 deliveryStatus: 'SKIPPED',
                 lastErrorCode: 'DISABLED',
@@ -256,7 +270,7 @@ export class TelegramNotificationWorkerService implements OnApplicationBootstrap
                     button: formatted.button,
                 });
             }
-            await repository.update(delivery.id, {
+            const completed = await repository.update(this.claimSnapshot(delivery), {
                 deliveryStatus: 'SENT',
                 telegramMessageId: result.messageId,
                 attempts: delivery.attempts + 1,
@@ -266,6 +280,7 @@ export class TelegramNotificationWorkerService implements OnApplicationBootstrap
                 lastErrorCode: null,
                 lastError: null,
             });
+            if (completed.affected === 0) await this.dispatchUpgradeAfterSend(delivery);
             await this.recordRuntimeSuccess();
             return { deliveryId: job.data.deliveryId, status: 'SENT' };
         } catch (error) {
@@ -282,16 +297,51 @@ export class TelegramNotificationWorkerService implements OnApplicationBootstrap
             ? telegramError.retryAfterSeconds * 1000
             : retryDelayMs(attempts);
         const message = safeError(error);
-        await this.connection.rawConnection.getRepository(AdminNotificationDelivery).update(delivery.id, {
-            deliveryStatus: dead ? 'DEAD' : 'RETRY',
-            availableAt: new Date(Date.now() + retryDelay),
-            attempts,
-            claimedAt: null,
-            claimedBy: null,
-            lastErrorCode: telegramError?.code ?? 'UNKNOWN',
-            lastError: message,
-        });
+        const failed = await this.connection.rawConnection
+            .getRepository(AdminNotificationDelivery)
+            .update(this.claimSnapshot(delivery), {
+                deliveryStatus: dead ? 'DEAD' : 'RETRY',
+                availableAt: new Date(Date.now() + retryDelay),
+                attempts,
+                claimedAt: null,
+                claimedBy: null,
+                lastErrorCode: telegramError?.code ?? 'UNKNOWN',
+                lastError: message,
+            });
+        if (failed.affected === 0) await this.dispatchUpgradeAfterSend(delivery);
         await this.recordRuntimeFailure(message);
+    }
+
+    private claimSnapshot(delivery: AdminNotificationDelivery) {
+        return {
+            id: delivery.id,
+            deliveryStatus: 'CLAIMED' as const,
+            eventState: delivery.eventState,
+            claimedBy: delivery.claimedBy ?? IsNull(),
+            queueJobId: delivery.queueJobId ?? IsNull(),
+            // An already-sent stronger alert also covers a later downgrade.
+            severity: In(SEVERITIES.slice(SEVERITIES.indexOf(delivery.severity))),
+        };
+    }
+
+    /** Finish the old network request before handing an upgraded incident to a new send. */
+    private async dispatchUpgradeAfterSend(delivery: AdminNotificationDelivery) {
+        const higher = SEVERITIES.slice(0, SEVERITIES.indexOf(delivery.severity));
+        if (!higher.length) return;
+        const repository = this.connection.rawConnection.getRepository(AdminNotificationDelivery);
+        const released = await repository.update(
+            { ...this.claimSnapshot(delivery), severity: In(higher) },
+            {
+                deliveryStatus: 'PENDING',
+                deliveryAction: 'SEND',
+                attempts: 0,
+                availableAt: new Date(),
+                claimedAt: null,
+                claimedBy: null,
+            },
+        );
+        // A recovery or a replacement claim has its own send; the old job must never overwrite it.
+        if (released.affected === 1) await this.dispatch(delivery.id).catch(() => false);
     }
 
     private async recoverExpiredClaims(): Promise<void> {

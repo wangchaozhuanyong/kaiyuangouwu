@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     AdministratorService,
@@ -18,6 +18,7 @@ import {
     UserInputError,
     UserService,
 } from '@vendure/core';
+import { SecurityNotificationService } from '@vendure/operations-dashboard-plugin';
 import { IsNull, LessThan, MoreThan } from 'typeorm';
 
 import {
@@ -67,6 +68,7 @@ export class AdminTwoFactorService {
         private readonly passwords: PasswordCipher,
         private readonly auth: AuthService,
         private readonly sessions: SessionService,
+        @Optional() private readonly securityNotifications?: SecurityNotificationService,
     ) {}
 
     // Security state and attempt counters deliberately use committed storage. A rejected GraphQL
@@ -148,6 +150,12 @@ export class AdminTwoFactorService {
             !user.verified ||
             !(await this.administrators.findOneByUserId(ctx, user.id))
         ) {
+            await this.notifyFailure(
+                'PASSWORD_ACCOUNT',
+                username.trim().toLowerCase().slice(0, 254),
+                user?.id,
+            );
+            if (ip) await this.notifyFailure('PASSWORD_SOURCE', ip);
             return { status: 'ERROR', message: LOGIN_ERROR };
         }
         const credential = await this.credential(user.id);
@@ -211,6 +219,7 @@ export class AdminTwoFactorService {
             return { status: 'ERROR', message: '账号安全设置已变更，请重新登录' };
         }
         if (!(await this.consumeFactor(credential, code))) {
+            await this.notifyFailure('FACTOR_ACCOUNT', String(challenge.userId), challenge.userId);
             this.audit('verification-failed', challenge.userId);
             return { status: 'ERROR', message: CODE_ERROR };
         }
@@ -454,8 +463,18 @@ export class AdminTwoFactorService {
             { id: credential.id, revision: credential.revision },
             { ...changes, revision: credential.revision + 1 },
         );
-        if (result.affected === 1 && !/^\d{6}$/.test(code))
+        if (result.affected === 1 && !/^\d{6}$/.test(code)) {
             this.audit('recovery-code-used', credential.userId);
+            await this.securityNotifications
+                ?.change(
+                    null,
+                    'security.factor.changed',
+                    String(credential.userId),
+                    '使用后台恢复码',
+                    `账号编号 ${credential.userId} 已使用一个恢复码`,
+                )
+                .catch(() => undefined);
+        }
         return result.affected === 1;
     }
 
@@ -475,6 +494,30 @@ export class AdminTwoFactorService {
         const user = await this.users.getUserById(ctx, userId);
         if (user) await this.sessions.deleteSessionsByUser(ctx, user);
         this.audit(action, userId);
+        await this.securityNotifications
+            ?.change(
+                ctx,
+                'security.factor.changed',
+                String(userId),
+                action === 'disabled'
+                    ? '关闭后台二次验证'
+                    : action === 'recovery-codes-regenerated'
+                      ? '重置后台恢复码'
+                      : '启用或更换后台二次验证',
+                `账号编号 ${userId} 的安全设置已变更`,
+            )
+            .catch(() => undefined);
+    }
+
+    private async notifyFailure(
+        kind: 'PASSWORD_ACCOUNT' | 'PASSWORD_SOURCE' | 'FACTOR_ACCOUNT',
+        value: string,
+        userId?: ID,
+    ) {
+        if (!this.securityNotifications || !this.crypto.available) return;
+        await this.securityNotifications
+            .failure(this.crypto.notificationIdentity(kind, value), kind, userId)
+            .catch(() => undefined);
     }
 
     private audit(action: string, userId: ID) {

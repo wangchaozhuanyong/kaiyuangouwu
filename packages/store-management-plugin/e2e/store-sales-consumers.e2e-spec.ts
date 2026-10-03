@@ -13,6 +13,7 @@ import {
     TransactionalConnection,
     mergeConfig,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import { randomUUID } from 'node:crypto';
@@ -29,6 +30,7 @@ const { server } = createTestEnvironment(
     mergeConfig(testConfig(), {
         apiOptions: { port: 37386 },
         plugins: [
+            OperationsDashboardPlugin,
             StorefrontCartPlugin,
             ContentTranslationPlugin.init({
                 provider: {

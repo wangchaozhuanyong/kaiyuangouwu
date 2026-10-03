@@ -28,7 +28,8 @@
         "file-type": "21.3.4",
         "graphql-tag": "^2.12.6",
         "sharp": "0.35.4",
-        "typeorm": "^0.3.21"
+        "typeorm": "^0.3.21",
+        "@vendure/operations-dashboard-plugin": "0.1.0"
     },
     "devDependencies": {
         "@types/express": "^5.0.0",

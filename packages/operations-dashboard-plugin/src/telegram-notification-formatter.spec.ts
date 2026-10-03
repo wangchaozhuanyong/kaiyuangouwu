@@ -5,6 +5,29 @@ import { AdminNotificationDelivery } from './entities/admin-notification-deliver
 import { formatTelegramNotification } from './telegram-notification-formatter';
 
 describe('Telegram notification formatting', () => {
+    it('keeps Chinese severity, departments, zero counts and unavailable shops in the hourly report', () => {
+        const delivery = deliveryFixture({
+            eventType: 'platform.online.hourly',
+            title: '平台在线情况',
+            payload: sanitizePayload({
+                total: 0,
+                shops: [
+                    { name: '甲店', total: 0, guests: 0, customers: 0, available: true },
+                    { name: '乙店', total: null, guests: null, customers: null, available: false },
+                ],
+                monitoredState: '部分监测不可用',
+            }),
+        });
+        const message = formatTelegramNotification(delivery, {
+            timezone: 'Asia/Kuala_Lumpur',
+            adminBaseUrl: null,
+        }).text;
+        expect(message).toContain('甲店：0 人');
+        expect(message).toContain('乙店：统计暂不可用');
+        expect(message).toContain('[信息]');
+        expect(message).not.toMatch(/P3|SALES|Fulfillment/);
+    });
+
     it('escapes dynamic HTML, hides the admin path and adds a safe button', () => {
         const delivery = deliveryFixture({
             title: '<script>alert(1)</script>',
@@ -53,6 +76,17 @@ describe('Telegram notification formatting', () => {
         expect(result.text).toContain('[待恢复验证]');
         expect(result.text).toContain('系统已恢复，待人工验证');
         expect(result.text).not.toContain('[已闭环]');
+    });
+
+    it('keeps escaped HTML entities complete when a large report is truncated', () => {
+        const result = formatTelegramNotification(
+            deliveryFixture({ payload: { products: '&😀'.repeat(1500) } }),
+            { timezone: 'Asia/Kuala_Lumpur', adminBaseUrl: null },
+        ).text;
+        expect(result.length).toBeLessThanOrEqual(3900);
+        expect(result).toContain('详细内容请到后台查看');
+        expect(result.replace(/&(?:amp|lt|gt|quot|#39);/g, '')).not.toContain('&');
+        expect(result).not.toMatch(/[\uD800-\uDBFF]\n/u);
     });
 });
 

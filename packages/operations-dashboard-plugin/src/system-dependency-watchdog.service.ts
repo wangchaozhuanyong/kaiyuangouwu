@@ -23,6 +23,7 @@ export class SystemDependencyWatchdog implements OnApplicationBootstrap, OnAppli
     private pipelineFailures = 0;
     private pipelineSuccesses = 0;
     private pipelineIncidentActive = false;
+    private pipelineSeverity: 'P0' | 'P1' | null = null;
     private lastPipelineSentAt = 0;
 
     constructor(
@@ -54,10 +55,13 @@ export class SystemDependencyWatchdog implements OnApplicationBootstrap, OnAppli
             this.consecutiveFailures = 0;
             this.consecutiveSuccesses += 1;
             if (this.incidentActive && this.consecutiveSuccesses >= 2) {
-                await this.sendEmergency(
-                    '✅ [已恢复][TECH] 数据库连接恢复\n\n责任部门：网站技术与自动化部\n协作部门：数据财务与经营分析部、质量合规安全与 AI 治理部',
-                );
-                this.incidentActive = false;
+                if (
+                    this.configService.cachedConfig()?.sendResolved === false ||
+                    (await this.sendEmergency(
+                        '✅ [已恢复] 数据库连接恢复\n\n责任部门：网站技术与自动化部\n协作部门：数据财务与经营分析部、质量合规安全与智能治理部',
+                    ))
+                )
+                    this.incidentActive = false;
             }
             await this.checkNotificationPipeline();
             return;
@@ -69,19 +73,19 @@ export class SystemDependencyWatchdog implements OnApplicationBootstrap, OnAppli
         if (!this.incidentActive || repeatDue) {
             if (
                 await this.sendEmergency(
-                    '🚨 [P0][TECH] 数据库连接中断\n\n责任部门：网站技术与自动化部\n协作部门：数据财务与经营分析部、质量合规安全与 AI 治理部\n升级部门：AI 总经办与运营调度中心\n处理要求：立即检查数据库连接、容量与最近变更',
+                    '🚨 [危急] 数据库连接中断\n\n责任部门：网站技术与自动化部\n协作部门：数据财务与经营分析部、质量合规安全与智能治理部\n升级部门：总经办与运营调度中心\n处理要求：立即检查数据库连接、容量与最近变更',
                 )
             ) {
                 this.lastDatabaseSentAt = Date.now();
+                this.incidentActive = true;
             }
-            this.incidentActive = true;
         }
     }
 
     private async checkNotificationPipeline(): Promise<void> {
         const deliveryRepository = this.connection.rawConnection.getRepository(AdminNotificationDelivery);
         const runtimeRepository = this.connection.rawConnection.getRepository(AdminNotificationRuntime);
-        const [runtime, dead, oldestCritical] = await Promise.all([
+        const [runtime, dead, oldestCritical, backlog] = await Promise.all([
             runtimeRepository.findOne({ where: { key: 'telegram-worker' } }),
             deliveryRepository.count({ where: { deliveryStatus: 'DEAD' } }),
             deliveryRepository.findOne({
@@ -91,43 +95,54 @@ export class SystemDependencyWatchdog implements OnApplicationBootstrap, OnAppli
                 },
                 order: { createdAt: 'ASC' },
             }),
+            deliveryRepository.count({ where: { deliveryStatus: In(['PENDING', 'CLAIMED', 'RETRY']) } }),
         ]);
         const now = Date.now();
         const workerFresh = Boolean(
             runtime?.heartbeatAt && now - runtime.heartbeatAt.getTime() <= WORKER_STALE_MS,
         );
         const criticalLagMs = oldestCritical ? Math.max(0, now - oldestCritical.createdAt.getTime()) : 0;
-        const unhealthy = dead > 0 || (criticalLagMs >= PIPELINE_LAG_MS && !workerFresh);
+        const unhealthy = dead > 0 || criticalLagMs >= PIPELINE_LAG_MS || (!workerFresh && backlog > 0);
         if (!unhealthy) {
             this.pipelineFailures = 0;
             this.pipelineSuccesses += 1;
             if (this.pipelineIncidentActive && this.pipelineSuccesses >= 2) {
-                await this.sendEmergency(
-                    '✅ [已恢复][TECH] Telegram 通知队列恢复\n\n责任部门：网站技术与自动化部',
-                );
-                this.pipelineIncidentActive = false;
+                if (
+                    this.configService.cachedConfig()?.sendResolved === false ||
+                    (await this.sendEmergency(
+                        '✅ [已恢复] Telegram 通知队列恢复\n\n责任部门：网站技术与自动化部',
+                    ))
+                ) {
+                    this.pipelineIncidentActive = false;
+                    this.pipelineSeverity = null;
+                }
             }
             return;
         }
         this.pipelineSuccesses = 0;
         this.pipelineFailures += 1;
         if (this.pipelineFailures < 2) return;
-        const repeatDue = !this.lastPipelineSentAt || now - this.lastPipelineSentAt >= COOLDOWN_MS;
-        if (!this.pipelineIncidentActive || repeatDue) {
-            const severity = criticalLagMs >= PIPELINE_LAG_MS && !workerFresh ? 'P0' : 'P1';
+        const urgent = !workerFresh && backlog > 0;
+        const repeatDue =
+            !this.lastPipelineSentAt ||
+            now - this.lastPipelineSentAt >= (urgent ? COOLDOWN_MS : 120 * 60_000);
+        const upgraded = urgent && this.pipelineSeverity === 'P1';
+        if (!this.pipelineIncidentActive || upgraded || repeatDue) {
+            const severity = urgent ? 'P0' : 'P1';
             const details = [
-                `dead：${dead}`,
-                `P0/P1 最长积压：${Math.floor(criticalLagMs / 1000)} 秒`,
-                `Worker 心跳：${workerFresh ? '正常' : '超时'}`,
+                `失败待处理：${dead}`,
+                `重要通知最长积压：${Math.floor(criticalLagMs / 1000)} 秒`,
+                `工作进程心跳：${workerFresh ? '正常' : '超时'}`,
             ].join('\n');
             if (
                 await this.sendEmergency(
-                    `⚠️ [${severity}][TECH] Telegram 通知队列异常\n\n责任部门：网站技术与自动化部\n升级部门：AI 总经办与运营调度中心\n${details}`,
+                    `⚠️ [${severity === 'P0' ? '危急' : '重要'}] Telegram 通知队列异常\n\n责任部门：网站技术与自动化部\n升级部门：总经办与运营调度中心\n${details}`,
                 )
             ) {
                 this.lastPipelineSentAt = now;
+                this.pipelineIncidentActive = true;
+                this.pipelineSeverity = severity;
             }
-            this.pipelineIncidentActive = true;
         }
     }
 
@@ -153,9 +168,23 @@ export class SystemDependencyWatchdog implements OnApplicationBootstrap, OnAppli
         const environmentChatId = process.env.TELEGRAM_OPS_CHAT_ID?.trim();
         const chatId = environmentChatId || config?.chatId;
         const enabled = config?.enabled || process.env.TELEGRAM_EMERGENCY_ENABLED === 'true';
-        if (!enabled || !chatId || !this.telegram.configured()) return false;
+        if (!enabled || config?.notifySecurityEvents === false || !chatId || !this.telegram.configured())
+            return false;
         try {
-            await this.telegram.sendMessage({ chatId, text, silent: false });
+            const time = new Intl.DateTimeFormat('zh-CN', {
+                timeZone: 'Asia/Kuala_Lumpur',
+                dateStyle: 'short',
+                timeStyle: 'short',
+                hour12: false,
+            }).format(new Date());
+            const entry = config?.adminBaseUrl
+                ? `${config.adminBaseUrl.replace(/\/$/u, '')}/settings/system-ops?tab=telegram`
+                : '请打开现有管理后台的系统运维页面';
+            await this.telegram.sendMessage({
+                chatId,
+                text: `${text}\n时间：${time}\n处理入口：${entry}`,
+                silent: false,
+            });
             return true;
         } catch (error) {
             Logger.error(`紧急 Telegram 通知失败：${safeError(error)}`, undefined, LOGGER_CTX);

@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
@@ -6,6 +6,7 @@ import { Permission, RequestContext, TransactionalConnection, UserInputError } f
 import { createHash, randomUUID } from 'node:crypto';
 import { In, IsNull, MoreThanOrEqual } from 'typeorm';
 
+import { AiAccessNotificationService } from './ai-access-notification.service';
 import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
@@ -59,6 +60,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         private readonly providerClient: ImageProviderClient,
         private readonly providerRouter: ImageProviderRouterService,
         private readonly rules: PromptRulesService,
+        @Optional() private readonly accessNotifications?: AiAccessNotificationService,
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
@@ -604,6 +606,10 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         if (result.ok && enableOnSuccess) credential.enabled = true;
         if (!result.ok) credential.enabled = false;
         await this.connection.getRepository(ctx, ImageProviderCredential).save(credential, { reload: false });
+        if (result.ok)
+            await this.accessNotifications
+                ?.result(ctx, String(credential.id), 'IMAGE', {}, true)
+                .catch(() => undefined);
         return { ...result, testedAt: credential.lastTestedAt };
     }
 
@@ -634,6 +640,10 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         credential.healthStatus = result.ok ? 'HEALTHY' : 'UNHEALTHY';
         credential.healthMessage = result.message.slice(0, 500);
         await this.connection.getRepository(ctx, ImageProviderCredential).save(credential, { reload: false });
+        if (result.ok)
+            await this.accessNotifications
+                ?.result(ctx, String(credential.id), 'IMAGE', {}, true)
+                .catch(() => undefined);
         return { ...result, testedAt: credential.lastTestedAt };
     }
 
@@ -928,6 +938,10 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         config.cooldownUntil = null;
         if (!result.ok) config.enabled = false;
         await repository.save(config, { reload: false });
+        if (result.ok)
+            await this.accessNotifications
+                ?.result(ctx, String(config.id), 'PROMPT', {}, true)
+                .catch(() => undefined);
         return { ...result, testedAt: config.lastTestedAt };
     }
 
@@ -982,6 +996,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     /** Wraps an ImagePromptModelConfig into a shape compatible with ImageProviderClient methods. */
     promptModelAsCredential(config: ImagePromptModelConfig): ImageProviderCredential {
         const credential = new ImageProviderCredential();
+        credential.id = config.id;
         credential.scope = inferPromptModelScope(config);
         credential.code = config.code;
         credential.name = config.name;
@@ -1073,13 +1088,44 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     recordCredentialRuntimeFailure(
         ctx: RequestContext,
         credential: ImageProviderCredential,
-        input: { httpStatus?: number; retryAfterSeconds?: number; message: string },
+        input: {
+            httpStatus?: number;
+            retryAfterSeconds?: number;
+            message: string;
+            accessFailure?: import('./provider/ai-access-failure').AiAccessFailure;
+        },
     ) {
         return this.providerRouter.recordFailure(ctx, credential, input);
     }
 
     recordCredentialRuntimeSuccess(ctx: RequestContext, credential: ImageProviderCredential) {
-        return this.providerRouter.recordSuccess(ctx, credential);
+        return this.providerRouter.recordSuccess(ctx, credential).then(async () => {
+            await this.accessNotifications
+                ?.result(ctx, String(credential.id), 'IMAGE', {}, true)
+                .catch(() => undefined);
+        });
+    }
+
+    async notifyImageAccessResult(
+        ctx: RequestContext,
+        credential: ImageProviderCredential,
+        telemetry: import('./types').ProviderTelemetry,
+        ok: boolean,
+    ) {
+        await this.accessNotifications
+            ?.result(ctx, String(credential.id), 'IMAGE', telemetry, ok)
+            .catch(() => undefined);
+    }
+
+    async notifyPromptAccessResult(
+        ctx: RequestContext,
+        credential: ImageProviderCredential,
+        telemetry: import('./types').ProviderTelemetry,
+        ok: boolean,
+    ) {
+        await this.accessNotifications
+            ?.result(ctx, String(credential.id), 'PROMPT', telemetry, ok)
+            .catch(() => undefined);
     }
 
     credentialFingerprint(credential: ImageProviderCredential): string {

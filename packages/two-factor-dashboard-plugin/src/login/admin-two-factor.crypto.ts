@@ -128,6 +128,12 @@ export class AdminTwoFactorCrypto {
         }
     }
 
+    notificationIdentity(kind: string, value: string): string {
+        return createHmac('sha256', this.requireKey())
+            .update(JSON.stringify(['admin-notification-v1', kind, value]))
+            .digest('hex');
+    }
+
     passwordFingerprint(passwordHash: string): string {
         return createHmac('sha256', this.requireKey())
             .update(`admin-login-password:${passwordHash}`)

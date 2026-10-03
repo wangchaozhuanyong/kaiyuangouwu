@@ -12,6 +12,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import {
     ReferralWallet,
     ReferralWalletSpendService,
@@ -94,6 +95,7 @@ const translationProvider: ContentTranslationProvider = {
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
+        OperationsDashboardPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({ provider: translationProvider }),
         StoreManagementPlugin.init({

@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShopApi } from './api';
-import type { ActiveCustomer, CustomerServiceFeedback, StorefrontContentBlock } from './types';
+import type { ActiveCustomer, CustomerServiceReviewRecord, StorefrontContentBlock } from './types';
 
 import { SupportContent } from './pages/support-page';
 
@@ -43,14 +43,13 @@ const content = {
     ],
 } as StorefrontContentBlock;
 
-const saved: CustomerServiceFeedback = {
-    id: 'feedback-1',
+const saved: CustomerServiceReviewRecord = {
+    id: 'feedback:1',
+    revision: 1,
     orderCode: null,
     rating: 5,
     tags: [],
     comment: '',
-    createdAt: '2026-09-25T00:00:00.000Z',
-    updatedAt: '2026-09-25T00:00:00.000Z',
 };
 
 describe('customer service feedback page', () => {
@@ -83,17 +82,17 @@ describe('customer service feedback page', () => {
     }
 
     it('waits for the server before showing a successful submission', async () => {
-        let resolveSubmit: (value: CustomerServiceFeedback) => void = () => undefined;
+        let resolveSubmit: (value: CustomerServiceReviewRecord) => void = () => undefined;
         const submit = vi.fn(
             () =>
-                new Promise<CustomerServiceFeedback>(resolve => {
+                new Promise<CustomerServiceReviewRecord>(resolve => {
                     resolveSubmit = resolve;
                 }),
         );
         await render({
             contentReviewsApi: {
-                myCustomerServiceFeedback: vi.fn().mockResolvedValue(null),
-                submitCustomerServiceFeedback: submit,
+                currentCustomerServiceReview: vi.fn().mockResolvedValue(null),
+                submitCustomerServiceReview: submit,
             },
         } as unknown as ShopApi);
 
@@ -116,8 +115,8 @@ describe('customer service feedback page', () => {
     it('keeps the form open when the server rejects the submission', async () => {
         await render({
             contentReviewsApi: {
-                myCustomerServiceFeedback: vi.fn().mockResolvedValue(null),
-                submitCustomerServiceFeedback: vi.fn().mockRejectedValue(new Error('offline')),
+                currentCustomerServiceReview: vi.fn().mockResolvedValue(null),
+                submitCustomerServiceReview: vi.fn().mockRejectedValue(new Error('offline')),
             },
         } as unknown as ShopApi);
 
@@ -136,8 +135,8 @@ describe('customer service feedback page', () => {
         const submit = vi.fn();
         await render({
             contentReviewsApi: {
-                myCustomerServiceFeedback: vi.fn().mockResolvedValue(null),
-                submitCustomerServiceFeedback: submit,
+                currentCustomerServiceReview: vi.fn().mockResolvedValue(null),
+                submitCustomerServiceReview: submit,
             },
         } as unknown as ShopApi);
 

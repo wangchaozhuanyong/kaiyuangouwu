@@ -426,3 +426,4 @@ reports/
 
 # Local governance audit workbooks and acceptance exports
 /outputs/platform-store-governance-20261002/
+.notification-monitor-state/

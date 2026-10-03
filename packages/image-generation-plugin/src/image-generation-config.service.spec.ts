@@ -129,8 +129,8 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
                 {} as never,
                 { sourceHash: 'hash' } as never,
             );
-            vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-            vi.spyOn(service as any, 'getConfig').mockResolvedValue({
+            vi.spyOn(configTestHooks(service), 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+            vi.spyOn(configTestHooks(service), 'getConfig').mockResolvedValue({
                 enabled: true,
                 promptOptimizationEnabled: true,
                 promptRateLimitPerMinute: 3,
@@ -144,7 +144,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
                 termsZh: 'test',
                 termsEn,
             });
-            vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([]);
+            vi.spyOn(configTestHooks(service), 'getOrCreateModels').mockResolvedValue([]);
 
             const result = await service.shopConfig({
                 languageCode,
@@ -174,8 +174,8 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             } as never,
             { sourceHash: 'hash' } as never,
         );
-        vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-        vi.spyOn(service as any, 'getConfig').mockResolvedValue({
+        vi.spyOn(configTestHooks(service), 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(configTestHooks(service), 'getConfig').mockResolvedValue({
             enabled: true,
             promptOptimizationEnabled: true,
             promptRateLimitPerMinute: 3,
@@ -189,7 +189,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             termsZh: 'test',
             termsEn: 'test',
         });
-        vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([
+        vi.spyOn(configTestHooks(service), 'getOrCreateModels').mockResolvedValue([
             {
                 id: 1,
                 code: 'OPENAI_HIGH_QUALITY',
@@ -237,9 +237,9 @@ describe('ImageGenerationConfigService admin readiness', () => {
             { hasAvailable } as never,
             { sourceHash: 'hash' } as never,
         );
-        vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-        vi.spyOn(service as any, 'getOrCreateConfig').mockResolvedValue({ enabled: true });
-        vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([
+        vi.spyOn(configTestHooks(service), 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(configTestHooks(service), 'getOrCreateConfig').mockResolvedValue({ enabled: true });
+        vi.spyOn(configTestHooks(service), 'getOrCreateModels').mockResolvedValue([
             {
                 id: 'model-1',
                 enabled: true,
@@ -462,7 +462,7 @@ describe('ImageGenerationConfigService unified prompt routing', () => {
             router as never,
             {} as never,
         );
-        vi.spyOn(service as any, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+        vi.spyOn(configTestHooks(service), 'getOrCreatePromptRoutingConfig').mockResolvedValue({
             strategy: 'AUTO',
         });
 
@@ -493,7 +493,7 @@ describe('ImageGenerationConfigService unified prompt routing', () => {
             {} as never,
             {} as never,
         );
-        vi.spyOn(service as any, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+        vi.spyOn(configTestHooks(service), 'getOrCreatePromptRoutingConfig').mockResolvedValue({
             strategy: 'FIXED',
             primaryCredentialCode: 'openai-primary',
             fallbackEnabled: false,
@@ -627,4 +627,9 @@ function release(
     });
     value.bundle = bundle;
     return value;
+}
+
+// Private asynchronous hooks are replaced only in test fixtures; avoid a never-typed spy target.
+function configTestHooks(service: ImageGenerationConfigService) {
+    return service as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
 }

@@ -165,6 +165,9 @@ export class AdminNotificationDelivery extends VendureEntity {
     @Column({ type: 'varchar', length: 16, default: 'PENDING' })
     deliveryStatus: NotificationDeliveryStatus;
 
+    @Column({ type: Date, nullable: true })
+    expiresAt: Date | null;
+
     @Column({ type: Date })
     availableAt: Date;
 
