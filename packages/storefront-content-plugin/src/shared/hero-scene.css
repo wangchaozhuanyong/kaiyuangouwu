@@ -327,17 +327,19 @@
     }
 }
 
-/* Uploaded artwork keeps its ratio. Desktop copy overlays only when all content fits. */
+/* Marketing artwork fills the shared scene; copy stays on the image at every width. */
 .hero.hero-image-overlay {
     display: block;
-    min-height: 0;
+    min-height: 320px;
     aspect-ratio: auto;
     background: var(--hero-copy-background);
 }
 
 .hero.hero-image-overlay .hero-rich-media {
-    position: relative;
+    position: absolute;
+    inset: 0;
     width: 100%;
+    height: 100%;
     min-width: 0;
 }
 
@@ -358,10 +360,10 @@
 .hero.hero-image-overlay .hero-rich-image-link,
 .hero.hero-image-overlay .safe-image-frame {
     display: block;
-    position: relative;
-    inset: auto;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link,
@@ -371,31 +373,33 @@
 
 .hero.hero-image-overlay .hero-rich-backdrop {
     width: 100%;
-    height: auto;
-    object-fit: contain;
+    height: 100%;
+    object-fit: cover;
     object-position: center;
 }
 
 .hero.hero-image-overlay .safe-image-preview {
-    object-fit: contain;
+    object-fit: cover;
     object-position: center;
 }
 
 .hero.hero-image-overlay .hero-rich-content {
-    position: absolute;
+    position: relative;
     z-index: 2;
-    top: 24px;
-    left: clamp(28px, 3vw, 44px);
+    top: auto;
+    left: auto;
     bottom: auto;
     transform: none;
     width: min(450px, calc(100% - 170px));
+    min-height: 320px;
+    margin-left: clamp(28px, 3vw, 44px);
     max-height: none;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
     gap: 12px;
-    padding: 0;
+    padding: 24px 0 calc(var(--hero-overlay-height, 0px) + 32px);
     overflow: visible;
     border: 0;
     border-radius: 0;
@@ -457,39 +461,9 @@
     font-size: 14px;
 }
 
-@media (min-width: 1024px) {
-    /* Insufficient native image height moves the intact copy below the photo. */
-    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-content {
-        position: relative;
-        top: auto;
-        left: auto;
-        margin-left: clamp(28px, 3vw, 44px);
-        padding: 24px 0;
-        color: var(--hero-copy-foreground);
-    }
-
-    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-image-link::after {
-        display: none;
-    }
-
-    .hero.hero-image-overlay
-        .hero-scene-wrapper[data-copy-layout='below']
-        :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
-        color: var(--hero-copy-foreground);
-        text-shadow: none;
-    }
-
-    .hero.hero-image-overlay
-        .hero-scene-wrapper[data-copy-layout='below']
-        :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
-        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
-        text-shadow: none;
-    }
-}
-
 @media (max-width: 1023px) {
-    .hero.hero-image-overlay .hero-rich-image-link::after {
-        display: none;
+    .hero.hero-image-overlay {
+        min-height: 280px;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
@@ -498,21 +472,12 @@
         left: auto;
         transform: none;
         width: 100%;
+        min-height: 280px;
+        margin-left: 0;
         max-height: none;
         gap: 10px;
-        padding: 16px 20px 20px;
-        background: var(--hero-copy-background);
-        color: var(--hero-copy-foreground);
-    }
-
-    .hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
-        color: var(--hero-copy-foreground);
-        text-shadow: none;
-    }
-
-    .hero.hero-image-overlay :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
-        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
-        text-shadow: none;
+        padding: 16px 20px calc(var(--hero-overlay-height, 0px) + 32px);
+        background: transparent;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {

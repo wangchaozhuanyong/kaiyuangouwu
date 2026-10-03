@@ -1012,7 +1012,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('keeps uploaded carousel artwork complete and lets phone copy follow its native ratio', () => {
+    it('fills the marketing scene and keeps desktop and phone copy on the image', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1020,19 +1020,17 @@ describe('storefront skin system', () => {
         );
         expect(imageRules.length).toBeGreaterThan(0);
         for (const [, , declarations] of imageRules) {
-            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: contain;');
-            expect(declarations).toContain('height: auto;');
+            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: cover;');
+            expect(declarations).toContain('height: 100%;');
         }
         expect(source).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*relative;[^}]*inset:\s*auto;/,
+            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/,
         );
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,
         );
         expect(source).toMatch(/\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*max-height:\s*none;/);
-        expect(source).toMatch(
-            /data-copy-layout='below'\] \.hero-rich-content\s*\{[^}]*position:\s*relative;/,
-        );
+        expect(source).not.toContain("data-copy-layout='below'");
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
