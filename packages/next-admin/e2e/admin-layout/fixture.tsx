@@ -22,6 +22,8 @@ import {
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
 import { CatalogImportAction } from '../../src/pages/Catalog/import/CatalogImportAction';
 import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
+import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModule';
+import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { ProfitReportModule } from '../../src/pages/Sales/ProfitReportModule';
@@ -51,6 +53,8 @@ const viewLabels: Record<string, string> = {
     plugins: '客户端插件',
     copy: '商业服务文案',
     categories: '商品分类',
+    suppliers: '供货商',
+    purchases: '采购与收货',
 };
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
@@ -343,7 +347,30 @@ const data: Record<string, unknown> = {
     productOptionGroups: empty,
     collections: { items: collections, totalItems: collections.length },
     selectedCollections: empty,
-    catalogSuppliers: empty,
+    catalogSuppliers:
+        view === 'suppliers' || view === 'purchases'
+            ? {
+                  items: [
+                      {
+                          id: 'layout-supplier',
+                          channelId: channel.id,
+                          createdAt: now,
+                          updatedAt: now,
+                          name: '示例供货商',
+                          code: 'LAYOUT-SUPPLIER',
+                          enabled: true,
+                          contactName: '示例联系人',
+                          phone: null,
+                          email: null,
+                          address: null,
+                          notes: null,
+                          linkedVariantCount: 0,
+                      },
+                  ],
+                  totalItems: 1,
+              }
+            : empty,
+    catalogPurchaseOrders: empty,
     suppliers: empty,
     catalogProductWorkspace: {
         productId: product.id,
@@ -589,6 +616,8 @@ const modules: Record<string, React.ReactNode> = {
     plugins: <ClientPluginsModule />,
     copy: <BusinessServicesCopyModule />,
     categories: <CategoriesModule />,
+    suppliers: <SuppliersModule />,
+    purchases: <PurchaseOrdersModule />,
 };
 createRoot(document.getElementById('root')!).render(
     <ApolloProvider client={client}>

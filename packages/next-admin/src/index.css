@@ -44,6 +44,15 @@
 }
 
 @layer base {
+    /* Tailwind's uncolored borders must use the Admin theme, not the text color. */
+    *,
+    ::before,
+    ::after,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--admin-border-subtle);
+    }
+
     html,
     body,
     #root {
