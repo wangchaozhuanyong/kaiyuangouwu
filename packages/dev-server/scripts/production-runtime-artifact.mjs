@@ -121,6 +121,7 @@ export const CUSTOMER_IMAGE_WORKER_FILES = Object.freeze([
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     ...CUSTOMER_IMAGE_WORKER_FILES,
+    'production-runtime-audit.mjs',
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
     'packages/dev-server/dist/index-worker.js',
@@ -414,6 +415,10 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
     await cp(
         path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-verify.mjs'),
         path.join(stagingRoot, 'verify-runtime.mjs'),
+    );
+    await cp(
+        path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
+        path.join(stagingRoot, 'production-runtime-audit.mjs'),
     );
     await writeFile(
         path.join(stagingRoot, 'RUNTIME-METADATA.json'),

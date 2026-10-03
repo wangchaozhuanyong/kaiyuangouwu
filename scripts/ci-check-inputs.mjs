@@ -16,6 +16,11 @@ const sharedInput = file =>
         file,
     );
 const controlInput = file => /^(deploy\/|scripts\/|\.github\/|packages\/dev-server\/scripts\/)/u.test(file);
+// These are invoked only by the production packaging/audit jobs, never by a
+// business build, API harness or TypeScript type dependency. Keep them in the
+// control/dependency proofs and their own lint checks, not unrelated business proofs.
+const runtimePackagingInput = file =>
+    /^packages\/dev-server\/scripts\/production-runtime-(artifact|audit|verify)\.mjs$/u.test(file);
 const jobsForFlag = {
     dependencies: ['dependency-audit'],
     codegen: ['codegen'],
@@ -196,7 +201,7 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
             if (
                 ['backend', 'frontend', 'quality'].includes(check.kind) &&
                 path !== check.file &&
-                /^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path)
+                (/^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path) || runtimePackagingInput(path))
             )
                 return false;
             if (check.kind === 'architecture') return architectureBudgetInput(path);
