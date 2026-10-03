@@ -273,3 +273,42 @@ describe('review drawer', () => {
         expect(input().value).toBe('');
     });
 });
+
+describe('review list navigation', () => {
+    it('shows one panel and lets keyboard navigation and the empty action select the right list', async () => {
+        const pending = button('#review-pending-tab');
+        const submitted = button('#review-submitted-tab');
+        const pendingPanel = required<HTMLElement>('#review-pending-panel');
+        const submittedPanel = required<HTMLElement>('#review-submitted-panel');
+        expect(pending.textContent).toBe('待评价2');
+        expect(submitted.textContent).toBe('我的评价0');
+        expect(pendingPanel.hidden).toBe(false);
+        expect(submittedPanel.hidden).toBe(true);
+        expect(host.textContent).not.toContain('选择一件商品');
+        pending.focus();
+        await act(() =>
+            pending.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })),
+        );
+        expect(document.activeElement).toBe(submitted);
+        expect(submitted.getAttribute('aria-selected')).toBe('true');
+        expect(submitted.tabIndex).toBe(0);
+        expect(pending.tabIndex).toBe(-1);
+        expect(pendingPanel.hidden).toBe(true);
+        expect(submittedPanel.hidden).toBe(false);
+        expect(submittedPanel.getAttribute('aria-labelledby')).toBe(submitted.id);
+        expect(submittedPanel.textContent).toContain('去评价');
+        act(() => button('#review-submitted-panel .empty-state-action').click());
+        expect(pendingPanel.hidden).toBe(false);
+        expect(document.activeElement).toBe(pending);
+        await act(() => pending.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
+        expect(document.activeElement).toBe(submitted);
+        await act(() =>
+            submitted.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })),
+        );
+        expect(document.activeElement).toBe(pending);
+        await act(() =>
+            pending.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })),
+        );
+        expect(document.activeElement).toBe(submitted);
+    });
+});

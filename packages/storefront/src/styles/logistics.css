@@ -2,10 +2,6 @@
 .delivery-workspace {
     color: var(--text);
 }
-.delivery-overview,
-.delivery-detail-page {
-    padding: 0 16px 24px;
-}
 .delivery-detail-heading p,
 .delivery-order-aside > p {
     margin: 0;
@@ -665,12 +661,6 @@
     opacity: 0.55;
     cursor: wait;
 }
-@media (min-width: 1024px) {
-    .delivery-overview,
-    .delivery-detail-page {
-        padding: 0 0 32px;
-    }
-}
 @media (max-width: 1279px) {
     .delivery-detail-layout {
         grid-template-columns: minmax(0, 1fr);
@@ -759,10 +749,6 @@
     }
 }
 @media (max-width: 767px) {
-    .delivery-overview,
-    .delivery-detail-page {
-        padding-inline: 12px;
-    }
     .delivery-detail-main,
     .delivery-order-aside {
         padding: 20px 16px;

@@ -114,7 +114,7 @@ describe('storefront semantic palette', () => {
         expect(Object.values(variables).every(value => /^#[0-9a-f]{6}$/i.test(value))).toBe(true);
     });
 
-    it('keeps skin surfaces distinct while preserving strong accessible control borders', () => {
+    it('keeps resting edges quiet while preserving strong boundaries and keyboard focus', () => {
         const treatments = (['classic', 'neo-minimalist'] as const).map(presetId =>
             resolveStorefrontSkinTreatment(presetId),
         );
@@ -124,8 +124,13 @@ describe('storefront semantic palette', () => {
             const paletteVariables = semanticPaletteCssVariables(palette);
             const skinVariables = storefrontSkinCssVariables(presetId);
             expect(
-                storefrontContrastRatio(paletteVariables['--line'], palette.surface),
+                storefrontContrastRatio(paletteVariables['--line-strong'], palette.surface),
             ).toBeGreaterThanOrEqual(3);
+            expect(storefrontContrastRatio(paletteVariables['--line'], palette.surface)).toBeLessThan(2);
+            expect(
+                storefrontContrastRatio(paletteVariables['--focus'], palette.surface),
+            ).toBeGreaterThanOrEqual(3);
+            expect(paletteVariables['--line']).not.toBe(paletteVariables['--line-strong']);
             expect(skinVariables).toMatchObject({
                 '--skin-divider': resolveStorefrontSkinTreatment(presetId).divider,
                 '--skin-display-font': resolveStorefrontSkinTreatment(presetId).displayFont,

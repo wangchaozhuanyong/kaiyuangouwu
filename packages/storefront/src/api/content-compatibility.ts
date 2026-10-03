@@ -1,12 +1,18 @@
 import { ShopApiGraphQlError } from './helpers';
 
 const fallbackFields = {
+    optionalContentSettings: new Set([
+        'StorefrontContentSettings.accountRecommendations',
+        'StorefrontContentSettings.personalDataExportEnabled',
+        'StorefrontSystemAnnouncement.createdAt',
+    ]),
     content: new Set([
         'Query.activeStorefrontFlashSales',
         'Query.activeSystemAnnouncements',
         'StorefrontSystemAnnouncement.createdAt',
         'StorefrontContentSettings.auth',
         'StorefrontContentSettings.personalDataExportEnabled',
+        'StorefrontContentSettings.accountRecommendations',
         'StorefrontContentSettings.configuredBlockTypes',
         'StorefrontContentBlock.internalName',
         'StorefrontContentBlock.layoutVariant',
@@ -20,6 +26,17 @@ const fallbackFields = {
     visualPreset: new Set(['Query.storefrontVisualPreset']),
     desktopLayout: new Set(['StorefrontVisualPreset.desktopLayout']),
 };
+
+/** Older servers can reject several new optional fields in the same validation response. */
+export function unsupportedOptionalContentFields(error: unknown): Set<string> {
+    if (!isSupportedContentSchemaFallback(error, 'optionalContentSettings')) return new Set();
+    return new Set(
+        (error as ShopApiGraphQlError).messages.flatMap(message => {
+            const match = /^Cannot query field "([^"]+)" on type "([^"]+)"\./u.exec(message);
+            return match ? [`${match[2]}.${match[1]}`] : [];
+        }),
+    );
+}
 
 /** Only downgrade fields omitted by the documented legacy query. */
 export function isSupportedContentSchemaFallback(

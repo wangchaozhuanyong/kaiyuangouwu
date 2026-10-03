@@ -34,7 +34,7 @@
 .address-form input:hover,
 .form-grid select:hover,
 .address-form select:hover {
-    border-color: var(--line-strong);
+    border-color: var(--line);
 }
 
 .form-grid input:focus,
@@ -220,6 +220,19 @@
     padding-bottom: calc(28px + var(--safe-bottom));
 }
 
+@media (min-width: 1024px) {
+    .payment-layout {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding-bottom: 48px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+        align-items: start;
+        gap: var(--space-section);
+    }
+}
+
 .cart-pending-actions {
     background: var(--surface);
 }
@@ -369,6 +382,7 @@
 }
 
 .payment-summary > header span {
+    flex: 0 0 auto;
     color: var(--muted);
 }
 
@@ -380,21 +394,27 @@
 
 .payment-summary-lines {
     padding: 8px 0;
+    display: grid;
+    gap: var(--space-8);
 }
 
 .payment-summary-lines > div {
     min-height: 34px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
 }
 
 .payment-summary-lines span {
     min-width: 0;
-    overflow: hidden;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.payment-summary-lines small,
+.payment-summary-lines b {
     white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
 .payment-summary-lines small {

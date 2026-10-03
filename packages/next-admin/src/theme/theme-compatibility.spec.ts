@@ -10,6 +10,8 @@ const themeStylesheet = readFileSync(fileURLToPath(new URL('../index.css', impor
 
 const lightSurfaceClassPattern =
     /(?<![\w:-])(?:(?:disabled|group-hover|hover):)?bg-(?:white(?:\/\d+)?|(?:slate|gray|zinc|neutral|stone)-(?:50|100|200|300)(?:\/\d+)?|(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200)(?:\/\d+)?)(?![\w/-])/g;
+const lightBorderClassPattern =
+    /(?<![\w:-])(?:(?:group-hover|hover):)?(?:border|divide)(?:-[xytrblse])?-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300)(?![\w/-])/g;
 const darkTextClassPattern =
     /(?<![\w:-])(?:(?:focus|group-hover|hover):)?text-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:600|700|800|900|950)(?![\w/-])/g;
 
@@ -58,6 +60,43 @@ function sourceStyleLiterals(content: string, path: string) {
     return literals;
 }
 
+describe('shared admin border contract', () => {
+    it('supplies subtle default edges for bare borders, dividers and pseudo elements', () => {
+        const base = themeStylesheet.slice(themeStylesheet.indexOf('@layer base'));
+        expect(base).toMatch(
+            /\*,\s*::before,\s*::after,\s*::backdrop\s*\{\s*border-color: var\(--admin-border-subtle\);/u,
+        );
+    });
+
+    it('rejects opaque dark neutral edges in default and hover states across admin source', () => {
+        const violations: string[] = [];
+        for (const file of listSourceFiles(sourceRoot)) {
+            for (const { text, line } of sourceStyleLiterals(readFileSync(file, 'utf8'), file)) {
+                for (const token of text.split(/\s+/u)) {
+                    // Dark surfaces and functional focus/selection states have their own contrast rules.
+                    if (
+                        /(?:^|:)(?:dark|focus(?:-visible|-within)?|checked|aria-selected|data-\[[^\]]+\]):/u.test(
+                            token,
+                        )
+                    )
+                        continue;
+                    if (
+                        /(?:^|:)(?:border|divide)(?:-[xytrblse])?-(?:(?:slate|gray|zinc|neutral|stone)-[4-9]\d{2}|black|current)$/u.test(
+                            token,
+                        )
+                    ) {
+                        violations.push(`${relative(sourceRoot, file)}:${line}: ${token}`);
+                    }
+                }
+            }
+        }
+        expect(
+            violations,
+            'Ordinary borders must use subtle theme tokens or light neutral utilities.',
+        ).toEqual([]);
+    });
+});
+
 describe('legacy light utility dark-theme compatibility', () => {
     it('keeps multiline style literals together without merging neighbouring elements', () => {
         const literals = sourceStyleLiterals(
@@ -70,7 +109,7 @@ describe('legacy light utility dark-theme compatibility', () => {
         ]);
     });
 
-    it('maps every light surface and dark text utility used by the admin source', () => {
+    it('maps every light surface, light border and dark text utility used by the admin source', () => {
         const usages = new Map<string, string[]>();
 
         for (const path of listSourceFiles(sourceRoot)) {
@@ -80,15 +119,19 @@ describe('legacy light utility dark-theme compatibility', () => {
             literals.forEach(({ text, line }) => {
                 const hasExplicitDarkSurface = /\bdark:bg-/.test(text);
                 const hasExplicitDarkText = /\bdark:text-/.test(text);
+                const hasExplicitDarkBorder = /\bdark:(?:border|divide)-/.test(text);
                 const classNames = [
                     ...(text.match(lightSurfaceClassPattern) ?? []),
                     ...(text.match(darkTextClassPattern) ?? []),
+                    ...(text.match(lightBorderClassPattern) ?? []),
                 ];
 
                 for (const className of classNames) {
                     const hasExplicitOverride = className.includes('bg-')
                         ? hasExplicitDarkSurface
-                        : hasExplicitDarkText;
+                        : /(?:border|divide)-/.test(className)
+                          ? hasExplicitDarkBorder
+                          : hasExplicitDarkText;
                     if (intentionalDarkOverlayClasses.has(className) || hasExplicitOverride) {
                         continue;
                     }

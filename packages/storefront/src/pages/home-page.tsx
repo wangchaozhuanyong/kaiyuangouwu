@@ -31,7 +31,7 @@ import {
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
-import { desktopHeroAspectRatio, HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
@@ -996,12 +996,6 @@ export function HomePage() {
                                         ]
                                             .filter(Boolean)
                                             .join(' ')}
-                                        style={{
-                                            aspectRatio:
-                                                desktop && !overlayTrustBar
-                                                    ? String(desktopHeroAspectRatio)
-                                                    : undefined,
-                                        }}
                                         role="region"
                                         aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                         aria-roledescription={isZh ? '轮播' : 'carousel'}
@@ -1030,6 +1024,11 @@ export function HomePage() {
                                         {managedHero && (
                                             <HeroScene
                                                 content={managedHero}
+                                                mediaOverlay={
+                                                    overlayTrustBar && (
+                                                        <div className="hero-service-overlay">{trustBar}</div>
+                                                    )
+                                                }
                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                                 onImageOpen={handleHeroImageOpen}
                                                 onOpen={openActiveHero}
@@ -1052,9 +1051,6 @@ export function HomePage() {
                                                     />
                                                 }
                                             />
-                                        )}
-                                        {overlayTrustBar && (
-                                            <div className="hero-service-overlay">{trustBar}</div>
                                         )}
                                         <span
                                             className="visually-hidden"
@@ -1770,29 +1766,28 @@ function FeaturedCollectionSection({
             aria-labelledby={`${block.id}-title`}
         >
             <div className="featured-collection-layout">
-                <header className="featured-collection-intro" style={managedContentStyle(block)}>
-                    <div className="featured-collection-heading">
-                        <h2 id={`${block.id}-title`}>{block.title}</h2>
-                        {block.subtitle ? (
-                            <p className="featured-collection-subtitle">{block.subtitle}</p>
-                        ) : null}
-                    </div>
-                    {block.body || blockHasTarget ? (
-                        <div className="featured-collection-description">
-                            {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
-                            {blockHasTarget ? (
-                                <button
-                                    className="featured-collection-action"
-                                    type="button"
-                                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
-                                >
-                                    {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
-                                    <ChevronRight aria-hidden="true" />
-                                </button>
-                            ) : null}
-                        </div>
+                <div
+                    className="featured-collection-intro"
+                    style={{
+                        ...managedContentStyle(block),
+                    }}
+                >
+                    <h2 id={`${block.id}-title`}>{block.title}</h2>
+                    {block.subtitle ? <p className="featured-collection-subtitle">{block.subtitle}</p> : null}
+                    {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
+                    {blockHasTarget ? (
+                        <button
+                            className="featured-collection-action"
+                            type="button"
+                            onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                        >
+                            <span className="featured-collection-action-label">
+                                {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
+                                <ChevronRight aria-hidden="true" />
+                            </span>
+                        </button>
                     ) : null}
-                </header>
+                </div>
                 {products.length ? (
                     <div
                         className="featured-collection-grid"

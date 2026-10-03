@@ -26,7 +26,7 @@ import { storefrontErrorMessage } from '../storefront-errors';
 import { NotificationsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { afterSalesNotification, orderNotification } from '../storefront-ui/order-ui';
-import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
+import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -187,173 +187,185 @@ export function NotificationsPage() {
     };
     return (
         <Subpage title={isZh ? '消息通知' : 'Notifications'} language={language} onBack={goBack}>
-            {!customer ? (
-                <EmptyState
-                    icon={<Bell />}
-                    title={isZh ? '登录后查看通知' : 'Sign in to view notifications'}
-                    detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => navigateTo({ name: 'login' })}
-                />
-            ) : afterSalesQuery.isLoading && !orders.length ? (
-                <PageSkeleton label={isZh ? '正在加载通知' : 'Loading notifications'} />
-            ) : ((afterSalesQuery.isPaused && afterSalesQuery.data === undefined) ||
-                  afterSalesQuery.isError) &&
-              !orders.length ? (
-                <EmptyState
-                    icon={<WifiOff />}
-                    title={isZh ? '消息加载失败' : 'Could not load notifications'}
-                    detail={
-                        afterSalesQuery.isPaused
-                            ? offlineLoadError(language)
-                            : afterSalesQuery.error instanceof Error
-                              ? storefrontErrorMessage(afterSalesQuery.error, language)
-                              : ''
-                    }
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void afterSalesQuery.refetch()}
-                />
-            ) : orders.length || afterSalesRequests.length ? (
-                <section className="notification-workbench">
-                    <div className="notification-toolbar">
-                        <h2>{isZh ? '消息通知' : 'Notifications'}</h2>
-                        <div
-                            ref={filtersRef}
-                            role="group"
-                            aria-label={isZh ? '消息筛选' : 'Notification filter'}
-                        >
-                            <button
-                                type="button"
-                                className={filter === 'all' ? 'is-active' : ''}
-                                onClick={() => setFilter('all')}
-                                aria-pressed={filter === 'all'}
+            <SubpageBody>
+                {!customer ? (
+                    <EmptyState
+                        icon={<Bell />}
+                        title={isZh ? '登录后查看通知' : 'Sign in to view notifications'}
+                        detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
+                        action={isZh ? '去登录' : 'Sign in'}
+                        onAction={() => navigateTo({ name: 'login' })}
+                    />
+                ) : afterSalesQuery.isLoading && !orders.length ? (
+                    <PageSkeleton label={isZh ? '正在加载通知' : 'Loading notifications'} />
+                ) : ((afterSalesQuery.isPaused && afterSalesQuery.data === undefined) ||
+                      afterSalesQuery.isError) &&
+                  !orders.length ? (
+                    <EmptyState
+                        icon={<WifiOff />}
+                        title={isZh ? '消息加载失败' : 'Could not load notifications'}
+                        detail={
+                            afterSalesQuery.isPaused
+                                ? offlineLoadError(language)
+                                : afterSalesQuery.error instanceof Error
+                                  ? storefrontErrorMessage(afterSalesQuery.error, language)
+                                  : ''
+                        }
+                        action={isZh ? '重试' : 'Retry'}
+                        onAction={() => void afterSalesQuery.refetch()}
+                    />
+                ) : orders.length || afterSalesRequests.length ? (
+                    <section className="notification-workbench">
+                        <div className="notification-toolbar">
+                            <h2>{isZh ? '消息通知' : 'Notifications'}</h2>
+                            <div
+                                ref={filtersRef}
+                                role="group"
+                                aria-label={isZh ? '消息筛选' : 'Notification filter'}
                             >
-                                {isZh ? '全部消息' : 'All'}
-                            </button>
-                            <button
-                                type="button"
-                                className={filter === 'unread' ? 'is-active' : ''}
-                                onClick={() => setFilter('unread')}
-                                aria-pressed={filter === 'unread'}
-                                disabled={!readStatusKnown}
-                            >
-                                {isZh ? '未读消息' : 'Unread'}{' '}
-                                <span className="notification-count">
-                                    {readStatusKnown ? unreadCount : '—'}
-                                </span>
-                            </button>
-                        </div>
-                        <button
-                            type="button"
-                            className="notification-mark-all"
-                            onClick={() => void markRead(references)}
-                            disabled={marking || !readStatusKnown || unreadCount === 0}
-                        >
-                            {marking ? (isZh ? '保存中' : 'Saving') : isZh ? '全部标为已读' : 'Mark all read'}
-                        </button>
-                    </div>
-                    {readQuery.isError && (
-                        <p className="notification-read-error" role="alert">
-                            {isZh ? '已读状态加载失败，请重试。' : 'Read status could not be loaded.'}{' '}
-                            <button type="button" onClick={() => void readQuery.refetch()}>
-                                {isZh ? '重试' : 'Retry'}
-                            </button>
-                        </p>
-                    )}
-                    {readError && (
-                        <p className="notification-read-error" role="alert">
-                            {readError}
-                        </p>
-                    )}
-                    <div
-                        className="notification-list"
-                        aria-label={isZh ? '最近通知' : 'Recent notifications'}
-                    >
-                        {visibleNotifications.map(entry => {
-                            const notification =
-                                entry.kind === 'after-sales'
-                                    ? afterSalesNotification(entry.request, language)
-                                    : orderNotification(entry.order, language);
-                            const isRead = entry.reference
-                                ? readKeys.has(notificationReferenceKey(entry.reference))
-                                : false;
-                            const isUnread = Boolean(entry.reference && readStatusKnown && !isRead);
-                            const Icon =
-                                entry.kind === 'after-sales' ? RotateCcw : notificationOrderIcon(entry.order);
-                            return (
                                 <button
                                     type="button"
-                                    className={isUnread ? 'is-unread' : 'is-read'}
-                                    key={
-                                        entry.kind === 'after-sales'
-                                            ? `after-sales-${entry.request.id}`
-                                            : `order-${entry.order.id}`
-                                    }
-                                    aria-haspopup="dialog"
-                                    onClick={event => {
-                                        triggerRef.current = event.currentTarget;
-                                        setReadError('');
-                                        setSelected({
-                                            entry,
-                                            customerId: customer.id,
-                                            marketCode: market.code,
-                                        });
-                                        if (entry.reference && readStatusKnown && !isRead)
-                                            void markRead([entry.reference]);
-                                    }}
+                                    className={filter === 'all' ? 'is-active' : ''}
+                                    onClick={() => setFilter('all')}
+                                    aria-pressed={filter === 'all'}
                                 >
-                                    <span className={`notification-icon is-${notification.tone}`}>
-                                        <Icon aria-hidden="true" />
-                                    </span>
-                                    <span className="notification-content">
-                                        <strong>{notification.title}</strong>
-                                        <small>{notification.detail}</small>
-                                    </span>
-                                    <time
-                                        className="notification-time"
-                                        dateTime={
-                                            entry.date && Number.isFinite(Date.parse(entry.date))
-                                                ? entry.date
-                                                : undefined
-                                        }
-                                    >
-                                        {entry.date && Number.isFinite(Date.parse(entry.date))
-                                            ? formatBusinessDate(locale, entry.date, {
-                                                  month: 'short',
-                                                  day: 'numeric',
-                                                  hour: '2-digit',
-                                                  minute: '2-digit',
-                                              })
-                                            : '--'}
-                                    </time>
-                                    {entry.reference && readStatusKnown && (
-                                        <span className="notification-read-status">
-                                            {isRead ? (isZh ? '已读' : 'Read') : isZh ? '未读' : 'Unread'}
-                                        </span>
-                                    )}
-                                    <ChevronRight aria-hidden="true" />
+                                    {isZh ? '全部消息' : 'All'}
                                 </button>
-                            );
-                        })}
-                        {!visibleNotifications.length && (
-                            <EmptyState
-                                compact
-                                icon={<Bell />}
-                                title={isZh ? '没有未读消息' : 'No unread notifications'}
-                                detail={isZh ? '新消息会显示在这里' : 'New notifications will appear here'}
-                            />
+                                <button
+                                    type="button"
+                                    className={filter === 'unread' ? 'is-active' : ''}
+                                    onClick={() => setFilter('unread')}
+                                    aria-pressed={filter === 'unread'}
+                                    disabled={!readStatusKnown}
+                                >
+                                    {isZh ? '未读消息' : 'Unread'}{' '}
+                                    <span className="notification-count">
+                                        {readStatusKnown ? unreadCount : '—'}
+                                    </span>
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                className="notification-mark-all"
+                                onClick={() => void markRead(references)}
+                                disabled={marking || !readStatusKnown || unreadCount === 0}
+                            >
+                                {marking
+                                    ? isZh
+                                        ? '保存中'
+                                        : 'Saving'
+                                    : isZh
+                                      ? '全部标为已读'
+                                      : 'Mark all read'}
+                            </button>
+                        </div>
+                        {readQuery.isError && (
+                            <p className="notification-read-error" role="alert">
+                                {isZh ? '已读状态加载失败，请重试。' : 'Read status could not be loaded.'}{' '}
+                                <button type="button" onClick={() => void readQuery.refetch()}>
+                                    {isZh ? '重试' : 'Retry'}
+                                </button>
+                            </p>
                         )}
-                    </div>
-                </section>
-            ) : (
-                <EmptyState
-                    icon={<Bell />}
-                    title={isZh ? '暂无消息' : 'No notifications'}
-                    detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
-                    action={isZh ? '返回首页' : 'Back to home'}
-                    onAction={() => navigateTo({ name: 'home' })}
-                />
-            )}
+                        {readError && (
+                            <p className="notification-read-error" role="alert">
+                                {readError}
+                            </p>
+                        )}
+                        <div
+                            className="notification-list"
+                            aria-label={isZh ? '最近通知' : 'Recent notifications'}
+                        >
+                            {visibleNotifications.map(entry => {
+                                const notification =
+                                    entry.kind === 'after-sales'
+                                        ? afterSalesNotification(entry.request, language)
+                                        : orderNotification(entry.order, language);
+                                const isRead = entry.reference
+                                    ? readKeys.has(notificationReferenceKey(entry.reference))
+                                    : false;
+                                const isUnread = Boolean(entry.reference && readStatusKnown && !isRead);
+                                const Icon =
+                                    entry.kind === 'after-sales'
+                                        ? RotateCcw
+                                        : notificationOrderIcon(entry.order);
+                                return (
+                                    <button
+                                        type="button"
+                                        className={isUnread ? 'is-unread' : 'is-read'}
+                                        key={
+                                            entry.kind === 'after-sales'
+                                                ? `after-sales-${entry.request.id}`
+                                                : `order-${entry.order.id}`
+                                        }
+                                        aria-haspopup="dialog"
+                                        onClick={event => {
+                                            triggerRef.current = event.currentTarget;
+                                            setReadError('');
+                                            setSelected({
+                                                entry,
+                                                customerId: customer.id,
+                                                marketCode: market.code,
+                                            });
+                                            if (entry.reference && readStatusKnown && !isRead)
+                                                void markRead([entry.reference]);
+                                        }}
+                                    >
+                                        <span className={`notification-icon is-${notification.tone}`}>
+                                            <Icon aria-hidden="true" />
+                                        </span>
+                                        <span className="notification-content">
+                                            <strong>{notification.title}</strong>
+                                            <small>{notification.detail}</small>
+                                        </span>
+                                        <time
+                                            className="notification-time"
+                                            dateTime={
+                                                entry.date && Number.isFinite(Date.parse(entry.date))
+                                                    ? entry.date
+                                                    : undefined
+                                            }
+                                        >
+                                            {entry.date && Number.isFinite(Date.parse(entry.date))
+                                                ? formatBusinessDate(locale, entry.date, {
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                      hour: '2-digit',
+                                                      minute: '2-digit',
+                                                  })
+                                                : '--'}
+                                        </time>
+                                        {entry.reference && readStatusKnown && (
+                                            <span className="notification-read-status">
+                                                {isRead ? (isZh ? '已读' : 'Read') : isZh ? '未读' : 'Unread'}
+                                            </span>
+                                        )}
+                                        <ChevronRight aria-hidden="true" />
+                                    </button>
+                                );
+                            })}
+                            {!visibleNotifications.length && (
+                                <EmptyState
+                                    compact
+                                    icon={<Bell />}
+                                    title={isZh ? '没有未读消息' : 'No unread notifications'}
+                                    detail={
+                                        isZh ? '新消息会显示在这里' : 'New notifications will appear here'
+                                    }
+                                />
+                            )}
+                        </div>
+                    </section>
+                ) : (
+                    <EmptyState
+                        icon={<Bell />}
+                        title={isZh ? '暂无消息' : 'No notifications'}
+                        detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
+                        action={isZh ? '返回首页' : 'Back to home'}
+                        onAction={() => navigateTo({ name: 'home' })}
+                    />
+                )}
+            </SubpageBody>
             {selectedEntry && (
                 <Sheet
                     title={isZh ? '消息详情' : 'Notification details'}

@@ -1,3 +1,24 @@
+.subpage-body {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--space-section);
+    padding: var(--space-section) var(--experience-page-gutter-mobile) 0;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .subpage-body {
+        padding-inline: var(--experience-page-gutter-tablet);
+    }
+}
+
+@media (min-width: 1024px) {
+    .subpage-body {
+        padding: 0;
+    }
+}
+
 .subpage-header {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     padding: 4px 6px;
@@ -455,10 +476,10 @@
         display: block;
         flex: 1;
         text-align: left;
-        font-size: var(--type-page-size);
+        font-size: var(--type-topbar-size);
         font-weight: var(--font-weight-semibold);
         opacity: 1;
-        line-height: var(--type-page-leading);
+        line-height: var(--type-topbar-leading);
     }
     .desktop-store-layout .subpage-header > button {
         position: static;

@@ -28,8 +28,8 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    gap: 16px;
-    margin: 16px 0 24px;
+    gap: var(--space-section);
+    margin: var(--space-section) 0 0;
 }
 
 .business-services-heading {
@@ -41,7 +41,7 @@
     overflow: hidden;
     gap: 24px;
     padding: 24px 20px;
-    border: 0;
+    border: 1px solid var(--line);
     border-radius: var(--skin-card-radius);
     background: linear-gradient(125deg, var(--soft), var(--surface));
 }
@@ -53,6 +53,14 @@
 .business-services-heading-copy {
     position: relative;
     z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-12);
+}
+
+.business-services-heading-copy:has(.business-services-heading-link) {
+    grid-template-columns: minmax(0, 1fr) fit-content(45%);
 }
 
 .business-services-architecture {
@@ -68,18 +76,20 @@
 }
 
 .business-services-page .business-services-page-title {
+    min-width: 0;
     margin: 0;
     color: var(--text);
     font-family: var(--skin-display-font, var(--font-ui));
-    font-size: 28px;
+    font-size: var(--type-page-size);
     font-weight: 700;
     letter-spacing: -0.02em;
-    line-height: 1.3;
+    line-height: var(--type-page-leading);
     overflow-wrap: anywhere;
 }
 
 .business-services-heading p {
-    margin: 12px 0 0;
+    grid-column: 1 / -1;
+    margin: 0;
     color: var(--muted);
     font-size: 14px;
     line-height: 1.7;
@@ -87,13 +97,15 @@
 }
 
 .business-services-heading-link {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     max-width: 100%;
     min-height: 44px;
-    margin-top: 24px;
     padding: 10px 16px;
     border: 0;
     border-radius: var(--skin-control-radius);
@@ -141,12 +153,13 @@
 
 @media (min-width: 1024px) {
     .desktop-store-layout .business-services-page {
-        padding: 32px 0 64px;
+        padding-top: var(--space-major);
+        padding-inline: 0;
     }
 
     .business-services-workspace {
         grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
-        gap: 20px;
+        gap: var(--space-section);
         margin: 0;
     }
 
@@ -174,10 +187,6 @@
 
     .business-services-workspace:not(:has(.is-tools)) .business-services-architecture {
         width: min(420px, 55%);
-    }
-
-    .business-services-page .business-services-page-title {
-        font-size: clamp(32px, 2.9vw, 42px);
     }
 
     .business-services-heading p {

@@ -12,6 +12,8 @@ export function DailyRecommendationSection({
     locale,
     language,
     title,
+    centered = false,
+    limit = 10,
     className,
     plain = false,
     compact = false,
@@ -23,6 +25,8 @@ export function DailyRecommendationSection({
     locale: string;
     language: StorefrontLanguage;
     title: string;
+    centered?: boolean;
+    limit?: number;
     className?: string;
     plain?: boolean;
     compact?: boolean;
@@ -30,8 +34,10 @@ export function DailyRecommendationSection({
     onProduct: (product: Product) => void;
 }) {
     const query = useDailyRecommendations(api, market, language, enabled);
-    // Yesterday's cached picks must not masquerade as today's recommendations after a failed refresh.
-    const data = query.data && Date.parse(query.data.expiresAt) > Date.now() ? query.data : undefined;
+    // This document keeps its first selection, including across midnight. A full
+    // reload fetches today's selection; recommendations are never persisted.
+    const data = query.data;
+    const products = data?.items.slice(0, limit) ?? [];
     const unavailable = query.isError || query.isPaused;
     if (unavailable && !data)
         return (
@@ -51,7 +57,7 @@ export function DailyRecommendationSection({
             <section className={`product-section ${className ?? ''}`}>
                 <SectionHeader title={title} icon={false} />
                 <div className="search-recommendation-list">
-                    {data.items.map(product => (
+                    {products.map(product => (
                         <ProductRow
                             key={product.id}
                             product={product}
@@ -71,12 +77,13 @@ export function DailyRecommendationSection({
         );
     return (
         <ProductSection
-            title={title}
+            title={centered ? undefined : title}
+            centerLabel={centered ? title : undefined}
             kind="recommendations"
             className={className}
-            products={data?.items ?? []}
+            products={products}
             loading={!data && !unavailable}
-            skeletonCount={10}
+            skeletonCount={limit}
             appearance={plain ? 'plain' : undefined}
             market={market}
             locale={locale}

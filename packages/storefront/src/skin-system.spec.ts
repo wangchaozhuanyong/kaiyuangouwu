@@ -20,6 +20,70 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('prevents neutral borders from inheriting dark text throughout the storefront', () => {
+        for (const file of ['./styles.css', '../two-factor-tool/styles.css']) {
+            const css = postcss.parse(stylesheet(file));
+            const baseDefaults: string[] = [];
+            css.walkAtRules('layer', layer => {
+                if (layer.params !== 'base') return;
+                layer.walkRules(rule => {
+                    if (!rule.selectors.includes('*')) return;
+                    expect(rule.selectors).toEqual(['*', '::before', '::after', '::backdrop']);
+                    rule.walkDecls('border-color', declaration => {
+                        baseDefaults.push(declaration.value);
+                    });
+                });
+            });
+            expect(baseDefaults).toEqual(['var(--line-subtle, var(--line))']);
+        }
+
+        const violations: string[] = [];
+        const iconStrokes = new Set([
+            'styles.css|.btn-spinner',
+            'styles/skeletons.css|.page-loading-spinner',
+            'styles/image-studio-desktop.css|.ai-studio-desktop-ratios i',
+        ]);
+        const visit = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) {
+                    visit(file);
+                    continue;
+                }
+                if (!/\.(?:css|tsx?)$/u.test(file) || /\.spec\.|routeTree\.gen/u.test(file)) continue;
+                const relative = path.relative(__dirname, file);
+                const source = readFileSync(file, 'utf8');
+                if (file.endsWith('.css')) {
+                    postcss.parse(source).walkDecls(declaration => {
+                        if (
+                            !/^border(?:$|-)/u.test(declaration.prop) ||
+                            /radius|width|style/u.test(declaration.prop)
+                        )
+                            return;
+                        const selector = (declaration.parent as postcss.Rule).selector;
+                        if (iconStrokes.has(`${relative}|${selector}`)) return;
+                        // Translucent text mixes and state colors remain intentional; opaque text is never a neutral edge.
+                        if (
+                            /currentcolor|var\(--line-strong\)/iu.test(declaration.value) ||
+                            /(?:^|solid\s+)var\(--(?:text|muted)\)$/u.test(declaration.value)
+                        ) {
+                            violations.push(`${relative}:${declaration.source?.start?.line}: ${selector}`);
+                        }
+                    });
+                } else if (/border[^\s'"`]*\[var\(--(?:line-strong|text|muted)\)\]/u.test(source)) {
+                    violations.push(`${relative}: opaque text or strong border utility`);
+                }
+            }
+        };
+        visit(__dirname);
+        visit(path.resolve(__dirname, '../../storefront-content-plugin/src/shared'));
+        visit(path.resolve(__dirname, '../two-factor-tool'));
+        expect(
+            violations,
+            'Use --line for controls and --line-subtle / --skin-divider for reading separators.',
+        ).toEqual([]);
+    });
+
     it('preserves the approved sidebar identity palette independently of skins', () => {
         const css = postcss.parse(stylesheet('./styles/desktop-commerce.css'));
         const tokens = new Map<string, string>();
@@ -228,7 +292,6 @@ describe('storefront skin system', () => {
                             'styles/notifications.css|.notification-list > button + button::before',
                             'styles/order-aftercare.css|.order-detail-products article + article::before',
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
-                            'styles/modals-and-support.css|.support-channel-row + .support-channel-row::before',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
                         if (
@@ -357,12 +420,24 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // The user's fresh profile-card reference includes three separated shortcuts.
+                        // The approved account B design separates shortcuts using the current skin's divider.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
                             selector.trim() === '.account-identity-assets > button + button' &&
                             border[1] === 'left' &&
-                            border[2].trim() === '1px solid #d3e5fb'
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // User-requested support contact groups share one subtle reading rule.
+                        if (
+                            file === path.join(__dirname, 'styles/modals-and-support.css') &&
+                            selector.trim().replace(/\s+/g, ' ') ===
+                                '.support-hours-card + .support-channel-list::before, ' +
+                                    '.support-channel-list + .support-contact-note::before, ' +
+                                    '.support-channel-row + .support-channel-row::before' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
                             continue;
                         }
@@ -370,16 +445,7 @@ describe('storefront skin system', () => {
                     }
                     const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);
                     const thinHeight = /(?:^|;)\s*height:\s*[1-4]px\s*;/.test(body);
-                    // Directory B keeps one short skin-colored heading accent, not a row divider.
-                    const approvedWarmHeading =
-                        file === path.join(__dirname, 'styles/service-entries.css') &&
-                        selector.trim() ===
-                            ".business-services-page[data-services-layout='directory-b'] .category-client-plugin-group-title::after" &&
-                        /width:\s*28px;/.test(body) &&
-                        /height:\s*2px;/.test(body) &&
-                        /background:\s*var\(--accent\);/.test(body);
                     if (
-                        !approvedWarmHeading &&
                         (thinWidth || thinHeight) &&
                         !(thinWidth && thinHeight) &&
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
@@ -428,6 +494,37 @@ describe('storefront skin system', () => {
         expect(findings).toEqual([]);
     });
 
+    it('prevents route containers from reintroducing shared page insets and stacked section margins', () => {
+        const violations: string[] = [];
+        const roots =
+            /\.(?:subpage-body|support-center-content|security-page-body|desktop-referral-content|delivery-overview|delivery-detail-page)$/u;
+        const cards =
+            /\.(?:support-contact-panel|support-faq-card|support-evaluation-card|coupon-center-workspace|coupon-center-guide)$/u;
+        for (const file of readdirSync(path.join(__dirname, 'styles')).filter(name =>
+            name.endsWith('.css'),
+        )) {
+            if (file === 'subpage-content.css') continue;
+            postcss.parse(stylesheet(`./styles/${file}`)).walkRules(rule => {
+                const isRoot = rule.selectors.some(selector => roots.test(selector.trim()));
+                const isCard = rule.selectors.some(selector => cards.test(selector.trim()));
+                rule.walkDecls(declaration => {
+                    const prop = declaration.prop;
+                    if (isRoot && /^(?:padding(?:-.+)?|gap|row-gap)$/u.test(prop)) {
+                        violations.push(`${file}: ${rule.selector}: ${prop}`);
+                    }
+                    if (
+                        (isRoot || isCard) &&
+                        /^(?:margin|margin-block(?:-.+)?|margin-top|margin-bottom)$/u.test(prop) &&
+                        !/^0(?:px)?$/u.test(declaration.value)
+                    ) {
+                        violations.push(`${file}: ${rule.selector}: ${prop}`);
+                    }
+                });
+            });
+        }
+        expect(violations).toEqual([]);
+    });
+
     it('keeps one page header implementation and one responsive spacing owner', () => {
         const visit = (directory: string) => {
             for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -436,7 +533,7 @@ describe('storefront skin system', () => {
                 else if (/\.tsx?$/.test(file) && !/\.spec\.|routeTree\.gen/.test(file)) {
                     if (file === path.join(__dirname, 'storefront-ui/page-shell.tsx')) continue;
                     expect(readFileSync(file, 'utf8'), file).not.toMatch(
-                        /function\s+(?:SubHeader|Subpage)\(/,
+                        /function\s+(?:SubHeader|Subpage|SubpageBody)\(/,
                     );
                 } else if (
                     file.endsWith('.css') &&
@@ -445,13 +542,27 @@ describe('storefront skin system', () => {
                     const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
                     for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
                         if (
-                            !selector.trim().endsWith('.subpage-header') ||
+                            !selector.includes('.subpage-header') ||
                             selector.includes('.product-detail-page')
                         )
                             continue;
-                        expect(body, `${file}: ${selector}`).not.toMatch(
-                            /(?:^|;)\s*(?:height|min-height|margin|padding(?:-top)?):/,
+                        const ownsHeader = /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*$/u.test(
+                            selector,
                         );
+                        const ownsTitle =
+                            /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*>\s*strong\b/u.test(
+                                selector,
+                            );
+                        if (ownsHeader) {
+                            expect(body, `${file}: ${selector}`).not.toMatch(
+                                /(?:^|;)\s*(?:height|min-height|margin|padding(?:-top)?):/,
+                            );
+                        }
+                        if (ownsHeader || ownsTitle) {
+                            expect(body, `${file}: ${selector}`).not.toMatch(
+                                /(?:^|;)\s*(?:font-size|font-weight|line-height):/,
+                            );
+                        }
                     }
                 }
             }
@@ -460,6 +571,10 @@ describe('storefront skin system', () => {
         expect(stylesheet('./styles/subpage-content.css')).toMatch(
             /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*height:\s*auto;/,
         );
+        expect(stylesheet('./styles/subpage-content.css')).toMatch(
+            /\.desktop-store-layout \.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
+        );
+        expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('[&>.subpage-header]');
         expect(stylesheet('./styles/home-showcase.css')).not.toMatch(
             /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*padding-top:\s*72px;/,
         );
@@ -582,7 +697,31 @@ describe('storefront skin system', () => {
     });
 
     it('keeps color ownership in the shared semantic palette instead of preset CSS copies', () => {
+        // Account B replaces the former blue exception: prevent fixed colors returning on skin changes.
+        expect(stylesheet('./styles/account-identity.css')).not.toMatch(
+            /#[\da-f]{3,8}\b|rgba?\(|hsla?\(|data-storefront-preset|!important/iu,
+        );
         const source = stylesheet('./styles/visual-presets.css');
+        const lineOwners = new Set([
+            'styles/experience-foundations.css',
+            // User-approved local campaign and service themes retain their boundaries.
+            'styles/referral.css',
+            'pages/business-services-page.css',
+        ]);
+        const visitLineOwners = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) visitLineOwners(file);
+                else if (file.endsWith('.css') && !lineOwners.has(path.relative(__dirname, file))) {
+                    postcss.parse(readFileSync(file, 'utf8')).walkDecls(declaration => {
+                        expect(declaration.prop, file).not.toBe('--line');
+                        expect(declaration.prop, file).not.toBe('--line-strong');
+                        expect(declaration.prop, file).not.toBe('--focus');
+                    });
+                }
+            }
+        };
+        visitLineOwners(__dirname);
         const semanticTokens = [
             '--bg',
             '--paper',
@@ -812,7 +951,6 @@ describe('storefront skin system', () => {
     it('keeps panel headings and non-review lists free of decorative rules across component and layout owners', () => {
         const borderlessSelectors = [
             '.section-header',
-            '.review-center-section > header',
             '.review-composer-summary',
             '.my-review-list article',
             '.product-review-list article',
@@ -874,7 +1012,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('fills the carousel frame for every theme without reintroducing original-image letterboxing', () => {
+    it('keeps uploaded carousel artwork complete and lets phone copy follow its native ratio', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -882,13 +1020,21 @@ describe('storefront skin system', () => {
         );
         expect(imageRules.length).toBeGreaterThan(0);
         for (const [, , declarations] of imageRules) {
-            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: cover;');
+            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: contain;');
+            expect(declarations).toContain('height: auto;');
         }
         expect(source).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/,
+            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*relative;[^}]*inset:\s*auto;/,
         );
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,
+        );
+        expect(source).toMatch(/\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*max-height:\s*none;/);
+        expect(source).toMatch(
+            /data-copy-layout='below'\] \.hero-rich-content\s*\{[^}]*position:\s*relative;/,
+        );
+        expect(source).toMatch(
+            /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
     });
 

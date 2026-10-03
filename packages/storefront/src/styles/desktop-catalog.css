@@ -313,14 +313,6 @@
         min-width: 0;
         padding: 0 var(--desktop-content-gutter) 24px;
     }
-    .desktop-catalog-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px 16px;
-        min-height: 80px;
-        padding-block: 18px;
-    }
     .desktop-catalog-label {
         font-size: 17px;
         font-weight: 600;
@@ -1053,9 +1045,6 @@
         }
         .desktop-header-settings {
             padding-left: 10px;
-        }
-        .desktop-catalog-toolbar {
-            gap: 14px;
         }
         .has-desktop-catalog .account-profile-card {
             grid-template-columns: minmax(0, 1fr);

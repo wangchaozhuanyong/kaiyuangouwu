@@ -95,11 +95,19 @@ const commonTypes = gql`
         revision: String!
     }
 
+    type StorefrontAccountRecommendationsSettings {
+        enabled: Boolean!
+        titleZh: String!
+        titleEn: String!
+        limit: Int!
+    }
+
     type StorefrontContentSettings {
         heroAutoplayIntervalSeconds: Int!
         configuredBlockTypes: [StorefrontContentBlockType!]!
         auth: StorefrontAuthSettings!
         personalDataExportEnabled: Boolean!
+        accountRecommendations: StorefrontAccountRecommendationsSettings!
     }
 
     type StorefrontAuthSettings {
@@ -122,6 +130,13 @@ export const shopApiExtensions = gql`
 `;
 
 export const adminApiExtensions = gql`
+    input UpdateStorefrontAccountRecommendationsInput {
+        enabled: Boolean!
+        titleZh: String!
+        titleEn: String!
+        limit: Int!
+    }
+
     ${commonTypes}
 
     type StorefrontContentBlockTranslation {
@@ -291,6 +306,9 @@ export const adminApiExtensions = gql`
 
     extend type Mutation {
         updateStorefrontPersonalDataExportEnabled(enabled: Boolean!): Boolean!
+        updateStorefrontAccountRecommendations(
+            input: UpdateStorefrontAccountRecommendationsInput!
+        ): StorefrontAccountRecommendationsSettings!
         updateStorefrontVisualPreset(input: UpdateStorefrontVisualPresetInput!): StorefrontVisualPreset!
         createStorefrontContentBlock(input: CreateStorefrontContentBlockInput!): StorefrontContentBlock!
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!

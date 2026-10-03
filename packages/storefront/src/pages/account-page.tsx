@@ -19,6 +19,7 @@ import {
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
+import { resolveAccountRecommendationSettings } from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { ShopApi } from '../api';
 import { AccountIdentity } from '../components/common/account-identity';
 import { AccountOrderCarousel } from '../components/common/account-order-carousel';
@@ -56,9 +57,11 @@ export interface AccountPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    accountRecommendations?: import('../types').AccountRecommendationSettings;
     reviewEnabled?: boolean;
     storefrontName: string;
     logoUrl: string | null;
+    accountHeroImageUrl?: string | null;
     favoriteProductCount: number;
     couponCount: number;
     displayCurrencyCode?: string;
@@ -85,8 +88,10 @@ export function AccountPage() {
         locale,
         language,
         reviewEnabled = true,
+        accountRecommendations,
         storefrontName,
         logoUrl,
+        accountHeroImageUrl,
         favoriteProductCount,
         couponCount,
         displayCurrencyCode,
@@ -98,6 +103,7 @@ export function AccountPage() {
         onLogout,
     } = AccountPageContext.useValue();
     const isZh = language === 'zh';
+    const recommendationSettings = resolveAccountRecommendationSettings(accountRecommendations);
     const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
     const orders = customer?.orders.items ?? [];
@@ -199,7 +205,9 @@ export function AccountPage() {
                 locale={locale}
                 language={language}
                 reviewEnabled={reviewEnabled}
+                accountRecommendations={recommendationSettings}
                 storefrontName={storefrontName}
+                accountHeroImageUrl={accountHeroImageUrl}
                 favoriteProductCount={favoriteProductCount}
                 couponCount={couponCount}
                 onContentTarget={onContentTarget}
@@ -237,6 +245,7 @@ export function AccountPage() {
                 />
             )}
             <AccountIdentity
+                heroImageUrl={accountHeroImageUrl}
                 customer={customer}
                 storefrontName={storefrontName}
                 language={language}
@@ -254,7 +263,7 @@ export function AccountPage() {
 
             <section className={`account-orders ${accountSectionClass}`}>
                 <SectionHeader
-                    title={isZh ? '我的订单中心' : 'My orders'}
+                    title={isZh ? '我的订单' : 'My orders'}
                     action={isZh ? '全部订单' : 'View all'}
                     onAction={() => navigateTo({ name: 'orders', tab: 'all' })}
                 />
@@ -500,10 +509,12 @@ export function AccountPage() {
                 </section>
             )}
 
-            {!desktop && (
+            {!desktop && recommendationSettings.enabled && (
                 <DailyRecommendationSection
                     api={api}
-                    title={isZh ? '为你推荐' : 'Recommended for you'}
+                    title={isZh ? recommendationSettings.titleZh : recommendationSettings.titleEn}
+                    centered
+                    limit={recommendationSettings.limit}
                     className="account-recommendations"
                     market={market}
                     locale={locale}

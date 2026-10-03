@@ -460,7 +460,8 @@ export function semanticPaletteCssVariables(palette: StorefrontSemanticPalette):
         '--interaction-hover': palette.interactionHover,
         '--interaction-pressed': palette.interactionPressed,
         '--interaction-ink': palette.interactionInk,
-        '--line': palette.border,
+        // Resting field edges are quiet. Strong boundaries and focus remain separate roles.
+        '--line': mixColors(palette.surface, palette.text, 0.14),
         '--line-strong': palette.borderStrong,
         '--focus': palette.focus,
         '--success': palette.success,

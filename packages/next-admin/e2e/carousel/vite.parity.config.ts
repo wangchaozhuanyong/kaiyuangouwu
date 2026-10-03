@@ -11,7 +11,10 @@ export default defineConfig(environment =>
                 configureServer(server) {
                     server.middlewares.use(async (request, response, next) => {
                         const url = new URL(request.url ?? '/', 'http://localhost');
-                        if (url.pathname === '/' && url.searchParams.has('parityClient')) {
+                        if (
+                            ['/', '/account'].includes(url.pathname) &&
+                            url.searchParams.has('parityClient')
+                        ) {
                             response.setHeader('content-type', 'text/html');
                             response.end(
                                 await server.transformIndexHtml(
@@ -58,9 +61,14 @@ export default defineConfig(environment =>
                                 request.url?.split('?')[0] ?? '',
                             )
                         ) {
+                            const height = new URL(request.url ?? '/', 'http://localhost').searchParams.has(
+                                'tall',
+                            )
+                                ? 1000
+                                : 520;
                             response.setHeader('content-type', 'image/svg+xml');
                             response.end(
-                                `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520"><rect width="1600" height="520" fill="${request.url?.includes('replacement') ? '#445a78' : '#bccbb5'}"/><rect x="940" y="70" width="340" height="390" rx="24" fill="#eef1e4"/><circle cx="260" cy="160" r="70" fill="#e8c38e"/></svg>`,
+                                `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="${height}"><rect width="1600" height="${height}" fill="${request.url?.includes('replacement') ? '#445a78' : '#bccbb5'}"/><rect x="940" y="70" width="340" height="390" rx="24" fill="#eef1e4"/><circle cx="260" cy="160" r="70" fill="#e8c38e"/></svg>`,
                             );
                         } else next();
                     });

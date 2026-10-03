@@ -9,6 +9,7 @@ import {
     WalletCards,
 } from 'lucide-react';
 
+import { resolveAccountRecommendationSettings } from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { AccountIdentity } from '../components/common/account-identity';
 import { RouteState } from '../storefront-router';
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
@@ -41,7 +42,9 @@ export function DesktopAccountPage({
     locale,
     language,
     reviewEnabled = true,
+    accountRecommendations,
     storefrontName,
+    accountHeroImageUrl,
     favoriteProductCount,
     couponCount,
     onContentTarget,
@@ -57,6 +60,7 @@ export function DesktopAccountPage({
     navigate,
 }: DesktopAccountPageProps) {
     const isZh = language === 'zh';
+    const recommendationSettings = resolveAccountRecommendationSettings(accountRecommendations);
     const orders = customer?.orders.items ?? [];
     const statuses = [
         {
@@ -106,6 +110,7 @@ export function DesktopAccountPage({
         <main className="page desktop-account-page" data-page-pending={pending ? 'query' : undefined}>
             <h1 className="desktop-account-page-title">{isZh ? '账户概览' : 'Account overview'}</h1>
             <AccountIdentity
+                heroImageUrl={accountHeroImageUrl}
                 customer={customer}
                 storefrontName={storefrontName}
                 language={language}
@@ -320,15 +325,19 @@ export function DesktopAccountPage({
                     </div>
                 </section>
             </div>
-            <DailyRecommendationSection
-                api={api}
-                className="desktop-account-recommendations"
-                title={isZh ? '为你推荐' : 'Recommended for you'}
-                market={market}
-                locale={locale}
-                language={language}
-                onProduct={product => navigate({ name: 'product', id: product.id })}
-            />
+            {recommendationSettings.enabled && (
+                <DailyRecommendationSection
+                    api={api}
+                    className="account-recommendations desktop-account-recommendations"
+                    title={isZh ? recommendationSettings.titleZh : recommendationSettings.titleEn}
+                    centered
+                    limit={recommendationSettings.limit}
+                    market={market}
+                    locale={locale}
+                    language={language}
+                    onProduct={product => navigate({ name: 'product', id: product.id })}
+                />
+            )}
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

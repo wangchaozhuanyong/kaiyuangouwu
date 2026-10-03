@@ -302,10 +302,10 @@ export function BusinessServicesCopyModule() {
                                                 className={inputClass}
                                             />
                                         </Field>
-                                        <Field label={`说明 ${translation.body.length}/${zh ? 100 : 180}`}>
+                                        <Field label={`说明 ${translation.body.length}/200`}>
                                             <textarea
                                                 value={translation.body}
-                                                maxLength={zh ? 100 : 180}
+                                                maxLength={200}
                                                 rows={2}
                                                 disabled={!canEdit}
                                                 onChange={event =>
@@ -403,15 +403,12 @@ export function BusinessServicesCopyModule() {
                             <div
                                 className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
                             >
-                                <div className="min-w-0 [overflow-wrap:anywhere]">
+                                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(45%)] items-start gap-3 [overflow-wrap:anywhere]">
                                     <h3 className="text-2xl font-bold leading-tight">
                                         {preview.title || '—'}
                                     </h3>
-                                    <p className="mt-3 text-sm leading-6 text-slate-300">
-                                        {preview.body || '—'}
-                                    </p>
                                     {linkValue.trim() && linkIsValid ? (
-                                        <span className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                        <span className="col-start-2 row-start-1 inline-flex min-h-11 items-center justify-self-end gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
                                             {preview.ctaLabel?.trim() ||
                                                 (previewLanguage === 'zh_Hans'
                                                     ? '打开服务网站'
@@ -419,6 +416,9 @@ export function BusinessServicesCopyModule() {
                                             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                                         </span>
                                     ) : null}
+                                    <p className="col-span-full text-sm leading-6 text-slate-300">
+                                        {preview.body || '—'}
+                                    </p>
                                 </div>
                                 {previewImage && (
                                     <img

@@ -1,3 +1,4 @@
+import type { AccountRecommendationSettings } from './shared/account-recommendation-settings';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
@@ -45,7 +46,8 @@ export class StorefrontContentShopResolver {
         const auth = await this.storefrontAuthSettingsService.get(ctx);
         const personalDataExportEnabled =
             await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
-        return { ...settings, auth, personalDataExportEnabled };
+        const accountRecommendations = await this.storefrontAccountSettingsService.getRecommendations(ctx);
+        return { ...settings, auth, personalDataExportEnabled, accountRecommendations };
     }
 }
 
@@ -76,7 +78,8 @@ export class StorefrontContentAdminResolver {
         const auth = await this.storefrontAuthSettingsService.get(ctx);
         const personalDataExportEnabled =
             await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
-        return { ...settings, auth, personalDataExportEnabled };
+        const accountRecommendations = await this.storefrontAccountSettingsService.getRecommendations(ctx);
+        return { ...settings, auth, personalDataExportEnabled, accountRecommendations };
     }
 
     @Transaction()
@@ -84,6 +87,16 @@ export class StorefrontContentAdminResolver {
     @Allow(storefrontContentPermission.Update)
     updateStorefrontPersonalDataExportEnabled(@Ctx() ctx: RequestContext, @Args('enabled') enabled: boolean) {
         return this.storefrontAccountSettingsService.updatePersonalDataExportEnabled(ctx, enabled);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storefrontContentPermission.Update)
+    updateStorefrontAccountRecommendations(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: AccountRecommendationSettings,
+    ) {
+        return this.storefrontAccountSettingsService.updateRecommendations(ctx, input);
     }
 
     @Query()
@@ -151,7 +164,8 @@ export class StorefrontContentAdminResolver {
         const settings = await this.storefrontContentService.updateSettings(ctx, input);
         const personalDataExportEnabled =
             await this.storefrontAccountSettingsService.getPersonalDataExportEnabled(ctx);
-        return { ...settings, personalDataExportEnabled };
+        const accountRecommendations = await this.storefrontAccountSettingsService.getRecommendations(ctx);
+        return { ...settings, personalDataExportEnabled, accountRecommendations };
     }
 
     @Transaction()

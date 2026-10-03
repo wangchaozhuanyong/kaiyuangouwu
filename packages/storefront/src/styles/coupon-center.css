@@ -2,11 +2,11 @@
    The skin adapter supplies colors; it never changes this layout. */
 .coupon-center-workspace {
     min-width: 0;
-    margin: 12px var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
+    margin: 0;
 }
 .coupon-center-guide {
     container: coupon-guide / inline-size;
-    margin: 20px var(--page-section-inset, var(--experience-page-gutter-mobile)) 24px;
+    margin: 0;
     overflow: hidden;
     border-radius: var(--skin-card-radius);
     background: var(--surface);
@@ -541,9 +541,6 @@
 }
 
 @media (min-width: 1024px) {
-    .coupon-center-workspace {
-        margin-top: 0;
-    }
     .coupon-center-tabs {
         width: fit-content;
         min-width: min(100%, 400px);
@@ -551,9 +548,6 @@
     .coupon-center-ticket-list {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 20px;
-    }
-    .coupon-center-guide {
-        margin-top: 24px;
     }
 }
 

@@ -185,6 +185,7 @@ export function useCustomerProductActivity({
         recentProductIds,
         visitTimes,
         loading: Boolean(customerId) && activityQuery.isPending,
+        initialLoadPending: activityQuery.isLoading,
         error: customerId ? activityQuery.error : null,
         retry: activityQuery.refetch,
         toggleFavoriteProduct,
