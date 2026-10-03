@@ -3,6 +3,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { AdminNotificationService } from './admin-notification.service';
 
 describe('AdminNotificationService', () => {
+    it('does not reclaim a pending incident and alerts immediately when a sent incident becomes critical', async () => {
+        const existing = {
+            id: 5,
+            occurrenceCount: 1,
+            severity: 'P1',
+            deliveryStatus: 'SENT',
+            sentAt: new Date(),
+            payload: {},
+            silent: true,
+        };
+        const test = serviceTest({ findOne: vi.fn().mockResolvedValue(existing) });
+        const input = {
+            eventType: 'inventory.variant.low',
+            category: 'INVENTORY',
+            severity: 'P0' as const,
+            fingerprint: 'stock:5',
+            title: '缺货',
+        };
+        await test.service.upsertIncident(null, input);
+        expect(existing).toMatchObject({ deliveryStatus: 'PENDING', silent: false });
+        expect(test.worker.dispatch).toHaveBeenCalledTimes(1);
+        await test.service.upsertIncident(null, input);
+        expect(test.worker.dispatch).toHaveBeenCalledTimes(1);
+    });
+
     it('returns an existing one-off record for the same deduplication key', async () => {
         const existing = { id: 7, dedupKey: 'order:7', deliveryStatus: 'SENT' };
         const test = serviceTest({ findOne: vi.fn().mockResolvedValue(existing) });
@@ -56,7 +81,7 @@ describe('AdminNotificationService', () => {
         expect(test.repository.save).not.toHaveBeenCalled();
     });
 
-    it('aggregates a repeated incident and edits its existing Telegram message', async () => {
+    it('aggregates a repeated incident and sends a new reminder so the group is notified', async () => {
         const occurredAt = new Date('2026-09-03T11:00:00.000Z');
         const existing = {
             id: 8,
@@ -87,7 +112,7 @@ describe('AdminNotificationService', () => {
 
         expect(result).toMatchObject({
             occurrenceCount: 2,
-            deliveryAction: 'EDIT',
+            deliveryAction: 'SEND',
             deliveryStatus: 'PENDING',
             payload: { saleableStock: 1 },
         });

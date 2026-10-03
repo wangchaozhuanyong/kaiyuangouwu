@@ -217,6 +217,7 @@ export interface ProviderGenerationResult {
 }
 
 export interface ProviderTelemetry {
+    accessFailure?: import('./provider/ai-access-failure').AiAccessFailure;
     httpStatus?: number;
     providerRequestId?: string;
     callId?: string;

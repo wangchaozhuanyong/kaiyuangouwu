@@ -10,6 +10,15 @@ import {
 } from './telegram-notification-worker.service';
 
 describe('TelegramNotificationWorkerService', () => {
+    it('skips old hourly snapshots instead of replaying stale reports after recovery', async () => {
+        const test = workerTest(fixture({ expiresAt: new Date(Date.now() - 1) }), {});
+        await test.process();
+        expect(test.deliveryRepository.update).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ deliveryStatus: 'SKIPPED', lastErrorCode: 'EXPIRED' }),
+        );
+    });
+
     it('moves retryable Telegram errors to RETRY using retry_after', async () => {
         const delivery = fixture();
         const test = workerTest(delivery, {
@@ -81,9 +90,47 @@ describe('TelegramNotificationWorkerService', () => {
         expect(editMessageText).toHaveBeenCalledOnce();
         expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ chatId: '-1001', silent: true }));
         expect(test.deliveryRepository.update).toHaveBeenCalledWith(
-            delivery.id,
+            expect.objectContaining({ id: delivery.id, eventState: 'RESOLVED', queueJobId: 'job-1' }),
             expect.objectContaining({ deliveryStatus: 'SENT', telegramMessageId: '99' }),
         );
+    });
+
+    it.each(['success', 'failure'])(
+        'does not overwrite a recovery queued during an old %s request',
+        async outcome => {
+            const delivery = fixture({ mode: 'INCIDENT', eventState: 'FIRING', severity: 'P1' });
+            const test = workerTest(delivery, {
+                sendMessage:
+                    outcome === 'success'
+                        ? vi.fn().mockResolvedValue({ messageId: 'old-message' })
+                        : vi.fn().mockRejectedValue(new TelegramClientError('NETWORK', 'offline', true)),
+            });
+            test.deliveryRepository.update.mockResolvedValue({ affected: 0 });
+            await test.process();
+            for (const [where] of test.deliveryRepository.update.mock.calls) {
+                expect(where).toMatchObject({
+                    id: delivery.id,
+                    deliveryStatus: 'CLAIMED',
+                    eventState: 'FIRING',
+                    queueJobId: 'job-1',
+                });
+            }
+        },
+    );
+
+    it('requeues an in-flight severity upgrade after finishing the older request', async () => {
+        const delivery = fixture({ mode: 'INCIDENT', eventState: 'FIRING', severity: 'P1' });
+        const test = workerTest(delivery, {});
+        test.deliveryRepository.update
+            .mockResolvedValueOnce({ affected: 0 })
+            .mockResolvedValueOnce({ affected: 1 });
+        const dispatch = vi.spyOn(test.worker, 'dispatch').mockResolvedValue(true);
+        await test.process();
+        expect(test.deliveryRepository.update.mock.calls[1][1]).toMatchObject({
+            deliveryStatus: 'PENDING',
+            attempts: 0,
+        });
+        expect(dispatch).toHaveBeenCalledWith(delivery.id);
     });
 
     it('routes P0/P1 jobs to a separate high-priority queue', async () => {
@@ -169,6 +216,7 @@ function workerTest(delivery: AdminNotificationDelivery, telegramOverrides: Reco
         telegram as never,
     );
     return {
+        worker,
         deliveryRepository,
         process: () =>
             (

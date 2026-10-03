@@ -34,6 +34,7 @@ export async function runPromptAttempt(
     stage: string,
     selectionReason: string | null,
     invoke: () => Promise<ProviderPromptResult>,
+    observe?: (telemetry: ProviderTelemetry, ok: boolean) => Promise<void>,
 ): Promise<ProviderPromptResult> {
     const repository = connection.getRepository(ctx, ImagePromptOptimizationAttempt);
     const callId = randomUUID();
@@ -93,6 +94,13 @@ export async function runPromptAttempt(
         );
     } catch {
         throw new ImageAttemptPersistenceError();
+    }
+    if (observe) {
+        try {
+            await observe(telemetry, Boolean(result));
+        } catch {
+            /* Notification failures cannot alter invocation or cost accounting. */
+        }
     }
     if (result) return { ...result, telemetry };
     throw failure;

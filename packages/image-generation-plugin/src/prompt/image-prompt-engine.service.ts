@@ -182,6 +182,8 @@ export class ImagePromptEngineService {
                                 promptPayload,
                                 references,
                             ),
+                        (telemetry, ok) =>
+                            this.configService.notifyPromptAccessResult(ctx, routedCredential, telemetry, ok),
                     );
                     await this.configService
                         .recordPromptModelSuccess(ctx, promptModelConfig)
@@ -232,6 +234,13 @@ export class ImagePromptEngineService {
                             'REPAIR',
                             credentialSelectionReason,
                             invoke,
+                            (telemetry, ok) =>
+                                this.configService.notifyPromptAccessResult(
+                                    ctx,
+                                    selectedCredential,
+                                    telemetry,
+                                    ok,
+                                ),
                         ),
                 )) ??
                 fallback;

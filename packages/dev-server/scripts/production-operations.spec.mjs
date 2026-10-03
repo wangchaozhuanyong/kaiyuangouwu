@@ -1898,3 +1898,22 @@ void test('the workflow shell accepts the fixed read-only governance operation a
     assert.equal(invoke('unknown-operation').status, 1);
     assert.equal(invoke('plan-platform-store-governance', 'a'.repeat(64)).status, 1);
 });
+
+void test('notification operation guards preserve settings, deduplicate delivery and encrypt credential transfer', () => {
+    const result = spawnSync(
+        process.execPath,
+        [
+            '--test',
+            'deploy/notification-configuration-guard.spec.mjs',
+            'deploy/monitor-notifications.spec.mjs',
+        ],
+        { cwd: repositoryRoot, encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    assert.match(workflow, /prepare-notification-secret-transfer/u);
+    assert.match(workflow, /OPS_NOTIFICATION_PUBLIC_KEY=\{notification_public_key\}/u);
+});

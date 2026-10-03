@@ -19,6 +19,11 @@ export const TELEGRAM_NOTIFICATIONS_QUERY = gql`
             notifyFulfillmentEvents
             notifyRefundEvents
             notifyInventoryEvents
+            notifyOnlineReports
+            notifyServiceReviews
+            notifyPromotionExpiry
+            notifyAiCredentials
+            notifySecurityEvents
             inventoryLowThreshold
             p1EscalationMinutes
             p0RepeatMinutes
@@ -160,6 +165,11 @@ export const UPDATE_TELEGRAM_NOTIFICATION_CONFIG = gql`
             notifyFulfillmentEvents
             notifyRefundEvents
             notifyInventoryEvents
+            notifyOnlineReports
+            notifyServiceReviews
+            notifyPromotionExpiry
+            notifyAiCredentials
+            notifySecurityEvents
             inventoryLowThreshold
             p1EscalationMinutes
             p0RepeatMinutes
@@ -260,6 +270,11 @@ export interface TelegramNotificationConfigRecord {
     notifyFulfillmentEvents: boolean;
     notifyRefundEvents: boolean;
     notifyInventoryEvents: boolean;
+    notifyOnlineReports: boolean;
+    notifyServiceReviews: boolean;
+    notifyPromotionExpiry: boolean;
+    notifyAiCredentials: boolean;
+    notifySecurityEvents: boolean;
     inventoryLowThreshold: number;
     p1EscalationMinutes: number;
     p0RepeatMinutes: number;
@@ -406,3 +421,21 @@ export interface TelegramNotificationsResult {
         routes: TelegramDepartmentRouteRecord[];
     };
 }
+
+export const CUSTOMER_SERVICE_REVIEWS_QUERY = gql`
+    query NextAdminCustomerServiceReviews($skip: Int!, $take: Int!, $allStores: Boolean!) {
+        customerServiceReviews(skip: $skip, take: $take, allStores: $allStores) {
+            totalItems
+            items {
+                id
+                createdAt
+                channelId
+                rating
+                tags
+                comment
+                orderCode
+                revision
+            }
+        }
+    }
+`;

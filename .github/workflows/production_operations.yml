@@ -21,6 +21,10 @@ on:
                 required: false
                 default: ''
                 type: string
+            notification_public_key:
+                required: false
+                default: ''
+                type: string
             product_id:
                 required: false
                 default: ''
@@ -68,6 +72,9 @@ on:
                     - verify-two-factor-backup
                     - verify-security-dependencies
                     - inspect-storefront-config
+                    - inspect-notification-config
+                    - enable-unified-notifications
+                    - prepare-notification-secret-transfer
                     - audit-store-isolation-data
                     - plan-platform-store-governance
                     - audit-administrator-product-readiness
@@ -96,6 +103,11 @@ on:
                 type: string
             expected_runtime_sha:
                 description: Exact running production SHA reviewed for pinned store-data operations
+                required: false
+                default: ''
+                type: string
+            notification_public_key:
+                description: Ephemeral RSA public key for encrypted transfer of existing notification credentials
                 required: false
                 default: ''
                 type: string
@@ -132,6 +144,7 @@ jobs:
             OPS_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
             OPS_EXPECTED_CHANNEL_CODES: ${{ inputs.expected_channel_codes || '' }}
             OPS_EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha || '' }}
+            OPS_NOTIFICATION_PUBLIC_KEY: ${{ inputs.notification_public_key || '' }}
             OPS_PRODUCT_ID: ${{ inputs.product_id || '' }}
 
         steps:
@@ -146,7 +159,7 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-platform-store-governance|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|inspect-notification-config|enable-unified-notifications|prepare-notification-secret-transfer|audit-store-isolation-data|plan-platform-store-governance|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
@@ -163,6 +176,11 @@ jobs:
                       exit 1
                       ;;
                   esac
+                  if [[ "$OPS_OPERATION" == "prepare-notification-secret-transfer" ]]; then
+                    [[ "$OPS_NOTIFICATION_PUBLIC_KEY" =~ ^[A-Za-z0-9+/=]{400,1000}$ ]] || exit 1
+                  else
+                    [[ -z "$OPS_NOTIFICATION_PUBLIC_KEY" ]] || exit 1
+                  fi
                   if [[ -n "$OPS_EXPECTED_CHANNEL_CODES" ]] && [[ "$OPS_EXPECTED_CHANNEL_CODES" != "美宜佳" ]] && [[ ! "$OPS_EXPECTED_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
                     echo 'expected_channel_codes must be a comma-separated list of Channel codes' >&2
                     exit 1
@@ -233,6 +251,7 @@ jobs:
                   expected_channels = shlex.quote(os.environ['OPS_EXPECTED_CHANNEL_CODES'])
                   expected_runtime = shlex.quote(os.environ['OPS_EXPECTED_RUNTIME_SHA'])
                   product_id = shlex.quote(os.environ['OPS_PRODUCT_ID'])
+                  notification_public_key = shlex.quote(os.environ['OPS_NOTIFICATION_PUBLIC_KEY'])
                   lines = [
                       'set -Eeuo pipefail',
                       'umask 077',
@@ -280,6 +299,8 @@ jobs:
                       lines.append(transport('deploy/verify-runtime-security-dependencies.cjs', 'verify-runtime-security-dependencies.cjs'))
                   if operation_name in {'preflight-release', 'postflight-release', 'inspect-storefront-config'}:
                       lines.append(transport('deploy/storefront-configuration-guard.mjs', 'storefront-configuration-guard.mjs'))
+                  if operation_name in {'inspect-notification-config', 'enable-unified-notifications', 'prepare-notification-secret-transfer'}:
+                      lines.append(transport('deploy/notification-configuration-guard.mjs', 'notification-configuration-guard.mjs'))
                   if operation_name == 'diagnose':
                       lines.append(transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'))
                   if operation_name == 'preflight-release':
@@ -319,7 +340,7 @@ jobs:
                   if 'asset-webp-migration' in operation_name:
                       lines.append(transport('packages/dev-server/scripts/asset-webp-migration.mjs', 'repository/packages/dev-server/scripts/asset-webp-migration.mjs'))
                   lines.append(
-                      f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} OPS_PRODUCT_ID={product_id} /usr/bin/node "$operations_dir/production-operations.cjs"'
+                      f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} OPS_PRODUCT_ID={product_id} OPS_NOTIFICATION_PUBLIC_KEY={notification_public_key} /usr/bin/node "$operations_dir/production-operations.cjs"'
                   )
                   command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join(lines) + '\nVENDURE_OPERATIONS_SCRIPT'
                   payload = json.dumps({'commands': [command], 'executionTimeout': ['600']})

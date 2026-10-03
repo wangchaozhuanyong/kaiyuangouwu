@@ -3,6 +3,7 @@ import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin'
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { mergeConfig, PaymentMethodHandler } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -38,6 +39,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        OperationsDashboardPlugin,
         CatalogManagementPlugin,
         ContentTranslationPlugin.init({
             provider: {
@@ -231,7 +233,7 @@ describe.runIf(process.env.DB === 'mysql')('checkout page on isolated MySQL', ()
         const frontend = await createServer({
             configFile: false,
             root: path.resolve(__dirname, '../..'),
-            plugins: [react()],
+            plugins: [OperationsDashboardPlugin, react()],
             server: {
                 host: '127.0.0.1',
                 port: 0,

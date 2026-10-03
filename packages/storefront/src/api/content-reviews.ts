@@ -5,6 +5,7 @@ import type {
     CreateAfterSalesRequestInput,
     CustomerProductActivity,
     CustomerServiceFeedback,
+    CustomerServiceReviewRecord,
     StoreNotificationReference,
     StorefrontAuthSettings,
     StorefrontConfig,
@@ -40,6 +41,29 @@ const defaultAuthSettings: StorefrontAuthSettings = {
 };
 
 export class ContentReviewsApi extends BaseDomainApi {
+    async recordStorefrontHeartbeat(visitorId: string): Promise<boolean> {
+        const { StoreNotificationsApi } = await import('./store-notifications');
+        return new StoreNotificationsApi(this.ctx.request).recordStorefrontHeartbeat(visitorId);
+    }
+    async currentCustomerServiceReview(
+        visitorId: string,
+        orderCode?: string,
+    ): Promise<CustomerServiceReviewRecord | null> {
+        const { StoreNotificationsApi } = await import('./store-notifications');
+        return new StoreNotificationsApi(this.ctx.request).currentCustomerServiceReview(visitorId, orderCode);
+    }
+    async submitCustomerServiceReview(input: {
+        id?: string;
+        visitorId: string;
+        rating: number;
+        tags: string[];
+        comment: string;
+        orderCode?: string;
+    }): Promise<CustomerServiceReviewRecord> {
+        const { StoreNotificationsApi } = await import('./store-notifications');
+        return new StoreNotificationsApi(this.ctx.request).submitCustomerServiceReview(input);
+    }
+
     async myCustomerProductActivity(signal?: AbortSignal): Promise<CustomerProductActivity> {
         const result = await this.request<{ myCustomerProductActivity: CustomerProductActivity }>(
             `query MyCustomerProductActivity {

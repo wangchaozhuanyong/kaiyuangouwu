@@ -53,6 +53,21 @@ export class AdminNotificationConfig extends VendureEntity {
     @Column('boolean', { default: true })
     notifyInventoryEvents: boolean;
 
+    @Column('boolean', { default: false })
+    notifyOnlineReports: boolean;
+
+    @Column('boolean', { default: false })
+    notifyServiceReviews: boolean;
+
+    @Column('boolean', { default: false })
+    notifyPromotionExpiry: boolean;
+
+    @Column('boolean', { default: false })
+    notifyAiCredentials: boolean;
+
+    @Column('boolean', { default: false })
+    notifySecurityEvents: boolean;
+
     @Column('int', { default: 2 })
     inventoryLowThreshold: number;
 

@@ -134,6 +134,9 @@ function validateRequest(environment) {
             'verify-two-factor-backup',
             'verify-security-dependencies',
             'inspect-storefront-config',
+            'inspect-notification-config',
+            'enable-unified-notifications',
+            'prepare-notification-secret-transfer',
             'audit-store-isolation-data',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
@@ -151,6 +154,20 @@ function validateRequest(environment) {
         'Unsupported production operation',
     );
     assert.match(environment.OPS_SOURCE_SHA || '', /^[a-f0-9]{40}$/u, 'Invalid operations source SHA');
+    const notificationPublicKey = environment.OPS_NOTIFICATION_PUBLIC_KEY || '';
+    if (operation === 'prepare-notification-secret-transfer') {
+        assert.match(
+            notificationPublicKey,
+            /^[A-Za-z0-9+/=]{400,1000}$/u,
+            'Invalid notification recipient key',
+        );
+    } else {
+        assert.equal(
+            notificationPublicKey,
+            '',
+            'Only encrypted notification transfer accepts a recipient key',
+        );
+    }
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
     const expectedChannelCodes = environment.OPS_EXPECTED_CHANNEL_CODES || '';
     const expectedRuntimeSha = environment.OPS_EXPECTED_RUNTIME_SHA || '';
@@ -2099,10 +2116,14 @@ function runStoreIsolationAudit(
             },
         );
         if (result.status !== 0) {
-            const safeFailure = String(result.stderr || '').split(/\r?\n/u).find(line =>
-                /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+            const safeFailure = String(result.stderr || '')
+                .split(/\r?\n/u)
+                .find(line =>
+                    /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+                );
+            throw new Error(
+                `The fixed read-only store isolation audit failed${safeFailure ? ` (${safeFailure})` : ''}`,
             );
-            throw new Error(`The fixed read-only store isolation audit failed${safeFailure ? ` (${safeFailure})` : ''}`);
         }
         payload = validateStoreAutonomyAuditPayload(String(result.stdout || '').trim());
     } catch (error) {
@@ -2141,43 +2162,82 @@ function runPlatformGovernanceDataPreflight(
         inspect = inspectProductionReleases,
         spawn = spawnSync,
         health = productionHealthSnapshot,
-        script = path.join(__dirname, 'repository', 'packages', 'dev-server', 'scripts', 'platform-governance-data-preflight.mjs'),
-        persistPlan = compressed => require('./governance-preflight-transport.cjs').persist(__dirname, compressed),
+        script = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'platform-governance-data-preflight.mjs',
+        ),
+        persistPlan = compressed =>
+            require('./governance-preflight-transport.cjs').persist(__dirname, compressed),
     } = {},
 ) {
     assert.equal(request.operation, 'plan-platform-store-governance');
     const before = inspect();
-    assert.equal(before.markerSha, request.expectedRuntimeSha, 'Production runtime SHA changed or was not reviewed');
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
     assertProductionHealthSnapshot(health(), 'before');
     let payload;
     let auditError;
     try {
         const result = spawn('/usr/bin/node', ['--env-file=' + PRODUCTION_ENVIRONMENT_FILE, script], {
-            encoding: 'utf8', timeout: 540000, maxBuffer: 1024 * 1024,
+            encoding: 'utf8',
+            timeout: 540000,
+            maxBuffer: 1024 * 1024,
             stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
         });
         if (result.status !== 0) {
-            const safeFailure = String(result.stderr || '').split(/\r?\n/u).find(line =>
-                /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+            const safeFailure = String(result.stderr || '')
+                .split(/\r?\n/u)
+                .find(line =>
+                    /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+                );
+            throw new Error(
+                `The fixed platform governance data preflight failed${safeFailure ? ` (${safeFailure})` : ''}`,
             );
-            throw new Error(`The fixed platform governance data preflight failed${safeFailure ? ` (${safeFailure})` : ''}`);
         }
-        try { payload = JSON.parse(String(result.stdout || '')); }
-        catch { throw new Error('Platform governance preflight returned invalid JSON'); }
+        try {
+            payload = JSON.parse(String(result.stdout || ''));
+        } catch {
+            throw new Error('Platform governance preflight returned invalid JSON');
+        }
         assert.equal(payload.schema, 'vendure-platform-governance-production-preflight-v1');
         assert.equal(payload.mode, 'READ_ONLY');
         assert.equal(payload.productionApply, false);
         assert.match(payload.snapshotHash, /^[a-f0-9]{64}$/u);
-        assert.ok(['resourceCount', 'unresolvedResourceCount', 'paymentMethodCount', 'enabledStoreSwitchCount']
-            .every(key => Number.isSafeInteger(payload[key]) && payload[key] >= 0));
+        assert.ok(
+            [
+                'resourceCount',
+                'unresolvedResourceCount',
+                'paymentMethodCount',
+                'enabledStoreSwitchCount',
+            ].every(key => Number.isSafeInteger(payload[key]) && payload[key] >= 0),
+        );
         assert.ok(typeof payload.compressedPlan === 'string' && payload.compressedPlan.length <= 512000);
         assert.match(payload.compressedPlan, /^[A-Za-z0-9+/]+={0,2}$/u);
-        assert.deepEqual(Object.keys(payload).sort(), [
-            'schema', 'mode', 'productionApply', 'snapshotHash', 'resourceCount',
-            'unresolvedResourceCount', 'paymentMethodCount', 'enabledStoreSwitchCount', 'compressedPlan',
-        ].sort());
-    } catch (error) { auditError = error; }
+        assert.deepEqual(
+            Object.keys(payload).sort(),
+            [
+                'schema',
+                'mode',
+                'productionApply',
+                'snapshotHash',
+                'resourceCount',
+                'unresolvedResourceCount',
+                'paymentMethodCount',
+                'enabledStoreSwitchCount',
+                'compressedPlan',
+            ].sort(),
+        );
+    } catch (error) {
+        auditError = error;
+    }
     // Always verify the runtime and health after a failed read as well.
     assert.deepEqual(inspect(), before, 'Production release state changed during the governance preflight');
     assertProductionHealthSnapshot(health(), 'after');
@@ -2678,6 +2738,53 @@ function runLocked(environment = process.env) {
         process.stdout.write(storefront.stdout);
         process.stdout.write(migrations.stdout);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=preflight-release\n');
+        return;
+    }
+    if (
+        [
+            'inspect-notification-config',
+            'enable-unified-notifications',
+            'prepare-notification-secret-transfer',
+        ].includes(request.operation)
+    ) {
+        const plan = inspectProductionReleases();
+        assert.equal(
+            plan.markerSha,
+            request.sourceSha,
+            'Notification operations require the deployed source SHA',
+        );
+        const result = spawnSync(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                path.join(__dirname, 'notification-configuration-guard.mjs'),
+                request.operation === 'enable-unified-notifications'
+                    ? 'enable'
+                    : request.operation === 'prepare-notification-secret-transfer'
+                      ? 'transfer'
+                      : 'inspect',
+            ],
+            {
+                encoding: 'utf8',
+                timeout: 180000,
+                maxBuffer: 16384,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, OPS_SOURCE_SHA: request.sourceSha },
+            },
+        );
+        assert.equal(
+            result.status,
+            0,
+            /^NOTIFICATION_[A-Z_:]+\n$/.test(result.stderr || '')
+                ? result.stderr.trim()
+                : 'Notification configuration failed',
+        );
+        assert.ok(
+            result.stdout.endsWith('NOTIFICATION_CONFIGURATION_OK\n'),
+            'Notification receipt is incomplete',
+        );
+        process.stdout.write(result.stdout);
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
         return;
     }
     if (request.operation === 'inspect-storefront-config') {

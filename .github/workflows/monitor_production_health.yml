@@ -41,6 +41,10 @@ jobs:
             INSTANCE_ID: i-041a146558e432cbf
 
         steps:
+            - name: Check out the audited revision
+              if: always()
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
             - name: Configure short-lived AWS credentials
               uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
               with:
@@ -230,3 +234,28 @@ jobs:
                     jq -r '.Output' "$RUNNER_TEMP/production-health.json"
                     echo '```'
                   } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Restore notification incident state
+              if: always()
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .notification-monitor-state
+                  key: production-notification-state-${{ github.run_id }}
+                  restore-keys: production-notification-state-
+
+            - name: Notify confirmed outages and inspection failures in Chinese
+              if: always()
+              env:
+                  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+                  TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+                  TELEGRAM_EMERGENCY_ENABLED: ${{ vars.TELEGRAM_EMERGENCY_ENABLED }}
+                  VENDURE_NOTIFICATION_STATE_FILE: ${{ github.workspace }}/.notification-monitor-state/state.json
+                  PRODUCTION_HEALTH_RESULT: ${{ runner.temp }}/production-health.json
+              run: node deploy/monitor-notifications.mjs
+
+            - name: Persist notification incident state
+              if: always()
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .notification-monitor-state
+                  key: production-notification-state-${{ github.run_id }}

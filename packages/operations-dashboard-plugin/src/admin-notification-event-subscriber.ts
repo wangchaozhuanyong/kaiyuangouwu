@@ -1,14 +1,16 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
 import {
     EventBus,
     Fulfillment,
     FulfillmentEvent,
     FulfillmentStateTransitionEvent,
+    LanguageCode,
     OrderPlacedEvent,
     PaymentStateTransitionEvent,
     ProductVariant,
     ProductVariantService,
     RefundStateTransitionEvent,
+    RequestContextService,
     StockMovementEvent,
     TransactionalConnection,
 } from '@vendure/core';
@@ -30,6 +32,7 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
         private readonly productVariantService: ProductVariantService,
         private readonly configService: AdminNotificationConfigService,
         private readonly notifications: AdminNotificationService,
+        @Optional() private readonly contexts?: RequestContextService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -73,7 +76,8 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
             sourceId: String(order.id),
             dedupKey: `commerce.order.placed:${order.id}`,
             title: `新订单 ${order.code}`,
-            payload: orderPayload(event.ctx.channelId, order),
+            payload: orderPayload(order.salesChannelId ?? event.ctx.channelId, order),
+            silent: false,
         });
     }
 
@@ -88,8 +92,9 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
             sourceId: String(event.payment.id),
             dedupKey: `${mapped.eventType}:${event.payment.id}`,
             title: `${mapped.title} · 订单 ${event.order.code}`,
+            ...(event.toState === 'Settled' ? { silent: false } : {}),
             payload: {
-                ...orderPayload(event.ctx.channelId, event.order),
+                ...orderPayload(event.order.salesChannelId ?? event.ctx.channelId, event.order),
                 paymentId: String(event.payment.id),
                 paymentMethod: event.payment.method,
                 amount: money(event.payment.amount, event.order.currencyCode),
@@ -112,7 +117,7 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
                 dedupKey: `commerce.fulfillment.created:${event.entity.id}:${order.id}`,
                 title: `订单 ${order.code} 已创建履约`,
                 payload: {
-                    ...orderPayload(event.ctx.channelId, order),
+                    ...orderPayload(order.salesChannelId ?? event.ctx.channelId, order),
                     fulfillmentId: String(event.entity.id),
                     toState: event.entity.state,
                 },
@@ -141,7 +146,7 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
                 dedupKey: `${mapped.eventType}:${fulfillment.id}:${order.id}`,
                 title: `${mapped.title} · 订单 ${order.code}`,
                 payload: {
-                    ...orderPayload(event.ctx.channelId, order),
+                    ...orderPayload(order.salesChannelId ?? event.ctx.channelId, order),
                     fulfillmentId: String(fulfillment.id),
                     fromState: event.fromState,
                     toState: event.toState,
@@ -163,7 +168,7 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
             dedupKey: `${mapped.eventType}:${event.refund.id}`,
             title: `${mapped.title} · 订单 ${event.order.code}`,
             payload: {
-                ...orderPayload(event.ctx.channelId, event.order),
+                ...orderPayload(event.order.salesChannelId ?? event.ctx.channelId, event.order),
                 refundId: String(event.refund.id),
                 amount: money(event.refund.total, event.order.currencyCode),
                 paymentMethod: event.refund.method,
@@ -184,35 +189,63 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
         ];
         for (const variantId of variantIds) {
             const variant = await this.connection.getEntityOrThrow(event.ctx, ProductVariant, variantId, {
-                relations: ['product'],
+                relations: ['product', 'channels', 'translations'],
             });
-            const saleableStock = await this.productVariantService.getSaleableStockLevel(event.ctx, variant);
-            if (saleableStock === Number.MAX_SAFE_INTEGER) continue;
-            const fingerprint = `inventory.variant.low:${event.ctx.channelId}:${variant.id}`;
-            if (saleableStock <= config.inventoryLowThreshold) {
-                await this.notifications.upsertIncident(event.ctx, {
-                    eventType: 'inventory.variant.low',
-                    category: 'INVENTORY',
-                    severity: saleableStock <= 0 ? 'P0' : 'P1',
-                    sourceType: 'ProductVariant',
-                    sourceId: String(variant.id),
-                    fingerprint,
-                    title: `${variant.sku} 可售库存不足`,
-                    payload: {
-                        channelId: String(event.ctx.channelId),
-                        variantId: String(variant.id),
-                        sku: variant.sku,
-                        variantName: variant.name,
+            const channels = variant.channels?.length ? variant.channels : [event.ctx.channel];
+            for (const channel of channels) {
+                if (!channel) continue;
+                if (
+                    channel.code === '__default_channel__' &&
+                    this.connection.rawConnection.hasMetadata('StoreDomain')
+                ) {
+                    const domain = await this.connection.rawConnection
+                        .getRepository('StoreDomain')
+                        .findOne({ where: { channelId: channel.id, status: 'ACTIVE', isPrimary: true } });
+                    if (!domain) continue;
+                }
+                const ctx = this.contexts
+                    ? await this.contexts.create({
+                          apiType: 'admin',
+                          channelOrToken: channel,
+                          languageCode: LanguageCode.zh_Hans,
+                      })
+                    : event.ctx;
+                const saleableStock = await this.productVariantService.getSaleableStockLevel(ctx, variant);
+                const fingerprint = `inventory.variant.low:${ctx.channelId}:${variant.id}`;
+                if (saleableStock === Number.MAX_SAFE_INTEGER) {
+                    await this.notifications.resolveIncident(ctx, fingerprint, {
+                        reason: '商品改为无限库存，不再监测低库存',
+                    });
+                    continue;
+                }
+                if (saleableStock <= config.inventoryLowThreshold) {
+                    await this.notifications.upsertIncident(ctx, {
+                        eventType: 'inventory.variant.low',
+                        category: 'INVENTORY',
+                        severity: saleableStock <= 0 ? 'P0' : 'P1',
+                        sourceType: 'ProductVariant',
+                        sourceId: String(variant.id),
+                        fingerprint,
+                        title: `${variant.sku} 可售库存不足`,
+                        payload: {
+                            channelId: String(ctx.channelId),
+                            variantId: String(variant.id),
+                            sku: variant.sku,
+                            variantName:
+                                variant.translations?.find(
+                                    translation => translation.languageCode === LanguageCode.zh_Hans,
+                                )?.name ?? variant.name,
+                            saleableStock,
+                            threshold: config.inventoryLowThreshold,
+                            adminPath: `/catalog/products/${variant.productId}`,
+                        },
+                    });
+                } else {
+                    await this.notifications.resolveIncident(ctx, fingerprint, {
                         saleableStock,
                         threshold: config.inventoryLowThreshold,
-                        adminPath: `/catalog/products/${variant.productId}`,
-                    },
-                });
-            } else {
-                await this.notifications.resolveIncident(event.ctx, fingerprint, {
-                    saleableStock,
-                    threshold: config.inventoryLowThreshold,
-                });
+                    });
+                }
             }
         }
     }
@@ -245,6 +278,11 @@ export class AdminNotificationEventSubscriber implements OnApplicationBootstrap,
 function orderPayload(channelId: unknown, order: OrderPlacedEvent['order']) {
     return {
         channelId: String(channelId),
+        products: order.lines
+            ?.slice(0, 5)
+            .map(line => `${line.productVariant?.name ?? '商品'} × ${line.quantity}`)
+            .join('、'),
+        orderState: order.state,
         orderId: String(order.id),
         orderCode: order.code,
         currencyCode: order.currencyCode,
