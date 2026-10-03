@@ -1034,7 +1034,7 @@ describe('platform governance real database and API boundaries', () => {
         const retention = server.app.get(DataRetentionService);
         const record = await retention.quarantineAvatar(
             a,
-            { id: '2147483000' } as Asset,
+            new Asset({ id: '2147483000' }),
             'synthetic-subject',
             'REPLACED',
         );
