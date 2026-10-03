@@ -160,10 +160,12 @@
 .address-default-toggle input {
     width: 17px;
     height: 17px;
+    flex: 0 0 17px;
     accent-color: var(--selection);
 }
 
-.address-default-toggle span {
+.address-form .address-default-toggle > span {
+    min-width: 0;
     margin: 0;
 }
 

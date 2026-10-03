@@ -25,6 +25,7 @@ import {
     Tag,
     TransactionalConnection,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { GovernanceService, StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -44,6 +45,7 @@ describe.skipIf(process.env.PLATFORM_GOVERNANCE_CI_MYSQL !== '1')(
             apiOptions: { port: 3478 },
             entityOptions: { entityIdStrategy: new AutoIncrementIdStrategy() },
             plugins: [
+                OperationsDashboardPlugin,
                 CatalogManagementPlugin,
                 StorefrontContentPlugin,
                 StorefrontCartPlugin,

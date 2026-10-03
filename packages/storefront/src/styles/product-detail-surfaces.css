@@ -387,7 +387,7 @@
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
 }
@@ -398,9 +398,7 @@
 }
 
 .detail-quantity .quantity-control {
-    width: 100%;
-    min-width: 0;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    justify-self: end;
     border-color: var(--skin-divider);
     background: var(--surface);
 }

@@ -155,7 +155,8 @@ describe('admin record pagination', () => {
         expect(query.requests.at(-1)?.options).toMatchObject({ skip: 0, take: 20 });
         await click(container, '下一页');
         expect(container.querySelector('tbody tr')?.textContent).toContain('item-21');
-        const region = container.querySelector<HTMLElement>('[aria-label="翻译审计记录"]')!;
+        // The compact layout scrolls the page content; the table region only scrolls horizontally.
+        const region = container.querySelector<HTMLElement>('main')!;
         region.scrollTop = 300;
         await select(container, '每页显示条数', '50');
         expect(container.querySelectorAll('tbody tr')).toHaveLength(50);

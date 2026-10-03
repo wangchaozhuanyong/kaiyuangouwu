@@ -608,7 +608,7 @@ describe('product image navigation layers', () => {
             String.raw`\.desktop-store-layout\s+\.desktop-product-toolbar-share`,
         );
 
-        expect(toolbarRule).toMatch(/min-height:\s*40px;/);
+        expect(toolbarRule).toMatch(/min-height:\s*var\(--experience-control-min\);/);
         expect(toolbarRule).toMatch(/justify-content:\s*space-between;/);
         expect(shareRule).toMatch(/background:\s*var\(--accent-soft\);/);
     });

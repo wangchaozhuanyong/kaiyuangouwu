@@ -10,6 +10,7 @@ import {
     createInputReader,
     missingPlan,
     requiredJobs,
+    sharedInputFingerprint,
 } from './ci-check-inputs.mjs';
 import {
     affectedFrontendsForFile,
@@ -210,6 +211,7 @@ export async function findInputCoverage({
     const fingerprints = new Map(
         required.map(check => [check.id, checkFingerprint(targetSha, check, inventory, reader)]),
     );
+    const targetSharedInputs = sharedInputFingerprint(targetSha, reader);
     const reused = [];
     let anchor;
     // Other Actions workflows can fill the repository-wide first page, or leave it stale.
@@ -267,7 +269,14 @@ export async function findInputCoverage({
         }
         const matching = [];
         const fullFrontendMatches = new Map();
+        let sharedInputsMatch = false;
+        try {
+            sharedInputsMatch = sharedInputFingerprint(sourceRef, reader) === targetSharedInputs;
+        } catch {
+            // Missing historical objects cannot supply reusable evidence.
+        }
         for (const check of missing.values()) {
+            if (!sharedInputsMatch && check.kind !== 'architecture') continue;
             try {
                 if (checkFingerprint(sourceRef, check, inventory, reader) === fingerprints.get(check.id))
                     matching.push(check);

@@ -38,8 +38,8 @@ describe('commerce mode rules', () => {
     });
 
     it('separates product collections into first-level and second-level category summaries', () => {
-        const root = { id: 'root', name: '__root_collection__' };
-        const tobacco = { id: 'tobacco', name: '正品烟草' };
+        const root = { id: 'root', name: '__root_collection__', slug: '__root_collection__' };
+        const tobacco = { id: 'tobacco', name: '正品烟草', slug: 'tobacco' };
         const cigarettes = { id: 'cigarettes', name: '香烟' };
         const cigars = { id: 'cigars', name: '雪茄' };
 
@@ -61,7 +61,7 @@ describe('commerce mode rules', () => {
                 {
                     id: 'cigarettes',
                     name: '香烟',
-                    parent: { id: 'tobacco', name: '正品烟草' },
+                    parent: { id: 'tobacco', name: '正品烟草', slug: 'tobacco' },
                 },
             ]),
         ).toEqual({
@@ -69,4 +69,22 @@ describe('commerce mode rules', () => {
             secondLevel: { primary: '香烟', extraCount: 0 },
         });
     });
+
+    it.each(['未填写中文名称', 'English name not set'])(
+        'does not expose the structural root when its localized name is %s',
+        name => {
+            expect(
+                collectionHierarchySummary([
+                    {
+                        id: 'codex',
+                        name: 'Codex订阅',
+                        parent: { id: 'root', name, slug: '__root_collection__' },
+                    },
+                ]),
+            ).toEqual({
+                topLevel: { primary: 'Codex订阅', extraCount: 0 },
+                secondLevel: { primary: '未分类', extraCount: 0 },
+            });
+        },
+    );
 });

@@ -17,7 +17,11 @@ import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
-import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
+import {
+    newAccountHeroBlock,
+    newContentBlock,
+    newContentItem,
+} from '../../src/pages/Storefront/storefront-content-utils';
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
@@ -88,6 +92,53 @@ if (params.has('original')) {
     for (const block of blocks) {
         if (block.type === 'HERO') block.settings = { ...block.settings, themePreset: 'bright' };
     }
+}
+if (params.has('managedImages')) {
+    const hero = blocks.find(block => block.id === 'hero-a')!;
+    if (params.has('tallHero')) {
+        asset.height = 1000;
+        hero.imageAsset = {
+            ...asset,
+            preview: '/assets/fixture-carousel.svg?tall=1',
+            source: '/assets/fixture-carousel.svg?tall=1',
+        };
+    }
+    if (params.has('heroStats')) {
+        hero.items = Array.from({ length: 8 }, (_, position) => {
+            const item = newContentItem(position);
+            item.translations[0].label = `布局示例 ${position + 1}`;
+            item.translations[0].description = `已配置统计说明 ${position + 1}`;
+            return item;
+        });
+    }
+    for (const block of blocks) if (block.id === 'hero-b') block.enabled = false;
+    Object.assign(hero.translations[0], {
+        title: '为马来西亚的家，甄选舒适好物',
+        subtitle: 'FLASH CAST · HOME & LIVING',
+        body: '从卧室、客厅到餐厅与书房，为日常空间挑选耐看、实用的家具与家居。',
+        ctaLabel: '浏览家具',
+    });
+    hero.targetType = 'PAGE';
+    hero.targetValue = 'category';
+    const trust = newContentBlock('TRUST_BAR', 2, '服务保障');
+    trust.enabled = true;
+    trust.items = ['马币标价', '订单可查', '在马客服', '按需询价'].map((label, position) => {
+        const item = newContentItem(position);
+        item.translations[0].label = label;
+        return item;
+    });
+    const account = newAccountHeroBlock(0);
+    blocks.push(
+        ...[trust, account].map((block, index) => ({
+            ...block,
+            __typename: 'StorefrontContentBlock',
+            id: `managed-image-${index}`,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: '2026-09-01T00:00:00Z',
+            imageAsset: index === 1 ? asset : null,
+            imageUrl: index === 1 ? asset.preview : null,
+        })),
+    );
 }
 if (params.has('gallery')) {
     const gallery = newContentBlock('QUICK_LINKS', 3, '精选分类');
@@ -372,7 +423,7 @@ const channel = params.has('platform-channel')
     : storeChannel;
 // Public Shop responses for the isolated parity exercise. No real store is contacted.
 if (params.has('parity')) {
-    asset.preview = '/assets/fixture-carousel.svg';
+    asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (input, init) => {
@@ -381,10 +432,16 @@ if (params.has('parity')) {
             const data = fixtureData(
                 params.get('preset') ?? 'classic',
                 false,
-                params.has('auth') ? 'auth-referral' : 'normal',
+                params.has('auth') || params.has('managedImages') ? 'auth-referral' : 'normal',
             );
             data.activeChannel = { ...data.activeChannel, id: channel.id, code: channel.code };
             data.storefrontVisualPreset.channelId = channel.id;
+            if (params.has('managedImages'))
+                data.storefrontDailyRecommendations = {
+                    businessDate: '2026-10-03',
+                    expiresAt: '2099-01-01T00:00:00Z',
+                    items: data.products.items,
+                };
             data.storefrontContent = blocks
                 .map(block =>
                     decorationDraft(block, url.searchParams.get('languageCode') === 'en' ? 'en' : 'zh_Hans'),

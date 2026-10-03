@@ -278,7 +278,8 @@
 }
 
 /* Gallery is the shared, quiet merchandising variant; commerce cards stay unchanged. */
-.product-card.is-gallery {
+.product-card.is-gallery,
+.product-card.is-mosaic {
     --product-card-inset: 0;
     overflow: visible;
     border: 0;
@@ -287,15 +288,18 @@
     box-shadow: none;
 }
 
-.product-card.is-gallery:hover {
+.product-card.is-gallery:hover,
+.product-card.is-mosaic:hover {
     background: transparent;
 }
 
-.product-card.is-gallery .product-card-media {
+.product-card.is-gallery .product-card-media,
+.product-card.is-mosaic .product-card-media {
     border-radius: var(--skin-media-radius);
 }
 
-.product-card.is-gallery .product-card-name {
+.product-card.is-gallery .product-card-name,
+.product-card.is-mosaic .product-card-name {
     margin-top: 12px;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -303,15 +307,18 @@
     line-height: 1.55;
 }
 
-.product-card.is-gallery .product-card-content > footer {
+.product-card.is-gallery .product-card-content > footer,
+.product-card.is-mosaic .product-card-content > footer {
     padding-top: 8px;
 }
 
-.product-card.is-gallery .product-card-price {
+.product-card.is-gallery .product-card-price,
+.product-card.is-mosaic .product-card-price {
     color: var(--text);
 }
 
-.product-card.is-gallery .price-lockup {
+.product-card.is-gallery .price-lockup,
+.product-card.is-mosaic .price-lockup {
     font-size: 16px;
     font-weight: var(--font-weight-semibold);
 }

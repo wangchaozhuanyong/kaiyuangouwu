@@ -13,7 +13,6 @@ import {
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
-import { useDesktopLayout } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import {
@@ -23,7 +22,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
-import { EmptyState, Sheet, SubHeader } from './storefront-ui/page-shell';
+import { EmptyState, Sheet, SubHeader, SubpageBody } from './storefront-ui/page-shell';
 import { formatMoney, SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -68,7 +67,6 @@ export function ReviewCenterPage({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const queryClient = useQueryClient();
     const reviewsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReviews(
@@ -138,283 +136,314 @@ export function ReviewCenterPage({
     return (
         <main className="page subpage review-center-page">
             <SubHeader title={isZh ? '评价中心' : 'Reviews'} language={language} onBack={onBack} />
-            {!customer ? (
-                <EmptyState
-                    icon={<MessageSquare />}
-                    title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
-                    detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={onSignIn}
-                />
-            ) : reviewsQuery.isLoading || candidatesQuery.isLoading ? (
-                <div className="review-center-loading" aria-busy="true">
-                    <span />
-                    <span />
-                    <span />
-                </div>
-            ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
-              (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
-              reviewsQuery.isError ||
-              candidatesQuery.isError ? (
-                <EmptyState
-                    icon={<RefreshCw />}
-                    title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
-                    detail={
-                        reviewsQuery.isPaused || candidatesQuery.isPaused
-                            ? offlineLoadError(language)
-                            : reviewsQuery.error instanceof Error
-                              ? storefrontErrorMessage(reviewsQuery.error, language)
-                              : candidatesQuery.error instanceof Error
-                                ? storefrontErrorMessage(candidatesQuery.error, language)
-                                : ''
-                    }
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
-                />
-            ) : (
-                <>
-                    {desktop && (
-                        <div className="desktop-account-workbench-toolbar review-center-toolbar">
+            <SubpageBody>
+                {!customer ? (
+                    <EmptyState
+                        icon={<MessageSquare />}
+                        title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
+                        detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
+                        action={isZh ? '去登录' : 'Sign in'}
+                        onAction={onSignIn}
+                    />
+                ) : reviewsQuery.isLoading || candidatesQuery.isLoading ? (
+                    <div className="review-center-loading" aria-busy="true">
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
+                  (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
+                  reviewsQuery.isError ||
+                  candidatesQuery.isError ? (
+                    <EmptyState
+                        icon={<RefreshCw />}
+                        title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
+                        detail={
+                            reviewsQuery.isPaused || candidatesQuery.isPaused
+                                ? offlineLoadError(language)
+                                : reviewsQuery.error instanceof Error
+                                  ? storefrontErrorMessage(reviewsQuery.error, language)
+                                  : candidatesQuery.error instanceof Error
+                                    ? storefrontErrorMessage(candidatesQuery.error, language)
+                                    : ''
+                        }
+                        action={isZh ? '重试' : 'Retry'}
+                        onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
+                    />
+                ) : (
+                    <div className="review-center-workspace">
+                        <header className="review-center-header">
                             <h1>{isZh ? '评价中心' : 'Reviews'}</h1>
-                            <div role="tablist" aria-label={isZh ? '评价列表' : 'Review lists'}>
+                            <div
+                                className="review-center-tabs"
+                                role="tablist"
+                                aria-label={isZh ? '评价列表' : 'Review lists'}
+                                onKeyDown={event => {
+                                    const tabs = Array.from(
+                                        event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                                            '[role="tab"]',
+                                        ),
+                                    );
+                                    const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+                                    const next =
+                                        event.key === 'Home'
+                                            ? 0
+                                            : event.key === 'End'
+                                              ? tabs.length - 1
+                                              : event.key === 'ArrowRight'
+                                                ? (index + 1) % tabs.length
+                                                : event.key === 'ArrowLeft'
+                                                  ? (index + tabs.length - 1) % tabs.length
+                                                  : null;
+                                    if (next === null) return;
+                                    event.preventDefault();
+                                    tabs[next].focus();
+                                    tabs[next].click();
+                                }}
+                            >
                                 <button
                                     type="button"
                                     role="tab"
+                                    id="review-pending-tab"
                                     aria-selected={activeList === 'pending'}
+                                    tabIndex={activeList === 'pending' ? 0 : -1}
                                     aria-controls="review-pending-panel"
                                     onClick={() => setActiveList('pending')}
                                 >
-                                    {isZh
-                                        ? `待评价 ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`
-                                        : `To review ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`}
+                                    <span>{isZh ? '待评价' : 'To review'}</span>
+                                    <span className="review-section-count">
+                                        {candidates.length}
+                                        {candidatesQuery.hasNextPage ? '+' : ''}
+                                    </span>
                                 </button>
                                 <button
                                     type="button"
                                     role="tab"
+                                    id="review-submitted-tab"
                                     aria-selected={activeList === 'submitted'}
+                                    tabIndex={activeList === 'submitted' ? 0 : -1}
                                     aria-controls="review-submitted-panel"
                                     onClick={() => setActiveList('submitted')}
                                 >
-                                    {isZh ? `本次提交 ${reviews.length}` : `Submitted ${reviews.length}`}
+                                    <span>{isZh ? '我的评价' : 'My reviews'}</span>
+                                    <span className="review-section-count">{reviews.length}</span>
                                 </button>
                             </div>
-                        </div>
-                    )}
-                    {selected && (
-                        <ReviewComposer
-                            key={selected.orderLineId}
-                            draft={drafts.current.get(selected.orderLineId)}
-                            onDraftChange={draft => drafts.current.set(selected.orderLineId, draft)}
-                            candidate={selected}
-                            language={language}
-                            locale={market.locale}
-                            onCancel={() => setSelected(null)}
-                            onSubmit={submit}
-                        />
-                    )}
-                    <section
-                        id="review-pending-panel"
-                        role={desktop ? 'tabpanel' : undefined}
-                        hidden={desktop && activeList !== 'pending'}
-                        className="review-center-section review-center-pending"
-                    >
-                        <header>
-                            <div>
-                                <strong>
-                                    {isZh ? '待评价商品' : 'Ready to review'}
-                                    <span className="review-section-count">
-                                        {' '}
-                                        · {candidates.length}
-                                        {candidatesQuery.hasNextPage ? '+' : ''}
-                                    </span>
-                                </strong>
-                                <small>
-                                    {isZh
-                                        ? '选择一件商品，分享你的真实体验'
-                                        : 'Choose an item and share your experience'}
-                                </small>
-                            </div>
                         </header>
-                        {candidates.length ? (
-                            <div className="review-candidate-list" id="review-candidate-list">
-                                {visibleCandidates.map(candidate => {
-                                    const imageUrl = candidate.imageUrl;
-                                    const variantLabel = reviewVariantLabel(candidate);
-                                    return (
-                                        <article key={candidate.orderLineId} className="review-candidate-row">
-                                            <span className="review-candidate-image">
-                                                {imageUrl ? (
-                                                    <SafeImage
-                                                        src={imageUrl}
-                                                        alt=""
-                                                        imageKind="thumbnail"
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                    />
-                                                ) : (
-                                                    <Package aria-hidden="true" />
-                                                )}
-                                            </span>
-                                            <span className="review-candidate-copy">
-                                                <strong>{candidate.productName}</strong>
-                                                {variantLabel && <small>{variantLabel}</small>}
-                                                <small>
-                                                    {isZh ? '含税单价 ' : 'Unit price incl. tax '}
-                                                    {formatMoney(
-                                                        candidate.unitPriceWithTax,
-                                                        candidate.currencyCode,
-                                                        market.locale,
-                                                    )}
-                                                </small>
-                                                <small
-                                                    className="review-candidate-order"
-                                                    title={`${candidate.orderCode} · ${candidate.orderLineId}`}
-                                                >
-                                                    {isZh ? '订单行 ' : 'Line '}
-                                                    {candidate.orderLineId}
-                                                    {' · '}
-                                                    {isZh ? '订单 ' : 'Order '}
-                                                    {candidate.orderCode}
-                                                </small>
-                                            </span>
-                                            <button
-                                                type="button"
-                                                className="review-candidate-action"
-                                                aria-haspopup="dialog"
-                                                aria-expanded={
-                                                    selected?.orderLineId === candidate.orderLineId
-                                                }
-                                                aria-label={`${isZh ? '写评价' : 'Review'}: ${candidate.productName}`}
-                                                onClick={() => setSelected(candidate)}
-                                            >
-                                                {isZh ? '写评价' : 'Review'}
-                                                <ChevronRight aria-hidden="true" />
-                                            </button>
-                                        </article>
-                                    );
-                                })}
-                                {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
-                                    <button
-                                        type="button"
-                                        className="review-candidate-more"
-                                        aria-expanded={showAllCandidates}
-                                        aria-controls="review-candidate-list"
-                                        disabled={candidatesQuery.isFetchingNextPage}
-                                        onClick={() => {
-                                            if (!showAllCandidates) setShowAllCandidates(true);
-                                            else if (candidatesQuery.hasNextPage)
-                                                void candidatesQuery.fetchNextPage();
-                                            else setShowAllCandidates(false);
-                                        }}
-                                    >
-                                        {showAllCandidates
-                                            ? candidatesQuery.isFetchingNextPage
-                                                ? isZh
-                                                    ? '加载中…'
-                                                    : 'Loading…'
-                                                : candidatesQuery.hasNextPage
-                                                  ? isZh
-                                                      ? '加载更多商品'
-                                                      : 'Load more items'
-                                                  : isZh
-                                                    ? '收起列表'
-                                                    : 'Show fewer'
-                                            : isZh
-                                              ? '查看其余商品'
-                                              : 'Show more items'}
-                                        {!showAllCandidates || !candidatesQuery.hasNextPage ? (
-                                            <ChevronDown aria-hidden="true" />
-                                        ) : null}
-                                    </button>
-                                )}
-                                {candidatesQuery.isFetchNextPageError && (
-                                    <p className="review-center-hint" role="alert">
-                                        {isZh
-                                            ? '加载更多商品失败，请重试'
-                                            : 'Could not load more items. Try again.'}
-                                    </p>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="review-center-hint">
-                                {isZh
-                                    ? '付款成功的商品均可在此评价，欢迎分享真实体验'
-                                    : 'Paid items will appear here for you to share your experience'}
-                            </p>
-                        )}
-                    </section>
-                    <section
-                        id="review-submitted-panel"
-                        role={desktop ? 'tabpanel' : undefined}
-                        hidden={desktop && activeList !== 'submitted'}
-                        className="review-center-section"
-                    >
-                        <header>
-                            <div>
-                                <strong>{isZh ? '我的评价' : 'My reviews'}</strong>
-                                <small>
-                                    {isZh
-                                        ? '查看已提交的评价与审核状态'
-                                        : 'View submitted reviews and status'}
-                                </small>
-                            </div>
-                            <span>{reviews.length}</span>
-                        </header>
-                        {reviews.length ? (
-                            <div className="my-review-list">
-                                {reviews.map(review => (
-                                    <article key={review.id}>
-                                        <header>
-                                            <button
-                                                type="button"
-                                                disabled={!review.productId}
-                                                onClick={() =>
-                                                    review.productId && onProduct(review.productId)
-                                                }
-                                            >
-                                                {review.productName}
-                                            </button>
-                                            <ReviewStateBadge state={review.state} language={language} />
-                                        </header>
-                                        <ReviewStars rating={review.rating} />
-                                        <strong>{review.title}</strong>
-                                        <p>{review.body}</p>
-                                        {review.images?.length > 0 && (
-                                            <ReviewImageGallery images={review.images} language={language} />
-                                        )}
-                                        {review.merchantResponse && (
-                                            <blockquote>
-                                                <strong>{isZh ? '商家回复' : 'Store response'}</strong>
-                                                {review.merchantResponse}
-                                            </blockquote>
-                                        )}
-                                        <small>{formatReviewDate(review.createdAt, language)}</small>
-                                    </article>
-                                ))}
-                            </div>
-                        ) : candidates.length ? (
-                            <p className="review-center-hint">
-                                {isZh
-                                    ? '还没有提交评价。选择上方商品，写下第一条使用体验。'
-                                    : 'No submitted reviews yet. Choose an item above to write your first one.'}
-                            </p>
-                        ) : (
-                            <EmptyState
-                                compact
-                                icon={<MessageSquare />}
-                                title={isZh ? '还没有评价' : 'No reviews yet'}
-                                detail={
-                                    isZh
-                                        ? '完成购买后可以分享真实体验'
-                                        : 'Share your experience after a purchase'
-                                }
-                                action={isZh ? '去选购' : 'Shop now'}
-                                onAction={onShop}
+                        {selected && (
+                            <ReviewComposer
+                                key={selected.orderLineId}
+                                draft={drafts.current.get(selected.orderLineId)}
+                                onDraftChange={draft => drafts.current.set(selected.orderLineId, draft)}
+                                candidate={selected}
+                                language={language}
+                                locale={market.locale}
+                                onCancel={() => setSelected(null)}
+                                onSubmit={submit}
                             />
                         )}
-                    </section>
-                </>
-            )}
+                        <section
+                            id="review-pending-panel"
+                            role="tabpanel"
+                            aria-labelledby="review-pending-tab"
+                            tabIndex={0}
+                            hidden={activeList !== 'pending'}
+                            className="review-center-section review-center-pending"
+                        >
+                            {candidates.length ? (
+                                <div className="review-candidate-list" id="review-candidate-list">
+                                    {visibleCandidates.map(candidate => {
+                                        const imageUrl = candidate.imageUrl;
+                                        const variantLabel = reviewVariantLabel(candidate);
+                                        return (
+                                            <article
+                                                key={candidate.orderLineId}
+                                                className="review-candidate-row"
+                                            >
+                                                <span className="review-candidate-image">
+                                                    {imageUrl ? (
+                                                        <SafeImage
+                                                            src={imageUrl}
+                                                            alt=""
+                                                            imageKind="thumbnail"
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                        />
+                                                    ) : (
+                                                        <Package aria-hidden="true" />
+                                                    )}
+                                                </span>
+                                                <span className="review-candidate-copy">
+                                                    <strong>{candidate.productName}</strong>
+                                                    {variantLabel && <small>{variantLabel}</small>}
+                                                    <small>
+                                                        {isZh ? '含税单价 ' : 'Unit price incl. tax '}
+                                                        {formatMoney(
+                                                            candidate.unitPriceWithTax,
+                                                            candidate.currencyCode,
+                                                            market.locale,
+                                                        )}
+                                                    </small>
+                                                    <small
+                                                        className="review-candidate-order"
+                                                        title={`${candidate.orderCode} · ${candidate.orderLineId}`}
+                                                    >
+                                                        {isZh ? '订单行 ' : 'Line '}
+                                                        {candidate.orderLineId}
+                                                        {' · '}
+                                                        {isZh ? '订单 ' : 'Order '}
+                                                        {candidate.orderCode}
+                                                    </small>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className="review-candidate-action"
+                                                    aria-haspopup="dialog"
+                                                    aria-expanded={
+                                                        selected?.orderLineId === candidate.orderLineId
+                                                    }
+                                                    aria-label={`${isZh ? '写评价' : 'Review'}: ${candidate.productName}`}
+                                                    onClick={() => setSelected(candidate)}
+                                                >
+                                                    {isZh ? '写评价' : 'Review'}
+                                                    <ChevronRight aria-hidden="true" />
+                                                </button>
+                                            </article>
+                                        );
+                                    })}
+                                    {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
+                                        <button
+                                            type="button"
+                                            className="review-candidate-more"
+                                            aria-expanded={showAllCandidates}
+                                            aria-controls="review-candidate-list"
+                                            disabled={candidatesQuery.isFetchingNextPage}
+                                            onClick={() => {
+                                                if (!showAllCandidates) setShowAllCandidates(true);
+                                                else if (candidatesQuery.hasNextPage)
+                                                    void candidatesQuery.fetchNextPage();
+                                                else setShowAllCandidates(false);
+                                            }}
+                                        >
+                                            {showAllCandidates
+                                                ? candidatesQuery.isFetchingNextPage
+                                                    ? isZh
+                                                        ? '加载中…'
+                                                        : 'Loading…'
+                                                    : candidatesQuery.hasNextPage
+                                                      ? isZh
+                                                          ? '加载更多商品'
+                                                          : 'Load more items'
+                                                      : isZh
+                                                        ? '收起列表'
+                                                        : 'Show fewer'
+                                                : isZh
+                                                  ? '查看其余商品'
+                                                  : 'Show more items'}
+                                            {!showAllCandidates || !candidatesQuery.hasNextPage ? (
+                                                <ChevronDown aria-hidden="true" />
+                                            ) : null}
+                                        </button>
+                                    )}
+                                    {candidatesQuery.isFetchNextPageError && (
+                                        <p className="review-center-hint" role="alert">
+                                            {isZh
+                                                ? '加载更多商品失败，请重试'
+                                                : 'Could not load more items. Try again.'}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    compact
+                                    icon={<Package />}
+                                    title={isZh ? '暂无待评价商品' : 'No items to review'}
+                                    detail={
+                                        isZh
+                                            ? '购买后的可评价商品会显示在这里'
+                                            : 'Eligible purchases will appear here'
+                                    }
+                                    action={isZh ? '去选购' : 'Shop now'}
+                                    onAction={onShop}
+                                />
+                            )}
+                        </section>
+                        <section
+                            id="review-submitted-panel"
+                            role="tabpanel"
+                            aria-labelledby="review-submitted-tab"
+                            tabIndex={0}
+                            hidden={activeList !== 'submitted'}
+                            className="review-center-section"
+                        >
+                            {reviews.length ? (
+                                <div className="my-review-list">
+                                    {reviews.map(review => (
+                                        <article key={review.id}>
+                                            <header>
+                                                <button
+                                                    type="button"
+                                                    disabled={!review.productId}
+                                                    onClick={() =>
+                                                        review.productId && onProduct(review.productId)
+                                                    }
+                                                >
+                                                    {review.productName}
+                                                </button>
+                                                <ReviewStateBadge state={review.state} language={language} />
+                                            </header>
+                                            <ReviewStars rating={review.rating} />
+                                            <strong>{review.title}</strong>
+                                            <p>{review.body}</p>
+                                            {review.images?.length > 0 && (
+                                                <ReviewImageGallery
+                                                    images={review.images}
+                                                    language={language}
+                                                />
+                                            )}
+                                            {review.merchantResponse && (
+                                                <blockquote>
+                                                    <strong>{isZh ? '商家回复' : 'Store response'}</strong>
+                                                    {review.merchantResponse}
+                                                </blockquote>
+                                            )}
+                                            <small>{formatReviewDate(review.createdAt, language)}</small>
+                                        </article>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    compact
+                                    icon={<MessageSquare />}
+                                    title={isZh ? '还没有评价' : 'No reviews yet'}
+                                    detail={
+                                        isZh
+                                            ? '提交后的评价与审核状态会显示在这里'
+                                            : 'Your reviews and their status will appear here'
+                                    }
+                                    action={
+                                        candidates.length
+                                            ? isZh
+                                                ? '去评价'
+                                                : 'Review a purchase'
+                                            : isZh
+                                              ? '去选购'
+                                              : 'Shop now'
+                                    }
+                                    onAction={
+                                        candidates.length
+                                            ? () => {
+                                                  setActiveList('pending');
+                                                  document.getElementById('review-pending-tab')?.focus();
+                                              }
+                                            : onShop
+                                    }
+                                />
+                            )}
+                        </section>
+                    </div>
+                )}
+            </SubpageBody>
         </main>
     );
 }

@@ -1,4 +1,5 @@
 import { Layers, Sliders, Tag } from 'lucide-react';
+import { useId } from 'react';
 import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 
 import { ProductBasicTab } from './ProductBasicTab';
@@ -8,6 +9,7 @@ import { ProductFacetsCollectionsTab } from './ProductFacetsCollectionsTab';
 import { ProductVariantsTab } from './ProductVariantsTab';
 
 export function ProductEditorWorkspace() {
+    const panelId = useId();
     const {
         isCreateMode,
         productData,
@@ -34,7 +36,7 @@ export function ProductEditorWorkspace() {
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'BASIC'}
-                    aria-controls="product-basic-panel"
+                    aria-controls={`${panelId}-basic`}
                     onClick={() => setActiveTab('BASIC')}
                     className={`flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${
                         activeTab === 'BASIC'
@@ -49,7 +51,7 @@ export function ProductEditorWorkspace() {
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'VARIANTS'}
-                    aria-controls="product-variants-panel"
+                    aria-controls={`${panelId}-variants`}
                     onClick={() => setActiveTab('VARIANTS')}
                     className={`flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${
                         activeTab === 'VARIANTS'
@@ -78,7 +80,7 @@ export function ProductEditorWorkspace() {
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'FACETS_COLLECTIONS'}
-                    aria-controls="product-facets-panel"
+                    aria-controls={`${panelId}-facets`}
                     onClick={() => setActiveTab('FACETS_COLLECTIONS')}
                     className={`flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${
                         activeTab === 'FACETS_COLLECTIONS'
@@ -103,7 +105,7 @@ export function ProductEditorWorkspace() {
 
             {activeTab === 'BASIC' && (
                 <div
-                    id="product-basic-panel"
+                    id={`${panelId}-basic`}
                     role="tabpanel"
                     className="order-3 min-w-0 lg:col-start-2 lg:row-start-2"
                 >
@@ -111,7 +113,7 @@ export function ProductEditorWorkspace() {
                 </div>
             )}
             <div
-                id="product-variants-panel"
+                id={`${panelId}-variants`}
                 role="tabpanel"
                 hidden={activeTab !== 'VARIANTS'}
                 className="order-3 min-w-0 lg:col-start-2 lg:row-start-2"
@@ -129,7 +131,7 @@ export function ProductEditorWorkspace() {
             </div>
             {activeTab === 'FACETS_COLLECTIONS' && (
                 <div
-                    id="product-facets-panel"
+                    id={`${panelId}-facets`}
                     role="tabpanel"
                     className="order-3 min-w-0 lg:col-start-2 lg:row-start-2"
                 >

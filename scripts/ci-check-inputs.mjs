@@ -165,6 +165,20 @@ export function createInputReader(root = process.cwd()) {
     };
 }
 
+// These entries are part of every fingerprint except the architecture budget.
+// Rejecting a different shared input first avoids rehashing hundreds of checks
+// for each historical run; matching inputs still require the complete proof.
+export function sharedInputFingerprint(ref, reader) {
+    return digest(
+        JSON.stringify(
+            reader
+                .entries(ref)
+                .filter(({ path }) => !isDocumentation(path) && sharedInput(path))
+                .map(({ path, metadata }) => `${metadata}\t${path}`),
+        ),
+    );
+}
+
 export function checkFingerprint(ref, check, inventory, reader, fullFrontend = false) {
     let names = check.packages;
     if (check.kind === 'dashboard') names = ['dashboard', 'core'];

@@ -29,11 +29,21 @@ describe('desktop catalog navigation', () => {
 
     it('groups catalog heading and controls into one balanced desktop toolbar module', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
+        const toolbar = stylesheet.match(/\.desktop-catalog-toolbar\s*\{([^}]*)\}/u)?.[1];
 
-        expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- This expression guards the complete desktop toolbar module.
-            /\.desktop-catalog-toolbar\s*\{[^}]*padding:\s*10px 12px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
+        expect(toolbar).toBeDefined();
+        expect(toolbar).toMatch(/display:\s*flex;/u);
+        expect(toolbar).toMatch(/flex-wrap:\s*wrap;/u);
+        expect(toolbar).toMatch(/align-items:\s*center;/u);
+        expect(toolbar).toMatch(/gap:\s*var\(--space-8\) var\(--space-16\);/u);
+        expect(toolbar).toMatch(
+            /min-height:\s*calc\(var\(--experience-control-min\) \+ var\(--space-8\)\);/u,
         );
+        expect(toolbar).toMatch(/padding:\s*var\(--space-4\) var\(--space-12\);/u);
+        expect(toolbar).toMatch(/border-radius:\s*var\(--skin-card-radius\);/u);
+        expect(toolbar).toMatch(/background:\s*var\(--surface\);/u);
+        expect(toolbar).toMatch(/box-shadow:\s*var\(--skin-card-shadow\);/u);
+        expect(toolbar).toMatch(/border:\s*var\(--skin-card-outline, 0\);/u);
         expect(stylesheet).toMatch(
             /\.desktop-catalog-actions\s*\{[^}]*margin-left:\s*auto;[^}]*background:\s*transparent;/u,
         );

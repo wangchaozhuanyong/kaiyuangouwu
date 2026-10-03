@@ -4,22 +4,15 @@
     min-height: 100dvh;
 }
 
-.security-page-body {
-    padding: 12px 14px 40px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
 /* User Card */
 .security-user-card {
     display: grid;
     grid-template-columns: 64px minmax(0, 1fr);
     align-items: center;
-    gap: 16px;
+    gap: var(--space-16);
     min-width: 0;
     margin: 0;
-    padding: 20px;
+    padding: var(--space-card);
     border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
@@ -164,9 +157,8 @@
 @media (min-width: 600px) {
     .security-user-card {
         grid-template-columns: 72px minmax(0, 1fr) auto;
-        gap: 20px;
+        gap: var(--space-section);
         min-height: 120px;
-        padding: 24px;
     }
     .security-user-avatar {
         width: 72px;
@@ -444,7 +436,7 @@
 
 /* Logout Button */
 .security-action-group {
-    margin-top: 10px;
+    margin: 0;
 }
 
 .security-logout-button {

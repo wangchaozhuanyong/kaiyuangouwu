@@ -66,7 +66,7 @@
     height: auto;
 }
 
-/* Marketing scenes fill their frame; catalog product media owns its separate contain rule. */
+/* Uploaded marketing artwork keeps its original ratio, as does its draft preview. */
 .hero-rich-backdrop {
     position: relative;
     width: 100%;
@@ -327,12 +327,18 @@
     }
 }
 
-/* Storefront and editor share one on-image composition, without a separate copy card. */
+/* Uploaded artwork keeps its ratio. Desktop copy overlays only when all content fits. */
 .hero.hero-image-overlay {
     display: block;
-    min-height: 320px;
-    aspect-ratio: 3;
-    background: var(--skin-hero-background, #10212f);
+    min-height: 0;
+    aspect-ratio: auto;
+    background: var(--hero-copy-background);
+}
+
+.hero.hero-image-overlay .hero-rich-media {
+    position: relative;
+    width: 100%;
+    min-width: 0;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link::after {
@@ -351,10 +357,11 @@
 
 .hero.hero-image-overlay .hero-rich-image-link,
 .hero.hero-image-overlay .safe-image-frame {
-    position: absolute;
-    inset: 0;
+    display: block;
+    position: relative;
+    inset: auto;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link,
@@ -364,29 +371,29 @@
 
 .hero.hero-image-overlay .hero-rich-backdrop {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: right center;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
 }
 
 .hero.hero-image-overlay .safe-image-preview {
-    object-fit: cover;
-    object-position: right center;
+    object-fit: contain;
+    object-position: center;
 }
 
 .hero.hero-image-overlay .hero-rich-content {
     position: absolute;
     z-index: 2;
-    top: 50%;
+    top: 24px;
     left: clamp(28px, 3vw, 44px);
     bottom: auto;
-    transform: translateY(-50%);
+    transform: none;
     width: min(450px, calc(100% - 170px));
-    max-height: calc(100% - 88px);
+    max-height: none;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 12px;
     padding: 0;
     overflow: visible;
@@ -420,7 +427,9 @@
     font-size: 15px;
     line-height: 1.7;
     font-weight: 500;
-    -webkit-line-clamp: 3;
+    display: block;
+    overflow: visible;
+    overflow-wrap: anywhere;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -448,22 +457,39 @@
     font-size: 14px;
 }
 
+@media (min-width: 1024px) {
+    /* Insufficient native image height moves the intact copy below the photo. */
+    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-content {
+        position: relative;
+        top: auto;
+        left: auto;
+        margin-left: clamp(28px, 3vw, 44px);
+        padding: 24px 0;
+        color: var(--hero-copy-foreground);
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper[data-copy-layout='below'] .hero-rich-image-link::after {
+        display: none;
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-copy-layout='below']
+        :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
+        color: var(--hero-copy-foreground);
+        text-shadow: none;
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-copy-layout='below']
+        :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
+        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        text-shadow: none;
+    }
+}
+
 @media (max-width: 1023px) {
-    .hero.hero-image-overlay {
-        display: grid;
-        align-items: center;
-        min-height: 280px;
-        aspect-ratio: auto;
-    }
-
-    /* Marketing artwork fills the compact phone frame; product media is unaffected. */
-    .hero.hero-image-overlay .hero-rich-backdrop {
-        object-fit: cover;
-        object-position: center;
-    }
-
-    .hero.hero-image-overlay .safe-image-preview {
-        object-position: center;
+    .hero.hero-image-overlay .hero-rich-image-link::after {
+        display: none;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
@@ -474,11 +500,23 @@
         width: 100%;
         max-height: none;
         gap: 10px;
-        padding: 24px 20px 44px;
+        padding: 16px 20px 20px;
+        background: var(--hero-copy-background);
+        color: var(--hero-copy-foreground);
+    }
+
+    .hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
+        color: var(--hero-copy-foreground);
+        text-shadow: none;
+    }
+
+    .hero.hero-image-overlay :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
+        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        text-shadow: none;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
-        max-width: 88%;
+        max-width: 100%;
         gap: 6px;
     }
 
@@ -496,7 +534,6 @@
     .hero.hero-image-overlay .hero-rich-desc {
         font-size: 12px;
         line-height: 1.6;
-        -webkit-line-clamp: 2;
     }
 
     .hero.hero-image-overlay .hero-rich-stats-row {

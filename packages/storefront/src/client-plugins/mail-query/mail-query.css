@@ -13,7 +13,7 @@
     --text-secondary: var(--muted);
     --text-muted: var(--muted);
     --border: var(--line);
-    --border-hover: var(--line-strong);
+    --border-hover: var(--line);
     --radius-sm: var(--skin-control-radius);
     --radius: var(--skin-control-radius);
     --radius-lg: var(--skin-card-radius);

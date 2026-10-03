@@ -258,7 +258,7 @@
 }
 
 .auth-page .login-content .auth-back-button:hover {
-    border-color: #a9bddb;
+    border-color: var(--line);
     background: #f5f9ff;
     color: var(--auth-accent);
     transform: translateX(-2px);
@@ -1397,7 +1397,7 @@
 }
 
 .auth-input-shell:hover {
-    border-color: #a9bddb;
+    border-color: var(--line);
 }
 
 .auth-input-shell:focus-within {

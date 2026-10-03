@@ -138,29 +138,12 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    padding: 20px;
+    align-self: start;
+    padding: var(--space-8) var(--space-card);
     border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
-}
-
-.category-client-plugin-group-title {
-    margin: 0 0 8px;
-    color: var(--text);
-    font-family: var(--skin-display-font, var(--font-ui));
-    font-size: 20px;
-    line-height: 1.4;
-}
-
-/* Directory B keeps its short heading accent in the active skin's color. */
-.business-services-page[data-services-layout='directory-b'] .category-client-plugin-group-title::after {
-    content: '';
-    display: block;
-    width: 28px;
-    height: 2px;
-    margin-top: 14px;
-    background: var(--accent);
 }
 
 .category-client-plugin-group.is-assistance {
@@ -273,7 +256,7 @@
     .business-services-workspace .category-client-plugin-group.is-tools {
         grid-column: 2;
         grid-row: 1;
-        padding: 28px;
+        padding-inline: var(--space-24);
     }
 
     .business-services-workspace .category-client-plugin-group.is-assistance {
@@ -284,11 +267,6 @@
 
     .category-client-plugin-group.is-assistance > :only-child {
         grid-column: 1 / -1;
-    }
-
-    .category-client-plugin-group-title {
-        margin-bottom: 12px;
-        font-size: 24px;
     }
 
     .is-business-services-main .category-client-plugin {
@@ -341,10 +319,6 @@
 }
 
 @media (max-width: 359px) {
-    .category-client-plugin-group.is-tools {
-        padding: 16px;
-    }
-
     .is-business-services-main .category-client-plugin {
         column-gap: 8px;
     }

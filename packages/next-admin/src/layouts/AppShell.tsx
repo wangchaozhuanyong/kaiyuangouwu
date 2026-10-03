@@ -37,7 +37,6 @@ import {
 } from 'lucide-react';
 import React, {
     startTransition,
-    Suspense,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -46,7 +45,6 @@ import React, {
     useState,
 } from 'react';
 import {
-    Outlet,
     NavLink as RouterNavLink,
     useLocation,
     useNavigate,
@@ -75,7 +73,7 @@ import {
     type AppShellCommerceContextData,
     type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
-import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
+import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
 import {
@@ -98,6 +96,7 @@ import {
     isPlatformOwnerPath,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
+import { TabbedOutlet } from './TabbedOutlet';
 
 const adminBrandIcon = `${import.meta.env.BASE_URL}brand-icon-180.png`;
 
@@ -573,7 +572,7 @@ export function AppShell() {
         if (
             isChannelSwitching ||
             channelToken === channelData?.activeChannel.token ||
-            !requestAppNavigation('/dashboard')
+            !requestAppTabsClose(tabs.map(tab => tab.path))
         )
             return;
         setIsChannelSwitching(true);
@@ -595,6 +594,7 @@ export function AppShell() {
     const closeTab = (e: React.MouseEvent, path: string) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!requestAppTabsClose([path])) return;
         const newTabs = tabs.filter(t => t.path !== path);
         if (location.pathname === path && newTabs.length > 0) {
             if (!navigate(newTabs[newTabs.length - 1].href)) return;
@@ -605,6 +605,8 @@ export function AppShell() {
     };
 
     const closeOtherTabs = () => {
+        if (!requestAppTabsClose(tabs.filter(tab => tab.path !== location.pathname).map(tab => tab.path)))
+            return;
         const currentTab = tabs.find(t => t.path === location.pathname) || {
             path: '/dashboard',
             href: '/dashboard',
@@ -1545,6 +1547,14 @@ export function AppShell() {
                                                 role="menuitem"
                                                 className="text-rose-600 hover:text-rose-700 font-normal cursor-pointer"
                                                 onClick={() => {
+                                                    if (
+                                                        !requestAppTabsClose(
+                                                            tabs
+                                                                .filter(tab => tab.path !== '/dashboard')
+                                                                .map(tab => tab.path),
+                                                        )
+                                                    )
+                                                        return;
                                                     if (!navigate('/dashboard')) return;
                                                     setTabs([
                                                         {
@@ -1614,7 +1624,9 @@ export function AppShell() {
                     tabIndex={-1}
                     className="flex-1 overflow-hidden relative outline-none"
                 >
-                    {currentRouteRequiresPermission && profileLoading ? (
+                    {isChannelSwitching ? (
+                        <RouteLoadingFallback />
+                    ) : currentRouteRequiresPermission && profileLoading ? (
                         <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
                             正在核验访问权限…
                         </div>
@@ -1659,14 +1671,22 @@ export function AppShell() {
                             </section>
                         </div>
                     ) : (
-                        <Suspense fallback={<RouteLoadingFallback />}>
-                            <AdminPermissionsProvider permissions={activePermissions}>
-                                {/* clearStore keeps mounted queries alive; switching stores must remount page queries. */}
-                                <CustomFieldsProvider key={channelData?.activeChannel.token}>
-                                    <Outlet />
-                                </CustomFieldsProvider>
-                            </AdminPermissionsProvider>
-                        </Suspense>
+                        <AdminPermissionsProvider permissions={activePermissions}>
+                            {/* Keep store-scoped queries separate while retaining pages within one store. */}
+                            <CustomFieldsProvider key={channelData?.activeChannel.token}>
+                                <TabbedOutlet
+                                    key={`${activeAdministrator?.id}:${channelData?.activeChannel.id}`}
+                                    openPaths={tabs
+                                        .filter(
+                                            tab =>
+                                                canAccessPath(tab.path) &&
+                                                commerceModeAllowsPath(commerceMode, tab.path),
+                                        )
+                                        .map(tab => tab.path)}
+                                    fallback={<RouteLoadingFallback />}
+                                />
+                            </CustomFieldsProvider>
+                        </AdminPermissionsProvider>
                     )}
                 </div>
             </div>

@@ -14,6 +14,7 @@ import {
     checkRequirements,
     jobRecipe,
     missingPlan,
+    sharedInputFingerprint,
 } from './ci-check-inputs.mjs';
 import { classifyChanges } from './ci-impact.mjs';
 import { packageCommands } from './ci-run.mjs';
@@ -491,6 +492,60 @@ test('backup-only follow-up combines narrow target proof with older full busines
     assert.equal(result.anchor.runId, 2);
     assert.equal(result.reused.find(item => item.check === 'backend:core').runId, 1);
     assert.equal(result.reused.find(item => item.check === 'controls').runId, 2);
+});
+
+test('different shared lock inputs reject historical checks before expensive per-file hashing while preserving architecture reuse', async () => {
+    const fixture = coverageFixture({
+        targetProof: false,
+        changes: { 'bun.lock': 'reviewed patched lock' },
+        mutateProof: proof => {
+            proof.architecture = true;
+        },
+    });
+    fixture.plan.architecture = true;
+    fixture.plan.lintFiles = Array.from({ length: 400 }, (_, index) => `scripts/check-${index}.mjs`);
+    let sourceEntries = 0;
+    const entries = fixture.reader.entries;
+    fixture.reader.entries = ref => {
+        if (ref === sourceSha) sourceEntries++;
+        return entries(ref);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.ok(result.missing.some(check => check.id === 'backend:core'));
+    assert.equal(result.missing.filter(check => check.kind === 'quality').length, 400);
+    assert.ok(result.reused.some(check => check.check === 'architecture'));
+    assert.ok(sourceEntries <= 3, `Historical tree scanned ${sourceEntries} times`);
+    assert.equal(result.anchor, undefined);
+});
+
+test('shared input prefilter includes additions, deletions and modes but leaves unrelated code to the full fingerprint', () => {
+    for (const changes of [
+        { 'bun.lock': 'new lock' },
+        { 'patches/pkg.patch': 'reviewed patch' },
+        { 'package.json': null },
+        { '.github/actions/setup/action.yml': 'different setup' },
+    ]) {
+        const { reader: changedReader } = inputFixture(changes);
+        assert.notEqual(
+            sharedInputFingerprint(sourceSha, changedReader),
+            sharedInputFingerprint(targetSha, changedReader),
+        );
+    }
+    const { reader } = inputFixture({ 'packages/core/src/service.ts': 'changed business code' });
+    assert.equal(sharedInputFingerprint(sourceSha, reader), sharedInputFingerprint(targetSha, reader));
+    const check = { id: 'backend:core', kind: 'backend', packages: ['core'], flags: [], databases: [] };
+    assert.notEqual(
+        checkFingerprint(sourceSha, check, inputInventory, reader),
+        checkFingerprint(targetSha, check, inputInventory, reader),
+    );
+    const entries = reader.entries;
+    reader.entries = ref =>
+        entries(ref).map(entry =>
+            entry.path === 'package.json' && ref === targetSha
+                ? { ...entry, metadata: `mode-changed:${entry.metadata}` }
+                : entry,
+        );
+    assert.notEqual(sharedInputFingerprint(sourceSha, reader), sharedInputFingerprint(targetSha, reader));
 });
 test('without target proof only missing control and file checks run; business and MySQL are reused', async () => {
     const fixture = coverageFixture({ targetProof: false });

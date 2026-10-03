@@ -121,7 +121,7 @@ function render(next: DecorationDraft) {
         storefrontPreviewBlockId: next.block?.id ?? '',
         storefrontPreviewDocumentUrl: new URL('/', origin).href,
         storefrontPreviewLanguage: next.language,
-        storefrontPreviewAuth: next.block?.type === 'ACCOUNT_HERO' ? 'authenticated' : 'guest',
+        storefrontPreviewAuth: next.route === '/account' ? 'authenticated' : 'guest',
     });
     if (next.presetId) parameters.set('storefrontPreviewPreset', next.presetId);
     setStorefrontPreviewParameters(parameters);

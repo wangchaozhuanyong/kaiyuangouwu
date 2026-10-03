@@ -248,6 +248,7 @@ export function useStorefrontAppState() {
         ...queryContext,
         customer,
         recentProductIds,
+        personalizationReady: customerLoadState !== 'loading' && !productActivity.initialLoadPending,
         products,
         contentBlocks,
         configuredBlockTypes,

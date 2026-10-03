@@ -336,8 +336,7 @@
 
     .legal-footer {
         width: 100%;
-        margin: 32px auto 0;
-        padding: 20px 24px;
+        margin-inline: auto;
     }
 
     .network-banner {
@@ -600,17 +599,6 @@
         padding-right: 0;
         padding-left: 0;
         border-top: 0;
-    }
-
-    .payment-layout {
-        width: 100%;
-        max-width: none;
-        margin: 24px auto 0;
-        padding-bottom: 48px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
-        align-items: start;
-        gap: 20px;
     }
 
     .payment-test-notice,

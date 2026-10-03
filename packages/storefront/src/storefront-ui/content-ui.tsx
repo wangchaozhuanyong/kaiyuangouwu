@@ -496,6 +496,7 @@ export function FlashSalePage({
 
 export function RecommendationPage({
     products,
+    loading = false,
     block,
     market,
     locale,
@@ -504,6 +505,7 @@ export function RecommendationPage({
     onProduct,
 }: {
     products: Product[];
+    loading?: boolean;
     block?: StorefrontContentBlock;
     market: MarketConfig;
     locale: string;
@@ -518,8 +520,13 @@ export function RecommendationPage({
             language={language}
             onBack={onBack}
         >
-            {products.length ? (
+            {loading || products.length ? (
                 <ProductSection
+                    loading={loading}
+                    skeletonCount={Math.min(
+                        50,
+                        Math.max(1, contentNumberSetting(block?.settings?.displayCount, 6)),
+                    )}
                     subtitle={resolveManagedContentCopy(
                         block,
                         'subtitle',

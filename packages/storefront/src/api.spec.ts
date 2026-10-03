@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultAccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
+
 import { SHOP_API_QUERY_TIMEOUT_MS, ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
 import { MarketConfig } from './types';
 
@@ -539,6 +541,7 @@ describe('ShopApi storefront mutations', () => {
             settings: {
                 heroAutoplayIntervalSeconds: 8,
                 personalDataExportEnabled: false,
+                accountRecommendations: defaultAccountRecommendationSettings,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -859,6 +862,7 @@ describe('ShopApi storefront mutations', () => {
             settings: {
                 heroAutoplayIntervalSeconds: 5,
                 personalDataExportEnabled: false,
+                accountRecommendations: defaultAccountRecommendationSettings,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -959,6 +963,7 @@ describe('ShopApi storefront mutations', () => {
             settings: {
                 heroAutoplayIntervalSeconds: 7,
                 personalDataExportEnabled: false,
+                accountRecommendations: defaultAccountRecommendationSettings,
                 configuredBlockTypes: [],
                 auth: defaultAuthSettings,
             },
@@ -2614,5 +2619,125 @@ describe('personal-data export visibility configuration', () => {
         const retry = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1]));
         expect(retry.query).not.toContain('personalDataExportEnabled');
         expect(retry.query).toContain('configuredBlockTypes');
+    });
+});
+
+describe('account recommendation settings API', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    it('reads the configured store title, count and visibility', async () => {
+        const settings = { enabled: false, titleZh: '店铺精选', titleEn: 'Store selection', limit: 6 };
+        mockGraphQlResponse({
+            storefrontContent: [],
+            storefrontContentSettings: { accountRecommendations: settings },
+        });
+        expect((await new ShopApi(market).storefrontContent()).settings.accountRecommendations).toEqual(
+            settings,
+        );
+    });
+    it('keeps modern settings when an older API lacks the account recommendation field', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message:
+                                    'Cannot query field "accountRecommendations" on type "StorefrontContentSettings".',
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            storefrontContent: [],
+                            storefrontContentSettings: {
+                                heroAutoplayIntervalSeconds: 9,
+                                personalDataExportEnabled: true,
+                                configuredBlockTypes: ['HERO'],
+                            },
+                        },
+                    }),
+                    { status: 200 },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const content = await new ShopApi(market).storefrontContent();
+        expect(content.settings.accountRecommendations).toEqual(defaultAccountRecommendationSettings);
+        expect(content.settings.personalDataExportEnabled).toBe(true);
+        expect(content.settings.configuredBlockTypes).toEqual(['HERO']);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const retry = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1]));
+        expect(retry.query).not.toContain('accountRecommendations');
+        expect(retry.query).toContain('personalDataExportEnabled');
+    });
+    it('removes several unsupported optional fields together without losing authentication settings', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message:
+                                    'Cannot query field "accountRecommendations" on type "StorefrontContentSettings".',
+                            },
+                            {
+                                message:
+                                    'Cannot query field "personalDataExportEnabled" on type "StorefrontContentSettings".',
+                            },
+                            {
+                                message:
+                                    'Cannot query field "createdAt" on type "StorefrontSystemAnnouncement".',
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            storefrontContent: [],
+                            storefrontContentSettings: {
+                                heroAutoplayIntervalSeconds: 9,
+                                auth: { ...defaultAuthSettings, googleEnabled: true },
+                                configuredBlockTypes: ['HERO'],
+                            },
+                        },
+                    }),
+                    { status: 200 },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const content = await new ShopApi(market).storefrontContent();
+        expect(content.settings.accountRecommendations).toEqual(defaultAccountRecommendationSettings);
+        expect(content.settings.auth.googleEnabled).toBe(true);
+        expect(content.settings.configuredBlockTypes).toEqual(['HERO']);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const retry = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1]));
+        expect(retry.query).not.toContain('accountRecommendations');
+        expect(retry.query).not.toContain('personalDataExportEnabled');
+        expect(retry.query).toContain('googleEnabled');
+        expect(retry.query).not.toContain('StorefrontContentLegacy');
+    });
+
+    it('does not replace a permission or runtime failure with default settings', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    errors: [{ message: 'Permission denied reading accountRecommendations' }],
+                }),
+                { status: 200 },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('Permission denied');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });

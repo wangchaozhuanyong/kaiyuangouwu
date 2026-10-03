@@ -38,6 +38,7 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
@@ -92,6 +93,7 @@ const serverConfig = mergeConfig(testConfig, {
     authOptions: { requireVerification: false },
     paymentOptions: { paymentMethodHandlers: [dummyPaymentHandler] },
     plugins: [
+        OperationsDashboardPlugin,
         StoreDomainPlugin.init({
             cnameTarget: 'synthetic.example.test',
             resolveTxt: () => Promise.resolve([]),
@@ -1032,7 +1034,7 @@ describe('platform governance real database and API boundaries', () => {
         const retention = server.app.get(DataRetentionService);
         const record = await retention.quarantineAvatar(
             a,
-            { id: '2147483000' } as Asset,
+            new Asset({ id: '2147483000' }),
             'synthetic-subject',
             'REPLACED',
         );

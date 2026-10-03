@@ -45,15 +45,16 @@
         grid-column: 1;
         grid-row: 1;
         min-width: 0;
-        height: 100%;
+        height: auto;
+        align-self: start;
     }
     .desktop-store-layout .home-intro-grid .hero {
         min-width: 0;
         width: 100%;
-        min-height: 320px;
+        min-height: 0;
         height: auto;
-        flex: 1 0 auto;
-        align-self: stretch;
+        flex: 0 0 auto;
+        align-self: start;
         border: 0;
         border-radius: var(--skin-hero-radius);
         overflow: hidden;
@@ -493,12 +494,6 @@
         border-radius: var(--radius-md);
         overflow: hidden;
     }
-    .desktop-store-layout .home-page > .legal-footer {
-        margin-top: 48px;
-        padding: 24px;
-        border-top: 0;
-    }
-
     /* ==========================================================================
        FIGURE 1 (SCHEME 1: NEO-MINIMALIST) DESKTOP STYLES
        ========================================================================== */

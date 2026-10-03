@@ -58,7 +58,7 @@ describe('ProductEditorSidebar', () => {
         expect(html).not.toContain('aspect-[4/3]');
     });
 
-    it('renders 1:1 aspect-square placeholder when no featured asset is selected', () => {
+    it('offers upload and selection without rendering a missing image', () => {
         vi.mocked(useProductEditor).mockReturnValue({
             isCreateMode: true,
             productData: undefined,
@@ -87,7 +87,7 @@ describe('ProductEditorSidebar', () => {
         const html = renderToStaticMarkup(<ProductEditorSidebar />);
 
         expect(html).toContain('选择商品主图');
-        expect(html).toContain('aspect-square');
-        expect(html).not.toContain('aspect-[4/3]');
+        expect(html).toContain('上传商品主图');
+        expect(html).not.toContain('alt="商品主图预览"');
     });
 });

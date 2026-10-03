@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
 
+import { TabPageContext } from '../layouts/tab-page-context';
 import { isInputMethodKey } from '../utils/input-method';
 
 const activeDialogStack: symbol[] = [];
@@ -17,6 +18,8 @@ const FOCUSABLE_SELECTOR = [
  * 为项目内自定义弹窗统一补齐 Escape、焦点限制与关闭后焦点返回。
  */
 export function useAccessibleDialog(onClose: () => void, active = true) {
+    const tabPage = useContext(TabPageContext);
+    const dialogActive = active && (tabPage?.active ?? true);
     const dialogRef = useRef<HTMLElement>(null);
     const dialogKeyRef = useRef(Symbol('accessible-dialog'));
     const titleId = useId();
@@ -27,7 +30,7 @@ export function useAccessibleDialog(onClose: () => void, active = true) {
     }, [onClose]);
 
     useEffect(() => {
-        if (!active) return;
+        if (!dialogActive) return;
         const dialogKey = dialogKeyRef.current;
         activeDialogStack.push(dialogKey);
         const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -75,7 +78,7 @@ export function useAccessibleDialog(onClose: () => void, active = true) {
             if (stackIndex >= 0) activeDialogStack.splice(stackIndex, 1);
             if (wasTopDialog) previousFocus?.focus();
         };
-    }, [active]);
+    }, [dialogActive]);
 
     return { dialogRef, titleId };
 }

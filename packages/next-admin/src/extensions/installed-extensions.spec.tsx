@@ -15,7 +15,7 @@ describe('installed next-admin extensions', () => {
         ['/marketing/sharing', 'ReadReferral'],
         ['/storefront/decoration', 'ReadStorefrontContent'],
         ['/storefront/content', 'ReadStorefrontContent'],
-        ['/plugins/icloud-relay', 'ReadIcloudRelay'],
+        ['/plugins/icloud-relay', 'SuperAdmin'],
     ])('aligns %s with the backend module permission and fallback route', (path, permission) => {
         const route = getNextAdminExtensionRoutes().find(item => item.path === path)!;
         expect(route.permissions).toEqual([permission]);
@@ -25,6 +25,7 @@ describe('installed next-admin extensions', () => {
             hasAnyAdminPermission(['ReadPromotion', 'ReadSettings', 'ReadCatalog'], route.permissions!),
         ).toBe(false);
         expect(hasAnyAdminPermission([], route.permissions!)).toBe(false);
+        expect(hasAnyAdminPermission(['ReadIcloudRelay'], route.permissions!)).toBe(false);
         expect(hasAnyAdminPermission(['SuperAdmin'], route.permissions!)).toBe(true);
     });
     it('registers all nine local plugins through the shared extension API', () => {
@@ -83,7 +84,7 @@ describe('installed next-admin extensions', () => {
                 expect.objectContaining({
                     id: 'icloud-relay',
                     path: '/plugins/icloud-relay',
-                    permissions: ['ReadIcloudRelay'],
+                    permissions: ['SuperAdmin'],
                 }),
             ]),
         );
@@ -103,7 +104,7 @@ describe('installed next-admin extensions', () => {
             expect.objectContaining({
                 path: '/plugins/icloud-relay',
                 title: '邮件验证码查询',
-                permissions: ['ReadIcloudRelay'],
+                permissions: ['SuperAdmin'],
             }),
         );
         expect(getNextAdminExtensionNavItems('settings')).toContainEqual(

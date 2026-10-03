@@ -95,13 +95,13 @@ describe('StoreEditor seller binding', () => {
         environment.IS_REACT_ACT_ENVIRONMENT = false;
     });
 
-    async function renderEditor(ready = true) {
+    async function renderEditor(ready = true, overrides: Partial<StoreProfileRecord> = {}) {
         await act(async () =>
             root.render(
                 <FeatureHelpProvider>
                     <ConfirmDialogContext.Provider value={requestConfirmation}>
                         <StoreEditor
-                            profile={profile}
+                            profile={{ ...profile, ...overrides }}
                             sellers={ready ? sellers : []}
                             sellerOptionsReady={ready}
                             onClose={() => undefined}
@@ -223,6 +223,47 @@ describe('StoreEditor seller binding', () => {
         expect(sellerSelect().value).toBe('seller-1');
         expect(sellerSelect().textContent).toContain('大马仓库（当前绑定）');
         expect(container.querySelector('[role="alert"]')?.textContent).toContain('商家列表尚未加载完整');
+    });
+
+    it('explains locked activation and rejects a forced ACTIVE change before writing', async () => {
+        await renderEditor(true, {
+            status: 'DRAFT',
+            isOperational: true,
+            activationReadiness: {
+                ready: false,
+                checks: [
+                    {
+                        code: 'PROFILE',
+                        ready: false,
+                        message: '请填写店铺简介',
+                        messageEn: 'Profile missing',
+                    },
+                    {
+                        code: 'PAYMENT',
+                        ready: false,
+                        message: '请启用正式支付方式',
+                        messageEn: 'Payment missing',
+                    },
+                ],
+            },
+        });
+        const select = container.querySelector<HTMLSelectElement>('select[aria-label="运行状态"]')!;
+        expect(select.querySelector<HTMLOptionElement>('option[value="ACTIVE"]')!.disabled).toBe(true);
+        expect(select.querySelector<HTMLOptionElement>('option[value="SUSPENDED"]')!.disabled).toBe(true);
+        const help = document.getElementById(select.getAttribute('aria-describedby')!)!;
+        expect(help.textContent).toContain('还有 2 项待处理');
+        expect(help.textContent).toContain('请填写店铺简介');
+        expect(help.textContent).toContain('请启用正式支付方式');
+        expect(help.textContent).toContain('当前店铺可访问，但运行状态仍为草稿');
+        expect(help.textContent).toContain('修改后请先保存店铺档案');
+        await act(async () => {
+            select.value = 'ACTIVE';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await save();
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('上线检查未通过');
+        expect(mutate).not.toHaveBeenCalled();
+        expect(requestConfirmation).not.toHaveBeenCalled();
     });
 });
 

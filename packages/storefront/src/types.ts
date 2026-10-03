@@ -1,4 +1,6 @@
 import type { PosterDesign } from './referral-poster-layout';
+import type { AccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
+export type { AccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
 export type MarketCode = string;
 export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
@@ -988,6 +990,7 @@ export interface StorefrontContentSettings {
     configuredBlockTypes?: StorefrontContentBlockType[];
     auth: StorefrontAuthSettings;
     personalDataExportEnabled?: boolean;
+    accountRecommendations?: AccountRecommendationSettings;
 }
 
 export interface StorefrontAuthSettings {

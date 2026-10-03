@@ -10,8 +10,9 @@
         <meta name="description" content="浏览店铺商品与服务，管理账户与订单。" />
         <meta name="robots" content="noindex, nofollow, noarchive" />
         <meta name="application-name" content="店铺" />
-        <link rel="icon" href="/storefront/neutral-store.png?storefront-icon=2" type="image/png" />
-        <link rel="apple-touch-icon" href="/storefront/neutral-store.png?storefront-icon=2" />
+        <!-- Host-resolved icons are the only parser-time declarations. Safari may
+             retain the first icon it sees and ignore later JavaScript changes.
+             The fragment itself supplies a neutral icon for unconfigured stores. -->
         <!--# include virtual="/_storefront/lcp-preload" -->
         <style>
             html,

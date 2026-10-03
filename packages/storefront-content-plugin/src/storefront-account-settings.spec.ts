@@ -1,9 +1,77 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { defaultAccountRecommendationSettings } from './shared/account-recommendation-settings';
 import {
+    accountRecommendationsKey,
     personalDataExportEnabledKey,
     StorefrontAccountSettingsService,
 } from './storefront-account-settings';
+
+describe('account recommendations settings', () => {
+    it('defaults to eight products and verifies channel-scoped settings and invalidation', async () => {
+        const values = new Map<string, unknown>();
+        const store = {
+            getMany: vi.fn((ctx: { channelId: string }) =>
+                Promise.resolve({
+                    [accountRecommendationsKey]: values.get(ctx.channelId),
+                }),
+            ),
+            setMany: vi.fn((ctx: { channelId: string }, input: Record<string, unknown>) => {
+                values.set(ctx.channelId, input[accountRecommendationsKey]);
+                return Promise.resolve([{ result: true }]);
+            }),
+        };
+        const events = { publish: vi.fn() };
+        const service = new StorefrontAccountSettingsService(store as never, events as never);
+        const a = { channelId: 'a' } as never;
+        const b = { channelId: 'b' } as never;
+        await expect(service.getRecommendations(a)).resolves.toEqual(defaultAccountRecommendationSettings);
+        const value = { enabled: false, titleZh: '  店铺推荐  ', titleEn: 'Store picks', limit: 6 };
+        await expect(service.updateRecommendations(a, value)).resolves.toEqual({
+            ...value,
+            titleZh: '店铺推荐',
+        });
+        await expect(service.getRecommendations(b)).resolves.toEqual(defaultAccountRecommendationSettings);
+        expect(events.publish).toHaveBeenCalledTimes(1);
+        expect(events.publish.mock.calls[0][0].ctx).toBe(a);
+    });
+
+    it.each([
+        { limit: 0 },
+        { limit: 11 },
+        { limit: 2.5 },
+        { enabled: 'true' },
+        { titleZh: '  ' },
+        { titleEn: 'a'.repeat(81) },
+    ])('rejects invalid input %s before writing', async invalid => {
+        const store = { setMany: vi.fn() };
+        const service = new StorefrontAccountSettingsService(store as never);
+        await expect(
+            service.updateRecommendations(
+                {} as never,
+                { ...defaultAccountRecommendationSettings, ...invalid } as never,
+            ),
+        ).rejects.toThrow();
+        expect(store.setMany).not.toHaveBeenCalled();
+    });
+
+    it('does not mistake defaults for persisted readback or publish failed writes', async () => {
+        const store = {
+            getMany: vi.fn().mockResolvedValue({}),
+            setMany: vi.fn().mockResolvedValue([{ result: true }]),
+        };
+        const events = { publish: vi.fn() };
+        const service = new StorefrontAccountSettingsService(store as never, events as never);
+        await expect(
+            service.updateRecommendations({} as never, { ...defaultAccountRecommendationSettings }),
+        ).rejects.toThrow('verify');
+        store.setMany.mockResolvedValue([{ result: false }]);
+        await expect(
+            service.updateRecommendations({} as never, { ...defaultAccountRecommendationSettings }),
+        ).rejects.toThrow('save');
+        expect(events.publish).not.toHaveBeenCalled();
+    });
+});
 
 describe('personal-data export entry settings', () => {
     it.each([undefined, null, false, 'true', 1])('defaults off for %s', async value => {

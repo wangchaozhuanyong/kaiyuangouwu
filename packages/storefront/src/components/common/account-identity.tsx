@@ -1,4 +1,4 @@
-import { ChevronRight, Heart, Share2, Smile, TicketPercent } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Heart, Share2, TicketPercent } from 'lucide-react';
 
 import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
@@ -12,6 +12,7 @@ export function maskedAccountEmail(email: string): string {
 
 export function AccountIdentity({
     customer,
+    heroImageUrl,
     storefrontName,
     language,
     favoriteCount,
@@ -26,6 +27,7 @@ export function AccountIdentity({
     navigate,
 }: {
     customer: ActiveCustomer | null;
+    heroImageUrl?: string | null;
     storefrontName: string;
     language: StorefrontLanguage;
     favoriteCount: number;
@@ -62,6 +64,16 @@ export function AccountIdentity({
 
     return (
         <div className="account-identity">
+            {heroImageUrl?.trim() && (
+                <SafeImage
+                    src={heroImageUrl.trim()}
+                    alt=""
+                    imageKind="hero"
+                    loading="eager"
+                    frameClassName="account-identity-artwork"
+                    sizes="(min-width: 1440px) 1280px, (min-width: 1024px) calc(100vw - 64px), calc(100vw - 24px)"
+                />
+            )}
             <section className="account-identity-card" aria-label={isZh ? '账户信息' : 'Account details'}>
                 <div className="account-identity-welcome">
                     <span>
@@ -100,11 +112,6 @@ export function AccountIdentity({
                                   ? '登录后管理订单与专属优惠'
                                   : 'Sign in to manage orders and offers'}
                         </p>
-                    </div>
-                    <div className="account-identity-greeting" aria-hidden="true">
-                        <span>Hello!</span>
-                        <small>NICE TO SEE YOU</small>
-                        <Smile />
                     </div>
                 </div>
                 {customer ? (
@@ -155,23 +162,6 @@ export function AccountIdentity({
                     className="account-identity-promotion"
                     aria-label={isZh ? '邀请与推广' : 'Invite and share'}
                 >
-                    <div className="account-identity-promotion-title">
-                        <div>
-                            <h3>
-                                <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
-                                <span>{isZh ? '分享有礼' : 'Earn rewards'}</span>
-                            </h3>
-                            <p>{isZh ? '好友成功消费，即可获得奖励。' : 'Your friend buys, you earn.'}</p>
-                        </div>
-                        <img
-                            className="account-identity-promotion-gift"
-                            src="/storefront/illustrations/referral-gift.webp"
-                            alt=""
-                            width={384}
-                            height={384}
-                            decoding="async"
-                        />
-                    </div>
                     <div className="account-identity-promotion-actions">
                         <div className="account-identity-promotion-balance" aria-live="polite">
                             <p>{isZh ? '返利余额' : 'Referral balance'}</p>
@@ -210,7 +200,7 @@ export function AccountIdentity({
                         </div>
                         <button type="button" onClick={() => navigate({ name: 'referral' })}>
                             {isZh ? '邀请好友' : 'Invite friends'}
-                            <ChevronRight aria-hidden="true" />
+                            <ArrowUpRight aria-hidden="true" />
                         </button>
                     </div>
                 </section>

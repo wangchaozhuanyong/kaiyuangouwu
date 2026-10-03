@@ -26,7 +26,7 @@ import { SafeImage } from './safe-image';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage, SubpageBody } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     DataSubjectExportPayload,
@@ -316,7 +316,7 @@ export function AccountSecurityPage({
                 onBack={onBack}
             />
 
-            <div className="security-page-body">
+            <SubpageBody className="security-page-body">
                 {/* Personal information and avatar actions have separate layout areas. */}
                 <section className="security-user-card" aria-label={isZh ? '个人信息' : 'Personal info'}>
                     <button
@@ -730,7 +730,7 @@ export function AccountSecurityPage({
                         <span>{isZh ? '退出当前登录账号' : 'Sign Out of Account'}</span>
                     </button>
                 </div>
-            </div>
+            </SubpageBody>
             {privacyDialog && (
                 <div className="security-privacy-dialog-backdrop" role="presentation">
                     <section

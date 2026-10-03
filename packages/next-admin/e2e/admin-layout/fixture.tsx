@@ -1,16 +1,19 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { Kind, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
 import { defineNextAdminExtension } from '../../src/extensions/extension-api';
-import type { StoreManagementResult } from '../../src/graphql/management.graphql';
+import type { StoreManagementResult, StoreProfileRecord } from '../../src/graphql/management.graphql';
 import '../../src/index.css';
+import { AppShell } from '../../src/layouts/AppShell';
+import { AssetsModule } from '../../src/pages/Catalog/AssetsModule';
 import { CatalogExportAction } from '../../src/pages/Catalog/CatalogExportAction';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
 import {
@@ -22,25 +25,42 @@ import {
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
 import { CatalogImportAction } from '../../src/pages/Catalog/import/CatalogImportAction';
 import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
+import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModule';
+import { StoreAllocationMatrixModule } from '../../src/pages/Catalog/StoreAllocationMatrixModule';
+import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
+import { AfterSalesModule } from '../../src/pages/Sales/AfterSalesModule';
+import { CardPoolModule } from '../../src/pages/Sales/CardPoolModule';
+import { DraftOrderEditor } from '../../src/pages/Sales/OrderWorkflowEditor';
 import { ProfitReportModule } from '../../src/pages/Sales/ProfitReportModule';
 import { SalesModule } from '../../src/pages/Sales/SalesModule';
 import { PaymentShippingManager } from '../../src/pages/Settings/PaymentShippingManager';
+import { RolesModule } from '../../src/pages/Settings/RolesModule';
+import { StoreEditor } from '../../src/pages/Settings/StoreDialogs';
+import { StoresPanel } from '../../src/pages/Settings/StorePanels';
 import { SystemOpsModule } from '../../src/pages/Settings/SystemOpsModule';
 import { TranslationsModule } from '../../src/pages/Settings/TranslationsModule';
 import { UsdtPaymentManagementModule } from '../../src/pages/Settings/UsdtPaymentManagementModule';
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
+import { ThemeProvider } from '../../src/theme/ThemeProvider';
 
 // Synthetic local data only. No HTTP link; every mutation is rejected.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
 const viewLabels: Record<string, string> = {
+    draft: '草稿订单',
+    team: '员工与权限',
+    allocation: '商品分配',
+    assets: '素材',
+    cardpool: '卡密库',
+    aftersales: '售后',
     dashboard: '工作台',
     sales: '订单列表',
     reviews: '买家评价',
     catalog: '商品列表',
+    suppliers: '供货商',
     paymentSettings: '支付设置',
     product: '商品编辑',
     profit: '利润统计',
@@ -51,12 +71,15 @@ const viewLabels: Record<string, string> = {
     plugins: '客户端插件',
     copy: '商业服务文案',
     categories: '商品分类',
+    purchases: '采购与收货',
+    stores: '店铺设置',
 };
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
 const channel = {
     id: 'layout-channel',
     code: '布局验收店铺',
+    customFields: { storefrontNameZh: '布局验收店铺', storefrontNameEn: 'Layout demo' },
     token: '',
     defaultLanguageCode: 'zh_Hans',
     availableLanguageCodes: ['zh_Hans', 'en'],
@@ -293,9 +316,138 @@ const fixtureOrder = {
     payments: [],
 };
 const data: Record<string, unknown> = {
-    products: { items: [product], totalItems: 1 },
+    order: {
+        ...fixtureOrder,
+        id: 'layout-order',
+        state: 'Draft',
+        customer: null,
+        salesChannel: channel,
+        nextStates: ['Cancelled', 'ArrangingPayment'],
+        couponCodes: [],
+        shippingLines: [],
+        totalWithTax: 0,
+    },
+    myAdministratorAccess: {
+        id: 'local-access',
+        scope: 'STORE',
+        authority: 'ADMIN',
+        status: 'ACTIVE',
+        channel,
+    },
+    manageableAdministrators: Array.from({ length: params.has('empty') ? 0 : 3 }, (_, i) => ({
+        id: `access-${i}`,
+        scope: 'STORE',
+        authority: 'STAFF',
+        status: 'ACTIVE',
+        channel,
+        administrator: {
+            id: `member-${i}`,
+            firstName: '示例',
+            lastName: `员工 ${i + 1}`,
+            emailAddress: `staff${i}@example.invalid`,
+            createdAt: now,
+            updatedAt: now,
+            user: { id: `user-${i}`, identifier: `staff${i}`, lastLogin: now, roles: [] },
+        },
+    })),
+    manageableRoles: [
+        {
+            id: 'role-1',
+            code: 'store-staff',
+            description: '示例员工',
+            createdAt: now,
+            updatedAt: now,
+            permissions: ['ReadProduct'],
+            channels: [channel],
+        },
+    ],
+    manageableChannels: [channel],
+    permissionPolicyCatalog: { permissions: [], templates: [] },
+    platformCatalogProducts: {
+        totalItems: 0,
+        items: [],
+        categories: [],
+        ownershipReviewCount: 0,
+        unassignedCount: 0,
+        channels: [
+            {
+                id: channel.id,
+                displayName: channel.code,
+                currencyCode: 'MYR',
+                assignedCount: 0,
+                coverageDenominator: 0,
+            },
+        ],
+    },
+    platformCatalogResources: [],
+    myStoreCatalogStatus: {
+        authorized: params.has('empty') ? 0 : params.has('many') ? 60 : 1,
+        listed: params.has('empty') ? 0 : params.has('many') ? 60 : 1,
+        paused: 0,
+        pending: 0,
+        outOfStock: 0,
+        items: params.has('empty')
+            ? []
+            : Array.from({ length: params.has('many') ? 60 : 1 }, (_, i) => ({
+                  productId: params.has('many') ? `layout-many-${i}` : product.id,
+                  listed: true,
+                  pending: false,
+                  paused: false,
+                  outOfStock: false,
+              })),
+    },
+    products: params.has('empty')
+        ? empty
+        : {
+              items: [
+                  {
+                      ...product,
+                      collections: params.has('categoryRegression')
+                          ? [
+                                {
+                                    id: 'category-1',
+                                    name: 'Codex订阅',
+                                    slug: 'codex',
+                                    parent: {
+                                        id: 'root',
+                                        name: '未填写中文名称',
+                                        slug: '__root_collection__',
+                                    },
+                                },
+                                {
+                                    id: 'category-2',
+                                    name: '成品账号',
+                                    slug: 'ready-account',
+                                    parent: { id: 'category-1', name: 'Codex订阅', slug: 'codex' },
+                                },
+                            ]
+                          : product.collections,
+                  },
+              ],
+              totalItems: 1,
+          },
     catalogProductOperations: [],
+    catalogProductChannelAssignments: {
+        items: [
+            {
+                id: product.id,
+                name: product.name,
+                enabled: true,
+                channels: [
+                    { id: channel.id, code: channel.code, displayName: '布局验收店铺', isDefault: false },
+                ],
+            },
+        ],
+        totalItems: 1,
+        channels: [{ id: channel.id, code: channel.code, displayName: '布局验收店铺', isDefault: false }],
+        scopeChannel: { id: channel.id, code: channel.code, isDefault: false },
+        summary: { totalItems: 1, unassignedItems: 0, multiChannelItems: 0, channelCounts: [] },
+    },
     physicalFulfillmentTodoCount: 3,
+    fulfillmentDeliveryExceptions: empty,
+    storefrontReviewSettings: { enabled: true },
+    customers: empty,
+    eligibleShippingMethodsForDraftOrder: [],
     afterSalesRequests: { totalItems: 2, items: [] },
     storefrontReviews: {
         totalItems: 1,
@@ -341,9 +493,27 @@ const data: Record<string, unknown> = {
     facets: empty,
     assets: empty,
     productOptionGroups: empty,
+    productVariants: empty,
     collections: { items: collections, totalItems: collections.length },
     selectedCollections: empty,
-    catalogSuppliers: empty,
+    catalogSuppliers: {
+        items: Array.from({ length: params.has('empty') ? 0 : params.has('multi') ? 3 : 1 }, (_, i) => ({
+            id: `supplier-${i}`,
+            name: `[QA] 模拟采购供货商 ${i + 1}`,
+            code: `QA-SUPPLIER-${i + 1}`,
+            enabled: view === 'suppliers' || view === 'purchases',
+            contactName: null,
+            phone: null,
+            email: null,
+            address: null,
+            notes: null,
+            linkedVariantCount: 0,
+            createdAt: now,
+            updatedAt: now,
+        })),
+        totalItems: params.has('empty') ? 0 : params.has('multi') ? 3 : 1,
+    },
+    catalogPurchaseOrders: empty,
     suppliers: empty,
     catalogProductWorkspace: {
         productId: product.id,
@@ -421,11 +591,42 @@ const data: Record<string, unknown> = {
             : [],
     apiKeys: empty,
     activeAdministrator: null,
-    storefrontContentBlocks: [],
+    storefrontContentBlocks:
+        view === 'plugins' && !params.has('empty')
+            ? [
+                  {
+                      id: 'local-plugins',
+                      code: 'storefront-client-plugins',
+                      type: 'CLIENT_PLUGINS',
+                      updatedAt: now,
+                      internalName: '本地插件',
+                      layoutVariant: 'CUSTOM',
+                      enabled: true,
+                      position: 10001,
+                      settings: { version: 1 },
+                      translations: [],
+                      items: storefrontClientPluginCatalog.map((plugin, i) => ({
+                          id: `plugin-${i}`,
+                          enabled: true,
+                          position: i,
+                          targetType: 'NONE',
+                          translations: [],
+                          settings: {
+                              pluginCode: plugin.code,
+                              placement: plugin.defaultPlacement,
+                              categoryScope: 'ALL',
+                              categoryIds: [],
+                              includeChildren: true,
+                          },
+                      })),
+                  },
+              ]
+            : [],
     storeUsdtWallets: [wallet],
     storePaymentStats: [{ ...payment, settledCount: 1, refundCount: 0, grossAmount: 5000 }],
     storePaymentDetails: { items: [payment], totalItems: 1 },
     storeUsdtManualRefunds: empty,
+    storeUsdtReconciliationActions: [],
     storeUsdtPaymentStats: [
         {
             channelId: channel.id,
@@ -442,6 +643,18 @@ const data: Record<string, unknown> = {
     ],
     storeUsdtPaymentIntents: [],
 };
+// GraphQL combines repeated selections (e.g. order lines in a fragment plus their prices).
+function mergeProjection(previous: unknown, next: unknown): unknown {
+    if (Array.isArray(previous) && Array.isArray(next)) {
+        return next.map((value, index) => mergeProjection(previous[index], value));
+    }
+    if (previous && next && typeof previous === 'object' && typeof next === 'object') {
+        const result = { ...previous } as Record<string, unknown>;
+        for (const [key, value] of Object.entries(next)) result[key] = mergeProjection(result[key], value);
+        return result;
+    }
+    return next;
+}
 // Project only the requested fields; absent nullable values remain null.
 function project(
     source: unknown,
@@ -453,11 +666,14 @@ function project(
     const result: Record<string, unknown> = {};
     for (const field of selection.selections) {
         if (field.kind === Kind.FRAGMENT_SPREAD) {
-            Object.assign(result, project(source, fragments[field.name.value].selectionSet, fragments));
+            Object.assign(
+                result,
+                mergeProjection(result, project(source, fragments[field.name.value].selectionSet, fragments)),
+            );
             continue;
         }
         if (field.kind === Kind.INLINE_FRAGMENT) {
-            Object.assign(result, project(source, field.selectionSet, fragments));
+            Object.assign(result, mergeProjection(result, project(source, field.selectionSet, fragments)));
             continue;
         }
         const typeFragment = selection.selections.find(item => item.kind === Kind.FRAGMENT_SPREAD);
@@ -468,9 +684,9 @@ function project(
                     ? fragments[typeFragment.name.value].typeCondition.name.value
                     : 'LayoutFixture'
                 : null);
-        result[field.alias?.value ?? field.name.value] = field.selectionSet
-            ? project(value, field.selectionSet, fragments)
-            : value;
+        const key = field.alias?.value ?? field.name.value;
+        const projected = field.selectionSet ? project(value, field.selectionSet, fragments) : value;
+        result[key] = mergeProjection(result[key], projected);
     }
     return result;
 }
@@ -495,7 +711,102 @@ const client = new ApolloClient({
                         .filter(d => d.kind === Kind.FRAGMENT_DEFINITION)
                         .map(d => [d.name.value, d]),
                 );
-                let responseData = data;
+                let responseData = params.has('empty')
+                    ? {
+                          ...data,
+                          storefrontReviews: { items: [], totalItems: 0, averageRating: 0 },
+                          afterSalesRequests: empty,
+                      }
+                    : data;
+                if (params.has('many')) {
+                    responseData = {
+                        ...responseData,
+                        products: {
+                            items: Array.from({ length: 20 }, (_, i) => ({
+                                ...product,
+                                id: `layout-many-${i + Number(operation.variables.options?.skip ?? 0)}`,
+                                name: `布局验收商品 ${i + 1 + Number(operation.variables.options?.skip ?? 0)}`,
+                            })),
+                            totalItems: 60,
+                        },
+                        order: {
+                            ...(data.order as object),
+                            totalQuantity: 20,
+                            totalWithTax: 100000,
+                            lines: Array.from({ length: 20 }, (_, i) => ({
+                                id: `line-${i}`,
+                                quantity: 1,
+                                productVariant: {
+                                    ...variants[0],
+                                    id: `order-variant-${i}`,
+                                    name: `示例商品 ${i + 1}`,
+                                    sku: `LAYOUT-SKU-${i + 1}`,
+                                },
+                                unitPriceWithTax: 5000,
+                                linePriceWithTax: 5000,
+                            })),
+                        },
+                    };
+                }
+                if (view === 'tabs') {
+                    const productId = String(
+                        operation.variables.id ?? operation.variables.productId ?? product.id,
+                    );
+                    const selectedProduct = {
+                        ...product,
+                        id: productId,
+                        variants: product.variants.map(variant => ({
+                            ...variant,
+                            id: `${productId}-${variant.id}`,
+                        })),
+                    };
+                    responseData = {
+                        ...data,
+                        product: selectedProduct,
+                        catalogProductChannelAssignments: {
+                            items: [{ id: productId, channels: [channel] }],
+                            totalItems: 1,
+                        },
+                        catalogProductWorkspace: {
+                            ...(data.catalogProductWorkspace as object),
+                            productId,
+                            variants: [],
+                        },
+                        globalSettings: {
+                            availableLanguages: ['zh_Hans', 'en'],
+                            serverConfig: { entityCustomFields: [] },
+                        },
+                        me: {
+                            id: 'tabs-admin',
+                            identifier: 'local@example.invalid',
+                            channels: [{ ...channel, permissions: ['SuperAdmin'] }],
+                        },
+                        activeAdministrator: {
+                            id: 'tabs-admin',
+                            firstName: '模拟',
+                            lastName: '验收',
+                            emailAddress: 'local@example.invalid',
+                            createdAt: now,
+                            updatedAt: now,
+                            user: {
+                                id: 'tabs-admin',
+                                identifier: 'local@example.invalid',
+                                verified: true,
+                                lastLogin: null,
+                                authenticationMethods: [],
+                                roles: [
+                                    {
+                                        id: 'local-role',
+                                        code: '__super_admin_role__',
+                                        description: '',
+                                        channels: [channel],
+                                    },
+                                ],
+                            },
+                        },
+                    };
+                    tabOperations.push({ name: operation.operationName, variables: operation.variables });
+                }
                 if (operation.operationName === 'NextAdminContentTranslationAudit') {
                     const options = operation.variables.options ?? {};
                     const filtered = states.filter(
@@ -530,6 +841,8 @@ const client = new ApolloClient({
             }),
     ),
 });
+const tabOperations: Array<{ name: string; variables: Record<string, unknown> }> = [];
+if (view === 'tabs') Object.assign(window, { tabOperations });
 defineNextAdminExtension({
     id: 'admin-layout-fixture',
     actions: [CatalogImportAction, CatalogExportAction].map((component, i) => ({
@@ -550,7 +863,13 @@ class FixtureBoundary extends React.Component<React.PropsWithChildren, { error: 
         return { error: error.stack ?? error.message };
     }
     render() {
-        return this.state.error ? <pre role="alert">{this.state.error}</pre> : this.props.children;
+        return this.state.error ? (
+            <pre data-layout-fixture-error role="alert">
+                {this.state.error}
+            </pre>
+        ) : (
+            this.props.children
+        );
     }
 }
 const paymentSettingsData = {
@@ -563,11 +882,141 @@ const paymentSettingsData = {
     shippingCalculators: [],
     fulfillmentHandlers: [],
 } as unknown as StoreManagementResult;
+
+const storeProfileSamples: StoreProfileRecord[] = [
+    '示例店铺一',
+    '示例店铺二',
+    '示例店铺三',
+    '正式营业示例',
+].map((name, index) => {
+    const ready = index === 3 || (index === 0 && params.has('ready'));
+    return {
+        id: `layout-store-${index + 1}`,
+        updatedAt: now,
+        status: index === 3 ? 'ACTIVE' : 'DRAFT',
+        isPublished: index === 1,
+        isOperational: index === 1 || index === 3,
+        sortOrder: index,
+        descriptionZh: index === 0 ? '' : '本地验收示例店铺',
+        descriptionEn: '',
+        taglineZh: null,
+        taglineEn: null,
+        brandBackgroundColor: null,
+        brandPrimaryColor: null,
+        brandAccentColor: null,
+        brandHighlightColor: null,
+        legalEntityName: null,
+        legalRegistrationCountry: null,
+        legalRegistrationNumber: null,
+        legalContactAddress: null,
+        supportEmail: null,
+        privacyEmail: null,
+        internalNote: null,
+        primaryDomain: index === 2 ? null : `store-${index + 1}.example.invalid`,
+        storefrontUrl: null,
+        activationReadiness: {
+            ready,
+            checks: ready
+                ? []
+                : index === 2
+                  ? [
+                        {
+                            code: 'DOMAIN',
+                            ready: false,
+                            message: '请配置并验证主域名',
+                            messageEn: 'Domain missing',
+                        },
+                    ]
+                  : [
+                        ...(index === 0
+                            ? [
+                                  {
+                                      code: 'PROFILE',
+                                      ready: false,
+                                      message: '请填写店铺简介',
+                                      messageEn: 'Profile missing',
+                                  },
+                              ]
+                            : []),
+                        {
+                            code: 'PAYMENT',
+                            ready: false,
+                            message: '请启用正式支付方式',
+                            messageEn: 'Payment missing',
+                        },
+                    ],
+        },
+        logoAsset: null,
+        logoOnLightAsset: null,
+        logoOnDarkAsset: null,
+        channel: {
+            ...channel,
+            id: `layout-channel-${index + 1}`,
+            code: `layout-shop-${index + 1}`,
+            token: `fixture-channel-${index + 1}`,
+            seller: null,
+            customFields: { storefrontNameZh: name, storefrontNameEn: `Fixture ${index + 1}` },
+        },
+    };
+});
+const storeFixtureWindow = window as Window & { storePreviewRequests: string[] };
+storeFixtureWindow.storePreviewRequests = [];
+
+function StoreManagementFixture() {
+    const [activeChannelId, setActiveChannelId] = useState('layout-channel-1');
+    const [editing, setEditing] = useState<StoreProfileRecord | null>(null);
+    return (
+        <div className="space-y-4 p-5">
+            <label className="block text-sm font-bold">
+                当前店铺（本地验收）
+                <select
+                    value={activeChannelId}
+                    onChange={event => setActiveChannelId(event.target.value)}
+                    className="ml-3 rounded-lg border border-slate-300 bg-white px-3 py-2"
+                >
+                    {storeProfileSamples.map(profile => (
+                        <option key={profile.id} value={profile.channel.id}>
+                            {profile.channel.customFields.storefrontNameZh}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <StoresPanel
+                profiles={storeProfileSamples}
+                activeChannelId={activeChannelId}
+                publicPreviewBusy={false}
+                onTogglePublicPreview={profile => {
+                    // Record the target only; no profile or storefront is changed.
+                    storeFixtureWindow.storePreviewRequests.push(profile.id);
+                }}
+                onEdit={setEditing}
+                onDeprovision={() => {}}
+                allowPermanentDeprovision={true}
+            />
+            {editing && (
+                <StoreEditor
+                    profile={editing}
+                    onClose={() => setEditing(null)}
+                    onCompleted={async () => {}}
+                    onError={() => {}}
+                />
+            )}
+        </div>
+    );
+}
+
 const modules: Record<string, React.ReactNode> = {
+    draft: <DraftOrderEditor />,
+    team: <RolesModule />,
+    allocation: <StoreAllocationMatrixModule />,
+    assets: <AssetsModule />,
+    cardpool: <CardPoolModule />,
+    aftersales: <AfterSalesModule />,
     dashboard: <DashboardModule />,
     sales: <SalesModule />,
     reviews: <ReviewsModule />,
     catalog: <CatalogModule />,
+    suppliers: <SuppliersModule />,
     paymentSettings: (
         <div className="p-5">
             <PaymentShippingManager
@@ -589,79 +1038,130 @@ const modules: Record<string, React.ReactNode> = {
     plugins: <ClientPluginsModule />,
     copy: <BusinessServicesCopyModule />,
     categories: <CategoriesModule />,
+    purchases: <PurchaseOrdersModule />,
+    stores: <StoreManagementFixture />,
 };
-createRoot(document.getElementById('root')!).render(
-    <ApolloProvider client={client}>
-        <AdminPermissionsProvider permissions={['SuperAdmin']}>
-            <ConfirmDialogContext.Provider value={async () => false}>
-                <CustomFieldsContext.Provider
-                    value={{
-                        availableLanguages: ['zh_Hans', 'en'],
-                        entities: [
-                            {
-                                entityName: 'ProductVariant',
-                                customFields: [
-                                    {
-                                        name: 'deliveryNote',
-                                        type: 'text',
-                                        list: false,
-                                        nullable: true,
-                                        label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-                                    },
-                                ],
-                            },
-                        ],
-                    }}
-                >
+if (view === 'tabs') {
+    createRoot(document.getElementById('root')!).render(
+        <ThemeProvider>
+            <ApolloProvider client={client}>
+                <ConfirmDialogContext.Provider value={async () => false}>
                     <FeatureHelpProvider>
-                        <div className="flex h-screen min-w-0">
-                            <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-5 md:block">
-                                <strong>后台布局验收</strong>
-                                <nav className="mt-5 space-y-4">
-                                    {Object.keys(modules).map(name => (
-                                        <a
-                                            key={viewLabels[name]}
-                                            className="block text-sm text-blue-600"
-                                            href={`?view=${name}`}
+                        <MemoryRouter initialEntries={['/catalog/list']}>
+                            <nav
+                                aria-label="本地测试导航"
+                                className="fixed bottom-0 right-0 z-50 flex gap-3 bg-amber-100 p-2 text-xs"
+                            >
+                                本地模拟数据 · 写入已阻止
+                                <Link to="/catalog/list">测试商品列表</Link>
+                                <Link to="/catalog/products/layout-product">测试商品一</Link>
+                                <Link to="/catalog/products/layout-product-2">测试商品二</Link>
+                            </nav>
+                            <Routes>
+                                <Route element={<AppShell />}>
+                                    <Route path="dashboard" element={<DashboardModule />} />
+                                    <Route path="catalog/list" element={<CatalogModule />} />
+                                    <Route path="catalog/products/:id" element={<ProductEditor />} />
+                                </Route>
+                            </Routes>
+                        </MemoryRouter>
+                    </FeatureHelpProvider>
+                </ConfirmDialogContext.Provider>
+            </ApolloProvider>
+        </ThemeProvider>,
+    );
+} else {
+    createRoot(document.getElementById('root')!).render(
+        <ApolloProvider client={client}>
+            <AdminPermissionsProvider permissions={['SuperAdmin']}>
+                <ConfirmDialogContext.Provider value={async () => false}>
+                    <CustomFieldsContext.Provider
+                        value={{
+                            availableLanguages: ['zh_Hans', 'en'],
+                            entities: [
+                                {
+                                    entityName: 'ProductVariant',
+                                    customFields: [
+                                        {
+                                            name: 'deliveryNote',
+                                            type: 'text',
+                                            list: false,
+                                            nullable: true,
+                                            label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                                        },
+                                    ],
+                                },
+                            ],
+                        }}
+                    >
+                        <FeatureHelpProvider>
+                            <div className="flex h-screen min-w-0">
+                                <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-5 md:block">
+                                    <strong>后台布局验收</strong>
+                                    <nav className="mt-5 space-y-2">
+                                        {Object.keys(modules).map(name => (
+                                            <a
+                                                key={viewLabels[name]}
+                                                className="block text-sm text-blue-600"
+                                                href={`?view=${name}&light${params.has('empty') ? '&empty' : ''}`}
+                                            >
+                                                {viewLabels[name]}
+                                            </a>
+                                        ))}
+                                    </nav>
+                                </aside>
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <header className="h-24 shrink-0 border-b border-slate-200 bg-white text-xs">
+                                        <div className="flex h-14 items-center justify-between gap-2 px-4">
+                                            <strong className="text-slate-700">Vendure 管理后台</strong>
+                                            <span className="rounded bg-amber-50 px-2 py-1 text-amber-900">
+                                                模拟数据 · 写入已阻止
+                                            </span>
+                                        </div>
+                                        <div className="flex h-10 items-center border-t border-slate-100 bg-slate-50 px-4 font-semibold text-slate-700">
+                                            {viewLabels[view]} · 布局验收
+                                        </div>
+                                    </header>
+                                    <div id="fixture-content" className="min-h-0 flex-1 overflow-hidden">
+                                        <MemoryRouter
+                                            initialEntries={[
+                                                view === 'draft'
+                                                    ? '/sales/orders/draft/layout-order'
+                                                    : view === 'team'
+                                                      ? `/settings/team?tab=${params.get('tab') ?? 'members'}`
+                                                      : view === 'product'
+                                                        ? '/catalog/products/layout-product'
+                                                        : view === 'jobs'
+                                                          ? '/settings/system-ops?tab=jobs'
+                                                          : view === 'health'
+                                                            ? '/settings/system-ops?tab=health'
+                                                            : '/',
+                                            ]}
                                         >
-                                            {viewLabels[name]}
-                                        </a>
-                                    ))}
-                                </nav>
-                            </aside>
-                            <div className="flex min-w-0 flex-1 flex-col">
-                                <div className="shrink-0 bg-amber-100 px-4 py-2 text-xs text-amber-900">
-                                    本地模拟数据 · 所有写入均已阻止
-                                </div>
-                                <div className="min-h-0 flex-1 overflow-auto">
-                                    <MemoryRouter
-                                        initialEntries={[
-                                            view === 'product'
-                                                ? '/catalog/products/layout-product'
-                                                : view === 'jobs'
-                                                  ? '/settings/system-ops?tab=jobs'
-                                                  : view === 'health'
-                                                    ? '/settings/system-ops?tab=health'
-                                                    : '/',
-                                        ]}
-                                    >
-                                        <Routes>
-                                            <Route
-                                                path={view === 'product' ? '/catalog/products/:id' : '*'}
-                                                element={
-                                                    <FixtureBoundary>
-                                                        {modules[view] ?? modules.product}
-                                                    </FixtureBoundary>
-                                                }
-                                            />
-                                        </Routes>
-                                    </MemoryRouter>
+                                            <Routes>
+                                                <Route
+                                                    path={
+                                                        view === 'draft'
+                                                            ? '/sales/orders/draft/:id'
+                                                            : view === 'product'
+                                                              ? '/catalog/products/:id'
+                                                              : '*'
+                                                    }
+                                                    element={
+                                                        <FixtureBoundary>
+                                                            {modules[view] ?? modules.product}
+                                                        </FixtureBoundary>
+                                                    }
+                                                />
+                                            </Routes>
+                                        </MemoryRouter>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </FeatureHelpProvider>
-                </CustomFieldsContext.Provider>
-            </ConfirmDialogContext.Provider>
-        </AdminPermissionsProvider>
-    </ApolloProvider>,
-);
+                        </FeatureHelpProvider>
+                    </CustomFieldsContext.Provider>
+                </ConfirmDialogContext.Provider>
+            </AdminPermissionsProvider>
+        </ApolloProvider>,
+    );
+}

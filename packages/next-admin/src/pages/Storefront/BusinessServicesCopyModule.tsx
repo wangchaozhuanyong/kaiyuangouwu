@@ -237,7 +237,7 @@ export function BusinessServicesCopyModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-6xl flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-none min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {notice && <Message tone="success" message={notice} />}
                 {error && <Message tone="error" message={error} />}
                 {query.loading && !draft ? (
@@ -245,8 +245,8 @@ export function BusinessServicesCopyModule() {
                 ) : query.error || !draft ? (
                     <State tone="error" label="页面文案加载失败" action={() => void query.refetch()} />
                 ) : (
-                    <div className="grid items-start gap-4 lg:grid-cols-[1fr_0.8fr]">
-                        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+                        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="flex items-center gap-2 text-sm font-bold">
@@ -275,20 +275,33 @@ export function BusinessServicesCopyModule() {
                                                     : current,
                                             )
                                         }
-                                        className={secondaryButton}
+                                        className={`${secondaryButton} shrink-0`}
                                     >
                                         <RotateCcw className="h-3.5 w-3.5" />
                                         恢复默认
                                     </button>
                                 )}
                             </div>
+                            <label className="flex items-center gap-3 text-xs font-semibold text-slate-700">
+                                <span className="shrink-0">编辑语言</span>
+                                <select
+                                    aria-label="编辑语言"
+                                    value={previewLanguage}
+                                    onChange={event => setPreviewLanguage(event.target.value as Language)}
+                                    className={inputClass}
+                                >
+                                    <option value="zh_Hans">中文</option>
+                                    <option value="en">英文</option>
+                                </select>
+                            </label>
                             {(['zh_Hans', 'en'] as const).map(language => {
                                 const translation = getTranslation(draft, language);
                                 const zh = language === 'zh_Hans';
                                 return (
                                     <div
                                         key={language}
-                                        className="space-y-3 rounded-lg border border-slate-200 p-4"
+                                        hidden={language !== previewLanguage}
+                                        className="space-y-3"
                                     >
                                         <strong className="text-xs">{zh ? '中文' : '英文'}</strong>
                                         <Field label={`标题 ${translation.title.length}/${zh ? 40 : 80}`}>
@@ -302,10 +315,10 @@ export function BusinessServicesCopyModule() {
                                                 className={inputClass}
                                             />
                                         </Field>
-                                        <Field label={`说明 ${translation.body.length}/${zh ? 100 : 180}`}>
+                                        <Field label={`说明 ${translation.body.length}/200`}>
                                             <textarea
                                                 value={translation.body}
-                                                maxLength={zh ? 100 : 180}
+                                                maxLength={200}
                                                 rows={2}
                                                 disabled={!canEdit}
                                                 onChange={event =>
@@ -317,118 +330,120 @@ export function BusinessServicesCopyModule() {
                                     </div>
                                 );
                             })}
-                            <fieldset
-                                disabled={!canEdit || pending}
-                                className="space-y-3 rounded-lg border border-slate-200 p-4"
-                            >
-                                <AssetPicker
-                                    label="电脑端商业服务页首配图"
-                                    value={draft.imageAsset}
-                                    fallbackUrl={draft.imageUrl}
-                                    onChange={asset =>
-                                        setDraft(current =>
-                                            current
-                                                ? {
-                                                      ...current,
-                                                      imageAsset: asset,
-                                                      imageAssetId: asset?.id ?? null,
-                                                      imageUrl: null,
-                                                  }
-                                                : current,
-                                        )
-                                    }
-                                />
-                                <p className="text-xs leading-5 text-slate-500">
-                                    图片显示在电脑端卡片右侧，手机端沿用原布局。建议选用主体清晰的横图。
-                                </p>
-                                {imageChanges.length > 0 && (
-                                    <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">
-                                        <input
-                                            type="checkbox"
-                                            checked={imagesConfirmed}
-                                            onChange={event =>
-                                                setReviewedImageKey(
-                                                    event.target.checked ? imageReviewKey : null,
-                                                )
-                                            }
+                        </section>
+                        <div className="min-w-0 space-y-3 lg:sticky lg:top-0">
+                            <section className="rounded-xl border border-slate-200 bg-white p-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="flex items-center gap-2 text-sm font-bold">
+                                        前台预览
+                                        <FeatureHelpButton
+                                            topic="storefront.business-copy"
+                                            title="商业服务页前台预览"
                                         />
-                                        我确认将当前已设置的商业服务页配图替换或清除
-                                    </label>
-                                )}
-                            </fieldset>
-                            <div className="space-y-2 rounded-lg border border-slate-200 p-4">
-                                <Field label="跳转链接地址（可选）">
-                                    <input
-                                        type="url"
-                                        inputMode="url"
-                                        autoComplete="url"
-                                        value={linkValue}
-                                        maxLength={2048}
-                                        disabled={!canEdit}
-                                        placeholder="https://example.com/services"
-                                        aria-invalid={!linkIsValid}
-                                        onChange={event => changeLink(event.target.value)}
-                                        className={inputClass}
-                                    />
-                                </Field>
-                                <p className="text-xs leading-5 text-slate-500">
-                                    支持站内路径（如 /promotions）或完整的 HTTP(S)
-                                    网址；填写后前台卡片会显示访问入口。
-                                </p>
-                                {!linkIsValid && (
-                                    <p role="alert" className="text-xs font-medium text-rose-700">
-                                        请输入有效的站内路径或 HTTP(S) 网址。
-                                    </p>
-                                )}
-                            </div>
-                        </section>
-                        <section className="rounded-xl border border-slate-200 bg-white p-5">
-                            <div className="flex items-center justify-between">
-                                <h2 className="flex items-center gap-2 text-sm font-bold">
-                                    前台预览
-                                    <FeatureHelpButton
-                                        topic="storefront.business-copy"
-                                        title="商业服务页前台预览"
-                                    />
-                                </h2>
-                                <select
-                                    value={previewLanguage}
-                                    onChange={event => setPreviewLanguage(event.target.value as Language)}
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                                >
-                                    <option value="zh_Hans">中文</option>
-                                    <option value="en">英文</option>
-                                </select>
-                            </div>
-                            <div
-                                className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
-                            >
-                                <div className="min-w-0 [overflow-wrap:anywhere]">
-                                    <h3 className="text-2xl font-bold leading-tight">
-                                        {preview.title || '—'}
-                                    </h3>
-                                    <p className="mt-3 text-sm leading-6 text-slate-300">
-                                        {preview.body || '—'}
-                                    </p>
-                                    {linkValue.trim() && linkIsValid ? (
-                                        <span className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
-                                            {preview.ctaLabel?.trim() ||
-                                                (previewLanguage === 'zh_Hans'
-                                                    ? '打开服务网站'
-                                                    : 'Open service website')}
-                                            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </span>
-                                    ) : null}
+                                    </h2>
+                                    <select
+                                        value={previewLanguage}
+                                        onChange={event => setPreviewLanguage(event.target.value as Language)}
+                                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                                    >
+                                        <option value="zh_Hans">中文</option>
+                                        <option value="en">英文</option>
+                                    </select>
                                 </div>
-                                {previewImage && (
-                                    <img
-                                        src={previewImage}
-                                        alt="商业服务页首配图预览"
-                                        className="h-40 w-full rounded-xl object-contain sm:h-[200px]"
+                                <div
+                                    className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
+                                >
+                                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(45%)] items-start gap-3 [overflow-wrap:anywhere]">
+                                        <h3 className="text-2xl font-bold leading-tight">
+                                            {preview.title || '—'}
+                                        </h3>
+                                        {linkValue.trim() && linkIsValid ? (
+                                            <span className="col-start-2 row-start-1 inline-flex min-h-11 items-center justify-self-end gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                                {preview.ctaLabel?.trim() ||
+                                                    (previewLanguage === 'zh_Hans'
+                                                        ? '打开服务网站'
+                                                        : 'Open service website')}
+                                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                                            </span>
+                                        ) : null}
+                                        <p className="col-span-full text-sm leading-6 text-slate-300">
+                                            {preview.body || '—'}
+                                        </p>
+                                    </div>
+                                    {previewImage && (
+                                        <img
+                                            src={previewImage}
+                                            alt="商业服务页首配图预览"
+                                            className="h-40 w-full rounded-xl object-contain sm:h-[200px]"
+                                        />
+                                    )}
+                                </div>
+                            </section>
+                            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                                {' '}
+                                <fieldset disabled={!canEdit || pending} className="space-y-2">
+                                    <AssetPicker
+                                        label="电脑端商业服务页首配图"
+                                        value={draft.imageAsset}
+                                        fallbackUrl={draft.imageUrl}
+                                        onChange={asset =>
+                                            setDraft(current =>
+                                                current
+                                                    ? {
+                                                          ...current,
+                                                          imageAsset: asset,
+                                                          imageAssetId: asset?.id ?? null,
+                                                          imageUrl: null,
+                                                      }
+                                                    : current,
+                                            )
+                                        }
                                     />
-                                )}
-                            </div>
-                        </section>
+                                    <p className="text-xs leading-5 text-slate-500">
+                                        图片显示在电脑端卡片右侧，手机端沿用原布局。建议选用主体清晰的横图。
+                                    </p>
+                                    {imageChanges.length > 0 && (
+                                        <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">
+                                            <input
+                                                type="checkbox"
+                                                checked={imagesConfirmed}
+                                                onChange={event =>
+                                                    setReviewedImageKey(
+                                                        event.target.checked ? imageReviewKey : null,
+                                                    )
+                                                }
+                                            />
+                                            我确认将当前已设置的商业服务页配图替换或清除
+                                        </label>
+                                    )}
+                                </fieldset>
+                                <div className="space-y-2 border-t border-slate-200 pt-3">
+                                    <Field label="跳转链接地址（可选）">
+                                        <input
+                                            type="url"
+                                            inputMode="url"
+                                            autoComplete="url"
+                                            value={linkValue}
+                                            maxLength={2048}
+                                            disabled={!canEdit}
+                                            placeholder="https://example.com/services"
+                                            aria-invalid={!linkIsValid}
+                                            onChange={event => changeLink(event.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </Field>
+                                    <p className="text-xs leading-5 text-slate-500">
+                                        支持站内路径（如 /promotions）或完整的 HTTP(S)
+                                        网址；填写后前台卡片会显示访问入口。
+                                    </p>
+                                    {!linkIsValid && (
+                                        <p role="alert" className="text-xs font-medium text-rose-700">
+                                            请输入有效的站内路径或 HTTP(S) 网址。
+                                        </p>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
                     </div>
                 )}
             </main>

@@ -18,7 +18,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { CSSProperties, ReactNode, Suspense, useEffect, useId, useRef } from 'react';
+import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { isInputMethodKey } from '../input-method';
@@ -137,6 +137,11 @@ export function AuthPageBoundary({
             {children}
         </Suspense>
     );
+}
+
+/** Shared page inset and section rhythm; the page shell alone reserves its end gap. */
+export function SubpageBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+    return <div {...props} className={`subpage-body${className ? ` ${className}` : ''}`} />;
 }
 
 export function Subpage({

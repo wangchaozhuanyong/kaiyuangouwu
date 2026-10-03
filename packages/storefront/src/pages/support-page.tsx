@@ -1,6 +1,6 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { ArrowUpRight, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
 import { storefrontVisitorId } from '../referral-attribution';
@@ -15,7 +15,7 @@ import whatsappIcon from '../assets/support/whatsapp.svg';
 import { SafeImage } from '../safe-image';
 import { SupportPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
-import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
+import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
@@ -147,7 +147,7 @@ export function SupportContent({
 
     if (!channels.length && !faqs.length) {
         return (
-            <div className="support-center-content">
+            <SubpageBody className="support-center-content">
                 <EmptyState
                     icon={<Headphones />}
                     title={supportPageTitle(content, language)}
@@ -157,12 +157,12 @@ export function SupportContent({
                             : 'No contact channels or FAQs are available yet.'
                     }
                 />
-            </div>
+            </SubpageBody>
         );
     }
 
     return (
-        <div className="support-center-content">
+        <SubpageBody className="support-center-content">
             <header className="support-desktop-hero">
                 <div>
                     <span>{isZh ? '客户支持' : 'Customer support'}</span>
@@ -208,15 +208,6 @@ export function SupportContent({
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <div className="support-workspace">
                 <div className="support-contact-panel">
-                    <h2>
-                        {channels.length
-                            ? isZh
-                                ? '联系我们'
-                                : 'Contact us'
-                            : isZh
-                              ? '客服信息'
-                              : 'Support information'}
-                    </h2>
                     {channels.length ? (
                         <div className="support-hours-card">
                             <span className="support-hours-label">{isZh ? '服务时间' : 'Service hours'}</span>
@@ -429,11 +420,12 @@ export function SupportContent({
                             />
                         </div>
                         <p>{isZh ? '长按保存或使用微信扫一扫' : 'Save the code or scan it with WeChat'}</p>
-                        {typeof qrChannel.item.settings?.supportAccount === 'string' &&
-                        qrChannel.item.settings.supportAccount.trim() ? (
-                            <small>
-                                {isZh ? '微信号' : 'WeChat ID'}：{qrChannel.item.settings.supportAccount}
-                            </small>
+                        {typeof qrChannel.item.settings?.supportAccount === 'string' ? (
+                            <SupportQrAccount
+                                key={qrChannel.item.settings.supportAccount}
+                                account={qrChannel.item.settings.supportAccount}
+                                language={language}
+                            />
                         ) : null}
                         <a
                             className="support-qr-save"
@@ -447,7 +439,61 @@ export function SupportContent({
                     </div>
                 </Sheet>
             ) : null}
-        </div>
+        </SubpageBody>
+    );
+}
+
+function SupportQrAccount({ account, language }: { account: string; language: StorefrontLanguage }) {
+    const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
+    const isZh = language === 'zh';
+    const wechatId = account.trim();
+    if (!wechatId) return null;
+
+    const copyAccount = async () => {
+        setCopyState('copying');
+        try {
+            await navigator.clipboard.writeText(wechatId);
+            setCopyState('copied');
+        } catch {
+            setCopyState('failed');
+        }
+    };
+    const result =
+        copyState === 'copied'
+            ? isZh
+                ? '微信号已复制'
+                : 'WeChat ID copied'
+            : copyState === 'failed'
+              ? isZh
+                  ? '复制失败，请长按微信号手动复制'
+                  : 'Could not copy. Select the WeChat ID to copy it manually.'
+              : '';
+
+    return (
+        <>
+            <div className="support-qr-account">
+                <small>
+                    {isZh ? '微信号' : 'WeChat ID'}：{wechatId}
+                </small>
+                <button
+                    type="button"
+                    className="support-qr-copy"
+                    aria-label={isZh ? '复制微信号' : 'Copy WeChat ID'}
+                    disabled={copyState === 'copying'}
+                    onClick={() => void copyAccount()}
+                >
+                    {copyState === 'copied' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                    {copyState === 'copied' ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy'}
+                </button>
+            </div>
+            <span
+                className={copyState === 'failed' ? 'support-qr-copy-result' : 'sr-only'}
+                role="status"
+                aria-live="polite"
+            >
+                {result}
+            </span>
+        </>
     );
 }
 

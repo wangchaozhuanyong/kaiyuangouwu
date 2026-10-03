@@ -24,6 +24,7 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -70,6 +71,7 @@ const config = mergeConfig(testConfig, {
     },
     // Configure dependencies explicitly, with the cart schema defined before StoreManagement extends it.
     plugins: [
+        OperationsDashboardPlugin,
         ContentTranslationPlugin.init({ provider }),
         StorefrontContentPlugin,
         StorefrontCartPlugin,

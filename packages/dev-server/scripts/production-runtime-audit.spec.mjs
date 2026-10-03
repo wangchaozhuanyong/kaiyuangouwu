@@ -14,6 +14,136 @@ import {
     runBunAudit,
     writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
+void test('cache backport verifies aliases and runtime bytes without hiding raw high findings', async () => {
+    const { cp, mkdir, symlink } = await import('node:fs/promises');
+    const { HTTP_CACHE_PATCH, BRACES_PATCH, verifyHttpCachePatch } =
+        await import('./production-runtime-audit.mjs');
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-cache-patch-'));
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    const installed = path.join(repositoryRoot, 'node_modules/http-cache-semantics');
+    const localCopy = path.join(root, 'node_modules/http-cache-semantics');
+    const nestedCopy = path.join(root, 'packages/fixture/node_modules/cache-alias');
+    const registration = JSON.stringify({
+        patchedDependencies: { 'http-cache-semantics@4.2.0': HTTP_CACHE_PATCH.path },
+    });
+    const cacheReport = {
+        'http-cache-semantics': [
+            {
+                id: 1,
+                severity: 'high',
+                title: 'max-stale must not bypass reuse restrictions',
+                url: HTTP_CACHE_PATCH.advisory,
+                vulnerable_versions: '<=4.2.0',
+            },
+        ],
+        // A build-only advisory must not require a missing package in the runtime artifact.
+        braces: [
+            {
+                id: 2,
+                severity: 'high',
+                title: 'build-only braces',
+                url: BRACES_PATCH.advisory,
+                vulnerable_versions: '<=3.0.3',
+            },
+        ],
+    };
+    const inventory = [
+        {
+            name: HTTP_CACHE_PATCH.package,
+            version: HTTP_CACHE_PATCH.version,
+            path: 'node_modules/http-cache-semantics',
+        },
+    ];
+    const onlyCache = { 'http-cache-semantics': cacheReport['http-cache-semantics'] };
+    const run = report =>
+        runBunAudit(root, {
+            auditLevel: 'high',
+            runCommand: () => ({ status: 1, stdout: JSON.stringify(report), stderr: '' }),
+        });
+    try {
+        await mkdir(path.join(root, 'patches'), { recursive: true });
+        await cp(path.join(repositoryRoot, HTTP_CACHE_PATCH.path), path.join(root, HTTP_CACHE_PATCH.path));
+        await writeFile(path.join(root, 'package.json'), registration);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await cp(installed, localCopy, { recursive: true });
+        await cp(installed, nestedCopy, { recursive: true });
+        const verified = verifyHttpCachePatch(root);
+        assert.equal(verified.copies.length, 2);
+        assert.deepEqual(await run(onlyCache), onlyCache);
+        const saved = path.join(root, 'saved-audit.json');
+        writeBunAuditEvidence(saved, path.join(root, 'bun.lock'), cacheReport);
+        const lockSha = createHash('sha256').update(registration).digest('hex');
+        const runtime = await auditRuntimePackages(root, inventory, {
+            auditReportPath: saved,
+            expectedLockfileSha256: lockSha,
+            failOn: 'high',
+        });
+        assert.equal(runtime.summary.high, 1);
+        assert.equal(runtime.findings[0].url, HTTP_CACHE_PATCH.advisory);
+        assert.equal(runtime.verifiedPatches[0].patchSha256, HTTP_CACHE_PATCH.sha256);
+        assert.throws(
+            () =>
+                verifyHttpCachePatch(root, {
+                    runtimePackages: [{ ...inventory[0], version: '4.1.0' }],
+                    requireRegistration: false,
+                }),
+            /inventory version does not match/u,
+        );
+        const critical = {
+            'http-cache-semantics': [{ ...onlyCache['http-cache-semantics'][0], severity: 'critical' }],
+        };
+        await assert.rejects(run(critical), /policy failed/u);
+        const unknown = {
+            'http-cache-semantics': [
+                { ...onlyCache['http-cache-semantics'][0], url: 'https://example.com/another-high' },
+            ],
+        };
+        await assert.rejects(run(unknown), /policy failed/u);
+        const spoofed = createRuntimeAuditReport([{ ...inventory[0], version: '4.1.0' }], onlyCache, {
+            failOn: 'high',
+            verifiedPatches: [verified],
+        });
+        assert.equal(spoofed.blockedFindings.length, 1);
+        await writeFile(path.join(nestedCopy, 'index.js'), '// unpatched alias');
+        assert.throws(() => verifyHttpCachePatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'index.js'), path.join(nestedCopy, 'index.js'));
+        await writeFile(path.join(localCopy, 'index.js'), '// changed runtime cache');
+        await assert.rejects(
+            auditRuntimePackages(root, inventory, {
+                auditReportPath: saved,
+                expectedLockfileSha256: lockSha,
+                failOn: 'high',
+            }),
+            /fingerprint mismatch/u,
+        );
+        await cp(path.join(installed, 'index.js'), path.join(localCopy, 'index.js'));
+        const manifest = await readFile(path.join(nestedCopy, 'package.json'), 'utf8');
+        await writeFile(path.join(nestedCopy, 'package.json'), manifest.replace('"4.2.0"', '"4.1.0"'));
+        assert.throws(() => verifyHttpCachePatch(root), /version does not match/u);
+        await writeFile(path.join(nestedCopy, 'package.json'), manifest);
+        await rm(path.join(nestedCopy, 'index.js'));
+        assert.throws(() => verifyHttpCachePatch(root), /ENOENT/u);
+        await cp(path.join(installed, 'index.js'), path.join(nestedCopy, 'index.js'));
+        await writeFile(path.join(root, HTTP_CACHE_PATCH.path), '// altered patch source');
+        assert.throws(() => verifyHttpCachePatch(root), /source fingerprint mismatch/u);
+        await cp(path.join(repositoryRoot, HTTP_CACHE_PATCH.path), path.join(root, HTTP_CACHE_PATCH.path));
+        await writeFile(path.join(root, 'bun.lock'), '{}');
+        assert.throws(() => verifyHttpCachePatch(root), /frozen lockfile/u);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await writeFile(path.join(root, 'package.json'), '{}');
+        assert.throws(() => verifyHttpCachePatch(root), /registration/u);
+        await writeFile(path.join(root, 'package.json'), registration);
+        const external = path.join(root, 'node_modules/external-cache');
+        await symlink(installed, external);
+        assert.throws(() => verifyHttpCachePatch(root), /outside the audited tree/u);
+        await rm(external);
+        await rm(path.join(root, 'node_modules'), { recursive: true });
+        await rm(path.join(root, 'packages'), { recursive: true });
+        assert.throws(() => verifyHttpCachePatch(root), /No installed/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
 
 const packages = [
     { name: 'safe-package', path: 'node_modules/safe-package', version: '2.0.0' },
@@ -265,6 +395,39 @@ void test('bun audit gate accepts exit status 1 when parsed findings are below t
     assert.deepEqual(report, moderateAudit);
 });
 
+void test('blocked audit preserves every raw advisory before rejecting the policy', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-blocked-audit-'));
+    try {
+        const lock = path.join(root, 'bun.lock');
+        const evidence = path.join(root, 'bun-audit.json');
+        await writeFile(lock, 'blocked audit fixture lock');
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                onReport: report => writeBunAuditEvidence(evidence, lock, report),
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(audit), stderr: '' }),
+            }),
+            /bun audit policy failed/u,
+        );
+        const lockSha = createHash('sha256')
+            .update(await readFile(lock))
+            .digest('hex');
+        assert.deepEqual(parseSavedBunAuditEvidence(await readFile(evidence, 'utf8'), lockSha), audit);
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                onReport: () => {
+                    throw new Error('Could not retain audit evidence');
+                },
+                runCommand: () => ({ status: 1, stdout: JSON.stringify({}), stderr: '' }),
+            }),
+            /Could not retain audit evidence/u,
+        );
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 void test('bun audit gate rejects an unexpected non-policy exit code', async () => {
     await assert.rejects(
         runBunAudit('/repository', {
@@ -409,4 +572,144 @@ void test('repository and production workflows use the fail-closed retrying audi
     );
     assert.doesNotMatch(repositoryWorkflow, /run: bun audit/u);
     assert.doesNotMatch(productionWorkflow, /bun audit --json/u);
+});
+
+void test('approved braces backport verifies all installed copies and preserves the original advisory', async () => {
+    const { cp, mkdir } = await import('node:fs/promises');
+    const { BRACES_PATCH, verifyBracesPatch } = await import('./production-runtime-audit.mjs');
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-braces-patch-'));
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    // A frozen approved patch and its exact expected installation are independent fixtures.
+    await mkdir(path.join(root, 'patches'), { recursive: true });
+    await cp(path.join(repositoryRoot, BRACES_PATCH.path), path.join(root, BRACES_PATCH.path));
+    await writeFile(
+        path.join(root, 'package.json'),
+        JSON.stringify({
+            patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+        }),
+    );
+    await writeFile(
+        path.join(root, 'bun.lock'),
+        JSON.stringify({
+            patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+        }),
+    );
+    const installed = path.join(repositoryRoot, 'node_modules/braces');
+    const localCopy = path.join(root, 'node_modules/braces');
+    await cp(installed, localCopy, { recursive: true });
+    // Keep the existing range dependency available without installing anything in the test.
+    await cp(
+        path.join(repositoryRoot, 'node_modules/fill-range'),
+        path.join(root, 'node_modules/fill-range'),
+        { recursive: true },
+    );
+    await cp(
+        path.join(repositoryRoot, 'node_modules/to-regex-range'),
+        path.join(root, 'node_modules/to-regex-range'),
+        { recursive: true },
+    );
+    await cp(path.join(repositoryRoot, 'node_modules/is-number'), path.join(root, 'node_modules/is-number'), {
+        recursive: true,
+    });
+    const nestedCopy = path.join(root, 'node_modules/dependent/node_modules/braces');
+    await cp(installed, nestedCopy, { recursive: true });
+    await cp(installed, path.join(root, 'node_modules/braces-alias'), { recursive: true });
+    const braceReport = {
+        braces: [
+            {
+                id: 1,
+                severity: 'high',
+                title: 'Stack exhaustion through deeply nested patterns',
+                url: BRACES_PATCH.advisory,
+                vulnerable_versions: '<=3.0.3',
+            },
+        ],
+    };
+    try {
+        const verified = verifyBracesPatch(root);
+        assert.equal(verified.state, 'VERIFIED_PATCH');
+        assert.equal(verified.copies.length, 3);
+        const raw = await runBunAudit(root, {
+            auditLevel: 'high',
+            runCommand: () => ({ status: 1, stdout: JSON.stringify(braceReport), stderr: '' }),
+        });
+        assert.deepEqual(raw, braceReport);
+        const runtimeInventory = [{ name: 'braces', version: '3.0.3', path: 'node_modules/braces' }];
+        const lockSha = createHash('sha256')
+            .update(await readFile(path.join(root, 'bun.lock')))
+            .digest('hex');
+        const saved = path.join(root, 'saved-audit.json');
+        writeBunAuditEvidence(saved, path.join(root, 'bun.lock'), raw);
+        const runtime = await auditRuntimePackages(root, runtimeInventory, {
+            auditReportPath: saved,
+            expectedLockfileSha256: lockSha,
+            failOn: 'high',
+        });
+        assert.equal(runtime.summary.high, 1);
+        assert.equal(runtime.findings[0].url, BRACES_PATCH.advisory);
+        assert.equal(runtime.verifiedPatches[0].state, 'VERIFIED_PATCH');
+
+        await writeFile(path.join(nestedCopy, 'lib/parse.js'), '// unpatched or corrupted copy');
+        assert.throws(() => verifyBracesPatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'lib/parse.js'), path.join(nestedCopy, 'lib/parse.js'));
+        await writeFile(path.join(localCopy, 'index.js'), '// bypass patched walkers');
+        assert.throws(() => verifyBracesPatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'index.js'), path.join(localCopy, 'index.js'));
+        const packageSource = await readFile(path.join(nestedCopy, 'package.json'), 'utf8');
+        await writeFile(path.join(nestedCopy, 'package.json'), packageSource.replace('"3.0.3"', '"3.0.2"'));
+        assert.throws(() => verifyBracesPatch(root), /version does not match/u);
+        await writeFile(path.join(nestedCopy, 'package.json'), packageSource);
+        await rm(path.join(nestedCopy, 'lib/parse.js'));
+        assert.throws(() => verifyBracesPatch(root), /ENOENT/u);
+        await cp(path.join(installed, 'lib/parse.js'), path.join(nestedCopy, 'lib/parse.js'));
+        await writeFile(path.join(root, BRACES_PATCH.path), '// modified patch');
+        assert.throws(() => verifyBracesPatch(root), /source fingerprint mismatch/u);
+        await cp(path.join(repositoryRoot, BRACES_PATCH.path), path.join(root, BRACES_PATCH.path));
+        await writeFile(path.join(root, 'bun.lock'), '{}');
+        assert.throws(() => verifyBracesPatch(root), /frozen lockfile/u);
+        await writeFile(
+            path.join(root, 'bun.lock'),
+            JSON.stringify({
+                patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+            }),
+        );
+        await writeFile(path.join(root, 'package.json'), '{}');
+        assert.throws(() => verifyBracesPatch(root), /registration/u);
+        await writeFile(
+            path.join(root, 'package.json'),
+            JSON.stringify({
+                patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+            }),
+        );
+        const unrelated = {
+            ...braceReport,
+            another: [
+                {
+                    id: 2,
+                    severity: 'high',
+                    title: 'Unrelated high advisory',
+                    url: 'https://example.com/high',
+                },
+            ],
+        };
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(unrelated), stderr: '' }),
+            }),
+            /policy failed \(high\+\): another/u,
+        );
+        const escalated = { braces: [{ ...braceReport.braces[0], severity: 'critical' }] };
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(escalated), stderr: '' }),
+            }),
+            /policy failed \(high\+\): braces critical/u,
+        );
+        await rm(path.join(root, 'node_modules'), { recursive: true });
+        assert.throws(() => verifyBracesPatch(root), /No installed braces/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });

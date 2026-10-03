@@ -1,3 +1,37 @@
+.account-recommendations > .section-header {
+    min-height: 44px;
+    margin-bottom: var(--space-title-content);
+    padding-inline: 0;
+    justify-content: center;
+}
+.account-recommendations .section-header-center-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 0;
+    padding: 8px 0;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-display, var(--font-ui));
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: normal;
+    line-height: var(--type-section-leading);
+    text-align: center;
+}
+.account-recommendations .section-header-center-label::before,
+.account-recommendations .section-header-center-label::after {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0.6;
+    transform: rotate(45deg);
+    content: '';
+}
+
 /* Managed account artwork is decorative; account content determines the card height. */
 .page.account-page {
     background: var(--bg);
@@ -366,8 +400,7 @@
     font-size: 12px;
 }
 .account-page .legal-footer {
-    margin-inline: var(--page-section-inset, 20px);
-    padding-top: 10px;
+    margin: 0 var(--page-section-inset, 20px);
 }
 
 @media (max-width: 1023px) {
@@ -514,39 +547,6 @@
         background: var(--surface);
         box-shadow: var(--shadow-sm);
     }
-    .account-page .account-recommendations > .section-header {
-        min-height: 56px;
-        margin-bottom: 14px;
-        padding-inline: 0;
-        justify-content: center;
-    }
-    .account-page .account-recommendations .section-header-center-label {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        margin: 0;
-        padding: 8px 0;
-        background: transparent;
-        color: var(--text);
-        font-family: var(--font-display, var(--font-ui));
-        font-size: var(--type-section-size);
-        font-weight: var(--font-weight-semibold);
-        letter-spacing: normal;
-        line-height: var(--type-section-leading);
-        text-align: center;
-    }
-    .account-page .account-recommendations .section-header-center-label::before,
-    .account-page .account-recommendations .section-header-center-label::after {
-        width: 6px;
-        height: 6px;
-        flex: none;
-        border-radius: 1px;
-        background: var(--accent);
-        opacity: 0.6;
-        transform: rotate(45deg);
-        content: '';
-    }
     .account-recommendations-single .product-grid {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -585,7 +585,7 @@
 .coupon-center-pagination button {
     min-height: 40px;
     padding: 8px 12px;
-    border: 1px solid currentColor;
+    border: 1px solid var(--line);
     border-radius: 8px;
     background: transparent;
     color: inherit;

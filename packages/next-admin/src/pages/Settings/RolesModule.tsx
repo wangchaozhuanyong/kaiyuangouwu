@@ -363,7 +363,7 @@ function MembersTable({
         await onChanged('店铺主管理员已移交，相关账号需要重新登录');
     };
     return (
-        <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
                     <thead>
@@ -550,7 +550,7 @@ function RolesTable({
     onEdit: (role: RoleRecord) => void;
 }) {
     return (
-        <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
                     <thead>

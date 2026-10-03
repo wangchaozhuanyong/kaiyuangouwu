@@ -109,6 +109,9 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
     const element = document.createElement('div');
     const root = createRoot(element);
     const history: Array<ReturnType<typeof useStorefrontMerchandising>> = [];
+    let recentProductIds = recent ? ['recent'] : [];
+    let activeRoute: RouteState['name'] = 'home';
+    let personalizationReady = true;
     function Fixture() {
         const data = useStorefrontMerchandising({
             api: api as ShopApi,
@@ -118,7 +121,8 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
             storefrontContextResolved: true,
             customerAuthenticated: false,
             customer: null,
-            recentProductIds: recent ? ['recent'] : [],
+            recentProductIds,
+            personalizationReady,
             products: [bootstrap],
             contentBlocks: [
                 {
@@ -146,7 +150,7 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
                 ...block,
             })) as StorefrontContentBlock[],
             configuredBlockTypes: ['BEST_SELLERS', 'RECOMMENDATIONS'],
-            activeRoute: 'home',
+            activeRoute,
             contentReady: true,
         });
         history.push(data);
@@ -157,23 +161,123 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
             </>
         );
     }
-    act(() =>
-        root.render(
-            <QueryClientProvider client={client}>
-                <Fixture />
-            </QueryClientProvider>,
-        ),
-    );
+    const render = () =>
+        act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <Fixture />
+                </QueryClientProvider>,
+            ),
+        );
+    render();
     return {
         client,
         history,
         element,
+        update(activity: { recentProductIds?: string[]; route?: RouteState['name']; ready?: boolean }) {
+            recentProductIds = activity.recentProductIds ?? recentProductIds;
+            activeRoute = activity.route ?? activeRoute;
+            personalizationReady = activity.ready ?? personalizationReady;
+            render();
+        },
         dispose() {
             act(() => root.unmount());
             client.clear();
         },
     };
 }
+
+it('keeps recommendation membership/order through visits, detail/back, catalog refresh and midnight until reload', async () => {
+    const candidates = ['a', 'b', 'c', 'd'].map(product);
+    const api = {
+        catalog: vi.fn(() => Promise.resolve({ items: candidates, totalItems: candidates.length })),
+        productSales: vi.fn(() => Promise.resolve({})),
+        productsByIds: vi.fn((ids: string[]) =>
+            Promise.resolve(candidates.filter(item => ids.includes(item.id))),
+        ),
+    };
+    const fixture = mount(api);
+    const latest = () => fixture.history[fixture.history.length - 1];
+    let reloaded: ReturnType<typeof mount> | undefined;
+    try {
+        await act(() => vi.waitFor(() => expect(latest().recommendationsLoading).toBe(false)));
+        const original = latest().recommendationProducts.map(item => item.id);
+        const clicked = original[0];
+        fixture.update({ recentProductIds: [clicked], route: 'product' });
+        await act(() => vi.waitFor(() => expect(fixture.client.isFetching()).toBe(0)));
+        fixture.update({ route: 'home' });
+        expect(latest().recommendationProducts.map(item => item.id)).toEqual(original);
+        fixture.update({ route: 'recommendations' });
+        expect(latest().recommendationProducts.map(item => item.id)).toEqual(original);
+
+        const catalogQuery = fixture.client
+            .getQueryCache()
+            .findAll()
+            .find(
+                query =>
+                    (query.queryKey[4] as { purpose?: string } | undefined)?.purpose ===
+                    'home-recommendations',
+            );
+        const refreshed = candidates.map(item => ({ ...item, name: `Updated ${item.id}` })).reverse();
+        if (!catalogQuery) throw new Error('Missing recommendation catalog query');
+        act(() => {
+            fixture.client.setQueryData(catalogQuery.queryKey, {
+                items: refreshed,
+                totalItems: refreshed.length,
+            });
+        });
+        expect(latest().recommendationProducts.map(item => item.id)).toEqual(original);
+        await act(() =>
+            vi.waitFor(() =>
+                expect(latest().recommendationProducts.every(item => item.name.startsWith('Updated '))).toBe(
+                    true,
+                ),
+            ),
+        );
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(Date.now() + 24 * 60 * 60_000));
+        fixture.update({ route: 'home' });
+        expect(latest().recommendationProducts.map(item => item.id)).toEqual(original);
+        vi.useRealTimers();
+
+        // A new document owns a new QueryClient and reads the updated browsing history.
+        const fresh = mount(api);
+        reloaded = fresh;
+        fresh.update({ recentProductIds: [clicked] });
+        await act(() => vi.waitFor(() => expect(fresh.history.at(-1)?.recommendationsLoading).toBe(false)));
+        expect(fresh.history.at(-1)?.recommendationProducts.map(item => item.id)).not.toContain(clicked);
+    } finally {
+        vi.useRealTimers();
+        fixture.dispose();
+        reloaded?.dispose();
+    }
+});
+
+it('waits for the initial browsing history before locking recommendations', async () => {
+    const catalog = deferred<{ items: Product[]; totalItems: number }>();
+    const fixture = mount({
+        catalog: () => catalog.promise,
+        productSales: () => Promise.resolve({}),
+        productsByIds: () => Promise.resolve([product('a')]),
+    });
+    const latest = () => {
+        const value = fixture.history.at(-1);
+        if (!value) throw new Error('Missing merchandising render');
+        return value;
+    };
+    try {
+        fixture.update({ ready: false });
+        act(() => catalog.resolve({ items: [product('a'), product('b'), product('c')], totalItems: 3 }));
+        await act(() => vi.waitFor(() => expect(fixture.client.isFetching()).toBe(0)));
+        expect(latest().recommendationsLoading).toBe(true);
+        expect(latest().recommendationProducts).toEqual([]);
+        fixture.update({ ready: true, recentProductIds: ['a'] });
+        await act(() => vi.waitFor(() => expect(latest().recommendationsLoading).toBe(false)));
+        expect(latest().recommendationProducts.map(item => item.id)).not.toContain('a');
+    } finally {
+        fixture.dispose();
+    }
+});
 it('publishes merchandising only after its catalog, ranking and selected products settle', async () => {
     const best = deferred<{ items: Product[]; totalItems: number }>();
     const recommendations = deferred<{ items: Product[]; totalItems: number }>();

@@ -141,6 +141,7 @@ export function RecommendationsRoutePage() {
     return (
         <RecommendationPage
             products={runtime.recommendationProducts}
+            loading={runtime.recommendationsLoading}
             block={runtime.recommendationsBlock}
             market={runtime.market}
             locale={runtime.locale}
