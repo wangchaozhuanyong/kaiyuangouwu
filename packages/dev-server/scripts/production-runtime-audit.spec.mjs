@@ -410,3 +410,143 @@ void test('repository and production workflows use the fail-closed retrying audi
     assert.doesNotMatch(repositoryWorkflow, /run: bun audit/u);
     assert.doesNotMatch(productionWorkflow, /bun audit --json/u);
 });
+
+void test('approved braces backport verifies all installed copies and preserves the original advisory', async () => {
+    const { cp, mkdir } = await import('node:fs/promises');
+    const { BRACES_PATCH, verifyBracesPatch } = await import('./production-runtime-audit.mjs');
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-braces-patch-'));
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    // A frozen approved patch and its exact expected installation are independent fixtures.
+    await mkdir(path.join(root, 'patches'), { recursive: true });
+    await cp(path.join(repositoryRoot, BRACES_PATCH.path), path.join(root, BRACES_PATCH.path));
+    await writeFile(
+        path.join(root, 'package.json'),
+        JSON.stringify({
+            patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+        }),
+    );
+    await writeFile(
+        path.join(root, 'bun.lock'),
+        JSON.stringify({
+            patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+        }),
+    );
+    const installed = path.join(repositoryRoot, 'node_modules/braces');
+    const localCopy = path.join(root, 'node_modules/braces');
+    await cp(installed, localCopy, { recursive: true });
+    // Keep the existing range dependency available without installing anything in the test.
+    await cp(
+        path.join(repositoryRoot, 'node_modules/fill-range'),
+        path.join(root, 'node_modules/fill-range'),
+        { recursive: true },
+    );
+    await cp(
+        path.join(repositoryRoot, 'node_modules/to-regex-range'),
+        path.join(root, 'node_modules/to-regex-range'),
+        { recursive: true },
+    );
+    await cp(path.join(repositoryRoot, 'node_modules/is-number'), path.join(root, 'node_modules/is-number'), {
+        recursive: true,
+    });
+    const nestedCopy = path.join(root, 'node_modules/dependent/node_modules/braces');
+    await cp(installed, nestedCopy, { recursive: true });
+    await cp(installed, path.join(root, 'node_modules/braces-alias'), { recursive: true });
+    const braceReport = {
+        braces: [
+            {
+                id: 1,
+                severity: 'high',
+                title: 'Stack exhaustion through deeply nested patterns',
+                url: BRACES_PATCH.advisory,
+                vulnerable_versions: '<=3.0.3',
+            },
+        ],
+    };
+    try {
+        const verified = verifyBracesPatch(root);
+        assert.equal(verified.state, 'VERIFIED_PATCH');
+        assert.equal(verified.copies.length, 3);
+        const raw = await runBunAudit(root, {
+            auditLevel: 'high',
+            runCommand: () => ({ status: 1, stdout: JSON.stringify(braceReport), stderr: '' }),
+        });
+        assert.deepEqual(raw, braceReport);
+        const runtimeInventory = [{ name: 'braces', version: '3.0.3', path: 'node_modules/braces' }];
+        const lockSha = createHash('sha256')
+            .update(await readFile(path.join(root, 'bun.lock')))
+            .digest('hex');
+        const saved = path.join(root, 'saved-audit.json');
+        writeBunAuditEvidence(saved, path.join(root, 'bun.lock'), raw);
+        const runtime = await auditRuntimePackages(root, runtimeInventory, {
+            auditReportPath: saved,
+            expectedLockfileSha256: lockSha,
+            failOn: 'high',
+        });
+        assert.equal(runtime.summary.high, 1);
+        assert.equal(runtime.findings[0].url, BRACES_PATCH.advisory);
+        assert.equal(runtime.verifiedPatches[0].state, 'VERIFIED_PATCH');
+
+        await writeFile(path.join(nestedCopy, 'lib/parse.js'), '// unpatched or corrupted copy');
+        assert.throws(() => verifyBracesPatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'lib/parse.js'), path.join(nestedCopy, 'lib/parse.js'));
+        await writeFile(path.join(localCopy, 'index.js'), '// bypass patched walkers');
+        assert.throws(() => verifyBracesPatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'index.js'), path.join(localCopy, 'index.js'));
+        const packageSource = await readFile(path.join(nestedCopy, 'package.json'), 'utf8');
+        await writeFile(path.join(nestedCopy, 'package.json'), packageSource.replace('"3.0.3"', '"3.0.2"'));
+        assert.throws(() => verifyBracesPatch(root), /version does not match/u);
+        await writeFile(path.join(nestedCopy, 'package.json'), packageSource);
+        await rm(path.join(nestedCopy, 'lib/parse.js'));
+        assert.throws(() => verifyBracesPatch(root), /ENOENT/u);
+        await cp(path.join(installed, 'lib/parse.js'), path.join(nestedCopy, 'lib/parse.js'));
+        await writeFile(path.join(root, BRACES_PATCH.path), '// modified patch');
+        assert.throws(() => verifyBracesPatch(root), /source fingerprint mismatch/u);
+        await cp(path.join(repositoryRoot, BRACES_PATCH.path), path.join(root, BRACES_PATCH.path));
+        await writeFile(path.join(root, 'bun.lock'), '{}');
+        assert.throws(() => verifyBracesPatch(root), /frozen lockfile/u);
+        await writeFile(
+            path.join(root, 'bun.lock'),
+            JSON.stringify({
+                patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+            }),
+        );
+        await writeFile(path.join(root, 'package.json'), '{}');
+        assert.throws(() => verifyBracesPatch(root), /registration/u);
+        await writeFile(
+            path.join(root, 'package.json'),
+            JSON.stringify({
+                patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
+            }),
+        );
+        const unrelated = {
+            ...braceReport,
+            another: [
+                {
+                    id: 2,
+                    severity: 'high',
+                    title: 'Unrelated high advisory',
+                    url: 'https://example.com/high',
+                },
+            ],
+        };
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(unrelated), stderr: '' }),
+            }),
+            /policy failed \(high\+\): another/u,
+        );
+        const escalated = { braces: [{ ...braceReport.braces[0], severity: 'critical' }] };
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(escalated), stderr: '' }),
+            }),
+            /policy failed \(high\+\): braces critical/u,
+        );
+        await rm(path.join(root, 'node_modules'), { recursive: true });
+        assert.throws(() => verifyBracesPatch(root), /No installed braces/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});

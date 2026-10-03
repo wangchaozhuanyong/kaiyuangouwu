@@ -38,6 +38,7 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
@@ -92,6 +93,7 @@ const serverConfig = mergeConfig(testConfig, {
     authOptions: { requireVerification: false },
     paymentOptions: { paymentMethodHandlers: [dummyPaymentHandler] },
     plugins: [
+        OperationsDashboardPlugin,
         StoreDomainPlugin.init({
             cnameTarget: 'synthetic.example.test',
             resolveTxt: () => Promise.resolve([]),
