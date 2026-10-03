@@ -197,7 +197,7 @@ export function verifyHttpCachePatch(root, options) {
     return verifyInstalledPatch(root, HTTP_CACHE_PATCH, assertCacheReuseGuard, options);
 }
 
-function isVerifiedFinding(name, advisory, verifiedPatches) {
+export function isVerifiedFinding(name, advisory, verifiedPatches) {
     return VERIFIED_PATCHES.some(
         patch =>
             name === patch.package &&
@@ -215,7 +215,7 @@ function isVerifiedFinding(name, advisory, verifiedPatches) {
     );
 }
 
-function verifyReportPatches(auditReport, root, options) {
+export function verifyReportPatches(auditReport, root, options) {
     const verified = [];
     for (const patch of VERIFIED_PATCHES) {
         if (options?.runtimePackages && !options.runtimePackages.some(item => item.name === patch.package))

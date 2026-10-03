@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { access, cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -18,6 +20,12 @@ import {
     runtimeArtifactsRoot,
     writeRuntimeFrontendReleaseManifests,
 } from './production-runtime-artifact.mjs';
+import {
+    auditRuntimePackages,
+    BRACES_PATCH,
+    HTTP_CACHE_PATCH,
+    writeBunAuditEvidence,
+} from './production-runtime-audit.mjs';
 import {
     assertVendureWorkspaceSymlinksResolve,
     collectArtifactEntries,
@@ -326,6 +334,131 @@ void test('runtime verification rejects files added after the integrity manifest
         );
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('standalone runtime verifier rechecks pinned patches and preserves raw high findings', async () => {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-patch-proof-'));
+    const root = path.join(fixture, 'runtime');
+    const expectedSha = 'a'.repeat(40);
+    try {
+        await mkdir(path.join(root, 'node_modules'), { recursive: true });
+        for (const name of [
+            'braces',
+            'fill-range',
+            'to-regex-range',
+            'is-number',
+            'http-cache-semantics',
+            'semver',
+        ]) {
+            await cp(path.join(repositoryRoot, 'node_modules', name), path.join(root, 'node_modules', name), {
+                recursive: true,
+            });
+        }
+        await cp(
+            path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-verify.mjs'),
+            path.join(root, 'verify-runtime.mjs'),
+        );
+        await cp(
+            path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
+            path.join(root, 'production-runtime-audit.mjs'),
+        );
+        await writeFile(path.join(root, 'package.json'), '{"name":"fixture-runtime","version":"1.0.0"}\n');
+        await writeFile(
+            path.join(root, 'RUNTIME-METADATA.json'),
+            JSON.stringify({
+                deniedPackages: DENIED_RUNTIME_PACKAGES,
+                gitSha: expectedSha,
+                platform: `${process.platform}/${process.arch}`,
+                sourceDirty: false,
+            }),
+        );
+        const packages = await collectPackageInventory(root);
+        await writeFile(path.join(root, 'RUNTIME-PACKAGES.json'), JSON.stringify(packages));
+        const raw = Object.fromEntries(
+            [BRACES_PATCH, HTTP_CACHE_PATCH].map((patch, index) => [
+                patch.package,
+                [
+                    {
+                        id: index + 1,
+                        severity: 'high',
+                        title: 'Pinned backport regression fixture',
+                        url: patch.advisory,
+                        vulnerable_versions: `<=${patch.version}`,
+                    },
+                ],
+            ]),
+        );
+        const saved = path.join(fixture, 'saved-audit.json');
+        const lockfile = path.join(repositoryRoot, 'bun.lock');
+        writeBunAuditEvidence(saved, lockfile, raw);
+        const lockSha = createHash('sha256')
+            .update(await readFile(lockfile))
+            .digest('hex');
+        const report = await auditRuntimePackages(root, packages, {
+            auditReportPath: saved,
+            expectedLockfileSha256: lockSha,
+            failOn: 'high',
+        });
+        const refresh = async value => {
+            await writeFile(path.join(root, 'RUNTIME-AUDIT.json'), JSON.stringify(value));
+            await writeIntegrityFiles(root);
+        };
+        await refresh(report);
+        await verifyRuntimeArtifact(root, { expectedSha, verifyModules: false });
+        assert.equal(report.summary.high, 2);
+        assert.equal(report.findings.length, 2);
+        const standalone = spawnSync(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `import {verifyRuntimeArtifact} from './verify-runtime.mjs'; await verifyRuntimeArtifact('.', {expectedSha:'${expectedSha}', verifyModules:false});`,
+            ],
+            { cwd: root, encoding: 'utf8' },
+        );
+        assert.equal(standalone.status, 0, standalone.stderr);
+
+        const forged = structuredClone(report);
+        forged.verifiedPatches[0].patchSha256 = 'b'.repeat(64);
+        await refresh(forged);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /patch proof/u,
+        );
+        await refresh(report);
+        // Recomputing integrity checksums must not certify corrupted installed patch bytes.
+        await writeFile(path.join(root, 'node_modules/braces/lib/parse.js'), '// unpatched copy\n');
+        await writeIntegrityFiles(root);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /fingerprint mismatch/u,
+        );
+        await cp(
+            path.join(repositoryRoot, 'node_modules/braces/lib/parse.js'),
+            path.join(root, 'node_modules/braces/lib/parse.js'),
+        );
+        const critical = structuredClone(report);
+        critical.findings[0].severity = 'critical';
+        critical.summary.high -= 1;
+        critical.summary.critical += 1;
+        await refresh(critical);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /Runtime audit policy failed/u,
+        );
+        const unrelated = structuredClone(report);
+        unrelated.findings[0].url = 'https://example.invalid/unapproved-high';
+        unrelated.verifiedPatches = unrelated.verifiedPatches.filter(
+            proof => proof.name !== unrelated.findings[0].name,
+        );
+        await refresh(unrelated);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /Runtime audit policy failed/u,
+        );
+    } finally {
+        await rm(fixture, { recursive: true, force: true });
     }
 });
 

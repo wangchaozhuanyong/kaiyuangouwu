@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { isVerifiedFinding, verifyReportPatches } from './production-runtime-audit.mjs';
+
 export const DENIED_RUNTIME_PACKAGES = Object.freeze([
     'esbuild',
     'less',
@@ -90,8 +92,9 @@ function parseRuntimeMetadata(value) {
 /**
  * @param {unknown} value
  * @param {RuntimePackage[]} packages
+ * @param {string} root
  */
-function assertRuntimeAudit(value, packages) {
+function assertRuntimeAudit(value, packages, root) {
     const severities = ['low', 'moderate', 'high', 'critical'];
     if (
         !isRecord(value) ||
@@ -131,17 +134,33 @@ function assertRuntimeAudit(value, packages) {
             throw new Error(`Runtime audit finding does not match package inventory: ${finding.path}`);
         }
         counts[finding.severity] += 1;
-        if (severities.indexOf(finding.severity) >= failOnRank) {
-            throw new Error(
-                `Runtime audit policy failed: ${finding.name}@${finding.version} is ${finding.severity}`,
-            );
-        }
     }
     if (
         value.summary.total !== value.findings.length ||
         severities.some(severity => value.summary[severity] !== counts[severity])
     ) {
         throw new Error('Runtime audit summary does not match its findings');
+    }
+    // Certificates are evidence to compare, never permission to skip installed-byte and behavior checks.
+    const advisories = Object.groupBy(value.findings, finding => finding.name);
+    const verifiedPatches = verifyReportPatches(advisories, root, {
+        runtimePackages: packages,
+        requireRegistration: false,
+    });
+    assert.deepEqual(
+        value.verifiedPatches ?? [],
+        verifiedPatches,
+        'Runtime audit patch proof does not match the installed artifact',
+    );
+    for (const finding of value.findings) {
+        if (
+            severities.indexOf(finding.severity) >= failOnRank &&
+            !isVerifiedFinding(finding.name, finding, verifiedPatches)
+        ) {
+            throw new Error(
+                `Runtime audit policy failed: ${finding.name}@${finding.version} is ${finding.severity}`,
+            );
+        }
     }
 }
 
@@ -445,6 +464,7 @@ export async function verifyRuntimeArtifact(
     assertRuntimeAudit(
         parseJson(await readFile(path.join(resolvedRoot, AUDIT_FILE), 'utf8')),
         actualPackages,
+        resolvedRoot,
     );
     assert.deepEqual(
         metadata.deniedPackages,
