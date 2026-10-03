@@ -607,7 +607,7 @@ export function AfterSalesModule() {
                                 ))}
                             </div>
                         ) : !error && visibleRequests.length === 0 ? (
-                            <div className="flex min-h-80 flex-col items-center justify-center px-6 text-center">
+                            <div className="flex min-h-40 flex-col items-center justify-center px-6 text-center">
                                 <FileSearch className="h-9 w-9 text-slate-300" />
                                 <h2 className="mt-3 text-sm font-semibold text-slate-800">
                                     没有匹配的售后工单

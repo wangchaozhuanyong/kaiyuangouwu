@@ -356,7 +356,7 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
     const graphqlHealthy = Boolean(data) && !graphQLError;
 
     return (
-        <div className="min-h-[620px] space-y-4">
+        <div className="space-y-4">
             <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-5">
                 <Metric
                     label="服务状态"

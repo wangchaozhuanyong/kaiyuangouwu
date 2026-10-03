@@ -64,7 +64,7 @@ describe('shared admin border contract', () => {
     it('supplies subtle default edges for bare borders, dividers and pseudo elements', () => {
         const base = themeStylesheet.slice(themeStylesheet.indexOf('@layer base'));
         expect(base).toMatch(
-            /\*,\s*::before,\s*::after,\s*::backdrop\s*\{\s*border-color: var\(--admin-border-subtle\);/u,
+            /\*,\s*::before,\s*::after,\s*::backdrop,\s*::file-selector-button\s*\{\s*border-color: var\(--admin-border-subtle\);/u,
         );
     });
 

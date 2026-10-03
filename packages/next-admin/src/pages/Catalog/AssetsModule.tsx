@@ -476,7 +476,7 @@ export function AssetsModule() {
                         )}
                     </div>
                 )}
-                <div className="min-h-[500px] overflow-hidden rounded-xl border border-slate-200 bg-white text-xs shadow-2xs">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs shadow-2xs">
                     <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 p-4">
                         <div className="flex gap-2">
                             {(['ALL', 'IMAGE', 'VIDEO'] as const).map(type => (
