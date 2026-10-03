@@ -273,7 +273,7 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
 
 void test('a failure before migration resumes the existing worker without switching runtime', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
-    const rollback = script.match(/\nrollback\(\) \{[\s\S]*?\n\}\n\ntrap cleanup EXIT/u)?.[0];
+    const rollback = script.match(/\nrollback\(\) \{[\s\S]*?\n\}/u)?.[0];
     assert.ok(rollback);
     const result = spawnSync(
         'bash',
