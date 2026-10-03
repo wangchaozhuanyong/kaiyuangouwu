@@ -106,6 +106,28 @@ test('admin UI stays in its own scope, while mixed app changes include both apps
         ['next-admin', 'storefront'],
     );
 });
+test('read-only mailbox diagnostics require controls without a website release', () => {
+    const files = [
+        '.github/workflows/production_operations.yml',
+        'deploy/production-operations.cjs',
+        'deploy/icloud-relay-diagnostic.mjs',
+        'deploy/icloud-relay-receipt.cjs',
+        'deploy/icloud-relay-diagnostic.spec.mjs',
+        'packages/dev-server/scripts/production-operations.spec.mjs',
+        'scripts/ci-impact.mjs',
+        'scripts/ci-impact.spec.mjs',
+    ];
+    const plan = classifyChanges(files, inventory);
+    assert.equal(plan.controls, true);
+    assert.equal(plan.lane, 'none');
+    assert.deepEqual(plan.packages, []);
+    assert.deepEqual(plan.frontends, []);
+    assert.deepEqual(plan.databases, []);
+    assert.equal(
+        classifyChanges([...files, 'packages/icloud-relay-plugin/src/mailbox.service.ts'], inventory).lane,
+        'runtime',
+    );
+});
 test('storefront runtime source updates Admin preview, while client tests and isolated tool do not', () => {
     assert.deepEqual(
         classifyChanges(['packages/storefront/src/styles/home-showcase.css'], inventory).frontends,

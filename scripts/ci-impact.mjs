@@ -45,6 +45,9 @@ export const isAutomationOnly = file =>
         'deploy/frontend-release.mjs',
         'deploy/frontend-ssm.mjs',
         'deploy/deploy-frontends-from-s3.sh',
+        'deploy/production-operations.cjs',
+        'deploy/icloud-relay-diagnostic.mjs',
+        'deploy/icloud-relay-receipt.cjs',
     ].includes(file) ||
     /^scripts\/(ci-|release-|architecture-debt|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);

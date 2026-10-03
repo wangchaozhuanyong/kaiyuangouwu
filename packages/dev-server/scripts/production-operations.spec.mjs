@@ -28,6 +28,172 @@ const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('mailbox inspection pins the live revision and never forwards secrets or raw child errors', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'inspect-icloud-relay',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+    });
+    assert.throws(
+        () =>
+            operations.validateRequest({
+                OPS_OPERATION: 'inspect-icloud-relay',
+                OPS_SOURCE_SHA: sourceSha,
+            }),
+        /exact expected runtime SHA/u,
+    );
+    assert.throws(
+        () =>
+            operations.validateRequest({
+                OPS_OPERATION: 'inspect-icloud-relay',
+                OPS_SOURCE_SHA: sourceSha,
+                OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+                OPS_EXPECTED_PLAN_SHA256: 'c'.repeat(64),
+            }),
+        /does not accept a write approval/u,
+    );
+    const secret = 'private-fixture-value-never-forward';
+    const receipt = {
+        diagnostic: 'icloud-relay',
+        category: 'PARTIAL_FAILURE',
+        login: {
+            operation: 'login',
+            status: 200,
+            contentType: 'json',
+            category: 'OK',
+            count: null,
+            errorCount: 0,
+            code: null,
+            path: null,
+            password: secret,
+        },
+        channelCount: 1,
+        channelsTruncated: false,
+        token: secret,
+        channels: [
+            {
+                channelIndex: 1,
+                isDefaultChannel: true,
+                probes: [
+                    {
+                        operation: 'primary_full',
+                        status: 200,
+                        contentType: 'json',
+                        category: 'GRAPHQL_ERROR',
+                        count: null,
+                        errorCount: 2,
+                        code: 'INTERNAL_SERVER_ERROR',
+                        path: ['icloudPrimaryAccounts', 0, 'remainingDays'],
+                        message: secret,
+                        data: [{ email: secret, masterQueryCode: secret }],
+                    },
+                ],
+            },
+        ],
+    };
+    let calls = 0;
+    const dependencies = {
+        inspect: () => ({ markerSha: runtimeSha }),
+        checkAncestry: (before, after) => assert.deepEqual([before, after], [runtimeSha, sourceSha]),
+        spawn: (command, args, options) => {
+            calls++;
+            assert.equal(command, '/usr/bin/node');
+            assert.equal(args.length, 2);
+            assert.equal(args[0], '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env');
+            assert.equal(path.basename(args[1]), 'icloud-relay-diagnostic.mjs');
+            assert.equal(options.timeout, 70000);
+            assert.equal(options.maxBuffer, 16384);
+            assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
+            return { status: 1, stdout: JSON.stringify(receipt), stderr: secret };
+        },
+    };
+    const result = operations.inspectIcloudRelay(request, dependencies);
+    assert.equal(result.category, 'PARTIAL_FAILURE');
+    assert.equal(result.runtimeSha, runtimeSha);
+    assert.equal(result.channels[0].probes[0].code, 'INTERNAL_SERVER_ERROR');
+    assert.deepEqual(result.channels[0].probes[0].path, ['icloudPrimaryAccounts', 0, 'remainingDays']);
+    assert.ok(!JSON.stringify(result).includes(secret));
+    assert.throws(
+        () =>
+            operations.inspectIcloudRelay(request, {
+                ...dependencies,
+                inspect: () => ({ markerSha: sourceSha }),
+            }),
+        /Production runtime SHA changed/u,
+    );
+    assert.equal(calls, 1);
+    const healthy = {
+        ...receipt,
+        category: 'OK',
+        channels: [
+            {
+                channelIndex: 1,
+                isDefaultChannel: true,
+                probes: ['primary_minimal', 'alias_minimal', 'primary_full', 'alias_full'].map(operation => ({
+                    operation,
+                    status: 200,
+                    contentType: 'json',
+                    category: 'OK',
+                    count: 0,
+                    errorCount: 0,
+                    code: null,
+                    path: null,
+                })),
+            },
+        ],
+    };
+    assert.equal(
+        operations.inspectIcloudRelay(request, {
+            ...dependencies,
+            spawn: () => ({ status: 0, stdout: JSON.stringify(healthy) }),
+        }).category,
+        'OK',
+    );
+    for (const patch of [{ status: 500 }, { contentType: 'html' }, { errorCount: 1 }]) {
+        assert.throws(
+            () =>
+                operations.inspectIcloudRelay(request, {
+                    ...dependencies,
+                    spawn: () => ({
+                        status: 0,
+                        stdout: JSON.stringify({
+                            ...healthy,
+                            login: { ...healthy.login, ...patch },
+                        }),
+                    }),
+                }),
+            /Mailbox diagnostic receipt was invalid/u,
+        );
+    }
+    for (const child of [
+        { status: null, error: new Error(secret), stdout: secret, stderr: secret },
+        { status: 1, stdout: secret, stderr: secret },
+        { status: 0, stdout: JSON.stringify({ ...receipt, category: secret }), stderr: secret },
+        { status: 0, stdout: JSON.stringify({ ...receipt, category: 'OK' }), stderr: secret },
+        { status: 0, stdout: ' '.repeat(13000), stderr: secret },
+    ]) {
+        assert.throws(
+            () =>
+                operations.inspectIcloudRelay(request, {
+                    ...dependencies,
+                    spawn: () => child,
+                }),
+            error => !error.message.includes(secret),
+        );
+    }
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    assert.match(workflow, /- inspect-icloud-relay/u);
+    assert.match(
+        workflow,
+        /if operation_name == 'inspect-icloud-relay':\n\s+lines.extend\(\[\n\s+transport\('deploy\/icloud-relay-diagnostic.mjs'/u,
+    );
+    assert.match(workflow, /"\$OPS_OPERATION" == "inspect-icloud-relay"[\s\S]*git merge-base --is-ancestor/u);
+});
+
 void test('image readiness rejects failed antivirus and missing sockets before a release', () => {
     const calls = [];
     const healthy = { status: 'ok', output: 'LoadState=loaded\nActiveState=active\nSubState=running' };
@@ -140,6 +306,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         'deploy/systemd/vendure-production-release-retention.cjs',
     ];
     const bundles = [
+        [...commonFiles, 'deploy/icloud-relay-diagnostic.mjs', 'deploy/icloud-relay-receipt.cjs'],
         [...commonFiles, ...backupFiles.map(file => `deploy/systemd/${file}`)],
         [
             ...commonFiles,
