@@ -54,11 +54,11 @@ describe('shared product navigation', () => {
         return match;
     }
 
-    function render(layout: 'card' | 'gallery' | 'row' | 'catalog', item = product) {
+    function render(layout: 'card' | 'gallery' | 'mosaic' | 'row' | 'catalog', item = product) {
         const props = { product: item, market, language: 'zh' as const, locale: market.locale, onOpen };
         act(() =>
             root.render(
-                layout === 'card' || layout === 'gallery' ? (
+                layout === 'card' || layout === 'gallery' || layout === 'mosaic' ? (
                     <ProductCard {...props} appearance={layout} onFavorite={onFavorite} />
                 ) : (
                     <ProductRow {...props} layout={layout} />
@@ -68,7 +68,7 @@ describe('shared product navigation', () => {
         return element<HTMLAnchorElement>('a');
     }
 
-    it.each(['card', 'gallery', 'row', 'catalog'] as const)(
+    it.each(['card', 'gallery', 'mosaic', 'row', 'catalog'] as const)(
         '%s opens once from image, name, price and card space through the same real link',
         layout => {
             const link = render(layout);
@@ -89,8 +89,8 @@ describe('shared product navigation', () => {
         },
     );
 
-    it('keeps quote-only and sold-out states in the gallery', () => {
-        render('gallery', {
+    it.each(['gallery', 'mosaic'] as const)('keeps quote-only and sold-out states in %s', appearance => {
+        render(appearance, {
             ...product,
             customFields: {
                 fulfillmentType: 'physical',
@@ -101,7 +101,7 @@ describe('shared product navigation', () => {
         });
         expect(element('.product-card-price').textContent).toContain('联系客服询价');
         expect(host.querySelector('.product-card-stock')).toBeNull();
-        render('gallery');
+        render(appearance);
         expect(element('.product-card-stock').textContent).toContain('已售罄');
         expect(host.querySelector('.product-card-meta')).toBeNull();
         expect(host.querySelector('.product-card-subtitle')).toBeNull();

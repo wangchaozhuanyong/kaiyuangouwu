@@ -1759,6 +1759,7 @@ function FeaturedCollectionSection({
 }) {
     const isZh = language === 'zh';
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const [featuredProduct, ...supportingProducts] = products;
 
     return (
         <section
@@ -1788,24 +1789,41 @@ function FeaturedCollectionSection({
                         </button>
                     ) : null}
                 </div>
-                {products.length ? (
+                {featuredProduct ? (
                     <div
-                        className="featured-collection-grid"
+                        className="featured-collection-mosaic"
                         data-product-count={products.length}
                         aria-label={block.title}
                     >
-                        {products.map(product => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                market={market}
-                                locale={locale}
-                                language={language}
-                                appearance="gallery"
-                                imageSizes="(min-width: 1280px) 400px, (min-width: 768px) 30vw, 50vw"
-                                onOpen={() => onContentTarget('PRODUCT', product.id)}
-                            />
-                        ))}
+                        <ProductCard
+                            key={featuredProduct.id}
+                            product={featuredProduct}
+                            market={market}
+                            locale={locale}
+                            language={language}
+                            appearance="mosaic"
+                            imageSizes="(min-width: 1280px) 600px, 45vw"
+                            onOpen={() => onContentTarget('PRODUCT', featuredProduct.id)}
+                        />
+                        {supportingProducts.length > 0 && (
+                            <div
+                                className="featured-collection-supporting-products"
+                                data-product-count={supportingProducts.length}
+                            >
+                                {supportingProducts.map(product => (
+                                    <ProductCard
+                                        key={product.id}
+                                        product={product}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        appearance="gallery"
+                                        imageSizes="(min-width: 1280px) 240px, (min-width: 768px) 20vw, 28vw"
+                                        onOpen={() => onContentTarget('PRODUCT', product.id)}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="featured-collection-empty">

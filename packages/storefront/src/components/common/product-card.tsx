@@ -29,10 +29,10 @@ export function ProductCard({
     onFavorite?: () => void;
     priority?: boolean;
     imageSizes?: string;
-    appearance?: 'card' | 'plain' | 'gallery';
+    appearance?: 'card' | 'plain' | 'gallery' | 'mosaic';
 }) {
     const isZh = language === 'zh';
-    const gallery = appearance === 'gallery';
+    const gallery = appearance === 'gallery' || appearance === 'mosaic';
     const variant = lowestPricedProductVariant(product);
     const availability = productListingAvailability(product.variants, language);
     const stockLabel = availability.label;
