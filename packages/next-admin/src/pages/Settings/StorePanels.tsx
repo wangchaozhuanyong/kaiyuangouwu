@@ -255,12 +255,25 @@ export function StoresPanel({
                                     .join('；')}
                             </div>
                         )}
-                        {profile.status === 'DRAFT' && profile.channel.id === activeChannelId && (
+                        {profile.status === 'DRAFT' && (
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
                                 <div>
                                     <p className="text-xs font-bold text-slate-900">公开预览</p>
                                     <p className="mt-1 text-[10px] leading-4 text-slate-700">
-                                        所有访客可浏览；模拟下单需单独启用测试支付。
+                                        当前店铺{profile.isOperational ? '可访问' : '未对外开放'}。
+                                        草稿预览不等于正式营业；模拟下单需单独启用测试支付。
+                                    </p>
+                                    <p
+                                        id={`public-preview-help-${profile.id}`}
+                                        className="mt-1 text-[10px] leading-4 text-slate-600"
+                                    >
+                                        {profile.channel.id !== activeChannelId
+                                            ? '请先从顶部切换到此店铺，再操作公开预览。'
+                                            : !profile.primaryDomain && !profile.isPublished
+                                              ? '请先配置并验证主域名，再开放预览。'
+                                              : profile.isPublished
+                                                ? '此店铺的公开预览已开放。'
+                                                : '开放后所有访客均可浏览此店铺。'}
                                     </p>
                                 </div>
                                 <button
@@ -268,9 +281,12 @@ export function StoresPanel({
                                     role="switch"
                                     aria-checked={profile.isPublished}
                                     aria-label={`${storeName(profile)}公开预览`}
+                                    aria-describedby={`public-preview-help-${profile.id}`}
                                     onClick={() => void onTogglePublicPreview(profile)}
                                     disabled={
-                                        publicPreviewBusy || (!profile.primaryDomain && !profile.isPublished)
+                                        publicPreviewBusy ||
+                                        profile.channel.id !== activeChannelId ||
+                                        (!profile.primaryDomain && !profile.isPublished)
                                     }
                                     className={profile.isPublished ? secondaryButton : primaryButton}
                                 >

@@ -37,10 +37,11 @@ interface CollectionHierarchyItem {
     parent?: {
         id: string;
         name: string;
+        slug: string;
     } | null;
 }
 
-const ROOT_COLLECTION_NAME = '__root_collection__';
+const ROOT_COLLECTION_SLUG = '__root_collection__';
 
 export const collectionHierarchySummary = (
     collections: ReadonlyArray<CollectionHierarchyItem> | undefined,
@@ -49,7 +50,8 @@ export const collectionHierarchySummary = (
     const secondLevelCollections = new Map<string, CollectionHierarchyItem>();
 
     for (const collection of collections ?? []) {
-        const isSecondLevel = Boolean(collection.parent && collection.parent.name !== ROOT_COLLECTION_NAME);
+        // The structural root's slug survives localization; its display name may be missing.
+        const isSecondLevel = Boolean(collection.parent && collection.parent.slug !== ROOT_COLLECTION_SLUG);
         const topLevel = isSecondLevel ? collection.parent : collection;
         const secondLevel = isSecondLevel ? collection : undefined;
 
