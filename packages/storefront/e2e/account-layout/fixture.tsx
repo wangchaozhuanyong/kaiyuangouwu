@@ -8,6 +8,7 @@ import {
     semanticPaletteCssVariables,
     storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import { AddressesPage } from '../../src/addresses-page';
 import { ShopApi } from '../../src/api';
 import { DesktopAccountNavigation } from '../../src/components/common/desktop-account-navigation';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
@@ -139,8 +140,27 @@ const customer = {
         })),
     },
 } as unknown as ActiveCustomer;
+const addressCustomer: ActiveCustomer = {
+    ...customer,
+    addresses: [
+        {
+            id: 'local-address',
+            fullName: '本地样本收件人',
+            phoneNumber: '+60 11 0000 0000',
+            streetLine1: '本地布局样本，非真实收货地址',
+            streetLine2: '',
+            city: 'Kuala Lumpur',
+            province: 'Kuala Lumpur',
+            postalCode: '00000',
+            country: { code: 'MY', name: 'Malaysia' },
+            defaultShippingAddress: true,
+            defaultBillingAddress: false,
+        },
+    ],
+};
 let fail = params.get('fail') === '1';
 const api = {
+    activeStoreCommerceMode: () => Promise.resolve('PHYSICAL_ONLY'),
     myReviews: () => Promise.resolve([...reviews]),
     reviewCandidates: ({ skip = 0, take = 20 } = {}) => Promise.resolve(candidates.slice(skip, skip + take)),
     submitReview: async (input: SubmitStorefrontReviewInput) => {
@@ -186,7 +206,7 @@ function Fixture() {
                 <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
                     <aside style={{ padding: '12px 24px', fontSize: 12, color: 'var(--muted)' }}>
                         本地组件验收 · 合成样本 · 不连接生产接口
-                        {['reviews', 'account', 'product'].map(page => (
+                        {['reviews', 'account', 'product', 'addresses'].map(page => (
                             <a
                                 key={page}
                                 style={{ marginRight: 12, color: 'var(--accent-ink)' }}
@@ -228,6 +248,19 @@ function Fixture() {
                                 onProduct={() => undefined}
                                 onShop={() => undefined}
                                 onSignIn={() => undefined}
+                                onNotify={setNotice}
+                            />
+                        ) : view === 'addresses' ? (
+                            <AddressesPage
+                                api={api}
+                                customer={addressCustomer}
+                                market={market}
+                                availableCountries={[{ code: 'MY', name: 'Malaysia' }]}
+                                availableProvinces={[]}
+                                commerceMode="PHYSICAL_ONLY"
+                                language={language}
+                                onBack={() => undefined}
+                                onCustomerChange={() => undefined}
                                 onNotify={setNotice}
                             />
                         ) : view === 'account' ? (
