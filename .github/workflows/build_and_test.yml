@@ -81,6 +81,7 @@ jobs:
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
                   node --test scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
+                  node --test deploy/icloud-relay-diagnostic.spec.mjs
             - name: Build lint prerequisites
               if: needs.detect-changes.outputs.has_lint_packages == 'true'
               run: bun run build:core-common

@@ -134,6 +134,7 @@ function validateRequest(environment) {
             'verify-two-factor-backup',
             'verify-security-dependencies',
             'inspect-storefront-config',
+            'inspect-icloud-relay',
             'inspect-notification-config',
             'enable-unified-notifications',
             'prepare-notification-secret-transfer',
@@ -214,6 +215,7 @@ function validateRequest(environment) {
         [
             'backup-database',
             'audit-store-isolation-data',
+            'inspect-icloud-relay',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
             'plan-order-sales-ownership-backfill',
@@ -1465,6 +1467,28 @@ function storefrontInspectionFailure(result) {
         : 'Read-only storefront configuration inspection failed';
 }
 
+function inspectIcloudRelay(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        checkAncestry = assertStorefrontInspectionRevision,
+        spawn = spawnSync,
+    } = {},
+) {
+    const plan = inspect();
+    assert.equal(plan.markerSha, request.expectedRuntimeSha, 'Production runtime SHA changed');
+    checkAncestry(plan.markerSha, request.sourceSha);
+    const result = spawn(
+        '/usr/bin/node',
+        [`--env-file=${PRODUCTION_ENVIRONMENT_FILE}`, path.join(__dirname, 'icloud-relay-diagnostic.mjs')],
+        { encoding: 'utf8', timeout: 70000, maxBuffer: 16384, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    // A completed diagnostic may report a failed dependency. Never forward stderr,
+    // partial output, returned mailbox rows, credentials or an arbitrary child payload.
+    assert.ok([0, 1].includes(result.status) && !result.error, 'Mailbox diagnostic did not complete');
+    return require('./icloud-relay-receipt.cjs')(result, request.sourceSha, plan.markerSha);
+}
+
 function frontendRevisionEvidence(plan, pointerDirectory = '/var/www') {
     const frontendVersions = ['storefront', 'next-admin'].map(component => {
         const pointer = path.join(pointerDirectory, `kaiyuangouwu-${component}-current`);
@@ -2411,6 +2435,11 @@ function runAdministratorProductReadinessAudit(
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'inspect-icloud-relay') {
+        process.stdout.write(`${JSON.stringify(inspectIcloudRelay(request))}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=inspect-icloud-relay\n');
+        return;
+    }
     if (request.operation === 'plan-offsite-file-backup-config') {
         const plan = inspectOffsiteFileBackupConfig(request.sourceSha);
         process.stdout.write(
@@ -2913,6 +2942,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    inspectIcloudRelay,
     inspectImageServices,
     applyAptListsCleanup,
     applySnapCacheCleanup,
