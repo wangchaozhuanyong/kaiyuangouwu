@@ -1847,11 +1847,15 @@ describe('HomePage featured collection', () => {
                 managedContentProducts: products,
             };
             const desktopMarkup = renderHome(props, true);
-            expect((desktopMarkup.match(/class="product-card is-gallery"/g) ?? []).length).toBe(count);
+            expect((desktopMarkup.match(/class="product-card is-(?:gallery|mosaic)"/g) ?? []).length).toBe(
+                count,
+            );
             for (const item of products)
                 expect(desktopMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
             const mobileMarkup = renderHome(props, false);
-            expect((mobileMarkup.match(/class="product-card is-gallery"/g) ?? []).length).toBe(count);
+            expect((mobileMarkup.match(/class="product-card is-(?:gallery|mosaic)"/g) ?? []).length).toBe(
+                count,
+            );
             for (const item of products) {
                 expect(mobileMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
                 expect(mobileMarkup).toContain(`/product?id=${item.id}`);
@@ -1913,7 +1917,11 @@ describe('HomePage featured collection', () => {
             managedContentProducts: productsInCollection,
         });
 
-        expect(markup).toContain('class="featured-collection-grid"');
+        expect(markup).toContain('class="featured-collection-mosaic"');
+        expect(markup.match(/class="product-card is-mosaic"/g)).toHaveLength(1);
+        expect(markup.match(/class="product-card is-gallery"/g)).toHaveLength(4);
+        expect(markup).toContain('class="featured-collection-supporting-products" data-product-count="4"');
+        expect(markup).not.toContain('class="featured-collection-grid"');
         expect(markup).toContain('data-product-count="5"');
         expect(markup).toContain('aria-label="推荐集合"');
         expect(markup).not.toContain('左右滑动查看更多商品');
