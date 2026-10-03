@@ -32,7 +32,7 @@ import {
 import { In } from 'typeorm';
 
 import { CatalogGovernanceService } from './catalog-governance.service';
-import { sensitiveStoreFinancePermission } from './constants';
+import { hasMachineMailboxAccess, sensitiveStoreFinancePermission } from './constants';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
@@ -273,6 +273,9 @@ export class MerchantCatalogAccessService {
         }
 
         if (platformOwnerFields.has(`${parentType}.${fieldName}`)) {
+            if (hasMachineMailboxAccess(ctx, `${parentType}.${fieldName}`)) {
+                return;
+            }
             if (
                 ctx.channel.code !== DEFAULT_CHANNEL_CODE ||
                 !ctx.userHasPermissions([Permission.SuperAdmin])

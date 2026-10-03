@@ -1,20 +1,25 @@
 import 'reflect-metadata';
 
 import {
+    API_KEY_AUTH_STRATEGY_NAME,
+    Channel,
     Collection,
     ForbiddenError,
     Fulfillment,
     Order,
     OrderLine,
     Payment,
+    Permission,
     Product,
     ProductVariant,
     Refund,
+    RequestContext,
     StockLocation,
     User,
 } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { hasMachineMailboxAccess } from './constants';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
@@ -116,7 +121,192 @@ const merchantContext = {
     userHasPermissions: vi.fn().mockReturnValue(false),
 } as any;
 
+// Independent contract fixtures checked against the mailbox resolver's @Allow.
+const mailboxRootPermissions = [
+    ['Query', 'icloudPrimaryAccounts', 'ReadIcloudRelay'],
+    ['Query', 'icloudPrimaryAccount', 'ReadIcloudRelay'],
+    ['Query', 'icloudVirtualEmails', 'ReadIcloudRelay'],
+    ['Query', 'icloudVirtualEmail', 'ReadIcloudRelay'],
+    ['Query', 'icloudReceivedMails', 'ReadIcloudRelay'],
+    ['Mutation', 'createIcloudPrimaryAccount', 'CreateIcloudRelay'],
+    ['Mutation', 'createIcloudVirtualEmail', 'CreateIcloudRelay'],
+    ['Mutation', 'batchCreateIcloudVirtualEmails', 'CreateIcloudRelay'],
+    ['Mutation', 'reconcileIcloudMailHistory', 'UpdateIcloudRelay'],
+    ['Mutation', 'updateIcloudPrimaryAccount', 'UpdateIcloudRelay'],
+    ['Mutation', 'testIcloudConnection', 'UpdateIcloudRelay'],
+    ['Mutation', 'syncIcloudAccount', 'UpdateIcloudRelay'],
+    ['Mutation', 'resetIcloudMasterCode', 'UpdateIcloudRelay'],
+    ['Mutation', 'updateIcloudVirtualEmail', 'UpdateIcloudRelay'],
+    ['Mutation', 'resetIcloudVirtualEmailCode', 'UpdateIcloudRelay'],
+    ['Mutation', 'reassignIcloudMail', 'UpdateIcloudRelay'],
+    ['Mutation', 'deleteIcloudPrimaryAccount', 'DeleteIcloudRelay'],
+    ['Mutation', 'deleteIcloudVirtualEmail', 'DeleteIcloudRelay'],
+    ['Mutation', 'deleteIcloudMail', 'DeleteIcloudRelay'],
+] as const;
+const mailboxCrudPermissions = [
+    'ReadIcloudRelay',
+    'CreateIcloudRelay',
+    'UpdateIcloudRelay',
+    'DeleteIcloudRelay',
+] as const;
+
+function mailboxMachineContext(permissions: readonly string[]) {
+    return {
+        ...merchantContext,
+        session: { authenticationStrategy: API_KEY_AUTH_STRATEGY_NAME },
+        channel: { code: '__default_channel__' },
+        userHasPermissions: vi.fn((requested: Permission[]) =>
+            requested.some(permission => permissions.includes(permission)),
+        ),
+    };
+}
+
 describe('MerchantCatalogAccessService', () => {
+    it.each(
+        mailboxRootPermissions.flatMap(([parentType, fieldName, requiredPermission]) =>
+            mailboxCrudPermissions.map(grantedPermission => ({
+                parentType,
+                fieldName,
+                requiredPermission,
+                grantedPermission,
+            })),
+        ),
+    )(
+        'enforces $requiredPermission for $parentType.$fieldName with only $grantedPermission',
+        async ({ parentType, fieldName, requiredPermission, grantedPermission }) => {
+            const { service, connection } = createService({ merchant: false });
+            const ctx = mailboxMachineContext([grantedPermission]);
+            const result = service.assertRootFieldAccess(ctx, parentType, fieldName, {});
+            if (requiredPermission === grantedPermission) {
+                await expect(result).resolves.toBeUndefined();
+            } else {
+                await expect(result).rejects.toMatchObject({
+                    extensions: { code: 'USER_INPUT_ERROR' },
+                });
+            }
+            expect(ctx.userHasPermissions).toHaveBeenCalledWith([requiredPermission]);
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(mailboxRootPermissions)(
+        'rejects non-default mailbox machine context at %s.%s',
+        async (parentType, fieldName, permission) => {
+            const { service, connection } = createService({ merchant: false });
+            const ctx = mailboxMachineContext([permission, Permission.SuperAdmin]);
+            const store = { ...ctx, channel: { code: 'store-a' } } as RequestContext;
+            await expect(service.assertRootFieldAccess(store, parentType, fieldName, {})).rejects.toThrow(
+                '平台管理中心',
+            );
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(mailboxRootPermissions)(
+        'keeps native delegated permission restricted at %s.%s',
+        async (parentType, fieldName, permission) => {
+            const { service, connection } = createService({ merchant: false });
+            const ctx = mailboxMachineContext([permission]);
+            const native = {
+                ...ctx,
+                session: { authenticationStrategy: 'native' },
+            } as RequestContext;
+            await expect(service.assertRootFieldAccess(native, parentType, fieldName, {})).rejects.toThrow(
+                '超级管理员',
+            );
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        ['Query', 'imageProviderAdminConfigs'],
+        ['Query', 'imagePromptRoutingConfig'],
+        ['Query', 'imagePromptModelConfigs'],
+        ['Mutation', 'saveImageProviderCredential'],
+        ['Mutation', 'saveImagePromptRoutingConfig'],
+        ['Mutation', 'testImagePromptRoute'],
+        ['Mutation', 'testImageProviderConnection'],
+        ['Mutation', 'testImageProviderCredential'],
+        ['Mutation', 'archiveImageProviderCredential'],
+        ['Mutation', 'activateImagePromptSkillRelease'],
+        ['Mutation', 'saveImagePromptModel'],
+        ['Mutation', 'testImagePromptModel'],
+        ['Mutation', 'archiveImagePromptModel'],
+        ['Mutation', 'anonymizeImageGenerationCustomerData'],
+    ])('preserves non-mailbox owner protection at %s.%s', async (parentType, fieldName) => {
+        const { service, connection } = createService({ merchant: false });
+        const ctx = mailboxMachineContext(mailboxCrudPermissions);
+        expect(hasMachineMailboxAccess(ctx, `${parentType}.${fieldName}`)).toBe(false);
+        await expect(service.assertRootFieldAccess(ctx, parentType, fieldName, {})).rejects.toThrow(
+            '超级管理员',
+        );
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['no session', { session: undefined }],
+        ['native session', { session: { authenticationStrategy: 'native' } }],
+        ['another strategy', { session: { authenticationStrategy: 'oauth' } }],
+        ['no authenticated user', { activeUserId: undefined }],
+        ['Shop API', { apiType: 'shop' }],
+        ['non-default channel', { channel: { code: 'store-a' } }],
+    ])('does not grant a mailbox machine exception with %s', (_label, override) => {
+        const machine = mailboxMachineContext(['ReadIcloudRelay']);
+        const ctx = { ...machine, ...override } as RequestContext;
+        expect(hasMachineMailboxAccess(ctx, 'Query.icloudPrimaryAccounts')).toBe(false);
+        expect(machine.userHasPermissions).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        'Query.icloudPrimaryAccountsExtra',
+        'Mutation.icloudPrimaryAccounts',
+        'Query.createIcloudPrimaryAccount',
+        'Query.icloudQueryMails',
+        'Query.activeChannel',
+    ])('does not match an unrelated root field %s', rootField => {
+        const ctx = mailboxMachineContext(mailboxCrudPermissions);
+        expect(hasMachineMailboxAccess(ctx, rootField)).toBe(false);
+        expect(ctx.userHasPermissions).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['matching channel', 'default-channel', ['ReadIcloudRelay'], true],
+        ['other channel', 'store-a', ['ReadIcloudRelay'], false],
+        ['no mailbox permission', 'default-channel', [], false],
+        ['SuperAdmin-only', 'default-channel', [Permission.SuperAdmin], false],
+    ] as const)(
+        'checks actual RequestContext channel permissions for %s',
+        (_label, permissionsChannelId, permissions, expected) => {
+            const ctx = new RequestContext({
+                apiType: 'admin',
+                channel: new Channel({ id: 'default-channel', code: '__default_channel__' }),
+                session: {
+                    id: 'fixture-session',
+                    token: 'fixture-session-token',
+                    cacheExpiry: 0,
+                    expires: new Date('2030-01-01'),
+                    authenticationStrategy: API_KEY_AUTH_STRATEGY_NAME,
+                    user: {
+                        id: 'fixture-machine',
+                        identifier: 'fixture-machine',
+                        verified: true,
+                        channelPermissions: [
+                            {
+                                id: permissionsChannelId,
+                                code: permissionsChannelId,
+                                token: 'fixture-channel-token',
+                                permissions: [...permissions] as Permission[],
+                            },
+                        ],
+                    },
+                },
+                isAuthorized: true,
+                authorizedAsOwnerOnly: false,
+            });
+            expect(hasMachineMailboxAccess(ctx, 'Query.icloudPrimaryAccounts')).toBe(expected);
+        },
+    );
+
     it.each([
         ['Query', 'imageProviderAdminConfigs'],
         ['Mutation', 'saveImageProviderCredential'],
