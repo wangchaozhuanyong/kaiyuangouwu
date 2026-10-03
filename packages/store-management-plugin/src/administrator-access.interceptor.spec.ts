@@ -1,5 +1,5 @@
 import { API_KEY_AUTH_STRATEGY_NAME, UserInputError } from '@vendure/core';
-import { from, lastValueFrom } from 'rxjs';
+import { defer, from, lastValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -24,6 +24,30 @@ vi.mock('@vendure/core', async importOriginal => ({
 }));
 
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
+import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
+import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
+
+const mailboxRootPermissions = [
+    ['Query', 'icloudPrimaryAccounts', 'ReadIcloudRelay'],
+    ['Query', 'icloudPrimaryAccount', 'ReadIcloudRelay'],
+    ['Query', 'icloudVirtualEmails', 'ReadIcloudRelay'],
+    ['Query', 'icloudVirtualEmail', 'ReadIcloudRelay'],
+    ['Query', 'icloudReceivedMails', 'ReadIcloudRelay'],
+    ['Mutation', 'createIcloudPrimaryAccount', 'CreateIcloudRelay'],
+    ['Mutation', 'createIcloudVirtualEmail', 'CreateIcloudRelay'],
+    ['Mutation', 'batchCreateIcloudVirtualEmails', 'CreateIcloudRelay'],
+    ['Mutation', 'reconcileIcloudMailHistory', 'UpdateIcloudRelay'],
+    ['Mutation', 'updateIcloudPrimaryAccount', 'UpdateIcloudRelay'],
+    ['Mutation', 'testIcloudConnection', 'UpdateIcloudRelay'],
+    ['Mutation', 'syncIcloudAccount', 'UpdateIcloudRelay'],
+    ['Mutation', 'resetIcloudMasterCode', 'UpdateIcloudRelay'],
+    ['Mutation', 'updateIcloudVirtualEmail', 'UpdateIcloudRelay'],
+    ['Mutation', 'resetIcloudVirtualEmailCode', 'UpdateIcloudRelay'],
+    ['Mutation', 'reassignIcloudMail', 'UpdateIcloudRelay'],
+    ['Mutation', 'deleteIcloudPrimaryAccount', 'DeleteIcloudRelay'],
+    ['Mutation', 'deleteIcloudVirtualEmail', 'DeleteIcloudRelay'],
+    ['Mutation', 'deleteIcloudMail', 'DeleteIcloudRelay'],
+] as const;
 
 function invoke(
     field: string,
@@ -56,15 +80,103 @@ function invoke(
         access,
         audit,
         next,
+        context,
+        interceptor,
+    };
+}
+
+function invokeMailboxChain(field: string, parentType = 'Query') {
+    const first = invoke(field, {}, Promise.resolve('ok'), undefined, parentType);
+    first.access.current.mockRejectedValue(new Error('Machine users have no employee profile'));
+    const connection = { getRepository: vi.fn() };
+    const merchant = new MerchantCatalogAccessInterceptor(
+        new MerchantCatalogAccessService(connection as never, {} as never, {} as never),
+    );
+    const nextGate = {
+        handle: vi.fn(() =>
+            defer(async () => lastValueFrom(await merchant.intercept(first.context, first.next))),
+        ),
+    };
+    return {
+        ...first,
+        connection,
+        nextGate,
+        runChain: async () => lastValueFrom(await first.interceptor.intercept(first.context, nextGate)),
     };
 }
 
 describe('administrator access failure audit', () => {
+    it.each(mailboxRootPermissions)(
+        'passes exact %s.%s permission through both gates',
+        async (parentType, fieldName, permission) => {
+            state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            state.requestContext.userHasPermissions.mockImplementation((requested: string[]) =>
+                requested.includes(permission),
+            );
+            const { runChain, access, next, nextGate, connection } = invokeMailboxChain(
+                fieldName,
+                parentType,
+            );
+            await expect(runChain()).resolves.toBe('ok');
+            expect(state.requestContext.userHasPermissions).toHaveBeenCalledWith([permission]);
+            expect(access.current).not.toHaveBeenCalled();
+            expect(nextGate.handle).toHaveBeenCalledOnce();
+            expect(next.handle).toHaveBeenCalledOnce();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(
+        [
+            ['Query', 'icloudPrimaryAccounts', 'ReadIcloudRelay'],
+            ['Mutation', 'createIcloudPrimaryAccount', 'CreateIcloudRelay'],
+            ['Mutation', 'updateIcloudVirtualEmail', 'UpdateIcloudRelay'],
+            ['Mutation', 'deleteIcloudMail', 'DeleteIcloudRelay'],
+        ].flatMap(([parentType, fieldName, requiredPermission]) =>
+            ['ReadIcloudRelay', 'CreateIcloudRelay', 'UpdateIcloudRelay', 'DeleteIcloudRelay']
+                .filter(permission => permission !== requiredPermission)
+                .map(grantedPermission => ({ parentType, fieldName, grantedPermission })),
+        ),
+    )(
+        'rejects $parentType.$fieldName with only $grantedPermission before either service runs',
+        async ({ parentType, fieldName, grantedPermission }) => {
+            state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            state.requestContext.userHasPermissions.mockImplementation((requested: string[]) =>
+                requested.includes(grantedPermission),
+            );
+            const { runChain, access, next, nextGate, connection } = invokeMailboxChain(
+                fieldName,
+                parentType,
+            );
+            await expect(runChain()).rejects.toThrow('Machine users have no employee profile');
+            expect(access.current).toHaveBeenCalledOnce();
+            expect(nextGate.handle).not.toHaveBeenCalled();
+            expect(next.handle).not.toHaveBeenCalled();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+
     beforeEach(() => {
         state.requestContext.session.authenticationStrategy = 'native';
         state.requestContext.channel.code = '__default_channel__';
         state.requestContext.userHasPermissions.mockReset().mockReturnValue(true);
     });
+
+    it.each(['icloudPrimaryAccounts', 'icloudVirtualEmails'])(
+        'passes a read-only mailbox API key through both authorization gates for %s',
+        async field => {
+            state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            state.requestContext.userHasPermissions.mockImplementation((permissions: string[]) =>
+                permissions.includes('ReadIcloudRelay'),
+            );
+            const { runChain, access, next, nextGate, connection } = invokeMailboxChain(field);
+            await expect(runChain()).resolves.toBe('ok');
+            expect(access.current).not.toHaveBeenCalled();
+            expect(nextGate.handle).toHaveBeenCalledOnce();
+            expect(next.handle).toHaveBeenCalledOnce();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
 
     it.each(['adminBeginLogin', 'adminCompleteTwoFactorLogin'])(
         'allows public %s without loading an old administrator profile',
@@ -86,6 +198,9 @@ describe('administrator access failure audit', () => {
         'allows a dedicated API key to call %s without an employee profile',
         async (field, parentType, permission) => {
             state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            state.requestContext.userHasPermissions.mockImplementation((requested: string[]) =>
+                requested.includes(permission),
+            );
             const { run, access, next } = invoke(field, {}, Promise.resolve('ok'), undefined, parentType);
             await expect(run()).resolves.toBeTruthy();
             expect(state.requestContext.userHasPermissions).toHaveBeenCalledWith([permission]);
