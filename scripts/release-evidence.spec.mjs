@@ -751,6 +751,51 @@ test('deployment control test changes do not invalidate dev-server business chec
     );
 });
 
+test('runtime packaging repairs retain business proofs and invalidate every actual packaging gate', () => {
+    const inventory = [...inputInventory, { directory: 'dev-server', name: 'dev-server' }];
+    const businessChecks = [
+        { id: 'backend:dev-server', kind: 'backend', packages: ['dev-server'], databases: [], flags: [] },
+        { id: 'backend:translation', kind: 'backend', packages: [], databases: [], flags: ['translation'] },
+        {
+            id: 'backend:storefront',
+            kind: 'backend',
+            packages: [],
+            databases: [],
+            flags: ['storefrontIntegration'],
+        },
+        {
+            id: 'quality:config',
+            kind: 'quality',
+            packages: ['dev-server'],
+            file: 'packages/dev-server/dev-config.ts',
+        },
+    ];
+    const controls = { id: 'controls', kind: 'controls', packages: [] };
+    const dependencies = { id: 'dependencies', kind: 'dependencies', packages: [] };
+    const changed = (check, reader) =>
+        checkFingerprint(sourceSha, check, inventory, reader) !==
+        checkFingerprint(targetSha, check, inventory, reader);
+    for (const name of ['artifact', 'audit', 'verify']) {
+        const file = `packages/dev-server/scripts/production-runtime-${name}.mjs`;
+        const { reader } = inputFixture({ [file]: 'actual production packaging repair' });
+        for (const check of businessChecks) assert.equal(changed(check, reader), false, check.id);
+        assert.equal(changed(controls, reader), true, file);
+        const lint = { id: `quality:${file}`, kind: 'quality', packages: ['dev-server'], file };
+        assert.equal(changed(lint, reader), true, file);
+        assert.equal(changed(dependencies, reader), name === 'audit', file);
+    }
+    for (const file of ['packages/dev-server/dev-config.ts', 'packages/dev-server/migrations/new.ts']) {
+        const { reader } = inputFixture({ [file]: 'actual business dependency change' });
+        for (const check of businessChecks) assert.equal(changed(check, reader), true, check.id);
+    }
+    for (const file of ['bun.lock', 'patches/braces@3.0.3.patch']) {
+        const { reader } = inputFixture({ [file]: 'changed production dependency' });
+        for (const check of businessChecks) assert.equal(changed(check, reader), true, check.id);
+        assert.equal(changed(dependencies, reader), true, file);
+        assert.equal(changed(controls, reader), true, file);
+    }
+});
+
 test('promotion verifier fixture changes reuse codegen and typed business lint but still check the fixture', () => {
     const file = 'packages/dev-server/scripts/production-release-smoke.spec.mjs';
     const { reader } = inputFixture({ [file]: 'public entry needs no cookie' });
