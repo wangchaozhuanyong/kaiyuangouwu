@@ -552,7 +552,19 @@ rollback() {
     exit "${status}"
 }
 
-trap cleanup EXIT
+handle_deploy_exit() {
+    local status="$?"
+    trap - EXIT
+    # Fatal shell errors can bypass ERR (and older Bash reports zero to EXIT).
+    # Unfinished writer pauses must still use the compatibility-guarded recovery.
+    if [[ "${rollback_needed:-0}" == "1" || "${worker_paused_early:-0}" == "1" ]]; then
+        [[ "${status}" != "0" ]] || status=1
+        rollback "${status}"
+    fi
+    cleanup
+}
+
+trap handle_deploy_exit EXIT
 trap rollback ERR
 
 sudo -n install -o root -g root -m 0755 "${swap_controller_source}" "${swap_controller}"
@@ -793,33 +805,46 @@ backup_age_seconds=""
 load_verified_backup() {
     local backup_service="vendure-mysql-backup.service"
     local backup_result backup_evidence backup_epoch current_epoch
+    local loaded_backup_file loaded_backup_invocation_id loaded_backup_age_seconds
+    local load_mode="${1:-capture}"
+    [[ "${load_mode}" == "capture" || "${load_mode}" == "verify" ]] || return 1
     backup_result="$(sudo -n systemctl show "${backup_service}" -p Result --value)"
     [[ "${backup_result}" == "success" ]] || return 1
-    backup_invocation_id="$(sudo -n systemctl show "${backup_service}" -p InvocationID --value)"
-    [[ "${backup_invocation_id}" =~ ^[0-9a-f]{32}$ ]] || return 1
+    loaded_backup_invocation_id="$(sudo -n systemctl show "${backup_service}" -p InvocationID --value)"
+    [[ "${loaded_backup_invocation_id}" =~ ^[0-9a-f]{32}$ ]] || return 1
     backup_evidence="$(
         sudo -n journalctl --quiet --no-pager --output=cat \
-            "_SYSTEMD_INVOCATION_ID=${backup_invocation_id}" |
+            "_SYSTEMD_INVOCATION_ID=${loaded_backup_invocation_id}" |
             grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes encrypted=yes$' |
             tail -n 1 || true
     )"
     [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes\ encrypted=yes$ ]] || return 1
-    backup_file="${BASH_REMATCH[1]}"
-    sudo -n test -s "${backup_file}" || return 1
-    sudo -n test -s "${backup_file}.sha256" || return 1
-    sudo -n test -s "${backup_file}.manifest.json" || return 1
+    loaded_backup_file="${BASH_REMATCH[1]}"
+    sudo -n test -s "${loaded_backup_file}" || return 1
+    sudo -n test -s "${loaded_backup_file}.sha256" || return 1
+    sudo -n test -s "${loaded_backup_file}.manifest.json" || return 1
     # A changed proof format requires one new snapshot; legacy backups remain available for recovery.
     local expected_manifest_version actual_manifest_version
     expected_manifest_version="$(sudo -n /usr/local/sbin/vendure-mysql-backup-manifest.py format-version)" || return 1
-    actual_manifest_version="$(sudo -n jq -er '.version' "${backup_file}.manifest.json")" || return 1
+    actual_manifest_version="$(sudo -n jq -er '.version' "${loaded_backup_file}.manifest.json")" || return 1
     [[ "${expected_manifest_version}" =~ ^[0-9]+$ && "${actual_manifest_version}" == "${expected_manifest_version}" ]] || return 1
     sudo -n /bin/bash -c 'cd "$1" && sha256sum --check --status "$2"' \
-        backup-check "$(dirname "${backup_file}")" "$(basename "${backup_file}.sha256")" || return 1
-    backup_epoch="$(sudo -n stat --format='%Y' "${backup_file}")"
+        backup-check "$(dirname "${loaded_backup_file}")" "$(basename "${loaded_backup_file}.sha256")" || return 1
+    backup_epoch="$(sudo -n stat --format='%Y' "${loaded_backup_file}")"
     current_epoch="$(date +%s)"
     [[ "${backup_epoch}" =~ ^[0-9]+$ && "${current_epoch}" =~ ^[0-9]+$ ]] || return 1
-    backup_age_seconds="$((current_epoch - backup_epoch))"
-    ((backup_age_seconds >= 0)) || return 1
+    loaded_backup_age_seconds="$((current_epoch - backup_epoch))"
+    ((loaded_backup_age_seconds >= 0)) || return 1
+    if [[ "${load_mode}" == "verify" ]]; then
+        # Revalidate the frozen migration snapshot without assigning its readonly
+        # receipt fields, and reject a different service invocation or file.
+        [[ "${loaded_backup_file}" == "${backup_file}" && \
+            "${loaded_backup_invocation_id}" == "${backup_invocation_id}" ]] || return 1
+    else
+        backup_file="${loaded_backup_file}"
+        backup_invocation_id="${loaded_backup_invocation_id}"
+        backup_age_seconds="${loaded_backup_age_seconds}"
+    fi
 }
 
 backup_action="create"
@@ -869,7 +894,7 @@ deploy_stage="migration-integrity-verification"
 node "${usdt_guard}" verify "${candidate}" "${usdt_snapshot}"
 if [[ -n "$governance_plan_sha256" ]]; then
     deploy_stage="reviewed-platform-data-reconciliation"
-    load_verified_backup || fail 'reviewed platform reconciliation requires a verified fresh backup'
+    load_verified_backup verify || fail 'reviewed platform reconciliation requires the verified frozen backup'
     STORE_ISOLATION_MODULE_ROOT="${candidate}" VENDURE_GOVERNANCE_BACKUP_VERIFIED=true \
         node "${candidate}/packages/dev-server/scripts/platform-governance-reconciliation.mjs" \
         apply "$governance_plan_sha256"
