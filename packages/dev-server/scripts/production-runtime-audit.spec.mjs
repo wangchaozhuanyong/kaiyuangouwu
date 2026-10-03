@@ -265,6 +265,39 @@ void test('bun audit gate accepts exit status 1 when parsed findings are below t
     assert.deepEqual(report, moderateAudit);
 });
 
+void test('blocked audit preserves every raw advisory before rejecting the policy', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-blocked-audit-'));
+    try {
+        const lock = path.join(root, 'bun.lock');
+        const evidence = path.join(root, 'bun-audit.json');
+        await writeFile(lock, 'blocked audit fixture lock');
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                onReport: report => writeBunAuditEvidence(evidence, lock, report),
+                runCommand: () => ({ status: 1, stdout: JSON.stringify(audit), stderr: '' }),
+            }),
+            /bun audit policy failed/u,
+        );
+        const lockSha = createHash('sha256')
+            .update(await readFile(lock))
+            .digest('hex');
+        assert.deepEqual(parseSavedBunAuditEvidence(await readFile(evidence, 'utf8'), lockSha), audit);
+        await assert.rejects(
+            runBunAudit(root, {
+                auditLevel: 'high',
+                onReport: () => {
+                    throw new Error('Could not retain audit evidence');
+                },
+                runCommand: () => ({ status: 1, stdout: JSON.stringify({}), stderr: '' }),
+            }),
+            /Could not retain audit evidence/u,
+        );
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 void test('bun audit gate rejects an unexpected non-policy exit code', async () => {
     await assert.rejects(
         runBunAudit('/repository', {

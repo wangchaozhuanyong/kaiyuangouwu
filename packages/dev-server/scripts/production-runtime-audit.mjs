@@ -21,13 +21,13 @@ export const BRACES_PATCH = Object.freeze({
     package: 'braces',
     version: '3.0.3',
     path: 'patches/braces@3.0.3.patch',
-    sha256: 'c67266878bc77f4d01fc348c1a8d0497ef72e97b82eae81d6ae04c9629399352',
+    sha256: '78eb00165305b88c9b6df49d8915842680423482c7663c141cee211479702b6f',
     files: Object.freeze({
         'lib/compile.js': 'b651f7715e6db8942ce61d3394357b4d81c8ece88240aa31a458ea1165edd195',
         'lib/constants.js': 'f9fb688959232eee3e6ad7906a5b0e3234815db49ee857ef86983d65b917dc7c',
         'lib/expand.js': '2974d5b8763a358d81dfa5b4b804329f525239f34429c396b93a540219504809',
         'lib/parse.js': 'ef9b3851f848460daaf91ff248222a43e266f97c4f2df7010cb7858e1e39a107',
-        'lib/stringify.js': '645f13c68af685148e9fe8eca449ee2ebb88eee0f27de7b2125fbfc175b1584d',
+        'lib/stringify.js': '212657a28ad9a1decea8ae098e9c241cfc6a7784982be6f17df6409224f01b59',
         'index.js': '332ea07c7b006361aad12aa994ca75dc1db8e8382b884909e2f38f10b85c88a4',
         'lib/utils.js': 'b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7',
         'package.json': '56f08b888a4f30dc7cf8a7dbb36ffe92b737912ba36abe9d069d32167c957ac7',
@@ -367,6 +367,7 @@ export async function runBunAudit(
             );
         },
         retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
+        onReport = () => undefined,
         runCommand = () =>
             spawnSync('bun', ['audit', '--json'], {
                 cwd: workingDirectory,
@@ -414,6 +415,8 @@ export async function runBunAudit(
             await wait(delayMs);
             continue;
         }
+        // Preserve the complete raw report even when a patch check or policy blocks publication.
+        await onReport(report);
         const verifiedPatches = verifyReportPatches(report, workingDirectory);
         const blockedFindings = evaluateAuditPolicy(report, auditLevel ?? 'critical', verifiedPatches);
         if (auditLevel && blockedFindings.length > 0) {
@@ -473,11 +476,15 @@ async function main() {
     });
     const auditLevel = values['audit-level'] ?? 'high';
     severityRank(auditLevel);
-    const report = await runBunAudit(repositoryRoot, { auditLevel });
-    if (values['evidence-output']) {
-        const lockfilePath = path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock');
-        writeBunAuditEvidence(path.resolve(values['evidence-output']), lockfilePath, report);
-    }
+    const report = await runBunAudit(repositoryRoot, {
+        auditLevel,
+        onReport: rawReport => {
+            if (values['evidence-output']) {
+                const lockfilePath = path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock');
+                writeBunAuditEvidence(path.resolve(values['evidence-output']), lockfilePath, rawReport);
+            }
+        },
+    });
     const verifiedPatches = verifyReportPatches(report, repositoryRoot);
     process.stdout.write(
         `bun audit policy passed (${auditLevel}+); verified patches: ${verifiedPatches.length}\n`,
