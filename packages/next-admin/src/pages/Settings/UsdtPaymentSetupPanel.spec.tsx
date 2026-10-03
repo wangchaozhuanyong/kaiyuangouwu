@@ -19,7 +19,7 @@ vi.mock('@apollo/client/react', () => apolloMocks);
 const unconfiguredSetup: StoreUsdtSetupResult = {
     myStoreCurrencyConfiguration: {
         channelId: '1',
-        channelCode: 'default-channel',
+        channelCode: '__default_channel__',
         updatedAt: '2026-09-01T00:00:00.000Z',
         defaultCurrencyCode: 'CNY',
         availableCurrencyCodes: ['CNY', 'MYR'],
@@ -48,7 +48,7 @@ const unconfiguredSetup: StoreUsdtSetupResult = {
     },
     myStoreUsdtWallet: {
         channelId: '1',
-        channelCode: 'default-channel',
+        channelCode: '__default_channel__',
         reviewStatus: 'UNCONFIGURED',
         configured: false,
         network: 'TRC20',
@@ -74,14 +74,35 @@ describe('UsdtPaymentSetupPanel', () => {
         });
     });
 
-    it('shows the dedicated merchant wallet submission flow instead of a generic payment editor', () => {
+    it('keeps the platform wallet submission form hidden from an ordinary store administrator', () => {
         const html = renderPanel(['ReadStoreProfile', 'UpdateStoreProfile']);
 
         expect(html).toContain('USDT-TRC20 收款');
         expect(html).toContain('尚未配置');
-        expect(html).toContain('TRON 主网收款地址');
-        expect(html).toContain('提交平台审核');
-        expect(html).toContain('无需在上方手工新增');
+        expect(html).not.toContain('TRON 主网收款地址');
+        expect(html).not.toContain('提交平台审核');
+        expect(html).toContain('平台统一收款钱包');
+    });
+
+    it('allows wallet submission only for SuperAdmin in platform context', () => {
+        expect(renderPanel(['ReadStoreProfile', 'UpdateStoreProfile', 'SuperAdmin'])).toContain(
+            '提交平台审核',
+        );
+        apolloMocks.useQuery.mockReturnValue({
+            data: {
+                ...unconfiguredSetup,
+                myStoreCurrencyConfiguration: {
+                    ...unconfiguredSetup.myStoreCurrencyConfiguration,
+                    channelCode: 'store-b',
+                },
+            },
+            loading: false,
+            refetch: vi.fn(),
+        });
+        const html = renderPanel(['ReadStoreProfile', 'UpdateStoreProfile', 'SuperAdmin']);
+        expect(html).not.toContain('提交平台审核');
+        expect(html).not.toContain('平台待审核收款地址');
+        expect(apolloMocks.useQuery.mock.calls.at(-1)?.[1].skip).toBe(true);
     });
 
     it('does not render store wallet data without store profile read permission', () => {

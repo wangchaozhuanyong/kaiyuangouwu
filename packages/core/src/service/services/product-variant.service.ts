@@ -28,6 +28,7 @@ import { UpdatedProductVariantPrice } from '../../config/catalog/product-variant
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import {
+    CatalogResourceOwnership,
     Channel,
     Order,
     OrderLine,
@@ -46,6 +47,7 @@ import { EventBus } from '../../event-bus/event-bus';
 import { ProductVariantChannelEvent } from '../../event-bus/events/product-variant-channel-event';
 import { ProductVariantEvent } from '../../event-bus/events/product-variant-event';
 import { ProductVariantPriceEvent } from '../../event-bus/events/product-variant-price-event';
+import { assertCatalogProductMaintainer } from '../helpers/catalog-ownership';
 import { catalogReadChannelId } from '../helpers/catalog-read-scope';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
@@ -314,7 +316,15 @@ export class ProductVariantService {
                 },
                 relations: ['options'],
             })
-            .then(variant => (!variant ? [] : variant.options.map(o => this.translator.translate(o, ctx))));
+            .then(variant =>
+                !variant
+                    ? []
+                    : variant.options.map(o =>
+                          Object.assign(this.translator.translate(o, ctx), {
+                              authorizedProductId: variant.productId,
+                          }),
+                      ),
+            );
     }
 
     getFacetValuesForVariant(ctx: RequestContext, variantId: ID): Promise<Array<Translated<FacetValue>>> {
@@ -435,6 +445,13 @@ export class ProductVariantService {
         input: UpdateProductVariantInput[],
     ): Promise<Array<Translated<ProductVariant>>> {
         for (const productInput of input) {
+            const localFields = new Set(['id', 'price', 'currencyCode', 'stockOnHand', 'stockLevels']);
+            if (Object.keys(productInput).some(key => !localFields.has(key))) {
+                const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, productInput.id, {
+                    channelId: ctx.channelId,
+                });
+                await assertCatalogProductMaintainer(this.connection, ctx, variant.productId);
+            }
             await this.updateSingle(ctx, productInput);
         }
         const updatedVariants = await this.findByIds(
@@ -446,6 +463,7 @@ export class ProductVariantService {
     }
 
     private async createSingle(ctx: RequestContext, input: CreateProductVariantInput): Promise<ID> {
+        await assertCatalogProductMaintainer(this.connection, ctx, input.productId);
         await this.validateVariantOptionIds(ctx, input.productId, input.optionIds);
         if (!input.optionIds) {
             input.optionIds = [];
@@ -513,6 +531,11 @@ export class ProductVariantService {
         // variant created directly within a non-default channel the channel-filtered `stockLevels`
         // field resolves to a real entry rather than an empty array until stock is first adjusted.
         await this.ensureStockLevelsForChannel(ctx, [createdVariant.id], ctx.channelId);
+
+        const governedOwner = await this.connection
+            .getRepository(ctx, CatalogResourceOwnership)
+            .findOne({ where: { resourceType: 'Product', resourceId: input.productId } });
+        if (governedOwner) return createdVariant.id;
 
         // Assign the new variant to any other channels the parent product is already assigned to,
         // so that the variant is visible in all channels the product belongs to.
@@ -805,6 +828,9 @@ export class ProductVariantService {
         const variants = await this.connection
             .getRepository(ctx, ProductVariant)
             .find({ where: { id: In(ids) } });
+        for (const productId of new Set(variants.map(variant => variant.productId))) {
+            await assertCatalogProductMaintainer(this.connection, ctx, productId);
+        }
         for (const variant of variants) {
             variant.deletedAt = new Date();
         }

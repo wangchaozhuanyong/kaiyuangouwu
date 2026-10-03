@@ -22,7 +22,10 @@ async function renderTemplate(
 ) {
     const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
     const templateVars = {
-        ...emailLanguageVariables(languageCode),
+        ...emailLanguageVariables(languageCode, {
+            storefrontNameZh: '测试店铺',
+            storefrontNameEn: 'Test Store',
+        }),
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
         verifyEmailAddressActionUrl: buildAccountActionUrl(
             'https://shop.example.com/#/verify-account',
@@ -99,7 +102,10 @@ describe('localized email templates', () => {
                 'utf8',
             );
             const result = await generator.generate('store@example.com', 'Subject', template, {
-                ...emailLanguageVariables(languageCode),
+                ...emailLanguageVariables(languageCode, {
+                    storefrontNameZh: '测试店铺',
+                    storefrontNameEn: 'Test Store',
+                }),
                 isChinese,
                 orderCode: 'ORDER-2002',
                 productName: 'Google account',
@@ -135,7 +141,7 @@ describe('localized email templates', () => {
         const result = await renderTemplate(type, 'zh_Hans');
 
         expect(result.body).toContain('lang="zh-CN"');
-        expect(result.body).toContain('云桥Ai');
+        expect(result.body).toContain('测试店铺');
         expect(result.body).toContain(bodyCopy);
         expect(result.body).toContain(actionCopy);
     });
@@ -149,7 +155,7 @@ describe('localized email templates', () => {
         const result = await renderTemplate(type, 'en');
 
         expect(result.body).toContain('lang="en"');
-        expect(result.body).toContain('Yunqiao Ai');
+        expect(result.body).toContain('Test Store');
         expect(result.body).toContain(bodyCopy);
         expect(result.body).toContain(actionCopy);
         expect(result.body).not.toContain('明集市');

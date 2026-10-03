@@ -17,6 +17,15 @@ export class AutoCardDelivery extends VendureEntity {
         super(input);
     }
 
+    @EntityId({ nullable: true })
+    sourceChannelId: ID | null;
+
+    @EntityId({ nullable: true })
+    supplyGrantId: ID | null;
+
+    @Column({ type: 'int', nullable: true })
+    supplyGrantVersion: number | null;
+
     @Column({ type: 'varchar', length: 24, default: 'WAITING_STOCK' })
     state: AutoCardDeliveryState;
 

@@ -78,11 +78,15 @@ export class TransactionalConnection {
         private configService: ConfigService,
     ) {}
 
+    /** Project governance is enabled by the configured store access strategy, including worker contexts. */
+    get platformStoreGovernanceEnabled(): boolean {
+        return this.configService.authOptions.entityAccessControlStrategy.platformStoreGovernance === true;
+    }
+
     /**
      * @description
      * The plain TypeORM Connection object. Should be used carefully as any operations
-     * performed with this connection will not be performed within any outer
-     * transactions.
+     * performed with this connection will not be performed within any outer transactions.
      */
     get rawConnection(): DataSource {
         return this.dataSource;

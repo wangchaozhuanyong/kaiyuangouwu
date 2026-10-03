@@ -22,7 +22,7 @@ export const getChannelDisplayName = (
     const normalizedCode = code.trim();
     if (!normalizedCode) return languageCode === 'zh_Hans' ? '未命名店铺' : 'Unnamed store';
     if (isDefaultChannelCode(normalizedCode)) {
-        return languageCode === 'zh_Hans' ? '平台管理（不经营）' : 'Platform management (non-operating)';
+        return languageCode === 'zh_Hans' ? '模钥平台管理中心' : 'MOYAO Platform Management Center';
     }
     if (typeof value !== 'string') {
         const localizedName =
@@ -46,7 +46,7 @@ export const getChannelDisplayLabel = (
 ) => {
     const name = getChannelDisplayName(value, languageCode);
     const currencyCode = value.defaultCurrencyCode?.trim();
-    return currencyCode ? `${name} · ${currencyCode}` : name;
+    return currencyCode && !isDefaultChannelCode(value.code) ? `${name} · ${currencyCode}` : name;
 };
 
 export const getCatalogEmptyStateDescription = ({

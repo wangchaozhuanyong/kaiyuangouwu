@@ -70,6 +70,7 @@ import {
 } from '../../utils/configurable-operation-localization';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { CatalogTemplateLibraryPanel } from './CatalogTemplateLibraryPanel';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
 import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
@@ -1082,6 +1083,8 @@ export function CategoriesModule() {
                     </button>
                 </div>
             </div>
+
+            <CatalogTemplateLibraryPanel key={data?.activeChannel.id} onClaimed={() => void refetch()} />
 
             <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
                 {(

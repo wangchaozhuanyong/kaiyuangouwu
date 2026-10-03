@@ -25,6 +25,12 @@ export function isPlatformBusinessPath(pathname: string) {
     );
 }
 
+export function isPlatformOwnerPath(pathname: string) {
+    return ['/plugins/ai-access', '/plugins/icloud-relay', '/icloud-relay'].some(
+        prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+}
+
 interface AppShellPermissionSnapshot {
     activeChannel?: { id: string } | null;
     me?: {

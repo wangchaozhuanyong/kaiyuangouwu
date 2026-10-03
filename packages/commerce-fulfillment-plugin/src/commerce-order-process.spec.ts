@@ -68,6 +68,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
         stockQueryBuilder.getMany.mockResolvedValue([]);
         connection.getEntityOrThrow.mockImplementation(() => Promise.resolve(hydratedOrder));
         const services = [
+            { resourceForSku: vi.fn() },
             orderService,
             productVariantService,
             stockMovementService,
@@ -214,6 +215,15 @@ describe('commerceOrderProcess digital fulfillment', () => {
         ).resolves.toBe('insufficient stock');
         expect(stockQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
         expect(productVariantService.getSaleableStockLevel).not.toHaveBeenCalled();
+    });
+
+    it('blocks starting a new payment from the platform management center', async () => {
+        await expect(
+            commerceOrderProcess.onTransitionStart?.('AddingItems', 'ArrangingPayment', {
+                ctx: { channel: { code: '__default_channel__' } },
+                order: { lines: [] },
+            } as any),
+        ).resolves.toBe('平台管理中心不经营，请到经营店铺购买');
     });
 
     it('does not create another fulfillment for unrelated transitions', async () => {

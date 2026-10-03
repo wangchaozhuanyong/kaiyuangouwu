@@ -325,7 +325,11 @@ export class RequestContext {
      * mutations to the copy itself will not affect the original, but deep mutations
      * (e.g. copy.channel.code = 'new') *will* also affect the original.
      */
-    copy(options?: { channel: Channel; currencyCode?: CurrencyCode }): RequestContext {
+    copy(options?: {
+        channel?: Channel;
+        currencyCode?: CurrencyCode;
+        languageCode?: LanguageCode;
+    }): RequestContext {
         // Trusted internal fan-out (for example seller-order settlement) must preserve the
         // transaction and authenticated identity while operating in the explicit owner's store.
         // This does not grant new permissions; API callers still require authorization.
@@ -333,7 +337,11 @@ export class RequestContext {
             Object.create(Object.getPrototypeOf(this)),
             this,
             options
-                ? { _channel: options.channel, _currencyCode: options.currencyCode ?? this.currencyCode }
+                ? {
+                      _channel: options.channel ?? this.channel,
+                      _currencyCode: options.currencyCode ?? this.currencyCode,
+                      _languageCode: options.languageCode ?? this.languageCode,
+                  }
                 : {},
         );
     }

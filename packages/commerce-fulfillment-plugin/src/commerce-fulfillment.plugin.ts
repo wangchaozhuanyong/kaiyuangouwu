@@ -1,6 +1,7 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
 import {
@@ -22,7 +23,9 @@ import { AuthenticatedOrderByCodeAccessStrategy } from './authenticated-order-by
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import { AutoCardEmailResultService } from './auto-card-email-result.service';
 import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
+import { AutoCardSupplyService } from './auto-card-supply.service';
 import { reconcileAutoCardDeliveriesTask } from './auto-card-tasks';
+import { manageAutoCardSecretsPermission, readSoldAutoCardsPermission } from './auto-card.constants';
 import { autoCardAdminResolvers, autoCardShopResolvers } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
 import { CartDeliveryCommandAdapter } from './cart-delivery-command.adapter';
@@ -53,6 +56,7 @@ import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+import { AutoCardSupplyGrant, AutoCardSupplySnapshot } from './entities/auto-card-supply-grant.entity';
 import { CustomerDeliveryEmail } from './entities/customer-delivery-email.entity';
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
 import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
@@ -88,18 +92,27 @@ import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-alloc
 import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
 import { ProductPackagingService } from './product-packaging.service';
 import { QuoteOnlyOrderInterceptor } from './quote-only-order-interceptor';
+import { StoreCatalogStatusService } from './store-catalog-status.service';
 import { StoreNotificationReadResolver } from './store-notification-read.resolver';
 import { StoreNotificationReadService } from './store-notification-read.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, CatalogManagementPlugin],
+    imports: [
+        PluginCommonModule,
+        ContentTranslationPlugin,
+        StorefrontCartPlugin,
+        CatalogManagementPlugin,
+        StoreManagementPlugin,
+    ],
     entities: [
         AfterSalesEvidence,
         AfterSalesRequest,
         AfterSalesItem,
         AfterSalesEvent,
         AutoCardConfig,
+        AutoCardSupplyGrant,
+        AutoCardSupplySnapshot,
         AutoCardPoolItem,
         AutoCardDelivery,
         AutoCardDeliveryEvent,
@@ -125,6 +138,8 @@ import './types';
         },
         AutoCardCipherService,
         AutoCardService,
+        AutoCardSupplyService,
+        StoreCatalogStatusService,
         AutoCardEmailResultService,
         FulfillmentModelService,
         CommerceI18nService,
@@ -177,6 +192,10 @@ import './types';
         ],
     },
     configuration: config => {
+        config.authOptions.customPermissions.push(
+            manageAutoCardSecretsPermission,
+            readSoldAutoCardsPermission,
+        );
         config.customFields.Channel.push({
             name: 'commerceMode',
             type: 'string',

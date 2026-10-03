@@ -46,9 +46,12 @@ export function buildGovernanceReconciliationPlan({ catalog, payment }) {
             return;
         }
         const native = row.channelIds.filter(channelId => channelId !== catalog.defaultChannelId);
+        // Historical import parents can omit a store even when their actual child values belong to it.
+        // Copy that already-shared parent into the child's private store; never grant the source parent.
+        const sharedFacetParent = type === 'Facet' && native.length > 1 && !row.proposedOwnerChannelId;
         for (const channel of channels) {
             if (String(channel) === catalog.defaultChannelId) continue;
-            if (type !== 'Tag' && !native.includes(String(channel))) {
+            if (type !== 'Tag' && !native.includes(String(channel)) && !sharedFacetParent) {
                 blockers.push({
                     code: 'REFERENCE_OUTSIDE_NATIVE_SCOPE',
                     identity,
@@ -152,6 +155,9 @@ export function buildGovernanceReconciliationPlan({ catalog, payment }) {
             resourceId: row.resourceId,
             channelIds: row.channelIds,
             kind: targets.length === 1 ? 'REGISTER_OWNER' : 'COPY_PRIVATE_METADATA_AND_REMAP',
+            ...(row.resourceType === 'Facet' && targets.length > 1
+                ? { codePolicy: 'APPEND_STORE_SUFFIX' }
+                : {}),
             targets,
             evidence: row.proposedOwnerChannelId
                 ? 'EXCLUSIVE_NATIVE_OPERATING_RELATION'

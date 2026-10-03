@@ -11,14 +11,33 @@ import {
     UsdtWalletConfigurationService,
 } from './usdt-wallet-configuration.service';
 
+const platformContext = (user = 'superadmin-user') => ({
+    apiType: 'admin',
+    channelId: 'channel-1',
+    channel: { code: '__default_channel__' },
+    activeUserId: user,
+    userHasPermissions: () => true,
+});
 const replacementAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
 
 describe('StoreUsdtWalletService', () => {
     afterEach(() => vi.unstubAllEnvs());
 
+    it('lists only platform configuration and rejects store setup even for a SuperAdmin', async () => {
+        const service = new StoreUsdtWalletService({} as any, {} as any, {} as any, {} as any, {} as any);
+        const status = vi.spyOn(service, 'status').mockResolvedValue({ channelId: 'channel-1' } as any);
+        const platform = platformContext() as any;
+        expect(await service.list(platform)).toEqual([{ channelId: 'channel-1' }]);
+        expect(status).toHaveBeenCalledWith(platform);
+        const store = { ...platform, channel: { code: 'store-two' }, channelId: 'channel-2' };
+        await expect(service.list(store)).rejects.toThrow();
+        await expect(service.submit(store, replacementAddress)).rejects.toThrow();
+        await expect(service.review(store, { channelId: 'channel-1', approved: true })).rejects.toThrow();
+    });
+
     it('encrypts submissions, records audits and only activates a wallet after review', async () => {
         vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'unit-test-wallet-encryption-key-that-is-long-enough');
-        const channel = { id: 'channel-1', code: 'store-one' } as Channel;
+        const channel = { id: 'channel-1', code: '__default_channel__' } as Channel;
         let stored: StoreUsdtWallet | null = null;
         const audits: StoreUsdtWalletAudit[] = [];
         const walletRepository = {
@@ -75,7 +94,7 @@ describe('StoreUsdtWalletService', () => {
             connection as any,
             new UsdtWalletConfigurationService(),
             {
-                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
+                getDefaultChannel: vi.fn().mockResolvedValue(channel),
                 removeFromChannels,
             } as any,
             paymentMethodService as any,
@@ -83,7 +102,7 @@ describe('StoreUsdtWalletService', () => {
         );
 
         const submitted = await service.submit(
-            { channelId: channel.id, activeUserId: 'merchant-user' } as any,
+            platformContext('merchant-user') as any,
             USDT_TRC20_CONTRACT_ADDRESS,
         );
 
@@ -95,13 +114,13 @@ describe('StoreUsdtWalletService', () => {
             '尚未通过平台审核',
         );
         await expect(
-            service.review({ activeUserId: 'merchant-user' } as any, {
+            service.review(platformContext('merchant-user') as any, {
                 channelId: channel.id,
                 approved: true,
             }),
         ).rejects.toThrow('提交人不能审核自己提交的 USDT 收款地址');
         await expect(
-            service.review({ activeUserId: 'merchant-user' } as any, {
+            service.review(platformContext('merchant-user') as any, {
                 channelId: channel.id,
                 approved: false,
                 rejectionReason: 'self review is forbidden',
@@ -111,7 +130,7 @@ describe('StoreUsdtWalletService', () => {
         expect(audits.map(audit => audit.action)).toEqual(['SUBMITTED']);
         expect(paymentMethodService.create).not.toHaveBeenCalled();
 
-        const approved = await service.review({ activeUserId: 'superadmin-user' } as any, {
+        const approved = await service.review(platformContext() as any, {
             channelId: channel.id,
             approved: true,
         });
@@ -119,25 +138,8 @@ describe('StoreUsdtWalletService', () => {
 
         expect(approved).toMatchObject({ reviewStatus: 'ACTIVE', configured: true, canReview: false });
         expect(configuration.receivingAddress).toBe(USDT_TRC20_CONTRACT_ADDRESS);
-        expect(paymentMethodService.create).toHaveBeenCalledWith(
-            expect.objectContaining({ channelId: channel.id }),
-            expect.objectContaining({
-                code: 'usdt-trc20',
-                handler: { code: 'usdt-trc20-chain-handler', arguments: [] },
-            }),
-        );
-        expect(removeFromChannels).toHaveBeenCalledWith(
-            expect.anything(),
-            PaymentMethod,
-            'isolated-usdt-payment-method',
-            ['default-channel'],
-        );
-        expect(removeFromChannels).toHaveBeenCalledWith(
-            expect.anything(),
-            PaymentMethod,
-            'usdt-payment-method',
-            [channel.id],
-        );
+        expect(paymentMethodService.create).not.toHaveBeenCalled();
+        expect(removeFromChannels).not.toHaveBeenCalled();
         expect(audits.map(audit => audit.action)).toEqual(['SUBMITTED', 'APPROVED']);
         expect(JSON.stringify(audits)).not.toContain(USDT_TRC20_CONTRACT_ADDRESS);
     });
@@ -145,7 +147,7 @@ describe('StoreUsdtWalletService', () => {
     it('keeps the active wallet available when a replacement address is rejected', async () => {
         vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'unit-test-wallet-encryption-key-that-is-long-enough');
         const encryption = new UsdtWalletConfigurationService();
-        const channel = { id: 'channel-1', code: 'store-one' } as Channel;
+        const channel = { id: 'channel-1', code: '__default_channel__' } as Channel;
         let stored = Object.assign(
             new StoreUsdtWallet({
                 id: 'wallet-1',
@@ -176,16 +178,13 @@ describe('StoreUsdtWalletService', () => {
         const service = new StoreUsdtWalletService(
             connection as any,
             encryption,
-            {} as any,
+            { getDefaultChannel: vi.fn().mockResolvedValue(channel) } as any,
             {} as any,
             {} as any,
         );
 
-        await service.submit(
-            { channelId: channel.id, activeUserId: 'merchant-user' } as any,
-            replacementAddress,
-        );
-        const rejected = await service.review({ activeUserId: 'superadmin-user' } as any, {
+        await service.submit(platformContext('merchant-user') as any, replacementAddress);
+        const rejected = await service.review(platformContext() as any, {
             channelId: channel.id,
             approved: false,
             rejectionReason: '地址归属凭证不完整',

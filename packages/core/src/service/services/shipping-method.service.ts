@@ -10,6 +10,7 @@ import {
     UpdateShippingMethodInput,
 } from '@vendure/common/lib/generated-types';
 import { omit } from '@vendure/common/lib/omit';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { IsNull } from 'typeorm';
 
@@ -142,10 +143,11 @@ export class ShippingMethodService {
     }
 
     async update(ctx: RequestContext, input: UpdateShippingMethodInput): Promise<Translated<ShippingMethod>> {
-        const shippingMethod = await this.findOne(ctx, input.id);
+        const shippingMethod = await this.findOne(ctx, input.id, false, ['channels']);
         if (!shippingMethod) {
             throw new EntityNotFoundError('ShippingMethod', input.id);
         }
+        await this.assertStoreCanMaintain(ctx, shippingMethod);
         const updatedShippingMethod = await this.translatableSaver.update({
             ctx,
             input: omit(input, ['checker', 'calculator']),
@@ -187,13 +189,36 @@ export class ShippingMethodService {
         const shippingMethod = await this.connection.getEntityOrThrow(ctx, ShippingMethod, id, {
             channelId: ctx.channelId,
             where: { deletedAt: IsNull() },
+            relations: ['channels'],
         });
+        await this.assertStoreCanMaintain(ctx, shippingMethod);
         shippingMethod.deletedAt = new Date();
         await this.connection.getRepository(ctx, ShippingMethod).save(shippingMethod, { reload: false });
         await this.eventBus.publish(new ShippingMethodEvent(ctx, shippingMethod, 'deleted', id));
         return {
             result: DeletionResult.DELETED,
         };
+    }
+
+    private async assertStoreCanMaintain(ctx: RequestContext, method: ShippingMethod): Promise<void> {
+        if (
+            !this.connection.platformStoreGovernanceEnabled ||
+            ctx.apiType !== 'admin' ||
+            ctx.channel.code === DEFAULT_CHANNEL_CODE
+        ) {
+            return;
+        }
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (
+            method.channels.some(
+                channel =>
+                    !idsAreEqual(channel.id, ctx.channelId) && !idsAreEqual(channel.id, defaultChannel.id),
+            )
+        ) {
+            throw new UserInputError(
+                '共享配送方式请在平台管理中心维护，店铺不能修改或删除其他店铺使用的配置',
+            );
+        }
     }
 
     async assignShippingMethodsToChannel(

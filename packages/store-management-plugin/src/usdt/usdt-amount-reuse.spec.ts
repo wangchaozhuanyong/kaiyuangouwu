@@ -1,4 +1,4 @@
-import { Channel, Order, Payment } from '@vendure/core';
+import { Channel, Order, Payment, PaymentMethod, StorePaymentMethodState } from '@vendure/core';
 import { DataSource, EntitySchema, EntitySchemaColumnOptions, getMetadataArgsStorage } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +6,7 @@ import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkou
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
 import { configureUsdtPaymentProofSecret } from './usdt-payment-proof';
-import { USDT_TRC20_CONTRACT_ADDRESS } from './usdt-payment.constants';
+import { USDT_TRC20_CONTRACT_ADDRESS, USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt-payment.constants';
 import { createMatchKey, UsdtPaymentService } from './usdt-payment.service';
 import { ConfirmedTrc20Transfer } from './usdt-trc20-client';
 import { fingerprintReceivingAddress } from './usdt-wallet-configuration.service';
@@ -74,6 +74,26 @@ const channelSchema = new EntitySchema({
     tableName: 'channel',
     columns: { id: { type: Number, primary: true }, code: { type: String } },
 });
+const methodSchema = new EntitySchema({
+    name: 'PaymentMethod',
+    target: PaymentMethod,
+    tableName: 'payment_method',
+    columns: { id: { type: Number, primary: true }, code: { type: String }, enabled: { type: Boolean } },
+    relations: {
+        channels: { type: 'many-to-many', target: 'Channel', joinTable: true },
+    },
+});
+const switchSchema = new EntitySchema({
+    name: 'StorePaymentMethodState',
+    target: StorePaymentMethodState,
+    tableName: 'store_payment_method_state',
+    columns: {
+        id: { type: Number, primary: true, generated: true },
+        channelId: { type: Number },
+        paymentMethodId: { type: Number },
+        enabled: { type: Boolean },
+    },
+});
 const orderSchema = new EntitySchema({
     name: 'Order',
     target: Order,
@@ -110,12 +130,21 @@ describe('USDT amount lifecycle on a real database', () => {
                       password: '',
                       database: 'vendure_logic_repair',
                   }),
-            entities: [intentSchema, quoteSchema, channelSchema, orderSchema],
+            entities: [intentSchema, quoteSchema, channelSchema, orderSchema, methodSchema, switchSchema],
             synchronize: true,
             dropSchema: true,
         });
         await db.initialize();
-        await db.getRepository(Channel).save({ id: 1, code: 'test' });
+        await db.getRepository(Channel).save([
+            { id: 1, code: 'test' },
+            { id: 2, code: '__default_channel__' },
+        ]);
+        await db
+            .getRepository(PaymentMethod)
+            .save({ id: 1, code: USDT_TRC20_PAYMENT_METHOD_CODE, enabled: true, channels: [{ id: 2 }] });
+        await db
+            .getRepository(StorePaymentMethodState)
+            .save({ channelId: 1, paymentMethodId: 1, enabled: true });
         nextOrder = 1;
         vi.clearAllMocks();
         chain.scanIncomingTransfers.mockResolvedValue({ complete: true, transfers: [] });
@@ -215,6 +244,14 @@ describe('USDT amount lifecycle on a real database', () => {
             await db.getRepository(StorefrontUsdtPaymentIntent).insert(rows.slice(index, index + 100));
         }
     }
+
+    it('does not reserve a payment amount while the local platform payment switch is off', async () => {
+        await db.getRepository(StorePaymentMethodState).update({ channelId: 1 }, { enabled: false });
+        await expect(service.ensureIntent({ channelId: 1 } as never, await quote())).rejects.toThrow(
+            '未开启平台',
+        );
+        expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(0);
+    });
 
     it.each([2, null])('rejects receipt replay if the persisted order owner is %s', async salesChannelId => {
         const current = await intent();

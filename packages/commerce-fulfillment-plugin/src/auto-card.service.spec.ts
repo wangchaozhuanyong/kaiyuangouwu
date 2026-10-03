@@ -3,9 +3,11 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AutoCardService } from './auto-card.service';
+import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+import { AutoCardSupplyGrant } from './entities/auto-card-supply-grant.entity';
 
 function autoCardLine(quantity = 2) {
     return {
@@ -83,7 +85,17 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         }),
     };
     const connection = {
+        withTransaction: (transactionCtx: any, work: any) => Promise.resolve(work(transactionCtx)),
+        rawConnection: { options: { type: 'sqljs' } },
         getRepository: vi.fn((_ctx: any, entity: any) => {
+            if (entity === AutoCardConfig)
+                return {
+                    findOneOrFail: vi
+                        .fn()
+                        .mockResolvedValue({ ...delivery.config, productVariantId: 'variant-1' }),
+                };
+            if (entity === AutoCardSupplyGrant) return { find: vi.fn().mockResolvedValue([]) };
+            if (entity?.name === 'OrderLine') return { findOne: vi.fn().mockResolvedValue({ id: 'line-1' }) };
             if (entity === AutoCardDelivery) return deliveryRepository;
             if (entity === AutoCardPoolItem) return poolRepository;
             if (entity === AutoCardDeliveryEvent) return eventRepository;
@@ -99,8 +111,12 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         {} as any,
         {} as any,
         {} as any,
+        { forPaidLine: vi.fn().mockResolvedValue({ config: delivery.config }) } as any,
+        { assertOwned: vi.fn() } as any,
+        { appendAudit: vi.fn() } as any,
     );
     const ctx = {
+        copy: () => ctx,
         channelId: 'channel-1',
         channel: { id: 'channel-1' },
         activeUserId: 'admin-1',

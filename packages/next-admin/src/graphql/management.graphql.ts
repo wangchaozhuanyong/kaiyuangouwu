@@ -339,6 +339,8 @@ export const MY_STORE_SETTINGS_QUERY = gql`
             usdtWalletReviewStatus
         }
         myStorePaymentOptions {
+            platformEnabled
+            effectiveEnabled
             id
             name
             code
@@ -497,6 +499,7 @@ export const STORE_MANAGEMENT_QUERY = gql`
         }
         activeChannel {
             id
+            code
             defaultLanguageCode
             defaultCurrencyCode
         }
@@ -1497,6 +1500,8 @@ export interface MyStoreSettingsResult {
         usdtWalletReviewStatus: string;
     };
     myStorePaymentOptions: Array<{
+        platformEnabled: boolean;
+        effectiveEnabled: boolean;
         id: string;
         name: string;
         code: string;
@@ -1590,7 +1595,7 @@ export interface StoreManagementResult {
         id: string;
         user: { roles: Array<{ id: string; code: string }> };
     } | null;
-    activeChannel: { id: string; defaultLanguageCode: string; defaultCurrencyCode: string };
+    activeChannel: { id: string; code: string; defaultLanguageCode: string; defaultCurrencyCode: string };
     storeProfiles: StoreProfileRecord[];
     storeGovernanceChanges: Array<{
         id: string;

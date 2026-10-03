@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Args, Parent, ResolveField, Resolver } from '@nestjs/graphql';
 import { FacetValueListOptions } from '@vendure/common/lib/generated-types';
 import { PaginatedList } from '@vendure/common/lib/shared-types';
@@ -31,9 +32,6 @@ export class FacetEntityResolver {
 
     @ResolveField()
     async values(@Ctx() ctx: RequestContext, @Parent() facet: Facet): Promise<FacetValue[]> {
-        if (facet.values) {
-            return facet.values;
-        }
         return this.requestContextCache.get(ctx, `FacetEntityResolver.values(${facet.id})`, () =>
             this.facetValueService.findByFacetId(ctx, facet.id),
         );

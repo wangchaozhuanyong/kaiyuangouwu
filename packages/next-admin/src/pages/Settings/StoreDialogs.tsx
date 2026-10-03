@@ -865,7 +865,7 @@ export function ProvisionStoreDialog({
                     </select>
                 </Field>
                 <p className="mt-2 text-[10px] leading-4 text-slate-500">
-                    新店会复制所选店铺的语言、币种、税务和库存默认值，并共享其库存点、支付方式和配送方式。
+                    新店会复制所选店铺的语言、币种与税务默认值，创建本店独立库存和配送配置；支付方式由平台统一管理，本店另行启用。
                 </p>
                 {!templates.length && (
                     <p className="mt-2 text-[10px] text-amber-700">

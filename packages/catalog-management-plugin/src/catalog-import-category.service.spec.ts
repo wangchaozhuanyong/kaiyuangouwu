@@ -24,10 +24,10 @@ function fixture() {
             if (entity === Collection) return { createQueryBuilder: () => query };
             if (entity === FacetValue)
                 return {
-                    find: (options: { where: { facet: { code: string } } }) =>
+                    find: (options: { where: { facet: { code: { value: string[] } } } }) =>
                         Promise.resolve(
                             facets
-                                .filter(facet => facet.code === options.where.facet.code)
+                                .filter(facet => options.where.facet.code.value.includes(facet.code))
                                 .map(facet => ({ id: facet.id, translations: [{ name: facet.name }] })),
                         ),
                 };

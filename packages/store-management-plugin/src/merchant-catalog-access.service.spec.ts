@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 
 import {
-    Asset,
     Collection,
     ForbiddenError,
     Fulfillment,
@@ -74,6 +73,7 @@ function createService(options?: {
             if (entity === Refund) return refundRepository;
             throw new Error(`Unexpected repository: ${String(entity)}`);
         }),
+        getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'variant-a', productId: 'product-a' }),
         findByIdsInChannel: vi.fn((_ctx, entity, ids: string[]) =>
             ids
                 .filter(id => visibleEntityIds.includes(id))
@@ -95,6 +95,15 @@ function createService(options?: {
             {
                 getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
             } as any,
+            {
+                assertOwned: vi.fn((_ctx, _type, id) => {
+                    if (sharedEntityIds.has(id)) {
+                        if (_type !== 'Product') throw new ForbiddenError();
+                        throw new Error('该历史共享商品需先完成店铺归属迁移');
+                    }
+                    return Promise.resolve({ ownerChannelId: 'store-a', scope: 'STORE' });
+                }),
+            } as any,
         ),
     };
 }
@@ -103,10 +112,154 @@ const merchantContext = {
     apiType: 'admin',
     activeUserId: 'user-a',
     channelId: 'store-a',
+    channel: { code: 'store-a' },
     userHasPermissions: vi.fn().mockReturnValue(false),
 } as any;
 
 describe('MerchantCatalogAccessService', () => {
+    it.each([
+        ['Query', 'imageProviderAdminConfigs'],
+        ['Mutation', 'saveImageProviderCredential'],
+        ['Mutation', 'testImageProviderCredential'],
+        ['Query', 'icloudPrimaryAccounts'],
+        ['Query', 'icloudReceivedMails'],
+        ['Mutation', 'resetIcloudVirtualEmailCode'],
+    ])(
+        'protects shared owner resources at %s.%s from store and legacy delegated roles',
+        async (type, field) => {
+            const { service, connection } = createService({ merchant: false });
+            const platform = { ...merchantContext, channel: { code: '__default_channel__' } };
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).rejects.toThrow('平台管理中心');
+            await expect(service.assertRootFieldAccess(platform, type, field, {})).rejects.toThrow(
+                '超级管理员',
+            );
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...platform, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).resolves.toBeUndefined();
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
+    it.each([
+        ['Mutation', 'updateTaxRate'],
+        ['Mutation', 'addMembersToZone'],
+        ['Mutation', 'deleteCountries'],
+        ['Query', 'dataRetentionRecords'],
+        ['Mutation', 'setDataRetentionLegalHold'],
+        ['Query', 'dataSubjectRequests'],
+        ['Mutation', 'retryDataSubjectRequest'],
+    ])(
+        'keeps global dictionary and privacy administration in the management center at %s.%s',
+        async (type, field) => {
+            const { service, connection } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    type,
+                    field,
+                    {},
+                ),
+            ).rejects.toThrow('平台管理中心');
+            expect(connection.getRepository).not.toHaveBeenCalled();
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, channel: { code: '__default_channel__' } },
+                    type,
+                    field,
+                    {},
+                ),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it.each(['imageGenerationJobs', 'imageAiUsageRecords', 'countries', 'taxCategories'])(
+        'preserves scoped business usage and shared dictionary reads for %s',
+        async field => {
+            const { service } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Query', field, {}),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it('preserves authenticated customer closure and public mailbox access through Shop API', async () => {
+        const { service, connection } = createService();
+        const ctx = { ...merchantContext, apiType: 'shop' };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'requestMyAccountClosure', {}),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Query', 'icloudQueryMails', {}),
+        ).resolves.toBeUndefined();
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+    it.each([
+        'jobs',
+        'storePaymentStats',
+        'systemAnnouncements',
+        'telegramNotificationDeliveries',
+        'governanceApprovals',
+    ])('rejects platform %s from a store context even for SuperAdmin', async fieldName => {
+        const { service, connection } = createService({ merchant: false });
+        const superInStore = { ...merchantContext, userHasPermissions: () => true };
+        await expect(service.assertRootFieldAccess(superInStore, 'Query', fieldName, {})).rejects.toThrow(
+            '平台管理中心',
+        );
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+    it.each(['createPaymentMethod', 'updatePaymentMethod', 'deletePaymentMethod', 'deletePaymentMethods'])(
+        'requires platform context and SuperAdmin for %s',
+        async fieldName => {
+            const { service } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    'Mutation',
+                    fieldName,
+                    {},
+                ),
+            ).rejects.toThrow('支付系统配置');
+            const platform = {
+                ...merchantContext,
+                channel: { code: '__default_channel__' },
+                userHasPermissions: () => false,
+            };
+            await expect(service.assertRootFieldAccess(platform, 'Mutation', fieldName, {})).rejects.toThrow(
+                '支付系统配置',
+            );
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...platform, userHasPermissions: () => true },
+                    'Mutation',
+                    fieldName,
+                    {},
+                ),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it('preserves platform queue access and current-store payment statistics', async () => {
+        const { service } = createService({ merchant: false });
+        await expect(
+            service.assertRootFieldAccess(
+                { ...merchantContext, channel: { code: '__default_channel__' } },
+                'Query',
+                'jobs',
+                {},
+            ),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Query', 'myStorePaymentStats', {}),
+        ).resolves.toBeUndefined();
+    });
     it.each(['adminBeginLogin', 'adminCompleteTwoFactorLogin'])(
         'allows public %s even when an old merchant session has another active Channel',
         async fieldName => {
@@ -156,7 +309,7 @@ describe('MerchantCatalogAccessService', () => {
             service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
                 input: { channelId: 'store-b', productIds: ['product-b'] },
             }),
-        ).rejects.toThrow('重新创建或导入独立副本');
+        ).rejects.toThrow('平台商品分配中心');
         expect(connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 
@@ -179,7 +332,7 @@ describe('MerchantCatalogAccessService', () => {
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'assignProductsToChannel', {
                 input: { channelId: 'store-a', productIds: ['product-b'] },
             }),
-        ).rejects.toThrow('重新创建或导入独立副本');
+        ).rejects.toThrow('平台商品分配中心');
         await expect(
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateStockLocation', {
                 input: { id: 'stock-a', name: 'Changed' },
@@ -397,6 +550,9 @@ describe('MerchantCatalogAccessService', () => {
             {
                 getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
             } as any,
+            {
+                assertOwned: vi.fn().mockRejectedValue(new Error('该历史共享商品需先完成店铺归属迁移')),
+            } as any,
         );
 
         await expect(
@@ -430,13 +586,7 @@ describe('MerchantCatalogAccessService', () => {
                 input: { id: 'asset-shared' },
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);
-        expect(shared.connection.findByIdsInChannel).toHaveBeenCalledWith(
-            merchantContext,
-            Asset,
-            ['asset-shared'],
-            'store-a',
-            { relations: ['channels'] },
-        );
+        expect(shared.connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 
     it('validates both the target and parent when moving a collection', async () => {

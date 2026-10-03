@@ -64,12 +64,11 @@ export class ControlledTestPaymentConfigService implements OnApplicationBootstra
                 ctx.channelId,
             ),
         );
-        if (args.channelId !== channelId)
-            throw new UserInputError(`测试支付的本店 Channel ID 应为 ${channelId}`);
-        if (method.code !== `${CONTROLLED_TEST_PAYMENT_PREFIX}${channelId}`)
-            throw new UserInputError(
-                `本店测试支付的配置代码应为 ${CONTROLLED_TEST_PAYMENT_PREFIX}${channelId}`,
-            );
+        if (ctx.channel.code !== '__default_channel__')
+            throw new UserInputError('测试支付统一在平台管理中心配置');
+        if (args.channelId !== channelId) throw new UserInputError(`测试支付的配置渠道 ID 应为 ${channelId}`);
+        if (method.code !== `${CONTROLLED_TEST_PAYMENT_PREFIX}platform`)
+            throw new UserInputError(`平台测试支付的配置代码应为 ${CONTROLLED_TEST_PAYMENT_PREFIX}platform`);
         if (method.checker?.code !== CONTROLLED_TEST_PAYMENT_CHECKER)
             throw new UserInputError('测试支付必须使用测试资格检查器');
         if (

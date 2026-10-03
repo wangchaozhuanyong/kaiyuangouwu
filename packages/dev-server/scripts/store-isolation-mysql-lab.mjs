@@ -165,8 +165,37 @@ async function connectDescriptor(descriptor, database) {
         throw error;
     }
 }
-export async function createLab() {
+export async function createLab(options = {}) {
+    if (options.subnet != null && options.subnet !== 'synthetic-auto')
+        assert.match(
+            options.subnet,
+            /^10\.247\.\d{1,3}\.0\/24$/u,
+            'Only a synthetic internal test subnet is allowed',
+        );
     const endpoint = await localDocker();
+    if (options.subnet === 'synthetic-auto') {
+        const ids = (await docker('network', 'ls', '--format', '{{.ID}}')).split('\n').filter(Boolean);
+        const used = ids.length
+            ? JSON.parse(await docker('network', 'inspect', ...ids)).flatMap(
+                  network => network.IPAM?.Config?.map(config => config.Subnet) ?? [],
+              )
+            : [];
+        const ipNumber = address => address.split('.').reduce((value, part) => value * 256 + Number(part), 0);
+        const overlaps = (subnet, candidateAddress) => {
+            if (!subnet || subnet.includes(':')) return false;
+            const [address, bits] = subnet.split('/');
+            const blockSize = 2 ** (32 - Math.min(Number(bits), 24));
+            return (
+                Math.floor(ipNumber(address) / blockSize) ===
+                Math.floor(ipNumber(candidateAddress) / blockSize)
+            );
+        };
+        const candidate = Array.from({ length: 254 }, (_, i) => `10.247.${i + 1}.0`).find(
+            address => !used.some(subnet => overlaps(subnet, address)),
+        );
+        assert.ok(candidate, 'No free synthetic internal test subnet');
+        options = { ...options, subnet: `${candidate}/24` };
+    }
     assert.equal(await docker('image', 'inspect', IMAGE, '--format', '{{.Id}}'), IMAGE);
     await mkdir(labRoot, { recursive: true });
     const runId = randomBytes(8).toString('hex');
@@ -177,6 +206,7 @@ export async function createLab() {
         'network',
         'create',
         '--internal',
+        ...(options.subnet ? ['--subnet', options.subnet] : []),
         '--label',
         `${label}=${runId}`,
         `vendure-rehearsal-${runId}`,

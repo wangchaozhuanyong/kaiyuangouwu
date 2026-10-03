@@ -7,6 +7,7 @@ interface RoutePermissionRule {
 
 // More-specific prefixes must be declared before their parent sections.
 const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
+    { prefix: '/platform/catalog', permissions: ['ManagePlatformCatalog'] },
     { prefix: '/sales/profit', permissions: ['ReadOrder', 'ReadCatalogOperations'] },
     { prefix: '/plugins/ai-access', permissions: ['SuperAdmin'] },
     {
@@ -44,7 +45,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     },
     { prefix: '/storefront', permissions: ['ReadStorefrontContent'] },
     { prefix: '/plugins/client-plugins', permissions: ['ReadStorefrontContent'] },
-    { prefix: '/plugins/icloud-relay', permissions: ['ReadIcloudRelay'] },
+    { prefix: '/plugins/icloud-relay', permissions: ['SuperAdmin'] },
+    { prefix: '/icloud-relay', permissions: ['SuperAdmin'] },
     { prefix: '/plugins/ai-settings', permissions: ['ReadSettings'] },
     { prefix: '/plugins/translations', permissions: ['ReadSettings', 'ReadCatalog'] },
     { prefix: '/operations', permissions: ['ReadSystem'] },

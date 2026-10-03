@@ -323,6 +323,12 @@ export class AssetService implements OnModuleInit {
         ctx: RequestContext,
         entity: T,
     ): Promise<Asset[] | undefined> {
+        if (this.connection.platformStoreGovernanceEnabled && this.channelService.isChannelAware(entity)) {
+            const entityType = Object.getPrototypeOf(entity).constructor as Type<T & ChannelAware>;
+            if (!(await this.connection.findOneInChannel(ctx, entityType, entity.id, ctx.channelId))) {
+                return [];
+            }
+        }
         let orderableAssets = entity.assets;
         if (!orderableAssets) {
             const entityType: Type<EntityWithAssets> = Object.getPrototypeOf(entity).constructor;
@@ -348,6 +354,8 @@ export class AssetService implements OnModuleInit {
                 const assetsInChannel = await this.connection
                     .getRepository(ctx, Asset)
                     .createQueryBuilder('asset')
+                    // The parent was checked above; this read is bounded to its assigned images.
+                    .comment('catalog-authorized-product-dependencies')
                     .leftJoinAndSelect('asset.channels', 'asset_channel')
                     .where('asset.id IN (:...ids)', { ids: orderableAssets.map(a => a.assetId) })
                     .andWhere('asset_channel.id = :channelId', { channelId: ctx.channelId })

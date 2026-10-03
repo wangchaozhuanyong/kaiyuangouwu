@@ -8,8 +8,10 @@ import {
     Order,
     OrderService,
     Payment,
+    PaymentMethod,
     RequestContext,
     RequestContextService,
+    StorePaymentMethodState,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
@@ -571,6 +573,19 @@ export class UsdtPaymentService {
             this.assertIntentScope(existing, quote);
             return existing;
         }
+        const platformMethod = await this.connection.getRepository(ctx, PaymentMethod).findOne({
+            where: {
+                code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                enabled: true,
+                channels: { code: '__default_channel__' },
+            },
+        });
+        const shopSwitch =
+            platformMethod &&
+            (await this.connection.getRepository(ctx, StorePaymentMethodState).findOne({
+                where: { channelId: ctx.channelId, paymentMethodId: platformMethod.id, enabled: true },
+            }));
+        if (!shopSwitch) throw new UserInputError('本店未开启平台 USDT 支付');
         const wallet = await this.storeWallets.requireConfigured(ctx, quote.channelId);
 
         const baseAmount = normalizeUsdtAmount(quote.usdtAmount);

@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Injectable } from '@nestjs/common';
 import {
     AssignFacetsToChannelInput,
@@ -21,9 +22,9 @@ import { Translated } from '../../common/types/locale-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
-import { FacetValue } from '../../entity/facet-value/facet-value.entity';
 import { FacetTranslation } from '../../entity/facet/facet-translation.entity';
 import { Facet } from '../../entity/facet/facet.entity';
+import { FacetValue } from '../../entity/facet-value/facet-value.entity';
 import { EventBus } from '../../event-bus';
 import { FacetEvent } from '../../event-bus/events/facet-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
@@ -133,6 +134,10 @@ export class FacetService {
             .findOne({
                 where: {
                     code: facetCode,
+                    ...(this.connection.platformStoreGovernanceEnabled &&
+                    ctxOrFacetCode instanceof RequestContext
+                        ? { channels: { id: ctxOrFacetCode.channelId } }
+                        : {}),
                 },
                 relations,
             })
@@ -262,7 +267,8 @@ export class FacetService {
         do {
             const match = await this.connection
                 .getRepository(ctx, Facet)
-                .findOne({ where: { code: candidate } });
+                .manager.getRepository(Facet)
+                .findOne({ where: { code: candidate }, select: ['id'] });
 
             conflict = !!match && ((id != null && !idsAreEqual(match.id, id)) || id == null);
             if (conflict) {

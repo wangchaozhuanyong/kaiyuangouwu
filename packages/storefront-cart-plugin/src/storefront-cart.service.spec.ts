@@ -84,6 +84,7 @@ describe('StorefrontCartService selection projection', () => {
             { getSaleableStockLevel: vi.fn().mockResolvedValue(100) } as any,
             {} as any,
             {} as any,
+            { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
         );
         vi.spyOn(service as any, 'loadCart').mockImplementation(() => ({
             ...cart,
@@ -305,6 +306,7 @@ describe('StorefrontCartService Channel isolation', () => {
             {} as any,
             {} as any,
             {} as any,
+            { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
         );
         const owner = { ownerType: 'CUSTOMER', ownerId: 'customer-1' };
 
@@ -358,6 +360,7 @@ describe('StorefrontCartService login merge', () => {
             { getSaleableStockLevel: vi.fn().mockResolvedValue(100) } as any,
             {} as any,
             {} as any,
+            { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
         );
         const projectCartSpy = vi.spyOn(service as any, 'projectCart');
 
@@ -404,6 +407,7 @@ describe('cart inventory before persistence', () => {
             variants as any,
             {} as any,
             { orderOptions: { orderLineItemsLimit: 100, orderItemsLimit: 1000 } } as any,
+            { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
         );
         vi.spyOn(service, 'getCart').mockResolvedValue(cart);
         vi.spyOn(service as any, 'getOwner').mockResolvedValue({

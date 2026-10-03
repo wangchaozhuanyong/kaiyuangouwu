@@ -1,11 +1,12 @@
+// organize-imports-ignore
 import { Parent, ResolveField, Resolver } from '@nestjs/graphql';
 import { Permission } from '@vendure/common/lib/generated-types';
 
 import { RequestContextCacheService } from '../../../cache/request-context-cache.service';
 import { Translated } from '../../../common/types/locale-types';
 import { assertFound } from '../../../common/utils';
-import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { ProductOption } from '../../../entity/product-option/product-option.entity';
+import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { LocaleStringHydrator } from '../../../service/helpers/locale-string-hydrator/locale-string-hydrator';
 import { ProductOptionGroupService } from '../../../service/services/product-option-group.service';
 import { RequestContext } from '../../common/request-context';
@@ -36,6 +37,12 @@ export class ProductOptionEntityResolver {
         @Ctx() ctx: RequestContext,
         @Parent() option: Translated<ProductOption>,
     ): Promise<ProductOptionGroup> {
+        const productId = (option as ProductOption & { authorizedProductId?: string }).authorizedProductId;
+        if (productId) {
+            const groups = await this.productOptionGroupService.getOptionGroupsByProductId(ctx, productId);
+            const group = groups.find(g => g.options.some(o => String(o.id) === String(option.id)));
+            if (group) return group;
+        }
         if (option.group) {
             return option.group;
         }

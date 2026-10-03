@@ -1,4 +1,4 @@
-import { Kind, print, type TypeNode } from 'graphql';
+import { Kind, print, type InputObjectTypeDefinitionNode, type TypeNode } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { adminApiExtensions } from './api-extensions';
@@ -40,7 +40,7 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('rows: [CatalogNormalizedRowInput!]!');
         expect(schema).toContain('sourceRecordKey: String');
         const normalizedRowInput = adminApiExtensions.definitions.find(
-            definition =>
+            (definition): definition is InputObjectTypeDefinitionNode =>
                 definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'CatalogNormalizedRowInput',
         );

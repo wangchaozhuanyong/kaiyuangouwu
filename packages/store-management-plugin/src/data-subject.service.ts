@@ -5,6 +5,7 @@ import {
     AuthService,
     Channel,
     Customer,
+    CustomerEvent,
     CustomerService,
     EventBus,
     ExternalAuthenticationMethod,
@@ -15,6 +16,7 @@ import {
     TransactionalConnection,
     User,
     UserInputError,
+    UserService,
 } from '@vendure/core';
 import { createHash } from 'node:crypto';
 import { In, LessThanOrEqual } from 'typeorm';
@@ -56,6 +58,7 @@ export class DataSubjectService {
         private readonly customerService: CustomerService,
         private readonly dataRetention: DataRetentionService,
         private readonly eventBus: EventBus,
+        private readonly userService: UserService,
     ) {}
 
     async myRequests(ctx: RequestContext): Promise<DataSubjectRequest[]> {
@@ -277,6 +280,12 @@ export class DataSubjectService {
                     await repository.save(request, { reload: false });
                     return request.status;
                 }
+                if (
+                    request.subjectKeyHash !== dataSubjectHash(customer.id) ||
+                    !customer.channels.some(item => String(item.id) === String(request.channelId))
+                ) {
+                    throw new UserInputError('账号关闭申请与客户归属不一致');
+                }
                 const blockers = await this.closureBlockers(txCtx, customer.id);
                 if (blockers.length) {
                     request.status = 'BLOCKED';
@@ -330,7 +339,13 @@ export class DataSubjectService {
                 await this.anonymizeFraudRiskRows(txCtx, customer.id);
                 await this.clearOptionalCustomerReference(txCtx, 'StorefrontDailyVisitor', customer.id);
                 await this.connection.getRepository(txCtx, Address).delete({ customer: { id: customer.id } });
-                await this.customerService.softDelete(txCtx, customer.id);
+                // A locked, password-verified closure request is a customer-owned operation.
+                // Keep the ordinary Admin customer write guard intact; this worker has no admin session.
+                await this.connection
+                    .getRepository(txCtx, Customer)
+                    .update({ id: customer.id }, { deletedAt: now });
+                if (customer.user) await this.userService.softDelete(txCtx, customer.user.id);
+                await this.eventBus.publish(new CustomerEvent(txCtx, customer, 'deleted', customer.id));
                 await this.anonymizeCustomer(txCtx, customer);
 
                 request.status = 'FULFILLED';

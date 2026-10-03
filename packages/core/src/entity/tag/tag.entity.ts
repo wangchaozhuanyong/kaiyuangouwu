@@ -1,7 +1,8 @@
-import { DeepPartial } from '@vendure/common/lib/shared-types';
+import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Column, Entity } from 'typeorm';
 
 import { VendureEntity } from '../base/base.entity';
+import { EntityId } from '../entity-id.decorator';
 
 /**
  * @description
@@ -15,6 +16,9 @@ export class Tag extends VendureEntity {
     constructor(input?: DeepPartial<Tag>) {
         super(input);
     }
+
+    @EntityId({ nullable: true })
+    ownerChannelId: ID | null;
 
     @Column()
     value: string;

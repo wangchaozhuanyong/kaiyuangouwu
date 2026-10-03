@@ -43,6 +43,6 @@ export function emailLanguageVariables(languageCode: string, names: StorefrontNa
         isChinese,
         emailLanguage: isChinese ? 'zh-CN' : 'en',
         emailLocale: isChinese ? 'zh-CN' : 'en-US',
-        brandName: configuredBrandName?.trim() || (isChinese ? '云桥Ai' : 'Yunqiao Ai'),
+        brandName: configuredBrandName?.trim() || (isChinese ? '店铺' : 'Store'),
     };
 }

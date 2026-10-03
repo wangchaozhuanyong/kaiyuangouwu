@@ -20,7 +20,7 @@ describe('email localization', () => {
         });
     });
 
-    it('uses English for every non-Chinese request and falls back to the default brand', () => {
+    it('uses English for every non-Chinese request and uses a neutral fallback without another store brand', () => {
         expect(localizedEmailText(localizedEmailSubjects['email-verification'], 'en')).toBe(
             'Please verify your email address',
         );
@@ -28,7 +28,7 @@ describe('email localization', () => {
             isChinese: false,
             emailLanguage: 'en',
             emailLocale: 'en-US',
-            brandName: 'Yunqiao Ai',
+            brandName: 'Store',
         });
     });
 });

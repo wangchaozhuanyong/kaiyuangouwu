@@ -198,3 +198,20 @@ test('binds every relationship to the approved manifest and rejects missing evid
         ),
     );
 });
+test('copies a historically shared facet parent for its store-owned child without granting the source parent', () => {
+    const source = fixture();
+    source.catalog.resources.push({
+        resourceType: 'FacetValue',
+        resourceId: '43',
+        channelIds: ['1', '8'],
+        proposedOwnerChannelId: '8',
+        evidence: 'EXCLUSIVE_NATIVE_OPERATING_RELATION',
+    });
+    source.catalog.referenceEvidence.valueFacets.push({ id: 43, facetId: 40 });
+    const plan = buildGovernanceReconciliationPlan(source);
+    assert.deepEqual(plan.blockers, []);
+    const parent = plan.resources.find(row => row.resourceType === 'Facet');
+    assert.deepEqual(parent.targets, ['2', '5', '8']);
+    assert.equal(parent.codePolicy, 'APPEND_STORE_SUFFIX');
+    assert.equal(parent.kind, 'COPY_PRIVATE_METADATA_AND_REMAP');
+});

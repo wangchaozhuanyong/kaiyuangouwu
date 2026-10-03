@@ -3,6 +3,7 @@ import { Permission } from '@vendure/common/lib/generated-types';
 import { ConfigService, UserInputError } from '@vendure/core';
 
 import {
+    managePlatformCatalogPermission,
     managePlatformTeamPermission,
     manageStoreLifecyclePermission,
     manageStoreTeamPermission,
@@ -41,6 +42,7 @@ const operationLabels: Record<string, string> = {
 };
 
 const MANAGE_STORE_TEAM_CODE = String(manageStoreTeamPermission.Permission);
+const MANAGE_PLATFORM_CATALOG_CODE = String(managePlatformCatalogPermission.Permission);
 const MANAGE_PLATFORM_TEAM_CODE = String(managePlatformTeamPermission.Permission);
 const MANAGE_STORE_LIFECYCLE_CODE = String(manageStoreLifecyclePermission.Permission);
 const REVIEW_STORE_GOVERNANCE_CODE = String(reviewStoreGovernancePermission.Permission);
@@ -126,6 +128,8 @@ const platformResources = new Set([
     'Zone',
 ]);
 const sensitiveCodes = new Set<string>([
+    'ReadSoldAutoCards',
+    'ManageAutoCardSecrets',
     'DeleteOrder',
     'DeleteCustomer',
     'ManageReferralWithdrawal',
@@ -331,6 +335,9 @@ export class PermissionPolicyRegistry {
                 !platformResources.has(resource) &&
                 code !== MANAGE_STORE_TEAM_CODE &&
                 code !== MANAGE_PLATFORM_TEAM_CODE &&
+                code !== MANAGE_PLATFORM_CATALOG_CODE &&
+                code !== 'ReadSoldAutoCards' &&
+                code !== 'ManageAutoCardSecrets' &&
                 code !== MANAGE_STORE_LIFECYCLE_CODE &&
                 code !== REVIEW_STORE_GOVERNANCE_CODE &&
                 code !== SENSITIVE_STORE_FINANCE_CODE);
@@ -338,7 +345,9 @@ export class PermissionPolicyRegistry {
         const platform =
             ownerOnly ||
             (platformResources.has(resource) && !storeSafePlatformResourceReads.has(code)) ||
-            [MANAGE_PLATFORM_TEAM_CODE, REVIEW_STORE_GOVERNANCE_CODE].includes(code) ||
+            [MANAGE_PLATFORM_TEAM_CODE, MANAGE_PLATFORM_CATALOG_CODE, REVIEW_STORE_GOVERNANCE_CODE].includes(
+                code,
+            ) ||
             code === MANAGE_STORE_LIFECYCLE_CODE;
         const fixedStoreManagement =
             resource === 'Administrator' || resource === 'Role' || code === MANAGE_STORE_TEAM_CODE;

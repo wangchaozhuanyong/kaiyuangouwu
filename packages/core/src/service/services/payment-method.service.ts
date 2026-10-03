@@ -28,6 +28,7 @@ import { TransactionalConnection } from '../../connection/transactional-connecti
 import { Order } from '../../entity/order/order.entity';
 import { PaymentMethodTranslation } from '../../entity/payment-method/payment-method-translation.entity';
 import { PaymentMethod } from '../../entity/payment-method/payment-method.entity';
+import { StorePaymentMethodState } from '../../entity/payment-method/store-payment-method-state.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { PaymentMethodEvent } from '../../event-bus/events/payment-method-event';
 import { ConfigArgService } from '../helpers/config-arg/config-arg.service';
@@ -61,16 +62,28 @@ export class PaymentMethodService {
         private translator: TranslatorService,
     ) {}
 
-    findAll(
+    async findAll(
         ctx: RequestContext,
         options?: ListQueryOptions<PaymentMethod>,
         relations: RelationPaths<PaymentMethod> = [],
     ): Promise<PaginatedList<PaymentMethod>> {
+        if (!this.connection.platformStoreGovernanceEnabled) {
+            const [items, totalItems] = await this.listQueryBuilder
+                .build(PaymentMethod, options, { ctx, relations, channelId: ctx.channelId })
+                .getManyAndCount();
+            return { items: items.map(method => this.translator.translate(method, ctx)), totalItems };
+        }
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        const states = await this.connection
+            .getRepository(ctx, StorePaymentMethodState)
+            .find({ where: { channelId: ctx.channelId } });
         return this.listQueryBuilder
-            .build(PaymentMethod, options, { ctx, relations, channelId: ctx.channelId })
+            .build(PaymentMethod, options, { ctx, relations, channelId: defaultChannel.id })
             .getManyAndCount()
             .then(([methods, totalItems]) => {
-                const items = methods.map(m => this.translator.translate(m, ctx));
+                const items = methods.map(m =>
+                    this.safeAdminMethod(ctx, this.translator.translate(m, ctx), states),
+                );
                 return {
                     items,
                     totalItems,
@@ -78,23 +91,119 @@ export class PaymentMethodService {
             });
     }
 
-    findOne(
+    async findOne(
         ctx: RequestContext,
         paymentMethodId: ID,
         relations: RelationPaths<PaymentMethod> = [],
     ): Promise<PaymentMethod | undefined> {
-        return this.connection
-            .findOneInChannel(ctx, PaymentMethod, paymentMethodId, ctx.channelId, {
-                relations,
-            })
-            .then(paymentMethod => {
-                if (paymentMethod) {
-                    return this.translator.translate(paymentMethod, ctx);
-                }
-            });
+        if (!this.connection.platformStoreGovernanceEnabled) {
+            const nativeMethod = await this.connection.findOneInChannel(
+                ctx,
+                PaymentMethod,
+                paymentMethodId,
+                ctx.channelId,
+                { relations },
+            );
+            return nativeMethod ? this.translator.translate(nativeMethod, ctx) : undefined;
+        }
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        const method = await this.connection.findOneInChannel(
+            ctx,
+            PaymentMethod,
+            paymentMethodId,
+            defaultChannel.id,
+            { relations },
+        );
+        if (!method) return;
+        const states = await this.connection
+            .getRepository(ctx, StorePaymentMethodState)
+            .find({ where: { channelId: ctx.channelId } });
+        return this.safeAdminMethod(ctx, this.translator.translate(method, ctx), states);
+    }
+
+    private safeAdminMethod(
+        ctx: RequestContext,
+        method: PaymentMethod,
+        states: StorePaymentMethodState[],
+    ): PaymentMethod {
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE) return method;
+        return Object.assign(new PaymentMethod(method), {
+            enabled:
+                method.enabled && states.some(s => idsAreEqual(s.paymentMethodId, method.id) && s.enabled),
+            handler: { code: method.handler.code, args: [] },
+            checker: method.checker ? { code: method.checker.code, args: [] } : null,
+            customFields: {},
+            // Do not return configurable credentials nested inside custom translation fields.
+            translations: method.translations.map(t => ({ ...t, customFields: {} })),
+        });
+    }
+
+    private assertPlatformConfiguration(ctx: RequestContext): void {
+        if (!this.connection.platformStoreGovernanceEnabled) return;
+        if (
+            ctx.apiType !== 'admin' ||
+            ctx.channel.code !== DEFAULT_CHANNEL_CODE ||
+            (ctx.activeUserId != null && !ctx.userHasPermissions([Permission.SuperAdmin]))
+        ) {
+            throw new UserInputError('支付系统配置仅允许超级管理员在平台管理中心修改');
+        }
+    }
+
+    async getStorePaymentOptions(ctx: RequestContext) {
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        const [methods, states] = await Promise.all([
+            this.connection
+                .getRepository(ctx, PaymentMethod)
+                .find({ where: { channels: { id: defaultChannel.id } }, relations: ['channels'] }),
+            this.connection
+                .getRepository(ctx, StorePaymentMethodState)
+                .find({ where: { channelId: ctx.channelId } }),
+        ]);
+        return methods.map(method => {
+            const translated = this.translator.translate(method, ctx);
+            const enabled =
+                ctx.channel.code !== DEFAULT_CHANNEL_CODE &&
+                states.some(s => idsAreEqual(s.paymentMethodId, method.id) && s.enabled);
+            return {
+                id: method.id,
+                name: translated.name,
+                description: translated.description,
+                code: method.code,
+                handlerCode: method.handler.code,
+                enabled,
+                platformEnabled: method.enabled,
+                effectiveEnabled: enabled && method.enabled,
+            };
+        });
+    }
+
+    async setStorePaymentOptionEnabled(ctx: RequestContext, id: ID, enabled: boolean) {
+        if (ctx.apiType !== 'admin' || ctx.channel.code === DEFAULT_CHANNEL_CODE)
+            throw new UserInputError('请在经营店铺设置本店支付开关');
+        if (
+            ![
+                Permission.SuperAdmin,
+                Permission.UpdatePaymentMethod,
+                Permission.UpdateSettings,
+                'UpdateStoreProfile' as Permission,
+            ].some(permission => ctx.userHasPermissions([permission]))
+        )
+            throw new ForbiddenError();
+        const options = await this.getStorePaymentOptions(ctx);
+        const method = options.find(m => idsAreEqual(m.id, id));
+        if (!method) throw new UserInputError('该支付方式未由平台配置');
+        if (enabled && !method.platformEnabled) throw new UserInputError('平台尚未启用该支付方式');
+        await this.connection
+            .getRepository(ctx, StorePaymentMethodState)
+            .upsert({ channelId: ctx.channelId, paymentMethodId: id, enabled }, [
+                'channelId',
+                'paymentMethodId',
+            ]);
+        return { ...method, enabled, effectiveEnabled: enabled && method.platformEnabled };
     }
 
     async create(ctx: RequestContext, input: CreatePaymentMethodInput): Promise<PaymentMethod> {
+        this.assertPlatformConfiguration(ctx);
         const savedPaymentMethod = await this.translatableSaver.create({
             ctx,
             input,
@@ -117,6 +226,7 @@ export class PaymentMethodService {
     }
 
     async update(ctx: RequestContext, input: UpdatePaymentMethodInput): Promise<PaymentMethod> {
+        this.assertPlatformConfiguration(ctx);
         // Ensure the entity belongs to the active channel before updating.
         await this.connection.getEntityOrThrow(ctx, PaymentMethod, input.id, { channelId: ctx.channelId });
         const updatedPaymentMethod = await this.translatableSaver.update({
@@ -155,6 +265,7 @@ export class PaymentMethodService {
         paymentMethodId: ID,
         force: boolean = false,
     ): Promise<DeletionResponse> {
+        this.assertPlatformConfiguration(ctx);
         const paymentMethod = await this.connection.getEntityOrThrow(ctx, PaymentMethod, paymentMethodId, {
             relations: ['channels'],
             channelId: ctx.channelId,
@@ -269,13 +380,8 @@ export class PaymentMethodService {
     }
 
     async getEligiblePaymentMethods(ctx: RequestContext, order: Order): Promise<PaymentMethodQuote[]> {
-        const paymentMethods = await this.connection
-            .getRepository(ctx, PaymentMethod)
-            .find({ where: { enabled: true }, relations: ['channels'] });
+        const paymentMethodsInChannel = await this.getActivePaymentMethods(ctx);
         const results: PaymentMethodQuote[] = [];
-        const paymentMethodsInChannel = paymentMethods
-            .filter(p => p.channels.find(pc => idsAreEqual(pc.id, ctx.channelId)))
-            .map(p => this.translator.translate(p, ctx));
         for (const method of paymentMethodsInChannel) {
             let isEligible = true;
             let eligibilityMessage: string | undefined;
@@ -307,19 +413,34 @@ export class PaymentMethodService {
     async getMethodAndOperations(
         ctx: RequestContext,
         method: string,
+        existingPayment = false,
     ): Promise<{
         paymentMethod: PaymentMethod;
         handler: PaymentMethodHandler;
         checker: PaymentMethodEligibilityChecker | null;
     }> {
-        const paymentMethod = await this.connection
-            .getRepository(ctx, PaymentMethod)
-            .createQueryBuilder('method')
-            .leftJoin('method.channels', 'channel')
-            .where('method.code = :code', { code: method })
-            .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
-            .andWhere('method.enabled IS true')
-            .getOne();
+        let paymentMethod: PaymentMethod | undefined;
+        if (!this.connection.platformStoreGovernanceEnabled) {
+            paymentMethod =
+                (await this.connection.getRepository(ctx, PaymentMethod).findOne({
+                    where: { code: method, channels: { id: ctx.channelId } },
+                })) ?? undefined;
+        } else if (existingPayment) {
+            // Existing payment records keep their original handler for settlement/refunds after a shop switch is off.
+            paymentMethod =
+                (await this.connection
+                    .getRepository(ctx, PaymentMethod)
+                    .findOne({ where: { code: method, channels: { id: ctx.channelId } } })) ?? undefined;
+            if (!paymentMethod) {
+                const platform = await this.channelService.getDefaultChannel(ctx);
+                paymentMethod =
+                    (await this.connection
+                        .getRepository(ctx, PaymentMethod)
+                        .findOne({ where: { code: method, channels: { id: platform.id } } })) ?? undefined;
+            }
+        } else {
+            paymentMethod = (await this.getActivePaymentMethods(ctx)).find(m => m.code === method);
+        }
         if (!paymentMethod) {
             throw new UserInputError('error.payment-method-not-found', { method });
         }
@@ -331,10 +452,26 @@ export class PaymentMethodService {
     }
 
     async getActivePaymentMethods(ctx: RequestContext): Promise<PaymentMethod[]> {
-        const paymentMethods = await this.connection.getRepository(ctx, PaymentMethod).find({
-            where: { enabled: true, channels: { id: ctx.channelId } },
-            relations: ['channels', 'customFields'],
-        });
-        return paymentMethods.map(p => this.translator.translate(p, ctx));
+        if (!this.connection.platformStoreGovernanceEnabled) {
+            const nativeMethods = await this.connection.getRepository(ctx, PaymentMethod).find({
+                where: { enabled: true, channels: { id: ctx.channelId } },
+                relations: ['channels', 'customFields'],
+            });
+            return nativeMethods.map(method => this.translator.translate(method, ctx));
+        }
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE) return [];
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        const [methods, states] = await Promise.all([
+            this.connection.getRepository(ctx, PaymentMethod).find({
+                where: { enabled: true, channels: { id: defaultChannel.id } },
+                relations: ['channels', 'customFields'],
+            }),
+            this.connection
+                .getRepository(ctx, StorePaymentMethodState)
+                .find({ where: { channelId: ctx.channelId, enabled: true } }),
+        ]);
+        return methods
+            .filter(m => states.some(s => idsAreEqual(s.paymentMethodId, m.id)))
+            .map(m => this.translator.translate(m, ctx));
     }
 }

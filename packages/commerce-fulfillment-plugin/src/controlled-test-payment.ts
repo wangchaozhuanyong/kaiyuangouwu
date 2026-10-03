@@ -9,6 +9,7 @@ import {
     PaymentMethod,
     PaymentMethodEligibilityChecker,
     PaymentMethodHandler,
+    PaymentMethodService,
     PaymentProcess,
     RequestContext,
     TransactionalConnection,
@@ -43,10 +44,12 @@ export function createControlledTestPayment(enabled: boolean) {
     let connection: TransactionalConnection;
     let config: ConfigService;
     let carts: StorefrontCartService;
+    let methods: PaymentMethodService;
     const init = (injector: Injector) => {
         connection = injector.get(TransactionalConnection);
         config = injector.get(ConfigService);
         carts = injector.get(StorefrontCartService);
+        methods = injector.get(PaymentMethodService);
     };
 
     const lockPayableOrder = async (ctx: RequestContext, orderId: ID): Promise<boolean> => {
@@ -66,27 +69,23 @@ export function createControlledTestPayment(enabled: boolean) {
         locked = false,
     ): Promise<Order | undefined> {
         if (!enabled || ctx.apiType !== 'shop') return;
-        const lock = locked ? { mode: 'pessimistic_write' as const } : undefined;
-        const currentMethod = await connection.findOneInChannel(
-            ctx,
-            PaymentMethod,
-            method.id,
-            ctx.channelId,
-            {
-                lock,
-            },
-        );
-        if (!currentMethod?.enabled || currentMethod.handler.code !== CONTROLLED_TEST_PAYMENT_HANDLER) return;
-        const args = testPaymentArguments(currentMethod);
-        const channelId = String(
-            (config.entityOptions.entityIdStrategy ?? config.entityIdStrategy).encodeId(ctx.channelId),
+        const lock =
+            locked && !['sqljs', 'sqlite', 'better-sqlite3'].includes(connection.rawConnection?.options?.type)
+                ? { mode: 'pessimistic_write' as const }
+                : undefined;
+        const currentMethod = (await methods.getActivePaymentMethods(ctx)).find(
+            m => String(m.id) === String(method.id),
         );
         if (
-            args.channelId !== channelId ||
-            currentMethod.code !== `${CONTROLLED_TEST_PAYMENT_PREFIX}${channelId}` ||
+            !currentMethod ||
+            currentMethod.handler.code !== CONTROLLED_TEST_PAYMENT_HANDLER ||
             currentMethod.checker?.code !== CONTROLLED_TEST_PAYMENT_CHECKER
         )
             return;
+        const args = testPaymentArguments(currentMethod);
+        // Platform scopes are checked against the sales order in the current shop. Legacy per-shop codes
+        // never become a global template implicitly.
+        if (currentMethod.code !== `${CONTROLLED_TEST_PAYMENT_PREFIX}platform`) return;
         // A joined locking read avoids stale payment totals under MySQL REPEATABLE READ.
         const order = await connection.findOneInChannel(ctx, Order, orderId, ctx.channelId, {
             relations: ['payments', 'payments.refunds', 'lines', 'lines.productVariant'],
@@ -125,7 +124,7 @@ export function createControlledTestPayment(enabled: boolean) {
             channelId: {
                 type: 'string',
                 required: true,
-                label: [{ languageCode: LanguageCode.zh_Hans, value: '本店 Channel ID' }],
+                label: [{ languageCode: LanguageCode.zh_Hans, value: '配置渠道 ID（平台统一配置）' }],
             },
             allowAllOrders: {
                 type: 'boolean',

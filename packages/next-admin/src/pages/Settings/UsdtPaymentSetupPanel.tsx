@@ -30,6 +30,7 @@ import {
     type UpdateStoreUsdtConfigurationResult,
 } from '../../graphql/store-usdt.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { isDefaultChannelCode } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     buildStoreUsdtConfigurationInput,
@@ -73,8 +74,12 @@ export function UsdtPaymentSetupPanel({
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
+    const isPlatformContext = isDefaultChannelCode(
+        setupQuery.data?.myStoreCurrencyConfiguration.channelCode ?? '',
+    );
+    const canManagePlatformWallet = isSuperAdmin && isPlatformContext;
     const platformWalletsQuery = useQuery<PlatformUsdtWalletsResult>(PLATFORM_USDT_WALLETS_QUERY, {
-        skip: !isSuperAdmin,
+        skip: !canManagePlatformWallet,
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
@@ -122,7 +127,7 @@ export function UsdtPaymentSetupPanel({
 
     const refreshPanels = async (message: string) => {
         await setupQuery.refetch();
-        if (isSuperAdmin) await platformWalletsQuery.refetch();
+        if (canManagePlatformWallet) await platformWalletsQuery.refetch();
         await onChanged(message);
     };
 
@@ -157,6 +162,7 @@ export function UsdtPaymentSetupPanel({
     };
 
     const submitReceivingAddress = async () => {
+        if (!canManagePlatformWallet) return;
         const receivingAddress = walletAddress.trim();
         if (!isPlausibleTronMainnetAddress(receivingAddress)) {
             return onError('请输入有效的 TRON 主网收款地址（T 开头，共 34 位）');
@@ -180,6 +186,7 @@ export function UsdtPaymentSetupPanel({
     };
 
     const decideWallet = async (candidate: StoreUsdtWalletRecord, approved: boolean) => {
+        if (!canManagePlatformWallet) return;
         if (!candidate.canReview) {
             return onError('当前账号提交的地址不能自审，请使用另一名 SuperAdmin 账号完成复核');
         }
@@ -188,7 +195,7 @@ export function UsdtPaymentSetupPanel({
         const confirmed = await requestConfirmation({
             title: approved ? '审核通过 USDT 收款地址' : '驳回 USDT 收款地址',
             description: approved
-                ? `通过后，店铺 ${candidate.channelCode} 的新 USDT 订单将向该地址付款。请确认已与钱包 App 和地址指纹交叉核对。`
+                ? `通过后，平台所有已开启店铺的新 USDT 订单将向该地址付款。请确认已与钱包 App 和地址指纹交叉核对。`
                 : `确认驳回店铺 ${candidate.channelCode} 提交的地址？商家将看到驳回原因。`,
             confirmLabel: approved ? '确认通过' : '确认驳回',
             tone: approved ? 'warning' : 'danger',
@@ -224,7 +231,7 @@ export function UsdtPaymentSetupPanel({
                         <FeatureHelpButton topic="settings.usdt" title="USDT-TRC20 收款" />
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                        收款地址审核通过后，系统会自动为当前店铺分配 USDT 支付方式，无需在上方手工新增。
+                        收款地址由超级管理员在平台管理中心统一设置；审核通过后，经营店铺在本店支付选项中独立启用。
                     </p>
                 </div>
                 {wallet && <WalletStatusBadge status={wallet.reviewStatus} />}
@@ -410,8 +417,8 @@ export function UsdtPaymentSetupPanel({
                         <section className="space-y-4 rounded-xl border border-slate-200 p-4">
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                                    本网店收款钱包
-                                    <FeatureHelpButton topic="settings.usdt" title="本网店收款钱包" />
+                                    平台统一收款钱包
+                                    <FeatureHelpButton topic="settings.usdt" title="平台统一收款钱包" />
                                 </h3>
                                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                                     只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。
@@ -434,7 +441,7 @@ export function UsdtPaymentSetupPanel({
                                 <Metric label="审核时间" value={formatDateTime(wallet.reviewedAt)} />
                             </div>
 
-                            {wallet.pendingReceivingAddress && (
+                            {canManagePlatformWallet && wallet.pendingReceivingAddress && (
                                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[10px] leading-5 text-amber-900">
                                     <strong className="block">待审核地址</strong>
                                     <code className="block break-all">{wallet.pendingReceivingAddress}</code>
@@ -448,7 +455,7 @@ export function UsdtPaymentSetupPanel({
                                 <InlineAlert tone="error">驳回原因：{wallet.rejectionReason}</InlineAlert>
                             )}
 
-                            {canUpdate && (
+                            {canManagePlatformWallet && (
                                 <div className="space-y-2 border-t border-slate-100 pt-4">
                                     <Field
                                         label={
@@ -487,7 +494,7 @@ export function UsdtPaymentSetupPanel({
                         </section>
                     </div>
 
-                    {isSuperAdmin && (
+                    {canManagePlatformWallet && (
                         <section className="space-y-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">

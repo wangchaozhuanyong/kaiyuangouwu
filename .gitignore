@@ -423,3 +423,6 @@ backups/
 playwright-report/
 test-results/
 reports/
+
+# Local governance audit workbooks and acceptance exports
+/outputs/platform-store-governance-20261002/

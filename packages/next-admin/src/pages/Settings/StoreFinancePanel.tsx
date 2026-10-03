@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@apollo/client/react';
-import { CircleDollarSign, RefreshCw, Save, ShieldCheck, WalletCards } from 'lucide-react';
+import { CircleDollarSign, RefreshCw, Save, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 
@@ -361,7 +361,7 @@ export function StoreUsdtPanel() {
                 <PanelHeading
                     icon={<WalletCards className="h-5 w-5 text-emerald-600" />}
                     title="USDT TRC20 收款地址"
-                    description="新地址提交后须经超级管理员审核；激活前不会影响现有收款。"
+                    description="收款地址由平台管理中心统一配置，本店只查看状态。"
                 />
                 <div className="grid gap-3 md:grid-cols-3">
                     <Metric label="审核状态" value={storeUsdtWalletStatusLabel(wallet.reviewStatus)} />
@@ -371,26 +371,7 @@ export function StoreUsdtPanel() {
                 {wallet.rejectionReason && (
                     <Notice tone="error" message={`驳回原因：${wallet.rejectionReason}`} />
                 )}
-                <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                        value={address}
-                        onChange={event => setAddress(event.target.value.trim())}
-                        placeholder="T 开头的 TRC20 收款地址"
-                        className={`${inputClass} flex-1 font-mono`}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setError('');
-                            setDialogOpen(true);
-                        }}
-                        disabled={!address}
-                        className={primaryButton}
-                    >
-                        <ShieldCheck className="h-4 w-4" />
-                        提交审核
-                    </button>
-                </div>
+                <p className="text-xs text-slate-500">平台统一收款，本店支付开关在店铺设置管理。</p>
             </section>
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <PanelHeading

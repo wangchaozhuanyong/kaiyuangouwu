@@ -1,11 +1,8 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
-import { sensitiveActionContext } from '../../apollo';
-import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION,
-    SUBMIT_MY_STORE_USDT_WALLET_MUTATION,
     SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION,
     type MyStoreSettingsResult,
 } from '../../graphql/management.graphql';
@@ -90,69 +87,24 @@ export function MyStorePayoutAccount({
 
 export function MyStoreUsdtWallet({
     wallet,
-    onCompleted,
-    onError,
 }: {
     wallet: MyStoreSettingsResult['myStoreUsdtWallet'];
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const requestConfirmation = useConfirmDialog();
-    const [address, setAddress] = useState(wallet.pendingReceivingAddress ?? '');
-    const [submitWallet, state] = useMutation(SUBMIT_MY_STORE_USDT_WALLET_MUTATION);
-    const submit = async () => {
-        if (!address.trim()) return onError('请输入 TRON 主网收款地址');
-        const confirmation = await requestConfirmation({
-            title: '提交本店 USDT 收款地址？',
-            description: '地址将加密保存并等待平台审核，通过前不会影响当前线上收款地址。',
-            confirmLabel: '验证并提交',
-            tone: 'warning',
-            requireCurrentPassword: true,
-        });
-        if (!confirmation) return;
-        try {
-            await submitWallet({
-                variables: { receivingAddress: address.trim() },
-                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
-            });
-            await onCompleted('USDT 收款地址已提交平台审核');
-        } catch (error) {
-            onError(toUserFacingError(error, '提交 USDT 收款地址失败'));
-        }
-    };
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                USDT 收款钱包
-                <FeatureHelpButton topic="settings.usdt" title="USDT 收款钱包" />
+            <h2 className="flex items-center gap-2 text-sm font-bold">
+                平台统一 USDT 收款
+                <FeatureHelpButton topic="settings.platform-usdt" title="平台统一 USDT 收款" />
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
-                只提交公开收款地址，禁止填写私钥或助记词；平台审核通过后仅影响新订单。
+            <p className="mt-2 text-xs text-slate-500">
+                收款地址由超级管理员在平台管理中心配置，本店通过支付选项开启或关闭。
             </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                <FieldInput label={`${wallet.network} 收款地址`} value={address} onChange={setAddress} />
-                <button
-                    type="button"
-                    onClick={() => void submit()}
-                    disabled={state.loading}
-                    className={secondaryButton}
-                >
-                    提交审核
-                </button>
-            </div>
-            <div className="mt-3 text-xs text-slate-500">
-                状态：
-                {wallet.reviewStatus === 'PENDING'
-                    ? '待平台审核'
-                    : wallet.reviewStatus === 'ACTIVE'
-                      ? '已审核启用'
-                      : wallet.reviewStatus === 'REJECTED'
-                        ? `已驳回：${wallet.rejectionReason ?? '未填写原因'}`
-                        : '未配置'}
-                {wallet.activeReceivingAddressMasked
-                    ? ` · 当前地址 ${wallet.activeReceivingAddressMasked}`
-                    : ''}
-            </div>
+            <p className="mt-3 text-xs">
+                {wallet.configured ? '平台已配置' : '平台尚未配置'} ·{' '}
+                {wallet.activeReceivingAddressMasked ?? '地址未获取'}
+            </p>
         </section>
     );
 }
@@ -182,26 +134,32 @@ export function MyStorePaymentOptions({
                 <FeatureHelpButton topic="settings.payment-shipping" title="本店支付选项" />
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-                只能启停平台已经分配给本店的支付方式；处理器参数与密钥不会返回。
+                支付系统由平台统一配置，本店独立开启或关闭。处理器参数与密钥仅在平台管理。
             </p>
             <div className="mt-4 divide-y divide-slate-100">
                 {options.map(option => (
                     <label key={option.id} className="flex items-center justify-between gap-4 py-3 text-xs">
                         <span>
                             <strong className="block text-slate-800">{option.name}</strong>
-                            <span className="mt-1 block text-slate-400">平台批准的支付方式</span>
+                            <span className="mt-1 block text-slate-400">
+                                {!option.platformEnabled
+                                    ? '平台已停用'
+                                    : option.effectiveEnabled
+                                      ? '本店已开启'
+                                      : '本店未开启'}
+                            </span>
                         </span>
                         <input
                             type="checkbox"
                             checked={option.enabled}
-                            disabled={state.loading}
+                            disabled={state.loading || (!option.platformEnabled && !option.enabled)}
                             onChange={event => void toggle(option.id, event.target.checked)}
                             aria-label={`${option.name}启用状态`}
                         />
                     </label>
                 ))}
                 {!options.length && (
-                    <div className="py-8 text-center text-xs text-slate-400">平台尚未给本店分配支付方式</div>
+                    <div className="py-8 text-center text-xs text-slate-400">平台尚未配置支付方式</div>
                 )}
             </div>
         </section>

@@ -1110,4 +1110,46 @@ export const adminApiExtensions = gql`
         disputeCatalogPurchasePayment(id: ID!, note: String!): CatalogPurchaseOrder!
         returnCatalogPurchaseOrder(input: ReturnCatalogPurchaseOrderInput!): CatalogPurchaseOrder!
     }
+
+    input PlatformCatalogTargetPriceInput {
+        variantId: ID!
+        price: Int!
+    }
+    input PlatformCatalogTargetInput {
+        channelId: ID!
+        collectionId: ID
+        prices: [PlatformCatalogTargetPriceInput!]
+    }
+    input PlatformCatalogDistributionInput {
+        idempotencyKey: String!
+        action: String!
+        productIds: [ID!]
+        variantIds: [ID!]
+        collectionId: ID
+        includeDescendants: Boolean
+        targets: [PlatformCatalogTargetInput!]!
+    }
+    input MyProductSalesOfferInput {
+        productId: ID!
+        version: Int!
+        state: String!
+        prices: [PlatformCatalogTargetPriceInput!]!
+    }
+    extend type Query {
+        platformCatalogProducts(skip: Int, take: Int, term: String): JSON!
+        myProductSalesOffer(productId: ID!): JSON!
+    }
+    extend type Mutation {
+        previewPlatformCatalogDistribution(input: PlatformCatalogDistributionInput!): JSON!
+        executePlatformCatalogDistribution(batchId: ID!): JSON!
+        updateMyProductSalesOffer(input: MyProductSalesOfferInput!): JSON!
+    }
+    extend type Query {
+        catalogTemplateLibrary: JSON!
+        platformCatalogResources(resourceType: String!): JSON!
+    }
+    extend type Mutation {
+        claimCatalogTemplate(resourceType: String!, resourceId: ID!): JSON!
+        publishPlatformCatalogTemplate(resourceType: String!, resourceId: ID!): JSON!
+    }
 `;

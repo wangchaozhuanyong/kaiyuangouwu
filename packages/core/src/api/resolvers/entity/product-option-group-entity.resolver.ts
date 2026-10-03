@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Args, Parent, ResolveField, Resolver } from '@nestjs/graphql';
 import { Permission, ProductListOptions } from '@vendure/common/lib/generated-types';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
@@ -6,9 +7,9 @@ import { PaginatedList } from '@vendure/common/lib/shared-types';
 import { Translated } from '../../../common/types/locale-types';
 import { idsAreEqual } from '../../../common/utils';
 import { Channel } from '../../../entity/channel/channel.entity';
-import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
-import { ProductOption } from '../../../entity/product-option/product-option.entity';
 import { Product } from '../../../entity/product/product.entity';
+import { ProductOption } from '../../../entity/product-option/product-option.entity';
+import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { LocaleStringHydrator } from '../../../service/helpers/locale-string-hydrator/locale-string-hydrator';
 import { ProductOptionGroupService } from '../../../service/services/product-option-group.service';
 import { ProductService } from '../../../service/services/product.service';
@@ -45,6 +46,15 @@ export class ProductOptionGroupEntityResolver {
         @Ctx() ctx: RequestContext,
         @Parent() optionGroup: Translated<ProductOptionGroup>,
     ): Promise<Array<Translated<ProductOption>>> {
+        const dependencyProductId = (optionGroup as ProductOptionGroup & { authorizedProductId?: string })
+            .authorizedProductId;
+        if (dependencyProductId) {
+            const groups = await this.productOptionGroupService.getOptionGroupsByProductId(
+                ctx,
+                dependencyProductId,
+            );
+            return groups.find(group => idsAreEqual(group.id, optionGroup.id))?.options ?? [];
+        }
         let options: Array<Translated<ProductOption>>;
         if (optionGroup.options) {
             options = optionGroup.options;
@@ -54,7 +64,9 @@ export class ProductOptionGroupEntityResolver {
             });
             options = group?.options ?? [];
         }
-        return options.filter(o => !o.deletedAt);
+        const visible = await this.productOptionGroupService.findOne(ctx, optionGroup.id);
+        const ids = new Set((visible?.options ?? []).map(o => String(o.id)));
+        return options.filter(o => !o.deletedAt && ids.has(String(o.id)));
     }
 }
 

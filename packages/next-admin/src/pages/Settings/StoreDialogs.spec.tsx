@@ -260,9 +260,11 @@ describe('ProvisionStoreDialog', () => {
         );
 
         expect(html).toContain('选择基础店铺');
-        expect(html).toContain('平台管理（不经营） · 简体中文 / CNY');
+        expect(html).toContain('模钥平台管理中心 · 简体中文 / CNY');
         expect(html).toContain('美宜佳 · 简体中文 / MYR');
-        expect(html).toContain('新店会复制所选店铺的语言、币种、税务和库存默认值');
+        expect(html).toContain('新店会复制所选店铺的语言、币种与税务默认值');
+        expect(html).toContain('支付方式由平台统一管理，本店另行启用');
+        expect(html).not.toContain('共享其库存点');
         expect(html).not.toContain('需要先在后端 Channel 配置中启用开店模板');
     });
 
