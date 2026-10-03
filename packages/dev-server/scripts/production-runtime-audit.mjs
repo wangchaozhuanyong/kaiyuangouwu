@@ -38,7 +38,21 @@ function hashFile(file) {
     return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
 
-function installedBracesPaths(root) {
+// Pinned backport of upstream PR58. Both source bytes and installed behavior must match.
+export const HTTP_CACHE_PATCH = Object.freeze({
+    advisory: 'https://github.com/advisories/GHSA-ch52-4w7c-c8xp',
+    package: 'http-cache-semantics',
+    version: '4.2.0',
+    path: 'patches/http-cache-semantics@4.2.0.patch',
+    sha256: '080c46bf50cee0ccfdeaa0494733b0b37ac08b1a3cf7647316c7a913898a6479',
+    files: Object.freeze({
+        'index.js': 'fc7b3f0265b7a7d0fee83bafa47186a66495720d3179801c2be3083de6d0cf76',
+        'package.json': 'bee0609d5ab09a590afe0e1209d3702b0afb0a3c158492f90902a724d889d22b',
+    }),
+});
+const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH]);
+
+function installedPackagePaths(root, name) {
     const pending = [path.join(root, 'node_modules')];
     const packagesRoot = path.join(root, 'packages');
     if (existsSync(packagesRoot)) {
@@ -55,7 +69,7 @@ function installedBracesPaths(root) {
             const manifestPath = path.join(target, 'package.json');
             if (existsSync(manifestPath)) {
                 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-                if (manifest.name === BRACES_PATCH.package) found.add(target);
+                if (manifest.name === name) found.add(target);
             }
             // Do not follow workspace or external links while enumerating dependencies.
             if (entry.isDirectory()) pending.push(target);
@@ -89,78 +103,130 @@ function assertDepthGuard(braces) {
     }
 }
 
-export function verifyBracesPatch(root, { runtimePackages, requireRegistration = true } = {}) {
+function assertCacheReuseGuard(CachePolicy) {
+    const request = { url: 'https://fixture.invalid/cache', method: 'GET', headers: {} };
+    const check = (headers, shared, expected) => {
+        const policy = new CachePolicy(request, { status: 200, headers }, { shared });
+        policy.now = () => policy._responseTime + 10_000;
+        const incoming = { ...request, headers: { 'cache-control': 'max-stale=100' } };
+        if (!!policy.evaluateRequest(incoming).response !== expected) {
+            throw new Error('Patched http-cache-semantics failed cache reuse guard');
+        }
+    };
+    check({ 'cache-control': 'max-age=1', 'set-cookie': 'synthetic=1' }, true, false);
+    check({ 'cache-control': 'max-age=1, proxy-revalidate' }, true, false);
+    check({ 'cache-control': 'max-age=1, no-cache' }, true, false);
+    check({ 'cache-control': 'public, max-age=1' }, true, true);
+    check({ 'cache-control': 'public, max-age=1', 'set-cookie': 'synthetic=1' }, true, true);
+    check({ 'cache-control': 'max-age=1', 'set-cookie': 'synthetic=1' }, false, true);
+}
+
+function verifyInstalledPatch(
+    root,
+    patch,
+    assertBehavior,
+    { runtimePackages, requireRegistration = true } = {},
+) {
     root = realpathSync(root);
+    const key = `${patch.package}@${patch.version}`;
     if (requireRegistration) {
         const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-        if (manifest.patchedDependencies?.['braces@3.0.3'] !== BRACES_PATCH.path) {
-            throw new Error('braces patch registration is missing or changed');
+        if (manifest.patchedDependencies?.[key] !== patch.path) {
+            throw new Error(patch.package + ' patch registration is missing or changed');
         }
-        if (hashFile(path.join(root, BRACES_PATCH.path)) !== BRACES_PATCH.sha256) {
-            throw new Error('braces patch source fingerprint mismatch');
+        if (hashFile(path.join(root, patch.path)) !== patch.sha256) {
+            throw new Error(patch.package + ' patch source fingerprint mismatch');
         }
         const lock = readFileSync(path.join(root, 'bun.lock'), 'utf8');
         const lockedPatches = /"patchedDependencies":\s*\{([^}]+)\}/u.exec(lock)?.[1] ?? '';
-        if (!/"braces@3\.0\.3":\s*"patches\/braces@3\.0\.3\.patch"/u.test(lockedPatches)) {
-            throw new Error('braces patch is absent from the frozen lockfile');
+        const entries = [...lockedPatches.matchAll(/"([^"]+)":\s*"([^"]+)"/gu)];
+        if (!entries.some(entry => entry[1] === key && entry[2] === patch.path)) {
+            throw new Error(patch.package + ' patch is absent from the frozen lockfile');
         }
     }
     const packagePaths = runtimePackages
         ? runtimePackages
-              .filter(item => item.name === BRACES_PATCH.package)
-              .map(item => path.join(root, item.path))
-        : installedBracesPaths(root);
-    if (!packagePaths.length) throw new Error('No installed braces copy available for patch verification');
+              .filter(item => item.name === patch.package)
+              .map(item => {
+                  if (item.version !== patch.version) {
+                      throw new Error(
+                          patch.package + ' runtime inventory version does not match the approved patch',
+                      );
+                  }
+                  return path.join(root, item.path);
+              })
+        : installedPackagePaths(root, patch.package);
+    if (!packagePaths.length)
+        throw new Error('No installed ' + patch.package + ' copy available for patch verification');
     const copies = [];
     for (const packagePath of [...new Set(packagePaths)]) {
         const resolved = realpathSync(packagePath);
         if (!resolved.startsWith(root + path.sep)) {
-            throw new Error('braces package resolves outside the audited tree');
+            throw new Error(patch.package + ' package resolves outside the audited tree');
         }
         const manifest = JSON.parse(readFileSync(path.join(resolved, 'package.json'), 'utf8'));
-        if (manifest.name !== BRACES_PATCH.package || manifest.version !== BRACES_PATCH.version) {
-            throw new Error('braces package version does not match the approved patch');
+        if (manifest.name !== patch.package || manifest.version !== patch.version) {
+            throw new Error(patch.package + ' package version does not match the approved patch');
         }
         const fingerprints = {};
-        for (const [file, expected] of Object.entries(BRACES_PATCH.files)) {
+        for (const [file, expected] of Object.entries(patch.files)) {
             const actual = hashFile(path.join(resolved, file));
-            if (actual !== expected) throw new Error('braces installed file fingerprint mismatch: ' + file);
+            if (actual !== expected)
+                throw new Error(patch.package + ' installed file fingerprint mismatch: ' + file);
             fingerprints[file] = actual;
         }
         const require = createRequire(path.join(resolved, 'package.json'));
-        assertDepthGuard(require(resolved));
+        assertBehavior(require(resolved));
         copies.push({ path: path.relative(root, packagePath), files: fingerprints });
     }
     return {
-        advisory: BRACES_PATCH.advisory,
-        name: BRACES_PATCH.package,
-        version: BRACES_PATCH.version,
+        advisory: patch.advisory,
+        name: patch.package,
+        version: patch.version,
         state: 'VERIFIED_PATCH',
-        patchSha256: BRACES_PATCH.sha256,
+        patchSha256: patch.sha256,
         copies,
     };
 }
 
+export function verifyBracesPatch(root, options) {
+    return verifyInstalledPatch(root, BRACES_PATCH, assertDepthGuard, options);
+}
+
+export function verifyHttpCachePatch(root, options) {
+    return verifyInstalledPatch(root, HTTP_CACHE_PATCH, assertCacheReuseGuard, options);
+}
+
 function isVerifiedFinding(name, advisory, verifiedPatches) {
-    return (
-        name === BRACES_PATCH.package &&
-        advisory.url === BRACES_PATCH.advisory &&
-        advisory.severity === 'high' &&
-        verifiedPatches.some(
-            item =>
-                item.state === 'VERIFIED_PATCH' &&
-                item.advisory === advisory.url &&
-                item.name === name &&
-                item.version === BRACES_PATCH.version &&
-                item.patchSha256 === BRACES_PATCH.sha256,
-        )
+    return VERIFIED_PATCHES.some(
+        patch =>
+            name === patch.package &&
+            advisory.url === patch.advisory &&
+            advisory.severity === 'high' &&
+            (advisory.version === undefined || advisory.version === patch.version) &&
+            verifiedPatches.some(
+                item =>
+                    item.state === 'VERIFIED_PATCH' &&
+                    item.advisory === advisory.url &&
+                    item.name === name &&
+                    item.version === patch.version &&
+                    item.patchSha256 === patch.sha256,
+            ),
     );
 }
 
 function verifyReportPatches(auditReport, root, options) {
-    const advisories = auditReport[BRACES_PATCH.package] ?? [];
-    if (!advisories.some(advisory => advisory.url === BRACES_PATCH.advisory)) return [];
-    return [verifyBracesPatch(root, options)];
+    const verified = [];
+    for (const patch of VERIFIED_PATCHES) {
+        if (options?.runtimePackages && !options.runtimePackages.some(item => item.name === patch.package))
+            continue;
+        const advisories = auditReport[patch.package] ?? [];
+        if (!advisories.some(advisory => advisory.url === patch.advisory)) continue;
+        verified.push(
+            patch === BRACES_PATCH ? verifyBracesPatch(root, options) : verifyHttpCachePatch(root, options),
+        );
+    }
+    return verified;
 }
 
 function isRecord(value) {
@@ -447,10 +513,10 @@ export async function auditRuntimePackages(
               expectedLockfileSha256,
           )
         : await runBunAudit(repositoryRoot);
-    const affectedBraces = runtimePackages.filter(item => item.name === BRACES_PATCH.package);
-    const verifiedPatches = affectedBraces.length
-        ? verifyReportPatches(auditReport, artifactRoot, { runtimePackages, requireRegistration: false })
-        : [];
+    const verifiedPatches = verifyReportPatches(auditReport, artifactRoot, {
+        runtimePackages,
+        requireRegistration: false,
+    });
     const { blockedFindings, report } = createRuntimeAuditReport(runtimePackages, auditReport, {
         failOn,
         verifiedPatches,

@@ -14,6 +14,136 @@ import {
     runBunAudit,
     writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
+void test('cache backport verifies aliases and runtime bytes without hiding raw high findings', async () => {
+    const { cp, mkdir, symlink } = await import('node:fs/promises');
+    const { HTTP_CACHE_PATCH, BRACES_PATCH, verifyHttpCachePatch } =
+        await import('./production-runtime-audit.mjs');
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-cache-patch-'));
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    const installed = path.join(repositoryRoot, 'node_modules/http-cache-semantics');
+    const localCopy = path.join(root, 'node_modules/http-cache-semantics');
+    const nestedCopy = path.join(root, 'packages/fixture/node_modules/cache-alias');
+    const registration = JSON.stringify({
+        patchedDependencies: { 'http-cache-semantics@4.2.0': HTTP_CACHE_PATCH.path },
+    });
+    const cacheReport = {
+        'http-cache-semantics': [
+            {
+                id: 1,
+                severity: 'high',
+                title: 'max-stale must not bypass reuse restrictions',
+                url: HTTP_CACHE_PATCH.advisory,
+                vulnerable_versions: '<=4.2.0',
+            },
+        ],
+        // A build-only advisory must not require a missing package in the runtime artifact.
+        braces: [
+            {
+                id: 2,
+                severity: 'high',
+                title: 'build-only braces',
+                url: BRACES_PATCH.advisory,
+                vulnerable_versions: '<=3.0.3',
+            },
+        ],
+    };
+    const inventory = [
+        {
+            name: HTTP_CACHE_PATCH.package,
+            version: HTTP_CACHE_PATCH.version,
+            path: 'node_modules/http-cache-semantics',
+        },
+    ];
+    const onlyCache = { 'http-cache-semantics': cacheReport['http-cache-semantics'] };
+    const run = report =>
+        runBunAudit(root, {
+            auditLevel: 'high',
+            runCommand: () => ({ status: 1, stdout: JSON.stringify(report), stderr: '' }),
+        });
+    try {
+        await mkdir(path.join(root, 'patches'), { recursive: true });
+        await cp(path.join(repositoryRoot, HTTP_CACHE_PATCH.path), path.join(root, HTTP_CACHE_PATCH.path));
+        await writeFile(path.join(root, 'package.json'), registration);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await cp(installed, localCopy, { recursive: true });
+        await cp(installed, nestedCopy, { recursive: true });
+        const verified = verifyHttpCachePatch(root);
+        assert.equal(verified.copies.length, 2);
+        assert.deepEqual(await run(onlyCache), onlyCache);
+        const saved = path.join(root, 'saved-audit.json');
+        writeBunAuditEvidence(saved, path.join(root, 'bun.lock'), cacheReport);
+        const lockSha = createHash('sha256').update(registration).digest('hex');
+        const runtime = await auditRuntimePackages(root, inventory, {
+            auditReportPath: saved,
+            expectedLockfileSha256: lockSha,
+            failOn: 'high',
+        });
+        assert.equal(runtime.summary.high, 1);
+        assert.equal(runtime.findings[0].url, HTTP_CACHE_PATCH.advisory);
+        assert.equal(runtime.verifiedPatches[0].patchSha256, HTTP_CACHE_PATCH.sha256);
+        assert.throws(
+            () =>
+                verifyHttpCachePatch(root, {
+                    runtimePackages: [{ ...inventory[0], version: '4.1.0' }],
+                    requireRegistration: false,
+                }),
+            /inventory version does not match/u,
+        );
+        const critical = {
+            'http-cache-semantics': [{ ...onlyCache['http-cache-semantics'][0], severity: 'critical' }],
+        };
+        await assert.rejects(run(critical), /policy failed/u);
+        const unknown = {
+            'http-cache-semantics': [
+                { ...onlyCache['http-cache-semantics'][0], url: 'https://example.com/another-high' },
+            ],
+        };
+        await assert.rejects(run(unknown), /policy failed/u);
+        const spoofed = createRuntimeAuditReport([{ ...inventory[0], version: '4.1.0' }], onlyCache, {
+            failOn: 'high',
+            verifiedPatches: [verified],
+        });
+        assert.equal(spoofed.blockedFindings.length, 1);
+        await writeFile(path.join(nestedCopy, 'index.js'), '// unpatched alias');
+        assert.throws(() => verifyHttpCachePatch(root), /fingerprint mismatch/u);
+        await cp(path.join(installed, 'index.js'), path.join(nestedCopy, 'index.js'));
+        await writeFile(path.join(localCopy, 'index.js'), '// changed runtime cache');
+        await assert.rejects(
+            auditRuntimePackages(root, inventory, {
+                auditReportPath: saved,
+                expectedLockfileSha256: lockSha,
+                failOn: 'high',
+            }),
+            /fingerprint mismatch/u,
+        );
+        await cp(path.join(installed, 'index.js'), path.join(localCopy, 'index.js'));
+        const manifest = await readFile(path.join(nestedCopy, 'package.json'), 'utf8');
+        await writeFile(path.join(nestedCopy, 'package.json'), manifest.replace('"4.2.0"', '"4.1.0"'));
+        assert.throws(() => verifyHttpCachePatch(root), /version does not match/u);
+        await writeFile(path.join(nestedCopy, 'package.json'), manifest);
+        await rm(path.join(nestedCopy, 'index.js'));
+        assert.throws(() => verifyHttpCachePatch(root), /ENOENT/u);
+        await cp(path.join(installed, 'index.js'), path.join(nestedCopy, 'index.js'));
+        await writeFile(path.join(root, HTTP_CACHE_PATCH.path), '// altered patch source');
+        assert.throws(() => verifyHttpCachePatch(root), /source fingerprint mismatch/u);
+        await cp(path.join(repositoryRoot, HTTP_CACHE_PATCH.path), path.join(root, HTTP_CACHE_PATCH.path));
+        await writeFile(path.join(root, 'bun.lock'), '{}');
+        assert.throws(() => verifyHttpCachePatch(root), /frozen lockfile/u);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await writeFile(path.join(root, 'package.json'), '{}');
+        assert.throws(() => verifyHttpCachePatch(root), /registration/u);
+        await writeFile(path.join(root, 'package.json'), registration);
+        const external = path.join(root, 'node_modules/external-cache');
+        await symlink(installed, external);
+        assert.throws(() => verifyHttpCachePatch(root), /outside the audited tree/u);
+        await rm(external);
+        await rm(path.join(root, 'node_modules'), { recursive: true });
+        await rm(path.join(root, 'packages'), { recursive: true });
+        assert.throws(() => verifyHttpCachePatch(root), /No installed/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
 
 const packages = [
     { name: 'safe-package', path: 'node_modules/safe-package', version: '2.0.0' },
