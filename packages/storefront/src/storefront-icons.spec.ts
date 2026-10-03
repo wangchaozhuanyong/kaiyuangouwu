@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { storefrontIcon } from '../../storefront-content-plugin/src/shared/storefront-icons';
 
@@ -8,6 +8,7 @@ import { applyStorefrontIcons, restoreStorefrontIcons } from './storefront-icons
 afterEach(() => {
     document.head.innerHTML = '';
     sessionStorage.clear();
+    vi.restoreAllMocks();
 });
 
 describe('storefront document icons', () => {
@@ -61,15 +62,31 @@ describe('storefront document icons', () => {
             'preset=storefront-thumbnail-fit-320&format=png',
         );
     });
-    it('updates duplicate links after a brand change and clears them when the logo is removed', () => {
+    it('replaces cached duplicate declarations and initializes their URLs before browser insertion', () => {
         document.head.innerHTML = '<link rel="icon" href="/old.png"><link rel="icon" href="/older.png">';
+        const inserted = [] as string[];
+        const append = document.head.append.bind(document.head);
+        vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
+            for (const node of nodes) {
+                if (node instanceof HTMLLinkElement) inserted.push(node.getAttribute('href') ?? '');
+            }
+            append(...nodes);
+        });
         applyStorefrontIcons('/new.png');
+        expect(document.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
+        expect(inserted).toEqual(['/new.png?storefront-icon=2&iv=3', '/new.png?storefront-icon=2&iv=3']);
         for (const link of document.querySelectorAll('link[rel="icon"]')) {
-            expect(link.getAttribute('href')).toBe('/new.png?storefront-icon=2');
+            expect(link.getAttribute('href')).toBe('/new.png?storefront-icon=2&iv=3');
         }
         applyStorefrontIcons(null);
         for (const link of document.querySelectorAll('link')) {
-            expect(link.getAttribute('href')).toBe('/storefront/neutral-store.png?storefront-icon=2');
+            expect(link.getAttribute('href')).toBe('/storefront/neutral-store.png?storefront-icon=2&iv=3');
         }
+    });
+    it('keeps the icon revision query before an existing URL fragment', () => {
+        applyStorefrontIcons('/brand.png#symbol');
+        expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+            '/brand.png?storefront-icon=2&iv=3#symbol',
+        );
     });
 });
