@@ -44,7 +44,7 @@ export const HTTP_CACHE_PATCH = Object.freeze({
     package: 'http-cache-semantics',
     version: '4.2.0',
     path: 'patches/http-cache-semantics@4.2.0.patch',
-    sha256: '080c46bf50cee0ccfdeaa0494733b0b37ac08b1a3cf7647316c7a913898a6479',
+    sha256: 'ef5fa630ed4a64ff13eeea43113d5e137d351881afa4afd2db78249629c58db9',
     files: Object.freeze({
         'index.js': 'fc7b3f0265b7a7d0fee83bafa47186a66495720d3179801c2be3083de6d0cf76',
         'package.json': 'bee0609d5ab09a590afe0e1209d3702b0afb0a3c158492f90902a724d889d22b',

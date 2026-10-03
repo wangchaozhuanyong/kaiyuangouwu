@@ -4,17 +4,20 @@ diff --git a/index.js b/index.js
 @@ -394,8 +394,8 @@
      evaluateRequest(req) {
          this._assertRequestHasHeaders(req);
- 
+-
++
 -        // In all circumstances, a cache MUST NOT ignore the must-revalidate directive
 -        if (this._rescc['must-revalidate']) {
 +        // Request directives cannot override restrictions on reusing the response.
 +        if (this._rescc['must-revalidate'] || this._requiresRevalidation()) {
              return this._evaluateRequestMissResult(req);
          }
- 
+-
++
 @@ -588,6 +588,23 @@
      }
- 
+-
++
      /**
 +     * Distinguishes reuse restrictions from ordinary expiration.
 +     * @returns {boolean} Whether this response must not be reused without validation.
@@ -55,10 +58,12 @@ diff --git a/index.js b/index.js
 +        if (this._requiresRevalidation()) {
              return 0;
          }
- 
+-
++
 @@ -617,9 +623,6 @@
          }
- 
+-
++
          if (this._isShared) {
 -            if (this._rescc['proxy-revalidate']) {
 -                return 0;
