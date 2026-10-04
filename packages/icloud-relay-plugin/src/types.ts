@@ -32,10 +32,16 @@ export interface IcloudRelayPluginOptions {
      */
     encryptionKey?: string;
     /**
-     * Automatic sync interval in seconds. Set to 0 to disable background cron sync.
-     * Default: 120 seconds.
+     * @deprecated Mail synchronization uses IDLE; this setting is ignored.
+     * Use realtimeEnabled to enable or disable the listener.
      */
     syncIntervalSeconds?: number;
+    /** Event-driven IMAP IDLE. No automatic NOOP/polling fallback. Default true. */
+    realtimeEnabled?: boolean;
+    maxIdleConnections?: number;
+    /** HTTPS endpoint in the ID system. Both systems configure the same dedicated secret. */
+    mailWebhookUrl?: string;
+    mailWebhookSecret?: string;
     /**
      * Email retention period in days. Emails older than this will be pruned.
      * Default: 30 days (0 = keep forever).

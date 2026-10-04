@@ -975,7 +975,9 @@ export const devConfig: VendureConfig = {
         OperationsDashboardPlugin,
         TwoFactorDashboardPlugin,
         IcloudRelayPlugin.init({
-            syncIntervalSeconds: 120,
+            realtimeEnabled: true,
+            mailWebhookUrl: process.env.ICLOUD_MAIL_WEBHOOK_URL,
+            mailWebhookSecret: process.env.ICLOUD_MAIL_WEBHOOK_SECRET,
             retentionDays: 30,
         }),
         ...(!BOOTSTRAP_BASE_SCHEMA
