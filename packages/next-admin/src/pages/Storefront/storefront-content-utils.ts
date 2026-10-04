@@ -1,4 +1,3 @@
-import { STOREFRONT_ACCOUNT_HERO_CODE } from '../../../../storefront-content-plugin/src/account-hero-config';
 import { homepageModuleCatalog } from '../../../../storefront-content-plugin/src/homepage-manifest';
 import { imageBindingKey } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { supportFaqValidation } from '../../../../storefront-content-plugin/src/support-faq';
@@ -194,17 +193,6 @@ export function newContentBlock(
             supportItem(4, 'QQ_GROUP', 'QQ 群', 'QQ group', false),
         ];
     }
-    return block;
-}
-
-export function newAccountHeroBlock(position: number): StorefrontContentBlock {
-    const block = newContentBlock('ACCOUNT_HERO', position, '个人中心头图');
-    block.code = STOREFRONT_ACCOUNT_HERO_CODE;
-    block.enabled = true;
-    block.translations = [
-        { ...emptyBlockTranslation('zh_Hans'), title: '个人中心头图' },
-        { ...emptyBlockTranslation('en'), title: 'Account hero' },
-    ];
     return block;
 }
 

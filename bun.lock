@@ -636,6 +636,7 @@
       "devDependencies": {
         "@types/express": "^5.0.0",
         "@vendure/storefront-cart-plugin": "0.1.0",
+        "@vendure/storefront-content-plugin": "0.1.0",
         "typescript": "5.8.2",
         "vitest": "^4.1.11",
       },

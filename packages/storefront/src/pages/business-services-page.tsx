@@ -94,6 +94,13 @@ export function BusinessServicesPage() {
             )}
             <div className="business-services-workspace">
                 <header className="business-services-heading">
+                    {heroImageUrl ? (
+                        <div className="business-services-hero-media">
+                            <SafeImage src={heroImageUrl} alt="" imageKind="hero" />
+                        </div>
+                    ) : (
+                        <ServiceArchitectureMotif />
+                    )}
                     <div className="business-services-heading-copy">
                         {/* Both viewports render the same Admin-managed title, description and action. */}
                         <h1 className="business-services-page-title">{heroTitle}</h1>
@@ -110,13 +117,6 @@ export function BusinessServicesPage() {
                         ) : null}
                         <p>{heroDescription}</p>
                     </div>
-                    {heroImageUrl ? (
-                        <div className="business-services-hero-media">
-                            <SafeImage src={heroImageUrl} alt="" imageKind="hero" />
-                        </div>
-                    ) : (
-                        <ServiceArchitectureMotif />
-                    )}
                 </header>
                 <ClientPluginSlot
                     block={clientPluginBlock}

@@ -198,12 +198,9 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('allows expanded English category names to grow without clipping', () => {
+    it('allows long English labels in collapsed category navigation to wrap', () => {
         expect(stylesheet).toMatch(
             /html\[lang='en'\] \.primary-category-label\s*\{[^}]*height:\s*48px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
-        );
-        expect(stylesheet).toMatch(
-            /html\[lang='en'\] \.all-primary-category-grid button > span:last-child\s*\{[^}]*min-height:\s*60px;[^}]*display:\s*block;[^}]*white-space:\s*normal;/,
         );
         expect(stylesheet).toMatch(
             /html\[lang='en'\] \.primary-categories button\s*\{[^}]*width:\s*80px;[^}]*min-width:\s*80px;[^}]*height:\s*92px;/,

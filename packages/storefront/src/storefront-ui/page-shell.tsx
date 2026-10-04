@@ -570,14 +570,8 @@ export function Sheet({
         previousFocusRef.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const releaseBodyScrollLock = acquireBodyScrollLock();
-        const focusableSelector = [
-            'a[href]',
-            'button:not([disabled])',
-            'input:not([disabled])',
-            'select:not([disabled])',
-            'textarea:not([disabled])',
-            '[tabindex]:not([tabindex="-1"])',
-        ].join(',');
+        const focusableSelector =
+            'a[href],:is(button,input,select,textarea):not([disabled]),[tabindex]:not([tabindex="-1"])';
         const getFocusableElements = () =>
             Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
                 element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
@@ -652,6 +646,7 @@ export function Sheet({
                 <header>
                     <strong id={titleId}>{title}</strong>
                     <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
+                        {side && <ArrowLeft className="sheet-back-icon" aria-hidden="true" />}
                         <X aria-hidden="true" />
                     </button>
                 </header>

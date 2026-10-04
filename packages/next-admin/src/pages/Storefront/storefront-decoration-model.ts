@@ -26,15 +26,13 @@ export function decorationDraft(
               ? '/login'
               : block.type === 'AUTH_REGISTER'
                 ? '/register'
-                : block.type === 'ACCOUNT_HERO'
-                  ? '/account'
-                  : block.type === 'CLIENT_PLUGINS'
-                    ? '/category'
-                    : block.type === 'LEGAL'
-                      ? '/legal?id=privacy'
-                      : block.settings?.purpose === 'desktop-category-banner'
-                        ? '/category'
-                        : '/';
+                : block.type === 'CLIENT_PLUGINS'
+                  ? '/category'
+                  : block.type === 'LEGAL'
+                    ? '/legal?id=privacy'
+                    : block.settings?.purpose === 'desktop-category-banner'
+                      ? '/category'
+                      : '/';
     return {
         language: language === 'zh_Hans' ? 'zh' : 'en',
         route,

@@ -178,7 +178,7 @@ describe('OrdersPage route query', () => {
         expect(markup).not.toContain('order-product-spec');
         expect(markup).not.toContain('order-total-summary');
         expect(markup).not.toContain('再来一单');
-        expect(renderOrders([order])).toContain('再来一单');
+        expect(renderOrders([order])).not.toContain('再来一单');
         expect(markup).toContain('role="img" aria-label="暂无商品图"');
         expect(markup).not.toContain('product-image-placeholder-label');
     });

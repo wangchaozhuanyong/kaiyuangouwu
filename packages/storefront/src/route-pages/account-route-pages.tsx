@@ -1,6 +1,5 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
-import { STOREFRONT_ACCOUNT_HERO_CODE } from '../../../storefront-content-plugin/src/account-hero-config';
 import {
     AccountPageContext,
     BrowsingHistoryPageContext,
@@ -47,12 +46,6 @@ export function AccountRoutePage() {
                     reviewEnabled: runtime.reviewSettingsStatus === 'enabled',
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,
-                    accountHeroImageUrl: runtime.contentBlocks.find(
-                        block =>
-                            block.type === 'ACCOUNT_HERO' &&
-                            block.code === STOREFRONT_ACCOUNT_HERO_CODE &&
-                            block.enabled,
-                    )?.imageUrl,
                     favoriteProductCount: runtime.favoriteProductIds.length,
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
