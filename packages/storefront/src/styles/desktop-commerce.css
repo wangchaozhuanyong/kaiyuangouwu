@@ -6,8 +6,7 @@
         max-width: none;
         background: var(--bg);
         color: var(--text);
-        font-family:
-            var(--font-ui);
+        font-family: var(--font-ui);
     }
     html,
     body {
@@ -1009,7 +1008,7 @@
     }
     .desktop-account-help {
         display: grid;
-        gap: 10px;
+        gap: 0;
         padding-top: 16px;
     }
     .desktop-account-help button {
@@ -1018,13 +1017,17 @@
         align-items: center;
         gap: 12px;
         border: 0;
-        border-radius: var(--skin-control-radius);
-        background: var(--control-surface);
+        border-radius: 0;
+        background: transparent;
         padding: 14px;
         text-align: left;
         color: var(--text);
         font-size: var(--type-label-size);
         line-height: var(--type-label-leading);
+    }
+    /* Adjacent help entries use the user-requested subtle reading divider. */
+    .desktop-account-help > button + button {
+        border-top: 1px solid var(--skin-divider);
     }
     .desktop-account-help button > span {
         display: grid;
@@ -1086,7 +1089,9 @@
         width: 14px;
     }
     @media (hover: hover) and (pointer: fine) {
-        .desktop-account-help button:hover,
+        .desktop-account-help button:hover {
+            color: var(--accent-ink);
+        }
         .desktop-account-support:hover,
         .desktop-delivery-action:hover {
             background: var(--interaction-hover);

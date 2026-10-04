@@ -288,6 +288,8 @@ describe('storefront skin system', () => {
                                 ' + :is(.security-item-btn, .security-item-static)::before',
                             'styles/address-surfaces.css|.address-card + .address-card::before',
                             'styles/checkout-payment-surfaces.css|.price-summary .summary-total',
+                            // User requested flat help entries separated only by a subtle line.
+                            'styles/desktop-commerce.css|.desktop-account-help > button + button',
                             'styles/logistics.css|.delivery-table tr + tr',
                             'styles/notifications.css|.notification-list > button + button::before',
                             'styles/order-aftercare.css|.order-detail-products article + article::before',
