@@ -268,6 +268,34 @@ describe('mail portal store configuration', () => {
 });
 
 describe('buyer recent mail display and error states', () => {
+    it('copies only the extracted numeric code from a ChatGPT mail', async () => {
+        const { window, document, requests } = await portal();
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(window.navigator, 'clipboard', { value: { writeText }, configurable: true });
+        const query = window.doQuery('BUY-TEST-MAIL');
+        requests[0].resolve({
+            ...result('Your temporary ChatGPT verification code', 'VIRTUAL'),
+            totalEmails: 1,
+            items: [
+                {
+                    id: 'otp-mail',
+                    subject: 'Your temporary ChatGPT verification code',
+                    fromName: 'ChatGPT',
+                    bodyText: 'ChatGPT\nEnter this temporary verification code to continue:\n482913',
+                    extractedCode: '482913',
+                },
+            ],
+        });
+        await query;
+
+        expect(document.querySelector('.otp-code-text')?.textContent).toBe('482913');
+        const button = document.querySelector('.otp-copy-btn') as HTMLButtonElement;
+        expect(button.getAttribute('data-otp')).toBe('482913');
+        button.click();
+        await Promise.resolve();
+        expect(writeText).toHaveBeenCalledExactlyOnceWith('482913');
+    });
+
     it('shows and saves history only for a verified store', async () => {
         const record = (code: string) => JSON.stringify([{ code, updatedAt: Date.now() }]);
         const storage = {

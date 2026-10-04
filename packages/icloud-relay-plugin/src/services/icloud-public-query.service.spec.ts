@@ -2,6 +2,7 @@ import { RequestContext, TransactionalConnection } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
+import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 import { IcloudPublicQueryService } from './icloud-public-query.service';
 
 describe('public mail recipient mapping', () => {
@@ -31,6 +32,7 @@ describe('public mail recipient mapping', () => {
         const service = new IcloudPublicQueryService(
             connection as unknown as TransactionalConnection,
             new IcloudAccessCodeService(),
+            new IcloudOtpExtractorService(),
         );
         const result = await service.queryByCode({} as RequestContext, 'MSTR-TEST-TEST', '127.0.0.1');
         expect(result.items.map(item => [item.virtualEmailId, item.targetEmail])).toEqual([
@@ -40,4 +42,64 @@ describe('public mail recipient mapping', () => {
         ]);
         expect(result.virtualEmailsList?.map(item => item.id)).toEqual(['v1', 'v2']);
     });
+});
+
+describe('public mail verification codes', () => {
+    it.each(['PRIMARY', 'VIRTUAL'])(
+        'corrects historical codes for %s queries without rewriting mail',
+        async target => {
+            const subject = 'Your temporary ChatGPT verification code';
+            const mails = [
+                {
+                    id: 'm1',
+                    virtualEmailId: 'v1',
+                    subject,
+                    bodyText: 'ChatGPT\nEnter this temporary verification code to continue:\n482913',
+                    extractedCode: 'ChatGPT',
+                },
+                {
+                    id: 'm2',
+                    virtualEmailId: 'v1',
+                    subject,
+                    bodyText: 'ChatGPT',
+                    extractedCode: 'ChatGPT',
+                },
+            ];
+            const mailRepo = { find: vi.fn().mockResolvedValue(mails), save: vi.fn(), update: vi.fn() };
+            const repos: Record<string, unknown> = {
+                IcloudQueryAuditLog: { save: vi.fn() },
+                IcloudVirtualEmail: {
+                    findOne: vi
+                        .fn()
+                        .mockResolvedValue(
+                            target === 'VIRTUAL' ? { id: 'v1', aliasEmail: 'alias@example.com' } : null,
+                        ),
+                    find: vi.fn().mockResolvedValue([]),
+                    update: vi.fn(),
+                },
+                IcloudPrimaryAccount: {
+                    findOne: vi.fn().mockResolvedValue({ id: 'p1', email: 'owner@example.com' }),
+                    update: vi.fn(),
+                },
+                IcloudReceivedMail: mailRepo,
+            };
+            const connection = {
+                getRepository: (_ctx: unknown, entity: { name: string }) => repos[entity.name],
+            };
+            const service = new IcloudPublicQueryService(
+                connection as unknown as TransactionalConnection,
+                new IcloudAccessCodeService(),
+                new IcloudOtpExtractorService(),
+            );
+
+            const result = await service.queryByCode({} as RequestContext, 'TEST-QUERY', '127.0.0.1');
+
+            expect(result.success).toBe(true);
+            expect(result.targetType).toBe(target);
+            expect(result.items.map(item => item.extractedCode)).toEqual(['482913', null]);
+            expect(mails.map(mail => mail.extractedCode)).toEqual(['ChatGPT', 'ChatGPT']);
+            expect(mailRepo.save).not.toHaveBeenCalled();
+            expect(mailRepo.update).not.toHaveBeenCalled();
+        },
+    );
 });

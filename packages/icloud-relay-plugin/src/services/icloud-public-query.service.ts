@@ -16,6 +16,7 @@ import {
 } from '../types';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
+import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 @Injectable()
 export class IcloudPublicQueryService {
@@ -25,6 +26,7 @@ export class IcloudPublicQueryService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly codeService: IcloudAccessCodeService,
+        private readonly otpExtractor: IcloudOtpExtractorService,
     ) {}
 
     /**
@@ -324,7 +326,8 @@ export class IcloudPublicQueryService {
             fromName: mail.fromName,
             subject: mail.subject,
             receivedAt: mail.receivedAt,
-            extractedCode: mail.extractedCode,
+            // Recompute on read so historical extraction errors do not reach the copy button.
+            extractedCode: this.otpExtractor.extractCode(mail.subject, mail.bodyText || ''),
             bodyText: mail.bodyText,
             bodyHtml: mail.bodyHtml,
             targetEmail: this.maskEmail(targetEmail),
