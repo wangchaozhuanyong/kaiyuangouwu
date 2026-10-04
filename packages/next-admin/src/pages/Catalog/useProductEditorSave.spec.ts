@@ -159,6 +159,20 @@ describe('product save orchestration', () => {
         mocks.mutate.mockReset();
     });
 
+    it('preserves multiline descriptions and blank paragraphs in the saved translation', async () => {
+        const input = fixture();
+        const description =
+            '使用说明及售后质保规则\n\n一、商品与服务说明\n1. 服务周期为一个月\n\n四、退款计算方式\n900÷30×（30－10）＝600元';
+        input.draft.description = description;
+        await useProductEditorSave(input).handleSave();
+        const saved = mocks.mutations.get(UPDATE_PRODUCT)!.mock.calls[0][0].variables.input;
+        expect(
+            saved.translations.find((item: { languageCode: string }) => item.languageCode === 'zh_Hans')
+                .description,
+        ).toBe(description);
+        expect(input.controls.showError).not.toHaveBeenCalled();
+    });
+
     it('rejects duplicate SKU codes before making any write', async () => {
         const input = fixture();
         input.draft.variants.push({ ...input.draft.variants[0], id: undefined, isNew: true, sku: ' sku-1 ' });

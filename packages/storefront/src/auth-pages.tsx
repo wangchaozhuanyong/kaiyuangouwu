@@ -26,6 +26,7 @@ import {
     authPresentation,
     authVisualStyle,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
+import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
 import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
 
 import { ShopApi, ShopApiError } from './api';
@@ -1505,12 +1506,12 @@ function AuthLayout({
                                 <div className="auth-hero-copy">
                                     {heroMessage.title && <h2>{heroMessage.title}</h2>}
                                     {(heroMessage.description || !hasManagedHero) && (
-                                        <p>
+                                        <ContentText>
                                             {heroMessage.description ||
                                                 (language === 'zh'
                                                     ? `在${storefrontName}安全地管理您的账户与订单。`
                                                     : `Manage your account and orders securely with ${storefrontName}.`)}
-                                        </p>
+                                        </ContentText>
                                     )}
                                 </div>
                             )}
@@ -1539,7 +1540,9 @@ function AuthLayout({
                                                     </span>
                                                     <strong>{benefit.title}</strong>
                                                     {benefit.description && (
-                                                        <small>{benefit.description}</small>
+                                                        <ContentText as="small">
+                                                            {benefit.description}
+                                                        </ContentText>
                                                     )}
                                                 </div>
                                             );

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
+import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
+
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
@@ -401,7 +403,7 @@ export function ReviewCenterPage({
                                             </header>
                                             <ReviewStars rating={review.rating} />
                                             <strong>{review.title}</strong>
-                                            <p>{review.body}</p>
+                                            <ContentText>{review.body}</ContentText>
                                             {review.images?.length > 0 && (
                                                 <ReviewImageGallery
                                                     images={review.images}
@@ -531,7 +533,7 @@ export function ProductReviewsSection({
                                 <div className="product-review-copy">
                                     <ReviewStars rating={review.rating} />
                                     <strong>{review.title}</strong>
-                                    <p>{review.body}</p>
+                                    <ContentText>{review.body}</ContentText>
                                     {review.orderLineId && (
                                         <em>
                                             <CheckCircle2 aria-hidden="true" />

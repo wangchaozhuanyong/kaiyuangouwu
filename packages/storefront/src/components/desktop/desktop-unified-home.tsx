@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronLeft, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { ContentText } from '../../../../storefront-content-plugin/src/shared/content-text';
 import { productAvailability } from '../../product-availability';
 import { minimumProductPrice, renderColorfulQuickIcon, SafeImage } from '../../storefront-ui/product-display';
 import {
@@ -132,7 +133,7 @@ export function DesktopUnifiedHome({
                                 {heroEyebrow}
                             </span>
                             <h1 className="proto-flagship-title">{heroTitle}</h1>
-                            <p className="proto-flagship-desc">{heroDescription}</p>
+                            <ContentText className="proto-flagship-desc">{heroDescription}</ContentText>
                         </div>
                         <div className="proto-flagship-actions">
                             <button
@@ -223,9 +224,9 @@ export function DesktopUnifiedHome({
                                                 <span>
                                                     <span className="proto-tool-name">{item.label}</span>
                                                     {item.description && (
-                                                        <span className="proto-tool-sub">
+                                                        <ContentText as="span" className="proto-tool-sub">
                                                             {item.description}
-                                                        </span>
+                                                        </ContentText>
                                                     )}
                                                 </span>
                                             </span>

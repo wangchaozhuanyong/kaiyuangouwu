@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
 import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
@@ -780,10 +781,7 @@ export function ProductDetailPage() {
                 <section className="detail-block detail-description">
                     <h2>{isZh ? '商品详情' : 'Description'}</h2>
                     {descriptionHtml ? (
-                        <div
-                            className="detail-rich-text"
-                            dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-                        />
+                        <ContentText as="div" className="detail-rich-text" html={descriptionHtml} />
                     ) : (
                         <p>
                             {isZh

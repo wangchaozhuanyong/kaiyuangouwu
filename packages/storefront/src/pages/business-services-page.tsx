@@ -1,7 +1,7 @@
 import { ExternalLink, Puzzle } from 'lucide-react';
-
 import './business-services-page.css';
 
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -115,7 +115,7 @@ export function BusinessServicesPage() {
                                 <ExternalLink aria-hidden="true" />
                             </button>
                         ) : null}
-                        <p>{heroDescription}</p>
+                        <ContentText>{heroDescription}</ContentText>
                     </div>
                 </header>
                 <ClientPluginSlot

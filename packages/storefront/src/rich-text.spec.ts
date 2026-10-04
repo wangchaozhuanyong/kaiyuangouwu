@@ -3,6 +3,38 @@ import { describe, expect, it } from 'vitest';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 
 describe('product description rich text', () => {
+    it.each(['\n', '\r\n', '\r'])('preserves textarea line breaks and blank lines (%j)', newline => {
+        const lines = [
+            '使用说明及售后质保规则',
+            '',
+            '一、商品与服务说明',
+            '1. 服务周期为一个月',
+            '2. API 调用费用另计',
+            '',
+            '四、退款计算方式',
+            '900÷30×（30－10）＝600元',
+        ];
+        expect(sanitizeProductDescription(lines.join(newline))).toBe(lines.join('<br>'));
+    });
+
+    it('keeps literal comparisons and placeholders in plain text', () => {
+        expect(sanitizeProductDescription('额度 < 10 & 剩余 > 0\n请填写<账号>')).toBe(
+            '额度 &lt; 10 &amp; 剩余 &gt; 0<br>请填写&lt;账号&gt;',
+        );
+    });
+
+    it('preserves legacy block boundaries and list numbering', () => {
+        const html = '<div>第一段</div><div>第二段</div><ol start="5"><li value="7">使用规则</li></ol>';
+        expect(sanitizeProductDescription(html)).toBe(html);
+        expect(productDescriptionText(html)).toBe('第一段 第二段 使用规则');
+    });
+
+    it('handles empty content without generating empty break markup', () => {
+        for (const value of [null, undefined, '', '\n  \r\n']) {
+            expect(sanitizeProductDescription(value)).toBe('');
+        }
+    });
+
     it('keeps supported formatting from the admin rich-text editor', () => {
         const result = sanitizeProductDescription(
             '<p>适合 <strong>日常使用</strong></p><ul><li>支付后交付</li></ul>',
@@ -55,6 +87,9 @@ describe('product description rich text', () => {
     });
 
     it('keeps description text formatting while removing media and empty image paragraphs', () => {
+        expect(sanitizeProductDescription('<p>First</p><p></p><p>Second</p>', { textOnly: true })).toBe(
+            '<p>First</p><p></p><p>Second</p>',
+        );
         expect(
             sanitizeProductDescription(
                 '<h2>商品说明</h2><p>经典<strong>浓香</strong></p>' +

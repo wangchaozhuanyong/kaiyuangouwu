@@ -2,11 +2,10 @@
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowUpRight, Check, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import type { ShopApi } from '../api';
 import { storefrontVisitorId } from '../referral-attribution';
 import { storefrontErrorMessage } from '../storefront-errors';
-
-import '../styles/modals-and-support.css';
 
 import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
@@ -16,6 +15,7 @@ import { SafeImage } from '../safe-image';
 import { SupportPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
+import '../styles/modals-and-support.css';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
@@ -167,7 +167,7 @@ export function SupportContent({
                 <div>
                     <span>{isZh ? '客户支持' : 'Customer support'}</span>
                     <h1>{supportPageTitle(content, language)}</h1>
-                    {content.subtitle.trim() ? <p>{content.subtitle.trim()}</p> : null}
+                    {content.subtitle.trim() ? <ContentText>{content.subtitle.trim()}</ContentText> : null}
                 </div>
                 <div className="support-desktop-hero-media" aria-hidden="true">
                     {content.imageUrl ? (
@@ -205,7 +205,9 @@ export function SupportContent({
                     </button>
                 </section>
             ) : null}
-            {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
+            {content.subtitle.trim() ? (
+                <ContentText className="support-page-intro">{content.subtitle.trim()}</ContentText>
+            ) : null}
             <div className="support-workspace">
                 <div className="support-contact-panel">
                     {channels.length ? (
@@ -288,7 +290,7 @@ export function SupportContent({
                     {channels.length && service.note ? (
                         <section className="support-contact-note">
                             <h3>{isZh ? '咨询说明' : 'Before you contact us'}</h3>
-                            <p>{service.note}</p>
+                            <ContentText>{service.note}</ContentText>
                         </section>
                     ) : null}
                 </div>

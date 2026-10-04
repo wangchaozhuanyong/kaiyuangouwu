@@ -1,0 +1,86 @@
+.content-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.content-text[data-content-format='plain'] {
+    white-space: pre-wrap;
+}
+
+.content-text[data-content-format='rich'] {
+    white-space: normal;
+}
+
+.content-text[data-content-format='rich'] :is(p, blockquote, ul, ol, pre, figure, table) {
+    margin-block: 0.75em;
+}
+
+.content-text[data-content-format='rich'] :is(p, li, h1, h2, h3, h4, h5, h6, th, td) {
+    white-space: pre-wrap;
+}
+
+.content-text[data-content-format='rich'] p:empty {
+    min-height: 1lh;
+}
+
+.content-text[data-content-format='rich'] :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1em 0.5em;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
+}
+
+.content-text[data-content-format='rich'] :is(ul, ol) {
+    padding-inline-start: 1.5em;
+}
+
+.content-text[data-content-format='rich'] ul {
+    list-style-type: disc;
+}
+
+.content-text[data-content-format='rich'] ol {
+    list-style-type: decimal;
+}
+
+.content-text[data-content-format='rich'] li + li {
+    margin-block-start: 0.35em;
+}
+
+.content-text[data-content-format='rich'] blockquote {
+    border-inline-start: 3px solid var(--line, #e2e8f0);
+    padding-inline-start: 1em;
+}
+
+.content-text[data-content-format='rich'] pre {
+    white-space: pre-wrap;
+}
+
+.content-text[data-content-format='rich'] a {
+    color: var(--accent, #635bff);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.content-text[data-content-format='rich'] img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 7px;
+}
+
+.content-text[data-content-format='rich'] table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.content-text[data-content-format='rich'] :is(th, td) {
+    padding: 8px;
+    border: 1px solid var(--line, #e2e8f0);
+    text-align: start;
+}
+
+.content-text[data-content-format='rich'] > :first-child {
+    margin-block-start: 0;
+}
+
+.content-text[data-content-format='rich'] > :last-child {
+    margin-block-end: 0;
+}

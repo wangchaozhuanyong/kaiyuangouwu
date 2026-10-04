@@ -10,6 +10,7 @@ import {
 
 import { normalizedHeroThemePreset } from '../content-visuals';
 
+import { ContentText } from './content-text';
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
 export interface HeroSceneData extends HeroThemeData {
@@ -84,11 +85,11 @@ export function HeroScene({
                     {subtitle && (
                         <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
                             {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
-                            <span>{subtitle}</span>
+                            <ContentText as="span">{subtitle}</ContentText>
                         </div>
                     )}
                     <h1 className="hero-rich-title">{title}</h1>
-                    {body && <p className="hero-rich-desc">{body}</p>}
+                    {body && <ContentText className="hero-rich-desc">{body}</ContentText>}
                 </div>
                 {items.length > 0 && (
                     <div className="hero-rich-stats-row">
@@ -98,7 +99,9 @@ export function HeroScene({
                                 key={`${item.label}-${index}`}
                             >
                                 <span className="stat-num">{item.label}</span>
-                                <span className="stat-lbl">{item.description}</span>
+                                <ContentText as="span" className="stat-lbl">
+                                    {item.description}
+                                </ContentText>
                             </div>
                         ))}
                     </div>

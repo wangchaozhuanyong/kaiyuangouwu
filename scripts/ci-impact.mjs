@@ -6,13 +6,19 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 export const STATIC_APPS = ['storefront', 'next-admin'];
-// This stylesheet is imported by storefront home-showcase.css; it has no server consumer.
-export const staticStyleOwner = file =>
-    file === 'packages/storefront-content-plugin/src/shared/hero-scene.css' ? 'storefront' : undefined;
+// These shared renderers/styles have only browser consumers in both static apps.
+const sharedStaticInputs = new Set([
+    'packages/storefront-content-plugin/src/shared/hero-scene.css',
+    'packages/storefront-content-plugin/src/shared/hero-scene.tsx',
+    'packages/storefront-content-plugin/src/shared/auth-visual.tsx',
+    'packages/storefront-content-plugin/src/shared/content-text.tsx',
+    'packages/storefront-content-plugin/src/shared/content-text.css',
+]);
+export const staticStyleOwner = file => (sharedStaticInputs.has(file) ? 'storefront' : undefined);
 // The Admin decoration preview compiles the storefront router and CSS into its own bundle.
 export const storefrontPreviewInput = file =>
     (file.startsWith('packages/storefront/src/') && !/\.(spec|test)\.[cm]?[jt]sx?$/u.test(file)) ||
-    file === 'packages/storefront-content-plugin/src/shared/hero-scene.css';
+    Boolean(staticStyleOwner(file));
 export const affectedFrontendsForFile = file =>
     sorted([
         ...(staticStyleOwner(file) || file.startsWith('packages/storefront/') ? ['storefront'] : []),

@@ -1715,7 +1715,7 @@ describe('HomePage category promotion', () => {
             contentBlocks: [categoryAdBlock],
         });
 
-        expect(markup).toContain('class="section-header-end-subtitle">右侧副标题</p>');
+        expect(markup).toMatch(/class="[^"]*\bsection-header-end-subtitle\b[^"]*"[^>]*>右侧副标题<\/p>/);
         expect(markup).not.toContain('不应显示的按钮文案');
     });
 

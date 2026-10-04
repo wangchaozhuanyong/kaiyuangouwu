@@ -702,14 +702,6 @@
     white-space: pre-wrap;
 }
 
-.detail-rich-text > :first-child {
-    margin-top: 0;
-}
-
-.detail-rich-text > :last-child {
-    margin-bottom: 0;
-}
-
 .detail-rich-text :is(figure, table, pre) {
     max-width: 100%;
 }
