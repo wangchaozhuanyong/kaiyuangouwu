@@ -1,7 +1,9 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { PlatformResourcePanel } from './PlatformResourcePanel';
 import { PlatformSupplyDialog } from './PlatformSupplyDialog';
@@ -94,7 +96,6 @@ export function StoreAllocationMatrixModule() {
     const [message, setMessage] = useState('');
     const query = useQuery<{ platformCatalogProducts: Catalog }>(CATALOG, {
         variables: { skip: page * 50, term },
-        fetchPolicy: 'network-only',
     });
     const [preview, previewStatus] = useMutation<{ previewPlatformCatalogDistribution: Receipt }>(PREVIEW);
     const [execute, executeStatus] = useMutation<{ executePlatformCatalogDistribution: Receipt }>(EXECUTE);
@@ -162,9 +163,14 @@ export function StoreAllocationMatrixModule() {
                         统筹商品维护归属、销售授权和各经营店覆盖情况；整类分配为一次性操作。
                     </p>
                 </div>
-                <button className={control} onClick={() => void query.refetch()} disabled={query.loading}>
+                <AdminButton
+                    refreshPage
+                    className={control}
+                    onClick={() => void query.refetch()}
+                    disabled={query.loading}
+                >
                     刷新
-                </button>
+                </AdminButton>
             </header>
             {query.error && (
                 <p role="alert" className="text-red-600 dark:text-red-400">
@@ -195,7 +201,7 @@ export function StoreAllocationMatrixModule() {
                         <FeatureHelpButton topic="catalog.platform-distribution" title="1. 选择商品或整类" />
                     </h2>
                     <div className="flex flex-wrap gap-3">
-                        <input
+                        <AdminInput
                             aria-label="搜索商品"
                             className={control}
                             placeholder="搜索商品"
@@ -205,7 +211,7 @@ export function StoreAllocationMatrixModule() {
                                 setPage(0);
                             }}
                         />
-                        <select
+                        <AdminSelect
                             aria-label="来源分类"
                             className={control}
                             value={categoryId}
@@ -222,9 +228,9 @@ export function StoreAllocationMatrixModule() {
                                         '待核对'}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                         <label className="flex items-center gap-2">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={descendants}
                                 onChange={e => {
@@ -249,7 +255,7 @@ export function StoreAllocationMatrixModule() {
                                 {data?.items.map(p => (
                                     <tr key={p.id} className="border-b border-slate-100">
                                         <td className="py-3">
-                                            <input
+                                            <AdminInput
                                                 aria-label={`选择 ${p.name}`}
                                                 type="checkbox"
                                                 disabled={Boolean(categoryId) || !p.ownerChannelId}
@@ -275,7 +281,7 @@ export function StoreAllocationMatrixModule() {
                                                             key={v.id}
                                                             className="flex items-center gap-1 text-xs"
                                                         >
-                                                            <input
+                                                            <AdminInput
                                                                 aria-label={`授权规格 ${v.name}`}
                                                                 type="checkbox"
                                                                 checked={(
@@ -298,12 +304,12 @@ export function StoreAllocationMatrixModule() {
                                                 </div>
                                             )}{' '}
                                             {p.ownerChannelId && (
-                                                <button
+                                                <AdminButton
                                                     className="ml-3 text-xs text-blue-600"
                                                     onClick={() => setSupplyProduct(p)}
                                                 >
                                                     供货设置
-                                                </button>
+                                                </AdminButton>
                                             )}
                                         </td>
                                         <td>
@@ -324,22 +330,26 @@ export function StoreAllocationMatrixModule() {
                             </tbody>
                         </table>
                     </div>
-                    {query.loading && <p role="status">读取中…</p>}
+                    {query.loading && !query.data && <p role="status">读取中…</p>}
                     {data && !data.items.length && <p className="text-slate-500">没有符合条件的商品</p>}
                     <div className="flex items-center gap-4">
-                        <button className={control} disabled={page === 0} onClick={() => setPage(page - 1)}>
+                        <AdminButton
+                            className={control}
+                            disabled={page === 0}
+                            onClick={() => setPage(page - 1)}
+                        >
                             上一页
-                        </button>
+                        </AdminButton>
                         <span>
                             第 {page + 1} 页 · {data?.totalItems ?? '未获取'} 个
                         </span>
-                        <button
+                        <AdminButton
                             className={control}
                             disabled={!data || (page + 1) * 50 >= data.totalItems}
                             onClick={() => setPage(page + 1)}
                         >
                             下一页
-                        </button>
+                        </AdminButton>
                     </div>
                 </section>
                 <section className="min-w-0 rounded-xl bg-white p-4 space-y-3">
@@ -356,7 +366,7 @@ export function StoreAllocationMatrixModule() {
                     {data?.channels.map(store => (
                         <div className="flex flex-wrap items-center gap-4" key={store.id}>
                             <label className="flex items-center gap-2">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={targets.includes(store.id)}
                                     onChange={() => {
@@ -367,7 +377,7 @@ export function StoreAllocationMatrixModule() {
                                 {store.displayName} · {store.currencyCode}
                             </label>
                             {targets.includes(store.id) && (
-                                <select
+                                <AdminSelect
                                     aria-label={`${store.displayName}目标分类`}
                                     className={control}
                                     value={categoryTargets[store.id] ?? ''}
@@ -387,11 +397,11 @@ export function StoreAllocationMatrixModule() {
                                                 {c.name}
                                             </option>
                                         ))}
-                                </select>
+                                </AdminSelect>
                             )}
                         </div>
                     ))}
-                    <select
+                    <AdminSelect
                         aria-label="授权操作"
                         className={`${control} w-full`}
                         value={action}
@@ -402,8 +412,8 @@ export function StoreAllocationMatrixModule() {
                     >
                         <option value="GRANT">新增销售授权</option>
                         <option value="REVOKE">撤销销售授权（已付款订单继续履约）</option>
-                    </select>
-                    <button
+                    </AdminSelect>
+                    <AdminButton
                         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         disabled={
                             busy ||
@@ -414,7 +424,7 @@ export function StoreAllocationMatrixModule() {
                         onClick={() => void createPreview()}
                     >
                         生成预览
-                    </button>
+                    </AdminButton>
                 </section>
             </div>
             {receipt && (
@@ -450,7 +460,7 @@ export function StoreAllocationMatrixModule() {
                                 .map(p => (
                                     <label key={p.variantId} className="mt-2 flex items-center gap-3 text-sm">
                                         规格 {p.variantId} · {item.targetCurrencyCode}（最小货币单位）
-                                        <input
+                                        <AdminInput
                                             className={control}
                                             type="number"
                                             min="0"
@@ -479,17 +489,17 @@ export function StoreAllocationMatrixModule() {
                             )}
                         </div>
                     ))}
-                    <button
+                    <AdminButton
                         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         disabled={busy || receipt.state === 'COMPLETE' || message.includes('重新生成预览')}
                         onClick={() => void apply()}
                     >
                         {receipt.state === 'PARTIAL' ? '继续失败项目' : '确认执行此预览'}
-                    </button>
+                    </AdminButton>
                     {message.includes('重新生成预览') && (
-                        <button className={control} disabled={busy} onClick={() => void createPreview()}>
+                        <AdminButton className={control} disabled={busy} onClick={() => void createPreview()}>
                             重新生成预览
-                        </button>
+                        </AdminButton>
                     )}
                 </section>
             )}

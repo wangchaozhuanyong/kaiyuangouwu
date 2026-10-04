@@ -382,7 +382,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         <div className="two-factor-secret-field">
                             <input
                                 id="storefront-two-factor-secret"
-                                className={`${inputClass} font-mono`}
+                                className={`${inputClass} [font-family:var(--font-code)]`}
                                 type="password"
                                 maxLength={1024}
                                 autoComplete="off"
@@ -406,7 +406,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                             </button>
                         </div>
                         {quickError ? (
-                            <p className="m-0 text-sm font-semibold text-[var(--danger)]" role="alert">
+                            <p className="m-0 type-body weight-semibold text-[var(--danger)]" role="alert">
                                 {quickError}
                             </p>
                         ) : null}
@@ -424,10 +424,10 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         <div className="two-factor-query-result mt-6" aria-live="polite">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div>
-                                    <small className="font-bold text-[var(--muted)]">
+                                    <small className="weight-bold text-[var(--muted)]">
                                         {copy.currentCode}
                                     </small>
-                                    <p className="mb-0 mt-1 font-mono text-3xl font-black tracking-[0.16em] text-[var(--text)] sm:text-4xl">
+                                    <p className="mb-0 mt-1 [font-family:var(--font-code)] type-page weight-bold [letter-spacing:var(--tracking-code)] text-[var(--text)] sm:type-display">
                                         {formatTotpCode(quickCode)}
                                     </p>
                                 </div>
@@ -511,11 +511,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                     >
                         <span className="flex items-center gap-2">
                             <ShieldCheck className="size-5 text-[var(--muted)]" aria-hidden="true" />
-                            <span className="text-base font-black text-[var(--text)]">
+                            <span className="type-card weight-bold text-[var(--text)]">
                                 {copy.privacyTitle}
                             </span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-1 text-sm text-[var(--muted)]">
+                        <span className="flex shrink-0 items-center gap-1 type-body text-[var(--muted)]">
                             {showPrivacyDetails ? copy.collapse : copy.expand}
                             <ChevronDown
                                 className={`size-4 transition-transform ${showPrivacyDetails ? 'rotate-180' : ''}`}
@@ -525,7 +525,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                     </button>
                     {showPrivacyDetails ? (
                         <div id="storefront-two-factor-privacy-details">
-                            <ul className="mb-0 mt-4 grid gap-3 p-0 text-sm leading-5 text-[var(--muted)]">
+                            <ul className="mb-0 mt-4 grid gap-3 p-0 type-body [line-height:var(--line-height-body)] text-[var(--muted)]">
                                 {[
                                     copy.noDatabase,
                                     copy.noUpload,
@@ -545,7 +545,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     </li>
                                 ))}
                             </ul>
-                            <p className="mb-0 mt-4 text-xs leading-5 text-[var(--warning)]">
+                            <p className="mb-0 mt-4 type-helper [line-height:var(--line-height-body)] text-[var(--warning)]">
                                 <LockKeyhole
                                     className="mr-1 inline size-4 align-text-bottom"
                                     aria-hidden="true"
@@ -568,11 +568,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
-                            <h2 className="m-0 text-base sm:text-lg max-[350px]:text-sm font-black text-[var(--text)] whitespace-nowrap">
+                            <h2 className="m-0 type-card sm:type-section max-[350px]:type-body weight-bold text-[var(--text)] whitespace-nowrap">
                                 {copy.accountList}
                             </h2>
                             {!accountsLocked ? (
-                                <p className="mb-0 mt-0.5 sm:mt-1 text-xs font-semibold text-[var(--muted)] whitespace-nowrap">
+                                <p className="mb-0 mt-0.5 sm:mt-1 type-helper weight-semibold text-[var(--muted)] whitespace-nowrap">
                                     {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
                                 </p>
                             ) : null}
@@ -613,7 +613,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     className="two-factor-account-form mt-6 grid gap-3 md:grid-cols-2"
                                     onSubmit={event => void saveAccount(event)}
                                 >
-                                    <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
+                                    <label className="grid gap-1.5 type-body weight-bold text-[var(--text)]">
                                         {copy.projectName}
                                         <input
                                             className={inputClass}
@@ -622,10 +622,10 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                             onChange={event => setProjectName(event.target.value)}
                                         />
                                     </label>
-                                    <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
+                                    <label className="grid gap-1.5 type-body weight-bold text-[var(--text)]">
                                         {copy.secret}
                                         <input
-                                            className={`${inputClass} font-mono`}
+                                            className={`${inputClass} [font-family:var(--font-code)]`}
                                             type="password"
                                             maxLength={1024}
                                             autoComplete="off"
@@ -636,7 +636,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     </label>
                                     {accountError ? (
                                         <p
-                                            className="m-0 text-sm font-semibold text-[var(--danger)] md:col-span-2"
+                                            className="m-0 type-body weight-semibold text-[var(--danger)] md:col-span-2"
                                             role="alert"
                                         >
                                             {accountError}
@@ -664,13 +664,13 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                             {showBatchImport ? (
                                 <div className="two-factor-batch-form mt-6">
                                     <label
-                                        className="grid gap-1.5 text-sm font-bold text-[var(--text)]"
+                                        className="grid gap-1.5 type-body weight-bold text-[var(--text)]"
                                         htmlFor="storefront-two-factor-batch"
                                     >
                                         {copy.batchFormat}
                                         <textarea
                                             id="storefront-two-factor-batch"
-                                            className={`${inputClass} min-h-36 resize-y font-mono`}
+                                            className={`${inputClass} min-h-36 resize-y [font-family:var(--font-code)]`}
                                             maxLength={MAX_BATCH_CHARACTERS}
                                             autoComplete="off"
                                             spellCheck={false}
@@ -682,7 +682,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                             }}
                                         />
                                     </label>
-                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold">
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 type-helper weight-bold">
                                         <span className="text-[var(--success)]">
                                             {copy.validRows}: {batchResult.accounts.length}
                                         </span>
@@ -692,7 +692,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     </div>
                                     {batchValidated && batchResult.errors.length ? (
                                         <ul
-                                            className="mb-0 mt-3 max-h-36 overflow-y-auto pl-5 text-sm text-[var(--danger)]"
+                                            className="mb-0 mt-3 max-h-36 overflow-y-auto pl-5 type-body text-[var(--danger)]"
                                             role="alert"
                                         >
                                             {batchResult.errors.map(error => (
@@ -761,13 +761,13 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                         <strong className="mt-3 block text-[var(--text)]">
                                             {copy.emptyTitle}
                                         </strong>
-                                        <p className="mb-0 mt-1 text-sm text-[var(--muted)]">
+                                        <p className="mb-0 mt-1 type-body text-[var(--muted)]">
                                             {copy.emptyDescription}
                                         </p>
                                     </div>
                                 </div>
                             ) : !visibleAccounts.length ? (
-                                <p className="two-factor-empty mt-5 py-8 text-center text-sm text-[var(--muted)]">
+                                <p className="two-factor-empty mt-5 py-8 text-center type-body text-[var(--muted)]">
                                     {copy.noSearchResults}
                                 </p>
                             ) : (
@@ -783,12 +783,12 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                                 <div className="flex min-h-9 items-center gap-2">
                                                     <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
                                                         <h3
-                                                            className="m-0 max-w-[45%] shrink-0 truncate text-sm font-black text-[var(--text)]"
+                                                            className="m-0 max-w-[45%] shrink-0 truncate type-body weight-bold text-[var(--text)]"
                                                             title={account.projectName}
                                                         >
                                                             {account.projectName}
                                                         </h3>
-                                                        <code className="min-w-0 truncate text-[11px] text-[var(--muted)]">
+                                                        <code className="min-w-0 truncate type-meta text-[var(--muted)]">
                                                             {maskSecret(account.secret)}
                                                         </code>
                                                     </div>
@@ -815,7 +815,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                                 <div className="two-factor-account-code mt-2 flex min-h-12 items-center gap-2">
                                                     <div className="min-w-[6.9rem] shrink-0">
                                                         <span className="sr-only">{copy.dynamicCode}</span>
-                                                        <p className="m-0 whitespace-nowrap font-mono text-[1.35rem] font-black leading-none tracking-[0.12em] text-[var(--text)] tabular-nums">
+                                                        <p className="m-0 whitespace-nowrap [font-family:var(--font-code)] type-code weight-bold  [letter-spacing:var(--tracking-code)] text-[var(--text)] tabular-nums">
                                                             {code ? formatTotpCode(code) : '--- ---'}
                                                         </p>
                                                     </div>
@@ -824,7 +824,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                                         label={copy.seconds}
                                                     />
                                                     <button
-                                                        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--control-surface,var(--soft))] px-2 text-xs font-bold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                                                        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--control-surface,var(--soft))] px-2 type-helper weight-bold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
                                                         type="button"
                                                         disabled={!code}
                                                         onClick={() => void copyAccountCode(account)}
@@ -854,10 +854,10 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                     <div className="p-4">
                         <p>{deletion === 'all' ? copy.clearConfirm : copy.deleteConfirm}</p>
                         {deletion !== 'all' && (
-                            <p className="break-words font-bold">{deletion.projectName}</p>
+                            <p className="break-words weight-bold">{deletion.projectName}</p>
                         )}
                         {deletionError && (
-                            <p role="alert" className="text-sm text-[var(--danger)]">
+                            <p role="alert" className="type-body text-[var(--danger)]">
                                 {copy.deleteFailed}
                             </p>
                         )}
@@ -887,25 +887,25 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
 }
 
 const inputClass =
-    'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-transparent bg-[var(--soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--focus)] focus:ring-4 focus:ring-[var(--accent-soft)]';
+    'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-transparent bg-[var(--soft)] px-3 py-2 type-input outline-none transition focus:border-[var(--focus)] focus:ring-4 focus:ring-[var(--accent-soft)]';
 const primaryButtonClass =
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--skin-control-radius,10px)] bg-[var(--accent)] px-4 text-sm font-extrabold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+    'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--skin-control-radius,10px)] bg-[var(--accent)] px-4 type-body weight-bold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 const secondaryButtonClass =
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--skin-control-radius,10px)] border-0 bg-[var(--control-surface,var(--soft))] px-3 text-sm font-extrabold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+    'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--skin-control-radius,10px)] border-0 bg-[var(--control-surface,var(--soft))] px-3 type-body weight-bold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 const headerPrimaryButtonClass =
-    'inline-flex min-h-11 items-center justify-center gap-1 sm:gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--accent-soft)] px-2.5 sm:px-3.5 max-[350px]:px-2 text-xs sm:text-sm max-[350px]:text-[11px] font-extrabold text-[var(--accent-ink)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+    'inline-flex min-h-11 items-center justify-center gap-1 sm:gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--accent-soft)] px-2.5 sm:px-3.5 max-[350px]:px-2 type-helper sm:type-body max-[350px]:type-meta weight-bold text-[var(--accent-ink)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 const headerSecondaryButtonClass =
-    'inline-flex min-h-11 items-center justify-center gap-1 sm:gap-1.5 rounded-[var(--skin-control-radius,10px)] border-0 bg-transparent px-2.5 sm:px-3 max-[350px]:px-2 text-xs sm:text-sm max-[350px]:text-[11px] font-extrabold text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+    'inline-flex min-h-11 items-center justify-center gap-1 sm:gap-1.5 rounded-[var(--skin-control-radius,10px)] border-0 bg-transparent px-2.5 sm:px-3 max-[350px]:px-2 type-helper sm:type-body max-[350px]:type-meta weight-bold text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 const iconButtonClass =
     'inline-grid size-10 shrink-0 place-items-center rounded-[var(--skin-control-radius,10px)] border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] focus-visible:ring-offset-1';
 const descriptionToggleClass =
-    'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-[var(--skin-control-radius,10px)] px-2 py-1 text-sm font-extrabold text-[var(--accent-ink)] transition-colors hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+    'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-[var(--skin-control-radius,10px)] px-2 py-1 type-body weight-bold text-[var(--accent-ink)] transition-colors hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 
 function Countdown({ seconds, label }: Readonly<{ seconds: number; label: string }>) {
     return (
-        <div className="mt-3 flex items-center gap-2 text-xs font-bold text-[var(--muted)]">
+        <div className="mt-3 flex items-center gap-2 type-helper weight-bold text-[var(--muted)]">
             <Clock3 className="size-4" aria-hidden="true" />
-            <span className="min-w-10 font-mono">
+            <span className="min-w-10 [font-family:var(--font-code)]">
                 {seconds} {label}
             </span>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--skin-divider,var(--line))]">
@@ -921,9 +921,9 @@ function Countdown({ seconds, label }: Readonly<{ seconds: number; label: string
 function CompactCountdown({ seconds, label }: Readonly<{ seconds: number; label: string }>) {
     return (
         <div className="min-w-0 flex-1" aria-label={`${seconds} ${label}`}>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-[var(--muted)]">
+            <div className="flex items-center gap-1 type-meta weight-bold text-[var(--muted)]">
                 <Clock3 className="size-3.5" aria-hidden="true" />
-                <span className="whitespace-nowrap font-mono tabular-nums">
+                <span className="whitespace-nowrap [font-family:var(--font-code)] tabular-nums">
                     {seconds} {label}
                 </span>
             </div>
@@ -982,7 +982,7 @@ function AccountMoreMenu({
         <div className={`relative shrink-0 ${open ? 'z-[30]' : ''}`} ref={containerRef}>
             <button
                 ref={triggerRef}
-                className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-[var(--skin-control-radius,10px)] px-2 text-xs font-extrabold text-[var(--muted)] transition hover:bg-[var(--soft)] hover:text-[var(--text)] active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-[var(--skin-control-radius,10px)] px-2 type-helper weight-bold text-[var(--muted)] transition hover:bg-[var(--soft)] hover:text-[var(--text)] active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
                 type="button"
                 aria-label={`${account.projectName} ${copy.moreActions}`}
                 aria-haspopup="dialog"
@@ -999,14 +999,14 @@ function AccountMoreMenu({
                     aria-label={`${account.projectName} ${copy.moreActions}`}
                 >
                     <div className="p-3">
-                        <span className="text-[11px] font-bold text-[var(--muted)]">{copy.secret}</span>
+                        <span className="type-meta weight-bold text-[var(--muted)]">{copy.secret}</span>
                         <code
-                            className="mt-1 block break-all py-1.5 text-xs text-[var(--text)]"
+                            className="mt-1 block break-all py-1.5 type-helper text-[var(--text)]"
                             aria-live="polite"
                         >
                             {revealed ? account.secret : maskSecret(account.secret)}
                         </code>
-                        <p className="mb-0 mt-2 text-xs text-[var(--muted)]">
+                        <p className="mb-0 mt-2 type-helper text-[var(--muted)]">
                             {copy.recentUse}: {formatRecentUse(account.lastUsedAt, now, copy)}
                         </p>
                     </div>
@@ -1049,7 +1049,7 @@ function AccountMoreMenu({
 }
 
 const moreMenuButtonClass = [
-    'flex min-h-11 w-full items-center gap-2 rounded-[var(--skin-control-radius,10px)] px-3 text-left text-sm font-bold',
+    'flex min-h-11 w-full items-center gap-2 rounded-[var(--skin-control-radius,10px)] px-3 text-left type-body weight-bold',
     'transition hover:bg-[var(--soft)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus)]',
 ].join(' ');
 

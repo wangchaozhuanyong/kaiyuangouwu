@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_COUPON_CAMPAIGN_MUTATION,
@@ -12,6 +13,7 @@ import {
     StoreCouponKind,
     StoreCouponRecord,
 } from '../../graphql/marketing.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
@@ -82,7 +84,6 @@ export function CouponEditor({
             },
         },
         skip: !hasScope,
-        fetchPolicy: 'cache-and-network',
     });
     const [create, state] = useMutation(CREATE_COUPON_CAMPAIGN_MUTATION);
     const validation = couponDraftError(draft);
@@ -295,7 +296,7 @@ export function CouponEditor({
                             避免客户因取消未履约订单损失优惠券
                         </small>
                     </span>
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.returnOnCancellation}
                         onChange={event => setDraft({ ...draft, returnOnCancellation: event.target.checked })}
@@ -307,7 +308,7 @@ export function CouponEditor({
                         <strong className="text-slate-800">全额退款后自动返券</strong>
                         <small className="block text-[10px] text-slate-400">部分退款不会自动返券</small>
                     </span>
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.returnOnFullRefund}
                         onChange={event => setDraft({ ...draft, returnOnFullRefund: event.target.checked })}
@@ -354,7 +355,6 @@ export function FlashEditor({
                 filter: deferredSearch ? { name: { contains: deferredSearch } } : {},
             },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const products = catalog.data?.products.items ?? [];
     const [create, state] = useMutation(CREATE_FLASH_SALE_MUTATION);
@@ -468,7 +468,7 @@ export function FlashEditor({
                                     <span className="font-mono text-slate-500">
                                         原价 {formatMoney(variant.priceWithTax, variant.currencyCode)}
                                     </span>
-                                    <input
+                                    <AdminInput
                                         type="number"
                                         value={draft.variantPrices[variant.id] ?? ''}
                                         onChange={event =>
@@ -539,7 +539,6 @@ export function GrantCouponDialog({
         };
     }>(MARKETING_CUSTOMER_LOOKUP_QUERY, {
         variables: { options: { take: 20, sort: dataTableSortPolicy.newestCreated, filter } },
-        fetchPolicy: 'cache-and-network',
     });
     const [grant, state] = useMutation(GRANT_STORE_COUPON_MUTATION);
     const submit = async (customerId: string) => {
@@ -567,7 +566,7 @@ export function GrantCouponDialog({
             )}
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
+                <AdminInput
                     value={search}
                     onChange={event => setSearch(event.target.value)}
                     aria-label="搜索客户"
@@ -578,7 +577,7 @@ export function GrantCouponDialog({
             <div className="mt-3 max-h-96 space-y-2 overflow-y-auto">
                 {lookup.loading && !lookup.data ? (
                     <LoadingState label="正在查找客户…" />
-                ) : lookup.error ? (
+                ) : lookup.error && !lookup.data ? (
                     <p className="p-4 text-xs text-rose-600">
                         {toUserFacingError(lookup.error, '客户查找失败，请稍后重试')}
                     </p>
@@ -596,14 +595,14 @@ export function GrantCouponDialog({
                                     {customer.phoneNumber || customer.emailAddress}
                                 </div>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void submit(customer.id)}
                                 disabled={state.loading}
                                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
                             >
                                 发放
-                            </button>
+                            </AdminButton>
                         </div>
                     ))
                 )}

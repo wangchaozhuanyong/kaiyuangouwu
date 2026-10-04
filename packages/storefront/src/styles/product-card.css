@@ -142,8 +142,8 @@
     gap: 4px 6px;
     margin-top: 4px;
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .product-card-delivery {
@@ -171,7 +171,7 @@
     font-size: var(--type-price-size);
     font-weight: var(--font-weight-bold);
     line-height: var(--type-price-leading);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-numeric);
 }
 
 .product-card-stock {
@@ -179,7 +179,8 @@
     max-width: 100%;
     margin-left: auto;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-align: right;
     overflow-wrap: anywhere;
 }
@@ -226,7 +227,7 @@
 
 .product-card.is-plain .product-card-delivery {
     color: var(--muted);
-    font-weight: 400;
+    font-weight: var(--font-weight-normal);
 }
 
 @container (max-width: 160px) {
@@ -236,7 +237,8 @@
         row-gap: 6px;
     }
     .product-card-price .price-lockup {
-        font-size: 14px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 }
 
@@ -304,7 +306,7 @@
     white-space: normal;
     overflow-wrap: anywhere;
     font-weight: var(--font-weight-medium);
-    line-height: 1.55;
+    line-height: var(--line-height-body);
 }
 
 .product-card.is-gallery .product-card-content > footer,
@@ -319,6 +321,7 @@
 
 .product-card.is-gallery .price-lockup,
 .product-card.is-mosaic .price-lockup {
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
 }

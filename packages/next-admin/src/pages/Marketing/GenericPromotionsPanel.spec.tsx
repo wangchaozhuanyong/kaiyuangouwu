@@ -40,7 +40,8 @@ describe('PromotionEditor', () => {
         });
     });
 
-    it('keeps a stable shell and loading state until the fetched detail initializes the draft', () => {
+    it('keeps a stable shell while the first detail read is pending', () => {
+        apolloMocks.useQuery.mockReturnValue({ data: undefined, loading: true, refetch: vi.fn() });
         const html = renderToStaticMarkup(
             <PromotionEditor
                 id={promotion.id}
@@ -58,4 +59,23 @@ describe('PromotionEditor', () => {
         expect(html).toContain('正在读取促销规则…');
         expect(html).not.toContain('测试促销');
     });
+    it('keeps loaded fields visible during background refresh', () => {
+        apolloMocks.useQuery.mockReturnValue({ data: { promotion }, loading: true, refetch: vi.fn() });
+        const html = renderToStaticMarkup(
+            <PromotionEditor
+                id={promotion.id}
+                conditions={[]}
+                actions={[]}
+                languageCode="zh_CN"
+                onClose={() => undefined}
+                onSaved={async () => undefined}
+                onError={() => undefined}
+            />,
+        );
+        expect(html).toContain('value="TEST"');
+        expect(html).not.toContain('正在读取促销规则…');
+    });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

@@ -1,9 +1,11 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { ExternalLink, Globe2, Pencil, Plus, Store, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { client, sensitiveActionContext } from '../../apollo';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
@@ -27,6 +29,10 @@ import {
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { invalidateAdminResources } from '../../runtime/admin-resource-events';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -53,21 +59,21 @@ export function CommerceModePanel({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
-    const modeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const modeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
     const currentMode = modeQuery.data?.myStoreCommerceMode.mode ?? 'DIGITAL_ONLY';
-    const [selectedMode, setSelectedMode] = useState<StoreCommerceMode>(currentMode);
+    const modeDraft = useServerDraft<StoreCommerceMode>(
+        'commerce-mode',
+        modeQuery.data ? currentMode : '',
+        modeQuery.data ? currentMode : null,
+    );
+    const selectedMode = modeDraft.draft ?? currentMode;
+    const setSelectedMode = modeDraft.setDraft;
     const [updateMode, updateState] = useMutation<{
         updateMyStoreCommerceMode: StoreCommerceModeData['myStoreCommerceMode'];
     }>(UPDATE_STORE_COMMERCE_MODE_MUTATION);
 
-    /* oxlint-disable react/set-state-in-effect */
-    useEffect(() => setSelectedMode(currentMode), [currentMode]);
-    /* oxlint-enable react/set-state-in-effect */
-
     const submit = async () => {
-        if (selectedMode === currentMode) return;
+        if (selectedMode === currentMode || modeDraft.sourceChanged) return;
         const confirmation = await requestConfirmation({
             title: '确认切换店铺经营模式？',
             description:
@@ -78,13 +84,17 @@ export function CommerceModePanel({
         if (!confirmation) return;
         try {
             await updateMode({ variables: { mode: selectedMode } });
-            await Promise.all([
-                modeQuery.refetch(),
-                client.refetchQueries({
-                    include: ['NextAdminAppShellBootstrap', 'GetProducts'],
-                }),
-            ]);
-            await onChanged('当前店铺经营模式已更新，商品与后台模块已按新模式刷新');
+            modeDraft.accept(selectedMode);
+            invalidateAdminResources(['catalog', 'settings']);
+            await refreshAfterAdminWrite(async () => {
+                await Promise.all([
+                    modeQuery.refetch(),
+                    client.refetchQueries({
+                        include: ['NextAdminAppShellBootstrap'],
+                    }),
+                ]);
+                await onChanged('当前店铺经营模式已更新，商品与后台模块已按新模式刷新');
+            }, onError);
         } catch (error) {
             onError(toUserFacingError(error, '经营模式切换失败，请检查冲突后重试'));
         }
@@ -111,6 +121,7 @@ export function CommerceModePanel({
 
     return (
         <section className="min-h-[220px] rounded-xl border border-slate-200 bg-white p-5">
+            {modeDraft.sourceChanged && <DraftUpdateNotice onReload={modeDraft.reload} />}
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -121,14 +132,14 @@ export function CommerceModePanel({
                         控制可创建的商品类型、结账收货信息，以及后台显示的库存仓库或数字交付模块。
                     </p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void submit()}
-                    disabled={selectedMode === currentMode || updateState.loading}
+                    disabled={modeDraft.sourceChanged || selectedMode === currentMode || updateState.loading}
                     className={primaryButton}
                 >
                     {updateState.loading ? '冲突检查中…' : '保存经营模式'}
-                </button>
+                </AdminButton>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {(
@@ -150,7 +161,7 @@ export function CommerceModePanel({
                         ],
                     ] as const
                 ).map(([mode, title, detail]) => (
-                    <button
+                    <AdminButton
                         key={mode}
                         type="button"
                         onClick={() => setSelectedMode(mode)}
@@ -166,7 +177,7 @@ export function CommerceModePanel({
                             )}
                         </span>
                         <span className="mt-2 block text-[11px] leading-5 text-slate-500">{detail}</span>
-                    </button>
+                    </AdminButton>
                 ))}
             </div>
         </section>
@@ -276,7 +287,7 @@ export function StoresPanel({
                                                 : '开放后所有访客均可浏览此店铺。'}
                                     </p>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     role="switch"
                                     aria-checked={profile.isPublished}
@@ -291,7 +302,7 @@ export function StoresPanel({
                                     className={profile.isPublished ? secondaryButton : primaryButton}
                                 >
                                     {profile.isPublished ? '关闭预览' : '开放预览'}
-                                </button>
+                                </AdminButton>
                             </div>
                         )}
                         <div className="mt-4 flex justify-between">
@@ -299,14 +310,14 @@ export function StoresPanel({
                                 更新于 {formatDateTime(profile.updatedAt)}
                             </span>
                             <div className="flex gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onDeprovision(profile)}
                                     className={`${secondaryButton} text-rose-600`}
                                 >
                                     <Trash2 className="h-3.5 w-3.5" />
                                     {allowPermanentDeprovision ? '暂停或清退' : '暂停营业'}
-                                </button>
+                                </AdminButton>
                                 {profile.storefrontUrl && (
                                     <a
                                         href={profile.storefrontUrl}
@@ -318,14 +329,14 @@ export function StoresPanel({
                                         访问店铺
                                     </a>
                                 )}
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onEdit(profile)}
                                     className={secondaryButton}
                                 >
                                     <Pencil className="h-3.5 w-3.5" />
                                     编辑档案
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </div>
@@ -352,7 +363,6 @@ export function DomainsPanel({
     const query = useQuery<StoreDomainsResult>(STORE_DOMAINS_QUERY, {
         variables: { channelId: profile?.channel.id ?? '' },
         skip: !profile,
-        fetchPolicy: 'cache-and-network',
     });
     const [create, createState] = useMutation(CREATE_STORE_DOMAIN_MUTATION);
     const [verify, verifyState] = useMutation<{ verifyStoreDomain: { success: boolean; message: string } }>(
@@ -505,7 +515,7 @@ export function DomainsPanel({
                         </p>
                     </div>
                     <div className="flex w-full gap-2 lg:w-auto">
-                        <input
+                        <AdminInput
                             value={domain}
                             onChange={event => setDomain(event.target.value)}
                             onKeyDown={event => {
@@ -515,7 +525,7 @@ export function DomainsPanel({
                             placeholder="shop.example.com"
                             className={`${inputClass} lg:w-72`}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void add()}
                             disabled={busy || !domain.trim()}
@@ -523,13 +533,13 @@ export function DomainsPanel({
                         >
                             <Plus className="h-3.5 w-3.5" />
                             添加域名
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </section>
             {query.loading && !query.data ? (
                 <LoadingState />
-            ) : query.error ? (
+            ) : query.error && !query.data ? (
                 <ErrorState
                     message={toUserFacingError(query.error, '店铺域名数据读取失败')}
                     onRetry={() => void query.refetch()}
@@ -585,7 +595,7 @@ export function DomainsPanel({
                                         candidate => candidate.channel.id !== profile.channel.id,
                                     ) && (
                                         <div className="flex gap-2">
-                                            <select
+                                            <AdminSelect
                                                 value={transferTargets[item.id] ?? ''}
                                                 onChange={event =>
                                                     setTransferTargets(current => ({
@@ -611,38 +621,38 @@ export function DomainsPanel({
                                                             {storeName(candidate)}
                                                         </option>
                                                     ))}
-                                            </select>
-                                            <button
+                                            </AdminSelect>
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void transferDomain(item)}
                                                 disabled={busy || !transferTargets[item.id]}
                                                 className={secondaryButton}
                                             >
                                                 原子转移
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     )}
                                     {item.status !== 'ACTIVE' && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => void verifyDomain(item)}
                                             disabled={busy}
                                             className={secondaryButton}
                                         >
                                             验证 DNS
-                                        </button>
+                                        </AdminButton>
                                     )}
                                     {item.status === 'ACTIVE' && !item.isPrimary && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => void makePrimary(item)}
                                             disabled={busy}
                                             className={secondaryButton}
                                         >
                                             设为主域名
-                                        </button>
+                                        </AdminButton>
                                     )}
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void destroy(item)}
                                         disabled={busy}
@@ -650,7 +660,7 @@ export function DomainsPanel({
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                         移除
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         ))}
@@ -795,15 +805,15 @@ export function SellersPanel({
                                         </td>
                                         <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                             <div className="flex justify-end gap-1">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setEditing(seller)}
                                                     className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
                                                     aria-label={`编辑${seller.name}`}
                                                 >
                                                     <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
+                                                </AdminButton>
+                                                <AdminButton
                                                     type="button"
                                                     disabled={state.loading}
                                                     onClick={() => void deleteSeller(seller)}
@@ -811,7 +821,7 @@ export function SellersPanel({
                                                     aria-label={`删除${seller.name}`}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         </td>
                                     </tr>

@@ -132,3 +132,6 @@ describe('compact editors retain drafts', () => {
         expect(mocks.mutate).not.toHaveBeenCalled();
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

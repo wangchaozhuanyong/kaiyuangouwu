@@ -3,6 +3,9 @@ import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react';
 
 import { ShopApi } from '../api';
 import { clearProductVisitTimes, readProductVisitTimes, recordProductVisit } from '../browsing-history';
+import { languageCodeFor } from '../i18n';
+import { offlineLoadError } from '../loading-state';
+import { storefrontQueryKeys } from '../query-client';
 import { scopedStorageKey } from '../storefront-storage';
 import {
     FAVORITE_PRODUCT_LIMIT,
@@ -47,13 +50,11 @@ export function useCustomerProductActivity({
     const activeCustomerId = useRef(customerId);
     activeCustomerId.current = customerId;
     const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
-    const key = [
-        'storefront',
-        `${market.code}:${market.currencyCode}`,
-        language,
-        'customer-product-activity',
-        customerId,
-    ];
+    const key = storefrontQueryKeys.customerProductActivity(
+        storefrontQueryKeys.market(market),
+        languageCodeFor(language),
+        customerId ?? '',
+    );
     const activityQuery = useQuery({
         queryKey: key,
         queryFn: ({ signal }) => api.contentReviewsApi.myCustomerProductActivity(signal),
@@ -101,7 +102,7 @@ export function useCustomerProductActivity({
                 return updateAccount(async () => {
                     const current = await queryClient.ensureQueryData({
                         queryKey: key,
-                        queryFn: () => api.contentReviewsApi.myCustomerProductActivity(),
+                        queryFn: ({ signal }) => api.contentReviewsApi.myCustomerProductActivity(signal),
                     });
                     if (activeCustomerId.current !== customerId) return current;
                     return api.contentReviewsApi.setFavoriteProduct(
@@ -184,10 +185,14 @@ export function useCustomerProductActivity({
         favoriteProductIds,
         recentProductIds,
         visitTimes,
-        loading: Boolean(customerId) && activityQuery.isPending,
+        loading: Boolean(customerId) && activityQuery.isLoading,
         initialLoadPending: activityQuery.isLoading,
-        error: customerId ? activityQuery.error : null,
-        retry: activityQuery.refetch,
+        error:
+            customerId && activityQuery.data === undefined
+                ? (activityQuery.error ??
+                  (activityQuery.isPaused ? new Error(offlineLoadError(language)) : null))
+                : null,
+        retry: () => activityQuery.refetch({ cancelRefetch: false }),
         toggleFavoriteProduct,
         removeFavoriteProducts,
         clearFavorites,

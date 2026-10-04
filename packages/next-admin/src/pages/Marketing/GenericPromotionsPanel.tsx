@@ -1,6 +1,11 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Edit3, Plus, RefreshCw, Save, Settings2, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -61,7 +66,6 @@ const emptyDraft = (): PromotionDraft => ({
 export function GenericPromotionsPanel() {
     const query = useQuery<GenericPromotionsData>(GENERIC_PROMOTIONS_QUERY, {
         variables: { options: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } } },
-        fetchPolicy: 'cache-and-network',
     });
     const [editingId, setEditingId] = useState<string | 'new' | null>(null);
     const [deleting, setDeleting] = useState<GenericPromotionListRecord | null>(null);
@@ -88,7 +92,7 @@ export function GenericPromotionsPanel() {
         }
     };
     if (query.loading && !query.data) return <State label="正在读取 Vendure 通用促销…" />;
-    if (query.error || !query.data)
+    if ((query.error && !query.data) || !query.data)
         return <State tone="error" label="通用促销加载失败" action={() => void query.refetch()} />;
     return (
         <div className="space-y-4">
@@ -110,18 +114,23 @@ export function GenericPromotionsPanel() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             className={secondaryButton}
                         >
                             <RefreshCw className="h-4 w-4" />
                             刷新
-                        </button>
-                        <button type="button" onClick={() => setEditingId('new')} className={primaryButton}>
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            onClick={() => setEditingId('new')}
+                            className={primaryButton}
+                        >
                             <Plus className="h-4 w-4" />
                             新建通用促销
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
                 <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
@@ -161,22 +170,22 @@ export function GenericPromotionsPanel() {
                                     <td className="px-3 py-3 text-slate-500">进入编辑器查看</td>
                                     <td className="px-3 py-3">
                                         <div className="flex gap-2">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => setEditingId(item.id)}
                                                 className="inline-flex items-center gap-1 font-bold text-blue-600"
                                             >
                                                 <Edit3 className="h-3.5 w-3.5" />
                                                 编辑
-                                            </button>
-                                            <button
+                                            </AdminButton>
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => setDeleting(item)}
                                                 className="inline-flex items-center gap-1 font-bold text-rose-600"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                                 删除
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </td>
                                 </tr>
@@ -243,20 +252,23 @@ export function PromotionEditor({
     const detail = useQuery<GenericPromotionDetailData>(GENERIC_PROMOTION_DETAIL_QUERY, {
         variables: { id },
         skip: id === 'new',
-        fetchPolicy: 'network-only',
     });
-    const [draft, setDraft] = useState<PromotionDraft>(emptyDraft);
+    const source = detail.data?.promotion
+        ? detailToDraft(detail.data.promotion)
+        : id === 'new'
+          ? emptyDraft()
+          : null;
+    const draftOwner = useServerDraft<PromotionDraft>(id, source ? JSON.stringify(source) : '', source);
+    const draft = draftOwner.draft ?? emptyDraft();
+    const setDraft = draftOwner.setDraft;
     const [createPromotion, createState] = useMutation(CREATE_GENERIC_PROMOTION_MUTATION);
     const [updatePromotion, updateState] = useMutation(UPDATE_GENERIC_PROMOTION_MUTATION);
-    /* oxlint-disable react/set-state-in-effect -- the selected promotion response initializes the editor draft. */
-    useEffect(() => {
-        if (detail.data?.promotion) setDraft(detailToDraft(detail.data.promotion));
-    }, [detail.data?.promotion]);
-    /* oxlint-enable react/set-state-in-effect */
     const isDraftInitializing =
         id !== 'new' &&
-        (detail.loading || Boolean(detail.data?.promotion && draft.id !== detail.data.promotion.id));
+        ((detail.loading && !detail.data) ||
+            Boolean(detail.data?.promotion && draft.id !== detail.data.promotion.id));
     const save = async () => {
+        if (draftOwner.sourceChanged) return;
         try {
             const input = promotionInput(draft, languageCode, conditions, actions);
             const response =
@@ -277,7 +289,11 @@ export function PromotionEditor({
                       )?.updatePromotion;
             if (payload?.__typename !== 'Promotion' || !payload.id)
                 throw new Error(getMutationError(payload));
-            await onSaved(id === 'new' ? '通用促销已创建' : '通用促销已更新');
+            draftOwner.accept(draft);
+            await refreshAfterAdminWrite(
+                () => onSaved(id === 'new' ? '通用促销已创建' : '通用促销已更新'),
+                onError,
+            );
         } catch (cause) {
             onError(toUserFacingError(cause, '通用促销保存失败'));
         }
@@ -298,11 +314,12 @@ export function PromotionEditor({
                             请按中文提示配置促销规则；列表类参数每行填写一项。
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
-                {detail.error ? (
+                {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
+                {detail.error && !detail.data ? (
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <State tone="error" label="促销详情加载失败" action={() => void detail.refetch()} />
                     </div>
@@ -377,13 +394,14 @@ export function PromotionEditor({
                     </div>
                 )}
                 <div className="flex justify-end gap-2 border-t p-5">
-                    <button type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => void save()}
                         disabled={
+                            draftOwner.sourceChanged ||
                             createState.loading ||
                             updateState.loading ||
                             isDraftInitializing ||
@@ -393,7 +411,7 @@ export function PromotionEditor({
                     >
                         <Save className="h-4 w-4" />
                         {createState.loading || updateState.loading ? '保存中…' : '保存促销'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>
@@ -430,7 +448,7 @@ function OperationList({
                     {title} ({values.length})
                 </h3>
                 <div className="flex gap-2">
-                    <select
+                    <AdminSelect
                         value={selected}
                         onChange={event => setSelected(event.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -441,11 +459,11 @@ function OperationList({
                                 {configurableOperationLabel(item, `${title}规则`)}
                             </option>
                         ))}
-                    </select>
-                    <button type="button" onClick={add} disabled={!selected} className={secondaryButton}>
+                    </AdminSelect>
+                    <AdminButton type="button" onClick={add} disabled={!selected} className={secondaryButton}>
                         <Plus className="h-3.5 w-3.5" />
                         添加
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             <div className="mt-3 space-y-3">
@@ -464,7 +482,7 @@ function OperationList({
                                         <ConfigurableOperationTechnicalDetails definition={definition} />
                                     )}
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onChange(values.filter((_, itemIndex) => itemIndex !== index))
@@ -473,7 +491,7 @@ function OperationList({
                                     className="text-rose-600"
                                 >
                                     <Trash2 className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {(
@@ -640,7 +658,7 @@ function TextField({
     return (
         <label className={labelClass}>
             {label}
-            <input
+            <AdminInput
                 type={type}
                 min={type === 'number' ? 1 : undefined}
                 value={value}
@@ -661,7 +679,11 @@ function Toggle({
 }) {
     return (
         <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
-            <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+            <AdminInput
+                type="checkbox"
+                checked={checked}
+                onChange={event => onChange(event.target.checked)}
+            />
             {label}
         </label>
     );
@@ -692,13 +714,13 @@ function State({
         >
             <p>{label}</p>
             {action && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={action}
                     className="mt-3 rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

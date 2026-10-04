@@ -9,6 +9,7 @@ import {
     hasActiveChannelSelection,
     setInitialActiveChannel,
 } from './apollo';
+import { AdminButton } from './components/AdminControls';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
@@ -195,14 +196,14 @@ function AuthenticatedShell() {
                     <p className="mt-2 text-xs leading-5 text-rose-600">
                         {toUserFacingError(blockingError, '暂时无法连接管理服务，请检查网络后重试。')}
                     </p>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void Promise.allSettled([authQuery.refetch(), sessionQuery.refetch()])}
                         className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                         重新验证
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => {
                             clearAuthSession();
@@ -211,7 +212,7 @@ function AuthenticatedShell() {
                         className="mt-3 block w-full text-xs font-medium text-blue-700 hover:underline"
                     >
                         切换账号登录
-                    </button>
+                    </AdminButton>
                 </section>
             </div>
         );

@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { Sparkles, Tag, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CREATE_OPTION_GROUP } from '../../graphql/catalog-admin.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -106,7 +107,7 @@ export function QuickCreateOptionGroupModal({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={creating}
@@ -114,7 +115,7 @@ export function QuickCreateOptionGroupModal({
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
 
                 {isSingleVariantWithoutOptions && (
@@ -141,7 +142,7 @@ export function QuickCreateOptionGroupModal({
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                             {PRESETS.map(preset => (
-                                <button
+                                <AdminButton
                                     key={preset.name}
                                     type="button"
                                     onClick={() => {
@@ -152,7 +153,7 @@ export function QuickCreateOptionGroupModal({
                                     className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 cursor-pointer transition-colors"
                                 >
                                     {preset.name} ({preset.values})
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
                     </div>
@@ -161,7 +162,7 @@ export function QuickCreateOptionGroupModal({
                         <label className="mb-1 block text-xs font-bold text-slate-700">
                             规格属性名称 <span className="text-rose-500">*</span>
                         </label>
-                        <input
+                        <AdminInput
                             type="text"
                             value={name}
                             onChange={e => setName(e.target.value)}
@@ -175,7 +176,7 @@ export function QuickCreateOptionGroupModal({
                         <label className="mb-1 block text-xs font-bold text-slate-700">
                             规格选项值（用逗号或换行隔开） <span className="text-rose-500">*</span>
                         </label>
-                        <textarea
+                        <AdminTextArea
                             rows={2}
                             value={valuesInput}
                             onChange={e => setValuesInput(e.target.value)}
@@ -200,21 +201,21 @@ export function QuickCreateOptionGroupModal({
                     </div>
 
                     <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={creating}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
                         >
                             取消
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="submit"
                             disabled={creating || !name.trim() || parsedValues.length < 2}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 cursor-pointer shadow-2xs disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {creating ? '创建中...' : '确定并生成规格行'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </form>
             </AccessibleDialogSurface>

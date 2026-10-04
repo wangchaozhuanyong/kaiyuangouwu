@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { Edit3, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { eventTypeDisplayLabel, systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     DELETE_REFERRAL_POSTER_MUTATION,
@@ -878,7 +879,7 @@ export function PostersPanel({
                             竖版）。开启开关后，买家在前台即可选用该海报。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={!canCreate || isProgramBusy}
                         onClick={() =>
@@ -892,7 +893,7 @@ export function PostersPanel({
                     >
                         <Plus className="h-3.5 w-3.5" />
                         新建模板
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="mt-4 grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {program.posterTemplateConfigs.map(template => {
@@ -959,7 +960,7 @@ export function PostersPanel({
                                         <span className="text-[10px] font-medium text-slate-700">
                                             在客户端分享面板显示
                                         </span>
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={template.enabled}
                                             disabled={!canUpdate || isProgramBusy}
@@ -970,7 +971,7 @@ export function PostersPanel({
                                         />
                                     </label>
                                     <div className="grid grid-cols-3 gap-1">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => onEdit(template)}
                                             disabled={!canUpdate || isProgramBusy}
@@ -978,8 +979,8 @@ export function PostersPanel({
                                         >
                                             <Edit3 className="h-3 w-3" />
                                             编辑
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             disabled={
                                                 !canUpdate || isProgramBusy || !template.enabled || isDefault
@@ -988,8 +989,8 @@ export function PostersPanel({
                                             className="rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
                                             设为默认
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setDeleting(template)}
                                             disabled={!canDelete || state.loading}
@@ -997,7 +998,7 @@ export function PostersPanel({
                                         >
                                             <Trash2 className="h-3 w-3" />
                                             删除
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                             </article>
@@ -1089,7 +1090,7 @@ export function PostersPanel({
                                             <span className="text-[10px] font-medium text-slate-700">
                                                 在客户端分享面板显示
                                             </span>
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 checked={isEnabled}
                                                 disabled={!canUpdate || isProgramBusy}
@@ -1099,22 +1100,22 @@ export function PostersPanel({
                                                 className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                             />
                                         </label>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             disabled={!canUpdate || isProgramBusy || !isEnabled || isDefault}
                                             onClick={() => void makeDefaultTemplate(sys.id)}
                                             className="w-full rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
                                             {isDefault ? '当前为默认海报' : '设为默认海报'}
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             className="w-full rounded-lg border border-slate-200 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                                             onClick={() => onEdit({ ...sys, id: '', enabled: false })}
                                             disabled={!canCreate || isProgramBusy}
                                         >
                                             基于此款创建本店模板
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </article>
                             );

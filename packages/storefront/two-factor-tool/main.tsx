@@ -66,7 +66,7 @@ function IsolatedVault() {
     return (
         <>
             {notice && (
-                <p role="status" className="p-3 text-sm">
+                <p role="status" className="p-3 type-body">
                     {notice}
                 </p>
             )}

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     Check,
@@ -17,6 +17,8 @@ import { useMemo, useRef, useState, type ReactNode, type SetStateAction } from '
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { validateIcloudInput } from '../../../../icloud-relay-plugin/src/client/admin-validation.js';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -57,23 +59,19 @@ export function IcloudRelayModule() {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
     // Primary Accounts Queries
-    const primaryQuery = useQuery(ICLOUD_PRIMARY_ACCOUNTS_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const primaryQuery = useQuery(ICLOUD_PRIMARY_ACCOUNTS_QUERY, {});
 
     // Virtual Emails Queries
     const [filterPrimaryId, setFilterPrimaryId] = useState<string>('');
     const [virtualSearch, setVirtualSearch] = useState('');
     const virtualQuery = useQuery(ICLOUD_VIRTUAL_EMAILS_QUERY, {
         variables: { primaryAccountId: filterPrimaryId || undefined },
-        fetchPolicy: 'cache-and-network',
     });
 
     // Received Mails Queries
     const [mailSearch, setMailSearch] = useState('');
     const mailsQuery = useQuery(ICLOUD_RECEIVED_MAILS_QUERY, {
         variables: { limit: 100 },
-        fetchPolicy: 'cache-and-network',
     });
 
     // Mutations
@@ -544,7 +542,8 @@ export function IcloudRelayModule() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => {
                                 setNotice('');
@@ -558,7 +557,7 @@ export function IcloudRelayModule() {
                                 className={`h-3.5 w-3.5 ${primaryQuery.loading || virtualQuery.loading || mailsQuery.loading ? 'animate-spin' : ''}`}
                             />
                             刷新
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -580,13 +579,13 @@ export function IcloudRelayModule() {
                             <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                             <span>{notice}</span>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setNotice('')}
                             className="text-emerald-600 hover:opacity-80"
                         >
                             <X className="h-3.5 w-3.5" />
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
                 {error && (
@@ -595,19 +594,19 @@ export function IcloudRelayModule() {
                             <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
                             <span>{error}</span>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setError('')}
                             className="text-rose-600 hover:opacity-80"
                         >
                             <X className="h-3.5 w-3.5" />
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
 
                 {/* Tabs */}
                 <div className="flex gap-2 border-b border-slate-200 pb-px">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setTab('primary')}
                         className={`rounded-t-lg border-b-2 px-4 py-2.5 text-xs font-bold transition-colors -mb-px ${
@@ -617,8 +616,8 @@ export function IcloudRelayModule() {
                         }`}
                     >
                         主邮箱管理 ({primaryAccounts.length})
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => setTab('virtual')}
                         className={`rounded-t-lg border-b-2 px-4 py-2.5 text-xs font-bold transition-colors -mb-px ${
@@ -628,8 +627,8 @@ export function IcloudRelayModule() {
                         }`}
                     >
                         虚拟邮箱管理 ({virtualEmails.length})
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => setTab('mails')}
                         className={`rounded-t-lg border-b-2 px-4 py-2.5 text-xs font-bold transition-colors -mb-px ${
@@ -639,7 +638,7 @@ export function IcloudRelayModule() {
                         }`}
                     >
                         收信记录 ({receivedMails.length})
-                    </button>
+                    </AdminButton>
                 </div>
 
                 {/* TAB 1: 主邮箱管理 */}
@@ -649,7 +648,7 @@ export function IcloudRelayModule() {
                             <p className="text-xs text-slate-500">
                                 配置 iCloud 账户及 App 专用密码，系统将自动连接 IMAP 服务器收信并提取验证码。
                             </p>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setError('');
@@ -666,7 +665,7 @@ export function IcloudRelayModule() {
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 新增主邮箱
-                            </button>
+                            </AdminButton>
                         </div>
 
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
@@ -690,7 +689,7 @@ export function IcloudRelayModule() {
                                                 <td colSpan={8} className="p-8 text-center text-slate-400">
                                                     {primaryQuery.error
                                                         ? '主邮箱加载失败，请刷新重试。'
-                                                        : primaryQuery.loading
+                                                        : primaryQuery.loading && !primaryQuery.data
                                                           ? '正在加载主邮箱…'
                                                           : '暂无主邮箱配置，请点击右上角「新增主邮箱」开始配置。'}
                                                 </td>
@@ -757,7 +756,7 @@ export function IcloudRelayModule() {
                                                         {account.masterQueryCode ? (
                                                             <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit">
                                                                 <span>{account.masterQueryCode}</span>
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() =>
                                                                         handleCopy(
@@ -773,7 +772,7 @@ export function IcloudRelayModule() {
                                                                     ) : (
                                                                         <Copy className="h-3 w-3" />
                                                                     )}
-                                                                </button>
+                                                                </AdminButton>
                                                             </div>
                                                         ) : (
                                                             '—'
@@ -799,7 +798,7 @@ export function IcloudRelayModule() {
                                                     </td>
                                                     <td className="p-3.5 text-right">
                                                         <div className="inline-flex items-center gap-1">
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleTestConnection(
@@ -812,8 +811,8 @@ export function IcloudRelayModule() {
                                                                 title="测试 IMAP 连接"
                                                             >
                                                                 测试
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleSync(account.id, account.email)
@@ -823,8 +822,8 @@ export function IcloudRelayModule() {
                                                                 title="立即同步邮件"
                                                             >
                                                                 同步
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleHistory(
@@ -839,8 +838,8 @@ export function IcloudRelayModule() {
                                                                 {historyState.loading
                                                                     ? '处理中…'
                                                                     : '检查历史邮件'}
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleResetMasterCode(
@@ -852,8 +851,8 @@ export function IcloudRelayModule() {
                                                                 title="重置主查询码"
                                                             >
                                                                 重置码
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setError('');
@@ -872,8 +871,8 @@ export function IcloudRelayModule() {
                                                                 title="编辑主邮箱"
                                                             >
                                                                 <Pencil className="h-3 w-3" />
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleDeletePrimary(
@@ -885,7 +884,7 @@ export function IcloudRelayModule() {
                                                                 title="删除主邮箱"
                                                             >
                                                                 <Trash2 className="h-3 w-3" />
-                                                            </button>
+                                                            </AdminButton>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -903,7 +902,7 @@ export function IcloudRelayModule() {
                     <div className="space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div className="flex flex-wrap items-center gap-2">
-                                <select
+                                <AdminSelect
                                     value={filterPrimaryId}
                                     onChange={e => setFilterPrimaryId(e.target.value)}
                                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
@@ -914,10 +913,10 @@ export function IcloudRelayModule() {
                                             {a.email} {a.note ? `(${a.note})` : ''}
                                         </option>
                                     ))}
-                                </select>
+                                </AdminSelect>
                                 <div className="relative">
                                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                                    <input
+                                    <AdminInput
                                         type="text"
                                         value={virtualSearch}
                                         onChange={e => setVirtualSearch(e.target.value)}
@@ -927,7 +926,7 @@ export function IcloudRelayModule() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setError('');
@@ -942,8 +941,8 @@ export function IcloudRelayModule() {
                                 >
                                     <UploadCloud className="h-3.5 w-3.5" />
                                     批量导入
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setError('');
@@ -960,7 +959,7 @@ export function IcloudRelayModule() {
                                 >
                                     <Plus className="h-3.5 w-3.5" />
                                     新增虚拟邮箱
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
 
@@ -984,7 +983,7 @@ export function IcloudRelayModule() {
                                                 <td colSpan={7} className="p-8 text-center text-slate-400">
                                                     {virtualQuery.error
                                                         ? '虚拟邮箱加载失败，请刷新重试。'
-                                                        : virtualQuery.loading
+                                                        : virtualQuery.loading && !virtualQuery.data
                                                           ? '正在加载虚拟邮箱…'
                                                           : virtualEmails.length === 0
                                                             ? '暂无虚拟邮箱配置，请点击右上角「新增虚拟邮箱」'
@@ -1007,7 +1006,7 @@ export function IcloudRelayModule() {
                                                     <td className="p-3.5">
                                                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 w-fit">
                                                             <span>{v.buyerQueryCode}</span>
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleCopy(
@@ -1023,7 +1022,7 @@ export function IcloudRelayModule() {
                                                                 ) : (
                                                                     <Copy className="h-3 w-3" />
                                                                 )}
-                                                            </button>
+                                                            </AdminButton>
                                                         </div>
                                                     </td>
                                                     <td className="p-3.5">
@@ -1046,7 +1045,7 @@ export function IcloudRelayModule() {
                                                     </td>
                                                     <td className="p-3.5 text-right">
                                                         <div className="inline-flex items-center gap-1">
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleResetVirtualCode(v.id, v.aliasEmail)
@@ -1055,8 +1054,8 @@ export function IcloudRelayModule() {
                                                                 title="重置买家查询码"
                                                             >
                                                                 重置码
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setError('');
@@ -1072,8 +1071,8 @@ export function IcloudRelayModule() {
                                                                 title="编辑备注"
                                                             >
                                                                 <Pencil className="h-3 w-3" />
-                                                            </button>
-                                                            <button
+                                                            </AdminButton>
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleDeleteVirtual(v.id, v.aliasEmail)
@@ -1082,7 +1081,7 @@ export function IcloudRelayModule() {
                                                                 title="删除虚拟邮箱"
                                                             >
                                                                 <Trash2 className="h-3 w-3" />
-                                                            </button>
+                                                            </AdminButton>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1104,7 +1103,7 @@ export function IcloudRelayModule() {
                             </p>
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                                <input
+                                <AdminInput
                                     type="text"
                                     value={mailSearch}
                                     onChange={e => setMailSearch(e.target.value)}
@@ -1132,7 +1131,7 @@ export function IcloudRelayModule() {
                                                 <td colSpan={5} className="p-8 text-center text-slate-400">
                                                     {mailsQuery.error
                                                         ? '收信记录加载失败，请刷新重试。'
-                                                        : mailsQuery.loading
+                                                        : mailsQuery.loading && !mailsQuery.data
                                                           ? '正在加载收信记录…'
                                                           : receivedMails.length === 0
                                                             ? '暂无收信记录，请点击上方「刷新」或在主邮箱管理中点击「同步」'
@@ -1169,7 +1168,7 @@ export function IcloudRelayModule() {
                                                         {mail.extractedCode ? (
                                                             <div className="flex items-center gap-1.5 font-mono text-sm font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit">
                                                                 <span>{mail.extractedCode}</span>
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() =>
                                                                         handleCopy(
@@ -1185,20 +1184,20 @@ export function IcloudRelayModule() {
                                                                     ) : (
                                                                         <Copy className="h-3.5 w-3.5" />
                                                                     )}
-                                                                </button>
+                                                                </AdminButton>
                                                             </div>
                                                         ) : (
                                                             <span className="text-slate-400">未提取</span>
                                                         )}
                                                     </td>
                                                     <td className="p-3.5 text-right">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() => setMailDetailDialog(mail)}
                                                             className="rounded border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                                                         >
                                                             查看正文
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                 </tr>
                                             ))
@@ -1222,7 +1221,7 @@ export function IcloudRelayModule() {
                     <div className="space-y-4 pt-4 text-xs">
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">iCloud 邮箱地址 *</label>
-                            <input
+                            <AdminInput
                                 type="email"
                                 value={primaryDialog.email}
                                 onChange={e => setPrimaryDialog(p => ({ ...p, email: e.target.value }))}
@@ -1234,7 +1233,7 @@ export function IcloudRelayModule() {
                             <label className="block text-slate-700 font-bold mb-1">
                                 App 专用密码 {primaryDialog.editing ? '(如不修改请留空)' : '*'}
                             </label>
-                            <input
+                            <AdminInput
                                 type="password"
                                 value={primaryDialog.appPassword}
                                 onChange={e => setPrimaryDialog(p => ({ ...p, appPassword: e.target.value }))}
@@ -1247,7 +1246,7 @@ export function IcloudRelayModule() {
                         </div>
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">备注说明</label>
-                            <input
+                            <AdminInput
                                 type="text"
                                 value={primaryDialog.note}
                                 onChange={e => setPrimaryDialog(p => ({ ...p, note: e.target.value }))}
@@ -1257,7 +1256,7 @@ export function IcloudRelayModule() {
                         </div>
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">查询码有效周期 (天)</label>
-                            <input
+                            <AdminInput
                                 type="number"
                                 min={1}
                                 max={365}
@@ -1272,14 +1271,14 @@ export function IcloudRelayModule() {
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setPrimaryDialog(p => ({ ...p, open: false }))}
                                 className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleSavePrimary}
                                 disabled={createPrimaryState.loading || updatePrimaryState.loading}
@@ -1288,7 +1287,7 @@ export function IcloudRelayModule() {
                                 {createPrimaryState.loading || updatePrimaryState.loading
                                     ? '保存中…'
                                     : '保存'}
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </AdminModal>
@@ -1306,7 +1305,7 @@ export function IcloudRelayModule() {
                         {!virtualDialog.editing && (
                             <div>
                                 <label className="block text-slate-700 font-bold mb-1">所属主邮箱 *</label>
-                                <select
+                                <AdminSelect
                                     value={virtualDialog.primaryAccountId}
                                     onChange={e =>
                                         setVirtualDialog(p => ({ ...p, primaryAccountId: e.target.value }))
@@ -1319,7 +1318,7 @@ export function IcloudRelayModule() {
                                             {a.email} {a.note ? `(${a.note})` : ''}
                                         </option>
                                     ))}
-                                </select>
+                                </AdminSelect>
                             </div>
                         )}
                         <div>
@@ -1329,7 +1328,7 @@ export function IcloudRelayModule() {
                             >
                                 虚拟邮箱地址 *
                             </label>
-                            <input
+                            <AdminInput
                                 id="icloud-virtual-email"
                                 type="email"
                                 value={virtualDialog.aliasEmail}
@@ -1346,7 +1345,7 @@ export function IcloudRelayModule() {
                             >
                                 备注说明
                             </label>
-                            <input
+                            <AdminInput
                                 id="icloud-virtual-note"
                                 type="text"
                                 value={virtualDialog.note}
@@ -1356,14 +1355,14 @@ export function IcloudRelayModule() {
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setVirtualDialog(p => ({ ...p, open: false }))}
                                 className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleSaveVirtual}
                                 disabled={createVirtualState.loading || updateVirtualState.loading}
@@ -1372,7 +1371,7 @@ export function IcloudRelayModule() {
                                 {createVirtualState.loading || updateVirtualState.loading
                                     ? '保存中…'
                                     : '保存'}
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </AdminModal>
@@ -1389,7 +1388,7 @@ export function IcloudRelayModule() {
                     <div className="space-y-4 pt-4 text-xs">
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">所属主邮箱 *</label>
-                            <select
+                            <AdminSelect
                                 value={batchDialog.primaryAccountId}
                                 onChange={e =>
                                     setBatchDialog(p => ({ ...p, primaryAccountId: e.target.value }))
@@ -1402,13 +1401,13 @@ export function IcloudRelayModule() {
                                         {a.email} {a.note ? `(${a.note})` : ''}
                                     </option>
                                 ))}
-                            </select>
+                            </AdminSelect>
                         </div>
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">
                                 邮箱列表 (一行一个) *
                             </label>
-                            <textarea
+                            <AdminTextArea
                                 rows={8}
                                 value={batchDialog.emailsText}
                                 onChange={e => setBatchDialog(p => ({ ...p, emailsText: e.target.value }))}
@@ -1417,21 +1416,21 @@ export function IcloudRelayModule() {
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setBatchDialog(p => ({ ...p, open: false }))}
                                 className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleBatchImportVirtual}
                                 disabled={batchCreateState.loading}
                                 className="px-4 py-1.5 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 text-xs shadow-2xs"
                             >
                                 {batchCreateState.loading ? '导入中…' : '开始导入'}
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </AdminModal>
@@ -1469,16 +1468,16 @@ export function IcloudRelayModule() {
                             无法核实或存在冲突的邮件将保持未分配。执行时会重新核对，实际修复数量可能变化。
                         </p>
                         <div className="flex flex-wrap justify-end gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={historyState.loading}
                                 onClick={() => setHistoryDialog(null)}
                                 className="rounded border px-3 py-2"
                             >
                                 关闭
-                            </button>
+                            </AdminButton>
                             {!historyDialog.applied && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     disabled={historyState.loading || historyDialog.result.matchedCount === 0}
                                     onClick={() =>
@@ -1487,7 +1486,7 @@ export function IcloudRelayModule() {
                                     className="rounded bg-blue-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
                                 >
                                     {historyState.loading ? '正在修复…' : '修复匹配记录'}
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     </div>
@@ -1512,13 +1511,13 @@ export function IcloudRelayModule() {
                                         {mailDetailDialog.extractedCode}
                                     </div>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => handleCopy(mailDetailDialog.extractedCode!, 'modal-code')}
                                     className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 shadow-2xs"
                                 >
                                     {copiedKey === 'modal-code' ? '已复制 ✓' : '复制验证码'}
-                                </button>
+                                </AdminButton>
                             </div>
                         )}
                         <div className="border-t border-slate-100 pt-3">
@@ -1575,14 +1574,14 @@ function AdminModal({
                             <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
                         )}
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         aria-label="关闭"
                         className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                     >
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {error && (
                     <div role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-xs text-red-700">

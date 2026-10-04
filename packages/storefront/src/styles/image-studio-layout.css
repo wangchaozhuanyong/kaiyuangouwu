@@ -48,8 +48,8 @@
     min-height: 78px;
     padding: 14px 14px 6px;
     resize: none;
-    font-size: 16px;
-    line-height: 1.55;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 
 .ai-studio-prompt-tools {
@@ -70,7 +70,8 @@
     border: 0;
     background: transparent;
     color: var(--accent);
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-prompt-tools button:disabled {
@@ -80,14 +81,15 @@
 .ai-studio-optimized,
 .ai-studio-error {
     margin-top: 8px;
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-options h3,
 .ai-studio-history h3 {
     margin: 0;
-    font-size: 17px;
-    line-height: 1.3;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .ai-studio-model-grid {
@@ -134,8 +136,8 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-overflow: ellipsis;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -144,7 +146,8 @@
 .ai-studio-model-grid strong {
     margin: 0;
     color: var(--accent);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 
@@ -205,7 +208,8 @@
     justify-content: flex-end;
     background: transparent;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-medium);
 }
 
@@ -239,12 +243,14 @@
 }
 
 .ai-studio-settlement-amount strong {
-    font-size: 22px;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-settlement-amount strong.is-balance {
     color: var(--text);
-    font-size: 19px;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-settlement-refund {
@@ -255,11 +261,13 @@
 }
 
 .ai-studio-settlement-refund strong {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-settlement-refund span {
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-checkout > .ai-studio-error {
@@ -269,7 +277,8 @@
 .ai-studio-low-balance {
     margin-top: 8px;
     padding: 8px 10px;
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-terms-row {
@@ -277,7 +286,8 @@
     padding: 1px 2px;
     gap: 7px !important;
     color: var(--muted);
-    font-size: 11px !important;
+    font-size: var(--type-meta-size) !important;
+    line-height: var(--type-meta-leading) !important;
 }
 
 .ai-studio-terms-row input {
@@ -323,7 +333,8 @@
     border-radius: var(--radius-sm);
     background: var(--accent);
     color: #fff;
-    font-size: 15px;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
     box-shadow: var(--accent-shadow);
 }
 
@@ -348,7 +359,8 @@
     padding: 5px 8px;
     border: 0;
     background: transparent;
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-history-heading .ai-studio-history-info {
@@ -383,7 +395,8 @@
     border-radius: 8px;
     background: transparent;
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -474,7 +487,8 @@
     border-radius: 5px;
     background: rgb(31 35 48 / 78%);
     color: #fff;
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-card-content {
@@ -485,7 +499,8 @@
 
 .ai-generation-card header time {
     color: var(--muted);
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 
@@ -496,7 +511,8 @@
     gap: 4px;
     background: transparent !important;
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-bold);
 }
 
@@ -525,8 +541,8 @@
     display: -webkit-box;
     overflow: hidden;
     color: var(--text);
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 }
@@ -535,8 +551,8 @@
     margin-top: 4px;
     display: block;
     color: var(--danger);
-    font-size: 9px;
-    line-height: 1.4;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-progress {
@@ -557,8 +573,8 @@
     min-width: 0;
     overflow: hidden;
     color: var(--muted);
-    font-size: 9px;
-    line-height: 1.4;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -566,7 +582,8 @@
 .ai-generation-progress strong {
     flex: none;
     color: var(--accent);
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-variant-numeric: tabular-nums;
     font-weight: var(--font-weight-semibold);
     white-space: nowrap;
@@ -628,7 +645,8 @@
     border-radius: 6px;
     background: var(--soft);
     color: var(--muted);
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-meta span.is-actual-size {
@@ -647,8 +665,8 @@
     align-items: flex-start;
     gap: 5px;
     color: var(--warning);
-    font-size: 9px;
-    line-height: 1.45;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-ratio-warning svg {
@@ -665,7 +683,8 @@
 
 .ai-generation-card footer > strong {
     color: var(--muted);
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 
@@ -681,7 +700,8 @@
     border-radius: 7px;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 9px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-generation-card footer .ai-generation-delete-button {
@@ -765,12 +785,14 @@
 }
 
 .ai-studio-setting-sheet > button strong {
-    font-size: 14px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-setting-sheet > button small {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-setting-sheet > button > i {
@@ -807,7 +829,8 @@
     display: grid;
     gap: 7px;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -821,9 +844,9 @@
     background: var(--paper);
     color: var(--text);
     font: inherit;
-    font-size: 16px;
+    font-size: var(--type-input-size);
     font-weight: var(--font-weight-normal);
-    line-height: 1.55;
+    line-height: var(--type-input-leading);
     outline: none;
 }
 
@@ -835,7 +858,8 @@
 .ai-studio-reference-instruction small {
     justify-self: end;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-normal);
 }
 
@@ -847,7 +871,8 @@
     border-radius: 11px;
     background: var(--accent);
     color: #fff;
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -858,8 +883,8 @@
 .ai-studio-info-sheet p {
     margin: 8px 0 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.65;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: pre-wrap;
 }
 
@@ -867,19 +892,21 @@
     margin-top: 12px;
     display: block;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-detail-summary strong {
     color: var(--accent);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-detail > p {
     margin: 10px 0 0;
     color: var(--text);
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-detail .ai-generation-grid {
@@ -907,9 +934,9 @@
     gap: 3px;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 10px !important;
+    font-size: var(--type-label-size) !important;
     font-weight: var(--font-weight-semibold);
-    line-height: 1;
+    line-height: var(--type-label-leading);
 }
 
 .ai-generation-detail .ai-generation-output-actions > button:disabled {
@@ -958,10 +985,10 @@
     border-radius: 7px;
     background: rgb(20 18 28 / 72%);
     color: #fff;
-    font-size: 9px;
+    font-size: var(--type-meta-size);
     font-variant-numeric: tabular-nums;
     font-weight: var(--font-weight-semibold);
-    line-height: 16px;
+    line-height: var(--type-meta-leading);
     pointer-events: none;
 }
 
@@ -981,7 +1008,8 @@
     gap: 4px;
     background: rgb(20 18 28 / 72%);
     color: #fff;
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-semibold);
     opacity: 0;
     transform: translateY(3px);
@@ -1048,7 +1076,8 @@
 .ai-generation-lightbox-dialog > header strong {
     overflow: hidden;
     color: #fff;
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-weight: var(--font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1109,7 +1138,8 @@
     gap: 7px;
     background: var(--paper);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -1169,14 +1199,15 @@
 .ai-confirmation-dialog h2 {
     margin: 0;
     color: var(--text);
-    font-size: 17px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .ai-confirmation-dialog p {
     margin: 9px 0 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-confirmation-dialog footer {
@@ -1197,7 +1228,8 @@
     gap: 6px;
     background: var(--paper);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -1221,8 +1253,8 @@
 .ai-studio-shell,
 .sheet.ai-studio-bottom-sheet,
 .ai-generation-lightbox {
-    --ai-font-caption: 12px;
-    --ai-font-body: 13px;
+    --ai-font-caption: var(--type-helper-size);
+    --ai-font-body: var(--type-body-size);
 }
 
 .ai-studio-optimizer-model,
@@ -1255,7 +1287,8 @@
 .ai-studio-info-sheet small,
 .ai-generation-output-size,
 .ai-generation-output-preview > span:last-child {
-    font-size: var(--ai-font-caption);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-heading span,
@@ -1274,21 +1307,24 @@
 .ai-studio-history-heading p,
 .ai-generation-card-content > p,
 .ai-generation-detail > p {
-    font-size: var(--ai-font-body);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-terms-row {
-    font-size: var(--ai-font-body) !important;
-    line-height: 1.55;
+    font-size: var(--type-body-size) !important;
+    line-height: var(--type-body-leading);
 }
 
 .ai-generation-detail .ai-generation-output-actions > * {
     min-height: 36px;
-    font-size: var(--ai-font-caption) !important;
+    font-size: var(--type-label-size) !important;
+    line-height: var(--type-label-leading) !important;
 }
 
 .ai-generation-lightbox-dialog > footer button {
-    font-size: 14px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-history-filters button {
@@ -1345,7 +1381,8 @@
     }
 
     .ai-studio-reference-mode select {
-        font-size: 16px;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
     }
 }
 

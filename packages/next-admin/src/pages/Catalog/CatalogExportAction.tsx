@@ -7,6 +7,7 @@ import {
 } from '@vendure/catalog-management-plugin/browser';
 import { AlertTriangle, Download, FileSpreadsheet, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -151,13 +152,13 @@ export function CatalogExportAction() {
 
     return (
         <>
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => void inspect()}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
             >
                 <Download className="h-4 w-4" /> 导出可回导商品表
-            </button>
+            </AdminButton>
             {open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
                     <AccessibleDialogSurface
@@ -175,7 +176,7 @@ export function CatalogExportAction() {
                                     文件在当前浏览器生成；服务器只返回结构化商品数据。
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setOpen(false)}
                                 disabled={loading}
@@ -183,7 +184,7 @@ export function CatalogExportAction() {
                                 className="rounded-lg p-2 text-slate-500 disabled:opacity-40"
                             >
                                 <X className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
 
                         <div className="mt-5 space-y-4">
@@ -196,7 +197,7 @@ export function CatalogExportAction() {
                             </div>
                             <label className="block space-y-2">
                                 <span className="text-xs font-bold text-slate-700">默认回导仓库</span>
-                                <select
+                                <AdminSelect
                                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
                                     value={stockLocationId}
                                     onChange={event => setStockLocationId(event.target.value)}
@@ -208,7 +209,7 @@ export function CatalogExportAction() {
                                             {location.name}
                                         </option>
                                     ))}
-                                </select>
+                                </AdminSelect>
                                 <span className="block text-[11px] text-slate-500">
                                     主表的库存量和上下限来自该仓库；库存是绝对值。
                                 </span>
@@ -312,13 +313,13 @@ function ExportButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             disabled={disabled}
             onClick={onClick}
             className={`rounded-lg px-4 py-2.5 text-xs font-bold disabled:opacity-40 ${secondary ? 'border border-slate-300 bg-white text-slate-700' : 'bg-blue-600 text-white'}`}
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }

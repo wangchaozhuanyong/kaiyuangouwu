@@ -1,6 +1,8 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const LIBRARY = gql`
@@ -17,7 +19,7 @@ const CLAIM = gql`
 export function CatalogTemplateLibraryPanel({ onClaimed }: { onClaimed: () => void }) {
     const query = useQuery<{
         catalogTemplateLibrary: Array<{ resourceType: string; resourceId: string; name: string }>;
-    }>(LIBRARY, { fetchPolicy: 'network-only' });
+    }>(LIBRARY, {});
     const [claim, state] = useMutation(CLAIM);
     const [message, setMessage] = useState('');
     const receive = async (resourceType: string, resourceId: string) => {
@@ -37,7 +39,7 @@ export function CatalogTemplateLibraryPanel({ onClaimed }: { onClaimed: () => vo
             <p className="my-3 text-slate-500">
                 公共模板由平台发布；领取后成为本店副本，平台更新不会覆盖本店修改。
             </p>
-            {query.loading && <p role="status">读取公共模板中…</p>}
+            {query.loading && !query.data && <p role="status">读取公共模板中…</p>}
             {query.error && <p role="alert">{toUserFacingError(query.error, '模板库读取失败')}</p>}
             {!query.loading && !query.error && !query.data?.catalogTemplateLibrary.length && (
                 <p>暂无公共模板</p>
@@ -47,13 +49,13 @@ export function CatalogTemplateLibraryPanel({ onClaimed }: { onClaimed: () => vo
                     <span>
                         {item.name} · {item.resourceType === 'Facet' ? '属性与标签' : '规格模板'}
                     </span>
-                    <button
+                    <AdminButton
                         className="text-blue-600 disabled:opacity-50"
                         disabled={state.loading}
                         onClick={() => void receive(item.resourceType, item.resourceId)}
                     >
                         领取本店副本
-                    </button>
+                    </AdminButton>
                 </div>
             ))}
             {message && (

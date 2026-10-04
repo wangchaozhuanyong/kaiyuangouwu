@@ -1,5 +1,6 @@
 import { GripVertical } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 import { storefrontBlockDisplayName } from './storefront-content-utils';
 import type { StorefrontHomepageRow } from './storefront-homepage-order';
 
@@ -92,7 +93,7 @@ export function StorefrontFloorList({
                         {renderRow(
                             row,
                             index,
-                            <button
+                            <AdminButton
                                 type="button"
                                 draggable={!locked}
                                 disabled={locked}
@@ -136,7 +137,7 @@ export function StorefrontFloorList({
                                 }}
                             >
                                 <GripVertical className="h-4 w-4" />
-                            </button>,
+                            </AdminButton>,
                         )}
                     </div>
                 );

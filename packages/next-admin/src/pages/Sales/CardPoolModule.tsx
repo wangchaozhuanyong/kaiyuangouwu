@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -20,6 +20,7 @@ import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -36,6 +37,7 @@ import {
     type AutoCardWorkspaceResult,
 } from '../../graphql/fulfillment.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
@@ -82,7 +84,6 @@ export function CardPoolModule() {
                 },
             },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const variants = variantsQuery.data?.productVariants.items ?? [];
     const selectedVariant = variants.find(item => item.id === selectedVariantId) ?? variants[0] ?? null;
@@ -101,7 +102,7 @@ export function CardPoolModule() {
             },
         },
         skip: !selectedVariant,
-        fetchPolicy: 'cache-and-network',
+
         pollInterval: 15_000,
     });
     const supplyQuery = useQuery<{
@@ -122,7 +123,7 @@ export function CardPoolModule() {
         {
             variables: { productVariantId: selectedVariant?.id ?? '' },
             skip: !selectedVariant,
-            fetchPolicy: 'cache-and-network',
+
             pollInterval: 15000,
         },
     );
@@ -148,7 +149,8 @@ export function CardPoolModule() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() =>
                                 void Promise.all([workspaceQuery.refetch(), variantsQuery.refetch()])
@@ -160,7 +162,7 @@ export function CardPoolModule() {
                                 className={`h-4 w-4 ${workspaceQuery.loading || variantsQuery.loading ? 'animate-spin' : ''}`}
                             />
                             刷新
-                        </button>
+                        </AdminButton>
                         {selectedVariant && (
                             <Link
                                 to={`/catalog/products/${selectedVariant.product.id}?tab=variants`}
@@ -189,7 +191,7 @@ export function CardPoolModule() {
                         查找卡密 SKU
                         <span className="relative mt-1 block">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <input
+                            <AdminInput
                                 value={variantSearch}
                                 onChange={event => {
                                     setVariantSearch(event.target.value);
@@ -210,7 +212,7 @@ export function CardPoolModule() {
                 </section>
                 {variantsQuery.loading && !variantsQuery.data ? (
                     <LoadingState text="正在读取卡密 SKU…" />
-                ) : variantsQuery.error ? (
+                ) : variantsQuery.error && !variantsQuery.data ? (
                     <ErrorState
                         message={toUserFacingError(variantsQuery.error, '卡密商品读取失败')}
                         onRetry={() => void variantsQuery.refetch()}
@@ -222,7 +224,7 @@ export function CardPoolModule() {
                         <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 xl:flex-row xl:items-center xl:justify-between">
                             <div>
                                 <div className="text-[10px] font-bold text-slate-400">当前卡密 SKU</div>
-                                <select
+                                <AdminSelect
                                     value={selectedVariant?.id ?? ''}
                                     onChange={event => {
                                         setSelectedVariantId(event.target.value);
@@ -236,7 +238,7 @@ export function CardPoolModule() {
                                             {item.product.name} / {item.name} · {item.sku}
                                         </option>
                                     ))}
-                                </select>
+                                </AdminSelect>
                             </div>
                             {config ? (
                                 <div className="flex flex-wrap gap-2 text-[10px]">
@@ -305,9 +307,9 @@ export function CardPoolModule() {
                                 <p className="mt-1 text-xs text-slate-500">
                                     仅显示本卡池对授权销售店的供货数量。
                                 </p>
-                                {supplyQuery.error ? (
+                                {supplyQuery.error && !supplyQuery.data ? (
                                     <p>供货记录未获取，请刷新重试。</p>
-                                ) : supplyQuery.loading ? (
+                                ) : supplyQuery.loading && !supplyQuery.data ? (
                                     <p>读取中…</p>
                                 ) : supplyQuery.data?.myAutoCardSupplySummary.length ? (
                                     supplyQuery.data.myAutoCardSupplySummary.map(item => (
@@ -336,14 +338,14 @@ export function CardPoolModule() {
                                 <div className="flex gap-2">
                                     <div className="relative">
                                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                                        <input
+                                        <AdminInput
                                             value={search}
                                             onChange={event => setSearch(event.target.value)}
                                             placeholder="筛选当前页序号或脱敏字段"
                                             className={`${inputClass} w-64 pl-8`}
                                         />
                                     </div>
-                                    <select
+                                    <AdminSelect
                                         value={poolState}
                                         onChange={event => {
                                             setPoolState(event.target.value);
@@ -355,13 +357,13 @@ export function CardPoolModule() {
                                         <option value="AVAILABLE">可用</option>
                                         <option value="ASSIGNED">已分配</option>
                                         <option value="DISABLED">已停用</option>
-                                    </select>
+                                    </AdminSelect>
                                 </div>
                             )}
                         </div>
                         {workspaceQuery.loading && !workspaceQuery.data ? (
                             <LoadingState text="正在读取真实卡密库存…" />
-                        ) : workspaceQuery.error ? (
+                        ) : workspaceQuery.error && !workspaceQuery.data ? (
                             <ErrorState
                                 message={toUserFacingError(workspaceQuery.error, '卡密库存读取失败')}
                                 onRetry={() => void workspaceQuery.refetch()}
@@ -549,7 +551,7 @@ function PoolTable({
                                     </td>
                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                         <div className="flex justify-end gap-1">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 disabled={!canReveal || revealState.loading}
                                                 onClick={() => void revealItem(item)}
@@ -557,19 +559,19 @@ function PoolTable({
                                                 aria-label="查看明文"
                                             >
                                                 <Eye className="h-4 w-4" />
-                                            </button>
+                                            </AdminButton>
                                             {item.state === 'AVAILABLE' && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setDisableItem(item)}
                                                     className={`${iconButton} text-rose-600`}
                                                     aria-label="停用"
                                                 >
                                                     <ShieldOff className="h-4 w-4" />
-                                                </button>
+                                                </AdminButton>
                                             )}
                                             {item.state === 'DISABLED' && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => void enable(item)}
                                                     disabled={enabledState.loading}
@@ -577,7 +579,7 @@ function PoolTable({
                                                     aria-label="恢复可用"
                                                 >
                                                     <RotateCcw className="h-4 w-4" />
-                                                </button>
+                                                </AdminButton>
                                             )}
                                         </div>
                                     </td>
@@ -761,7 +763,7 @@ function DeliveriesTable({
                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                     {hasAnyPermission(['ReadSoldAutoCards']) &&
                                         item.state !== 'WAITING_STOCK' && (
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 disabled={soldState.loading}
                                                 onClick={() => void showSoldCards(item)}
@@ -770,9 +772,9 @@ function DeliveriesTable({
                                                 title="查看本单卡密（记录审计）"
                                             >
                                                 <Eye className="h-4 w-4" />
-                                            </button>
+                                            </AdminButton>
                                         )}
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void resend(item)}
                                         disabled={state.loading}
@@ -780,7 +782,7 @@ function DeliveriesTable({
                                     >
                                         <RefreshCw className="h-3.5 w-3.5" />
                                         {item.state === 'SENT' ? '重新发送' : '重试交付'}
-                                    </button>
+                                    </AdminButton>
                                 </td>
                             </tr>
                         ))}
@@ -819,7 +821,7 @@ function RevealDialog({
                                 {field.value}
                             </code>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label={`复制${field.label}`}
                             title={`复制${field.label}`}
@@ -833,14 +835,14 @@ function RevealDialog({
                             ) : (
                                 <Copy className="h-4 w-4" />
                             )}
-                        </button>
+                        </AdminButton>
                     </div>
                 ))}
             </div>
             <div className="mt-5 flex justify-end">
-                <button type="button" onClick={onClose} className={primaryButton}>
+                <AdminButton type="button" onClick={onClose} className={primaryButton}>
                     关闭明文
-                </button>
+                </AdminButton>
             </div>
         </Modal>
     );
@@ -885,7 +887,7 @@ export function DisableDialog({
                 </p>
             )}
             <Field label="停用原因 *">
-                <textarea
+                <AdminTextArea
                     rows={4}
                     value={reason}
                     onChange={event => setReason(event.target.value)}
@@ -982,7 +984,7 @@ function Pagination({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.max(0, page - 1))}
                     disabled={page === 0 || loading}
@@ -990,8 +992,8 @@ function Pagination({
                     aria-label="上一页"
                 >
                     <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
                     disabled={page >= totalPages - 1 || loading}
@@ -999,7 +1001,7 @@ function Pagination({
                     aria-label="下一页"
                 >
                     <ChevronRight className="h-4 w-4" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -1014,13 +1016,13 @@ function TabButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }
 function Modal({
@@ -1048,9 +1050,14 @@ function Modal({
                             <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
                         )}
                     </div>
-                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="p-1 text-slate-400"
+                        aria-label="关闭"
+                    >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </AccessibleDialogSurface>
@@ -1070,13 +1077,13 @@ function ModalActions({
 }) {
     return (
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
+            <AdminButton type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
                 取消
-            </button>
-            <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+            </AdminButton>
+            <AdminButton type="button" onClick={onSave} disabled={saving} className={primaryButton}>
                 {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                 {saveLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1122,9 +1129,9 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">卡密数据加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
+            <AdminButton type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1144,9 +1151,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

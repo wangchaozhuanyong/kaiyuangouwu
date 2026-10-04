@@ -1,8 +1,10 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Search, Truck, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -70,7 +72,6 @@ export function SuppliersModule() {
                 enabled: enabled === 'ALL' ? null : enabled === 'ENABLED',
             },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const result = query.data?.catalogSuppliers;
     const totalPages = Math.max(1, Math.ceil((result?.totalItems ?? 0) / pageSize));
@@ -102,21 +103,24 @@ export function SuppliersModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             aria-label="刷新供货商"
                             className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
-                        </button>
-                        <button
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setDraft(emptyDraft())}
                             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
                             <Plus className="h-4 w-4" /> 新增供货商
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -130,7 +134,7 @@ export function SuppliersModule() {
                     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row">
                         <label className="relative min-w-0 flex-1">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
+                            <AdminInput
                                 value={search}
                                 onChange={event => {
                                     setSearch(event.target.value);
@@ -141,7 +145,7 @@ export function SuppliersModule() {
                                 className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
                             />
                         </label>
-                        <select
+                        <AdminSelect
                             value={enabled}
                             onChange={event => {
                                 setEnabled(event.target.value as typeof enabled);
@@ -153,7 +157,7 @@ export function SuppliersModule() {
                             <option value="ALL">全部状态</option>
                             <option value="ENABLED">启用</option>
                             <option value="DISABLED">停用</option>
-                        </select>
+                        </AdminSelect>
                     </div>
 
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -161,16 +165,16 @@ export function SuppliersModule() {
                             <div className="p-12 text-center text-sm text-slate-500" role="status">
                                 正在读取供货商…
                             </div>
-                        ) : query.error ? (
+                        ) : query.error && !query.data ? (
                             <div className="p-12 text-center" role="alert">
                                 <p className="text-sm font-bold text-rose-700">供货商列表加载失败</p>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void query.refetch()}
                                     className="mt-3 rounded-lg border px-3 py-2 text-xs font-bold"
                                 >
                                     重试
-                                </button>
+                                </AdminButton>
                             </div>
                         ) : !result?.items.length ? (
                             <div className="p-12 text-center text-sm text-slate-500">
@@ -212,13 +216,13 @@ export function SuppliersModule() {
                                                     {supplier.phone || '—'}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => setViewing(supplier)}
                                                         className="font-bold text-blue-600 hover:underline"
                                                     >
                                                         {supplier.linkedVariantCount}
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <span
@@ -228,14 +232,14 @@ export function SuppliersModule() {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => openEdit(supplier)}
                                                         aria-label={`编辑${supplier.name}`}
                                                         className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
                                                     >
                                                         <Pencil className="h-4 w-4" />
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
                                             </tr>
                                         ))}
@@ -365,7 +369,7 @@ export function SupplierEditor({
                     onChange={value => update('email', value)}
                 />
                 <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.enabled}
                         onChange={event => update('enabled', event.target.checked)}
@@ -380,7 +384,7 @@ export function SupplierEditor({
                 />
                 <label className="sm:col-span-2 text-xs font-bold text-slate-700">
                     备注
-                    <textarea
+                    <AdminTextArea
                         value={draft.notes}
                         onChange={event => update('notes', event.target.value)}
                         rows={4}
@@ -389,21 +393,21 @@ export function SupplierEditor({
                 </label>
             </div>
             <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     className="rounded-lg border px-4 py-2 text-xs font-bold"
                 >
                     取消
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
                     disabled={saving}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
                     {saving ? '保存中…' : '保存'}
-                </button>
+                </AdminButton>
             </div>
         </Modal>
     );
@@ -427,9 +431,9 @@ function SupplierVariants({ supplier, onClose }: { supplier: CatalogSupplierReco
     });
     return (
         <Modal title={`关联 SKU · ${supplier.name}`} onClose={onClose}>
-            {query.loading ? (
+            {query.loading && !query.data ? (
                 <p className="py-8 text-center text-sm text-slate-500">正在读取关联 SKU…</p>
-            ) : query.error ? (
+            ) : query.error && !query.data ? (
                 <p className="py-8 text-center text-sm text-rose-700" role="alert">
                     关联 SKU 加载失败
                 </p>
@@ -478,9 +482,9 @@ function Modal({
             >
                 <div className="mb-5 flex items-center justify-between gap-3">
                     <h2 className="text-base font-bold text-slate-900">{title}</h2>
-                    <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg p-2">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭" className="rounded-lg p-2">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </AccessibleDialogSurface>
@@ -504,7 +508,7 @@ function Field({
     return (
         <label className={`text-xs font-bold text-slate-700 ${className}`}>
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -526,7 +530,7 @@ function PagerButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             aria-label={label}
             disabled={disabled}
@@ -534,7 +538,7 @@ function PagerButton({
             className="rounded-lg border p-2 disabled:opacity-40"
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -553,9 +557,9 @@ function Notice({
             className={`flex items-center justify-between rounded-lg border px-4 py-3 text-xs ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
         >
             <span>{message}</span>
-            <button type="button" onClick={onClose} aria-label="关闭提示">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭提示">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

@@ -49,7 +49,8 @@
         border-radius: 0;
         overflow: visible;
         box-shadow: none;
-        font-size: 15px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 
     .storefront-app.desktop-store-layout {
@@ -189,7 +190,8 @@
     }
 
     .home-page > .storefront-description {
-        font-size: 14px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
         text-align: left;
     }
 
@@ -260,12 +262,14 @@
 
     .section-header h2,
     .services-section h2 {
-        font-size: 22px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
     }
 
     .section-header p {
         margin-top: 5px;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .product-grid {
@@ -379,7 +383,7 @@
 
     html[lang='en'] .primary-category-label {
         height: 24px;
-        line-height: 12px;
+        line-height: var(--line-height-body);
         -webkit-line-clamp: 2;
     }
 
@@ -473,7 +477,8 @@
         align-items: center;
         gap: 6px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .subcat-expand-toggle svg {
@@ -512,7 +517,8 @@
     .sort-bar button {
         height: 47px;
         padding-inline: 12px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .product-list,
@@ -711,7 +717,8 @@
     }
 
     .auth-page .auth-brand-lockup strong {
-        font-size: 20px;
+        font-size: var(--type-brand-size);
+        line-height: var(--type-brand-leading);
     }
 
     .auth-page .auth-brand-lockup small {
@@ -733,22 +740,23 @@
         min-height: 24px;
         padding: 0 0 0 14px;
         display: inline-flex;
-        font-size: 10px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .auth-page .auth-hero-message h2 {
         margin-top: 0;
         max-width: 12em;
-        font-size: clamp(32px, 2.6vw, 38px);
-        line-height: 1.1;
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
     }
 
     .auth-page .auth-hero-message p {
         max-width: 31em;
         margin-top: 12px;
         display: block;
-        font-size: 14px;
-        line-height: 1.58;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 
     .auth-page .auth-hero-tags {
@@ -764,7 +772,8 @@
     .auth-page .auth-hero-tags > span {
         min-height: auto;
         padding: 0 13px;
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .auth-page .login-content {
@@ -838,7 +847,8 @@
 @media (min-width: 1024px) and (max-width: 1199px) {
     .auth-page .auth-hero-message h2 {
         max-width: none;
-        font-size: clamp(28px, 3.1vw, 34px);
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
         -webkit-line-clamp: 3;
     }
 
@@ -852,7 +862,8 @@
     .auth-page .auth-hero-tags > span {
         padding-right: 6px;
         padding-left: 6px;
-        font-size: 10.5px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 }
 

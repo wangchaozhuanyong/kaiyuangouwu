@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { GET_COLLECTIONS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
@@ -32,7 +34,6 @@ export function TargetValueInput({
             },
         },
         skip: type !== 'PRODUCT' || !canReadProducts,
-        fetchPolicy: 'cache-first',
     });
     const collectionLookup = useQuery<{
         collections: { items: Array<{ id: string; name: string }>; totalItems: number };
@@ -46,28 +47,33 @@ export function TargetValueInput({
             },
         },
         skip: type !== 'COLLECTION' || !canReadCollections,
-        fetchPolicy: 'cache-first',
     });
     if ((type === 'PRODUCT' && !canReadProducts) || (type === 'COLLECTION' && !canReadCollections)) {
         return (
             <div>
-                <input value={value} disabled className={inputClass} />
+                <AdminInput value={value} disabled className={inputClass} />
                 <p role="status">需要对应的商品或分类读取权限，已保留原目标。</p>
             </div>
         );
     }
     if (type === 'NONE')
-        return <input value="" disabled className={`${inputClass} bg-slate-100`} placeholder="无需填写" />;
+        return (
+            <AdminInput value="" disabled className={`${inputClass} bg-slate-100`} placeholder="无需填写" />
+        );
     if (type === 'PAGE')
         return (
-            <select value={value} onChange={event => onChange(event.target.value)} className={inputClass}>
+            <AdminSelect
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                className={inputClass}
+            >
                 <option value="">请选择页面</option>
                 {navigationTargets.map(([path, label]) => (
                     <option key={path} value={path}>
                         {label} · {path}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         );
     if (type === 'PRODUCT' || type === 'COLLECTION') {
         const query = type === 'PRODUCT' ? productLookup : collectionLookup;
@@ -83,14 +89,18 @@ export function TargetValueInput({
             <div className="space-y-2">
                 <div className="relative">
                     <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                    <input
+                    <AdminInput
                         value={lookupSearch}
                         onChange={event => setLookupSearch(event.target.value)}
                         className={`${inputClass} pl-8`}
                         placeholder={`搜索${type === 'PRODUCT' ? '商品' : '分类专辑'}名称`}
                     />
                 </div>
-                <select value={value} onChange={event => onChange(event.target.value)} className={inputClass}>
+                <AdminSelect
+                    value={value}
+                    onChange={event => onChange(event.target.value)}
+                    className={inputClass}
+                >
                     <option value="">
                         {query.loading ? '正在查询…' : `请选择（匹配 ${totalItems} 条）`}
                     </option>
@@ -102,7 +112,7 @@ export function TargetValueInput({
                             {item.name}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
                 {query.error && (
                     <p className="text-[10px] text-rose-600">目标列表读取失败，可保留原选择后重试</p>
                 )}
@@ -110,7 +120,7 @@ export function TargetValueInput({
         );
     }
     return (
-        <input
+        <AdminInput
             value={value}
             onChange={event => onChange(event.target.value)}
             className={inputClass}

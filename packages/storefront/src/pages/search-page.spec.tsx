@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
+import { CatalogPaginationError } from '../catalog-pagination';
 import { enabledMarkets } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
 import { SearchPageContext } from '../storefront-page-contexts';
@@ -361,6 +362,38 @@ describe('search result and product-detail cache separation', () => {
         expect(container.querySelector('.search-results-heading')?.textContent).toContain('Unavailable');
         expect(container.querySelector('.search-results-heading')?.textContent).not.toContain('0 items');
         expect(container.querySelector('.search-empty')).toBeNull();
+    });
+    it('keeps confirmed results and shows next-page failure in the pagination footer', async () => {
+        const catalog = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('Next page unavailable'))
+            .mockResolvedValue({ items: [{ ...product, id: 'tea', name: 'Tea' }], totalItems: 2 });
+        client.setQueryData(searchKey, { pages: [{ items: [product], totalItems: 2 }], pageParams: [0] });
+        renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi });
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-load-more')).click();
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.textContent).toContain('Coffee');
+        expect(container.querySelector('.search-load-error')?.textContent).toContain('Please try again');
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-load-error button')).click();
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.textContent).toContain('Coffee');
+        expect(container.textContent).toContain('Tea');
+        expect(container.querySelector('.search-load-error')).toBeNull();
+    });
+    it('shows a recoverable error instead of repeating offset zero for an empty page with remaining results', async () => {
+        client.removeQueries({ queryKey: searchKey });
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 10 });
+        renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.textContent).toContain('Search unavailable');
+        expect(client.getQueryState(searchKey)?.error).toBeInstanceOf(CatalogPaginationError);
+        expect(catalog).toHaveBeenCalledTimes(1);
     });
     beforeEach(() => {
         navigate.mockClear();

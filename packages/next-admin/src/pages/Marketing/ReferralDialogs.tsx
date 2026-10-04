@@ -1,8 +1,9 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { AlertCircle, ChevronRight, LoaderCircle, Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { posterLayoutFields, type PosterCopyField } from '../../../../storefront/src/referral-poster-layout';
 import { sensitiveActionContext } from '../../apollo';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
@@ -18,6 +19,7 @@ import {
     UPDATE_REFERRAL_POSTER_MUTATION,
 } from '../../graphql/marketing.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
@@ -106,7 +108,7 @@ export function WithdrawalActionDialog({
             )}
             <label className="mt-4 block text-[11px] font-bold text-slate-600">
                 处理备注{action.status === 'REJECTED' ? ' *' : ''}
-                <textarea
+                <AdminTextArea
                     value={note}
                     onChange={event => setNote(event.target.value)}
                     rows={3}
@@ -180,7 +182,6 @@ export function FinancialDialog({
     }>(MARKETING_CUSTOMER_LOOKUP_QUERY, {
         variables: { options: { take: 20, filter } },
         skip: Boolean(customer),
-        fetchPolicy: 'cache-and-network',
     });
     const wallets = useQuery<{
         referralCustomerWallets: Array<{
@@ -193,7 +194,6 @@ export function FinancialDialog({
     }>(REFERRAL_CUSTOMER_WALLETS_QUERY, {
         variables: { customerId: customer?.id },
         skip: !customer,
-        fetchPolicy: 'network-only',
     });
     const [createWithdrawal, withdrawalState] = useMutation(CREATE_REFERRAL_WITHDRAWAL_MUTATION);
     const [adjust, adjustState] = useMutation(ADJUST_REFERRAL_BALANCE_MUTATION);
@@ -269,13 +269,13 @@ export function FinancialDialog({
                     <p className="mt-2 text-xs text-rose-700">
                         {toUserFacingError(lookup.error, '客户列表读取失败，请重新加载。')}
                     </p>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void lookup.refetch()}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
                     >
                         重新加载客户
-                    </button>
+                    </AdminButton>
                 </div>
             </Modal>
         );
@@ -293,13 +293,13 @@ export function FinancialDialog({
                     <p className="mt-2 text-xs text-rose-700">
                         {toUserFacingError(wallets.error, '客户返利余额读取失败，请重新加载。')}
                     </p>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void wallets.refetch()}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
                     >
                         重新加载余额
-                    </button>
+                    </AdminButton>
                 </div>
             </Modal>
         );
@@ -317,7 +317,7 @@ export function FinancialDialog({
                 <>
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <input
+                        <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
                             aria-label="搜索客户"
@@ -330,7 +330,7 @@ export function FinancialDialog({
                             <LoadingState />
                         ) : (
                             lookup.data?.customers.items.map(item => (
-                                <button
+                                <AdminButton
                                     type="button"
                                     key={item.id}
                                     onClick={() =>
@@ -347,7 +347,7 @@ export function FinancialDialog({
                                         email={item.phoneNumber || item.emailAddress}
                                     />
                                     <ChevronRight className="h-4 w-4 text-slate-400" />
-                                </button>
+                                </AdminButton>
                             ))
                         )}
                     </div>
@@ -362,13 +362,13 @@ export function FinancialDialog({
                 <>
                     <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
                         <NameEmail name={customer.name} email={customer.email} />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setCustomer(null)}
                             className="text-[11px] font-bold text-blue-600"
                         >
                             更换客户
-                        </button>
+                        </AdminButton>
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2">
                         {wallets.data?.referralCustomerWallets.map(wallet => (
@@ -434,7 +434,7 @@ export function FinancialDialog({
                     </div>
                     <label className="mt-3 block text-[11px] font-bold text-slate-600">
                         {mode === 'ADJUST' ? '调整原因 *' : '客服处理备注 *'}
-                        <textarea
+                        <AdminTextArea
                             value={reason}
                             onChange={event => setReason(event.target.value)}
                             rows={3}
@@ -504,7 +504,7 @@ export function PosterEditor({
                 },
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [create, createState] = useMutation(CREATE_REFERRAL_POSTER_MUTATION);
@@ -593,12 +593,12 @@ export function PosterEditor({
                             placeholder="输入素材名称"
                         />
                         <div className="mt-1 flex min-h-4 items-center justify-between gap-3 text-[10px] text-slate-400">
-                            {assetQuery.loading ? (
+                            {assetQuery.loading && !assetQuery.data ? (
                                 <span className="flex items-center gap-1" role="status">
                                     <LoaderCircle className="h-3 w-3 animate-spin" />
                                     正在查询素材库…
                                 </span>
-                            ) : assetQuery.error ? (
+                            ) : assetQuery.error && !assetQuery.data ? (
                                 <span className="text-rose-600" role="alert">
                                     素材读取失败，请重试
                                 </span>
@@ -608,13 +608,13 @@ export function PosterEditor({
                                 </span>
                             )}
                             {assetQuery.error && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void assetQuery.refetch()}
                                     className="font-bold text-blue-600 hover:text-blue-700"
                                 >
                                     重新加载
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     </div>
@@ -682,7 +682,7 @@ export function PosterEditor({
                                         >
                                             {field.label} · {locale === 'Zh' ? '中文' : 'English'}（最多{' '}
                                             {field.lines} 行）
-                                            <textarea
+                                            <AdminTextArea
                                                 value={draft[key]}
                                                 rows={field.lines}
                                                 onChange={event =>

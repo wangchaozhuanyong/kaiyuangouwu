@@ -24,8 +24,9 @@
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
 }
 
 .two-factor-view-tabs [aria-selected='true'] {
@@ -50,16 +51,16 @@
 .two-factor-workspace h2 {
     margin: 0;
     color: var(--text);
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.5;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 
 .two-factor-intro {
     margin: 8px 0 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .two-factor-quick-form {
@@ -70,8 +71,9 @@
 
 .two-factor-quick-form > label {
     color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
 }
 
 .two-factor-secret-field {
@@ -97,7 +99,8 @@
     border-radius: var(--skin-control-radius);
     background: transparent;
     color: var(--accent-ink);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .two-factor-query-result {
@@ -112,7 +115,8 @@
     gap: 8px;
     margin-top: 16px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .two-factor-lock-notice button {
@@ -122,8 +126,9 @@
     border: 0;
     background: transparent;
     color: var(--accent-ink);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
 }
 
 .two-factor-workspace .two-factor-vault {
@@ -136,12 +141,13 @@
 
 .two-factor-vault > strong {
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .two-factor-vault > p {
-    font-size: 12px;
-    line-height: 1.7;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .two-factor-workspace .two-factor-vault button[type='submit'] {
@@ -178,12 +184,13 @@
     width: 100%;
     justify-content: space-between;
     color: var(--muted);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .two-factor-privacy > button span {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
 }
 
 .two-factor-workspace :is(button, input):focus-visible {

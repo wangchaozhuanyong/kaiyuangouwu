@@ -223,3 +223,6 @@ describe('AiImageAccessModule credential controls', () => {
         expect(refetch).not.toHaveBeenCalled();
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

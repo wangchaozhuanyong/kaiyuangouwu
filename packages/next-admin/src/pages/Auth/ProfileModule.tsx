@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -13,6 +13,7 @@ import {
 import { useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { sensitiveActionContext } from '../../apollo';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ACTIVE_ADMINISTRATOR_PROFILE_QUERY,
@@ -21,6 +22,7 @@ import {
     type ActiveAdministratorProfileData,
     type UpdateActiveAdministratorData,
 } from '../../graphql/auth.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { isStrongAdministratorPassword, PASSWORD_REQUIREMENT } from '../../utils/password';
 import { getRoleLabel } from '../../utils/status-labels';
@@ -39,7 +41,6 @@ interface UpdateActiveAdministratorVariables {
 
 export function ProfileModule() {
     const query = useQuery<ActiveAdministratorProfileData>(ACTIVE_ADMINISTRATOR_PROFILE_QUERY, {
-        fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
 
@@ -66,13 +67,14 @@ export function ProfileModule() {
                     <p className="mt-2 text-xs text-slate-500">
                         {toUserFacingError(query.error, '个人资料读取失败，请稍后重试')}
                     </p>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
                     >
                         <RefreshCw className="h-3.5 w-3.5" /> 重试
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         );
@@ -269,7 +271,7 @@ function ProfileContent({
                                     </div>
                                 </div>
                                 <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
-                                    <button
+                                    <AdminButton
                                         type="submit"
                                         disabled={savingProfile}
                                         className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -280,7 +282,7 @@ function ProfileContent({
                                             <Save className="h-3.5 w-3.5" />
                                         )}{' '}
                                         保存资料
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </form>
 
@@ -324,7 +326,7 @@ function ProfileContent({
                                 </div>
                                 <p className="mt-2 text-[11px] text-slate-400">{PASSWORD_REQUIREMENT}。</p>
                                 <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
-                                    <button
+                                    <AdminButton
                                         type="submit"
                                         disabled={savingPassword}
                                         className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -335,7 +337,7 @@ function ProfileContent({
                                             <KeyRound className="h-3.5 w-3.5" />
                                         )}{' '}
                                         更新密码
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </form>
                         </div>
@@ -455,7 +457,7 @@ function Field({
             {label}
             <span className="relative mt-1.5 block">
                 {Icon && <Icon className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />}
-                <input
+                <AdminInput
                     required
                     type={type}
                     value={value}

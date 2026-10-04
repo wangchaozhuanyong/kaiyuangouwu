@@ -43,7 +43,7 @@
 .cart-guest-copy small {
     margin-top: 3px;
     color: var(--muted);
-    line-height: 1.45;
+    line-height: var(--line-height-body);
 }
 
 .cart-guest-actions {
@@ -58,7 +58,8 @@
     padding: 0 11px;
     border: 0;
     border-radius: 7px;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -148,7 +149,8 @@
 }
 
 .cart-group > header strong {
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-weight: var(--font-weight-semibold);
     color: var(--text);
 }
@@ -157,7 +159,8 @@
     max-width: 55%;
     overflow: hidden;
     color: var(--text);
-    font-size: 11.5px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
     text-overflow: ellipsis;
 }
@@ -194,9 +197,9 @@
     place-content: center;
     justify-items: center;
     gap: 7px;
-    font-size: 12px;
+    font-size: var(--type-label-size);
     font-weight: var(--font-weight-medium);
-    line-height: 1;
+    line-height: var(--type-label-leading);
     transition:
         background-color 160ms ease,
         color 160ms ease,
@@ -348,16 +351,16 @@
     padding-right: 24px;
     overflow: hidden;
     font-weight: var(--font-weight-semibold);
-    line-height: 1.4;
+    line-height: var(--line-height-body);
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
 .cart-line-tag {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--type-meta-size);
+    font-weight: var(--font-weight-medium);
     color: var(--accent-ink);
-    line-height: 1.35;
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -387,10 +390,10 @@
 .cart-line-purchase-row > b {
     min-width: 0;
     color: var(--accent-ink);
-    font-size: 14px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-bold);
     font-variant-numeric: tabular-nums;
-    line-height: 32px;
+    line-height: var(--type-body-leading);
     white-space: nowrap;
 }
 
@@ -444,7 +447,8 @@
 
 .cart-checkout-bar > div span {
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     display: flex;
     align-items: baseline;
     gap: 4px;
@@ -452,8 +456,9 @@
 
 .cart-checkout-bar strong {
     color: var(--accent-ink);
-    font-size: 19px;
-    font-weight: 800;
+    font-size: var(--type-price-size);
+    line-height: var(--type-price-leading);
+    font-weight: var(--font-weight-bold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -461,7 +466,8 @@
     display: block;
     margin-top: 2px;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .cart-checkout-bar > button {
@@ -471,8 +477,9 @@
     border-radius: 9999px;
     background: var(--accent);
     color: var(--accent-foreground, #ffffff);
-    font-weight: 700;
-    font-size: 14px;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     box-shadow: var(--accent-shadow);
     transition:
         transform 140ms ease,
@@ -514,7 +521,7 @@
 /* Inventory feedback stays beside the affected item, including unselected lines. */
 .cart-line-copy > .cart-stock-error {
     color: var(--danger);
-    line-height: 1.5;
+    line-height: var(--line-height-body);
     white-space: normal;
 }
 .cart-stock-error button {
@@ -532,8 +539,8 @@
     color: var(--text);
     background: var(--soft);
     border-radius: 10px;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 @media (max-width: 1023px) {
     .cart-page :is(.cart-group, .coupon-row, .invalid-cart-lines) {

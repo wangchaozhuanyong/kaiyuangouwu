@@ -18,23 +18,25 @@
     }
 
     .hero.hero-image-overlay .hero-rich-title {
-        font-size: 24px;
-        line-height: 1.25;
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
     }
 
     .hero.hero-image-overlay .hero-rich-desc {
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .hero.hero-image-overlay .hero-rich-pill {
-        font-size: 10px;
-        letter-spacing: 0.02em;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+        letter-spacing: var(--tracking-normal);
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn {
         padding: 10px 16px;
         margin-top: 4px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 }

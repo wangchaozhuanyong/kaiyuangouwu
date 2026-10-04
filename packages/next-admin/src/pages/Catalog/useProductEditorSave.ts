@@ -14,7 +14,6 @@ import {
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     GET_COLLECTION_ASSIGNMENT_DETAIL,
-    GET_PRODUCTS,
     REMOVE_OPTION_GROUP_FROM_PRODUCT,
     UPDATE_COLLECTION_ASSIGNMENT,
     UPDATE_PRODUCT,
@@ -58,6 +57,7 @@ interface ProductEditorSaveInput {
         setSaving: (saving: boolean) => void;
         showError: (message: string) => void;
         showNotice: (message: string) => void;
+        onReadbackComplete?: () => void;
     };
 }
 
@@ -531,7 +531,6 @@ export function useProductEditorSave({
                                 ],
                             },
                         },
-                        refetchQueries: [{ query: GET_PRODUCTS }],
                     });
 
                     newProductId = createRes?.data?.createProduct?.id || '';
@@ -889,12 +888,15 @@ export function useProductEditorSave({
                     }
                 }
 
-                await refetchProduct();
-                await data.refetchWorkspace?.();
+                const readback = await Promise.allSettled([refetchProduct(), data.refetchWorkspace?.()]);
+                const readbackFailed = readback.some(result => result.status === 'rejected');
+                if (!readbackFailed) controls.onReadbackComplete?.();
                 showNotice(
-                    completedStages.length > 0
-                        ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
-                        : '商品数据已同步至最新状态',
+                    readbackFailed
+                        ? `商品《${productName}》已保存，但最新数据读取失败。草稿已保留，请重试读取核对结果，勿重复保存。`
+                        : completedStages.length > 0
+                          ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
+                          : '商品数据已同步至最新状态',
                 );
             }
         } catch (err: unknown) {
@@ -904,7 +906,7 @@ export function useProductEditorSave({
                     () => false,
                 );
                 showError(
-                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '页面已按后端当前数据重新加载。' : '重新加载失败，请刷新页面核对已保存内容后再操作。'}`,
+                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '已读取后端当前数据，未保存的草稿仍保留。' : '重新读取失败，请重试读取核对已保存内容后再操作。'}`,
                 );
             } else {
                 showError(toUserFacingError(err, '商品保存失败，请稍后重试'));

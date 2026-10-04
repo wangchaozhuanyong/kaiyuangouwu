@@ -331,7 +331,7 @@ describe('unified store notifications with real persistence and additive migrati
         await db
             .getRepository(CustomerServiceFeedback)
             .update(
-                { id: Number(String(first.review.id).replace('feedback:', '')) },
+                { id: Number(first.review.id.replace('feedback:', '')) },
                 { updatedAt: new Date(Date.now() - 61_000) },
             );
         const changed = await reviews.submit(ctx(1, 7), {

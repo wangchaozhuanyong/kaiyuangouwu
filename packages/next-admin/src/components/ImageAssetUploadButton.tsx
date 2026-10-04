@@ -4,6 +4,7 @@ import { uploadAdminFiles } from '../apollo';
 import { CREATE_ASSETS_MULTIPART } from '../graphql/catalog-admin.graphql';
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
 import { toUserFacingError } from '../utils/user-facing-error';
+import { AdminButton, AdminInput } from './AdminControls';
 
 export interface UploadedImageAsset {
     id: string;
@@ -110,7 +111,7 @@ export function ImageAssetUploadButton({
 
     return (
         <div className={`inline-flex min-w-0 flex-col items-start gap-1 ${className}`}>
-            <input
+            <AdminInput
                 ref={inputRef}
                 type="file"
                 multiple={multiple}
@@ -126,7 +127,7 @@ export function ImageAssetUploadButton({
                     void uploadImages(multiple ? files : files.slice(0, 1));
                 }}
             />
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={unavailable}
@@ -137,7 +138,7 @@ export function ImageAssetUploadButton({
             >
                 <UploadCloud className={`h-3.5 w-3.5 ${uploading ? 'animate-pulse' : ''}`} />
                 {uploading ? '上传中…' : label}
-            </button>
+            </AdminButton>
             {error && (
                 <span className="max-w-64 text-[11px] leading-4 text-rose-600" role="alert">
                     {error}

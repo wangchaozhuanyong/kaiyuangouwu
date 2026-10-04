@@ -211,7 +211,7 @@ export function ReferralPosterModal({
                             alt={isZh ? `${style.name}邀请海报预览` : `${style.name} referral poster preview`}
                         />
                     ) : (
-                        <div className="referral-poster-placeholder grid size-full place-items-center text-sm font-bold">
+                        <div className="referral-poster-placeholder grid size-full place-items-center type-body weight-bold">
                             {renderError
                                 ? isZh
                                     ? '海报生成失败'
@@ -223,7 +223,7 @@ export function ReferralPosterModal({
                     )}
                     {generating && posterDataUrl && (
                         <div className="pointer-events-none absolute inset-0 grid place-items-center bg-slate-900/15 backdrop-blur-[1px] transition-opacity">
-                            <div className="flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-sm">
+                            <div className="flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-1.5 type-label text-white shadow-lg backdrop-blur-sm">
                                 <div className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                                 <span>{isZh ? '正在生成…' : 'Generating…'}</span>
                             </div>
@@ -231,7 +231,7 @@ export function ReferralPosterModal({
                     )}
                 </div>
                 {renderError && (
-                    <div className="mt-3 text-xs text-rose-700" role="alert">
+                    <div className="mt-3 type-helper text-rose-700" role="alert">
                         <p>{renderError}</p>
                         <button
                             type="button"
@@ -263,7 +263,7 @@ export function ReferralPosterModal({
                                 type="button"
                                 data-template-id={item.id}
                                 data-active={selectedId === item.id}
-                                className="referral-poster-template-button shrink-0 rounded-xl px-3 py-2 text-xs font-bold"
+                                className="referral-poster-template-button shrink-0 rounded-xl px-3 py-2 type-helper weight-bold"
                                 onClick={() => setSelectedId(item.id)}
                             >
                                 {item.name}
@@ -274,7 +274,7 @@ export function ReferralPosterModal({
                 <div className="mt-4 grid w-full min-w-0 grid-cols-2 gap-3">
                     <button
                         type="button"
-                        className="referral-poster-save flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 font-bold disabled:opacity-60"
+                        className="referral-poster-save flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 weight-bold disabled:opacity-60"
                         disabled={generating || !posterDataUrl}
                         onClick={download}
                     >
@@ -283,7 +283,7 @@ export function ReferralPosterModal({
                     </button>
                     <button
                         type="button"
-                        className="referral-poster-copy flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 font-bold"
+                        className="referral-poster-copy flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 weight-bold"
                         onClick={() => void copyText()}
                     >
                         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}

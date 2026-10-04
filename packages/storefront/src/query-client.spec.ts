@@ -337,3 +337,32 @@ describe('public React Query session cache', () => {
         }
     });
 });
+
+describe('failed background refresh persistence', () => {
+    it('retains last confirmed public data without persisting errors or advancing freshness', async () => {
+        const client = createStorefrontQueryClient();
+        const key = storefrontQueryKeys.products('shop:MYR', 'zh_Hans', 12);
+        const observer = new QueryObserver(client, {
+            queryKey: key,
+            queryFn: () => Promise.reject(new Error('sensitive diagnostic')),
+            meta: publicQueryMeta(),
+            retry: false,
+            staleTime: Infinity,
+        });
+        client.setQueryData(key, [], { updatedAt: 100 });
+        const stop = observer.subscribe(() => undefined);
+        await observer.refetch({ cancelRefetch: false });
+        expect(observer.getCurrentResult().isRefetchError).toBe(true);
+        const storage = memoryStorage();
+        persistPublicQueryCache(client, storage, 200);
+        expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).not.toContain('sensitive diagnostic');
+        const restored = createStorefrontQueryClient();
+        expect(restorePublicQueryCache(restored, storage, 250)).toBe(true);
+        expect(restored.getQueryData(key)).toEqual([]);
+        expect(restored.getQueryState(key)?.dataUpdatedAt).toBe(100);
+        expect(restored.getQueryState(key)?.error).toBeNull();
+        stop();
+        client.clear();
+        restored.clear();
+    });
+});

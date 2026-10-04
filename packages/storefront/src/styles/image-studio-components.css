@@ -25,14 +25,16 @@
 .ai-studio-heading span,
 .ai-studio-option-row span {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-heading h2,
 .ai-studio-options h3,
 .ai-studio-history h3 {
     margin: 4px 0 0;
-    font-size: 20px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .ai-studio-balance {
@@ -51,7 +53,8 @@
 .ai-studio-balance strong {
     margin-top: 2px;
     color: var(--accent);
-    font-size: 18px;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-prompt-wrap {
@@ -77,7 +80,8 @@
     color: var(--text);
     background: transparent;
     font: inherit;
-    line-height: 1.65;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 
 .ai-studio-prompt-tools {
@@ -88,7 +92,8 @@
     align-items: center;
     justify-content: space-between;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-prompt-tools > span {
@@ -113,8 +118,8 @@
     align-items: baseline;
     gap: 5px;
     color: var(--muted);
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 
@@ -122,8 +127,9 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 10px;
+    font-family: var(--font-code);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-semibold);
     text-overflow: ellipsis;
 }
@@ -143,7 +149,8 @@
     gap: 7px;
     background: var(--paper);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
     text-decoration: none;
 }
@@ -186,7 +193,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-optimized {
@@ -227,7 +235,8 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 
 .ai-studio-reference-add {
@@ -286,14 +295,16 @@
 }
 
 .ai-studio-reference-add-copy strong {
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
 }
 
 .ai-studio-reference-add-copy small {
     overflow: hidden;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -342,12 +353,14 @@
 }
 
 .ai-studio-resolution-picker button strong {
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-resolution-picker button small {
     overflow: hidden;
-    font-size: 10px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -398,7 +411,8 @@
     place-items: center;
     background: rgb(35 28 48 / 78%);
     color: #fff;
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-bold);
 }
 
@@ -439,7 +453,8 @@
     align-items: center;
     gap: 4px;
     color: var(--accent);
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -459,7 +474,8 @@
 .ai-studio-reference-meta strong {
     overflow: hidden;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -467,7 +483,8 @@
 
 .ai-studio-reference-meta small {
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-reference-actions {
@@ -487,7 +504,8 @@
     justify-content: center;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
@@ -522,7 +540,8 @@
     gap: 10px;
     background: var(--paper);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-align: left;
     cursor: pointer;
 }
@@ -532,7 +551,8 @@
     max-width: 190px;
     overflow: hidden;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -553,8 +573,8 @@
     gap: 7px;
     background: #fef2f2;
     color: #b91c1c;
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-reference-error svg {
@@ -592,19 +612,21 @@
 .ai-studio-model-grid code,
 .ai-generation-card code {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-model-grid small {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-model-grid strong {
     margin-top: auto;
     color: var(--accent);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-option-row {
@@ -627,21 +649,22 @@
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-checkout details {
     margin: 10px 0 16px 25px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-checkout details p {
     padding: 10px;
     border-radius: 8px;
     background: var(--soft);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 
 .ai-studio-settlement {
@@ -673,14 +696,15 @@
 
 .ai-studio-settlement-amount small {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-settlement-amount strong {
     color: var(--accent);
-    font-size: 25px;
+    font-size: var(--type-metric-size);
     font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-settlement-refund {
@@ -704,16 +728,16 @@
 
 .ai-studio-settlement-refund strong {
     color: var(--text);
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-settlement-refund span,
 .ai-studio-history-heading p {
     margin: 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-generate-button {
@@ -722,7 +746,8 @@
     border-radius: var(--radius-sm);
     background: var(--accent);
     box-shadow: var(--accent-shadow);
-    font-size: 15px;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
     transition:
         background-color 160ms ease,
         box-shadow 160ms ease,
@@ -757,8 +782,8 @@
     gap: 8px;
     color: var(--warning-text);
     background: var(--warning-bg);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-low-balance svg {
@@ -787,15 +812,16 @@
 .ai-generation-card > p {
     margin: 12px 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-status {
     padding: 5px 9px;
     border-radius: 999px;
     background: var(--soft);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-status.is-succeeded,
@@ -852,7 +878,8 @@
 
 .ai-generation-placeholder small {
     max-width: 100%;
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-output-actions {
@@ -865,13 +892,15 @@
     flex: 1;
     min-width: 0;
     padding: 5px !important;
-    font-size: 11px !important;
+    font-size: var(--type-label-size) !important;
+    line-height: var(--type-label-leading) !important;
 }
 
 .ai-generation-card footer {
     margin-top: 12px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-card footer > div {
@@ -931,8 +960,8 @@
 .ai-studio-prompt-budget {
     padding: 6px 14px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 /* Approved image-first workflow. Scoped so detail sheets and other pages retain their styles. */
@@ -1032,9 +1061,9 @@
     :is(.ai-studio-composer h3, .ai-studio-options h3, .ai-studio-checkout h3, .ai-studio-history h3) {
     margin: 0 0 12px;
     display: block;
-    font-size: 17px;
+    font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.5;
+    line-height: var(--type-section-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap {
@@ -1055,15 +1084,16 @@
     padding: 14px 14px 6px;
     display: block;
     resize: none;
-    font-size: 16px;
-    line-height: 1.65;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
     box-shadow: none;
 }
 
 .ai-studio-prompt-count {
     padding: 4px 14px 12px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
@@ -1084,8 +1114,8 @@
     border: 0;
     display: block;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: normal;
     overflow-wrap: anywhere;
 }
@@ -1111,8 +1141,8 @@
 
 .ai-studio-prompt-quota {
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-prompt-tools button {
@@ -1122,7 +1152,8 @@
     border: 0;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 14px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     white-space: normal;
     overflow-wrap: anywhere;
 }
@@ -1146,8 +1177,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-reference-add-copy small {
     overflow: visible;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: normal;
 }
 
@@ -1179,8 +1210,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-model-description {
     overflow: visible;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: normal;
     overflow-wrap: anywhere;
 }
@@ -1188,7 +1219,8 @@
 .ai-studio-shell.ai-studio-workflow .ai-studio-model-grid strong {
     margin: 0;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-radio-mark {
@@ -1228,8 +1260,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger > span {
     grid-column: 1 / -1;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger strong {
@@ -1240,8 +1272,8 @@
     border-radius: 0;
     justify-content: flex-start;
     background: transparent;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     overflow-wrap: anywhere;
 }
 
@@ -1261,7 +1293,8 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-settlement-amount strong.is-balance {
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     color: var(--text);
 }
 
@@ -1278,8 +1311,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-settlement-refund :is(strong, span) {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-terms-row {
@@ -1288,8 +1321,8 @@
     padding: 10px 0;
     align-items: flex-start;
     color: var(--muted);
-    font-size: 12px !important;
-    line-height: 1.6;
+    font-size: var(--type-meta-size) !important;
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-terms-row button {
@@ -1327,13 +1360,14 @@
 
 .ai-studio-hold-amount small {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-hold-amount strong {
     color: var(--text);
-    font-size: 22px;
-    line-height: 1.2;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-generate-button {
@@ -1343,7 +1377,8 @@
     border-radius: 9px;
     background: var(--accent);
     color: #fff;
-    font-size: 15px;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
     box-shadow: none;
 }
 
@@ -1360,7 +1395,8 @@
     min-height: 44px;
     border: 0;
     background: transparent;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history-filters {
@@ -1383,7 +1419,8 @@
     border-radius: var(--skin-control-radius);
     color: var(--muted);
     background: transparent;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     box-shadow: none;
 }
 
@@ -1446,8 +1483,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-card-content > p {
     margin: 8px 0 0;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
     -webkit-line-clamp: 2;
 }
@@ -1455,7 +1492,8 @@
 .ai-studio-shell.ai-studio-workflow .ai-generation-card header time,
 .ai-studio-shell.ai-studio-workflow .ai-generation-status {
     padding: 0;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-meta {
@@ -1468,8 +1506,8 @@
     border-radius: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-meta span + span::before {
@@ -1508,7 +1546,8 @@
     border: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-card footer svg {
@@ -1530,7 +1569,7 @@
     justify-items: center;
     gap: 12px;
     background: var(--surface);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 
 .ai-studio-empty-icon {
@@ -1546,12 +1585,14 @@
 
 .ai-studio-empty h4 {
     color: var(--text);
-    font-size: 16px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .ai-studio-empty p {
     max-width: 32ch;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-empty button {

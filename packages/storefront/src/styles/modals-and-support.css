@@ -103,8 +103,9 @@
 }
 
 .poster-brand-name {
-    font-size: 13px;
-    font-weight: 800;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-bold);
     color: #0f172a;
 }
 
@@ -112,8 +113,9 @@
     display: flex;
     align-items: center;
     gap: 3px;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-semibold);
     color: #10b981;
 }
 
@@ -144,18 +146,19 @@
 }
 
 .poster-price-badge {
-    font-size: 20px;
-    font-weight: 900;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
+    font-weight: var(--font-weight-bold);
     color: #d33c30;
     font-family: var(--font-numeric);
 }
 
 .poster-title {
     margin: 0;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-bold);
     color: #0f172a;
-    line-height: 1.35;
+    line-height: var(--type-section-leading);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -175,13 +178,15 @@
 }
 
 .poster-scan-prompt strong {
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-bold);
     color: #334155;
 }
 
 .poster-scan-prompt small {
-    font-size: 10px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: #94a3b8;
 }
 
@@ -207,8 +212,9 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
     cursor: pointer;
     transition:
         transform 160ms ease,
@@ -333,8 +339,8 @@
     margin: 0;
     padding: 0 2px;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 /* One shared contact panel owns spacing and hierarchy on every screen and skin. */
@@ -360,8 +366,8 @@
 
 .support-hours-label {
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .support-hours-value {
@@ -371,14 +377,15 @@
     align-items: baseline;
     gap: 4px 10px;
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
 }
 
 .support-hours-time {
     font-family: var(--font-numeric);
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -391,16 +398,16 @@
 .support-contact-note h3 {
     margin: 0 0 8px;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.5;
+    line-height: var(--type-section-leading);
 }
 
 .support-contact-note p {
     margin: 0;
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.65;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     white-space: pre-line;
     overflow-wrap: anywhere;
 }
@@ -503,16 +510,16 @@
 }
 
 .support-channel-copy strong {
-    font-size: 15px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.45;
+    line-height: var(--type-body-leading);
 }
 
 .support-channel-copy small {
     margin-top: 4px;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .support-channel-action {
@@ -525,7 +532,8 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
     white-space: nowrap;
 }
@@ -550,7 +558,8 @@
 
 .support-channel-empty p {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .support-qr-sheet {
@@ -604,15 +613,15 @@
 
 .support-qr-error strong {
     margin-top: 12px;
-    font-size: 14px;
-    line-height: 1.4;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .support-qr-error span {
     margin-top: 5px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .support-qr-error button {
@@ -624,7 +633,8 @@
     border-radius: 9px;
     background: var(--accent-soft);
     color: var(--accent-ink);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -635,8 +645,8 @@
 .support-qr-sheet p {
     margin: 16px 0 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-align: center;
 }
 
@@ -652,7 +662,8 @@
 .support-qr-account small {
     min-width: 0;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;
     user-select: text;
 }
@@ -669,7 +680,8 @@
     border-radius: var(--skin-control-radius);
     color: var(--accent-ink);
     background: var(--control-surface);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
@@ -691,7 +703,8 @@
 .support-qr-copy-result {
     margin-top: var(--space-8);
     color: var(--danger);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-align: center;
 }
 
@@ -702,7 +715,8 @@
     border-radius: 10px;
     background: var(--accent);
     color: var(--accent-foreground);
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-weight: var(--font-weight-bold);
     display: flex;
     align-items: center;
@@ -735,8 +749,9 @@
 .support-order-banner-badge {
     display: inline-block;
     padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-semibold);
     color: var(--accent-ink);
     background: var(--accent-soft);
     border-radius: 6px;
@@ -745,18 +760,19 @@
 
 .support-order-banner-code {
     display: block;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-bold);
     color: var(--text);
-    font-family: var(--font-mono, monospace);
-    letter-spacing: 0.5px;
+    font-family: var(--font-code);
+    letter-spacing: var(--tracking-code);
 }
 
 .support-order-banner-tip {
     margin: 4px 0 0;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
     color: var(--muted);
-    line-height: 1.4;
+    line-height: var(--type-meta-leading);
 }
 
 .support-order-banner-copy {
@@ -768,8 +784,9 @@
     border-radius: 9px;
     background: var(--control-surface);
     color: var(--text);
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -797,8 +814,9 @@
 .support-faq-card h2 {
     margin: 0;
     color: var(--text);
-    font-size: 16px;
-    font-weight: 700;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 .support-faq-card > p {
@@ -820,7 +838,8 @@
 .support-faq-header label {
     max-width: 50%;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     text-align: right;
 }
 
@@ -843,7 +862,7 @@
     border-radius: 12px;
     color: var(--text);
     cursor: pointer;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     list-style: none;
     transition: background-color 160ms ease;
 }
@@ -876,7 +895,7 @@
     margin: 0;
     padding: 0 14px 14px;
     color: var(--muted);
-    line-height: 1.65;
+    line-height: var(--line-height-relaxed);
     white-space: pre-line;
 }
 
@@ -910,7 +929,8 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--danger) 10%, var(--surface));
     color: var(--danger);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .support-evaluation-header {
@@ -933,12 +953,14 @@
 }
 
 .support-evaluation-title strong {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 .support-evaluation-header span {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: var(--muted);
     margin-left: auto;
     text-align: right;
@@ -951,7 +973,8 @@
 }
 
 .support-evaluation-order-badge {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: var(--muted);
     padding: 6px 10px;
     background: var(--soft);
@@ -962,7 +985,7 @@
 }
 
 .support-evaluation-order-badge b {
-    font-family: var(--font-mono, monospace);
+    font-family: var(--font-code);
     color: var(--text);
 }
 
@@ -1005,8 +1028,9 @@
 }
 
 .support-rating-text {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-semibold);
     color: var(--text);
 }
 
@@ -1030,7 +1054,8 @@
     border-radius: 20px;
     padding: 6px 12px;
     background: var(--control-surface);
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     color: var(--text);
     cursor: pointer;
     transition:
@@ -1051,7 +1076,7 @@
 .support-tag-btn.is-active {
     background: var(--selection);
     color: var(--selection-foreground);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .support-tag-btn.is-active:hover:not(:disabled) {
@@ -1064,7 +1089,8 @@
     padding: 10px 12px;
     border: 0;
     border-radius: 10px;
-    font-size: 13px;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
     color: var(--text);
     background: var(--control-surface);
     resize: vertical;
@@ -1086,8 +1112,9 @@
     border-radius: 10px;
     background: var(--accent, #0d9488);
     color: var(--accent-foreground);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
     transition: opacity 150ms ease;
 }
@@ -1113,12 +1140,14 @@
 }
 
 .support-evaluation-success strong {
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     color: var(--text);
 }
 
 .support-evaluation-success small {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: var(--muted);
 }
 
@@ -1128,7 +1157,8 @@
     background: var(--control-surface);
     border-radius: 8px;
     padding: 6px 14px;
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     color: var(--text);
     cursor: pointer;
 }
@@ -1147,7 +1177,8 @@
     display: grid;
     gap: 8px;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .support-faq-search input {
     width: 100%;
@@ -1158,6 +1189,8 @@
     color: var(--text);
     background: var(--surface);
     font: inherit;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 .support-faq-pagination {
     display: flex;

@@ -131,9 +131,10 @@
     background: var(--hero-accent-soft);
     border: 1px solid var(--hero-accent-border);
     color: var(--hero-accent-color);
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     box-shadow: var(--hero-pill-shadow);
     transition:
         background 200ms ease,
@@ -153,10 +154,10 @@
 
 .hero-rich-title {
     margin: 4px 0 2px;
-    font-size: 17.5px;
-    font-weight: 700;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
+    font-size: var(--type-hero-size);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--type-hero-leading);
+    letter-spacing: var(--tracking-normal);
     color: var(--hero-title-color);
     text-shadow: var(--hero-title-shadow);
     -webkit-font-smoothing: antialiased;
@@ -164,10 +165,10 @@
 
 .hero-rich-desc {
     margin: 0;
-    font-size: 12.5px;
-    line-height: 1.4;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     color: var(--hero-body-color);
-    font-weight: 400;
+    font-weight: var(--font-weight-normal);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -192,7 +193,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    line-height: 1.1;
+    line-height: var(--line-height-tight);
     min-width: 44px;
     box-shadow: none;
 }
@@ -202,8 +203,9 @@
 }
 
 .hero-stat-badge .stat-num {
-    font-size: 10px;
-    font-weight: 800;
+    font-size: var(--type-badge-size);
+    line-height: var(--type-badge-leading);
+    font-weight: var(--font-weight-bold);
     color: var(--hero-accent-readable, var(--hero-copy-foreground));
 }
 
@@ -212,9 +214,10 @@
 }
 
 .hero-stat-badge .stat-lbl {
-    font-size: 8px;
+    font-size: var(--type-badge-size);
+    line-height: var(--type-badge-leading);
     color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .hero-rich-cta-btn {
@@ -227,8 +230,9 @@
     border: 0;
     background: var(--hero-button-background, var(--accent));
     color: var(--hero-button-foreground, var(--accent-foreground));
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -264,14 +268,16 @@
         padding: 12px 14px;
     }
     .hero-rich-title {
-        font-size: 16px;
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
     }
     .hero-stat-badge {
         min-width: 38px;
         padding: 2px 4px;
     }
     .hero-stat-badge .stat-num {
-        font-size: 9px;
+        font-size: var(--type-badge-size);
+        line-height: var(--type-badge-leading);
     }
 }
 
@@ -283,7 +289,8 @@
 
     .hero-rich-pill {
         padding: 4px 12px;
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .hero-rich-pill svg {
@@ -292,13 +299,14 @@
     }
 
     .hero-rich-title {
-        font-size: 28px;
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
         margin: 8px 0 6px;
     }
 
     .hero-rich-desc {
-        font-size: 14px;
-        line-height: 1.5;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 
     .hero-stat-badge {
@@ -307,17 +315,20 @@
     }
 
     .hero-stat-badge .stat-num {
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .hero-stat-badge .stat-lbl {
-        font-size: 10px;
+        font-size: var(--type-badge-size);
+        line-height: var(--type-badge-leading);
     }
 
     .hero-rich-cta-btn {
         margin-top: 12px;
         padding: 8px 20px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         border-radius: var(--skin-control-radius, 10px);
     }
 
@@ -420,17 +431,17 @@
 
 .hero.hero-image-overlay .hero-rich-title {
     margin: 0;
-    font-size: clamp(27px, 2.5vw, 36px);
-    line-height: 1.2;
-    font-weight: 700;
+    font-size: var(--type-hero-size);
+    line-height: var(--type-hero-leading);
+    font-weight: var(--font-weight-bold);
     -webkit-font-smoothing: antialiased;
 }
 
 .hero.hero-image-overlay .hero-rich-desc {
     margin: 0;
-    font-size: 15px;
-    line-height: 1.7;
-    font-weight: 500;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-medium);
     display: block;
     overflow: visible;
     overflow-wrap: anywhere;
@@ -447,8 +458,9 @@
     border: 0;
     background: transparent;
     box-shadow: none;
-    font-size: 12px;
-    letter-spacing: 0.08em;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    letter-spacing: var(--tracking-normal);
 }
 
 .hero.hero-image-overlay .hero-rich-cta-btn {
@@ -458,7 +470,8 @@
     margin: 12px 0 0;
     border: 0;
     box-shadow: none;
-    font-size: 14px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 @media (max-width: 1023px) {
@@ -486,19 +499,20 @@
     }
 
     .hero.hero-image-overlay .hero-rich-title {
-        font-size: clamp(20px, 5.4vw, 24px);
-        line-height: 1.3;
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
         overflow-wrap: anywhere;
     }
 
     .hero.hero-image-overlay .hero-rich-pill {
-        font-size: 10px;
-        letter-spacing: 0.04em;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+        letter-spacing: var(--tracking-normal);
     }
 
     .hero.hero-image-overlay .hero-rich-desc {
-        font-size: 12px;
-        line-height: 1.6;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .hero.hero-image-overlay .hero-rich-stats-row {
@@ -517,16 +531,19 @@
     }
 
     .hero.hero-image-overlay .hero-stat-badge .stat-num {
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .hero.hero-image-overlay .hero-stat-badge .stat-lbl {
-        font-size: 10px;
+        font-size: var(--type-badge-size);
+        line-height: var(--type-badge-leading);
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn {
         margin-top: 4px;
         padding: 10px 14px;
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 }

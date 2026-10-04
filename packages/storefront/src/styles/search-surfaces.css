@@ -23,7 +23,8 @@
     border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 .search-header > button > svg {
@@ -54,7 +55,8 @@
     height: 100%;
     padding: 0;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 .search-input-field input::-webkit-search-cancel-button {
     display: none;
@@ -109,8 +111,8 @@
     min-width: 0;
     margin: 0 0 0 auto;
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-align: right;
 }
 .search-page .section-header-title-lockup {
@@ -131,7 +133,8 @@
     border: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 .search-history-actions svg {
     width: 13px;
@@ -150,14 +153,14 @@
     border-radius: var(--skin-control-radius);
     background: var(--control-surface, var(--soft));
     color: var(--text);
-    font-size: 12px;
-    line-height: 20px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     overflow-wrap: anywhere;
 }
 .search-tags > small {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 32px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .search-term-list {
     display: grid;
@@ -175,7 +178,8 @@
     background: transparent;
     color: var(--text);
     text-align: left;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 .search-term-list button > span {
     min-width: 0;
@@ -204,7 +208,8 @@
     border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 .search-category-links :is(img, svg, .safe-image-frame) {
     width: 28px;
@@ -221,7 +226,7 @@
     width: 100%;
     overflow-wrap: anywhere;
     text-align: center;
-    line-height: 1.4;
+    line-height: var(--line-height-body);
 }
 .search-page .product-section {
     margin: 0;
@@ -256,7 +261,8 @@
     border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     text-align: left;
 }
 .search-suggestions li > button > span {
@@ -277,13 +283,15 @@
 .search-suggestions small {
     margin-left: auto;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 .search-suggestion-status {
     margin: 16px 0;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .search-results-heading > h2 {
     min-width: 0;
@@ -317,7 +325,8 @@
     border-radius: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     white-space: nowrap;
 }
 .search-sort > button.is-active {
@@ -344,7 +353,8 @@
     justify-content: space-between;
     gap: 16px;
     margin: -4px 0 20px;
-    font-size: 11px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     color: var(--muted);
 }
 .search-filter-summary > span {
@@ -377,7 +387,8 @@
     justify-content: space-between;
     gap: 12px;
     color: var(--danger);
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .search-load-error button {
     min-height: 44px;
@@ -395,13 +406,15 @@
     background: transparent;
     color: var(--muted);
     box-shadow: none;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .search-filter-sheet .filter-collection-select {
     display: grid;
     gap: 12px;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 .search-filter-sheet .filter-collection-select select {
     width: 100%;
@@ -412,6 +425,8 @@
     background: var(--surface);
     color: var(--text);
     font: inherit;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 .search-filter-sheet .filter-stock-card {
     padding-inline: 0;
@@ -439,7 +454,8 @@
         gap: 6px;
         margin-left: 12px;
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         white-space: nowrap;
     }
     .search-page .search-discovery {
@@ -539,7 +555,8 @@
 .search-category-links .search-child-category {
     min-height: 36px;
     padding: 6px;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: var(--muted);
 }
 .search-page.is-embedded-search .search-category-links {

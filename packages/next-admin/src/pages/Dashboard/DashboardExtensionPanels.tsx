@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -11,7 +13,6 @@ import {
 
 export function ReferralTodayExtensionWidget() {
     const query = useQuery<ReferralTodayWidgetData>(REFERRAL_TODAY_WIDGET_QUERY, {
-        fetchPolicy: 'cache-and-network',
         pollInterval: 60_000,
     });
     const value = query.data?.referralTodayMetrics;
@@ -31,16 +32,16 @@ export function ReferralTodayExtensionWidget() {
     if (query.loading && !value) {
         return <p className="py-8 text-center text-xs text-slate-500">正在读取今日数据…</p>;
     }
-    if (query.error || !value) {
+    if ((query.error && !query.data) || !value) {
         return (
             <div
                 className="flex items-center justify-between gap-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-800"
                 role="alert"
             >
                 <span>今日客户与邀请数据加载失败</span>
-                <button type="button" onClick={() => void query.refetch()} className="font-bold">
+                <AdminButton type="button" onClick={() => void query.refetch()} className="font-bold">
                     重试
-                </button>
+                </AdminButton>
             </div>
         );
     }
@@ -64,14 +65,17 @@ export function ReferralTodayExtensionWidget() {
                     )}
                 </span>
                 <div className="flex items-center gap-3">
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         className="inline-flex items-center gap-1 font-bold text-slate-600"
                     >
-                        <RefreshCw className={`h-3 w-3 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-3 w-3 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新
-                    </button>
+                    </AdminButton>
                     <Link
                         to="/marketing/referrals"
                         className="inline-flex items-center gap-1 font-bold text-blue-600"
@@ -87,7 +91,6 @@ export function ReferralTodayExtensionWidget() {
 
 export function StaleTranslationExtensionAlert() {
     const query = useQuery<StaleTranslationAlertData>(STALE_TRANSLATION_ALERT_QUERY, {
-        fetchPolicy: 'cache-and-network',
         pollInterval: 15_000,
     });
     const count = query.data?.contentTranslationStaleCount ?? 0;

@@ -32,7 +32,7 @@ import {
 import { useDesktopLayout } from './desktop-layout';
 import { compactUiCopy, languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
-import { offlineLoadError } from './loading-state';
+import { offlineLoadError, storefrontInitialQueryError } from './loading-state';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -243,16 +243,7 @@ export function OrdersPage({
     const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
     const loading = ordersQuery.isLoading;
     const loadingMore = ordersQuery.isFetchingNextPage;
-    const listError =
-        ordersQuery.isPaused && ordersQuery.data === undefined
-            ? offlineLoadError(language)
-            : ordersQuery.error instanceof Error
-              ? storefrontErrorMessage(ordersQuery.error, language)
-              : ordersQuery.error
-                ? isZh
-                    ? '订单加载失败'
-                    : 'Could not load orders'
-                : '';
+    const listError = storefrontInitialQueryError(ordersQuery, language);
     const tabs: Array<{ id: OrderTab; label: string }> = [
         { id: 'all', label: compactCopy.orders.all },
         { id: 'pending', label: compactCopy.orders.unpaid },
@@ -366,7 +357,7 @@ export function OrdersPage({
                     updatingId={updatingAfterSalesId}
                     locale={locale}
                     language={language}
-                    onRetry={() => void afterSalesQuery.refetch()}
+                    onRetry={() => void afterSalesQuery.refetch({ cancelRefetch: false })}
                     onOpenOrder={openOrder}
                     onCancel={id => void cancelAfterSales(id)}
                     onSubmitReturn={(id, carrier, trackingCode) =>
@@ -382,7 +373,7 @@ export function OrdersPage({
                     title={isZh ? '订单加载失败' : 'Could not load orders'}
                     detail={listError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void ordersQuery.refetch()}
+                    onAction={() => void ordersQuery.refetch({ cancelRefetch: false })}
                 />
             ) : orders.length ? (
                 <div className={orderPageClassName('order-list')}>
@@ -402,7 +393,7 @@ export function OrdersPage({
                         <InlineError
                             message={listError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void ordersQuery.fetchNextPage()}
+                            onAction={() => void ordersQuery.fetchNextPage({ cancelRefetch: false })}
                         />
                     )}
                     {orders.length < totalItems && (
@@ -410,7 +401,7 @@ export function OrdersPage({
                             type="button"
                             className={orderPageClassName('load-more-button order-load-more')}
                             disabled={loadingMore}
-                            onClick={() => void ordersQuery.fetchNextPage()}
+                            onClick={() => void ordersQuery.fetchNextPage({ cancelRefetch: false })}
                         >
                             {loadingMore
                                 ? isZh

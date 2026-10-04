@@ -1,5 +1,6 @@
 import { Loader2, MinusCircle, PlusCircle, Store, X } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 
 import { getChannelDisplayName } from '../../utils/channel-display';
 
@@ -82,7 +83,7 @@ export function CatalogBulkChannelBar({
                 {/* Store Selector */}
                 <div className="flex items-center gap-1.5">
                     <Store className="h-4 w-4 text-blue-600 shrink-0" />
-                    <select
+                    <AdminSelect
                         aria-label="选择目标店铺"
                         value={effectiveChannelId}
                         onChange={e => setTargetChannelId(e.target.value)}
@@ -95,7 +96,7 @@ export function CatalogBulkChannelBar({
                                 {channel.isDefault ? ' (主店铺)' : ''}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </div>
 
                 {/* Price Factor (optional for assign) */}
@@ -106,7 +107,7 @@ export function CatalogBulkChannelBar({
                     >
                         价格系数:
                     </label>
-                    <input
+                    <AdminInput
                         id="bulk-price-factor"
                         type="number"
                         min="0.1"
@@ -121,7 +122,7 @@ export function CatalogBulkChannelBar({
                 </div>
 
                 {/* Bulk Assign Button */}
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void handleAssign()}
                     disabled={busy || !effectiveChannelId}
@@ -134,10 +135,10 @@ export function CatalogBulkChannelBar({
                         <PlusCircle className="h-3.5 w-3.5" />
                     )}
                     <span>批量上架到店铺</span>
-                </button>
+                </AdminButton>
 
                 {/* Bulk Remove Button */}
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void handleRemove()}
                     disabled={busy || !effectiveChannelId}
@@ -150,10 +151,10 @@ export function CatalogBulkChannelBar({
                         <MinusCircle className="h-3.5 w-3.5 text-rose-600" />
                     )}
                     <span>从店铺下架</span>
-                </button>
+                </AdminButton>
 
                 {/* Clear Selection */}
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClearSelection}
                     disabled={busy}
@@ -162,7 +163,7 @@ export function CatalogBulkChannelBar({
                 >
                     <X className="h-3.5 w-3.5" />
                     <span>取消选择</span>
-                </button>
+                </AdminButton>
             </div>
         </div>
     );

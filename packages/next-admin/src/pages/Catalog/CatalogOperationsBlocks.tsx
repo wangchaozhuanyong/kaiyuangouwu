@@ -1,7 +1,13 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Boxes, CalendarClock, CircleDollarSign, PackageOpen, Plus, RefreshCw, Save, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -76,7 +82,6 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
     const query = useQuery<CatalogWorkspaceResult>(CATALOG_PRODUCT_WORKSPACE_QUERY, {
         variables: { productId },
         skip: !productId,
-        fetchPolicy: 'cache-and-network',
     });
     const supplierQuery = useQuery<{
         catalogSuppliers: { items: CatalogSupplierRecord[]; totalItems: number };
@@ -90,6 +95,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
     const [stockLocationId, setStockLocationId] = useState('');
     const [drafts, setDrafts] = useState<Record<string, VariantDraft>>({});
     const [dirtyIds, setDirtyIds] = useState<string[]>([]);
+    useUnsavedChangesWarning(dirtyIds.length > 0, '当前页面还有未保存的 SKU 修改，确定放弃吗？');
     const [lotDraft, setLotDraft] = useState<LotDraft | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -116,7 +122,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
 
     if (!productId) return null;
     if (query.loading && !workspace) return <PanelState label="正在读取采购、库存与批次数据…" />;
-    if (query.error || !workspace) {
+    if ((query.error && !query.data) || !workspace) {
         return (
             <PanelState tone="error" label="商品供应链工作区加载失败" action={() => void query.refetch()} />
         );
@@ -148,7 +154,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
             setDirtyIds([]);
             setNotice(`已保存 ${inputs.length} 个 SKU 的经营与采购资料`);
             setError('');
-            await query.refetch();
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (cause) {
             setError(toUserFacingError(cause, 'SKU 经营资料保存失败，请检查输入后重试'));
         }
@@ -177,7 +183,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
             setLotDraft(null);
             setNotice('库存批次已保存，并生成对应库存调整流水');
             setError('');
-            await query.refetch();
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (cause) {
             setError(toUserFacingError(cause, '库存批次保存失败，请检查输入后重试'));
         }
@@ -206,7 +212,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 <div className="flex flex-wrap items-end gap-2">
                     <label className="text-xs font-bold text-slate-600">
                         当前仓库
-                        <select
+                        <AdminSelect
                             value={stockLocationId}
                             onChange={event => changeWarehouse(event.target.value)}
                             className="mt-1 block min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
@@ -216,9 +222,9 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                     {location.name}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </label>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void save()}
                         disabled={!dirtyIds.length || saveState.loading}
@@ -228,7 +234,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         {saveState.loading
                             ? '保存中…'
                             : `保存供应链信息${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             {notice && <InlineNotice tone="success" message={notice} />}
@@ -288,7 +294,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
                                             记录这个 SKU 从谁处采购；没有固定供货商可不关联。
                                         </span>
-                                        <select
+                                        <AdminSelect
                                             value={draft.supplierId}
                                             onChange={event =>
                                                 updateDraft(variant.id, { supplierId: event.target.value })
@@ -301,7 +307,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                     {supplier.name} {supplier.enabled ? '' : '（已停用）'}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </AdminSelect>
                                     </label>
                                 </div>
                                 <details className="border-t border-slate-100">
@@ -380,7 +386,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                             }
                                         />
                                         <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 checked={draft.enabled}
                                                 onChange={event =>
@@ -390,7 +396,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                             允许销售该 SKU
                                         </label>
                                         <div className="flex items-end sm:col-span-2 xl:col-span-2">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() =>
                                                     setLotDraft(emptyLot(variant.id, stockLocationId))
@@ -398,7 +404,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
                                             >
                                                 <Plus className="h-4 w-4" /> 新增库存批次
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </div>
                                 </details>
@@ -465,7 +471,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         </td>
                                         <td className="px-3 py-3">{systemStatusDisplayLabel(lot.state)}</td>
                                         <td className="px-3 py-3">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() =>
                                                     setLotDraft({
@@ -488,7 +494,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                 className="font-bold text-blue-600 hover:underline"
                                             >
                                                 编辑
-                                            </button>
+                                            </AdminButton>
                                         </td>
                                     </tr>
                                 ))}
@@ -517,47 +523,60 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
     const query = useQuery<ProductPackagingWorkspaceResult>(PRODUCT_PACKAGING_WORKSPACE_QUERY, {
         variables: { productId },
         skip: !productId,
-        fetchPolicy: 'cache-and-network',
     });
     const [updatePackaging, updateState] = useMutation(UPDATE_PRODUCT_PACKAGING_MUTATION);
     const data = query.data;
     const variants = useMemo(() => data?.product?.variants ?? [], [data?.product?.variants]);
-    const [unitVariantId, setUnitVariantId] = useState('');
-    const [packageVariantId, setPackageVariantId] = useState('');
-    const [unitLabel, setUnitLabel] = useState('件');
-    const [packageLabel, setPackageLabel] = useState('箱');
-    const [unitsPerPackage, setUnitsPerPackage] = useState('24');
-    const [enabled, setEnabled] = useState(true);
-    const [autoUnpack, setAutoUnpack] = useState(true);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-
-    /* oxlint-disable react/set-state-in-effect -- the versioned packaging response initializes the form. */
-    useEffect(() => {
-        const rule = data?.productPackaging;
-        if (rule) {
-            setUnitVariantId(rule.unitVariant.id);
-            setPackageVariantId(rule.packageVariant.id);
-            setUnitLabel(rule.unitLabel);
-            setPackageLabel(rule.packageLabel);
-            setUnitsPerPackage(String(rule.unitsPerPackage));
-            setEnabled(rule.enabled);
-            setAutoUnpack(rule.autoUnpack);
-        } else if (variants.length >= 2 && !unitVariantId && !packageVariantId) {
-            setUnitVariantId(variants[0].id);
-            setPackageVariantId(variants[1].id);
-        }
-    }, [data?.productPackaging, packageVariantId, unitVariantId, variants]);
-    /* oxlint-enable react/set-state-in-effect */
+    const rule = data?.productPackaging;
+    const source = data
+        ? {
+              unitVariantId: rule?.unitVariant.id ?? variants[0]?.id ?? '',
+              packageVariantId: rule?.packageVariant.id ?? variants[1]?.id ?? '',
+              unitLabel: rule?.unitLabel ?? '件',
+              packageLabel: rule?.packageLabel ?? '箱',
+              unitsPerPackage: String(rule?.unitsPerPackage ?? 24),
+              enabled: rule?.enabled ?? true,
+              autoUnpack: rule?.autoUnpack ?? true,
+          }
+        : null;
+    const draftOwner = useServerDraft(productId, source ? JSON.stringify(source) : '', source);
+    const draft = draftOwner.draft ?? {
+        unitVariantId: '',
+        packageVariantId: '',
+        unitLabel: '件',
+        packageLabel: '箱',
+        unitsPerPackage: '24',
+        enabled: true,
+        autoUnpack: true,
+    };
+    const { unitVariantId, packageVariantId, unitLabel, packageLabel, unitsPerPackage, enabled, autoUnpack } =
+        draft;
+    const setUnitVariantId = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), unitVariantId: value }));
+    const setPackageVariantId = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), packageVariantId: value }));
+    const setUnitLabel = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), unitLabel: value }));
+    const setPackageLabel = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), packageLabel: value }));
+    const setUnitsPerPackage = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), unitsPerPackage: value }));
+    const setEnabled = (value: boolean) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), enabled: value }));
+    const setAutoUnpack = (value: boolean) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), autoUnpack: value }));
 
     if (!productId) return null;
     if (query.loading && !data) return <PanelState label="正在读取包装换算配置…" />;
-    if (query.error || !data)
+    if ((query.error && !query.data) || !data)
         return <PanelState tone="error" label="包装配置加载失败" action={() => void query.refetch()} />;
     if (variants.length < 2) {
         return null;
     }
     const save = async () => {
+        if (draftOwner.sourceChanged) return;
         try {
             if (unitVariantId === packageVariantId) throw new Error('散件 SKU 与整包 SKU 不能相同');
             const quantity = integer(unitsPerPackage, '每包数量');
@@ -581,7 +600,8 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
             });
             setNotice('包装换算与自动拆包配置已保存');
             setError('');
-            await query.refetch();
+            draftOwner.accept(draft);
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (cause) {
             setError(toUserFacingError(cause, '包装配置保存失败，请检查输入后重试'));
         }
@@ -599,15 +619,16 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                         散件库存不足时，可在支付确认阶段自动拆整包补充库存。
                     </p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
-                    disabled={updateState.loading}
+                    disabled={updateState.loading || draftOwner.sourceChanged}
                     className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                 >
                     <Save className="h-4 w-4" /> {updateState.loading ? '保存中…' : '保存包装配置'}
-                </button>
+                </AdminButton>
             </div>
+            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -711,13 +732,13 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
     const query = useQuery<VariantPricesData>(PRODUCT_VARIANT_PRICES_QUERY, {
         variables: { productId },
         skip: !productId,
-        fetchPolicy: 'cache-and-network',
     });
     const [updatePrices, updateState] = useMutation<{
         updateProductVariants: Array<{ id: string }>;
     }>(UPDATE_PRODUCT_VARIANT_PRICES_MUTATION);
     const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
     const [dirtyIds, setDirtyIds] = useState<string[]>([]);
+    useUnsavedChangesWarning(dirtyIds.length > 0, '当前页面还有未保存的 SKU 修改，确定放弃吗？');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const data = query.data;
@@ -756,7 +777,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
     /* oxlint-enable react/set-state-in-effect */
     if (!productId) return null;
     if (query.loading && !data) return <PanelState label="正在读取多币种 SKU 价格…" />;
-    if (query.error || !data?.product)
+    if ((query.error && !query.data) || !data?.product)
         return (
             <PanelState tone="error" label="多币种 SKU 价格加载失败" action={() => void query.refetch()} />
         );
@@ -785,7 +806,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
             }
             setDirtyIds([]);
             setNotice(`已保存 ${input.length} 个 SKU 的 ${currencies.length} 种币种价格`);
-            await query.refetch();
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (cause) {
             setError(toUserFacingError(cause, '多币种价格保存失败'));
         }
@@ -802,7 +823,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                         只有当前店铺同时收取多种币种时才需要设置；不会覆盖其他店铺。
                     </p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
                     disabled={!dirtyIds.length || updateState.loading}
@@ -812,7 +833,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                     {updateState.loading
                         ? '保存中…'
                         : `保存价格${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
-                </button>
+                </AdminButton>
             </div>
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
@@ -837,7 +858,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                                 </td>
                                 {currencies.map(currency => (
                                     <td key={currency} className="px-3 py-3">
-                                        <input
+                                        <AdminInput
                                             type="number"
                                             min="0"
                                             step="0.01"
@@ -904,11 +925,8 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     const query = useQuery<ProductVariantCustomFieldsData>(document, {
         variables: { productId },
         skip: !productId || visibleDefinitions.length === 0,
-        fetchPolicy: 'cache-and-network',
     });
     const [selectedId, setSelectedId] = useState('');
-    const [sourceSignature, setSourceSignature] = useState('');
-    const [values, setValues] = useState<CustomFieldValueMap>({});
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [update, updateState] = useMutation<{
@@ -920,16 +938,15 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         ? `${selected.id}:${JSON.stringify([selected.customFields ?? {}, selected.translations])}`
         : '';
 
-    /* oxlint-disable react/set-state-in-effect -- GraphQL result initializes the selected SKU draft. */
-    useEffect(() => {
-        if (!selected || nextSignature === sourceSignature) return;
-        setSelectedId(selected.id);
-        setValues(
-            customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations),
-        );
-        setSourceSignature(nextSignature);
-    }, [nextSignature, selected, sourceSignature, visibleDefinitions]);
-    /* oxlint-enable react/set-state-in-effect */
+    const draftOwner = useServerDraft<CustomFieldValueMap>(
+        `${productId}:${selected?.id ?? ''}`,
+        nextSignature,
+        selected
+            ? customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations)
+            : null,
+    );
+    const values = draftOwner.draft ?? {};
+    const setValues = draftOwner.setDraft;
 
     if (!productId || visibleDefinitions.length === 0) return null;
     if (query.loading && !query.data) {
@@ -939,25 +956,20 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             />
         );
     }
-    if (query.error || !query.data?.product) {
+    if ((query.error && !query.data) || !query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
     }
     if (variants.length === 0) return null;
     const selectVariant = (id: string) => {
         const variant = variants.find(item => item.id === id);
         if (!variant) return;
+        if (draftOwner.dirty && !window.confirm('切换 SKU 会放弃当前未保存的修改，确定继续吗？')) return;
         setSelectedId(id);
-        setValues(
-            customFieldValuesFromEntity(visibleDefinitions, variant.customFields, variant.translations),
-        );
-        setSourceSignature(
-            `${variant.id}:${JSON.stringify([variant.customFields ?? {}, variant.translations])}`,
-        );
         setNotice('');
         setError('');
     };
     const save = async () => {
-        if (!selected) return;
+        if (!selected || draftOwner.sourceChanged) return;
         const validation = validateCustomFieldValues(visibleDefinitions, values);
         if (Object.keys(validation).length > 0) {
             setError(Object.values(validation)[0] ?? 'SKU 扩展字段校验失败');
@@ -988,8 +1000,8 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             }
             setNotice(`SKU ${selected.sku} 的扩展字段已保存`);
             setError('');
-            setSourceSignature('');
-            await query.refetch();
+            draftOwner.accept(values);
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (cause) {
             setError(toUserFacingError(cause, 'SKU 扩展字段保存失败'));
         }
@@ -1012,7 +1024,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <select
+                    <AdminSelect
                         value={selected?.id ?? ''}
                         onChange={event => selectVariant(event.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -1023,18 +1035,19 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                                 {variant.name} · {variant.sku}
                             </option>
                         ))}
-                    </select>
-                    <button
+                    </AdminSelect>
+                    <AdminButton
                         type="button"
                         onClick={() => void save()}
-                        disabled={!selected || updateState.loading}
+                        disabled={!selected || updateState.loading || draftOwner.sourceChanged}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         <Save className="h-4 w-4" />
                         {updateState.loading ? '保存中…' : '保存字段'}
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
+            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
@@ -1047,7 +1060,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                 fields={visibleDefinitions}
                 values={values}
                 onChange={setValues}
-                disabled={updateState.loading}
+                disabled={updateState.loading || draftOwner.sourceChanged}
             />
         </section>
     );
@@ -1096,9 +1109,9 @@ function LotEditor({
             >
                 <div className="flex items-center justify-between">
                     <h2 className="text-base font-bold">{draft.id ? '编辑库存批次' : '新增库存批次'}</h2>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <p className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs leading-5 text-blue-800">
                     {defaultShelfLifeDays == null
@@ -1148,21 +1161,21 @@ function LotEditor({
                     />
                 </div>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg border px-4 py-2 text-xs font-bold"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => void onSave(draft)}
                         disabled={saving || !draft.reason.trim()}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         {saving ? '保存中…' : '保存批次'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>
@@ -1279,7 +1292,7 @@ function TextField({
                     {description}
                 </span>
             )}
-            <input
+            <AdminInput
                 type={type}
                 min={type === 'number' ? 0 : undefined}
                 step={type === 'number' ? 'any' : undefined}
@@ -1328,7 +1341,7 @@ function SelectField({
     return (
         <label className="text-xs font-bold text-slate-600">
             {label}
-            <select
+            <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
@@ -1338,7 +1351,7 @@ function SelectField({
                         {option.name} · {option.sku}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </label>
     );
 }
@@ -1353,7 +1366,11 @@ function Toggle({
 }) {
     return (
         <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+            <AdminInput
+                type="checkbox"
+                checked={checked}
+                onChange={event => onChange(event.target.checked)}
+            />
             {label}
         </label>
     );
@@ -1392,14 +1409,14 @@ function PanelState({
         >
             <p>{label}</p>
             {action && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={action}
                     className="mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                     <RefreshCw className="h-4 w-4" />
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

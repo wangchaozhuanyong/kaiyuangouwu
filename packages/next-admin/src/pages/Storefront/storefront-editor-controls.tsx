@@ -1,4 +1,5 @@
 import { ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
 import { inputClass } from './storefront-editor-model';
@@ -26,7 +27,7 @@ export function InlinePager({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.max(0, page - 1))}
                     disabled={loading || page === 0}
@@ -34,8 +35,8 @@ export function InlinePager({
                     aria-label="上一页"
                 >
                     <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
                     disabled={loading || page >= totalPages - 1}
@@ -43,7 +44,7 @@ export function InlinePager({
                     aria-label="下一页"
                 >
                     <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -58,20 +59,20 @@ export function LanguageSwitch({
 }) {
     return (
         <div className="flex rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => onChange('zh_Hans')}
                 className={`rounded-md px-3 py-1.5 ${value === 'zh_Hans' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500'}`}
             >
                 中文
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
                 type="button"
                 onClick={() => onChange('en')}
                 className={`rounded-md px-3 py-1.5 ${value === 'en' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500'}`}
             >
                 英文
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -107,26 +108,26 @@ export function ColorInput({
 }) {
     return (
         <div className="flex flex-wrap gap-2">
-            <input
+            <AdminInput
                 type="color"
                 value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff'}
                 onChange={event => onChange(event.target.value)}
                 className="h-9 w-11 rounded border border-slate-300 bg-white p-1"
             />
-            <input
+            <AdminInput
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 placeholder={placeholder}
                 className={`${inputClass} min-w-0 flex-1 font-mono`}
             />
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => onChange('')}
                 disabled={!value}
                 className="shrink-0 text-xs text-blue-700 disabled:text-slate-400"
             >
                 自动适应
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -145,7 +146,7 @@ export function IconButton({
     danger?: boolean;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             title={label}
             aria-label={label}
@@ -154,6 +155,6 @@ export function IconButton({
             className={`rounded-md p-1.5 disabled:opacity-30 ${danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-500 hover:bg-white'}`}
         >
             <Icon className="h-3.5 w-3.5" />
-        </button>
+        </AdminButton>
     );
 }

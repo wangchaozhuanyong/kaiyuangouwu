@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -13,7 +15,6 @@ import { errorText } from './referral-ui';
 
 export function SharingModule() {
     const query = useQuery<SharingSettingsResult>(SHARING_SETTINGS_QUERY, {
-        fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
 
@@ -80,7 +81,7 @@ function SharingSettings({
                             管理客户端分享海报的默认模板、启停、背景与中英文文案
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={loading}
                         onClick={() => {
@@ -91,7 +92,7 @@ function SharingSettings({
                     >
                         <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="w-full flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">

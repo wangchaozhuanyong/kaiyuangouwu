@@ -207,22 +207,37 @@ export function AuthVisual({
                 }}
             >
                 {content.ctaLabel && (
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{content.ctaLabel}</span>
+                    <span
+                        style={{
+                            fontSize: 'var(--type-helper-size)',
+                            lineHeight: 'var(--type-helper-leading)',
+                            fontWeight: 'var(--font-weight-semibold)',
+                        }}
+                    >
+                        {content.ctaLabel}
+                    </span>
                 )}
                 {content.title && (
                     <h2
                         style={{
                             margin: 0,
                             color: 'inherit',
-                            fontSize: 'clamp(24px, 3vw, 36px)',
-                            lineHeight: 1.3,
+                            fontSize: 'var(--type-hero-size)',
+                            lineHeight: 'var(--type-hero-leading)',
                         }}
                     >
                         {content.title}
                     </h2>
                 )}
                 {content.subtitle && (
-                    <p style={{ margin: 0, color: 'inherit', fontSize: 15, lineHeight: 1.7 }}>
+                    <p
+                        style={{
+                            margin: 0,
+                            color: 'inherit',
+                            fontSize: 'var(--type-reading-size)',
+                            lineHeight: 'var(--type-reading-leading)',
+                        }}
+                    >
                         {content.subtitle}
                     </p>
                 )}
@@ -235,7 +250,8 @@ export function AuthVisual({
                                     border: '1px solid currentColor',
                                     borderRadius: 8,
                                     padding: '6px 10px',
-                                    fontSize: 13,
+                                    fontSize: 'var(--type-helper-size)',
+                                    lineHeight: 'var(--type-helper-leading)',
                                 }}
                             >
                                 {item.label}

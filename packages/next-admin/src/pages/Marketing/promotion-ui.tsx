@@ -8,9 +8,11 @@ import {
     Search,
     X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useActiveInterval } from '../../hooks/use-page-activity';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 export function MultiSelector<T extends { id: string; name: string; label?: string }>({
@@ -52,7 +54,7 @@ export function MultiSelector<T extends { id: string; name: string; label?: stri
                 </div>
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                    <input
+                    <AdminInput
                         value={search}
                         onChange={event => setSearch(event.target.value)}
                         aria-label={`搜索${title}`}
@@ -73,7 +75,7 @@ export function MultiSelector<T extends { id: string; name: string; label?: stri
                             key={item.id}
                             className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[11px] hover:bg-white"
                         >
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 disabled={loading || Boolean(error)}
                                 checked={selectedIds.includes(item.id)}
@@ -97,25 +99,25 @@ export function MultiSelector<T extends { id: string; name: string; label?: stri
             </div>
             {page != null && onPageChange && totalItems > 30 && (
                 <div className="mt-2 flex items-center justify-end gap-3 text-[11px] text-slate-500">
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={loading || page === 0}
                         onClick={() => onPageChange(page - 1)}
                         className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"
                     >
                         上一页
-                    </button>
+                    </AdminButton>
                     <span>
                         第 {page + 1} / {Math.ceil(totalItems / 30)} 页
                     </span>
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={loading || (page + 1) * 30 >= totalItems}
                         onClick={() => onPageChange(page + 1)}
                         className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"
                     >
                         下一页
-                    </button>
+                    </AdminButton>
                 </div>
             )}
         </div>
@@ -132,10 +134,7 @@ export function CampaignState({
     endsAt: string | null;
 }) {
     const [currentTime, setCurrentTime] = useState(() => Date.now());
-    useEffect(() => {
-        const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
-        return () => window.clearInterval(timer);
-    }, []);
+    useActiveInterval(() => setCurrentTime(Date.now()), 60_000);
     const start = startsAt ? Date.parse(startsAt) : null;
     const end = endsAt ? Date.parse(endsAt) : null;
     let label = enabled ? '进行中' : '已停用';
@@ -182,14 +181,14 @@ export function TabButton({
     label: string;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 font-bold ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
         >
             <Icon className="h-3.5 w-3.5" />
             {label}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -209,7 +208,7 @@ export function FormInput({
     return (
         <label className="block text-[11px] font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -243,7 +242,7 @@ export function FormSelect({
     return (
         <label className="block text-[11px] font-bold text-slate-600">
             {label}
-            <select
+            <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
@@ -253,7 +252,7 @@ export function FormSelect({
                         {labelValue}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </label>
     );
 }
@@ -275,21 +274,21 @@ export function ModalFooter({
 }) {
     return (
         <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button
+            <AdminButton
                 type="button"
                 onClick={onCancel}
                 className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
             >
                 取消
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
                 type="button"
                 onClick={onConfirm}
                 disabled={pending || disabled}
                 className={`rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-50 ${danger ? 'bg-rose-600' : 'bg-blue-600'}`}
             >
                 {pending ? '处理中…' : confirmLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -318,7 +317,7 @@ export function SimplePagination({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     disabled={loading || page === 0}
                     onClick={() => onPageChange(page - 1)}
@@ -326,8 +325,8 @@ export function SimplePagination({
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >
                     <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     disabled={loading || page + 1 >= totalPages}
                     onClick={() => onPageChange(page + 1)}
@@ -335,7 +334,7 @@ export function SimplePagination({
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >
                     <ChevronRight className="h-4 w-4" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -356,9 +355,9 @@ export function Message({
         >
             {kind === 'success' ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭提示">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭提示">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -378,13 +377,13 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
             <AlertCircle className="mx-auto h-8 w-8 text-rose-500" />
             <h3 className="mt-3 text-sm font-bold text-slate-900">营销数据读取失败</h3>
             <p className="mt-1 text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
             >
                 重新加载
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -407,13 +406,13 @@ export function EmptyState({
             <Icon className="mx-auto h-10 w-10 text-slate-300" />
             <h3 className="mt-3 text-sm font-bold text-slate-800">{title}</h3>
             <p className="mt-1 text-xs text-slate-400">{detail}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onAction}
                 className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
             >
                 {action}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -454,14 +453,14 @@ export function Modal({
                         </h2>
                         {description && <p className="mt-1 text-[11px] text-slate-500">{description}</p>}
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded p-1 text-slate-400 hover:bg-slate-100"
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="p-5">{children}</div>
             </div>

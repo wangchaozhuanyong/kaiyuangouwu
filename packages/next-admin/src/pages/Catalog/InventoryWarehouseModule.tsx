@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import type { CatalogExportRowRecord } from '@vendure/catalog-management-plugin/browser';
 import {
     AlertCircle,
@@ -26,6 +26,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -47,6 +48,7 @@ import {
     UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION,
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
@@ -379,12 +381,11 @@ export function InventoryWarehouseModule() {
                     : undefined,
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const locationQuery = useQuery<StockLocationsData>(GET_STOCK_LOCATIONS, {
         variables: { options: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
-        fetchPolicy: 'cache-and-network',
     });
     const {
         data: locationData,
@@ -397,11 +398,10 @@ export function InventoryWarehouseModule() {
     }>(CATALOG_EXPORT_ROWS_QUERY, {
         variables: { skip: page * pageSize, take: pageSize },
         skip: activeTab !== 'LOTS',
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const alertQuery = useQuery<InventoryAlertData>(CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY, {
-        fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
 
@@ -1038,7 +1038,7 @@ export function InventoryWarehouseModule() {
                 </div>
                 {activeTab === 'WAREHOUSES' ? (
                     <div className="flex flex-wrap items-center gap-2">
-                        <select
+                        <AdminSelect
                             value={bulkLocationTransferId}
                             onChange={event => setBulkLocationTransferId(event.target.value)}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -1052,8 +1052,8 @@ export function InventoryWarehouseModule() {
                                         迁移到 {location.name}
                                     </option>
                                 ))}
-                        </select>
-                        <button
+                        </AdminSelect>
+                        <AdminButton
                             type="button"
                             onClick={() => void handleBulkDeleteLocations()}
                             disabled={!selectedLocationIds.length || deleteLocationsState.loading}
@@ -1061,30 +1061,34 @@ export function InventoryWarehouseModule() {
                         >
                             <Trash2 className="h-3.5 w-3.5" />
                             批量删除 {selectedLocationIds.length || ''}
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => openLocationModal()}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
                             <Plus className="h-3.5 w-3.5" />
                             新增库存点
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : activeTab === 'LOTS' ? (
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void lotQuery.refetch()}
                             disabled={lotQuery.loading}
                             className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                         >
                             <RefreshCw
-                                className={'h-3.5 w-3.5 ' + (lotQuery.loading ? 'animate-spin' : '')}
+                                className={
+                                    'h-3.5 w-3.5 ' +
+                                    (lotQuery.loading && !lotQuery.data ? 'animate-spin' : '')
+                                }
                             />
                             刷新批次
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={openNewLot}
                             disabled={!lotVariants.some(variant => variant.stockLevels.length > 0)}
@@ -1092,10 +1096,11 @@ export function InventoryWarehouseModule() {
                         >
                             <Plus className="h-3.5 w-3.5" />
                             新增库存批次
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : (
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void refetchAll()}
                         disabled={pageLoading}
@@ -1103,13 +1108,13 @@ export function InventoryWarehouseModule() {
                     >
                         <RefreshCw className={'h-3.5 w-3.5 ' + (pageLoading ? 'animate-spin' : '')} />
                         刷新库存
-                    </button>
+                    </AdminButton>
                 )}
             </div>
 
             <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
                 {tabs.map(([key, Icon, label]) => (
-                    <button
+                    <AdminButton
                         type="button"
                         key={key}
                         onClick={() => {
@@ -1126,7 +1131,7 @@ export function InventoryWarehouseModule() {
                     >
                         <Icon className="h-3.5 w-3.5" />
                         {label}
-                    </button>
+                    </AdminButton>
                 ))}
             </div>
 
@@ -1146,13 +1151,13 @@ export function InventoryWarehouseModule() {
                             </span>
                         </div>
                         {pageError && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void refetchAll()}
                                 className="rounded bg-rose-600 px-3 py-1 font-bold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 )}
@@ -1168,7 +1173,7 @@ export function InventoryWarehouseModule() {
                         <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/60 p-4 xl:flex-row xl:items-center xl:justify-between">
                             <div className="relative w-full max-w-sm">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <AdminInput
                                     value={searchTerm}
                                     onChange={event => {
                                         setSearchTerm(event.target.value);
@@ -1188,24 +1193,24 @@ export function InventoryWarehouseModule() {
                                     </strong>{' '}
                                     项
                                 </span>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void handleBulkEnabledChange(true)}
                                     disabled={selectedVariantIds.length === 0 || bulkUpdating}
                                     className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 disabled:opacity-40"
                                 >
                                     批量上架
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => void handleBulkEnabledChange(false)}
                                     disabled={selectedVariantIds.length === 0 || bulkUpdating}
                                     className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 disabled:opacity-40"
                                 >
                                     批量下架
-                                </button>
+                                </AdminButton>
                                 <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white">
-                                    <input
+                                    <AdminInput
                                         type="number"
                                         min="0"
                                         step="0.01"
@@ -1215,7 +1220,7 @@ export function InventoryWarehouseModule() {
                                         aria-label="批量设置销售价"
                                         className="w-28 px-3 py-2 text-xs outline-none"
                                     />
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void handleBulkPriceChange()}
                                         disabled={
@@ -1226,7 +1231,7 @@ export function InventoryWarehouseModule() {
                                         className="border-l border-slate-300 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"
                                     >
                                         批量调价
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         </div>
@@ -1241,7 +1246,7 @@ export function InventoryWarehouseModule() {
                                                 scope="col"
                                                 className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
                                             >
-                                                <input
+                                                <AdminInput
                                                     type="checkbox"
                                                     checked={
                                                         variants.length > 0 &&
@@ -1335,7 +1340,7 @@ export function InventoryWarehouseModule() {
                                                     className="group h-[52px] hover:bg-slate-50"
                                                 >
                                                     <td className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                        <input
+                                                        <AdminInput
                                                             type="checkbox"
                                                             checked={selectedVariantIds.includes(variant.id)}
                                                             onChange={event =>
@@ -1397,7 +1402,7 @@ export function InventoryWarehouseModule() {
                                                         )}
                                                     </td>
                                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() =>
                                                                 navigate(
@@ -1412,7 +1417,7 @@ export function InventoryWarehouseModule() {
                                                             className="whitespace-nowrap rounded bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                                         >
                                                             编辑商品
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                 </tr>
                                             );
@@ -1439,7 +1444,7 @@ export function InventoryWarehouseModule() {
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 p-4">
                             <div className="relative w-full sm:w-72">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <AdminInput
                                     value={searchTerm}
                                     onChange={event => {
                                         setSearchTerm(event.target.value);
@@ -1546,14 +1551,14 @@ export function InventoryWarehouseModule() {
                             <div className="space-y-3 p-16 text-center text-xs text-slate-400">
                                 <CalendarClock className="mx-auto h-10 w-10 text-slate-300" />
                                 <p>当前页还没有库存批次</p>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={openNewLot}
                                     disabled={!lotVariants.some(variant => variant.stockLevels.length > 0)}
                                     className="font-bold text-blue-600 disabled:text-slate-300"
                                 >
                                     为当前页 SKU 创建第一个批次
-                                </button>
+                                </AdminButton>
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
@@ -1619,7 +1624,7 @@ export function InventoryWarehouseModule() {
                                                     {systemStatusDisplayLabel(lot.state)}
                                                 </td>
                                                 <td className="whitespace-nowrap px-3 py-0">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() =>
                                                             setLotDraft({
@@ -1643,8 +1648,8 @@ export function InventoryWarehouseModule() {
                                                         className="mr-3 font-bold text-blue-600 hover:underline"
                                                     >
                                                         编辑
-                                                    </button>
-                                                    <button
+                                                    </AdminButton>
+                                                    <AdminButton
                                                         type="button"
                                                         disabled={
                                                             lot.quantityOnHand <= 0 || locations.length < 2
@@ -1669,8 +1674,8 @@ export function InventoryWarehouseModule() {
                                                         className="mr-3 font-bold text-blue-600 hover:underline disabled:text-slate-300"
                                                     >
                                                         转仓
-                                                    </button>
-                                                    <button
+                                                    </AdminButton>
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() =>
                                                             navigate(
@@ -1685,7 +1690,7 @@ export function InventoryWarehouseModule() {
                                                         className="font-bold text-slate-500 hover:underline"
                                                     >
                                                         商品详情
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
                                             </tr>
                                         ))}
@@ -1814,7 +1819,7 @@ export function InventoryWarehouseModule() {
                                 >
                                     <div className="flex items-start justify-between border-b border-slate-100 pb-3">
                                         <div className="flex items-start gap-3">
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 checked={selectedLocationIds.includes(location.id)}
                                                 onChange={() =>
@@ -1835,14 +1840,14 @@ export function InventoryWarehouseModule() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => openLocationModal(location)}
                                             className="p-1.5 text-slate-400 hover:text-blue-600"
                                             aria-label={'编辑库存点 ' + location.name}
                                         >
                                             <Edit3 className="h-4 w-4" />
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                     <div className="text-xs leading-5 text-slate-600">
                                         {location.description || '未填写库存点说明'}
@@ -1879,7 +1884,7 @@ export function InventoryWarehouseModule() {
                                 实物库存盘点调整
                                 <FeatureHelpButton topic="catalog.inventory" title="实物库存盘点调整" />
                             </h3>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeStockAdjustment}
                                 disabled={adjusting}
@@ -1887,7 +1892,7 @@ export function InventoryWarehouseModule() {
                                 aria-label="关闭库存调整"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                             <div>
@@ -1911,7 +1916,7 @@ export function InventoryWarehouseModule() {
                         </div>
                         <div>
                             <label className="mb-1 block font-bold text-slate-700">调整增量 *</label>
-                            <input
+                            <AdminInput
                                 type="number"
                                 value={adjustAmount}
                                 onChange={event => setAdjustAmount(event.target.value)}
@@ -1925,7 +1930,7 @@ export function InventoryWarehouseModule() {
                         </div>
                         <div>
                             <label className="mb-1 block font-bold text-slate-700">调整原因 *</label>
-                            <input
+                            <AdminInput
                                 type="text"
                                 value={adjustReason}
                                 onChange={event => setAdjustReason(event.target.value)}
@@ -1937,22 +1942,22 @@ export function InventoryWarehouseModule() {
                             <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
                         )}
                         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeStockAdjustment}
                                 disabled={adjusting}
                                 className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleAdjustSubmit}
                                 disabled={adjusting}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50"
                             >
                                 {adjusting && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}确认调整
-                            </button>
+                            </AdminButton>
                         </div>
                     </AccessibleDialogSurface>
                 </div>
@@ -1973,7 +1978,7 @@ export function InventoryWarehouseModule() {
                             <h3 className="text-base font-bold text-slate-900">
                                 {editingLocation ? '编辑库存点' : '新增库存点'}
                             </h3>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeLocationModal}
                                 disabled={savingLocation}
@@ -1981,11 +1986,11 @@ export function InventoryWarehouseModule() {
                                 aria-label="关闭库存点编辑"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div>
                             <label className="mb-1 block font-bold text-slate-700">库存点名称 *</label>
-                            <input
+                            <AdminInput
                                 value={locationName}
                                 onChange={event => setLocationName(event.target.value)}
                                 className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
@@ -1994,7 +1999,7 @@ export function InventoryWarehouseModule() {
                         </div>
                         <div>
                             <label className="mb-1 block font-bold text-slate-700">说明</label>
-                            <textarea
+                            <AdminTextArea
                                 value={locationDescription}
                                 onChange={event => setLocationDescription(event.target.value)}
                                 rows={3}
@@ -2009,7 +2014,7 @@ export function InventoryWarehouseModule() {
                                     <label className="mb-1 block font-bold text-slate-700">
                                         删除时库存迁移至
                                     </label>
-                                    <select
+                                    <AdminSelect
                                         value={transferToLocationId}
                                         onChange={event => setTransferToLocationId(event.target.value)}
                                         className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
@@ -2022,7 +2027,7 @@ export function InventoryWarehouseModule() {
                                                     {location.name}
                                                 </option>
                                             ))}
-                                    </select>
+                                    </AdminSelect>
                                 </div>
                             )}
                         {actionError && (
@@ -2030,7 +2035,7 @@ export function InventoryWarehouseModule() {
                         )}
                         <div className="flex items-center justify-between border-t border-slate-100 pt-4">
                             {editingLocation ? (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={handleDeleteLocation}
                                     disabled={savingLocation}
@@ -2038,27 +2043,27 @@ export function InventoryWarehouseModule() {
                                 >
                                     <Trash2 className="h-3.5 w-3.5" />
                                     删除库存点
-                                </button>
+                                </AdminButton>
                             ) : (
                                 <span />
                             )}
                             <div className="flex gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={closeLocationModal}
                                     disabled={savingLocation}
                                     className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                                 >
                                     取消
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={handleSaveLocation}
                                     disabled={savingLocation}
                                     className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50"
                                 >
                                     {savingLocation && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}保存
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </AccessibleDialogSurface>
@@ -2241,7 +2246,7 @@ export function InventoryStockOverview({
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => onToggle(item.variantId)}
                                                 aria-expanded={expanded}
@@ -2258,7 +2263,7 @@ export function InventoryStockOverview({
                                                         className="h-3.5 w-3.5"
                                                     />
                                                 )}
-                                            </button>
+                                            </AdminButton>
                                         </td>
                                     </tr>
                                     {expanded && (
@@ -2336,7 +2341,7 @@ export function InventoryStockOverview({
                                                                             )}
                                                                         </td>
                                                                         <td className="px-3 py-2 text-right">
-                                                                            <button
+                                                                            <AdminButton
                                                                                 type="button"
                                                                                 onClick={() =>
                                                                                     onAdjust(stock)
@@ -2345,7 +2350,7 @@ export function InventoryStockOverview({
                                                                                 className="whitespace-nowrap rounded bg-blue-50 px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
                                                                             >
                                                                                 盘点调整
-                                                                            </button>
+                                                                            </AdminButton>
                                                                         </td>
                                                                     </tr>
                                                                 ))}
@@ -2416,7 +2421,7 @@ function InventoryAlertPanel({
             <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
+                    <AdminInput
                         value={searchTerm}
                         onChange={event => onSearchChange(event.target.value)}
                         aria-label="搜索全店库存预警"
@@ -2479,7 +2484,7 @@ function InventoryAlertPanel({
                                 >
                                     <tr className="h-[58px] hover:bg-slate-50/80">
                                         <td className="px-3 py-0">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => onToggle(item.variantId)}
                                                 className="rounded p-1 text-slate-500 hover:bg-slate-100"
@@ -2491,7 +2496,7 @@ function InventoryAlertPanel({
                                                 ) : (
                                                     <ChevronRight className="h-4 w-4" />
                                                 )}
-                                            </button>
+                                            </AdminButton>
                                         </td>
                                         <td className="max-w-64 px-3 py-0">
                                             <span
@@ -2527,13 +2532,13 @@ function InventoryAlertPanel({
                                             <InventoryAlertBadge status={item.status} />
                                         </td>
                                         <td className="px-3 py-0 text-right">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => onEditProduct(item)}
                                                 className="rounded bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                             >
                                                 编辑商品
-                                            </button>
+                                            </AdminButton>
                                         </td>
                                     </tr>
                                     {expanded && (
@@ -2581,7 +2586,7 @@ function InventoryAlertPanel({
                                                                             </td>
                                                                             <td className="px-3 py-0">
                                                                                 <div className="flex items-center gap-1.5">
-                                                                                    <input
+                                                                                    <AdminInput
                                                                                         type="number"
                                                                                         min="0"
                                                                                         step="1"
@@ -2617,7 +2622,7 @@ function InventoryAlertPanel({
                                                                                 />
                                                                             </td>
                                                                             <td className="px-3 py-0 text-right whitespace-nowrap">
-                                                                                <button
+                                                                                <AdminButton
                                                                                     type="button"
                                                                                     disabled={saving}
                                                                                     onClick={() =>
@@ -2632,9 +2637,9 @@ function InventoryAlertPanel({
                                                                                     {saving
                                                                                         ? '保存中…'
                                                                                         : '保存预警值'}
-                                                                                </button>
+                                                                                </AdminButton>
                                                                                 {!level.usesDefaultThreshold && (
-                                                                                    <button
+                                                                                    <AdminButton
                                                                                         type="button"
                                                                                         disabled={saving}
                                                                                         onClick={() =>
@@ -2648,9 +2653,9 @@ function InventoryAlertPanel({
                                                                                     >
                                                                                         恢复默认{' '}
                                                                                         {defaultThreshold}
-                                                                                    </button>
+                                                                                    </AdminButton>
                                                                                 )}
-                                                                                <button
+                                                                                <AdminButton
                                                                                     type="button"
                                                                                     onClick={() =>
                                                                                         onAdjust(item, level)
@@ -2658,7 +2663,7 @@ function InventoryAlertPanel({
                                                                                     className="font-bold text-emerald-700"
                                                                                 >
                                                                                     盘点调整
-                                                                                </button>
+                                                                                </AdminButton>
                                                                             </td>
                                                                         </tr>
                                                                     );
@@ -2722,7 +2727,7 @@ function InventoryPagination({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     disabled={loading || page === 0}
                     onClick={() => onPageChange(page - 1)}
@@ -2730,8 +2735,8 @@ function InventoryPagination({
                     aria-label="上一页"
                 >
                     <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     disabled={loading || page + 1 >= totalPages}
                     onClick={() => onPageChange(page + 1)}
@@ -2739,7 +2744,7 @@ function InventoryPagination({
                     aria-label="下一页"
                 >
                     <ChevronRight className="h-4 w-4" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -2783,13 +2788,13 @@ function InventoryLotTransferDialog({
                             {draft.sku} · {draft.lotCode}，最多可转 {draft.maximumQuantity}
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} disabled={saving} aria-label="关闭转仓">
+                    <AdminButton type="button" onClick={onClose} disabled={saving} aria-label="关闭转仓">
                         <X className="h-5 w-5 text-slate-400" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <label className="block font-bold text-slate-600">
                     目标仓库 *
-                    <select
+                    <AdminSelect
                         value={draft.targetStockLocationId}
                         onChange={event => onChange({ ...draft, targetStockLocationId: event.target.value })}
                         className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
@@ -2801,7 +2806,7 @@ function InventoryLotTransferDialog({
                                     {location.name}
                                 </option>
                             ))}
-                    </select>
+                    </AdminSelect>
                 </label>
                 <InventoryLotField
                     label="转仓数量 *"
@@ -2820,22 +2825,22 @@ function InventoryLotTransferDialog({
                     </div>
                 )}
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={saving}
                         className="rounded-lg bg-slate-100 px-4 py-2 font-bold"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={onSave}
                         disabled={saving || !draft.reason.trim()}
                         className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
                     >
                         {saving ? '转仓中…' : '确认转仓'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>
@@ -2881,14 +2886,14 @@ export function InventoryLotDialog({
                         </h2>
                         <p className="mt-1 text-slate-500">数量变化会同步写入 Vendure 库存流水。</p>
                     </div>
-                    <button type="button" onClick={onClose} disabled={saving} aria-label="关闭批次编辑">
+                    <AdminButton type="button" onClick={onClose} disabled={saving} aria-label="关闭批次编辑">
                         <X className="h-5 w-5 text-slate-400" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <label className="font-bold text-slate-600">
                         SKU *
-                        <select
+                        <AdminSelect
                             value={draft.productVariantId}
                             onChange={event => {
                                 const next = variants.find(
@@ -2907,11 +2912,11 @@ export function InventoryLotDialog({
                                     {variant.productName} · {variant.sku}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </label>
                     <label className="font-bold text-slate-600">
                         库存点 *
-                        <select
+                        <AdminSelect
                             value={draft.stockLocationId}
                             onChange={event => update({ stockLocationId: event.target.value })}
                             disabled={Boolean(draft.id)}
@@ -2922,7 +2927,7 @@ export function InventoryLotDialog({
                                     {location.stockLocationName}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </label>
                     <InventoryLotField
                         label="批次号 *"
@@ -2965,22 +2970,22 @@ export function InventoryLotDialog({
                     </div>
                 )}
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={saving}
                         className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={onSave}
                         disabled={saving}
                         className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
                     >
                         {saving ? '保存中…' : '保存批次'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>
@@ -3001,7 +3006,7 @@ function InventoryLotField({
     return (
         <label className="font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     BadgePercent,
     BarChart3,
@@ -11,7 +11,8 @@ import {
     TrendingUp,
     X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ARCHIVE_COUPON_CAMPAIGN_MUTATION,
@@ -30,6 +31,8 @@ import {
     UPDATE_PROMOTION_NAME_MUTATION,
     type StoreCouponAppearanceTheme,
 } from '../../graphql/marketing.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useActiveInterval } from '../../hooks/use-page-activity';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
@@ -90,14 +93,9 @@ export function PromotionsModule() {
     const [reportFilter, setReportFilter] = useState(defaultReportFilter);
     const [, setStatusClock] = useState(() => Date.now());
 
-    useEffect(() => {
-        const timer = window.setInterval(() => setStatusClock(Date.now()), 60_000);
-        return () => window.clearInterval(timer);
-    }, []);
+    useActiveInterval(() => setStatusClock(Date.now()), 60_000);
 
-    const overview = useQuery<MarketingOverviewResult>(MARKETING_OVERVIEW_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const overview = useQuery<MarketingOverviewResult>(MARKETING_OVERVIEW_QUERY, {});
     const coupons = overview.data?.storeCouponCampaigns ?? [];
     const flashSales = overview.data?.storeFlashSales ?? [];
     const currencyCode = overview.data?.activeChannel.defaultCurrencyCode ?? 'CNY';
@@ -113,7 +111,6 @@ export function PromotionsModule() {
                 },
             },
             skip: activeTab !== 'LEDGER',
-            fetchPolicy: 'cache-and-network',
         },
     );
     const report = useQuery<{ storeCouponDailyReport: CouponDailyMetricRecord[] }>(
@@ -125,7 +122,6 @@ export function PromotionsModule() {
                 campaignId: reportFilter.campaignId === 'ALL' ? null : reportFilter.campaignId,
             },
             skip: activeTab !== 'REPORT' || !validReportFilter(reportFilter),
-            fetchPolicy: 'cache-and-network',
         },
     );
 
@@ -279,34 +275,37 @@ export function PromotionsModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void refreshAll()}
                             disabled={overview.loading}
                             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 ${overview.loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                                className={`h-3.5 w-3.5 ${overview.loading && !overview.data ? 'animate-spin' : ''}`}
+                            />
                             刷新
-                        </button>
+                        </AdminButton>
                         {activeTab === 'COUPONS' && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setCouponEditorOpen(true)}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 新建优惠券
-                            </button>
+                            </AdminButton>
                         )}
                         {activeTab === 'FLASH_SALES' && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setFlashEditorOpen(true)}
                                 className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-orange-700"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 新建秒杀
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -386,7 +385,7 @@ export function PromotionsModule() {
                     <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
+                            <AdminInput
                                 type="search"
                                 name="promotion-search"
                                 autoComplete="off"
@@ -397,18 +396,18 @@ export function PromotionsModule() {
                                 className="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
                             />
                             {searchTerm && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setSearchTerm('')}
                                     className="absolute right-2.5 top-2 text-slate-400"
                                     aria-label="清空搜索"
                                 >
                                     <X className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                         {activeTab === 'COUPONS' && (
-                            <select
+                            <AdminSelect
                                 value={couponVisibility}
                                 onChange={event =>
                                     setCouponVisibility(event.target.value as CouponVisibility)
@@ -421,7 +420,7 @@ export function PromotionsModule() {
                                 <option value="ENDED">已结束</option>
                                 <option value="ARCHIVED">已归档</option>
                                 <option value="ALL">全部活动</option>
-                            </select>
+                            </AdminSelect>
                         )}
                     </div>
                 )}
@@ -432,7 +431,7 @@ export function PromotionsModule() {
                     <GenericPromotionsPanel />
                 ) : overview.loading && !overview.data ? (
                     <LoadingState label="正在读取营销活动…" />
-                ) : overview.error ? (
+                ) : overview.error && !overview.data ? (
                     <ErrorState
                         message={toUserFacingError(overview.error, '营销活动读取失败')}
                         onRetry={() => void overview.refetch()}

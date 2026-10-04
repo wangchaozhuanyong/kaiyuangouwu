@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { Image as ImageIcon } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -46,7 +48,6 @@ export function CategoryImageField({
             },
         },
         skip: !open || !canReadAssets,
-        fetchPolicy: 'cache-and-network',
     });
 
     return (
@@ -85,7 +86,7 @@ export function CategoryImageField({
                                 setOpen(false);
                             }}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setOpen(current => !current)}
                             disabled={disabled || !canReadAssets}
@@ -93,16 +94,16 @@ export function CategoryImageField({
                             className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 disabled:opacity-50"
                         >
                             {open ? '收起素材库' : value ? '更换图片' : '选择图片'}
-                        </button>
+                        </AdminButton>
                         {value && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onChange(null)}
                                 disabled={disabled}
                                 className="rounded-lg px-2 py-1.5 text-xs text-rose-600 disabled:opacity-50"
                             >
                                 移除图片
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -115,7 +116,7 @@ export function CategoryImageField({
             )}
             {open && canReadAssets && (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <input
+                    <AdminInput
                         aria-label="搜索分类图片"
                         placeholder="搜索图片名称"
                         value={search}
@@ -126,18 +127,18 @@ export function CategoryImageField({
                         disabled={disabled}
                         className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    {error ? (
+                    {error && !data ? (
                         <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-rose-700">
                             {toUserFacingError(error, '图片加载失败，请重试')}
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={disabled || loading}
                                 onClick={() => void refetch().catch(() => undefined)}
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
-                    ) : loading ? (
+                    ) : loading && !data ? (
                         <p role="status" className="py-4 text-center text-xs text-slate-500">
                             正在加载图片…
                         </p>
@@ -148,7 +149,7 @@ export function CategoryImageField({
                     ) : (
                         <div className="grid max-h-64 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-4">
                             {data.assets.items.map(asset => (
-                                <button
+                                <AdminButton
                                     key={asset.id}
                                     type="button"
                                     aria-label={`选择图片：${asset.name}`}
@@ -169,7 +170,7 @@ export function CategoryImageField({
                                     <div className="truncate p-2 text-[11px] text-slate-700">
                                         {asset.name}
                                     </div>
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
                     )}

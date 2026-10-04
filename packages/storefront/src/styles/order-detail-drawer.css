@@ -50,18 +50,19 @@
     background: var(--soft);
 }
 .order-detail-content .order-status > strong {
-    font-size: 20px;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
     color: var(--text);
 }
 .order-detail-content .order-status > span {
     margin-top: 8px;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     color: var(--muted);
 }
 .order-detail-content .order-status > small {
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-navigation-compact-size);
+    line-height: var(--type-navigation-compact-leading);
 }
 .order-detail-content .order-detail-products > header {
     padding: 0 0 12px;
@@ -88,20 +89,21 @@
     min-width: 0;
 }
 .order-detail-content .order-detail-products article > div strong {
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     white-space: normal;
     overflow-wrap: anywhere;
 }
 .order-detail-content .order-detail-products article > div em {
     margin-top: 4px;
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .order-detail-content .order-detail-products article > span:last-child {
     min-width: 0;
     text-align: end;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .order-detail-content .order-detail-summary .price-summary {
     margin: 16px 0 0;
@@ -113,12 +115,13 @@
 .order-detail-content .price-summary > div {
     min-width: 0;
     gap: 12px;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .order-detail-content .order-information {
     gap: 12px;
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .order-detail-content .order-information > div {
     display: grid;
@@ -138,7 +141,8 @@
     padding: 0;
 }
 .order-detail-content .order-delivery-panel h2 {
-    font-size: 15px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 .order-detail-content .delivery-table-scroll {
     overflow: visible;
@@ -171,7 +175,8 @@
     min-width: 0;
     padding: 0;
     border: 0;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     overflow-wrap: anywhere;
 }
 .order-detail-content .delivery-summary-table td:nth-child(2) {
@@ -182,7 +187,8 @@
     display: block;
     margin-bottom: 4px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .order-detail-content .delivery-summary-table td:first-child {
     grid-column: 1 / -1;
@@ -224,9 +230,9 @@
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-label-leading);
     white-space: normal;
 }
 .order-detail-sheet-footer .order-detail-actions .primary-action {

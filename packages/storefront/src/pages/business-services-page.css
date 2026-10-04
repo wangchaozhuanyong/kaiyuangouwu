@@ -82,8 +82,8 @@
     color: var(--text);
     font-family: var(--skin-display-font, var(--font-ui));
     font-size: var(--type-page-size);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     line-height: var(--type-page-leading);
     overflow-wrap: anywhere;
 }
@@ -92,8 +92,8 @@
     grid-column: 1 / -1;
     margin: 0;
     color: var(--muted);
-    font-size: 14px;
-    line-height: 1.7;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
 }
 
@@ -113,9 +113,9 @@
     background: var(--accent);
     color: var(--accent-foreground);
     font: inherit;
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.5;
+    font-size: var(--type-body-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
     cursor: pointer;
     transition: background-color 150ms ease;
@@ -184,7 +184,6 @@
     .business-services-heading p {
         grid-column: 1;
         max-width: 75ch;
-        font-size: 15px;
     }
 
     .business-services-hero-media {
@@ -199,6 +198,11 @@
         width: min(320px, 30%);
         right: -20px;
         bottom: -20px;
+    }
+
+    .business-services-heading p {
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 
     .business-services-empty {

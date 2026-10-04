@@ -1,4 +1,5 @@
 import { Archive, BadgePercent, Ban, Copy, Edit3, Eye, Flame, Send, Trash2 } from 'lucide-react';
+import { AdminButton } from '../../components/AdminControls';
 import { StoreCouponRecord, StoreFlashSaleRecord } from '../../graphql/marketing.graphql';
 import { formatMoney } from '../Sales/sales-utils';
 import {
@@ -76,7 +77,7 @@ export function CouponList({
                                 )}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onCopy(coupon.couponCode)}
                                     className="flex items-center gap-1 font-mono font-bold text-slate-700 hover:text-blue-600"
@@ -84,7 +85,7 @@ export function CouponList({
                                 >
                                     {coupon.couponCode}
                                     <Copy className="h-3 w-3" />
-                                </button>
+                                </AdminButton>
                                 <span>{couponRule(coupon, currencyCode)}</span>
                                 <span>
                                     {dateRange(
@@ -112,36 +113,36 @@ export function CouponList({
                             </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2 text-[11px]">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onView(coupon)}
                                 className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold text-slate-700 hover:bg-slate-50"
                             >
                                 <Eye className="h-3.5 w-3.5" />
                                 查看详情
-                            </button>
+                            </AdminButton>
                             {!coupon.archivedAt && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onGrant(coupon)}
                                     className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-700 hover:bg-blue-100"
                                 >
                                     <Send className="h-3.5 w-3.5" />
                                     指定发券
-                                </button>
+                                </AdminButton>
                             )}
                             {!coupon.archivedAt && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onRename({ id: coupon.id, name: coupon.name })}
                                     className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
                                     aria-label="修改名称"
                                 >
                                     <Edit3 className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             )}
                             {!coupon.archivedAt && couponIsActive(coupon) && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onSensitive({ kind: 'STOP', id: coupon.id, name: coupon.name })
@@ -151,10 +152,10 @@ export function CouponList({
                                 >
                                     <Ban className="h-3.5 w-3.5" />
                                     停止发放
-                                </button>
+                                </AdminButton>
                             )}
                             {!coupon.archivedAt && coupon.availableCount > 0 && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onSensitive({
@@ -168,10 +169,10 @@ export function CouponList({
                                     className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 font-bold text-rose-700 disabled:opacity-50"
                                 >
                                     作废未使用券
-                                </button>
+                                </AdminButton>
                             )}
                             {!coupon.archivedAt && coupon.claimedCount > 0 && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onSensitive({
@@ -187,10 +188,10 @@ export function CouponList({
                                 >
                                     <Archive className="h-3.5 w-3.5" />
                                     归档
-                                </button>
+                                </AdminButton>
                             )}
                             {!coupon.archivedAt && coupon.claimedCount === 0 && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onSensitive({
@@ -205,7 +206,7 @@ export function CouponList({
                                     aria-label="删除优惠券"
                                 >
                                     <Trash2 className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     </div>
@@ -228,7 +229,7 @@ function CouponAppearanceButton({
         couponAppearanceOptions.find(item => item.value === (coupon.appearanceTheme ?? 'default')) ??
         couponAppearanceOptions[0];
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             disabled={disabled}
@@ -237,7 +238,7 @@ function CouponAppearanceButton({
         >
             <span className={`h-3 w-3 rounded-sm ${option.swatchClass}`} aria-hidden="true" />
             券面：{option.label}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -313,23 +314,23 @@ export function FlashSaleList({
                             </div>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onView(sale)}
                                 className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
                             >
                                 <Eye className="h-3.5 w-3.5" />
                                 查看详情
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => onRename({ id: sale.id, name: sale.name })}
                                 className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600"
                                 aria-label="修改名称"
                             >
                                 <Edit3 className="h-4 w-4" />
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() =>
                                     onSensitive({
@@ -343,8 +344,8 @@ export function FlashSaleList({
                                 className={`rounded-lg px-3 py-2 text-[11px] font-bold ${sale.enabled ? 'border border-amber-200 bg-amber-50 text-amber-700' : 'bg-emerald-600 text-white'}`}
                             >
                                 {sale.enabled ? '停用活动' : '启用活动'}
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() =>
                                     onSensitive({
@@ -359,7 +360,7 @@ export function FlashSaleList({
                                 aria-label="删除秒杀"
                             >
                                 <Trash2 className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </article>

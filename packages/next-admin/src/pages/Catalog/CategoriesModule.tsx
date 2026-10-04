@@ -1,4 +1,4 @@
-import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -20,6 +20,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import {
     ConfigurableOperationField,
     ConfigurableOperationTechnicalDetails,
@@ -62,6 +63,7 @@ import type {
     OperationDefinition,
     OperationValue,
 } from '../../graphql/generic-promotions.graphql';
+import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import {
     configurableArgumentLabel,
@@ -184,6 +186,8 @@ export function CategoriesModule() {
     );
     const [activeTab, setActiveTab] = useUrlTab<ActiveTab>(CATEGORY_TABS, 'categories');
     const [notification, setNotification] = useState('');
+    const noticeTimeout = useRef<number | undefined>(undefined);
+    useEffect(() => () => window.clearTimeout(noticeTimeout.current), []);
     const [actionError, setActionError] = useState('');
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<EditableItem | null>(null);
@@ -220,7 +224,7 @@ export function CategoriesModule() {
             },
             facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
 
@@ -394,7 +398,8 @@ export function CategoriesModule() {
     const showNotice = (message: string) => {
         setNotification(message);
         setActionError('');
-        window.setTimeout(() => setNotification(''), 3500);
+        window.clearTimeout(noticeTimeout.current);
+        noticeTimeout.current = window.setTimeout(() => setNotification(''), 3500);
     };
 
     const showError = (message: string) => {
@@ -914,7 +919,7 @@ export function CategoriesModule() {
                     style={{ marginLeft: Math.min(depth, 3) * 20 }}
                 >
                     <div className="flex min-w-0 items-center gap-2">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={selectedCollectionIds.has(node.id)}
                             disabled={!canBulkDelete || bulkDeletingCollections}
@@ -923,7 +928,7 @@ export function CategoriesModule() {
                             title={canBulkDelete ? '选择这个空分类' : '仅无子分类、无 SKU 的分类可批量选择'}
                             className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             draggable={!locked}
                             disabled={locked}
@@ -964,9 +969,9 @@ export function CategoriesModule() {
                             }}
                         >
                             <GripVertical className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                         {isTopLevel && hasChildren ? (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => toggleCollection(node.id)}
                                 aria-expanded={isExpanded}
@@ -979,7 +984,7 @@ export function CategoriesModule() {
                                 ) : (
                                     <ChevronRight className="h-4 w-4" />
                                 )}
-                            </button>
+                            </AdminButton>
                         ) : isTopLevel ? (
                             <span className="h-8 w-8 shrink-0" aria-hidden="true" />
                         ) : null}
@@ -1012,22 +1017,22 @@ export function CategoriesModule() {
                             <strong className="font-mono text-slate-800">{node.productVariantCount}</strong>{' '}
                             个 SKU
                         </span>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => openEditor(node)}
                             className="p-1.5 text-slate-400 hover:text-blue-600"
                             aria-label={`编辑分类 ${node.name}`}
                         >
                             <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => handleDelete(node)}
                             className="p-1.5 text-slate-400 hover:text-rose-600"
                             aria-label={`删除分类 ${node.name}`}
                         >
                             <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
                 {hasChildren && isExpanded && (
@@ -1061,15 +1066,16 @@ export function CategoriesModule() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => refetch()}
                         disabled={loading}
                         className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> 刷新
-                    </button>
-                    <button
+                        <RefreshCw className={`h-3.5 w-3.5 ${loading && !data ? 'animate-spin' : ''}`} /> 刷新
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => openEditor()}
                         className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
@@ -1080,7 +1086,7 @@ export function CategoriesModule() {
                             : activeTab === 'OPTION_TEMPLATES'
                               ? '新增规格模板'
                               : '新增筛选属性'}
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
 
@@ -1102,14 +1108,14 @@ export function CategoriesModule() {
                         ['FACETS', Tag, `筛选属性与标签 (${data?.facets.totalItems ?? facets.length})`],
                     ] as const
                 ).map(([key, Icon, label]) => (
-                    <button
+                    <AdminButton
                         type="button"
                         key={key}
                         onClick={() => setActiveTab(key)}
                         className={`flex items-center gap-1.5 border-b-2 py-3.5 transition-colors ${activeTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
                         <Icon className="h-3.5 w-3.5" /> {label}
-                    </button>
+                    </AdminButton>
                 ))}
             </div>
 
@@ -1129,13 +1135,13 @@ export function CategoriesModule() {
                             </span>
                         </div>
                         {error && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => refetch()}
                                 className="rounded bg-rose-600 px-3 py-1 font-bold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 )}
@@ -1164,15 +1170,15 @@ export function CategoriesModule() {
                                         <span className="text-[11px] font-bold text-slate-600">
                                             已选 {selectedCollectionIds.size} 个空分类
                                         </span>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setSelectedCollectionIds(new Set())}
                                             disabled={bulkDeletingCollections}
                                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
                                         >
                                             取消选择
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={handleBulkDeleteCollections}
                                             disabled={bulkDeletingCollections}
@@ -1181,25 +1187,25 @@ export function CategoriesModule() {
                                             {bulkDeletingCollections
                                                 ? '正在删除…'
                                                 : `批量删除 (${selectedCollectionIds.size})`}
-                                        </button>
+                                        </AdminButton>
                                     </>
                                 )}
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={expandAllCollections}
                                     disabled={allTopLevelCollectionsExpanded}
                                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:opacity-40"
                                 >
                                     全部展开
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={collapseAllCollections}
                                     disabled={allTopLevelCollectionsCollapsed}
                                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-default disabled:opacity-40"
                                 >
                                     全部收起
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                         <div className="space-y-3 bg-slate-50/50 p-3 sm:p-5" aria-busy={isReordering}>
@@ -1222,7 +1228,7 @@ export function CategoriesModule() {
                             </div>
                             <div className="relative w-full sm:max-w-xs">
                                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <AdminInput
                                     type="search"
                                     name="option-group-search"
                                     autoComplete="off"
@@ -1257,7 +1263,7 @@ export function CategoriesModule() {
                                                 <div className="truncate text-sm font-bold text-slate-900">
                                                     {group.name}
                                                 </div>
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setUsageGroup(group)}
                                                     className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
@@ -1265,18 +1271,18 @@ export function CategoriesModule() {
                                                 >
                                                     查看 {group.productCount} 个关联商品
                                                     <ChevronRight className="h-3 w-3" />
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                             <div className="flex shrink-0 gap-1">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => openEditor(group)}
                                                     aria-label={`编辑规格模板：${group.name}`}
                                                     className="p-1.5 text-slate-400 hover:text-blue-600"
                                                 >
                                                     <Edit3 className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
+                                                </AdminButton>
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => handleDelete(group)}
                                                     disabled={group.productCount > 0}
@@ -1289,7 +1295,7 @@ export function CategoriesModule() {
                                                     className="p-1.5 text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-slate-400"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
@@ -1314,7 +1320,7 @@ export function CategoriesModule() {
                                     / {optionGroupPageCount} 页
                                 </span>
                                 <div className="flex items-center gap-1.5">
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setOptionGroupPage(Math.max(0, visibleOptionGroupPage - 1))
@@ -1324,8 +1330,8 @@ export function CategoriesModule() {
                                         aria-label="上一页规格模板"
                                     >
                                         <ChevronLeft className="h-4 w-4" />
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setOptionGroupPage(
@@ -1340,7 +1346,7 @@ export function CategoriesModule() {
                                         aria-label="下一页规格模板"
                                     >
                                         <ChevronRight className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         )}
@@ -1364,22 +1370,22 @@ export function CategoriesModule() {
                                         </div>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => openEditor(facet)}
                                             aria-label={`编辑筛选属性：${facet.name}`}
                                             className="p-1.5 text-slate-400 hover:text-blue-600"
                                         >
                                             <Edit3 className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => handleDelete(facet)}
                                             aria-label={`删除筛选属性：${facet.name}`}
                                             className="p-1.5 text-slate-400 hover:text-rose-600"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -1422,7 +1428,7 @@ export function CategoriesModule() {
                                       ? '规格模板'
                                       : '筛选属性'}
                             </h3>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeEditor}
                                 disabled={saving}
@@ -1430,7 +1436,7 @@ export function CategoriesModule() {
                                 aria-label="关闭"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         {activeTab === 'OPTION_TEMPLATES' &&
                             editingItem &&
@@ -1443,7 +1449,7 @@ export function CategoriesModule() {
                                     <p className="mt-1 leading-5">
                                         修改名称或选项值会影响这些商品，删除前必须先移除所有关联。
                                     </p>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setIsEditorOpen(false);
@@ -1453,12 +1459,12 @@ export function CategoriesModule() {
                                         className="mt-2 font-bold text-amber-900 underline underline-offset-2"
                                     >
                                         先查看关联商品
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             )}
                         <div>
                             <label className="mb-1 block text-xs font-bold text-slate-700">中文名称 *</label>
-                            <input
+                            <AdminInput
                                 value={formName}
                                 onChange={event => setFormName(event.target.value)}
                                 className="w-full rounded-lg border border-slate-300 p-2.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
@@ -1472,7 +1478,7 @@ export function CategoriesModule() {
                             <label className="mb-1 block text-xs font-bold text-slate-700">
                                 {activeTab === 'CATEGORIES' ? 'Slug' : '编码 Code'}
                             </label>
-                            <input
+                            <AdminInput
                                 value={formCode}
                                 onChange={event => setFormCode(event.target.value)}
                                 placeholder="留空自动生成"
@@ -1490,7 +1496,7 @@ export function CategoriesModule() {
                                     <label className="mb-1 block text-xs font-bold text-slate-700">
                                         上级分类
                                     </label>
-                                    <select
+                                    <AdminSelect
                                         value={formParentId}
                                         onChange={event => setFormParentId(event.target.value)}
                                         className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs"
@@ -1503,7 +1509,7 @@ export function CategoriesModule() {
                                                     {item.name}
                                                 </option>
                                             ))}
-                                    </select>
+                                    </AdminSelect>
                                 </div>
                                 <CollectionFiltersEditor
                                     values={formFilters}
@@ -1527,7 +1533,7 @@ export function CategoriesModule() {
                                 <label className="mb-1 block text-xs font-bold text-slate-700">
                                     选项值（逗号或换行分隔）
                                 </label>
-                                <textarea
+                                <AdminTextArea
                                     value={formValues}
                                     onChange={event => setFormValues(event.target.value)}
                                     rows={4}
@@ -1541,7 +1547,7 @@ export function CategoriesModule() {
                         )}
                         {activeTab !== 'OPTION_TEMPLATES' && (
                             <label className="flex items-center gap-2 text-xs text-slate-700">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={formIsPrivate}
                                     onChange={event => setFormIsPrivate(event.target.checked)}
@@ -1555,22 +1561,22 @@ export function CategoriesModule() {
                             </div>
                         )}
                         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeEditor}
                                 disabled={saving}
                                 className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleSave}
                                 disabled={saving}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                             >
                                 {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}保存
-                            </button>
+                            </AdminButton>
                         </div>
                     </AccessibleDialogSurface>
                 </div>
@@ -1655,7 +1661,7 @@ function CollectionFiltersEditor({
                     </p>
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-700">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={inheritFilters}
                         onChange={event => onInheritFiltersChange(event.target.checked)}
@@ -1664,7 +1670,7 @@ function CollectionFiltersEditor({
                 </label>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-                <select
+                <AdminSelect
                     value={selectedCode}
                     onChange={event => setSelectedCode(event.target.value)}
                     className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -1675,8 +1681,8 @@ function CollectionFiltersEditor({
                             {configurableOperationLabel(definition, '商品筛选规则')}
                         </option>
                     ))}
-                </select>
-                <button
+                </AdminSelect>
+                <AdminButton
                     type="button"
                     onClick={add}
                     disabled={!selectedCode}
@@ -1684,7 +1690,7 @@ function CollectionFiltersEditor({
                 >
                     <Plus className="mr-1 inline h-3.5 w-3.5" />
                     添加规则
-                </button>
+                </AdminButton>
             </div>
             <div className="space-y-3">
                 {values.map((operation, operationIndex) => {
@@ -1705,7 +1711,7 @@ function CollectionFiltersEditor({
                                         <ConfigurableOperationTechnicalDetails definition={definition} />
                                     )}
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         onChange(values.filter((_, index) => index !== operationIndex))
@@ -1714,7 +1720,7 @@ function CollectionFiltersEditor({
                                     aria-label={`删除筛选规则 ${configurableOperationLabel(definitions.find(item => item.code === operation.code) ?? { code: operation.code, description: '', args: [] })}`}
                                 >
                                     <Trash2 className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {(definition?.args ?? []).map(arg => (
@@ -1773,7 +1779,7 @@ function CollectionFiltersEditor({
                     </ul>
                 </div>
             )}
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => void runPreview()}
                 disabled={previewState.loading}
@@ -1781,7 +1787,7 @@ function CollectionFiltersEditor({
             >
                 <Eye className="h-3.5 w-3.5" />
                 {previewState.loading ? '预览中…' : '预览集合内容'}
-            </button>
+            </AdminButton>
         </section>
     );
 }

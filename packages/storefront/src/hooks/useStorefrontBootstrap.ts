@@ -13,7 +13,7 @@ import {
     uiCopy,
 } from '../i18n';
 import { configureMoneyDisplay } from '../money-display';
-import { storefrontQueryKeys } from '../query-client';
+import { refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
@@ -245,9 +245,14 @@ export function useStorefrontBootstrap() {
         if (configQuery.isPaused) document.documentElement.removeAttribute('data-storefront-theme-pending');
     }, [configQuery.isPaused]);
 
-    const refetchStorefront = useCallback(async () => {
-        await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);
-    }, [collectionsQuery, configQuery, productsQuery]);
+    const refetchStorefront = useCallback(
+        () =>
+            refreshStorefrontQueries(queryClient, {
+                marketCode: storefrontQueryKeys.market(market),
+                languageCode: vendureLanguageCode,
+            }),
+        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
+    );
 
     useEffect(() => {
         document.documentElement.lang = documentLanguageFor(language);

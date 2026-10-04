@@ -99,9 +99,10 @@ export function HomeRoutePage() {
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
-                onCouponCampaignsRetry: () => void runtime.couponCampaignsQuery.refetch(),
+                onCouponCampaignsRetry: () =>
+                    void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
                 onContentTarget: runtime.openContentTarget,
-                onContentRetry: () => void runtime.contentQuery?.refetch?.(),
+                onContentRetry: () => void runtime.contentQuery?.refetch?.({ cancelRefetch: false }),
                 onRetry: () => void runtime.refetchStorefront(),
             }}
         >
@@ -191,7 +192,7 @@ export function ProductRoutePage() {
                     }
                     onAction={() =>
                         runtime.routeProductError
-                            ? void runtime.productQuery.refetch()
+                            ? void runtime.productQuery.refetch({ cancelRefetch: false })
                             : runtime.navigate({ name: 'category' })
                     }
                 />

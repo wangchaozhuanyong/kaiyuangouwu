@@ -155,6 +155,19 @@ async function renderTabs(basename = '/') {
 }
 
 describe('retained admin tabs', () => {
+    it('bounds clean cached pages without evicting an inactive dirty editor', async () => {
+        const tabs = await renderTabs();
+        const paths = Array.from({ length: 10 }, (_, index) => `/catalog/products/${index + 1}`);
+        await tabs.close([], ['/catalog/list', ...paths]);
+        await tabs.go(paths[0]);
+        await tabs.click(paths[0], '编辑');
+        for (const path of paths.slice(1)) await tabs.go(path);
+        expect(tabs.page(paths[0]).querySelector('input')!.value).toBe('draft-1');
+        expect(tabs.page(paths[1])).toBeNull();
+        expect(tabs.container.querySelectorAll('article')).toHaveLength(9);
+        await tabs.go(paths[0]);
+        expect(tabs.page(paths[0]).querySelector('input')!.value).toBe('draft-1');
+    });
     it('keeps list pagination, DOM scroll and independent product drafts without remounting', async () => {
         const tabs = await renderTabs();
         await tabs.click('/catalog/list', '分页');

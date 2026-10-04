@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Plus, RefreshCw, Store } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -10,6 +11,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
@@ -71,7 +73,6 @@ export function PlatformGovernanceCenter({
             paymentMethodOptions: directoryOptions(0),
             shippingMethodOptions: directoryOptions(0),
         },
-        fetchPolicy: 'cache-and-network',
     });
     const {
         data: storeSettingsData,
@@ -227,23 +228,26 @@ export function PlatformGovernanceCenter({
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading}
                             className={secondaryButton}
                             aria-label="刷新"
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
-                        </button>
-                        <button
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setProvisionOpen(true)}
                             className={primaryButton}
                         >
                             <Plus className="h-4 w-4" />
                             开通网店
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -300,22 +304,22 @@ export function PlatformGovernanceCenter({
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             disabled={reviewGovernanceState.loading}
                                             onClick={() => void reviewRequest(request.id, 'REJECTED')}
                                             className={secondaryButton}
                                         >
                                             驳回
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             disabled={reviewGovernanceState.loading}
                                             onClick={() => void reviewRequest(request.id, 'APPROVED')}
                                             className={primaryButton}
                                         >
                                             通过
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                             ))}
@@ -365,7 +369,7 @@ export function PlatformGovernanceCenter({
                         canReadBusinessSettings={canReadBusinessSettings}
                     />
                     {tab === 'DOMAINS' && profiles.length > 0 && (
-                        <select
+                        <AdminSelect
                             value={selectedProfile?.id ?? ''}
                             onChange={event => setSelectedStoreId(event.target.value)}
                             className={`${inputClass} w-full xl:w-72`}
@@ -375,13 +379,17 @@ export function PlatformGovernanceCenter({
                                     {storeName(profile)}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     )}
                     {tab === 'SELLERS' && (
-                        <button type="button" onClick={() => setSellerOpen(true)} className={primaryButton}>
+                        <AdminButton
+                            type="button"
+                            onClick={() => setSellerOpen(true)}
+                            className={primaryButton}
+                        >
                             <Plus className="h-3.5 w-3.5" />
                             新增商家主体
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
                 {query.error && !query.data ? (

@@ -1,8 +1,10 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const CONFIGS = gql`
@@ -33,7 +35,6 @@ export function PlatformSupplyDialog({
 }) {
     const query = useQuery<{ platformAutoCardSupplyCatalog: Supply }>(CONFIGS, {
         variables: { productId },
-        fetchPolicy: 'network-only',
     });
     const [save, state] = useMutation(SAVE);
     const [configId, setConfigId] = useState('');
@@ -78,12 +79,12 @@ export function PlatformSupplyDialog({
                         卡密供货授权
                         <FeatureHelpButton topic="sales.card-supply" title="卡密供货授权" />
                     </h2>
-                    <button onClick={onClose}>关闭</button>
+                    <AdminButton onClick={onClose}>关闭</AdminButton>
                 </div>
                 <p className="text-sm text-slate-500">
                     维护店铺提供原始卡池，目标店铺定价并履约。此处不展示卡密内容；撤销后已进入付款的订单按快照继续处理。
                 </p>
-                {query.loading && <p role="status">读取供货配置中…</p>}
+                {query.loading && !query.data && <p role="status">读取供货配置中…</p>}
                 {query.error && <p role="alert">{toUserFacingError(query.error, '供货配置读取失败')}</p>}
                 {!query.loading &&
                     !query.error &&
@@ -92,7 +93,7 @@ export function PlatformSupplyDialog({
                     )}
                 <label className="block text-sm">
                     原始发卡配置
-                    <select
+                    <AdminSelect
                         aria-label="原始发卡配置"
                         className="ml-3 rounded-lg border border-slate-200 p-2"
                         value={configId}
@@ -104,11 +105,11 @@ export function PlatformSupplyDialog({
                                 {c.name} · {c.enabled ? '启用' : '来源已停用'}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </label>
                 <label className="block text-sm">
                     目标销售店铺
-                    <select
+                    <AdminSelect
                         aria-label="目标销售店铺"
                         className="ml-3 rounded-lg border border-slate-200 p-2"
                         value={channelId}
@@ -122,7 +123,7 @@ export function PlatformSupplyDialog({
                                     {s.displayName}
                                 </option>
                             ))}
-                    </select>
+                    </AdminSelect>
                 </label>
                 {grant && (
                     <p className="text-sm">
@@ -130,16 +131,20 @@ export function PlatformSupplyDialog({
                     </p>
                 )}
                 <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                    <AdminInput
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={e => setEnabled(e.target.checked)}
+                    />
                     允许来源卡池供货
                 </label>
-                <button
+                <AdminButton
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                     disabled={state.loading || !config || !channelId}
                     onClick={() => void submit()}
                 >
                     保存并回读供货授权
-                </button>
+                </AdminButton>
                 {message && (
                     <p role="status" className="text-sm">
                         {message}

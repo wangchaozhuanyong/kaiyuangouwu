@@ -1,4 +1,5 @@
 import { PAGE_SIZE_OPTIONS, normalizePageSize } from '../utils/pagination';
+import { AdminSelect } from './AdminControls';
 
 export function PageSizeSelect({
     pageSize,
@@ -12,7 +13,7 @@ export function PageSizeSelect({
     return (
         <label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-slate-500">
             <span>每页显示</span>
-            <select
+            <AdminSelect
                 aria-label="每页显示条数"
                 value={normalizePageSize(pageSize)}
                 onChange={event => onPageSizeChange(normalizePageSize(event.target.value))}
@@ -24,7 +25,7 @@ export function PageSizeSelect({
                         {size} 条
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </label>
     );
 }

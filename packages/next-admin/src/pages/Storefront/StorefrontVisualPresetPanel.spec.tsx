@@ -164,3 +164,6 @@ describe('fixed desktop layout skin settings', () => {
         expect(mocks.refetch).not.toHaveBeenCalled();
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

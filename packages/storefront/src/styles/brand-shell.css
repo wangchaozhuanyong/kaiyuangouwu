@@ -22,8 +22,9 @@
     color: var(--accent);
     display: grid;
     place-items: center;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 /* Keep transparent brand artwork clear of the shared product-image placeholder surface. */
@@ -55,12 +56,12 @@ img.brand-mark {
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    font-family: var(--font-display, inherit);
-    font-size: 18px;
-    font-weight: 800;
-    line-height: 1.2;
+    font-family: var(--skin-display-font, var(--font-ui));
+    font-size: var(--type-brand-size);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--type-brand-leading);
     color: var(--text);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-normal);
     white-space: nowrap;
     text-overflow: ellipsis;
 }
@@ -108,9 +109,9 @@ img.brand-mark {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    font-size: 12px;
+    font-size: var(--type-input-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1;
+    line-height: var(--type-input-leading);
     white-space: nowrap;
     cursor: pointer;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -190,7 +191,8 @@ img.brand-mark {
 }
 
 .language-button {
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -267,7 +269,8 @@ img.brand-mark {
         display: inline-flex;
         align-items: center;
         color: var(--text);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         font-weight: var(--font-weight-semibold);
         white-space: nowrap;
     }

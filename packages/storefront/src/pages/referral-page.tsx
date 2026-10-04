@@ -19,6 +19,7 @@ const REFERRAL_LIST_PAGE_SIZE = 10;
 
 import { ShopApi } from '../api';
 import { languageCodeFor } from '../i18n';
+import { storefrontInitialQueryError } from '../loading-state';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { referralShareUrl } from '../referral-attribution';
 import { availablePosterTemplates } from '../referral-poster-layout';
@@ -163,6 +164,14 @@ export function ReferralPage() {
                     action={isZh ? '去登录' : 'Sign in'}
                     onAction={onLogin}
                 />
+            ) : storefrontInitialQueryError(programQuery, language) ? (
+                <EmptyState
+                    icon={<Gift />}
+                    title={isZh ? '活动信息加载失败' : 'Could not load referral settings'}
+                    detail={storefrontInitialQueryError(programQuery, language)}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => void programQuery.refetch({ cancelRefetch: false })}
+                />
             ) : !programQuery.data?.enabled ? (
                 <EmptyState
                     icon={<Gift />}
@@ -173,7 +182,7 @@ export function ReferralPage() {
                             : 'Your invitation code and rewards will appear here when the program opens.'
                     }
                 />
-            ) : overviewQuery.error || !overview ? (
+            ) : !overview ? (
                 <EmptyState
                     icon={<Gift />}
                     title={isZh ? '邀请信息加载失败' : 'Could not load referrals'}
@@ -185,7 +194,7 @@ export function ReferralPage() {
                               : 'Try again later'
                     }
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void overviewQuery.refetch()}
+                    onAction={() => void overviewQuery.refetch({ cancelRefetch: false })}
                 />
             ) : (
                 // REFERRAL_CELEBRATION_20261002: user-approved campaign theme, independent of store skins.
@@ -359,11 +368,11 @@ export function ReferralPage() {
                                     <div className="referral-record-list">
                                         {paginatedInvitees.map(invitee => (
                                             <div key={invitee.id} className="referral-record-row">
-                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] font-bold text-[var(--accent-ink)]">
+                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] weight-bold text-[var(--accent-ink)]">
                                                     {invitee.displayName.slice(0, 1)}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <strong className="block truncate text-sm text-[var(--text)]">
+                                                    <strong className="block truncate type-body text-[var(--text)]">
                                                         {invitee.displayName}
                                                     </strong>
                                                     <small className="text-[var(--muted)]">
@@ -373,7 +382,7 @@ export function ReferralPage() {
                                                     </small>
                                                 </div>
                                                 <span
-                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
+                                                    className={`shrink-0 rounded-full px-2 py-1 type-meta weight-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
                                                 >
                                                     {invitee.firstPaidOrderAt
                                                         ? isZh
@@ -583,7 +592,7 @@ function LedgerRow({
                 <WalletCards />
             </span>
             <div className="min-w-0 flex-1">
-                <strong className="block truncate text-sm text-[var(--text)]">{label}</strong>
+                <strong className="block truncate type-body text-[var(--text)]">{label}</strong>
                 <small className="text-[var(--muted)]">
                     {new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
                         new Date(entry.createdAt),
@@ -615,7 +624,7 @@ function ListPagination({
 }) {
     if (totalItems <= 0) return null;
     return (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 text-xs text-[var(--muted)]">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 type-helper text-[var(--muted)]">
             <span>
                 {isZh
                     ? `共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页`
@@ -627,7 +636,7 @@ function ListPagination({
                     disabled={currentPage <= 1}
                     onClick={() => onPageChange(currentPage - 1)}
                     aria-label={isZh ? '上一页' : 'Previous page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 weight-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="size-3.5" aria-hidden="true" />
                     <span>{isZh ? '上一页' : 'Prev'}</span>
@@ -637,7 +646,7 @@ function ListPagination({
                     disabled={currentPage >= totalPages}
                     onClick={() => onPageChange(currentPage + 1)}
                     aria-label={isZh ? '下一页' : 'Next page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 weight-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <span>{isZh ? '下一页' : 'Next'}</span>
                     <ChevronRight className="size-3.5" aria-hidden="true" />

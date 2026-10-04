@@ -1,5 +1,6 @@
 import { ExternalLink, KeyRound, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { StorefrontAuthConfigurationRecord } from '../../graphql/storefront.graphql';
@@ -150,7 +151,7 @@ export function StorefrontAuthSettingsPanel({
                 >
                     全平台 Google OAuth Web Client ID
                 </label>
-                <input
+                <AdminInput
                     id="platform-google-client-id"
                     value={draft.platformGoogleClientId ?? ''}
                     disabled={!canEditPlatform || busy}
@@ -158,7 +159,7 @@ export function StorefrontAuthSettingsPanel({
                     placeholder="1234567890-xxxx.apps.googleusercontent.com"
                     className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                 />
-                <button
+                <AdminButton
                     type="button"
                     disabled={!canEditPlatform || busy}
                     onClick={() => void savePlatform()}
@@ -166,7 +167,7 @@ export function StorefrontAuthSettingsPanel({
                 >
                     {platformSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                     {platformSaving ? '保存中' : '保存全平台 Google 配置'}
-                </button>
+                </AdminButton>
             </div>
 
             <div className="mt-5">
@@ -233,7 +234,7 @@ export function StorefrontAuthSettingsPanel({
                     >
                         当前店铺 Google OAuth Web Client ID
                     </label>
-                    <input
+                    <AdminInput
                         id="store-google-client-id"
                         value={draft.storeGoogleClientId ?? ''}
                         disabled={disabled || busy}
@@ -273,7 +274,7 @@ export function StorefrontAuthSettingsPanel({
                 </p>
             ) : null}
 
-            <button
+            <AdminButton
                 type="button"
                 disabled={disabled || busy}
                 onClick={() => void saveStore()}
@@ -281,7 +282,7 @@ export function StorefrontAuthSettingsPanel({
             >
                 {storeSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                 {storeSaving ? '保存中' : '保存当前店铺账号设置'}
-            </button>
+            </AdminButton>
         </section>
     );
 }
@@ -305,7 +306,7 @@ function SwitchRow({
                 <strong className="block text-xs text-slate-800">{label}</strong>
                 <small className="mt-1 block text-[11px] leading-4 text-slate-500">{description}</small>
             </div>
-            <button
+            <AdminButton
                 type="button"
                 role="switch"
                 aria-checked={checked}
@@ -317,7 +318,7 @@ function SwitchRow({
                 <span
                     className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}
                 />
-            </button>
+            </AdminButton>
         </div>
     );
 }

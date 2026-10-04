@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { AlertCircle, Image as ImageIcon, X } from 'lucide-react';
 import { useState } from 'react';
 import { channelRequestContext } from '../../apollo';
@@ -30,14 +32,14 @@ export function BrandAssetPickerDialog({ title, selectedAsset, channel, onClose,
             >
                 <div className="flex items-start justify-between gap-4">
                     <h3 className="text-base font-bold text-slate-900">{title}</h3>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         aria-label="关闭品牌素材选择"
                         className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
                     只显示当前店铺的独立素材；选择图片后，请保存店铺档案以应用到前台。
@@ -78,7 +80,7 @@ function BrandAssetResults({
     return (
         <>
             <div className="my-3 flex flex-col gap-2 sm:flex-row sm:items-start">
-                <input
+                <AdminInput
                     aria-label="搜索品牌图片素材"
                     placeholder="按素材名称搜索"
                     className={`${inputClass} min-w-0 flex-1`}
@@ -99,24 +101,24 @@ function BrandAssetResults({
                 />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={loading}>
-                {loading ? (
+                {loading && !data ? (
                     <p role="status" className="py-16 text-center text-xs text-slate-500">
                         正在读取素材库…
                     </p>
-                ) : error ? (
+                ) : error && !data ? (
                     <div
                         role="alert"
                         className="flex flex-col items-center gap-3 py-12 text-center text-xs text-rose-700"
                     >
                         <AlertCircle className="h-8 w-8" />
                         <span>{toUserFacingError(error, '品牌素材读取失败，请重试')}</span>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void refetch().catch(() => undefined)}
                             className={secondaryButton}
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : assets.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-12 text-center text-xs text-slate-500">
@@ -130,7 +132,7 @@ function BrandAssetResults({
                 ) : (
                     <div className="grid grid-cols-2 gap-3 p-1 sm:grid-cols-3 md:grid-cols-5">
                         {assets.map(asset => (
-                            <button
+                            <AdminButton
                                 type="button"
                                 key={asset.id}
                                 aria-label={asset.name || '选择品牌图片'}
@@ -148,7 +150,7 @@ function BrandAssetResults({
                                 <p className="truncate p-2 text-[10px] text-slate-700" title={asset.name}>
                                     {asset.name || '品牌图片'}
                                 </p>
-                            </button>
+                            </AdminButton>
                         ))}
                     </div>
                 )}

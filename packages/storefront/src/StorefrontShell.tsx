@@ -135,7 +135,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         ? '店铺目前无法提供商品浏览与下单服务，请稍后再来。'
                         : 'Products and checkout are unavailable for this store right now. Please check back later.'}
                 </p>
-                <button type="button" onClick={() => window.location.reload()}>
+                <button type="button" onClick={() => void state.retryPageLoad()}>
                     {isZh ? '重新检查' : 'Check again'}
                 </button>
             </main>
@@ -152,7 +152,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     navigationPreparing={state.isPreparingProduct}
                     online={online}
                     language={language}
-                    onRetry={() => window.location.reload()}
+                    onRetry={() => void state.retryPageLoad()}
                     onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
                 >
                     <div

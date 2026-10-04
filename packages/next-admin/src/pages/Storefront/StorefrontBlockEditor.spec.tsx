@@ -190,3 +190,6 @@ it('saves shared auth presentation settings while retaining merchant artwork and
         host.remove();
     }
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

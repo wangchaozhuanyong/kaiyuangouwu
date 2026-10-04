@@ -2,7 +2,6 @@ import { Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
-import { matchesCatalogFilters } from '../api/helpers';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../catalog-route-query';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CatalogFilterSheet, type CatalogFilterValues } from '../components/common/catalog-filter-sheet';
@@ -11,8 +10,7 @@ import { DesktopCategoryNavigation } from '../components/common/desktop-category
 import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
-import { offlineLoadError } from '../loading-state';
-import { storefrontErrorMessage } from '../storefront-errors';
+import { storefrontInitialQueryError } from '../loading-state';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { useStorefront } from '../StorefrontContext';
@@ -49,18 +47,10 @@ export function DesktopCatalogPage() {
         pageSize: 20,
     });
     const query = pagination.query;
-    const loadedProducts = pagination.products;
-    // Search-index stock can lag behind live auto-card stock. Use the existing
-    // availability rules while keeping pagination offsets based on raw API pages.
-    const products = loadedProducts.filter(product => matchesCatalogFilters(product, input));
+    const products = pagination.products;
     const totalItems = query.data ? pagination.totalItems : undefined;
     const displayCount = query.hasNextPage ? totalItems : products.length;
-    const countIsPartial = query.hasNextPage && products.length !== loadedProducts.length;
-    const error = query.isPaused
-        ? offlineLoadError(language)
-        : query.error instanceof Error
-          ? storefrontErrorMessage(query.error, language)
-          : '';
+    const error = storefrontInitialQueryError(query, language);
     const activeCollection = collections.find(collection => collection.id === route.collectionId);
     const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);
     const [filterOpen, setFilterOpen] = useState(false);
@@ -161,12 +151,8 @@ export function DesktopCatalogPage() {
                                       ? '暂不可用'
                                       : 'Unavailable'
                                   : isZh
-                                    ? countIsPartial
-                                        ? `已显示 ${products.length} 件商品`
-                                        : `${displayCount} 件商品`
-                                    : countIsPartial
-                                      ? `${products.length} products shown`
-                                      : `${displayCount} products`}
+                                    ? `${displayCount} 件商品`
+                                    : `${displayCount} products`}
                         </span>
                     </div>
                     <div className="desktop-catalog-actions">
@@ -238,11 +224,7 @@ export function DesktopCatalogPage() {
                         currencyCode={market.currencyCode}
                         value={draftFilters}
                         onChange={setDraftFilters}
-                        resultCount={
-                            draftMatchesApplied && !query.isFetching && !countIsPartial
-                                ? (displayCount ?? null)
-                                : null
-                        }
+                        resultCount={draftMatchesApplied && !query.isFetching ? (displayCount ?? null) : null}
                         onApply={applyFilters}
                         onClose={() => setFilterOpen(false)}
                     />
@@ -272,7 +254,7 @@ export function DesktopCatalogPage() {
                                 title={isZh ? '商品加载失败' : 'Could not load products'}
                                 detail={error}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void query.refetch()}
+                                onAction={() => void query.refetch({ cancelRefetch: false })}
                             />
                         ) : products.length ? (
                             <div className="desktop-product-grid">

@@ -35,8 +35,9 @@
     background: var(--control-surface);
     color: var(--text);
     font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
 .notification-toolbar button:hover:not(:disabled) {
@@ -54,7 +55,7 @@
     padding-inline: 6px;
     background: transparent;
     color: var(--muted);
-    font-weight: 400;
+    font-weight: var(--font-weight-normal);
 }
 .notification-count {
     font-variant-numeric: tabular-nums;
@@ -70,7 +71,8 @@
 .notification-read-error {
     margin: 0;
     color: var(--danger);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .notification-read-error button {
     min-height: 44px;
@@ -141,12 +143,12 @@
     overflow-wrap: anywhere;
 }
 .notification-content strong {
-    font-size: 14px;
-    line-height: 1.5;
-    font-weight: 500;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-medium);
 }
 .notification-list > button.is-unread strong {
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
 }
 .notification-content small {
     display: -webkit-box;
@@ -155,14 +157,14 @@
     overflow: hidden;
     margin-top: 4px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .notification-time {
     grid-area: time;
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-variant-numeric: tabular-nums;
 }
 .notification-list > button > svg {
@@ -213,28 +215,28 @@
 }
 .notification-detail-kind {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .notification-detail-heading h2 {
     margin: 8px 0 12px;
-    font-size: 22px;
+    font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.5;
+    line-height: var(--type-section-leading);
 }
 .notification-detail-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 6px 12px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .notification-detail-copy {
     margin: 0;
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.8;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     white-space: pre-wrap;
 }
 .notification-detail-related {
@@ -245,15 +247,16 @@
 }
 .notification-detail-body h3 {
     margin: 0 0 16px;
-    font-size: 14px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
     font-weight: var(--font-weight-semibold);
 }
 .notification-detail-related dl {
     display: grid;
     gap: 14px;
     margin: 0;
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .notification-detail-related dl > div {
     display: grid;
@@ -280,18 +283,19 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .notification-detail-related li small {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .notification-detail-note p {
     margin: 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.8;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: pre-wrap;
 }
 .notification-detail-footer {
@@ -314,8 +318,8 @@
     background: var(--control-surface);
     color: var(--text);
     font: inherit;
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     cursor: pointer;
 }
 .notification-detail-footer .primary-action {
@@ -387,7 +391,8 @@
     }
     .notification-time {
         white-space: nowrap;
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .notification-list > button.is-unread::after {
         top: 12px;

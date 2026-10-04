@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useDeferredValue, useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import {
@@ -13,6 +14,7 @@ import {
     type ManualDeliveryRecord,
 } from '../../graphql/manual-digital-delivery.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 type DeliveryPackage = {
@@ -80,7 +82,6 @@ export function ManualDigitalDeliveryModule() {
         manualDigitalDeliveries: { items: ManualDeliveryRecord[]; totalItems: number };
     }>(GET_MANUAL_DELIVERIES, {
         variables: { options: { skip: page * PAGE_SIZE, take: PAGE_SIZE, ...(state ? { state } : {}) } },
-        fetchPolicy: 'cache-and-network',
     });
     const items = query.data?.manualDigitalDeliveries.items ?? [];
     const total = query.data?.manualDigitalDeliveries.totalItems ?? 0;
@@ -98,13 +99,14 @@ export function ManualDigitalDeliveryModule() {
                             付款后按订单生成交付任务；每件商品对应一个成品包，发布后发送到订单交付邮箱。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold"
                     >
                         刷新任务
-                    </button>
+                    </AdminButton>
                 </header>
                 {notice && (
                     <p role="status" className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">
@@ -119,7 +121,7 @@ export function ManualDigitalDeliveryModule() {
                         >
                             任务状态
                         </label>
-                        <select
+                        <AdminSelect
                             id="manual-delivery-state"
                             value={state}
                             onChange={event => {
@@ -134,7 +136,7 @@ export function ManualDigitalDeliveryModule() {
                                     {label}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                         <span className="text-xs text-slate-500">共 {total} 条</span>
                     </div>
                     {query.error && (
@@ -180,7 +182,7 @@ export function ManualDigitalDeliveryModule() {
                                             </td>
                                             <td className="p-2">{stateLabels[item.state]}</td>
                                             <td className="p-2">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setSelectedId(item.id)}
                                                     className="rounded-lg border border-blue-200 px-3 py-1.5 font-semibold text-blue-700"
@@ -188,7 +190,7 @@ export function ManualDigitalDeliveryModule() {
                                                     {editableStates.has(item.state) && canUpdate
                                                         ? '准备交付'
                                                         : '查看详情'}
-                                                </button>
+                                                </AdminButton>
                                             </td>
                                         </tr>
                                     ))}
@@ -197,25 +199,25 @@ export function ManualDigitalDeliveryModule() {
                         </div>
                     )}
                     <div className="mt-4 flex items-center justify-end gap-3 text-xs">
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={page === 0 || query.loading}
                             onClick={() => setPage(value => value - 1)}
                             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
                         >
                             上一页
-                        </button>
+                        </AdminButton>
                         <span>
                             第 {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))} 页
                         </span>
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={(page + 1) * PAGE_SIZE >= total || query.loading}
                             onClick={() => setPage(value => value + 1)}
                             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
                         >
                             下一页
-                        </button>
+                        </AdminButton>
                     </div>
                 </section>
                 {selectedId && (
@@ -248,7 +250,6 @@ function DeliveryEditor({
 }) {
     const query = useQuery<{ manualDigitalDelivery: ManualDeliveryRecord | null }>(GET_MANUAL_DELIVERY, {
         variables: { id },
-        fetchPolicy: 'network-only',
     });
     const delivery = query.data?.manualDigitalDelivery;
     return (
@@ -269,16 +270,20 @@ function DeliveryEditor({
                         </p>
                     )}
                 </div>
-                <button type="button" onClick={onClose} className="rounded-lg border px-3 py-1.5 text-xs">
+                <AdminButton
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg border px-3 py-1.5 text-xs"
+                >
                     关闭
-                </button>
+                </AdminButton>
             </div>
             {query.error && (
                 <p role="alert" className="text-xs text-rose-700">
                     {toUserFacingError(query.error, '交付详情读取失败')}
                 </p>
             )}
-            {query.loading && (
+            {query.loading && !query.data && (
                 <p role="status" className="text-xs text-slate-500">
                     正在读取交付详情…
                 </p>
@@ -408,7 +413,7 @@ function DeliveryForm({
                     <div className="grid gap-3 sm:grid-cols-2">
                         <label className="space-y-1">
                             <span>账号（可选）</span>
-                            <input
+                            <AdminInput
                                 aria-label={`成品包 ${index + 1} 账号`}
                                 value={item.account}
                                 onChange={event => setPackage(index, { account: event.target.value })}
@@ -417,7 +422,7 @@ function DeliveryForm({
                         </label>
                         <label className="space-y-1">
                             <span>密钥 / 密码（可选）</span>
-                            <input
+                            <AdminInput
                                 aria-label={`成品包 ${index + 1} 密钥`}
                                 type="password"
                                 autoComplete="off"
@@ -429,7 +434,7 @@ function DeliveryForm({
                     </div>
                     <label className="block space-y-1">
                         <span>交付说明</span>
-                        <textarea
+                        <AdminTextArea
                             aria-label={`成品包 ${index + 1} 交付说明`}
                             value={item.note}
                             onChange={event => setPackage(index, { note: event.target.value })}
@@ -440,7 +445,7 @@ function DeliveryForm({
                     <div className="flex flex-wrap items-center gap-2">
                         <span>附件 {item.attachmentAssetIds.length} 件</span>
                         {editable && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setAssetPackage(index);
@@ -449,14 +454,14 @@ function DeliveryForm({
                                 className="rounded-lg border px-2.5 py-1.5"
                             >
                                 从本店素材库选择
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                     {item.attachmentAssetIds.map(assetId => (
                         <div key={assetId} className="flex items-center gap-2">
                             <span>素材 #{assetId}</span>
                             {editable && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() =>
                                         setPackage(index, {
@@ -468,7 +473,7 @@ function DeliveryForm({
                                     className="text-rose-700"
                                 >
                                     移除
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     ))}
@@ -484,11 +489,11 @@ function DeliveryForm({
                 >
                     <div className="flex justify-between">
                         <strong>选择成品包 {assetPackage + 1} 的附件</strong>
-                        <button type="button" onClick={() => setAssetPackage(null)}>
+                        <AdminButton type="button" onClick={() => setAssetPackage(null)}>
                             关闭
-                        </button>
+                        </AdminButton>
                     </div>
-                    <input
+                    <AdminInput
                         aria-label="搜索交付附件"
                         placeholder="搜索本店素材名称"
                         value={assetSearch}
@@ -499,10 +504,10 @@ function DeliveryForm({
                         className="w-full rounded-lg border px-3 py-2"
                     />
                     {assets.error && <p role="alert">{toUserFacingError(assets.error, '素材库读取失败')}</p>}
-                    {assets.loading && <p role="status">正在读取素材…</p>}
+                    {assets.loading && !assets.data && <p role="status">正在读取素材…</p>}
                     <div className="grid gap-2 sm:grid-cols-2">
                         {assets.data?.assets.items.map(asset => (
-                            <button
+                            <AdminButton
                                 key={asset.id}
                                 type="button"
                                 aria-pressed={packages[assetPackage]?.attachmentAssetIds.includes(asset.id)}
@@ -518,62 +523,62 @@ function DeliveryForm({
                                 className="rounded-lg border border-slate-300 bg-white p-2 text-left"
                             >
                                 {asset.name} · {systemFieldDisplayLabel('type', asset.type)}
-                            </button>
+                            </AdminButton>
                         ))}
                     </div>
                     <div className="flex items-center justify-end gap-3">
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={assetPage === 0}
                             onClick={() => setAssetPage(value => value - 1)}
                         >
                             上一页
-                        </button>
+                        </AdminButton>
                         <span>第 {assetPage + 1} 页</span>
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={(assetPage + 1) * PAGE_SIZE >= (assets.data?.assets.totalItems ?? 0)}
                             onClick={() => setAssetPage(value => value + 1)}
                         >
                             下一页
-                        </button>
+                        </AdminButton>
                     </div>
                 </section>
             )}
             {editable && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={busy}
                         onClick={() => void execute('draft')}
                         className="rounded-lg border border-slate-300 px-3 py-2 font-semibold"
                     >
                         保存草稿
-                    </button>
+                    </AdminButton>
                     {confirmPublish ? (
                         <>
                             <span>请核对收件邮箱及全部成品包，发布后将发送邮件。</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void execute('publish')}
                                 className="rounded-lg bg-blue-700 px-3 py-2 font-semibold text-white"
                             >
                                 确认发布并发送
-                            </button>
-                            <button type="button" onClick={() => setConfirmPublish(false)}>
+                            </AdminButton>
+                            <AdminButton type="button" onClick={() => setConfirmPublish(false)}>
                                 返回修改
-                            </button>
+                            </AdminButton>
                         </>
                     ) : (
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={busy}
                             onClick={() => setConfirmPublish(true)}
                             className="rounded-lg bg-blue-700 px-3 py-2 font-semibold text-white"
                         >
                             发布交付
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             )}
@@ -582,27 +587,27 @@ function DeliveryForm({
                     {confirmRetry ? (
                         <>
                             <span>重发会向同一邮箱再次发送原成品，不会修改内容。</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void execute('retry')}
                                 className="rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-700"
                             >
                                 确认重发
-                            </button>
-                            <button type="button" onClick={() => setConfirmRetry(false)}>
+                            </AdminButton>
+                            <AdminButton type="button" onClick={() => setConfirmRetry(false)}>
                                 取消
-                            </button>
+                            </AdminButton>
                         </>
                     ) : (
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={busy}
                             onClick={() => setConfirmRetry(true)}
                             className="rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-700"
                         >
                             重发原成品
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             )}

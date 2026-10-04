@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowDown,
@@ -16,7 +16,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useMemo, useState } from 'react';
 import {
     storefrontClientPluginCatalog as catalog,
     type StorefrontClientPluginPlacement as Placement,
@@ -25,6 +25,8 @@ import {
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { getClientPluginDisplay } from '../../../../storefront-content-plugin/src/shared/client-plugin-display';
 import { channelRequestContext } from '../../apollo';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -36,9 +38,10 @@ import {
     type StorefrontContentResult,
 } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import {
     emptyBlockTranslation,
     emptyItemTranslation,
@@ -73,9 +76,7 @@ export function ClientPluginsModule() {
     const [actionError, setActionError] = useState('');
     const [reviewedImageKey, setReviewedImageKey] = useState<string | null>(null);
     const [collectionSearch, setCollectionSearch] = useState('');
-    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
     const sourceBlock = content.data?.storefrontContentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
     );
@@ -84,16 +85,12 @@ export function ClientPluginsModule() {
         : content.data
           ? `${content.data.activeChannel.id}:empty`
           : '';
-    const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
+    const serverDraft = useServerDraft<StorefrontContentBlock>(
+        content.data?.activeChannel.id ?? '',
+        sourceSignature,
         sourceSignature ? createDraft(sourceBlock) : null,
     );
-    const [loadedSignature, setLoadedSignature] = useState(sourceSignature);
-    const draft = resolveVersionedDraft(
-        sourceSignature,
-        loadedSignature,
-        createDraft(sourceBlock),
-        storedDraft,
-    );
+    const { draft, setDraft, sourceChanged, dirty } = serverDraft;
     const imageChanges = sourceBlock && draft ? imageReplacements(sourceBlock, draft) : [];
     const imageReviewKey = `${sourceSignature}:${JSON.stringify(imageChanges)}`;
     const imagesConfirmed = imageChanges.length === 0 || reviewedImageKey === imageReviewKey;
@@ -124,18 +121,12 @@ export function ClientPluginsModule() {
                 },
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [create, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
     const [update, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
-    /* oxlint-disable react/set-state-in-effect -- GraphQL 结果是编辑草稿的外部版本源 */
-    useEffect(() => {
-        if (!sourceSignature || sourceSignature === loadedSignature) return;
-        setDraft(createDraft(sourceBlock));
-        setLoadedSignature(sourceSignature);
-    }, [loadedSignature, sourceBlock, sourceSignature]);
-    /* oxlint-enable react/set-state-in-effect */
+
     const installedCodes = new Set(
         (draft?.items ?? []).map(pluginCode).filter((value): value is string => Boolean(value)),
     );
@@ -147,12 +138,12 @@ export function ClientPluginsModule() {
             ].map(collection => [collection.id, collection]),
         ).values(),
     ];
-    const dirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(createDraft(sourceBlock)));
     const validation = draft ? validateDraft(draft) : '配置尚未加载';
     const canSave = hasAnyPermission([sourceBlock ? 'UpdateStorefrontContent' : 'CreateStorefrontContent']);
     const pending = createState.loading || updateState.loading;
 
     const save = async () => {
+        if (sourceChanged) return;
         if (
             !draft ||
             validation ||
@@ -193,8 +184,10 @@ export function ClientPluginsModule() {
                 block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
             );
             if (!savedBlock) throw new Error('保存后未读到插件配置，请刷新后核对');
-            setDraft(createDraft(savedBlock));
-            setLoadedSignature(`${refreshed.data.activeChannel.id}:${savedBlock.id}:${savedBlock.updatedAt}`);
+            serverDraft.accept(
+                createDraft(savedBlock),
+                `${refreshed.data.activeChannel.id}:${savedBlock.id}:${savedBlock.updatedAt}`,
+            );
             setNotice('客户端插件配置已保存');
             setActionError('');
         } catch (error) {
@@ -205,6 +198,7 @@ export function ClientPluginsModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
+            {sourceChanged && <DraftUpdateNotice onReload={serverDraft.reload} />}
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -217,7 +211,8 @@ export function ClientPluginsModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void Promise.all([content.refetch(), collections.refetch()])}
                             disabled={content.loading || collections.loading}
@@ -227,12 +222,13 @@ export function ClientPluginsModule() {
                                 className={`h-3.5 w-3.5 ${content.loading || collections.loading ? 'animate-spin' : ''}`}
                             />
                             刷新
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => void save()}
                             disabled={
                                 pending ||
+                                sourceChanged ||
                                 !canSave ||
                                 content.loading ||
                                 Boolean(content.error) ||
@@ -245,7 +241,7 @@ export function ClientPluginsModule() {
                         >
                             <Save className="h-3.5 w-3.5" />
                             {pending ? '正在保存…' : '保存插件配置'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -262,7 +258,7 @@ export function ClientPluginsModule() {
                 )}
                 {imageChanges.length > 0 && (
                     <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={imagesConfirmed}
                             disabled={pending}
@@ -295,7 +291,7 @@ export function ClientPluginsModule() {
                 </section>
                 {content.loading && !content.data ? (
                     <LoadingState />
-                ) : content.error ? (
+                ) : content.error && !content.data ? (
                     <ErrorState
                         message={toUserFacingError(content.error, '客户端插件配置读取失败')}
                         onRetry={() => void content.refetch()}
@@ -467,7 +463,7 @@ function PluginCard({
                     {getClientPluginDisplay(definition.code).description}
                 </p>
             </div>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onToggle}
                 className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-colors ${installed ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
@@ -483,7 +479,7 @@ function PluginCard({
                         添加到客户端
                     </>
                 )}
-            </button>
+            </AdminButton>
         </article>
     );
 }
@@ -550,7 +546,7 @@ function InstalledEditor({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="展示位置">
-                    <select
+                    <AdminSelect
                         value={placement ?? ''}
                         title={placementOptions.find(value => value[0] === placement)?.[2]}
                         onChange={event => patchSettings({ placement: event.target.value })}
@@ -562,12 +558,12 @@ function InstalledEditor({
                                 {label}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 {placement !== 'BUSINESS_SERVICES_MAIN' && (
                     <div className="relative">
                         <Field label="适用商品分类">
-                            <select
+                            <AdminSelect
                                 value={scope}
                                 onChange={event =>
                                     patchSettings({
@@ -579,10 +575,10 @@ function InstalledEditor({
                             >
                                 <option value="ALL">全部分类</option>
                                 <option value="SELECTED">仅指定分类</option>
-                            </select>
+                            </AdminSelect>
                         </Field>
                         <label className="mt-1 flex items-center gap-2 text-[10px] font-normal text-slate-500 sm:absolute sm:right-0 sm:top-0 sm:mt-0">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={pluginIncludeChildren(item)}
                                 onChange={event => patchSettings({ includeChildren: event.target.checked })}
@@ -596,7 +592,7 @@ function InstalledEditor({
                 <div className="rounded-lg border border-slate-200 bg-white p-3 lg:col-span-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                        <input
+                        <AdminInput
                             value={collectionSearch}
                             onChange={event => setCollectionSearch(event.target.value)}
                             aria-label="搜索商品分类"
@@ -615,7 +611,7 @@ function InstalledEditor({
                                 key={collection.id}
                                 className="flex cursor-pointer items-center gap-2 rounded p-2 text-[10px] hover:bg-slate-50"
                             >
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={categoryIds.includes(collection.id)}
                                     onChange={event =>
@@ -779,7 +775,7 @@ function IconButton({
     danger?: boolean;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             title={label}
             aria-label={label}
@@ -788,7 +784,7 @@ function IconButton({
             className={`rounded-md p-1.5 disabled:opacity-30 ${danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-500 hover:bg-white'}`}
         >
             <Icon className="h-3.5 w-3.5" />
-        </button>
+        </AdminButton>
     );
 }
 function LoadingState() {
@@ -805,13 +801,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">插件配置加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -831,9 +827,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

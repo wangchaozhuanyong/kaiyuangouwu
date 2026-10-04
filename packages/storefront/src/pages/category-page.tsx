@@ -554,7 +554,11 @@ export function CategoryPage() {
                             title={isZh ? '商品加载失败' : 'Could not load products'}
                             detail={categoryError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => (collections.length ? void catalogQuery.refetch() : onRetry())}
+                            onAction={() =>
+                                collections.length
+                                    ? void catalogQuery.refetch({ cancelRefetch: false })
+                                    : onRetry()
+                            }
                             compact
                         />
                     ) : categoryProducts.length ? (

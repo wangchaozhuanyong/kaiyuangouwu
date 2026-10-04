@@ -1,5 +1,6 @@
 import { ShieldAlert, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AdminButton, AdminInput } from './AdminControls';
 
 import { isInputMethodKey } from '../utils/input-method';
 import { AccessibleDialogSurface } from './AccessibleDialogSurface';
@@ -53,7 +54,7 @@ export function SensitiveActionDialog({
                             </h2>
                             <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={loading}
@@ -61,9 +62,9 @@ export function SensitiveActionDialog({
                             className="rounded-lg p-2 text-slate-500 disabled:opacity-40"
                         >
                             <X className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                     </div>
-                    <input
+                    <AdminInput
                         type="text"
                         name="username"
                         autoComplete="username"
@@ -74,7 +75,7 @@ export function SensitiveActionDialog({
                     />
                     <label className="mt-5 block text-xs font-bold text-slate-700">
                         当前管理员密码
-                        <input
+                        <AdminInput
                             type="password"
                             name="current-password"
                             autoComplete="current-password"
@@ -96,21 +97,21 @@ export function SensitiveActionDialog({
                         </p>
                     )}
                     <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={loading}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-40"
                         >
                             取消
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="submit"
                             disabled={!password || loading}
                             className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                         >
                             {loading ? '后端校验中…' : confirmLabel}
-                        </button>
+                        </AdminButton>
                     </div>
                 </form>
             </AccessibleDialogSurface>

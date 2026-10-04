@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { AlertTriangle, CheckCircle2, FileClock, Gavel, RefreshCw, ShieldCheck, ShieldX } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -6,6 +6,8 @@ import {
     severityDisplayLabel,
     systemStatusDisplayLabel,
 } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -34,7 +36,7 @@ const FRAUD_DEFAULT = JSON.stringify(
 export function GovernanceRiskPanel() {
     const query = useQuery<GovernanceRiskResult>(GOVERNANCE_RISK_QUERY, {
         variables: { riskOptions: { take: 100 }, auditTake: 50 },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [submitConfig, submitState] = useMutation(SUBMIT_GOVERNED_CONFIG_MUTATION);
@@ -123,12 +125,20 @@ export function GovernanceRiskPanel() {
                             提交人不能自审；批准后生成不可覆盖的新版本。
                         </p>
                     </div>
-                    <button type="button" onClick={() => void query.refetch()} className={secondaryButton}>
-                        <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} /> 刷新
-                    </button>
+                    <AdminButton
+                        refreshPage
+                        type="button"
+                        onClick={() => void query.refetch()}
+                        className={secondaryButton}
+                    >
+                        <RefreshCw
+                            className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />{' '}
+                        刷新
+                    </AdminButton>
                 </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-[190px_1fr]">
-                    <select
+                    <AdminSelect
                         value={namespace}
                         onChange={event => {
                             const value = event.target.value as typeof namespace;
@@ -143,21 +153,21 @@ export function GovernanceRiskPanel() {
                     >
                         <option value="FRAUD_RULES">反欺诈规则</option>
                         <option value="REPORT_SCHEDULE">治理报告计划</option>
-                    </select>
-                    <input
+                    </AdminSelect>
+                    <AdminInput
                         value={reason}
                         onChange={event => setReason(event.target.value)}
                         className={inputClass}
                         placeholder="变更原因"
                     />
-                    <textarea
+                    <AdminTextArea
                         value={payloadJson}
                         onChange={event => setPayloadJson(event.target.value)}
                         className="min-h-44 rounded-xl border border-slate-300 bg-slate-950 p-3 font-mono text-xs text-slate-100 lg:col-span-2"
                         spellCheck={false}
                     />
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     disabled={busy || !reason.trim()}
                     onClick={() =>
@@ -179,7 +189,7 @@ export function GovernanceRiskPanel() {
                     className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
                     提交审批
-                </button>
+                </AdminButton>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -233,13 +243,13 @@ export function GovernanceRiskPanel() {
                                     ]}
                                 />
                             ) : (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setActionId(`approval:${item.id}`)}
                                     className={`${secondaryButton} mt-3`}
                                 >
                                     审核
-                                </button>
+                                </AdminButton>
                             )}
                         </article>
                     ))}
@@ -351,13 +361,13 @@ export function GovernanceRiskPanel() {
                                         ]}
                                     />
                                 ) : (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setActionId(`risk:${item.id}`)}
                                         className={`${secondaryButton} mt-3`}
                                     >
                                         复核案件
-                                    </button>
+                                    </AdminButton>
                                 ))}
                         </article>
                     ))}
@@ -374,7 +384,7 @@ export function GovernanceRiskPanel() {
                             <ShieldX className="h-4 w-4 text-rose-600" />
                         ) : (
                             <RefreshCw
-                                className={`h-4 w-4 text-slate-400 ${query.loading ? 'animate-spin' : ''}`}
+                                className={`h-4 w-4 text-slate-400 ${query.loading && !query.data ? 'animate-spin' : ''}`}
                             />
                         )}
                         不可变审计链
@@ -465,7 +475,7 @@ function ActionEditor({
 }) {
     return (
         <div className="mt-3 rounded-lg bg-slate-50 p-3">
-            <input
+            <AdminInput
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className={inputClass}
@@ -473,7 +483,7 @@ function ActionEditor({
             />
             <div className="mt-2 flex flex-wrap gap-2">
                 {actions.map(action => (
-                    <button
+                    <AdminButton
                         key={action.label}
                         type="button"
                         disabled={disabled || !value.trim()}
@@ -481,11 +491,11 @@ function ActionEditor({
                         className={`rounded-lg px-3 py-2 text-xs font-bold text-white disabled:opacity-50 ${action.tone === 'danger' ? 'bg-rose-600' : action.tone === 'success' ? 'bg-emerald-600' : 'bg-slate-700'}`}
                     >
                         {action.label}
-                    </button>
+                    </AdminButton>
                 ))}
-                <button type="button" disabled={disabled} onClick={onCancel} className={secondaryButton}>
+                <AdminButton type="button" disabled={disabled} onClick={onCancel} className={secondaryButton}>
                     取消
-                </button>
+                </AdminButton>
             </div>
         </div>
     );

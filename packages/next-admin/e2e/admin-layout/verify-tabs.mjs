@@ -2,7 +2,9 @@ import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-const base = process.env.TAB_TEST_URL ?? 'http://127.0.0.1:5319/e2e/admin-layout/index.html?view=tabs&light';
+const base =
+    process.env.TAB_TEST_URL ??
+    'http://127.0.0.1:5319/e2e/admin-layout/index.html?view=tabs&light&slowReads=700';
 const output = fileURLToPath(new URL('./results/tab-navigation/', import.meta.url));
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
@@ -54,20 +56,87 @@ try {
                     id: operation.variables.id ?? operation.variables.productId ?? null,
                 })),
             );
-        await page.goto(base);
+        const settleEditor = async id => {
+            // Warm-switch assertions must start after initial dependent reads, including
+            // prices and packaging triggered by the product workspace, have completed.
+            await expect
+                .poll(() =>
+                    page.evaluate(
+                        productId =>
+                            [
+                                'GetProductDetail',
+                                'NextAdminCatalogProductWorkspace',
+                                'NextAdminProductVariantPrices',
+                                'NextAdminProductPackagingWorkspace',
+                            ].every(
+                                name =>
+                                    window.tabOperations
+                                        .filter(
+                                            operation =>
+                                                operation.name === name &&
+                                                (operation.variables.id ?? operation.variables.productId) ===
+                                                    productId,
+                                        )
+                                        .at(-1)?.completed,
+                            ),
+                        id,
+                    ),
+                )
+                .toBe(true);
+        };
+        await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 60_000 });
         await expect(listTab()).toBeVisible();
         await page.getByRole('combobox', { name: '每页显示条数', exact: true }).selectOption('50');
         await expect(page.getByRole('combobox', { name: '每页显示条数', exact: true })).toHaveValue('50');
+        // Complete dependent reads before testing a warm retained-page switch.
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    [
+                        'GetProducts',
+                        'NextAdminCatalogProductOperations',
+                        'GetCatalogChannelAssignments',
+                    ].every(
+                        name =>
+                            window.tabOperations.filter(operation => operation.name === name).at(-1)
+                                ?.completed,
+                    ),
+                ),
+            )
+            .toBe(true);
+        await expect(page.locator('[data-refreshing]')).toHaveCount(0);
         await page.getByRole('link', { name: '测试商品一', exact: true }).click();
         await expect(productName()).toHaveValue('布局验收示例商品');
         await productName().fill('商品一未保存草稿');
+        await settleEditor('layout-product');
         await page.getByRole('link', { name: '测试商品二', exact: true }).click();
         await expect(productName()).toHaveValue('布局验收示例商品');
         await productName().fill('商品二未保存草稿');
+        await settleEditor('layout-product-2');
         await expect(retainedEditors()).toHaveCount(2);
         // A label must target the visible input even while another editor is retained.
         await page.locator('#main-content label:visible').filter({ hasText: /^名称/ }).click();
         await expect(productName()).toBeFocused();
+        const beforeDraftRefresh = (await operations()).filter(
+            operation => operation.name === 'GetProductDetail' && operation.id === 'layout-product-2',
+        ).length;
+        await page.getByRole('button', { name: '刷新当前测试标签', exact: true }).click();
+        await expect
+            .poll(
+                async () =>
+                    (await operations()).filter(
+                        operation =>
+                            operation.name === 'GetProductDetail' && operation.id === 'layout-product-2',
+                    ).length,
+            )
+            .toBe(beforeDraftRefresh + 1);
+        await expect(page.getByText('正在更新本页数据…')).toBeVisible();
+        expect(await page.locator('[title="有未保存变更"]:visible').count()).toBe(1);
+        await expect(page.locator('[data-refreshing]')).toHaveCount(0);
+        await expect(productName()).toHaveValue('商品二未保存草稿');
+        checks.push(
+            `${viewport.width}px: refreshing an edited product retains its unsaved draft after the read completes`,
+        );
         const baseline = await operations();
         for (let index = 0; index < 3; index++) {
             await selectProduct(0);
@@ -103,9 +172,9 @@ try {
         const afterDetail = (await operations()).filter(
             operation => operation.name === 'GetProductDetail' && operation.id === 'layout-product',
         ).length;
-        expect(afterDetail).toBe(beforeDetail + 1);
+        expect(afterDetail).toBe(beforeDetail);
         checks.push(
-            `${viewport.width}px: cancelling a dirty tab close preserves it; confirmed close releases it and reopening fetches fresh product detail`,
+            `${viewport.width}px: cancelling a dirty tab close preserves it; confirmed close releases it and reopening resets the form using valid cached detail`,
         );
 
         await selectList();

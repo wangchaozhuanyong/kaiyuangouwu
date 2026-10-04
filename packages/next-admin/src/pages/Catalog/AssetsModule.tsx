@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     AlertTriangle,
@@ -21,6 +21,7 @@ import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -41,6 +42,7 @@ import {
     UPDATE_ASSET,
 } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { AdminImage } from '../../utils/admin-image';
@@ -158,7 +160,7 @@ export function AssetsModule() {
                 filter: assetFilter,
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [updateAsset] = useMutation(UPDATE_ASSET);
@@ -431,23 +433,24 @@ export function AssetsModule() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => refetch()}
                         disabled={loading}
                         className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                     >
-                        <RefreshCw className={'h-3.5 w-3.5 ' + (loading ? 'animate-spin' : '')} />
+                        <RefreshCw className={'h-3.5 w-3.5 ' + (loading && !data ? 'animate-spin' : '')} />
                         刷新
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={openUploadModal}
                         className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
                     >
                         <UploadCloud className="h-4 w-4" />
                         上传新素材
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             <div className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
@@ -466,13 +469,13 @@ export function AssetsModule() {
                             </span>
                         </div>
                         {error && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => refetch()}
                                 className="rounded bg-rose-600 px-3 py-1 font-bold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 )}
@@ -480,7 +483,7 @@ export function AssetsModule() {
                     <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 p-4">
                         <div className="flex gap-2">
                             {(['ALL', 'IMAGE', 'VIDEO'] as const).map(type => (
-                                <button
+                                <AdminButton
                                     type="button"
                                     key={type}
                                     onClick={() => {
@@ -495,12 +498,12 @@ export function AssetsModule() {
                                     }
                                 >
                                     {type === 'ALL' ? '全部' : type === 'IMAGE' ? '图片' : '视频'}
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
+                            <AdminInput
                                 value={searchTerm}
                                 onChange={event => {
                                     setSearchTerm(event.target.value);
@@ -515,7 +518,7 @@ export function AssetsModule() {
                     {assets.length > 0 && (
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
                             <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={assets.every(asset => selectedAssetIds.includes(asset.id))}
                                     onChange={event =>
@@ -530,7 +533,7 @@ export function AssetsModule() {
                                 />
                                 选择当前页（已选 {selectedAssetIds.length}）
                             </label>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void handleBulkDelete()}
                                 disabled={!selectedAssetIds.length || deleteAssetsState.loading}
@@ -538,7 +541,7 @@ export function AssetsModule() {
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 {deleteAssetsState.loading ? '删除中…' : '批量删除'}
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     {loading && !data ? (
@@ -563,7 +566,7 @@ export function AssetsModule() {
                                     className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
                                 >
                                     <label className="absolute left-2 top-2 z-10 rounded-md bg-white/90 p-1 shadow-sm">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             aria-label={`选择素材 ${asset.name}`}
                                             checked={selectedAssetIds.includes(asset.id)}
@@ -576,7 +579,7 @@ export function AssetsModule() {
                                             }
                                         />
                                     </label>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => openAsset(asset)}
                                         className="block w-full text-left"
@@ -615,7 +618,7 @@ export function AssetsModule() {
                                                 <span>{formatFileSize(asset.fileSize)}</span>
                                             </div>
                                         </div>
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             ))}
                         </div>
@@ -633,7 +636,7 @@ export function AssetsModule() {
                                 }}
                                 disabled={loading}
                             />
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setPage(current => Math.max(0, current - 1))}
                                 disabled={page === 0 || loading}
@@ -641,8 +644,8 @@ export function AssetsModule() {
                                 aria-label="上一页"
                             >
                                 <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
                                 disabled={page >= totalPages - 1 || loading}
@@ -650,7 +653,7 @@ export function AssetsModule() {
                                 aria-label="下一页"
                             >
                                 <ChevronRight className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </div>
@@ -673,7 +676,7 @@ export function AssetsModule() {
                                 上传多媒体文件
                                 <FeatureHelpButton topic="catalog.assets" title="上传多媒体文件" />
                             </h2>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeUploadModal}
                                 disabled={isUploading}
@@ -681,7 +684,7 @@ export function AssetsModule() {
                                 aria-label="关闭上传窗口"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="space-y-4 overflow-y-auto p-6">
                             <div className="flex flex-col items-center space-y-2 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-6 text-center">
@@ -690,7 +693,7 @@ export function AssetsModule() {
                                 <p className="text-[11px] text-slate-400">
                                     支持 JPG、PNG、WEBP、MP4，单文件最大 20MB
                                 </p>
-                                <input
+                                <AdminInput
                                     ref={fileInputRef}
                                     type="file"
                                     multiple
@@ -698,14 +701,14 @@ export function AssetsModule() {
                                     onChange={handleNativeFileSelect}
                                     className="hidden"
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isUploading}
                                     className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold text-slate-700"
                                 >
                                     从电脑选择文件
-                                </button>
+                                </AdminButton>
                             </div>
                             {pendingFiles.length > 0 && (
                                 <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
@@ -755,14 +758,14 @@ export function AssetsModule() {
                                                     <Check className="h-4 w-4 text-emerald-600" />
                                                 )}
                                                 {!isUploading && (
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => removePendingFile(file.id)}
                                                         className="text-slate-300 hover:text-rose-600"
                                                         aria-label="移除待上传文件"
                                                     >
                                                         <X className="h-4 w-4" />
-                                                    </button>
+                                                    </AdminButton>
                                                 )}
                                             </div>
                                         </div>
@@ -771,15 +774,15 @@ export function AssetsModule() {
                             )}
                         </div>
                         <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-6 py-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={closeUploadModal}
                                 disabled={isUploading}
                                 className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleConfirmUpload}
                                 disabled={readyFileCount === 0 || isUploading}
@@ -791,7 +794,7 @@ export function AssetsModule() {
                                     <Check className="h-3.5 w-3.5" />
                                 )}
                                 确认上传 ({readyFileCount})
-                            </button>
+                            </AdminButton>
                         </div>
                     </AccessibleDialogSurface>
                 </div>
@@ -816,7 +819,7 @@ export function AssetsModule() {
                                 素材属性
                                 <FeatureHelpButton topic="catalog.assets" title="素材属性" />
                             </h2>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedAsset(null)}
                                 disabled={savingAsset}
@@ -824,7 +827,7 @@ export function AssetsModule() {
                                 aria-label="关闭素材属性"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="flex-1 space-y-5 overflow-y-auto p-6">
                             <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
@@ -842,7 +845,7 @@ export function AssetsModule() {
                             </div>
                             <div>
                                 <label className="mb-1 block font-bold text-slate-700">素材名称</label>
-                                <input
+                                <AdminInput
                                     value={editName}
                                     onChange={event => setEditName(event.target.value)}
                                     className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
@@ -868,7 +871,7 @@ export function AssetsModule() {
                                 <label className="mb-1 block font-bold text-slate-700">
                                     标签（逗号分隔）
                                 </label>
-                                <textarea
+                                <AdminTextArea
                                     value={editTags}
                                     onChange={event => setEditTags(event.target.value)}
                                     rows={3}
@@ -878,12 +881,12 @@ export function AssetsModule() {
                             <div>
                                 <label className="mb-1 block font-bold text-slate-700">素材源地址</label>
                                 <div className="flex gap-2">
-                                    <input
+                                    <AdminInput
                                         readOnly
                                         value={selectedAsset.source}
                                         className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 p-2 font-mono text-[10px] text-slate-500"
                                     />
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={async () => {
                                             if (await copyAdminText(selectedAsset.source, '素材地址')) {
@@ -894,7 +897,7 @@ export function AssetsModule() {
                                         aria-label="复制素材地址"
                                     >
                                         <Copy className="h-3.5 w-3.5" />
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                             <DynamicCustomFieldsForm
@@ -909,7 +912,7 @@ export function AssetsModule() {
                                 <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
                             )}
                             <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => handleDeleteAsset(selectedAsset)}
                                     disabled={savingAsset}
@@ -917,8 +920,8 @@ export function AssetsModule() {
                                 >
                                     <Trash2 className="h-4 w-4" />
                                     删除素材
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={handleSaveAsset}
                                     disabled={savingAsset}
@@ -926,7 +929,7 @@ export function AssetsModule() {
                                 >
                                     {savingAsset && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
                                     保存属性
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </AccessibleDialogSurface>

@@ -54,7 +54,8 @@
     color: white;
     display: grid;
     place-items: center;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 /* Image switching stays below the main image on every screen size. */
@@ -119,8 +120,9 @@
 .detail-price.is-flash-sale del {
     margin-top: 2px;
     color: var(--muted);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-medium);
 }
 
 .detail-price-line {
@@ -147,7 +149,8 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     cursor: pointer;
     transition:
         background 160ms ease,
@@ -160,8 +163,8 @@
 
 .detail-coupon-note {
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .detail-coupon-price:active {
@@ -173,15 +176,15 @@
     border-radius: 5px;
     background: var(--accent);
     color: white;
-    font-size: 10px;
+    font-size: var(--type-meta-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1.35;
+    line-height: var(--type-meta-leading);
 }
 
 .detail-coupon-price > strong {
-    font-size: 14px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1;
+    line-height: var(--type-body-leading);
 }
 
 .detail-coupon-price > svg {
@@ -196,7 +199,8 @@
     align-items: center;
     gap: 6px;
     color: var(--success);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
     white-space: nowrap;
 }
@@ -223,7 +227,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--detail-tag-surface);
     color: var(--text);
-    font-size: 11px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .detail-summary h1 {
@@ -244,13 +249,15 @@
 .detail-options header strong,
 .detail-description h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
     font-weight: var(--font-weight-semibold);
 }
 
 .detail-options header span {
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: nowrap;
 }
 
@@ -270,7 +277,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--surface);
     font-size: var(--type-action-size);
-    font-weight: 500;
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-medium);
     color: var(--text);
     transition:
         background-color 160ms ease,
@@ -321,7 +329,7 @@
 .detail-variant-name {
     padding-right: 22px;
     font-weight: var(--font-weight-semibold);
-    line-height: 1.4;
+    line-height: var(--line-height-body);
 }
 
 .detail-variant-bottom {
@@ -333,7 +341,8 @@
 
 .detail-variant-price {
     color: var(--text);
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -341,7 +350,8 @@
 
 .detail-variant-bottom small {
     color: var(--success);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     white-space: nowrap;
 }
 
@@ -367,12 +377,13 @@
     display: grid;
     gap: 3px;
     color: var(--accent-ink);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .detail-packaging-note strong {
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -393,7 +404,8 @@
 }
 
 .detail-quantity > strong {
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     color: var(--text);
 }
 
@@ -419,7 +431,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .detail-service-bar span {
@@ -429,7 +442,7 @@
     justify-content: center;
     gap: 5px;
     padding: 3px;
-    line-height: 1.35;
+    line-height: var(--line-height-body);
     text-align: center;
     white-space: nowrap;
 }
@@ -517,7 +530,8 @@
 }
 
 .detail-block > header strong {
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -549,12 +563,13 @@
 
 .detail-after-sales h2 {
     color: var(--text);
-    font-size: 16px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .detail-after-sales p {
     color: var(--muted);
-    line-height: 1.7;
+    line-height: var(--line-height-relaxed);
 }
 
 .detail-after-sales button {
@@ -610,7 +625,8 @@
 
 .detail-block > header span {
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .detail-empty-review {
@@ -678,7 +694,7 @@
 .detail-rich-text {
     margin: var(--space-title-content) 0 0;
     color: var(--muted);
-    line-height: 1.7;
+    line-height: var(--line-height-relaxed);
     overflow-wrap: anywhere;
 }
 
@@ -787,7 +803,8 @@
 }
 
 .detail-action-bar button span {
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     white-space: nowrap;
 }
 
@@ -805,7 +822,8 @@
     border-radius: 8px;
     background: var(--accent);
     color: white;
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .detail-action-bar button:nth-last-child(2) {
@@ -816,7 +834,8 @@
     color: var(--accent-ink);
     display: grid;
     font-size: var(--type-action-size);
-    font-weight: 700;
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-bold);
     box-shadow: var(--shadow-sm);
     transition:
         transform 120ms ease,
@@ -835,7 +854,8 @@
     color: var(--accent-foreground, #fff);
     display: grid;
     font-size: var(--type-action-size);
-    font-weight: 700;
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-bold);
     box-shadow: var(--accent-shadow);
     transition:
         transform 120ms ease,
@@ -890,7 +910,8 @@
         background: var(--surface);
         box-shadow: var(--shadow-sm);
         gap: 3px;
-        font-size: 11px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .product-detail-page .detail-service-bar span + span {
         border: 0;
@@ -926,7 +947,8 @@
         min-height: 40px;
         gap: 3px;
         padding: 3px 2px;
-        font-size: 11px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .product-detail-page .detail-service-bar svg {

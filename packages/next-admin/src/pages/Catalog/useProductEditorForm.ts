@@ -1,5 +1,5 @@
 import { useMutation } from '@apollo/client/react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -108,6 +108,8 @@ export function useProductEditorForm() {
     const [notification, setNotification] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [saving, setSaving] = useState(false);
+    const [hydratedBaseline, setHydratedBaseline] = useState<ProductEditorSaveDraft | null>(null);
+    const hydration = useRef({ initialized: false, dirty: false, allowReadback: false });
 
     const deferredAssetSearch = useDeferredValue(assetSearch.trim());
     const deferredFacetSearch = useDeferredValue(facetSearch.trim());
@@ -170,6 +172,11 @@ export function useProductEditorForm() {
     // 绑定从后端查询到的真实商品数据；查询结果到达后需要初始化可编辑表单。
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
+        if (
+            saving ||
+            (hydration.current.initialized && hydration.current.dirty && !hydration.current.allowReadback)
+        )
+            return;
         if (productData?.product) {
             const p = productData.product;
             const draft = productEditorDraft(
@@ -195,6 +202,10 @@ export function useProductEditorForm() {
             }
             setVariants(draft.variants);
             setDynamicCustomFieldValues(draft.dynamicCustomFields ?? {});
+            setSelectedChannelIds(draft.selectedChannelIds);
+            setHydratedBaseline(draft);
+            hydration.current.initialized = true;
+            hydration.current.allowReadback = false;
             setFeaturedAssetPreview(p.featuredAsset?.preview ?? null);
             setKnownAssets(
                 Object.fromEntries(
@@ -203,6 +214,7 @@ export function useProductEditorForm() {
             );
             setKnownOptionGroups(Object.fromEntries(p.optionGroups.map(group => [group.id, group])));
         } else if (isCreateMode) {
+            hydration.current.initialized = true;
             setProductName('');
             setSlug('');
             setEnabled(true);
@@ -222,13 +234,14 @@ export function useProductEditorForm() {
             setVariants([]);
             setIsOptionTemplatesOpen(false);
         }
-    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields, workspaceVariants]);
+    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields, workspaceVariants, saving]);
 
     useEffect(() => {
         if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
     }, [fixedFulfillmentType]);
 
     useEffect(() => {
+        if (hydration.current.initialized && hydration.current.dirty) return;
         if (productData?.product) {
             setSelectedChannelIds(productData.product.channels.map(channel => channel.id));
         } else if (isCreateMode && catalogChannelsData?.activeChannel.id) {
@@ -299,27 +312,22 @@ export function useProductEditorForm() {
                 dynamicCustomFields: {},
             };
         }
-        const product = productData?.product;
-        if (!product) return null;
-        return productEditorDraft(product, fixedFulfillmentType, productExtensionFields);
-    }, [
-        catalogChannelsData?.activeChannel.id,
-        fixedFulfillmentType,
-        isCreateMode,
-        productData,
-        productExtensionFields,
-    ]);
+        return hydratedBaseline;
+    }, [catalogChannelsData?.activeChannel.id, fixedFulfillmentType, isCreateMode, hydratedBaseline]);
     const baselineEditorSnapshot = useMemo(
         () => (baselineEditorDraft ? serializeProductEditor(baselineEditorDraft) : null),
         [baselineEditorDraft],
     );
     const hasUnsavedChanges =
-        !productLoading &&
-        baselineEditorSnapshot !== null &&
-        currentEditorSnapshot !== baselineEditorSnapshot;
+        baselineEditorSnapshot !== null && currentEditorSnapshot !== baselineEditorSnapshot;
+    useLayoutEffect(() => {
+        hydration.current.dirty = hasUnsavedChanges;
+    }, [hasUnsavedChanges]);
     const confirmLeave = useUnsavedChangesWarning(
-        hasUnsavedChanges && !saving,
-        '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
+        hasUnsavedChanges || saving,
+        saving
+            ? '商品正在保存，离开可能无法核对结果。确定继续吗？'
+            : '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
     );
     const { returnToList } = useAdminReturn('/catalog/list');
     const leaveToProductList = () => {
@@ -595,6 +603,9 @@ export function useProductEditorForm() {
             setSaving,
             showError,
             showNotice,
+            onReadbackComplete: () => {
+                hydration.current.allowReadback = true;
+            },
         },
     });
 

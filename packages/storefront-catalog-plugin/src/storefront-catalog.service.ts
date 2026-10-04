@@ -4,13 +4,16 @@ import {
     Product,
     ProductService,
     ProductVariant,
+    ProductVariantService,
     RequestContext,
     SearchIndexItem,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { isManagedCurrency } from '@vendure/store-management-plugin/currency-conversion';
 import { Brackets, SelectQueryBuilder } from 'typeorm';
 
+import { catalogPriceBounds } from './catalog-price-bounds';
 import { NormalizedStorefrontCatalogInput, StorefrontCatalogInput, StorefrontCatalogSort } from './types';
 
 export const STOREFRONT_CATALOG_DEFAULT_TAKE = 12;
@@ -18,6 +21,7 @@ export const STOREFRONT_CATALOG_MAX_TAKE = 48;
 
 interface CatalogRow {
     productId: string | number;
+    catalogQuoteOnly?: number | string;
 }
 
 export function normalizeCatalogInput(input: StorefrontCatalogInput): NormalizedStorefrontCatalogInput {
@@ -59,10 +63,25 @@ export class StorefrontCatalogService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly productService: ProductService,
+        private readonly productVariantService: ProductVariantService,
     ) {}
 
     async find(ctx: RequestContext, rawInput: StorefrontCatalogInput) {
         const input = normalizeCatalogInput(rawInput);
+        const crossCurrency =
+            ctx.currencyCode !== ctx.channel.defaultCurrencyCode &&
+            isManagedCurrency(ctx.currencyCode) &&
+            isManagedCurrency(ctx.channel.defaultCurrencyCode);
+        const priceQuery =
+            input.minPriceWithTax != null ||
+            input.maxPriceWithTax != null ||
+            input.sort === 'PRICE_ASC' ||
+            input.sort === 'PRICE_DESC';
+        // Tax-exclusive prices convert before tax calculation. Reuse Vendure's actual
+        // applicator instead of converting rounded tax-inclusive search amounts.
+        if (crossCurrency && priceQuery && ctx.channel.defaultTaxZone && !ctx.channel.pricesIncludeTax) {
+            return this.findWithRequestPrices(ctx, input);
+        }
         const candidates = this.createCandidateQuery(ctx, input);
         const countQuery = this.connection.rawConnection
             .createQueryBuilder()
@@ -94,6 +113,58 @@ export class StorefrontCatalogService {
         };
     }
 
+    private async findWithRequestPrices(ctx: RequestContext, input: NormalizedStorefrontCatalogInput) {
+        const candidates = this.createCandidateQuery(ctx, input, false);
+        const rows = await candidates.getRawMany<CatalogRow>();
+        const variantRows = await candidates
+            .clone()
+            .select('si.productVariantId', 'variantId')
+            .addSelect('si.productId', 'productId')
+            .groupBy('si.productVariantId')
+            .addGroupBy('si.productId')
+            .orderBy()
+            .getRawMany<{ variantId: string | number; productId: string | number }>();
+        const prices = new Map<string, number>();
+        for (let offset = 0; offset < variantRows.length; offset += 100) {
+            const variants = await this.productVariantService.findByIds(
+                ctx,
+                variantRows.slice(offset, offset + 100).map(row => row.variantId),
+            );
+            for (const variant of variants) {
+                const id = String(variant.productId);
+                prices.set(id, Math.min(prices.get(id) ?? Infinity, variant.priceWithTax));
+            }
+        }
+        const matches = rows.flatMap(row => {
+            const price = prices.get(String(row.productId));
+            if (
+                price == null ||
+                (input.minPriceWithTax != null && price < input.minPriceWithTax) ||
+                (input.maxPriceWithTax != null && price > input.maxPriceWithTax)
+            )
+                return [];
+            return [{ ...row, requestPrice: price }];
+        });
+        if (input.sort === 'PRICE_ASC' || input.sort === 'PRICE_DESC') {
+            const direction = input.sort === 'PRICE_ASC' ? 1 : -1;
+            matches.sort(
+                (left, right) =>
+                    Number(left.catalogQuoteOnly ?? 0) - Number(right.catalogQuoteOnly ?? 0) ||
+                    direction * (left.requestPrice - right.requestPrice),
+            );
+        }
+        const ids = matches.slice(input.skip, input.skip + input.take).map(row => row.productId);
+        const products = ids.length ? await this.productService.findByIds(ctx, ids) : [];
+        const byId = new Map(products.map(product => [String(product.id), product]));
+        return {
+            totalItems: matches.length,
+            items: ids.flatMap(id => {
+                const product = byId.get(String(id));
+                return product ? [product] : [];
+            }),
+        };
+    }
+
     async recommendationProductIds(ctx: RequestContext): Promise<string[]> {
         const rows = await this.createCandidateQuery(ctx, normalizeCatalogInput({}))
             .andWhere('catalog_product.enabled = :recommendationsEnabled', { recommendationsEnabled: true })
@@ -104,7 +175,15 @@ export class StorefrontCatalogService {
     private createCandidateQuery(
         ctx: RequestContext,
         input: NormalizedStorefrontCatalogInput,
+        applyPriceBounds = true,
     ): SelectQueryBuilder<SearchIndexItem> {
+        const convertCurrency =
+            isManagedCurrency(ctx.channel.defaultCurrencyCode) && isManagedCurrency(ctx.currencyCode);
+        const indexedCurrency = convertCurrency ? ctx.channel.defaultCurrencyCode : ctx.currencyCode;
+        const prices =
+            convertCurrency && applyPriceBounds
+                ? catalogPriceBounds(ctx, input.minPriceWithTax, input.maxPriceWithTax)
+                : { min: input.minPriceWithTax, max: input.maxPriceWithTax };
         const qb = this.connection
             .getRepository(ctx, SearchIndexItem)
             .createQueryBuilder('si')
@@ -121,6 +200,13 @@ export class StorefrontCatalogService {
             .andWhere('catalog_product.deletedAt IS NULL')
             .groupBy('si.productId')
             .addGroupBy('catalog_product.createdAt');
+        if (
+            this.connection.rawConnection
+                .getMetadata(SearchIndexItem)
+                .columns.some(column => column.propertyName === 'currencyCode')
+        ) {
+            qb.andWhere('si.currencyCode = :catalogCurrencyCode', { catalogCurrencyCode: indexedCurrency });
+        }
         const pricingColumn = this.connection.rawConnection
             .getMetadata(Product)
             .columns.find(column => column.propertyPath === 'customFields.pricingMode');
@@ -205,15 +291,15 @@ export class StorefrontCatalogService {
                 catalogCardConfigEnabled: true,
             });
         }
-        if (input.minPriceWithTax != null) {
+        if (applyPriceBounds && input.minPriceWithTax != null) {
             qb.having('MIN(si.priceWithTax) >= :catalogMinPriceWithTax', {
-                catalogMinPriceWithTax: input.minPriceWithTax,
+                catalogMinPriceWithTax: prices.min,
             });
         }
-        if (input.maxPriceWithTax != null) {
+        if (applyPriceBounds && input.maxPriceWithTax != null) {
             const havingMethod = input.minPriceWithTax != null ? 'andHaving' : 'having';
             qb[havingMethod]('MIN(si.priceWithTax) <= :catalogMaxPriceWithTax', {
-                catalogMaxPriceWithTax: input.maxPriceWithTax,
+                catalogMaxPriceWithTax: prices.max,
             });
         }
 

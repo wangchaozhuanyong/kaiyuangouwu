@@ -1,4 +1,5 @@
-import { useQuery } from '@apollo/client/react';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import type { DocumentNode } from 'graphql';
 import { useEffect, useRef } from 'react';
 import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
@@ -74,14 +75,12 @@ export function useProductEditorData({
             currencyCode: string;
             defaultCurrencyCode: string;
         };
-    }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
+    }>(GET_ACTIVE_CHANNEL, {});
 
     const activeCurrencyCode =
         channelData?.activeChannel.currencyCode ?? channelData?.activeChannel.defaultCurrencyCode ?? 'CNY';
 
-    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
-        fetchPolicy: 'cache-first',
-    });
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
 
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
 
@@ -95,7 +94,6 @@ export function useProductEditorData({
     } = useQuery<{ product: ProductDetailRecord | null }>(productDetailDocument, {
         variables: { id: productId },
         skip: isCreateMode,
-        fetchPolicy: 'network-only',
     });
 
     const { data: workspaceData, refetch: refetchWorkspace } = useQuery<CatalogWorkspaceResult>(
@@ -103,15 +101,12 @@ export function useProductEditorData({
         {
             variables: { productId },
             skip: !productId || isCreateMode,
-            fetchPolicy: 'cache-and-network',
         },
     );
 
     const { data: stockLocationsData } = useQuery<{
         stockLocations: { items: Array<{ id: string; name: string }>; totalItems: number };
-    }>(GET_STOCK_LOCATIONS, {
-        fetchPolicy: 'cache-first',
-    });
+    }>(GET_STOCK_LOCATIONS, {});
 
     const defaultStockLocationId =
         workspaceData?.catalogProductWorkspace?.stockLocations[0]?.id ||
@@ -134,7 +129,6 @@ export function useProductEditorData({
                 filter: deferredFacetSearch ? { name: { contains: deferredFacetSearch } } : {},
             },
         },
-        fetchPolicy: 'cache-first',
     });
 
     const {
@@ -152,7 +146,6 @@ export function useProductEditorData({
                 sort: { position: 'ASC', id: 'ASC' },
             },
         },
-        fetchPolicy: 'cache-first',
     });
 
     useEffect(() => {
@@ -209,7 +202,6 @@ export function useProductEditorData({
         channels: { items: CatalogChannel[]; totalItems: number };
     }>(GET_CATALOG_CHANNELS, {
         variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
-        fetchPolicy: 'cache-and-network',
     });
 
     useEffect(() => {
@@ -273,7 +265,6 @@ export function useProductEditorData({
             },
         },
         skip: !isAssetPickerOpen,
-        fetchPolicy: 'cache-first',
     });
 
     const {
@@ -295,7 +286,6 @@ export function useProductEditorData({
                 },
             },
         },
-        fetchPolicy: 'cache-first',
     });
     return {
         channelData,

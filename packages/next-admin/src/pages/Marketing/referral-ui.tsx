@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React from 'react';
 import { missingDisplayLabel } from '../../../../common/src/display-localization';
 import { referralStatusDisplayLabel as statusLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
@@ -91,13 +92,13 @@ export function ActionButton({
     positive?: boolean;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`rounded px-2 py-1 text-[10px] font-bold ${positive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-600'}`}
         >
             {label}
-        </button>
+        </AdminButton>
     );
 }
 export function ReportPagination({
@@ -124,7 +125,7 @@ export function ReportPagination({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     disabled={loading || skip === 0}
                     onClick={() => onChange(skip - pageSize)}
@@ -132,8 +133,8 @@ export function ReportPagination({
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >
                     <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     disabled={loading || skip + pageSize >= total}
                     onClick={() => onChange(skip + pageSize)}
@@ -141,7 +142,7 @@ export function ReportPagination({
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >
                     <ChevronRight className="h-4 w-4" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -184,7 +185,7 @@ export function ToggleField({
                 <strong className="text-xs text-slate-800">{label}</strong>
                 <small className="mt-1 block text-[10px] leading-4 text-slate-400">{detail}</small>
             </span>
-            <input
+            <AdminInput
                 type="checkbox"
                 checked={checked}
                 onChange={event => onChange(event.target.checked)}
@@ -213,7 +214,7 @@ export function NumberField({
     return (
         <label className="block text-[11px] font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type="number"
                 value={value}
                 min={min}
@@ -246,7 +247,7 @@ export function TextField({
     return (
         <label className="mt-3 block text-[11px] font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -270,7 +271,7 @@ export function FormSelect({
     return (
         <label className="block text-[11px] font-bold text-slate-600">
             {label}
-            <select
+            <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
@@ -280,7 +281,7 @@ export function FormSelect({
                         {text}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </label>
     );
 }
@@ -301,21 +302,21 @@ export function ModalFooter({
 }) {
     return (
         <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button
+            <AdminButton
                 type="button"
                 onClick={onCancel}
                 className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
             >
                 取消
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
                 type="button"
                 onClick={onConfirm}
                 disabled={pending || disabled}
                 className={`rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-50 ${danger ? 'bg-rose-600' : 'bg-blue-600'}`}
             >
                 {pending ? '处理中…' : confirmLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }

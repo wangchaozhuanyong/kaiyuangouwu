@@ -176,7 +176,7 @@ export function LogisticsPage({
                                 title={zh ? '物流详情加载失败' : 'Could not load delivery'}
                                 detail={error}
                                 action={zh ? '重试' : 'Retry'}
-                                onAction={() => void detail.refetch()}
+                                onAction={() => void detail.refetch({ cancelRefetch: false })}
                             />
                         ) : !selectedOrder || !physicalDeliveryLines(selectedOrder).length ? (
                             <EmptyState
@@ -228,7 +228,7 @@ export function LogisticsPage({
                                     <InlineError
                                         message={error}
                                         action={zh ? '重试' : 'Retry'}
-                                        onAction={() => void detail.refetch()}
+                                        onAction={() => void detail.refetch({ cancelRefetch: false })}
                                     />
                                 )}
                             </>
@@ -295,7 +295,7 @@ export function LogisticsPage({
                                         className="delivery-refresh-button"
                                         disabled={list.isFetching}
                                         aria-busy={list.isFetching}
-                                        onClick={() => void list.refetch()}
+                                        onClick={() => void list.refetch({ cancelRefetch: false })}
                                     >
                                         <RefreshCw aria-hidden="true" />
                                         {list.isFetching
@@ -328,7 +328,7 @@ export function LogisticsPage({
                                     title={zh ? '物流信息加载失败' : 'Could not load deliveries'}
                                     detail={error}
                                     action={zh ? '重试' : 'Retry'}
-                                    onAction={() => void list.refetch()}
+                                    onAction={() => void list.refetch({ cancelRefetch: false })}
                                 />
                             ) : visible.length ? (
                                 <div className="delivery-table-scroll">
@@ -479,7 +479,7 @@ export function LogisticsPage({
                                 <InlineError
                                     message={error}
                                     action={zh ? '重试' : 'Retry'}
-                                    onAction={() => void list.refetch()}
+                                    onAction={() => void list.refetch({ cancelRefetch: false })}
                                 />
                             )}
                             <footer className="delivery-list-footer">
@@ -493,7 +493,7 @@ export function LogisticsPage({
                                         className="delivery-text-button"
                                         type="button"
                                         disabled={list.isFetchingNextPage}
-                                        onClick={() => void list.fetchNextPage()}
+                                        onClick={() => void list.fetchNextPage({ cancelRefetch: false })}
                                     >
                                         {list.isFetchingNextPage
                                             ? zh
@@ -530,7 +530,7 @@ export function LogisticsPage({
                                 title={zh ? '物流详情加载失败' : 'Could not load delivery'}
                                 detail={detailError}
                                 action={zh ? '重试' : 'Retry'}
-                                onAction={() => void detail.refetch()}
+                                onAction={() => void detail.refetch({ cancelRefetch: false })}
                             />
                         ) : detail.isLoading ? (
                             <PageSkeleton label={zh ? '正在加载物流详情' : 'Loading delivery details'} />
@@ -550,7 +550,7 @@ export function LogisticsPage({
                                     <InlineError
                                         message={detailError}
                                         action={zh ? '重试' : 'Retry'}
-                                        onAction={() => void detail.refetch()}
+                                        onAction={() => void detail.refetch({ cancelRefetch: false })}
                                     />
                                 )}
                                 <DeliveryDetails

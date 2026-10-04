@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { Check, Plus, Search, X } from 'lucide-react';
 import { useDeferredValue, useLayoutEffect, useState } from 'react';
 import {
@@ -84,7 +86,6 @@ export function StorefrontBlockEditor({
                 filter: deferredProductSearch ? { name: { contains: deferredProductSearch } } : {},
             },
         },
-        fetchPolicy: 'cache-first',
     });
     const translation = blockTranslation(draft, language);
     const validation = storefrontBlockValidation(draft);
@@ -161,7 +162,7 @@ export function StorefrontBlockEditor({
                             中文是前台必填内容；英文可在右侧语言切换后补充
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={saving}
@@ -169,7 +170,7 @@ export function StorefrontBlockEditor({
                         aria-label="关闭编辑器"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-5 sm:p-7">
@@ -192,13 +193,13 @@ export function StorefrontBlockEditor({
                                     '商品与集合选项读取失败，已保留当前编辑内容。',
                                 )}
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void options.refetch()}
                                 className="self-start rounded-lg bg-amber-900 px-3 py-2 font-bold text-white sm:self-auto"
                             >
                                 重新加载选项
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     <div className="mx-auto grid max-w-6xl gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -218,7 +219,7 @@ export function StorefrontBlockEditor({
                                         </p>
                                     </div>
                                     <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={draft.enabled}
                                             onChange={event =>
@@ -231,7 +232,7 @@ export function StorefrontBlockEditor({
                                 </div>
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                     <Field label="内部管理名称 *">
-                                        <input
+                                        <AdminInput
                                             value={draft.internalName}
                                             onChange={event =>
                                                 setDraft({ ...draft, internalName: event.target.value })
@@ -240,7 +241,7 @@ export function StorefrontBlockEditor({
                                         />
                                     </Field>
                                     <Field label="稳定编码 *">
-                                        <input
+                                        <AdminInput
                                             value={draft.code}
                                             onChange={event =>
                                                 setDraft({ ...draft, code: event.target.value })
@@ -250,7 +251,7 @@ export function StorefrontBlockEditor({
                                         />
                                     </Field>
                                     <Field label="开始展示">
-                                        <input
+                                        <AdminInput
                                             type="datetime-local"
                                             value={toLocalDateTime(draft.startsAt)}
                                             onChange={event =>
@@ -263,7 +264,7 @@ export function StorefrontBlockEditor({
                                         />
                                     </Field>
                                     <Field label="结束展示">
-                                        <input
+                                        <AdminInput
                                             type="datetime-local"
                                             value={toLocalDateTime(draft.endsAt)}
                                             onChange={event =>
@@ -302,7 +303,7 @@ export function StorefrontBlockEditor({
                                         label={`${isAuth ? '电脑左侧' : ''}${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`}
                                     >
                                         {isAuth ? (
-                                            <textarea
+                                            <AdminTextArea
                                                 rows={2}
                                                 value={translation.title}
                                                 onChange={event =>
@@ -312,7 +313,7 @@ export function StorefrontBlockEditor({
                                                 placeholder="可换行安排主标题层次"
                                             />
                                         ) : (
-                                            <input
+                                            <AdminInput
                                                 value={translation.title}
                                                 onChange={event =>
                                                     updateTranslation({ title: event.target.value })
@@ -322,7 +323,7 @@ export function StorefrontBlockEditor({
                                         )}
                                     </Field>
                                     <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
-                                        <input
+                                        <AdminInput
                                             value={translation.subtitle}
                                             onChange={event =>
                                                 updateTranslation({ subtitle: event.target.value })
@@ -333,7 +334,7 @@ export function StorefrontBlockEditor({
                                     {isAuth && (
                                         <>
                                             <Field label="表单标题（电脑与手机共用）">
-                                                <input
+                                                <AdminInput
                                                     className={inputClass}
                                                     maxLength={60}
                                                     value={stringSetting(
@@ -358,7 +359,7 @@ export function StorefrontBlockEditor({
                                                 />
                                             </Field>
                                             <Field label="表单副标题（电脑与手机共用）">
-                                                <input
+                                                <AdminInput
                                                     className={inputClass}
                                                     maxLength={160}
                                                     value={stringSetting(
@@ -385,7 +386,7 @@ export function StorefrontBlockEditor({
                                         </>
                                     )}
                                     <Field label={isSupport ? '客服说明' : '正文'}>
-                                        <textarea
+                                        <AdminTextArea
                                             rows={5}
                                             value={translation.body}
                                             onChange={event =>
@@ -396,7 +397,7 @@ export function StorefrontBlockEditor({
                                     </Field>
                                     {!isSupport && (
                                         <Field label={isAuth ? '图片上的引导短句' : '按钮文案'}>
-                                            <input
+                                            <AdminInput
                                                 value={translation.ctaLabel}
                                                 onChange={event =>
                                                     updateTranslation({ ctaLabel: event.target.value })
@@ -447,7 +448,7 @@ export function StorefrontBlockEditor({
                                     )}
                                     {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
                                         <Field label="卡片样式">
-                                            <select
+                                            <AdminSelect
                                                 className={inputClass}
                                                 value={normalizedHomepageVisualStyle(
                                                     draft.settings?.visualStyle,
@@ -461,7 +462,7 @@ export function StorefrontBlockEditor({
                                                         {option.label}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </AdminSelect>
                                         </Field>
                                     )}
                                     {draft.type === 'CORE_CATEGORIES' && (
@@ -469,7 +470,7 @@ export function StorefrontBlockEditor({
                                             label="双卡片颜色模板"
                                             helpText="双卡仅展示文案和跳转，不使用图片；暖居纯色会自动跟随当前店铺皮肤配色。"
                                         >
-                                            <select
+                                            <AdminSelect
                                                 className={inputClass}
                                                 value={dualCardTemplateId(draft.settings)}
                                                 onChange={event =>
@@ -481,13 +482,13 @@ export function StorefrontBlockEditor({
                                                         {template.labelZh} · {template.descriptionZh}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </AdminSelect>
                                         </Field>
                                     )}
                                     {draft.type === 'HERO' && (
                                         <>
                                             <Field label="轮播图样式">
-                                                <select
+                                                <AdminSelect
                                                     className={inputClass}
                                                     value={normalizedHeroThemePreset(
                                                         draft.settings?.themePreset,
@@ -501,10 +502,10 @@ export function StorefrontBlockEditor({
                                                             {option.label}
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                             <Field label="遮罩对比度">
-                                                <select
+                                                <AdminSelect
                                                     className={inputClass}
                                                     value={
                                                         draft.settings?.contrastMode === 'high'
@@ -517,14 +518,14 @@ export function StorefrontBlockEditor({
                                                 >
                                                     <option value="standard">标准</option>
                                                     <option value="high">高对比度</option>
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                         </>
                                     )}
                                     {isAuth && (
                                         <>
                                             <Field label="电脑端图片上的文字位置">
-                                                <select
+                                                <AdminSelect
                                                     className={inputClass}
                                                     value={authHeroCopyPosition(draft.settings)}
                                                     onChange={event =>
@@ -535,10 +536,10 @@ export function StorefrontBlockEditor({
                                                 >
                                                     <option value="center">左侧居中</option>
                                                     <option value="bottom">左侧靠下</option>
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                             <Field label="卖点呈现方式">
-                                                <select
+                                                <AdminSelect
                                                     className={inputClass}
                                                     value={
                                                         draft.settings?.heroBenefitsStyle === 'tags'
@@ -553,10 +554,10 @@ export function StorefrontBlockEditor({
                                                 >
                                                     <option value="icons">图标、标题与说明</option>
                                                     <option value="tags">简洁文字标签</option>
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                             <label className="flex items-center gap-2 text-sm text-slate-700">
-                                                <input
+                                                <AdminInput
                                                     type="checkbox"
                                                     checked={draft.settings?.heroLogoEnabled !== false}
                                                     onChange={event =>
@@ -654,7 +655,7 @@ export function StorefrontBlockEditor({
                                                 />
                                             </Field>
                                             <Field label="跳转类型">
-                                                <select
+                                                <AdminSelect
                                                     value={draft.targetType}
                                                     onChange={event =>
                                                         setDraft({
@@ -674,7 +675,7 @@ export function StorefrontBlockEditor({
                                                             {label}
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                             <Field label="跳转目标">
                                                 <TargetValueInput
@@ -703,7 +704,7 @@ export function StorefrontBlockEditor({
                                         {draft.type === 'SUPPORT' ? (
                                             <>
                                                 <Field label="中文服务日">
-                                                    <input
+                                                    <AdminInput
                                                         value={stringSetting(
                                                             draft.settings?.serviceDaysZh,
                                                             '每日',
@@ -717,7 +718,7 @@ export function StorefrontBlockEditor({
                                                     />
                                                 </Field>
                                                 <Field label="英文服务日期">
-                                                    <input
+                                                    <AdminInput
                                                         value={stringSetting(
                                                             draft.settings?.serviceDaysEn,
                                                             'Daily',
@@ -731,7 +732,7 @@ export function StorefrontBlockEditor({
                                                     />
                                                 </Field>
                                                 <Field label="开始时间">
-                                                    <input
+                                                    <AdminInput
                                                         type="time"
                                                         value={stringSetting(
                                                             draft.settings?.serviceStartTime,
@@ -746,7 +747,7 @@ export function StorefrontBlockEditor({
                                                     />
                                                 </Field>
                                                 <Field label="结束时间">
-                                                    <input
+                                                    <AdminInput
                                                         type="time"
                                                         value={stringSetting(
                                                             draft.settings?.serviceEndTime,
@@ -768,7 +769,7 @@ export function StorefrontBlockEditor({
                                         ) : draft.type === 'CUSTOM' ? (
                                             <>
                                                 <Field label="展示方式">
-                                                    <select
+                                                    <AdminSelect
                                                         className={inputClass}
                                                         value={
                                                             draft.settings?.displayMode === 'scrollingAds'
@@ -783,11 +784,11 @@ export function StorefrontBlockEditor({
                                                     >
                                                         <option value="grid">卡片网格</option>
                                                         <option value="scrollingAds">横向滚动广告</option>
-                                                    </select>
+                                                    </AdminSelect>
                                                 </Field>
                                                 {draft.settings?.displayMode === 'scrollingAds' && (
                                                     <Field label="自动滚动间隔（秒）">
-                                                        <input
+                                                        <AdminInput
                                                             type="number"
                                                             min={3}
                                                             max={30}
@@ -814,7 +815,7 @@ export function StorefrontBlockEditor({
                                             </>
                                         ) : draft.type === 'NOTICE' ? (
                                             <Field label="公告轮播间隔（秒）">
-                                                <input
+                                                <AdminInput
                                                     type="number"
                                                     min={3}
                                                     max={30}
@@ -836,7 +837,7 @@ export function StorefrontBlockEditor({
                                             </Field>
                                         ) : (
                                             <Field label="展示商品总数（非每行列数）">
-                                                <input
+                                                <AdminInput
                                                     type="number"
                                                     min={1}
                                                     max={draft.type === 'CATEGORY_AD' ? 4 : 50}
@@ -859,13 +860,13 @@ export function StorefrontBlockEditor({
                                         )}
                                         {productSettingKey && (
                                             <div className="sm:col-span-2">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setShowProducts(!showProducts)}
                                                     className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
                                                 >
                                                     选择商品（已选 {selectedProductIds.length} 个）
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         )}
                                     </div>
@@ -876,7 +877,7 @@ export function StorefrontBlockEditor({
                                         <div className="mt-4 rounded-xl border border-slate-200 p-3">
                                             <div className="relative">
                                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                                <input
+                                                <AdminInput
                                                     value={productSearch}
                                                     onChange={event => {
                                                         setProductSearch(event.target.value);
@@ -893,7 +894,7 @@ export function StorefrontBlockEditor({
                                                         key={product.id}
                                                         className="flex cursor-pointer items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs hover:bg-blue-50"
                                                     >
-                                                        <input
+                                                        <AdminInput
                                                             type="checkbox"
                                                             checked={selectedProductIds.includes(product.id)}
                                                             onChange={() => toggleProduct(product.id)}
@@ -954,7 +955,7 @@ export function StorefrontBlockEditor({
                                                       : '用于轮播、入口、保障项、法律页或导航项'}
                                             </p>
                                         </div>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() =>
                                                 setDraft({
@@ -970,7 +971,7 @@ export function StorefrontBlockEditor({
                                         >
                                             <Plus className="h-3.5 w-3.5" />
                                             {isSupport ? '添加渠道' : '添加子项'}
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                     <div className="mt-4 space-y-3">
                                         {draft.items.map((item, index) => (
@@ -1054,7 +1055,7 @@ export function StorefrontBlockEditor({
                                     ))}
                                 </ul>
                                 <label className="flex items-center gap-2">
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={imagesConfirmed}
                                         disabled={saving}
@@ -1068,15 +1069,15 @@ export function StorefrontBlockEditor({
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={saving}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                         >
                             取消
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => void onSave(draft, imageChanges.length > 0 && imagesConfirmed)}
                             disabled={saving || Boolean(validation) || !imagesConfirmed}
@@ -1084,7 +1085,7 @@ export function StorefrontBlockEditor({
                         >
                             <Check className="h-4 w-4" />
                             {saving ? '正在保存并核对…' : '保存并核对'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </footer>
             </div>

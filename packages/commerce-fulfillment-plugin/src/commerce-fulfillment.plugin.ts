@@ -1,6 +1,6 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
-import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
@@ -32,7 +32,7 @@ import { CartDeliveryCommandAdapter } from './cart-delivery-command.adapter';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { CommerceModeAdminResolver, CommerceModeShopResolver } from './commerce-mode.resolver';
 import { CommerceModeService } from './commerce-mode.service';
-import { commerceOrderProcess } from './commerce-order-process';
+import { composeCommerceOrderProcesses } from './commerce-order-process-composition';
 import { commercePaymentProcess } from './commerce-payment-process';
 import { CommerceShippingLineAssignmentStrategy } from './commerce-shipping-line-assignment-strategy';
 import {
@@ -495,13 +495,7 @@ import './types';
         config.orderOptions.orderInterceptors.push(new QuoteOnlyOrderInterceptor());
         config.catalogOptions.stockLocationStrategy = new PackagingStockLocationStrategy();
         config.orderOptions.orderByCodeAccessStrategy = new AuthenticatedOrderByCodeAccessStrategy();
-        config.orderOptions.process = [
-            commerceOrderProcess,
-            configureDefaultOrderProcess({
-                arrangingPaymentRequiresShipping: false,
-                arrangingPaymentRequiresStock: false,
-            }),
-        ];
+        config.orderOptions.process = composeCommerceOrderProcesses(config.orderOptions.process);
         config.paymentOptions.process = [...(config.paymentOptions.process ?? []), commercePaymentProcess];
         const testPayment = createControlledTestPayment(CommerceFulfillmentPlugin.testPaymentsEnabled);
         config.orderOptions.process.push(testPayment.orderProcess);

@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
 
 import { businessChoiceLabel, type BusinessChoice } from './business-settings-choice-data';
 import { FieldGroup, inputClass } from './settings-ui';
@@ -42,7 +43,7 @@ export function MultiValueChoiceField({
                             className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700"
                         >
                             <span className="min-w-0 truncate">{businessChoiceLabel(value, allChoices)}</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onChange(normalizedValues.filter(item => item !== value))}
                                 disabled={disabled || normalizedValues.length <= minimum}
@@ -50,11 +51,11 @@ export function MultiValueChoiceField({
                                 className="shrink-0 rounded px-1 text-blue-500 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-35"
                             >
                                 ×
-                            </button>
+                            </AdminButton>
                         </span>
                     ))}
                 </div>
-                <select
+                <AdminSelect
                     id={selectId}
                     value=""
                     onChange={event => {
@@ -69,7 +70,7 @@ export function MultiValueChoiceField({
                             {choice.label}（{choice.value}）
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
             </div>
         </FieldGroup>
     );

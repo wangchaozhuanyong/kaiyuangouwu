@@ -1,4 +1,4 @@
-import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
+import { ApolloClient, ApolloLink, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { Kind, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
 import React, { useState } from 'react';
@@ -6,24 +6,17 @@ import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
+import { AdminButton, PAGE_REFRESH_EVENT } from '../../src/components/AdminControls';
+import { AdminPageWorkspace } from '../../src/components/AdminPageWorkspace';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
-import { defineNextAdminExtension } from '../../src/extensions/extension-api';
 import type { StoreManagementResult, StoreProfileRecord } from '../../src/graphql/management.graphql';
 import '../../src/index.css';
 import { AppShell } from '../../src/layouts/AppShell';
 import { AssetsModule } from '../../src/pages/Catalog/AssetsModule';
-import { CatalogExportAction } from '../../src/pages/Catalog/CatalogExportAction';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
-import {
-    CatalogOperationsBlock,
-    ProductPackagingBlock,
-    ProductVariantCustomFieldsBlock,
-    ProductVariantPricesBlock,
-} from '../../src/pages/Catalog/CatalogOperationsBlocks';
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
-import { CatalogImportAction } from '../../src/pages/Catalog/import/CatalogImportAction';
 import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
 import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModule';
 import { StoreAllocationMatrixModule } from '../../src/pages/Catalog/StoreAllocationMatrixModule';
@@ -44,6 +37,7 @@ import { TranslationsModule } from '../../src/pages/Settings/TranslationsModule'
 import { UsdtPaymentManagementModule } from '../../src/pages/Settings/UsdtPaymentManagementModule';
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
+import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 
 // Synthetic local data only. No HTTP link; every mutation is rejected.
@@ -522,6 +516,11 @@ const data: Record<string, unknown> = {
         stockLocations: [{ id: 'stock-1', name: '示例仓库' }],
         variants: variants.map(v => ({
             ...v,
+            barcode: '',
+            specification: '',
+            saleUnit: '件',
+            purchaseUnit: '件',
+            packageQuantity: 1,
             sellingPrice: 5000,
             purchaseCostMicrounits: 25000,
             grossProfitMicrounits: 25000,
@@ -542,6 +541,7 @@ const data: Record<string, unknown> = {
     },
     productPackaging: null,
     productPackagingStock: null,
+    productPackagingUnpackEvents: [],
     catalogProfitReport: {
         summary,
         totalItems: 8,
@@ -553,6 +553,30 @@ const data: Record<string, unknown> = {
         })),
     },
     contentTranslationStaleCount: states.filter(state => state.status === 'FAILED').length,
+    storefrontTraffic: {
+        businessDate: '2026-09-09',
+        timezone: 'Asia/Shanghai',
+        firstRecordedAt: now,
+        lastRecordedAt: now,
+        days: Array.from({ length: 7 }, (_, index) => ({
+            businessDate: `2026-09-${String(index + 3).padStart(2, '0')}`,
+            visitorCount: 10 + index,
+            pageViewCount: 20 + index * 2,
+            ipCount: 7 + index,
+        })),
+    },
+    referralTodayMetrics: {
+        businessDate: '2026-09-09',
+        visitorCount: 16,
+        newCustomerCount: 3,
+        consumerCount: 2,
+        firstTimeConsumerCount: 1,
+        returningConsumerCount: 1,
+        orderCount: 2,
+        todayInvitedCount: 2,
+        todayInvitedPurchaserCount: 1,
+        salesByCurrency: [{ currencyCode: 'MYR', sales: 10000 }],
+    },
     contentTranslationAudit: {
         configured: true,
         provider: 'GEMINI',
@@ -691,10 +715,11 @@ function project(
     return result;
 }
 const client = new ApolloClient({
-    cache: new InMemoryCache(),
+    cache: createAdminCache(),
     link: new ApolloLink(
         operation =>
             new Observable(observer => {
+                let operationTrace: (typeof tabOperations)[number] | undefined;
                 const definition = operation.query.definitions.find(
                     d => d.kind === Kind.OPERATION_DEFINITION,
                 );
@@ -763,6 +788,18 @@ const client = new ApolloClient({
                     responseData = {
                         ...data,
                         product: selectedProduct,
+                        products: {
+                            ...data.products,
+                            items: [
+                                {
+                                    ...product,
+                                    variants: product.variants.map(variant => ({
+                                        ...variant,
+                                        id: `${product.id}-${variant.id}`,
+                                    })),
+                                },
+                            ],
+                        },
                         catalogProductChannelAssignments: {
                             items: [{ id: productId, channels: [channel] }],
                             totalItems: 1,
@@ -805,7 +842,19 @@ const client = new ApolloClient({
                             },
                         },
                     };
-                    tabOperations.push({ name: operation.operationName, variables: operation.variables });
+                    operationTrace = { name: operation.operationName, variables: operation.variables };
+                    tabOperations.push(operationTrace);
+                    if (
+                        params.has('failRefresh') &&
+                        operation.operationName === 'GetProducts' &&
+                        tabOperations.filter(item => item.name === 'GetProducts').length > 1
+                    ) {
+                        const timer = window.setTimeout(
+                            () => observer.error(new Error('本地模拟更新失败')),
+                            200,
+                        );
+                        return () => window.clearTimeout(timer);
+                    }
                 }
                 if (operation.operationName === 'NextAdminContentTranslationAudit') {
                     const options = operation.variables.options ?? {};
@@ -831,32 +880,30 @@ const client = new ApolloClient({
                         },
                     };
                 }
-                observer.next({
-                    data: project(responseData, definition.selectionSet, fragments) as Record<
-                        string,
-                        unknown
-                    >,
-                });
-                observer.complete();
+                const finish = () => {
+                    if (operationTrace) operationTrace.completed = true;
+                    observer.next({
+                        data: project(responseData, definition.selectionSet, fragments) as Record<
+                            string,
+                            unknown
+                        >,
+                    });
+                    observer.complete();
+                };
+                if (params.has('slowReads')) {
+                    const timer = window.setTimeout(finish, Number(params.get('slowReads')) || 200);
+                    return () => window.clearTimeout(timer);
+                }
+                finish();
             }),
     ),
 });
-const tabOperations: Array<{ name: string; variables: Record<string, unknown> }> = [];
+const tabOperations: Array<{
+    name: string;
+    variables: Record<string, unknown>;
+    completed?: boolean;
+}> = [];
 if (view === 'tabs') Object.assign(window, { tabOperations });
-defineNextAdminExtension({
-    id: 'admin-layout-fixture',
-    actions: [CatalogImportAction, CatalogExportAction].map((component, i) => ({
-        id: `layout-action-${i}`,
-        pageId: 'product-list',
-        component,
-    })),
-    pageBlocks: [
-        CatalogOperationsBlock,
-        ProductVariantPricesBlock,
-        ProductVariantCustomFieldsBlock,
-        ProductPackagingBlock,
-    ].map((component, i) => ({ id: `layout-extension-${i}`, pageId: 'product-detail', component })),
-});
 class FixtureBoundary extends React.Component<React.PropsWithChildren, { error: string }> {
     state = { error: '' };
     static getDerivedStateFromError(error: Error) {
@@ -1056,6 +1103,22 @@ if (view === 'tabs') {
                                 <Link to="/catalog/list">测试商品列表</Link>
                                 <Link to="/catalog/products/layout-product">测试商品一</Link>
                                 <Link to="/catalog/products/layout-product-2">测试商品二</Link>
+                                <AdminButton
+                                    type="button"
+                                    onClick={() => {
+                                        const page = Array.from(
+                                            document.querySelectorAll<HTMLElement>(
+                                                '#main-content [data-admin-page]',
+                                            ),
+                                        ).find(element => !element.closest('[hidden]'))?.dataset.adminPage;
+                                        if (page)
+                                            window.dispatchEvent(
+                                                new CustomEvent(PAGE_REFRESH_EVENT, { detail: { page } }),
+                                            );
+                                    }}
+                                >
+                                    刷新当前测试标签
+                                </AdminButton>
                             </nav>
                             <Routes>
                                 <Route element={<AppShell />}>
@@ -1149,7 +1212,12 @@ if (view === 'tabs') {
                                                     }
                                                     element={
                                                         <FixtureBoundary>
-                                                            {modules[view] ?? modules.product}
+                                                            <AdminPageWorkspace
+                                                                page={`fixture:${view}`}
+                                                                active
+                                                            >
+                                                                {modules[view] ?? modules.product}
+                                                            </AdminPageWorkspace>
                                                         </FixtureBoundary>
                                                     }
                                                 />

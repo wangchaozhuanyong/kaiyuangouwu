@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { uiCopy } from '../i18n';
-import { offlineLoadError, resolveQueryLoadState } from '../loading-state';
+import { offlineLoadError, resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 
@@ -82,25 +82,12 @@ export function useStorefrontCustomerData({
 
     const couponUsageRecords = customerCouponUsageRecordsQuery.data?.items ?? [];
 
-    const customerCouponsError = !customer
-        ? ''
-        : customerCouponsQuery.isPaused && customerCouponsQuery.data === undefined
-          ? offlineLoadError(language)
-          : customerCouponsQuery.error instanceof Error
-            ? storefrontErrorMessage(customerCouponsQuery.error, language)
-            : customerCouponsQuery.error
-              ? text.loadError
-              : '';
+    const customerCouponsError = storefrontInitialQueryError(customerCouponsQuery, language);
 
-    const customerCouponUsageRecordsError = !customer
-        ? ''
-        : customerCouponUsageRecordsQuery.isPaused && customerCouponUsageRecordsQuery.data === undefined
-          ? offlineLoadError(language)
-          : customerCouponUsageRecordsQuery.error instanceof Error
-            ? storefrontErrorMessage(customerCouponUsageRecordsQuery.error, language)
-            : customerCouponUsageRecordsQuery.error
-              ? text.loadError
-              : '';
+    const customerCouponUsageRecordsError = storefrontInitialQueryError(
+        customerCouponUsageRecordsQuery,
+        language,
+    );
 
     const customerLoadState = resolveQueryLoadState({
         hasData: customerQuery.data !== undefined,
@@ -129,22 +116,9 @@ export function useStorefrontCustomerData({
     const couponCampaignsError =
         customerQuery.data === undefined && customerQuery.isError
             ? customerLoadError
-            : couponCampaignsQuery.isPaused && couponCampaignsQuery.data === undefined
-              ? offlineLoadError(language)
-              : couponCampaignsQuery.error instanceof Error
-                ? storefrontErrorMessage(couponCampaignsQuery.error, language)
-                : couponCampaignsQuery.error
-                  ? text.loadError
-                  : '';
+            : storefrontInitialQueryError(couponCampaignsQuery, language);
 
-    const cartQueryError =
-        cartLoadState === 'paused'
-            ? offlineLoadError(language)
-            : cartQuery.error instanceof Error
-              ? storefrontErrorMessage(cartQuery.error, language)
-              : cartQuery.error
-                ? text.loadError
-                : null;
+    const cartQueryError = storefrontInitialQueryError(cartQuery, language);
     return {
         cartQueryKey,
         customerQueryKey,

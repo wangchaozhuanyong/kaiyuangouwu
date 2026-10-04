@@ -7,13 +7,16 @@
         max-width: none;
         background: var(--paper);
         color: var(--text);
-        font-size: 15px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
 
     .has-desktop-catalog button,
     .has-desktop-catalog input,
     .has-desktop-catalog select {
         font: inherit;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
     }
 
     html:has(.has-desktop-catalog) {
@@ -53,8 +56,8 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: 20px;
-        line-height: 1.3;
+        font-size: var(--type-brand-size);
+        line-height: var(--type-brand-leading);
     }
     .desktop-brand-mark {
         flex: none;
@@ -121,9 +124,9 @@
         gap: 7px;
         color: var(--muted);
         text-decoration: none;
-        font-size: 14px;
+        font-size: var(--type-body-size);
         font-weight: var(--font-weight-medium);
-        line-height: 20px;
+        line-height: var(--type-body-leading);
         white-space: nowrap;
         min-height: 42px;
         padding: 8px 10px;
@@ -165,8 +168,8 @@
         border-radius: 9px;
         background: var(--accent);
         color: var(--accent-foreground);
-        font-size: 10px;
-        line-height: 18px;
+        font-size: var(--type-badge-size);
+        line-height: var(--type-badge-leading);
         text-align: center;
     }
     .desktop-header-settings {
@@ -176,7 +179,6 @@
         padding-left: 16px;
     }
     .desktop-header-settings button,
-    .desktop-header-settings select,
     .desktop-header-settings a {
         display: grid;
         place-items: center;
@@ -186,9 +188,24 @@
         border: 0;
         background: transparent;
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         text-decoration: none;
         cursor: pointer;
+    }
+    .desktop-header-settings select {
+        display: grid;
+        place-items: center;
+        min-width: 30px;
+        min-height: 36px;
+        padding: 4px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        text-decoration: none;
+        cursor: pointer;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
     }
     .desktop-header-settings svg {
         width: 17px;
@@ -244,8 +261,8 @@
         border-radius: var(--radius-sm);
         background: transparent;
         color: var(--text);
-        font-size: 14px;
-        line-height: 1.45;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         text-decoration: none;
         cursor: pointer;
     }
@@ -260,7 +277,7 @@
     .desktop-local-navigation [aria-pressed='true'],
     .desktop-local-navigation [aria-current='page'] {
         background: var(--selection);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         color: var(--selection-foreground);
     }
     .desktop-local-navigation [aria-pressed='true']:hover:not(:disabled),
@@ -300,11 +317,13 @@
     .desktop-category-status {
         margin: 12px 0;
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-price-error {
         color: var(--danger);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         margin: 0;
         align-self: center;
     }
@@ -314,8 +333,9 @@
         padding: 0 var(--desktop-content-gutter) 24px;
     }
     .desktop-catalog-label {
-        font-size: 17px;
-        font-weight: 600;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
         max-width: 260px;
         overflow-wrap: anywhere;
     }
@@ -336,8 +356,9 @@
         border-radius: 9999px;
         background: color-mix(in srgb, var(--soft, #f8fafc) 60%, transparent);
         color: var(--muted);
-        font-size: 13px;
-        font-weight: 500;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+        font-weight: var(--font-weight-medium);
         cursor: pointer;
         transition:
             background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
@@ -357,7 +378,7 @@
         background: var(--selection);
         border-color: var(--selection);
         color: var(--selection-foreground);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         box-shadow: none;
     }
     .desktop-sort button[aria-pressed='true']:hover:not(:disabled) {
@@ -403,7 +424,8 @@
     }
     .desktop-result-count {
         color: var(--muted);
-        font-size: 14px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
         white-space: nowrap;
     }
     .desktop-catalog-filters {
@@ -422,7 +444,8 @@
         gap: 7px;
         flex: 1;
         min-width: 150px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         color: var(--muted);
     }
     .desktop-catalog-filters input,
@@ -480,11 +503,13 @@
     }
     .desktop-services-link strong {
         color: var(--text);
-        font-size: 17px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
     }
     .desktop-services-link small {
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-catalog-extras .category-client-plugin {
         margin: 0;
@@ -522,7 +547,8 @@
         margin-top: 24px;
         padding-top: 12px;
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-catalog-footer button {
         min-height: 32px;
@@ -574,10 +600,11 @@
     }
     .has-desktop-catalog .cart-topbar .topbar-title {
         justify-self: start;
-        font-size: 26px;
-        font-weight: 600;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
         text-align: left;
-        letter-spacing: -0.025em;
+        letter-spacing: var(--tracking-normal);
     }
 
     /* Account identity and assets share one row without nested decorative frames. */
@@ -634,13 +661,14 @@
         display: none;
     }
     .has-desktop-catalog .account-assets > button > b {
-        font-size: 22px;
-        line-height: 1.2;
-        font-weight: 600;
+        font-size: var(--type-metric-size);
+        line-height: var(--type-metric-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .has-desktop-catalog .account-assets > button > span:last-child {
-        font-size: 14px;
-        font-weight: 400;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+        font-weight: var(--font-weight-normal);
         color: var(--muted);
     }
     .has-desktop-catalog .account-panel {
@@ -654,8 +682,9 @@
         margin-bottom: 16px;
     }
     .has-desktop-catalog .account-panel .section-header h2 {
-        font-size: 20px;
-        font-weight: 600;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .has-desktop-catalog .account-recent-purchases article > .responsive-picture {
         width: 54px;
@@ -674,7 +703,8 @@
         background: transparent;
     }
     .has-desktop-catalog .account-orders .account-order-shortcuts small {
-        font-size: 14px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .has-desktop-catalog .account-services .account-service-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -692,12 +722,14 @@
         color: var(--text);
     }
     .has-desktop-catalog .account-services .account-service-grid > button > b {
-        font-size: 14px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .has-desktop-catalog .account-identity h1 {
-        font-size: 22px;
-        font-weight: 600;
+        font-size: var(--type-identity-size);
+        line-height: var(--type-identity-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .has-desktop-catalog .account-avatar {
         background: transparent;
@@ -752,7 +784,7 @@
     .desktop-account-order-product strong {
         display: block;
         overflow-wrap: anywhere;
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-account-order-product small {
         display: block;
@@ -785,8 +817,9 @@
     }
     .desktop-orders-heading h1 {
         margin: 0;
-        font-size: 26px;
-        font-weight: 600;
+        font-size: var(--type-page-size);
+        line-height: var(--type-page-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .has-desktop-catalog .orders-page > .order-search {
         grid-column: 2;
@@ -812,7 +845,8 @@
     .has-desktop-catalog .order-tabs button {
         flex: none;
         padding: 0 8px;
-        font-size: 15px;
+        font-size: var(--type-navigation-compact-size);
+        line-height: var(--type-navigation-compact-leading);
     }
     .has-desktop-catalog .order-list {
         display: flex;
@@ -832,7 +866,8 @@
         background: var(--soft);
         color: var(--muted);
         border-radius: 6px;
-        font-size: 14px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
     }
     .desktop-order-columns > :not(:first-child) {
         text-align: center;
@@ -859,7 +894,8 @@
     }
     .desktop-order-date {
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .has-desktop-catalog .order-card-product {
         grid-column: 1;
@@ -882,7 +918,8 @@
         align-content: center;
     }
     .has-desktop-catalog .order-product-title {
-        font-size: 18px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
         white-space: normal;
     }
     .has-desktop-catalog .order-product-heading {
@@ -892,11 +929,13 @@
         display: none;
     }
     .has-desktop-catalog .order-product-spec {
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         white-space: normal;
     }
     .desktop-order-values {
-        font-size: 16px;
+        font-size: var(--type-card-size);
+        line-height: var(--type-card-leading);
         grid-column: 2 / 5;
         grid-row: 2;
         display: grid;
@@ -928,15 +967,17 @@
         margin-right: auto;
     }
     .has-desktop-catalog .order-total-amount {
-        font-size: 19px;
-        font-weight: 600;
+        font-size: var(--type-price-size);
+        line-height: var(--type-price-leading);
+        font-weight: var(--font-weight-semibold);
         color: var(--accent);
     }
     .has-desktop-catalog .order-btn {
         min-height: 38px;
         padding-inline: 14px;
         border-radius: 6px;
-        font-size: 14px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         box-shadow: none;
     }
     .has-desktop-catalog .order-card .secondary-btn {
@@ -970,8 +1011,9 @@
         color: var(--accent-ink);
     }
     .desktop-shortcut-count {
-        font-size: 14px;
-        font-weight: 500;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+        font-weight: var(--font-weight-medium);
         font-variant-numeric: tabular-nums;
     }
     .desktop-order-tab-count {
@@ -1024,7 +1066,8 @@
             gap: 8px;
         }
         .desktop-brand strong {
-            font-size: 16px;
+            font-size: var(--type-brand-size);
+            line-height: var(--type-brand-leading);
         }
         .desktop-brand-mark {
             width: 36px;
@@ -1034,7 +1077,8 @@
             gap: 2px;
         }
         .desktop-header-link {
-            font-size: 12px;
+            font-size: var(--type-meta-size);
+            line-height: var(--type-meta-leading);
             gap: 5px;
             padding: 8px 6px;
         }
@@ -1083,13 +1127,15 @@
             height: 88px;
         }
         .has-desktop-catalog .order-product-title {
-            font-size: 16px;
+            font-size: var(--type-section-size);
+            line-height: var(--type-section-leading);
         }
         .desktop-sort {
             gap: 4px;
         }
         .desktop-sort button {
-            font-size: 13px;
+            font-size: var(--type-label-size);
+            line-height: var(--type-label-leading);
         }
         .desktop-order-columns,
         .has-desktop-catalog .order-card {
@@ -1097,7 +1143,8 @@
             column-gap: 12px;
         }
         .desktop-order-values {
-            font-size: 16px;
+            font-size: var(--type-card-size);
+            line-height: var(--type-card-leading);
             grid-template-columns: 60px 110px 130px;
             gap: 12px;
         }

@@ -25,6 +25,7 @@ import {
     orderPaymentCurrencyCode,
     STOREFRONT_USDT_CURRENCY_CODE,
 } from './payment-currency';
+import { convertMinorPrice } from './store-currency-conversion';
 import {
     StoreCurrencyConfiguration,
     StoreCurrencyRateMode,
@@ -635,19 +636,6 @@ function isLockNotSupportedError(error: unknown): boolean {
     );
 }
 
-export function convertMinorPrice(
-    price: number,
-    baseCurrency: CurrencyCode,
-    cnyToMyrRate: number,
-    markupPercent: number,
-    roundingMode: StoreCurrencyRoundingMode,
-): number {
-    const exchangeFactor = baseCurrency === CurrencyCode.CNY ? cnyToMyrRate : 1 / cnyToMyrRate;
-    const raw = price * exchangeFactor * (1 + markupPercent / 100);
-    const step = roundingMode === 'WHOLE' ? 100 : roundingMode === 'TENTH' ? 10 : 1;
-    return Math.max(0, Math.round(raw / step) * step);
-}
-
 export function calculateUsdtCheckoutAmount(
     fiatMinorAmount: number,
     fiatPerUsdtRate: number,
@@ -832,3 +820,5 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
     const date = value instanceof Date ? value : new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
 }
+
+export { convertMinorPrice } from './store-currency-conversion';

@@ -5,6 +5,7 @@ import {
     resolveAccountRecommendationSettings,
     type AccountRecommendationSettings,
 } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { errorText } from './storefront-content-utils';
 
@@ -63,7 +64,7 @@ export function StorefrontAccountRecommendationsPanel({
             </p>
             <fieldset disabled={disabled || saving} className="mt-4 space-y-4 disabled:opacity-60">
                 <label className="flex items-center gap-2 text-sm text-slate-800">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.enabled}
                         onChange={event => setDraft({ ...draft, enabled: event.target.checked })}
@@ -73,7 +74,7 @@ export function StorefrontAccountRecommendationsPanel({
                 <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-xs font-medium text-slate-700">
                         中文推荐标题
-                        <input
+                        <AdminInput
                             required
                             maxLength={80}
                             className={fieldClass}
@@ -83,7 +84,7 @@ export function StorefrontAccountRecommendationsPanel({
                     </label>
                     <label className="text-xs font-medium text-slate-700">
                         英文推荐标题
-                        <input
+                        <AdminInput
                             required
                             maxLength={80}
                             className={fieldClass}
@@ -94,7 +95,7 @@ export function StorefrontAccountRecommendationsPanel({
                 </div>
                 <label className="block text-xs font-medium text-slate-700">
                     推荐展示数量
-                    <input
+                    <AdminInput
                         type="number"
                         required
                         min={1}
@@ -109,13 +110,13 @@ export function StorefrontAccountRecommendationsPanel({
                     <span className="text-xs text-slate-500">
                         {dirty ? '有未保存的更改' : '已与当前店铺设置同步'}
                     </span>
-                    <button
+                    <AdminButton
                         type="submit"
                         disabled={!dirty}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {saving ? '正在保存…' : '保存账户推荐'}
-                    </button>
+                    </AdminButton>
                 </div>
             </fieldset>
             {error && (

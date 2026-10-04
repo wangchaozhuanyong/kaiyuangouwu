@@ -75,7 +75,7 @@ export interface AccountPageProps {
 
 const accountSectionClass = 'account-panel account-section';
 const compactSectionHeaderClass =
-    '[&_.section-header]:mb-1 [&_.section-header]:min-h-0 [&_.section-header]:items-center [&_.section-header-title-row_h2]:m-0 [&_.section-header-title-row_h2]:text-[15px] [&_.section-header-title-row_h2]:font-extrabold [&_.section-header-title-row_h2]:leading-[1.2] [&_.section-header-action-btn]:min-h-0 [&_.section-header-action-btn]:p-0 [&_.section-header-action-btn]:text-[12.5px] [&_.section-header-action-btn]:leading-[1.2] [&_.section-header-action-btn]:text-slate-500 hover:[&_.section-header-action-btn]:text-[var(--accent)] [&_.section-header-action-btn_svg]:size-3.5';
+    '[&_.section-header]:mb-1 [&_.section-header]:min-h-0 [&_.section-header]:items-center [&_.section-header-title-row_h2]:m-0 [&_.section-header-title-row_h2]:type-body [&_.section-header-title-row_h2]:weight-bold  [&_.section-header-action-btn]:min-h-0 [&_.section-header-action-btn]:p-0 [&_.section-header-action-btn]:type-meta  [&_.section-header-action-btn]:text-slate-500 hover:[&_.section-header-action-btn]:text-[var(--accent)] [&_.section-header-action-btn_svg]:size-3.5';
 
 export function AccountPage() {
     const navigate = useNavigate();
@@ -212,14 +212,14 @@ export function AccountPage() {
                 couponCount={couponCount}
                 onContentTarget={onContentTarget}
                 counts={countsQuery.data}
-                countsError={countsQuery.isError}
-                onRetryCounts={() => void countsQuery.refetch()}
+                countsError={countsQuery.isError && countsQuery.data === undefined}
+                onRetryCounts={() => void countsQuery.refetch({ cancelRefetch: false })}
                 afterSalesCount={afterSalesQuery.data ? activeAfterSalesCount : undefined}
                 referralEnabled={referralEnabled}
                 referralPending={referralProgramQuery.isPending}
                 referralBalance={referralBalance}
                 referralBalanceStatus={referralBalanceStatus}
-                onRetryReferral={() => void referralOverviewQuery.refetch()}
+                onRetryReferral={() => void referralOverviewQuery.refetch({ cancelRefetch: false })}
                 navigate={navigateTo}
             />
         );
@@ -255,7 +255,7 @@ export function AccountPage() {
                 referralPending={referralProgramQuery.isPending}
                 referralBalance={referralBalance}
                 referralBalanceStatus={referralBalanceStatus}
-                onRetryReferral={() => void referralOverviewQuery.refetch()}
+                onRetryReferral={() => void referralOverviewQuery.refetch({ cancelRefetch: false })}
                 currencyCode={market.currencyCode}
                 locale={locale}
                 navigate={navigateTo}
@@ -360,12 +360,12 @@ export function AccountPage() {
 
             {customer && !desktop && (
                 <section
-                    className={`account-latest-logistics ${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
+                    className={`account-latest-logistics ${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:type-helper [&>header_strong]:weight-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:type-meta [&>button>span_strong]:weight-semibold [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:type-meta [&>button>span_small]:text-[var(--muted)]`}
                 >
                     <header>
                         <h2>{isZh ? '最新物流' : 'Latest delivery'}</h2>
                         <button
-                            className="inline-flex min-h-[26px] items-center gap-0.5 border-0 bg-transparent py-0 pl-2 pr-0 text-[12.5px] text-[var(--muted)] hover:text-[var(--accent)]"
+                            className="inline-flex min-h-[26px] items-center gap-0.5 border-0 bg-transparent py-0 pl-2 pr-0 type-meta text-[var(--muted)] hover:text-[var(--accent)]"
                             type="button"
                             onClick={() => navigateTo({ name: 'logistics' })}
                         >
@@ -410,7 +410,7 @@ export function AccountPage() {
                 className={`account-services ${accountSectionClass}`}
                 aria-label={isZh ? '常用服务' : 'Services'}
             >
-                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-transform hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
+                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-transform hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:type-meta [&>button>span_em]:weight-semibold [&>button>span_em]:not-italic  [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:type-helper [&>button>b]:weight-medium [&>button>b]:text-[var(--text)]">
                     {!desktop && (
                         <ServiceButton
                             icon={<Heart />}

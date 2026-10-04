@@ -2,16 +2,16 @@ import { InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
+import { CatalogPaginationError, nextCatalogPageParam, validateCatalogPage } from '../catalog-pagination';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    storefrontPlaceholderData,
     storefrontQueryKeys,
     storefrontQueryRetry,
 } from '../query-client';
 import { MarketConfig, ProductSearchPage, StorefrontCatalogInput, StorefrontLanguage } from '../types';
-
-class CatalogPaginationError extends Error {}
 
 interface CategoryPaginationOptions {
     api: Pick<ShopApi, 'catalog'>;
@@ -72,22 +72,17 @@ export function useCategoryPagination({
                     cached.pageParams[index] < pageParam ? previous.items.map(item => item.id) : [],
                 ),
             );
-            const emptyWithRemaining = page.items.length === 0 && page.totalItems > pageParam;
-            const repeatedPage = page.items.length > 0 && page.items.every(item => previousIds.has(item.id));
-            if (emptyWithRemaining || repeatedPage) {
-                throw new CatalogPaginationError(
-                    language === 'zh'
-                        ? '暂时无法加载更多商品，请重试'
-                        : 'Could not load more products. Please retry.',
-                );
-            }
-            return page;
+            return validateCatalogPage(
+                page,
+                pageParam,
+                previousIds,
+                language === 'zh'
+                    ? '暂时无法加载更多商品，请重试'
+                    : 'Could not load more products. Please retry.',
+            );
         },
         initialPageParam: 0,
-        getNextPageParam: (lastPage, _pages, lastPageParam) => {
-            const next = lastPageParam + lastPage.items.length;
-            return lastPage.items.length > 0 && next < lastPage.totalItems ? next : undefined;
-        },
+        getNextPageParam: nextCatalogPageParam,
         enabled,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -95,9 +90,7 @@ export function useCategoryPagination({
         refetchOnWindowFocus: current => current.state.status !== 'error',
         refetchOnReconnect: current => current.state.status !== 'error',
         placeholderData: (previousData, previousQuery) =>
-            previousQuery?.queryKey.slice(0, 3).every((part, index) => part === queryKey[index])
-                ? previousData
-                : undefined,
+            storefrontPlaceholderData(previousData, previousQuery?.queryKey, queryKey),
         retry: (count, error) =>
             !(error instanceof CatalogPaginationError) && storefrontQueryRetry(count, error),
         meta: publicQueryMeta(),

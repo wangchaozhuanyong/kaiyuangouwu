@@ -1,7 +1,9 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const RESOURCES = gql`
@@ -26,7 +28,7 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
             ownerChannelId: string | null;
             scope: string;
         }>;
-    }>(RESOURCES, { variables: { resourceType }, fetchPolicy: 'network-only' });
+    }>(RESOURCES, { variables: { resourceType } });
     const [publish, state] = useMutation(PUBLISH);
     const submit = async (resourceId: string) => {
         try {
@@ -47,7 +49,7 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
                 归属待核对的资源须按
                 ID、渠道关系及引用证据整理。公共模板发布为平台副本，经营店领取后独立维护。
             </p>
-            <select
+            <AdminSelect
                 aria-label="资源类型"
                 className="rounded-lg border border-slate-200 p-2 text-sm"
                 value={resourceType}
@@ -61,8 +63,8 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
                 <option value="Collection">商品分类</option>
                 <option value="Asset">素材</option>
                 <option value="Tag">素材标签</option>
-            </select>
-            {query.loading && <p role="status">读取归属中…</p>}
+            </AdminSelect>
+            {query.loading && !query.data && <p role="status">读取归属中…</p>}
             {query.error && <p role="alert">{toUserFacingError(query.error, '资源读取失败')}</p>}
             <div className="max-h-80 overflow-auto text-sm">
                 <table className="w-full text-left">
@@ -95,13 +97,13 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
                                 <td>
                                     {['Facet', 'ProductOptionGroup'].includes(resourceType) &&
                                         item.scope === 'STORE' && (
-                                            <button
+                                            <AdminButton
                                                 className="text-blue-600 disabled:opacity-50"
                                                 disabled={state.loading}
                                                 onClick={() => void submit(item.resourceId)}
                                             >
                                                 发布公共副本
-                                            </button>
+                                            </AdminButton>
                                         )}
                                 </td>
                             </tr>

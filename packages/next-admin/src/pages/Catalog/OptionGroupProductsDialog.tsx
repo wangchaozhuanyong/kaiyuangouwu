@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import {
     AlertCircle,
     ArrowRight,
@@ -97,20 +99,20 @@ export function OptionGroupProductsDialog({
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400">打开商品后可修改或移除该规格模板。</p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         aria-label="关闭关联商品"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
 
                 <div className="border-b border-slate-100 px-5 py-3 sm:px-6">
                     <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <input
+                        <AdminInput
                             type="search"
                             name="option-group-products-search"
                             autoComplete="off"
@@ -135,21 +137,22 @@ export function OptionGroupProductsDialog({
                                 <div key={item} className="h-16 animate-pulse rounded-xl bg-slate-100" />
                             ))}
                         </div>
-                    ) : error ? (
+                    ) : error && !data ? (
                         <div
                             role="alert"
                             className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center text-xs text-rose-700"
                         >
                             <AlertCircle className="h-8 w-8 text-rose-500" />
                             <span>{toUserFacingError(error, '关联商品读取失败，请稍后重试')}</span>
-                            <button
+                            <AdminButton
+                                refreshPage
                                 type="button"
                                 onClick={() => void refetch()}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 font-bold text-white hover:bg-rose-700"
                             >
                                 <RefreshCw className="h-3.5 w-3.5" />
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
                     ) : products.length === 0 ? (
                         <div className="flex min-h-64 flex-col items-center justify-center gap-2 p-8 text-center">
@@ -162,9 +165,9 @@ export function OptionGroupProductsDialog({
                             </p>
                         </div>
                     ) : (
-                        <div className={`divide-y divide-slate-100 ${loading ? 'opacity-60' : ''}`}>
+                        <div className={`divide-y divide-slate-100 ${loading && !data ? 'opacity-60' : ''}`}>
                             {products.map(product => (
-                                <button
+                                <AdminButton
                                     key={product.id}
                                     type="button"
                                     onClick={() => {
@@ -191,7 +194,7 @@ export function OptionGroupProductsDialog({
                                         </span>
                                     </span>
                                     <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
                     )}
@@ -204,7 +207,7 @@ export function OptionGroupProductsDialog({
                             : '共 0 个商品'}
                     </span>
                     <div className="flex items-center gap-1.5">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setPage(current => Math.max(0, current - 1))}
                             disabled={loading || page === 0}
@@ -212,8 +215,8 @@ export function OptionGroupProductsDialog({
                             aria-label="上一页关联商品"
                         >
                             <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
                             disabled={loading || page >= totalPages - 1}
@@ -221,7 +224,7 @@ export function OptionGroupProductsDialog({
                             aria-label="下一页关联商品"
                         >
                             <ChevronRight className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </AccessibleDialogSurface>

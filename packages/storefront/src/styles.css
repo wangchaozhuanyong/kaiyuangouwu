@@ -25,6 +25,18 @@
     box-sizing: border-box;
 }
 
+.storefront-app,
+.sheet-layer {
+    font-family: var(--font-ui);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+
+:where(.storefront-app, .sheet-layer) :where(small) {
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+
 .storefront-app :where(button, a, input, select, textarea, summary):focus-visible {
     outline: var(--experience-focus-width) solid var(--focus);
     outline-offset: var(--experience-focus-offset);
@@ -66,6 +78,7 @@ body {
     select,
     textarea {
         font-size: var(--type-input-size) !important;
+        line-height: var(--type-input-leading) !important;
     }
 
     html,
@@ -111,8 +124,15 @@ input,
 textarea,
 select {
     font: inherit;
-    letter-spacing: 0;
+    letter-spacing: var(--tracking-normal);
     -webkit-font-smoothing: antialiased;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+textarea,
+select {
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 
 h1,
@@ -122,8 +142,8 @@ h4,
 h5,
 h6 {
     color: var(--text);
-    font-weight: 700;
-    letter-spacing: normal;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     line-height: var(--line-height-tight);
 }
 
@@ -136,7 +156,7 @@ h6 {
 .badge-count {
     font-family: var(--font-numeric);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-numeric);
 }
 
 .price-lockup {
@@ -144,30 +164,33 @@ h6 {
     align-items: baseline;
     font-family: var(--font-numeric);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-numeric);
     color: var(--accent-ink);
     font-weight: var(--font-weight-bold);
 }
 
 .price-lockup .price-symbol {
-    font-size: 0.75em;
-    font-weight: 600;
+    font-size: var(--type-price-symbol-size);
+    line-height: var(--type-price-part-leading);
+    font-weight: var(--font-weight-semibold);
     margin-right: 1.5px;
 }
 
 .price-lockup .price-integer {
-    font-size: 1.06em;
+    font-size: var(--type-price-integer-size);
+    line-height: var(--type-price-part-leading);
     font-weight: var(--font-weight-bold);
 }
 
 .price-lockup .price-decimal {
-    font-size: 0.78em;
-    font-weight: 600;
+    font-size: var(--type-price-decimal-size);
+    line-height: var(--type-price-part-leading);
+    font-weight: var(--font-weight-semibold);
 }
 
 strong,
 b {
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
 }
 
 button {
@@ -368,8 +391,8 @@ img {
     height: 32px;
 }
 .image-status-label {
-    font-size: 12px;
-    line-height: var(--line-height-body);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     overflow-wrap: anywhere;
 }
 .image-status-loading {
@@ -508,9 +531,10 @@ img {
     max-width: 100%;
     overflow: hidden;
     color: var(--text);
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -662,8 +686,9 @@ img {
     color: white;
     display: grid;
     place-items: center;
-    font-size: 18px;
-    font-weight: 700;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 .fatal-error-page h1,
@@ -672,7 +697,8 @@ img {
 }
 
 .fatal-error-page h1 {
-    font-size: 20px;
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
 }
 
 .fatal-error-page p {
@@ -813,9 +839,9 @@ img {
 
 .topbar-title {
     margin: 0;
-    font-size: 17px;
+    font-size: var(--type-topbar-size);
     font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
+    line-height: var(--type-topbar-leading);
 }
 
 .visually-hidden {
@@ -837,10 +863,11 @@ img {
 }
 
 .cart-topbar .topbar-title {
-    font-size: 18px;
-    font-weight: 800;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-bold);
     color: var(--text);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-normal);
 }
 
 .cart-page.is-empty .cart-topbar {
@@ -911,7 +938,8 @@ img {
     flex: 1;
     overflow: hidden;
     color: #64748b;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-medium);
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -927,9 +955,9 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: var(--type-label-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1;
+    line-height: var(--type-label-leading);
     white-space: nowrap;
 }
 
@@ -985,14 +1013,14 @@ img {
 
 .currency-sheet-option strong {
     color: currentColor;
-    font-size: 15px;
-    line-height: 1.2;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .currency-sheet-option small {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .currency-sheet-option svg {
@@ -1015,7 +1043,8 @@ img {
     align-items: center;
     gap: 8px;
     text-align: left;
-    font-size: 12.5px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     box-shadow: var(--shadow-sm);
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -1055,8 +1084,8 @@ img {
 .notice-detail-body {
     margin: 0;
     color: #334155;
-    font-size: 14px;
-    line-height: 1.8;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
@@ -1118,18 +1147,18 @@ img {
 .storefront-description {
     margin: 0 16px 12px;
     color: var(--muted);
-    font-size: 12.5px;
-    line-height: 1.55;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-align: center;
 }
 
 .storefront-tagline {
     margin: 10px 16px 4px;
     color: var(--brand-primary);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    line-height: 1.4;
+    font-size: var(--type-helper-size);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
+    line-height: var(--type-helper-leading);
     text-align: center;
 }
 
@@ -1162,5 +1191,5 @@ img {
 .subpage-header h1,
 .store-auth-copy h2,
 .all-primary-categories h2 {
-    font-family: var(--font-display);
+    font-family: var(--skin-display-font, var(--font-ui));
 }

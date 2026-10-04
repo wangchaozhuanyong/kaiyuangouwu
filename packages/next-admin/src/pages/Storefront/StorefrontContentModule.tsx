@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -21,6 +21,7 @@ import { useSearchParams } from 'react-router-dom';
 import { sourceImageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -44,6 +45,7 @@ import {
 } from '../../graphql/storefront.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
@@ -84,21 +86,17 @@ export function StorefrontContentModule() {
     const [deletingAnnouncement, setDeletingAnnouncement] = useState<SystemAnnouncementRecord | null>(null);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
     const announcements = useQuery<{ systemAnnouncements: SystemAnnouncementRecord[] }>(
         SYSTEM_ANNOUNCEMENTS_QUERY,
         {
             skip: tab !== 'ANNOUNCEMENTS' || !canManageAnnouncements,
-            fetchPolicy: 'cache-and-network',
         },
     );
     const promotion = useQuery<{ storefrontPromotionPage: StorefrontPromotionRecord }>(
         STOREFRONT_PROMOTION_PAGE_QUERY,
         {
             skip: tab !== 'LANDING',
-            fetchPolicy: 'cache-and-network',
         },
     );
     const requestedAnnouncementId = searchParams.get('announcementId');
@@ -280,7 +278,8 @@ export function StorefrontContentModule() {
                             法律客服、登录视觉、导航、公告和推广落地页集中管理
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() =>
                             void Promise.all([
@@ -297,7 +296,7 @@ export function StorefrontContentModule() {
                             className={`h-3.5 w-3.5 ${content.loading || announcements.loading || promotion.loading ? 'animate-spin' : ''}`}
                         />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
@@ -339,7 +338,7 @@ export function StorefrontContentModule() {
                 {tab === 'PAGES' &&
                     (content.loading && !content.data ? (
                         <LoadingState label="正在读取店铺内容…" />
-                    ) : content.error ? (
+                    ) : content.error && !content.data ? (
                         <ErrorState
                             message={toUserFacingError(content.error, '店铺内容读取失败')}
                             onRetry={() => void content.refetch()}
@@ -372,7 +371,7 @@ export function StorefrontContentModule() {
                     canManageAnnouncements &&
                     (announcements.loading && !announcements.data ? (
                         <LoadingState label="正在读取首页公告…" />
-                    ) : announcements.error ? (
+                    ) : announcements.error && !announcements.data ? (
                         <ErrorState
                             message={toUserFacingError(announcements.error, '首页公告读取失败')}
                             onRetry={() => void announcements.refetch()}
@@ -388,7 +387,7 @@ export function StorefrontContentModule() {
                 {tab === 'LANDING' &&
                     (promotion.loading && !promotion.data ? (
                         <LoadingState label="正在读取推广页…" />
-                    ) : promotion.error ? (
+                    ) : promotion.error && !promotion.data ? (
                         <ErrorState
                             message={toUserFacingError(promotion.error, '店铺促销页读取失败')}
                             onRetry={() => void promotion.refetch()}
@@ -518,7 +517,7 @@ function PageBlockList({
                             <div className="mt-auto flex gap-2 pt-5">
                                 {block ? (
                                     <>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             disabled={!canUpdate || pending}
                                             onClick={() => onEdit(block)}
@@ -526,18 +525,18 @@ function PageBlockList({
                                         >
                                             <Pencil className="h-3.5 w-3.5" />
                                             编辑内容
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => onToggle(block)}
                                             disabled={pending || !canUpdate}
                                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                                         >
                                             {block.enabled ? '停用' : '启用'}
-                                        </button>
+                                        </AdminButton>
                                     </>
                                 ) : (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={!canCreate || pending}
                                         onClick={() => onCreate(descriptor)}
@@ -545,7 +544,7 @@ function PageBlockList({
                                     >
                                         <Plus className="h-3.5 w-3.5" />
                                         开始配置
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                         </article>
@@ -587,14 +586,14 @@ function AnnouncementList({
                         30 天内的有效公告，与手动公告合计最多 5 条。
                     </p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={onCreate}
                     className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
                 >
                     <Plus className="h-3.5 w-3.5" />
                     新建公告
-                </button>
+                </AdminButton>
             </div>
             {sorted.length ? (
                 <div className="divide-y divide-slate-100">
@@ -634,21 +633,21 @@ function AnnouncementList({
                                 </div>
                             </div>
                             <div className="flex shrink-0 gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onEdit(item)}
                                     className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-700"
                                 >
                                     编辑
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => onDelete(item)}
                                     className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
                                     aria-label="删除公告"
                                 >
                                     <Trash2 className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </article>
                     ))}
@@ -695,7 +694,7 @@ function AnnouncementEditor({
 }) {
     const channels = useQuery<{ channels: { items: SystemAnnouncementChannel[] } }>(
         SYSTEM_ANNOUNCEMENT_CHANNELS_QUERY,
-        { fetchPolicy: 'cache-and-network' },
+        {},
     );
     const [allChannels, setAllChannels] = useState(value?.targetMode === 'ALL');
     const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>(
@@ -800,7 +799,7 @@ function AnnouncementEditor({
                     <legend className="px-1 text-xs font-bold text-slate-700">公告展示范围 *</legend>
                     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
                         <label className="flex items-center gap-2">
-                            <input
+                            <AdminInput
                                 type="radio"
                                 name="announcement-scope"
                                 checked={!allChannels}
@@ -809,7 +808,7 @@ function AnnouncementEditor({
                             指定店铺
                         </label>
                         <label className="flex items-center gap-2">
-                            <input
+                            <AdminInput
                                 type="radio"
                                 name="announcement-scope"
                                 checked={allChannels}
@@ -825,7 +824,7 @@ function AnnouncementEditor({
                                     key={channel.id}
                                     className="flex items-center gap-2 text-xs text-slate-700"
                                 >
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={selectedChannelIds.includes(channel.id)}
                                         onChange={event =>
@@ -859,7 +858,7 @@ function AnnouncementEditor({
                     )}
                 </fieldset>
                 <Field label="中文标题 *">
-                    <input
+                    <AdminInput
                         value={draft.titleZh}
                         onChange={event => setDraft({ ...draft, titleZh: event.target.value })}
                         className={inputClass}
@@ -871,7 +870,7 @@ function AnnouncementEditor({
                             英文标题
                         </label>
                         <label className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={draft.titleEnLocked}
                                 onChange={event =>
@@ -881,7 +880,7 @@ function AnnouncementEditor({
                             人工锁定
                         </label>
                     </div>
-                    <input
+                    <AdminInput
                         id="announcement-title-en"
                         value={draft.titleEn}
                         onChange={event => setDraft({ ...draft, titleEn: event.target.value })}
@@ -896,7 +895,7 @@ function AnnouncementEditor({
                 </div>
                 <div className="sm:col-span-2">
                     <Field label="中文正文 *">
-                        <textarea
+                        <AdminTextArea
                             rows={4}
                             value={draft.contentZh}
                             onChange={event => setDraft({ ...draft, contentZh: event.target.value })}
@@ -914,7 +913,7 @@ function AnnouncementEditor({
                                 英文正文
                             </label>
                             <label className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={draft.contentEnLocked}
                                     onChange={event =>
@@ -924,7 +923,7 @@ function AnnouncementEditor({
                                 人工锁定
                             </label>
                         </div>
-                        <textarea
+                        <AdminTextArea
                             id="announcement-content-en"
                             rows={4}
                             value={draft.contentEn}
@@ -941,7 +940,7 @@ function AnnouncementEditor({
                 </div>
                 <div>
                     <Field label="优先级">
-                        <input
+                        <AdminInput
                             type="number"
                             value={draft.priority}
                             onChange={event => setDraft({ ...draft, priority: event.target.value })}
@@ -953,7 +952,7 @@ function AnnouncementEditor({
                     </p>
                 </div>
                 <Field label="跳转网址">
-                    <input
+                    <AdminInput
                         value={draft.linkUrl}
                         onChange={event => setDraft({ ...draft, linkUrl: event.target.value })}
                         placeholder="https://..."
@@ -961,7 +960,7 @@ function AnnouncementEditor({
                     />
                 </Field>
                 <Field label="上线时间">
-                    <input
+                    <AdminInput
                         type="datetime-local"
                         value={draft.startsAt}
                         onChange={event => setDraft({ ...draft, startsAt: event.target.value })}
@@ -969,7 +968,7 @@ function AnnouncementEditor({
                     />
                 </Field>
                 <Field label="下线时间">
-                    <input
+                    <AdminInput
                         type="datetime-local"
                         value={draft.endsAt}
                         onChange={event => setDraft({ ...draft, endsAt: event.target.value })}
@@ -978,7 +977,7 @@ function AnnouncementEditor({
                 </Field>
             </div>
             <label className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-700">
-                <input
+                <AdminInput
                     type="checkbox"
                     checked={draft.enabled}
                     onChange={event => setDraft({ ...draft, enabled: event.target.checked })}
@@ -1156,17 +1155,17 @@ function PromotionPageEditor({
                 </div>
                 <div className="p-5">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                        <select
+                        <AdminSelect
                             value={contentType}
                             onChange={event => setContentType(event.target.value as 'HTML' | 'MARKDOWN')}
                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold"
                         >
                             <option value="HTML">HTML</option>
                             <option value="MARKDOWN">Markdown</option>
-                        </select>
+                        </AdminSelect>
                         {dirty && <span className="text-[10px] font-bold text-amber-600">有未保存更改</span>}
                     </div>
-                    <textarea
+                    <AdminTextArea
                         value={source}
                         onChange={event => setSource(event.target.value)}
                         rows={24}
@@ -1186,7 +1185,7 @@ function PromotionPageEditor({
                                     ))}
                                 </ul>
                                 <label className="flex items-center gap-2">
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={imagesConfirmed}
                                         disabled={pending}
@@ -1198,7 +1197,7 @@ function PromotionPageEditor({
                                 </label>
                             </div>
                         )}
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setConfirmReset(true)}
                             disabled={!canUpdate || pending}
@@ -1206,9 +1205,9 @@ function PromotionPageEditor({
                         >
                             <RotateCcw className="h-3.5 w-3.5" />
                             恢复默认模板
-                        </button>
+                        </AdminButton>
                         <div className="flex flex-wrap gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void showPreview()}
                                 disabled={!canUpdate || pending || !source.trim()}
@@ -1216,8 +1215,8 @@ function PromotionPageEditor({
                             >
                                 <Code2 className="h-3.5 w-3.5" />
                                 生成预览
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void saveDraft()}
                                 disabled={
@@ -1227,8 +1226,8 @@ function PromotionPageEditor({
                             >
                                 <Save className="h-3.5 w-3.5" />
                                 保存草稿
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void publishPage()}
                                 disabled={!canUpdate || pending || !source.trim() || !imagesConfirmed}
@@ -1236,7 +1235,7 @@ function PromotionPageEditor({
                             >
                                 <Send className="h-3.5 w-3.5" />
                                 发布上线
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </div>
@@ -1291,14 +1290,14 @@ function TabButton({
     label: string;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 py-3.5 ${active ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
             <Icon className="h-3.5 w-3.5" />
             {label}
-        </button>
+        </AdminButton>
     );
 }
 function Modal({
@@ -1335,9 +1334,14 @@ function Modal({
                         </h2>
                         {description && <p className="mt-1 text-xs text-slate-400">{description}</p>}
                     </div>
-                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="p-1 text-slate-400"
+                        aria-label="关闭"
+                    >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </div>
@@ -1359,22 +1363,22 @@ function ModalFooter({
 }) {
     return (
         <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button
+            <AdminButton
                 type="button"
                 onClick={onCancel}
                 disabled={pending}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
             >
                 取消
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
                 type="button"
                 onClick={onConfirm}
                 disabled={pending || disabled}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
                 {pending ? '正在保存…' : confirmLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1400,13 +1404,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">数据加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1428,13 +1432,13 @@ function EmptyState({
             <Icon className="h-9 w-9 text-slate-300" />
             <h3 className="mt-3 text-sm font-bold text-slate-800">{title}</h3>
             <p className="mt-1 text-xs text-slate-400">{detail}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onAction}
                 className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
             >
                 {action}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1455,9 +1459,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1488,22 +1492,22 @@ function ConfirmDialog({
                 <h2 className="mt-4 font-bold text-slate-900">{title}</h2>
                 <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
                 <div className="mt-5 flex justify-end gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={pending}
                         className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={onConfirm}
                         disabled={pending}
                         className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                     >
                         {pending ? '处理中…' : '确认'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>

@@ -59,10 +59,10 @@
     padding-inline: 8px;
     background: var(--surface);
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
-    line-height: 1;
+    line-height: var(--type-body-leading);
 }
 
 .quantity-control.is-compact {
@@ -82,5 +82,6 @@
 .quantity-control.is-compact > output {
     min-width: 24px;
     padding-inline: 4px;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }

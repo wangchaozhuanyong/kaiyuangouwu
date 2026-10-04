@@ -86,18 +86,20 @@
 }
 
 .category-client-plugin-copy strong {
-    font-size: 15px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .category-client-plugin-copy > span {
     color: var(--muted, #64748b);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .category-client-plugin-action {
     color: var(--brand-primary);
-    font-size: 13px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
     white-space: nowrap;
 }

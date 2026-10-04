@@ -69,7 +69,13 @@ export function PageSkeleton({
         );
     }
     return (
-        <div data-page-pending="data" className={className} role="status" aria-label={ariaLabel}>
+        <div
+            data-page-pending="data"
+            className={className}
+            role="status"
+            aria-label={ariaLabel}
+            aria-busy="true"
+        >
             {content}
         </div>
     );

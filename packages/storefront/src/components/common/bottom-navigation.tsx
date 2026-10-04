@@ -193,7 +193,7 @@ export function BottomNavigation({
                         key={item.key}
                         className={cn(
                             'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-colors lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] hover:text-[var(--interaction-ink)]',
-                            isActive && 'font-bold text-[var(--interaction-ink)]',
+                            isActive && 'weight-bold text-[var(--interaction-ink)]',
                         )}
                         aria-current={isActive ? 'page' : undefined}
                         aria-label={item.label}
@@ -226,25 +226,29 @@ export function BottomNavigation({
                                 />
                             )}
                             {item.routeName === 'cart' && cartQuantity > 0 && (
-                                <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-[var(--paper)] bg-[var(--accent)] px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+                                <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-[var(--paper)] bg-[var(--accent)] px-1 type-navigation-compact weight-bold  text-white shadow-sm">
                                     {cartQuantity > 99 ? '99+' : cartQuantity}
                                 </b>
                             )}
                         </span>
                         <span
-                            className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight lg:hidden"
+                            className={clsx(
+                                'max-w-full overflow-hidden text-ellipsis whitespace-nowrap type-navigation-compact lg:hidden',
+                                isActive ? 'weight-bold' : 'weight-medium',
+                            )}
                             style={{
                                 color: isActive ? item.activeColor : 'var(--muted)',
-                                fontWeight: isActive ? 700 : 500,
                             }}
                         >
                             {mobileBottomNavigationLabel(item, language)}
                         </span>
                         <span
-                            className="hidden max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-tight lg:block"
+                            className={clsx(
+                                'hidden max-w-full overflow-hidden text-ellipsis whitespace-nowrap type-helper lg:block',
+                                isActive ? 'weight-bold' : 'weight-medium',
+                            )}
                             style={{
                                 color: isActive ? item.activeColor : 'var(--muted)',
-                                fontWeight: isActive ? 700 : 500,
                             }}
                         >
                             {item.label}

@@ -233,3 +233,6 @@ describe('AI 图片工坊运营配置', () => {
         expect(container.textContent).not.toContain('该张已成功图片的费用已退回用户钱包');
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

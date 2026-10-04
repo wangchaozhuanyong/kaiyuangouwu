@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StorefrontVisualPresetId } from '../../../../storefront-content-plugin/src/visual-presets';
 import { getActiveChannelToken } from '../../apollo';
@@ -228,9 +230,13 @@ function ClientFrame({
             {!domainError && error && (
                 <div role="alert" className="p-3 text-xs text-red-700">
                     {error}{' '}
-                    <button type="button" className="underline" onClick={() => setRetry(value => value + 1)}>
+                    <AdminButton
+                        type="button"
+                        className="underline"
+                        onClick={() => setRetry(value => value + 1)}
+                    >
                         重试预览
-                    </button>
+                    </AdminButton>
                 </div>
             )}
             <div
@@ -292,16 +298,16 @@ export function StorefrontDecorationPreview({
                     客户端效果预览 <FeatureHelpButton topic="storefront.decoration" title="客户端效果预览" />
                 </h3>
                 <div className="flex gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setRevision(value => value + 1)}
                         className="rounded border px-2 py-1 text-xs"
                     >
                         刷新预览
-                    </button>
+                    </AdminButton>
                     {!fixedViewport &&
                         (['mobile', 'desktop'] as const).map(value => (
-                            <button
+                            <AdminButton
                                 type="button"
                                 key={value}
                                 aria-pressed={selectedViewport === value}
@@ -309,15 +315,15 @@ export function StorefrontDecorationPreview({
                                 className="rounded border px-2 py-1 text-xs"
                             >
                                 {value === 'mobile' ? '手机' : '电脑'}
-                            </button>
+                            </AdminButton>
                         ))}
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setExpanded(true)}
                         className="rounded border px-2 py-1 text-xs"
                     >
                         放大预览
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <p className="p-3 text-xs text-slate-500">
@@ -327,7 +333,7 @@ export function StorefrontDecorationPreview({
             {!block && (
                 <label className="flex items-center gap-2 px-3 pb-3 text-xs text-slate-600">
                     预览页面
-                    <select
+                    <AdminSelect
                         aria-label="预览页面"
                         value={route}
                         onChange={event => setRoute(event.target.value as '/' | '/account')}
@@ -335,7 +341,7 @@ export function StorefrontDecorationPreview({
                     >
                         <option value="/">首页</option>
                         <option value="/account">个人中心</option>
-                    </select>
+                    </AdminSelect>
                 </label>
             )}
             {publication !== 'PUBLISHED' && (
@@ -363,9 +369,9 @@ export function StorefrontDecorationPreview({
                                 客户端效果 · {selectedViewport === 'desktop' ? '电脑' : '手机'}{' '}
                                 <FeatureHelpButton topic="storefront.decoration" title="客户端效果预览" />
                             </h3>
-                            <button type="button" onClick={() => setExpanded(false)}>
+                            <AdminButton type="button" onClick={() => setExpanded(false)}>
                                 关闭预览
-                            </button>
+                            </AdminButton>
                         </header>
                         <ClientFrame
                             key={`${revision}:${route}`}

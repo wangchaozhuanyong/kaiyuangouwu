@@ -1,6 +1,7 @@
 import { Download } from 'lucide-react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CouponDailyMetricRecord,
@@ -66,7 +67,7 @@ export function CouponReport({
                     />
                     <label className="text-[10px] font-bold text-slate-500">
                         优惠券
-                        <select
+                        <AdminSelect
                             value={filter.campaignId}
                             onChange={event => setFilter({ ...filter, campaignId: event.target.value })}
                             className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
@@ -77,9 +78,9 @@ export function CouponReport({
                                     {coupon.name}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </label>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => exportReport(metrics, currencyCode)}
                         disabled={!metrics.length}
@@ -87,7 +88,7 @@ export function CouponReport({
                     >
                         <Download className="h-3.5 w-3.5" />
                         导出 CSV
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             {validationError ? (
@@ -233,7 +234,7 @@ export function CouponLedger({
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <select
+                    <AdminSelect
                         value={campaign}
                         onChange={eventValue => setCampaign(eventValue.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -244,8 +245,8 @@ export function CouponLedger({
                                 {coupon.name}
                             </option>
                         ))}
-                    </select>
-                    <select
+                    </AdminSelect>
+                    <AdminSelect
                         value={event}
                         onChange={eventValue => setEvent(eventValue.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -256,7 +257,7 @@ export function CouponLedger({
                                 {label}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </div>
             </div>
             {loading && !data ? (

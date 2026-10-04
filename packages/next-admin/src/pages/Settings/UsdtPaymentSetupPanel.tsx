@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -11,6 +11,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -30,6 +31,7 @@ import {
     type UpdateStoreUsdtConfigurationResult,
 } from '../../graphql/store-usdt.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { isDefaultChannelCode } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -71,7 +73,7 @@ export function UsdtPaymentSetupPanel({
 
     const setupQuery = useQuery<StoreUsdtSetupResult>(STORE_USDT_SETUP_QUERY, {
         skip: !canRead,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const isPlatformContext = isDefaultChannelCode(
@@ -80,7 +82,7 @@ export function UsdtPaymentSetupPanel({
     const canManagePlatformWallet = isSuperAdmin && isPlatformContext;
     const platformWalletsQuery = useQuery<PlatformUsdtWalletsResult>(PLATFORM_USDT_WALLETS_QUERY, {
         skip: !canManagePlatformWallet,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [updateConfiguration, updateState] = useMutation<UpdateStoreUsdtConfigurationResult>(
@@ -241,18 +243,19 @@ export function UsdtPaymentSetupPanel({
                 <div className="flex items-center justify-center gap-2 p-10 text-xs text-slate-500">
                     <LoaderCircle className="h-4 w-4 animate-spin" /> 正在加载 USDT 配置
                 </div>
-            ) : setupQuery.error ? (
+            ) : setupQuery.error && !setupQuery.data ? (
                 <div className="p-5">
                     <InlineAlert tone="error">
                         {toUserFacingError(setupQuery.error, 'USDT 配置加载失败，请重试')}
                     </InlineAlert>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         className={`${secondaryButton} mt-3`}
                         onClick={() => void setupQuery.refetch()}
                     >
                         <RefreshCw className="h-3.5 w-3.5" /> 重试
-                    </button>
+                    </AdminButton>
                 </div>
             ) : configuration && wallet && draft ? (
                 <div className="space-y-6 p-5">
@@ -283,7 +286,7 @@ export function UsdtPaymentSetupPanel({
                                     </p>
                                 </div>
                                 <label className="flex shrink-0 items-center gap-2 text-[10px] font-bold text-slate-600">
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={draft.usdtDisplayEnabled}
                                         disabled={!canUpdate || busy}
@@ -306,7 +309,7 @@ export function UsdtPaymentSetupPanel({
                                     <OutputValue value={formatRate(configuration.myrPerUsdtRate, 'RM ')} />
                                 </Field>
                                 <Field label="报价加价（%）">
-                                    <input
+                                    <AdminInput
                                         type="number"
                                         min={0}
                                         max={20}
@@ -323,7 +326,7 @@ export function UsdtPaymentSetupPanel({
                                     />
                                 </Field>
                                 <Field label="自动采集方式">
-                                    <select
+                                    <AdminSelect
                                         value={draft.usdtRateScheduleMode}
                                         disabled={!canUpdate || busy}
                                         onChange={event =>
@@ -337,11 +340,11 @@ export function UsdtPaymentSetupPanel({
                                     >
                                         <option value="INTERVAL">按分钟间隔</option>
                                         <option value="DAILY">每天固定时间</option>
-                                    </select>
+                                    </AdminSelect>
                                 </Field>
                                 {draft.usdtRateScheduleMode === 'INTERVAL' ? (
                                     <Field label="采集间隔">
-                                        <select
+                                        <AdminSelect
                                             value={draft.usdtRateIntervalMinutes}
                                             disabled={!canUpdate || busy}
                                             onChange={event =>
@@ -357,11 +360,11 @@ export function UsdtPaymentSetupPanel({
                                                     {minutes === 60 ? '每 1 小时' : `每 ${minutes} 分钟`}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </AdminSelect>
                                     </Field>
                                 ) : (
                                     <Field label="每日采集时间（北京时间）">
-                                        <input
+                                        <AdminInput
                                             type="time"
                                             value={draft.usdtRateDailyTime}
                                             disabled={!canUpdate || busy}
@@ -391,7 +394,7 @@ export function UsdtPaymentSetupPanel({
 
                             {canUpdate && (
                                 <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         className={secondaryButton}
                                         disabled={busy || dirty}
@@ -401,15 +404,15 @@ export function UsdtPaymentSetupPanel({
                                             className={`h-3.5 w-3.5 ${refreshState.loading ? 'animate-spin' : ''}`}
                                         />
                                         立即刷新汇率
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         className={primaryButton}
                                         disabled={busy || !dirty}
                                         onClick={() => void saveConfiguration()}
                                     >
                                         <Save className="h-3.5 w-3.5" /> 保存报价配置
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             )}
                         </section>
@@ -462,7 +465,7 @@ export function UsdtPaymentSetupPanel({
                                             wallet.configured ? '更换 TRON 主网收款地址' : 'TRON 主网收款地址'
                                         }
                                     >
-                                        <input
+                                        <AdminInput
                                             value={walletAddress}
                                             maxLength={64}
                                             autoComplete="off"
@@ -480,14 +483,14 @@ export function UsdtPaymentSetupPanel({
                                         </p>
                                     )}
                                     <div className="flex justify-end">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             className={primaryButton}
                                             disabled={busy || !isPlausibleTronMainnetAddress(walletAddress)}
                                             onClick={() => void submitReceivingAddress()}
                                         >
                                             <ShieldCheck className="h-3.5 w-3.5" /> 提交平台审核
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                             )}
@@ -510,7 +513,7 @@ export function UsdtPaymentSetupPanel({
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                     <LoaderCircle className="h-4 w-4 animate-spin" /> 正在加载待审核地址
                                 </div>
-                            ) : platformWalletsQuery.error ? (
+                            ) : platformWalletsQuery.error && !platformWalletsQuery.data ? (
                                 <InlineAlert tone="error">
                                     {toUserFacingError(platformWalletsQuery.error, '待审核地址加载失败')}
                                 </InlineAlert>
@@ -545,7 +548,7 @@ export function UsdtPaymentSetupPanel({
                                                     SuperAdmin 账号完成复核。
                                                 </InlineAlert>
                                             )}
-                                            <input
+                                            <AdminInput
                                                 value={rejectionReasons[candidate.channelId] ?? ''}
                                                 maxLength={500}
                                                 placeholder="驳回原因（驳回时必填）"
@@ -559,22 +562,22 @@ export function UsdtPaymentSetupPanel({
                                                 className={inputClass}
                                             />
                                             <div className="flex justify-end gap-2">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     disabled={busy || !candidate.canReview}
                                                     onClick={() => void decideWallet(candidate, false)}
                                                     className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                                                 >
                                                     <XCircle className="h-3.5 w-3.5" /> 驳回
-                                                </button>
-                                                <button
+                                                </AdminButton>
+                                                <AdminButton
                                                     type="button"
                                                     disabled={busy || !candidate.canReview}
                                                     onClick={() => void decideWallet(candidate, true)}
                                                     className={primaryButton}
                                                 >
                                                     <CheckCircle2 className="h-3.5 w-3.5" /> 审核通过
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         </article>
                                     ))}

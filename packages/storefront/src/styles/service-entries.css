@@ -97,15 +97,15 @@
 }
 
 .category-client-plugin-copy strong {
-    font-size: 13px;
-    line-height: 1.3;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .category-client-plugin-copy > span {
     overflow: hidden;
     color: var(--service-card-description, var(--muted));
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -115,8 +115,9 @@
     padding: 6px 9px;
     background: var(--service-card-action, var(--accent-soft));
     color: var(--service-card-ink, var(--accent-ink));
-    font-size: 11px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
     white-space: nowrap;
 }
 
@@ -203,9 +204,9 @@
 
 .is-business-services-main .category-client-plugin-copy strong {
     color: var(--text);
-    font-size: 15px;
-    font-weight: 650;
-    line-height: 1.5;
+    font-size: var(--type-body-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-body-leading);
     overflow-wrap: anywhere;
 }
 
@@ -214,8 +215,8 @@
     text-overflow: clip;
     white-space: normal;
     overflow-wrap: anywhere;
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .is-business-services-main .category-client-plugin-action {
@@ -226,17 +227,17 @@
     min-height: 44px;
     padding: 8px 10px;
     border-radius: var(--skin-control-radius);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.5;
+    font-size: var(--type-label-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-label-leading);
 }
 
 .is-business-services-main .category-client-plugin-action::after {
     content: '→';
     flex: none;
-    font-size: 18px;
-    font-weight: 400;
-    line-height: 1;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--type-section-leading);
 }
 
 .is-business-services-main .is-assistance .category-client-plugin {
@@ -295,17 +296,20 @@
     }
 
     .is-business-services-main .category-client-plugin-copy strong {
-        font-size: 18px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
     }
 
     .is-business-services-main .category-client-plugin-copy > span {
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .is-business-services-main .category-client-plugin-action {
         min-width: 100px;
         padding: 10px 14px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .is-business-services-main .is-assistance .category-client-plugin {

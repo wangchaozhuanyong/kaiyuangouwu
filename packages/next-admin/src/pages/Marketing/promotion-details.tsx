@@ -1,4 +1,5 @@
-import { useQuery } from '@apollo/client/react';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import {
     MARKETING_CAMPAIGN_SCOPE_QUERY,
     MarketingCampaignScopeResult,
@@ -26,7 +27,6 @@ export function CampaignDetailDialog({
             variantTake: Math.max(1, coupon?.productVariantIds.length ?? 0),
         },
         skip: !coupon || (!coupon.collectionIds.length && !coupon.productVariantIds.length),
-        fetchPolicy: 'cache-first',
     });
 
     if (campaign.type === 'FLASH_SALE') {

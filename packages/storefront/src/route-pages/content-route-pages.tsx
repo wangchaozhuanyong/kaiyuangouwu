@@ -46,7 +46,7 @@ export function ServicesRoutePage() {
                 error={runtime.contentError}
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.contentQuery.refetch()}
+                onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
             />
         );
     }
@@ -167,7 +167,7 @@ export function ReviewsRoutePage() {
                 }
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.reviewSettingsQuery.refetch()}
+                onRetry={() => void runtime.reviewSettingsQuery.refetch({ cancelRefetch: false })}
             />
         );
     }

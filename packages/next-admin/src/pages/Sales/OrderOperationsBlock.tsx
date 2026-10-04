@@ -1,8 +1,10 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { CreditCard, Plus, RefreshCw, ShieldCheck, Store, Ticket, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -50,14 +52,12 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
     const query = useQuery<OrderOperationsData>(ORDER_OPERATIONS_QUERY, {
         variables: { id: orderId },
         skip: !orderId,
-        fetchPolicy: 'cache-and-network',
     });
     const canUpdate =
         hasAnyPermission(['UpdateOrder']) &&
         canManageOrderInChannel(query.data?.order, query.data?.activeChannel?.id);
     const paymentMethodsQuery = useQuery<PaymentMethodsForManualData>(PAYMENT_METHODS_FOR_MANUAL_QUERY, {
         skip: !canUpdate || !canReadPaymentMethods,
-        fetchPolicy: 'cache-first',
     });
     const [action, setAction] = useState<ProtectedAction | null>(null);
     const [manualOpen, setManualOpen] = useState(false);
@@ -89,7 +89,7 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
 
     if (!orderId) return null;
     if (query.loading && !order) return <State label="正在读取支付操作、优惠券和子订单…" />;
-    if (query.error || !order)
+    if ((query.error && !query.data) || !order)
         return <State tone="error" label="订单经营明细加载失败" action={() => void query.refetch()} />;
 
     const paid = order.payments
@@ -172,10 +172,14 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                         detail="在此查看付款、处理退款；资金操作需验证管理员密码。"
                     />
                     {canUpdate && canReadPaymentMethods && canAddManualPayment(order.state, outstanding) && (
-                        <button type="button" onClick={() => setManualOpen(true)} className={primaryButton}>
+                        <AdminButton
+                            type="button"
+                            onClick={() => setManualOpen(true)}
+                            className={primaryButton}
+                        >
                             <Plus className="h-4 w-4" />
                             手工添加支付
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
                 <div className="mt-4 space-y-3">
@@ -383,13 +387,13 @@ function PaymentCard({
                             <span>
                                 <b>{formatMoney(refund.total, currencyCode)}</b>
                                 {canOperate && refund.state === 'Pending' && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => onSettleRefund(refund.id)}
                                         className="ml-3 font-bold underline"
                                     >
                                         结算退款
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </span>
                         </div>
@@ -399,16 +403,16 @@ function PaymentCard({
             {canOperate && payment.nextStates.length > 0 && (
                 <div className="flex flex-wrap items-start justify-end gap-2 sm:self-start">
                     {payment.nextStates.includes('Settled') && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => onAction({ kind: 'settle-payment', payment })}
                             className={successButton}
                         >
                             结算支付
-                        </button>
+                        </AdminButton>
                     )}
                     {otherStates.map(state => (
-                        <button
+                        <AdminButton
                             key={state}
                             type="button"
                             onClick={() =>
@@ -421,7 +425,7 @@ function PaymentCard({
                             className={secondaryButton}
                         >
                             {state === 'Cancelled' ? '取消支付' : `转为 ${getPaymentStateLabel(state)}`}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             )}
@@ -455,7 +459,7 @@ function ManualPaymentEditor({
             </p>
             <label className={labelClass}>
                 支付方式
-                <select
+                <AdminSelect
                     value={method}
                     onChange={event => setMethod(event.target.value)}
                     className={inputClass}
@@ -466,11 +470,11 @@ function ManualPaymentEditor({
                             {item.name}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
             </label>
             <label className={labelClass}>
                 真实交易号
-                <input
+                <AdminInput
                     value={transactionId}
                     onChange={event => setTransactionId(event.target.value)}
                     className={`${inputClass} font-mono`}
@@ -501,7 +505,7 @@ function RefundSettlementEditor({
             </p>
             <label className={labelClass}>
                 退款交易号
-                <input
+                <AdminInput
                     value={transactionId}
                     onChange={event => setTransactionId(event.target.value)}
                     className={`${inputClass} font-mono`}
@@ -532,19 +536,24 @@ function Editor({
             >
                 <div className="flex items-center justify-between">
                     <h2 className="text-base font-bold">{title}</h2>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="mt-5 space-y-4">{children}</div>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                    <button type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
                         取消
-                    </button>
-                    <button type="button" onClick={onNext} disabled={nextDisabled} className={primaryButton}>
+                    </AdminButton>
+                    <AdminButton
+                        type="button"
+                        onClick={onNext}
+                        disabled={nextDisabled}
+                        className={primaryButton}
+                    >
                         <ShieldCheck className="h-4 w-4" />
                         下一步验证密码
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>
@@ -617,14 +626,14 @@ function State({
         >
             <p>{label}</p>
             {action && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={action}
                     className="mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                     <RefreshCw className="h-4 w-4" />
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

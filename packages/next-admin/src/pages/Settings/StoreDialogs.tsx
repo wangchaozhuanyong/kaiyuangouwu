@@ -1,7 +1,8 @@
-import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
+import { useApolloClient, useMutation } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -23,6 +24,7 @@ import {
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import { getChannelDisplayName } from '../../utils/channel-display';
@@ -187,7 +189,7 @@ export function StoreEditor({
         >
             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <Field label="所属商家主体（店铺归属）">
-                    <select
+                    <AdminSelect
                         aria-label="所属商家主体（店铺归属）"
                         aria-describedby="store-seller-help"
                         value={sellerId}
@@ -209,7 +211,7 @@ export function StoreEditor({
                                 {seller.name}（ID：{seller.id}）
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <p id="store-seller-help" className="mt-2 text-[10px] leading-4 text-slate-500">
                     决定本店归属哪个商家，商家主体列表的占用情况以此为准。选择后点击下方保存生效。
@@ -222,14 +224,14 @@ export function StoreEditor({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="中文店铺名称 *">
-                    <input
+                    <AdminInput
                         value={nameZh}
                         onChange={event => setNameZh(event.target.value)}
                         className={inputClass}
                     />
                 </Field>
                 <Field label="中文简介">
-                    <textarea
+                    <AdminTextArea
                         rows={4}
                         value={descriptionZh}
                         onChange={event => setDescriptionZh(event.target.value)}
@@ -237,7 +239,7 @@ export function StoreEditor({
                     />
                 </Field>
                 <Field label="品牌口号">
-                    <input
+                    <AdminInput
                         value={taglineZh}
                         maxLength={160}
                         onChange={event => setTaglineZh(event.target.value)}
@@ -247,7 +249,7 @@ export function StoreEditor({
                 </Field>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => setReviewEnglish(current => !current)}
                     aria-expanded={reviewEnglish}
@@ -255,21 +257,21 @@ export function StoreEditor({
                 >
                     <Languages className="h-3.5 w-3.5" />
                     {reviewEnglish ? '收起英文校对' : '展开英文校对（可选）'}
-                </button>
+                </AdminButton>
                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                     中文是源内容；不填写英文时保存会自动生成。手工英文仅作当前覆盖，中文改动后请重新校对。
                 </p>
                 {reviewEnglish && (
                     <div className="mt-3 grid gap-4 sm:grid-cols-2">
                         <Field label="英文店铺名称（人工覆盖）">
-                            <input
+                            <AdminInput
                                 value={nameEn}
                                 onChange={event => setNameEn(event.target.value)}
                                 className={inputClass}
                             />
                         </Field>
                         <Field label="英文简介（人工覆盖）">
-                            <textarea
+                            <AdminTextArea
                                 rows={4}
                                 value={descriptionEn}
                                 onChange={event => setDescriptionEn(event.target.value)}
@@ -277,7 +279,7 @@ export function StoreEditor({
                             />
                         </Field>
                         <Field label="英文品牌口号（人工覆盖）">
-                            <input
+                            <AdminInput
                                 value={taglineEn}
                                 maxLength={160}
                                 onChange={event => setTaglineEn(event.target.value)}
@@ -304,7 +306,7 @@ export function StoreEditor({
                         ['高亮色', brandHighlightColor, setBrandHighlightColor, '#8B5CF6'],
                     ].map(([label, value, setter, placeholder]) => (
                         <Field key={String(label)} label={String(label)}>
-                            <input
+                            <AdminInput
                                 value={String(value)}
                                 maxLength={7}
                                 onChange={event =>
@@ -328,7 +330,7 @@ export function StoreEditor({
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="法定经营主体（法律文案）">
-                        <input
+                        <AdminInput
                             value={legalEntityName}
                             maxLength={200}
                             onChange={event => setLegalEntityName(event.target.value)}
@@ -337,7 +339,7 @@ export function StoreEditor({
                         />
                     </Field>
                     <Field label="注册国家/地区">
-                        <input
+                        <AdminInput
                             value={legalRegistrationCountry}
                             maxLength={100}
                             onChange={event => setLegalRegistrationCountry(event.target.value)}
@@ -346,7 +348,7 @@ export function StoreEditor({
                         />
                     </Field>
                     <Field label="公司登记号码">
-                        <input
+                        <AdminInput
                             value={legalRegistrationNumber}
                             maxLength={100}
                             onChange={event => setLegalRegistrationNumber(event.target.value)}
@@ -355,7 +357,7 @@ export function StoreEditor({
                         />
                     </Field>
                     <Field label="营业／通讯地址（对外公开）">
-                        <input
+                        <AdminInput
                             value={legalContactAddress}
                             maxLength={500}
                             onChange={event => setLegalContactAddress(event.target.value)}
@@ -364,7 +366,7 @@ export function StoreEditor({
                         />
                     </Field>
                     <Field label="客服邮箱">
-                        <input
+                        <AdminInput
                             type="email"
                             value={supportEmail}
                             maxLength={254}
@@ -375,7 +377,7 @@ export function StoreEditor({
                         />
                     </Field>
                     <Field label="隐私邮箱">
-                        <input
+                        <AdminInput
                             type="email"
                             value={privacyEmail}
                             maxLength={254}
@@ -389,7 +391,7 @@ export function StoreEditor({
             </div>
             <div className="mt-4">
                 <Field label="内部备注（客户不可见）">
-                    <textarea
+                    <AdminTextArea
                         rows={3}
                         value={internalNote}
                         onChange={event => setInternalNote(event.target.value)}
@@ -399,7 +401,7 @@ export function StoreEditor({
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="运行状态">
-                    <select
+                    <AdminSelect
                         aria-label="运行状态"
                         aria-describedby={statusHelpId}
                         value={status}
@@ -413,10 +415,10 @@ export function StoreEditor({
                         <option value="SUSPENDED" disabled={profile.status !== 'SUSPENDED'}>
                             暂停营业（从店铺卡片操作）
                         </option>
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <Field label="显示顺序">
-                    <input
+                    <AdminInput
                         type="number"
                         value={sortOrder}
                         onChange={event => setSortOrder(Number(event.target.value) || 0)}
@@ -494,7 +496,6 @@ export function StoreDeprovisionDialog({
         STORE_DEPROVISION_IMPACT_QUERY,
         {
             variables: { profileId: profile.id },
-            fetchPolicy: 'network-only',
         },
     );
     const [suspendStore, suspendState] = useMutation<{
@@ -598,13 +599,13 @@ export function StoreDeprovisionDialog({
                             ? toUserFacingError(impactQuery.error, '店铺清退影响读取失败')
                             : '店铺清退影响读取失败'}
                     </p>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void impactQuery.refetch()}
                         className="mt-3 font-bold underline"
                     >
                         重新检查
-                    </button>
+                    </AdminButton>
                 </div>
             ) : (
                 <>
@@ -651,7 +652,7 @@ export function StoreDeprovisionDialog({
                     </div>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <Field label="当前管理员密码 *">
-                            <input
+                            <AdminInput
                                 type="password"
                                 autoComplete="current-password"
                                 value={currentPassword}
@@ -661,7 +662,7 @@ export function StoreDeprovisionDialog({
                         </Field>
                         {allowPermanentDeprovision && (
                             <Field label={`彻底清退时输入店铺编码：${impact.channelCode}`}>
-                                <input
+                                <AdminInput
                                     value={confirmCode}
                                     onChange={event => setConfirmCode(event.target.value)}
                                     placeholder={impact.channelCode}
@@ -677,11 +678,16 @@ export function StoreDeprovisionDialog({
                         </p>
                     )}
                     <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                        <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
+                        <AdminButton
+                            type="button"
+                            onClick={onClose}
+                            disabled={busy}
+                            className={secondaryButton}
+                        >
                             关闭
-                        </button>
+                        </AdminButton>
                         {impact.status !== 'SUSPENDED' && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void suspend()}
                                 disabled={
@@ -696,10 +702,10 @@ export function StoreDeprovisionDialog({
                                     <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
                                 )}
                                 先暂停营业
-                            </button>
+                            </AdminButton>
                         )}
                         {allowPermanentDeprovision && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void deprovision()}
                                 disabled={
@@ -716,7 +722,7 @@ export function StoreDeprovisionDialog({
                                     <Trash2 className="h-3.5 w-3.5" />
                                 )}
                                 验证并彻底清退空店铺
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </>
@@ -803,7 +809,7 @@ export function ProvisionStoreDialog({
                         <code className="select-all break-all text-sm font-bold text-amber-950">
                             {result.temporaryPassword}
                         </code>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={async () => {
                                 if (await copyAdminText(result.temporaryPassword, '临时管理员密码')) {
@@ -814,13 +820,13 @@ export function ProvisionStoreDialog({
                         >
                             <Copy className="h-3.5 w-3.5" />
                             {copied ? '已复制' : '复制'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
                 <div className="mt-5 flex justify-end">
-                    <button type="button" onClick={onClose} className={primaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={primaryButton}>
                         我已安全保存
-                    </button>
+                    </AdminButton>
                 </div>
             </Modal>
         );
@@ -832,7 +838,7 @@ export function ProvisionStoreDialog({
         >
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="商家名称 *">
-                    <input
+                    <AdminInput
                         value={draft.name}
                         onChange={event => set('name', event.target.value)}
                         className={inputClass}
@@ -840,7 +846,7 @@ export function ProvisionStoreDialog({
                     />
                 </Field>
                 <Field label="网店编码 *">
-                    <input
+                    <AdminInput
                         value={draft.code}
                         onChange={event => set('code', event.target.value)}
                         className={`${inputClass} font-mono`}
@@ -848,7 +854,7 @@ export function ProvisionStoreDialog({
                     />
                 </Field>
                 <Field label="中文网站名称 *">
-                    <input
+                    <AdminInput
                         value={draft.storefrontNameZh}
                         onChange={event => set('storefrontNameZh', event.target.value)}
                         className={inputClass}
@@ -856,7 +862,7 @@ export function ProvisionStoreDialog({
                 </Field>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => setReviewEnglish(current => !current)}
                     aria-expanded={reviewEnglish}
@@ -864,14 +870,14 @@ export function ProvisionStoreDialog({
                 >
                     <Languages className="h-3.5 w-3.5" />
                     {reviewEnglish ? '收起英文校对' : '展开英文校对（可选）'}
-                </button>
+                </AdminButton>
                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                     默认根据中文网站名称自动生成英文；品牌名称需要固定写法时再手工覆盖。
                 </p>
                 {reviewEnglish && (
                     <div className="mt-3">
                         <Field label="英文网站名称（人工覆盖）">
-                            <input
+                            <AdminInput
                                 value={draft.storefrontNameEn}
                                 onChange={event => set('storefrontNameEn', event.target.value)}
                                 className={inputClass}
@@ -882,7 +888,7 @@ export function ProvisionStoreDialog({
             </div>
             <div className="mt-4">
                 <Field label="选择基础店铺 *">
-                    <select
+                    <AdminSelect
                         value={draft.templateChannelId}
                         onChange={event => set('templateChannelId', event.target.value)}
                         className={inputClass}
@@ -895,7 +901,7 @@ export function ProvisionStoreDialog({
                                 / {template.defaultCurrencyCode}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <p className="mt-2 text-[10px] leading-4 text-slate-500">
                     新店会复制所选店铺的语言、币种与税务默认值，创建本店独立库存和配送配置；支付方式由平台统一管理，本店另行启用。
@@ -913,21 +919,21 @@ export function ProvisionStoreDialog({
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-3">
                     <Field label="名 *">
-                        <input
+                        <AdminInput
                             value={draft.firstName}
                             onChange={event => set('firstName', event.target.value)}
                             className={inputClass}
                         />
                     </Field>
                     <Field label="姓 *">
-                        <input
+                        <AdminInput
                             value={draft.lastName}
                             onChange={event => set('lastName', event.target.value)}
                             className={inputClass}
                         />
                     </Field>
                     <Field label="登录邮箱 *">
-                        <input
+                        <AdminInput
                             type="email"
                             value={draft.emailAddress}
                             onChange={event => set('emailAddress', event.target.value)}
@@ -990,7 +996,7 @@ export function SellerDialog({
             onClose={onClose}
         >
             <Field label="商家主体名称 *">
-                <input
+                <AdminInput
                     value={name}
                     onChange={event => setName(event.target.value)}
                     className={inputClass}

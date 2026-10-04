@@ -129,3 +129,6 @@ describe('coupon category selection', () => {
         }
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

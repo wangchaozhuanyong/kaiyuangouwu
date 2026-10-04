@@ -1,9 +1,11 @@
-import { useApolloClient, useQuery } from '@apollo/client/react';
+import { useApolloClient } from '@apollo/client/react';
 import { Download, ShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { clearAuthSession } from '../../apollo';
 import {
@@ -174,15 +176,15 @@ export function TwoFactorSecurityCard() {
                             </li>
                         ))}
                     </ul>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={downloadRecoveryCodes}
                         className="flex items-center gap-2 text-sm font-semibold text-blue-700"
                     >
                         <Download className="h-4 w-4" /> 下载恢复码
-                    </button>
+                    </AdminButton>
                     <label className="my-5 flex items-start gap-3 text-sm">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={saved}
                             onChange={event => setSaved(event.target.checked)}
@@ -190,14 +192,14 @@ export function TwoFactorSecurityCard() {
                         />
                         我已妥善保存恢复码
                     </label>
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={!saved}
                         onClick={() => void goToLogin()}
                         className={buttonClass}
                     >
                         返回登录
-                    </button>
+                    </AdminButton>
                     <p className="mt-4 text-xs text-slate-500">
                         动态码已用于确认绑定时，请等待验证器生成下一枚动态码再登录。
                     </p>
@@ -221,7 +223,7 @@ export function TwoFactorSecurityCard() {
             <p className="mt-2 text-xs leading-5 text-slate-500">
                 开启后，登录需要密码和验证器动态码。不需要手机号或短信。
             </p>
-            {query.loading && (
+            {query.loading && !query.data && (
                 <p role="status" className="mt-4 text-sm">
                     正在读取安全状态…
                 </p>
@@ -229,9 +231,13 @@ export function TwoFactorSecurityCard() {
             {query.error && (
                 <div role="alert" className="mt-4 text-sm text-red-700">
                     安全状态读取失败。
-                    <button type="button" onClick={() => void query.refetch()} className="ml-2 underline">
+                    <AdminButton
+                        type="button"
+                        onClick={() => void query.refetch()}
+                        className="ml-2 underline"
+                    >
                         重试
-                    </button>
+                    </AdminButton>
                 </div>
             )}
             {status && (
@@ -260,25 +266,29 @@ export function TwoFactorSecurityCard() {
                     )}
                     {!action && status.available && (
                         <div className="mt-5 flex flex-wrap gap-3">
-                            <button type="button" onClick={() => setAction('setup')} className={buttonClass}>
+                            <AdminButton
+                                type="button"
+                                onClick={() => setAction('setup')}
+                                className={buttonClass}
+                            >
                                 {status.enabled ? '更换验证器' : '开启 2FA'}
-                            </button>
+                            </AdminButton>
                             {status.enabled && (
                                 <>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setAction('recovery')}
                                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                                     >
                                         重新生成恢复码
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setAction('disable')}
                                         className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700"
                                     >
                                         关闭 2FA
-                                    </button>
+                                    </AdminButton>
                                 </>
                             )}
                         </div>
@@ -329,7 +339,7 @@ export function TwoFactorSecurityCard() {
                     )}
                     <label className="block text-xs font-semibold">
                         当前登录密码
-                        <input
+                        <AdminInput
                             type="password"
                             autoComplete="current-password"
                             required
@@ -342,7 +352,7 @@ export function TwoFactorSecurityCard() {
                     {(status?.enabled || setup) && (
                         <label className="block text-xs font-semibold">
                             {setup ? '新验证器的 6 位动态码' : '2FA 动态码或一次性恢复码'}
-                            <input
+                            <AdminInput
                                 type="text"
                                 autoComplete="one-time-code"
                                 inputMode={setup ? 'numeric' : 'text'}
@@ -363,7 +373,7 @@ export function TwoFactorSecurityCard() {
                         </p>
                     )}
                     <div className="flex flex-wrap gap-3">
-                        <button type="submit" disabled={busy} className={buttonClass}>
+                        <AdminButton type="submit" disabled={busy} className={buttonClass}>
                             {busy
                                 ? '正在验证…'
                                 : action === 'disable'
@@ -373,15 +383,15 @@ export function TwoFactorSecurityCard() {
                                     : setup
                                       ? '确认绑定'
                                       : '下一步'}
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             disabled={busy}
                             onClick={reset}
                             className="px-3 py-2 text-sm text-slate-500"
                         >
                             取消
-                        </button>
+                        </AdminButton>
                     </div>
                 </form>
             )}

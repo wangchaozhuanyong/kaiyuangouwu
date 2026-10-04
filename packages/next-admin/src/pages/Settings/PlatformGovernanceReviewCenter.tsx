@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Store } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -8,6 +9,7 @@ import {
     REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION,
     type PlatformGovernanceReviewResult,
 } from '../../graphql/management.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ErrorState, Message, SettingsContentSkeleton, primaryButton, secondaryButton } from './settings-ui';
@@ -16,9 +18,7 @@ export function PlatformGovernanceReviewCenter() {
     const requestConfirmation = useConfirmDialog();
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const query = useQuery<PlatformGovernanceReviewResult>(PLATFORM_GOVERNANCE_REVIEW_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<PlatformGovernanceReviewResult>(PLATFORM_GOVERNANCE_REVIEW_QUERY, {});
     const [reviewGovernance, reviewState] = useMutation(REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION);
     const reviewRequest = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
         const reason = decision === 'REJECTED' ? window.prompt('请输入驳回原因')?.trim() : '';
@@ -113,22 +113,22 @@ export function PlatformGovernanceReviewCenter() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             disabled={reviewState.loading}
                                             onClick={() => void reviewRequest(request.id, 'REJECTED')}
                                             className={secondaryButton}
                                         >
                                             驳回
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             disabled={reviewState.loading}
                                             onClick={() => void reviewRequest(request.id, 'APPROVED')}
                                             className={primaryButton}
                                         >
                                             通过
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                             ))}

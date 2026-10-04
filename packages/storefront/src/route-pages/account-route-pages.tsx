@@ -199,9 +199,12 @@ export function CouponsRoutePage() {
                         runtime.customerCouponUsageRecordsQuery.isPending &&
                         runtime.customerCouponUsageRecordsQuery.data === undefined,
                     usageRecordsError: runtime.customerCouponUsageRecordsError,
-                    onRetryCampaigns: () => void runtime.couponCampaignsQuery.refetch(),
-                    onRetryMyCoupons: () => void runtime.customerCouponsQuery.refetch(),
-                    onRetryUsageRecords: () => void runtime.customerCouponUsageRecordsQuery.refetch(),
+                    onRetryCampaigns: () =>
+                        void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
+                    onRetryMyCoupons: () =>
+                        void runtime.customerCouponsQuery.refetch({ cancelRefetch: false }),
+                    onRetryUsageRecords: () =>
+                        void runtime.customerCouponUsageRecordsQuery.refetch({ cancelRefetch: false }),
                     onClaim: runtime.claimCoupon,
                 }}
             >

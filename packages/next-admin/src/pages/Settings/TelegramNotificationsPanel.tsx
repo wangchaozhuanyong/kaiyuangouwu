@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertTriangle,
     Bot,
@@ -20,8 +20,10 @@ import {
     systemStatusDisplayLabel,
 } from '../../../../common/src/system-display-labels';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CUSTOMER_SERVICE_REVIEWS_QUERY } from '../../graphql/telegram-notifications.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import {
     ACKNOWLEDGE_ADMIN_INCIDENT,
@@ -107,7 +109,6 @@ export function TelegramNotificationsPanel() {
         };
     }>(CUSTOMER_SERVICE_REVIEWS_QUERY, {
         variables: { skip: reviewPage * 25, take: 25, allStores: true },
-        fetchPolicy: 'cache-and-network',
     });
     const [statusFilter, setStatusFilter] = useState('');
     const [editedDraft, setDraft] = useState<Draft | null>(null);
@@ -116,7 +117,7 @@ export function TelegramNotificationsPanel() {
     const [incidentDialog, setIncidentDialog] = useState<IncidentDialogDraft | null>(null);
     const query = useQuery<TelegramNotificationsResult>(TELEGRAM_NOTIFICATIONS_QUERY, {
         variables: { skip: 0, take: 25, status: statusFilter || null },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
         pollInterval: 10_000,
     });
@@ -363,7 +364,7 @@ export function TelegramNotificationsPanel() {
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void checkConnection()}
                             disabled={busy || !config.tokenConfigured}
@@ -373,8 +374,8 @@ export function TelegramNotificationsPanel() {
                                 className={'h-3.5 w-3.5 ' + (connectionState.loading ? 'animate-spin' : '')}
                             />
                             检测 Bot
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => void save()}
                             disabled={busy}
@@ -382,7 +383,7 @@ export function TelegramNotificationsPanel() {
                         >
                             <Save className="h-3.5 w-3.5" />
                             保存配置
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
 
@@ -393,7 +394,7 @@ export function TelegramNotificationsPanel() {
                         onChange={enabled => setDraft({ ...draft, enabled })}
                     />
                     <Field label="接收群编号" hint={'来源：' + sourceLabel(config.chatIdSource)}>
-                        <input
+                        <AdminInput
                             value={draft.chatId ?? ''}
                             onChange={event => setDraft({ ...draft, chatId: event.target.value || null })}
                             disabled={config.chatIdSource === 'ENVIRONMENT'}
@@ -403,7 +404,7 @@ export function TelegramNotificationsPanel() {
                         />
                     </Field>
                     <Field label="管理后台地址">
-                        <input
+                        <AdminInput
                             value={draft.adminBaseUrl ?? ''}
                             onChange={event =>
                                 setDraft({ ...draft, adminBaseUrl: event.target.value || null })
@@ -413,14 +414,14 @@ export function TelegramNotificationsPanel() {
                         />
                     </Field>
                     <Field label="时区">
-                        <input
+                        <AdminInput
                             value={draft.timezone}
                             onChange={event => setDraft({ ...draft, timezone: event.target.value })}
                             className={inputClass}
                         />
                     </Field>
                     <Field label="最低通知等级">
-                        <select
+                        <AdminSelect
                             value={draft.minSeverity}
                             onChange={event => setDraft({ ...draft, minSeverity: event.target.value })}
                             className={inputClass}
@@ -430,7 +431,7 @@ export function TelegramNotificationsPanel() {
                                     {displayState(value)}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                     <NumberField
                         label="库存告警阈值"
@@ -548,7 +549,7 @@ export function TelegramNotificationsPanel() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                     {testKinds.map(([kind, label]) => (
-                        <button
+                        <AdminButton
                             key={kind}
                             type="button"
                             onClick={() => void test(kind)}
@@ -557,7 +558,7 @@ export function TelegramNotificationsPanel() {
                         >
                             <Send className="h-3.5 w-3.5" />
                             {label}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             </section>
@@ -567,7 +568,7 @@ export function TelegramNotificationsPanel() {
                     全店客服服务评价
                     <FeatureHelpButton topic="settings.telegram" title="全店客服服务评价" />
                 </h2>
-                {reviewQuery.loading && <p role="status">正在读取评价…</p>}
+                {reviewQuery.loading && !reviewQuery.data && <p role="status">正在读取评价…</p>}
                 {reviewQuery.error && <p role="alert">评价读取失败，请刷新后重试</p>}
                 {!reviewQuery.loading &&
                     !reviewQuery.error &&
@@ -595,18 +596,18 @@ export function TelegramNotificationsPanel() {
                     ))}
                 </div>
                 <div className="mt-3 flex items-center gap-3 text-sm">
-                    <button
+                    <AdminButton
                         className={secondaryButton}
                         disabled={reviewPage === 0 || reviewQuery.loading}
                         onClick={() => setReviewPage(page => page - 1)}
                     >
                         上一页
-                    </button>
+                    </AdminButton>
                     <span>
                         第 {reviewPage + 1} 页，共 {reviewQuery.data?.customerServiceReviews?.totalItems ?? 0}{' '}
                         条
                     </span>
-                    <button
+                    <AdminButton
                         className={secondaryButton}
                         disabled={
                             reviewQuery.loading ||
@@ -616,7 +617,7 @@ export function TelegramNotificationsPanel() {
                         onClick={() => setReviewPage(page => page + 1)}
                     >
                         下一页
-                    </button>
+                    </AdminButton>
                 </div>
             </section>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -663,7 +664,7 @@ export function TelegramNotificationsPanel() {
                 <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                     {routing.departments.map(department => (
                         <Field key={department.code} label={department.nameZh}>
-                            <input
+                            <AdminInput
                                 value={draft.departmentMentions[department.code] ?? ''}
                                 onChange={event =>
                                     setDraft({
@@ -725,7 +726,7 @@ export function TelegramNotificationsPanel() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <select
+                                            <AdminSelect
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 主责部门'
                                                 }
@@ -742,10 +743,10 @@ export function TelegramNotificationsPanel() {
                                                         {department.nameZh}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </AdminSelect>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <select
+                                            <AdminSelect
                                                 multiple
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 协作部门'
@@ -768,10 +769,10 @@ export function TelegramNotificationsPanel() {
                                                             {department.nameZh}
                                                         </option>
                                                     ))}
-                                            </select>
+                                            </AdminSelect>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <select
+                                            <AdminSelect
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 升级部门'
                                                 }
@@ -790,10 +791,10 @@ export function TelegramNotificationsPanel() {
                                                         {department.nameZh}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </AdminSelect>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <input
+                                            <AdminInput
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 需要处理'
                                                 }
@@ -808,7 +809,7 @@ export function TelegramNotificationsPanel() {
                                             />
                                         </td>
                                         <td className="px-4 py-3">
-                                            <input
+                                            <AdminInput
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) +
                                                     ' 处理时限（分钟）'
@@ -831,14 +832,14 @@ export function TelegramNotificationsPanel() {
                                             {route.actionHint}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => resetRouteOverride(route.eventType)}
                                                 disabled={!override}
                                                 className={secondaryButton}
                                             >
                                                 恢复默认
-                                            </button>
+                                            </AdminButton>
                                         </td>
                                     </tr>
                                 );
@@ -899,7 +900,7 @@ export function TelegramNotificationsPanel() {
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {incident.incidentStatus === 'OPEN' && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             className={primaryButton}
                                             disabled={busy}
@@ -912,10 +913,10 @@ export function TelegramNotificationsPanel() {
                                             }
                                         >
                                             确认接手
-                                        </button>
+                                        </AdminButton>
                                     )}
                                     {incident.incidentStatus === 'RECOVERY_PENDING' && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             className={primaryButton}
                                             disabled={busy}
@@ -928,10 +929,10 @@ export function TelegramNotificationsPanel() {
                                             }
                                         >
                                             验证恢复
-                                        </button>
+                                        </AdminButton>
                                     )}
                                     {incident.incidentStatus === 'REVIEW_PENDING' && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             className={primaryButton}
                                             disabled={busy}
@@ -940,7 +941,7 @@ export function TelegramNotificationsPanel() {
                                             }
                                         >
                                             提交复盘
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                             </div>
@@ -960,7 +961,7 @@ export function TelegramNotificationsPanel() {
                                                 </p>
                                             </div>
                                             {action.status === 'OPEN' && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     className={secondaryButton}
                                                     disabled={busy}
@@ -973,7 +974,7 @@ export function TelegramNotificationsPanel() {
                                                     }
                                                 >
                                                     完成整改
-                                                </button>
+                                                </AdminButton>
                                             )}
                                         </div>
                                     ))}
@@ -998,7 +999,7 @@ export function TelegramNotificationsPanel() {
                             共 {deliveries.totalItems} 条，显示最近 25 条
                         </p>
                     </div>
-                    <select
+                    <AdminSelect
                         value={statusFilter}
                         onChange={event => setStatusFilter(event.target.value)}
                         className={inputClass + ' w-40'}
@@ -1009,7 +1010,7 @@ export function TelegramNotificationsPanel() {
                                 {displayState(value)}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[1240px] border-collapse text-left text-xs">
@@ -1070,7 +1071,7 @@ export function TelegramNotificationsPanel() {
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {['DEAD', 'RETRY'].includes(delivery.deliveryStatus) && (
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void retry(delivery.id)}
                                                 disabled={busy}
@@ -1078,7 +1079,7 @@ export function TelegramNotificationsPanel() {
                                             >
                                                 <RotateCcw className="h-3.5 w-3.5" />
                                                 重试
-                                            </button>
+                                            </AdminButton>
                                         )}
                                     </td>
                                 </tr>
@@ -1122,7 +1123,7 @@ export function TelegramNotificationsPanel() {
                                         提交后将写入不可编辑的事故证据链，请使用可核验的业务事实。
                                     </p>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setIncidentDialog(null)}
                                     disabled={busy}
@@ -1130,13 +1131,13 @@ export function TelegramNotificationsPanel() {
                                     className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
                                 >
                                     <X className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                             <div className="space-y-4 p-5">
                                 {incidentDialog.kind === 'REVIEW' ? (
                                     <>
                                         <Field label="根因说明" hint="20–2000 字">
-                                            <textarea
+                                            <AdminTextArea
                                                 value={incidentDialog.rootCause}
                                                 onChange={event =>
                                                     setIncidentDialog({
@@ -1149,7 +1150,7 @@ export function TelegramNotificationsPanel() {
                                             />
                                         </Field>
                                         <Field label="影响范围与结果" hint="20–2000 字">
-                                            <textarea
+                                            <AdminTextArea
                                                 value={incidentDialog.impactSummary}
                                                 onChange={event =>
                                                     setIncidentDialog({
@@ -1162,7 +1163,7 @@ export function TelegramNotificationsPanel() {
                                             />
                                         </Field>
                                         <Field label="首项整改任务" hint="5–500 字">
-                                            <input
+                                            <AdminInput
                                                 value={incidentDialog.actionTitle}
                                                 onChange={event =>
                                                     setIncidentDialog({
@@ -1175,7 +1176,7 @@ export function TelegramNotificationsPanel() {
                                         </Field>
                                         <div className="grid gap-4 sm:grid-cols-2">
                                             <Field label="责任部门">
-                                                <select
+                                                <AdminSelect
                                                     value={incidentDialog.ownerDepartmentCode}
                                                     onChange={event =>
                                                         setIncidentDialog({
@@ -1193,10 +1194,10 @@ export function TelegramNotificationsPanel() {
                                                             {department.nameZh}
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </AdminSelect>
                                             </Field>
                                             <Field label="整改截止时间">
-                                                <input
+                                                <AdminInput
                                                     type="datetime-local"
                                                     value={incidentDialog.dueAt}
                                                     onChange={event =>
@@ -1212,7 +1213,7 @@ export function TelegramNotificationsPanel() {
                                     </>
                                 ) : (
                                     <Field label="处理说明" hint="至少 10 字">
-                                        <textarea
+                                        <AdminTextArea
                                             value={incidentDialog.note}
                                             onChange={event =>
                                                 setIncidentDialog({
@@ -1227,21 +1228,21 @@ export function TelegramNotificationsPanel() {
                                 )}
                             </div>
                             <div className="flex justify-end gap-2 border-t border-slate-100 p-5">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setIncidentDialog(null)}
                                     disabled={busy}
                                     className={secondaryButton}
                                 >
                                     取消
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="submit"
                                     disabled={busy || !incidentDialogValid(incidentDialog)}
                                     className={primaryButton}
                                 >
                                     {busy ? '正在保存…' : '确认并留存证据'}
-                                </button>
+                                </AdminButton>
                             </div>
                         </form>
                     </AccessibleDialogSurface>
@@ -1331,7 +1332,11 @@ function Toggle({
     return (
         <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700">
             <span>{label}</span>
-            <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+            <AdminInput
+                type="checkbox"
+                checked={checked}
+                onChange={event => onChange(event.target.checked)}
+            />
         </label>
     );
 }
@@ -1349,7 +1354,7 @@ function NumberField({
 }) {
     return (
         <Field label={label}>
-            <input
+            <AdminInput
                 type="number"
                 min={minimum}
                 value={value}
@@ -1437,10 +1442,10 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertTriangle className="mx-auto h-7 w-7 text-rose-600" />
             <p className="mt-3 text-sm font-bold text-rose-900">加载失败</p>
             <p className="mt-1 text-xs text-rose-700">{message}</p>
-            <button type="button" onClick={onRetry} className={secondaryButton + ' mt-4'}>
+            <AdminButton type="button" onClick={onRetry} className={secondaryButton + ' mt-4'}>
                 <RefreshCw className="h-3.5 w-3.5" />
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }

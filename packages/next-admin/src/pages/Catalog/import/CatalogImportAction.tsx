@@ -1,5 +1,6 @@
 import { Upload } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
+import { AdminButton } from '../../../components/AdminControls';
 
 import { useAdminPermissions } from '../../../hooks/use-admin-permissions';
 
@@ -17,14 +18,14 @@ export function CatalogImportAction() {
     if (!canRead || !canCreate) return null;
     return (
         <>
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => setOpen(true)}
                 className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3.5 py-2 text-xs font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
             >
                 <Upload className="h-4 w-4" />
                 批量导入
-            </button>
+            </AdminButton>
             {open && (
                 <Suspense
                     fallback={

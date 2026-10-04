@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     Check,
@@ -18,6 +18,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { ADMIN_API_URL } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
@@ -28,6 +29,7 @@ import {
     TRANSITION_AFTER_SALES_REQUEST,
     UPDATE_AFTER_SALES_REPLACEMENT,
 } from '../../graphql/sales.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -231,7 +233,7 @@ export function AfterSalesModule() {
                 ...(searchTerm.trim() ? { search: searchTerm.trim() } : {}),
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [transitionRequest, { loading: transitioning }] = useMutation<{
@@ -503,15 +505,16 @@ export function AfterSalesModule() {
                             审核买家售后申请，核对真实退款记录后完成归档
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => refetch()}
                         disabled={loading}
                         className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 ${loading && !data ? 'animate-spin' : ''}`} />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
 
@@ -521,7 +524,7 @@ export function AfterSalesModule() {
             >
                 <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
-                        <button
+                        <AdminButton
                             key={tab.id}
                             type="button"
                             aria-current={activeTab === tab.id ? 'page' : undefined}
@@ -533,7 +536,7 @@ export function AfterSalesModule() {
                             className={`border-b-2 py-3.5 text-xs font-semibold transition ${activeTab === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
                         >
                             {tab.label}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             </nav>
@@ -558,20 +561,20 @@ export function AfterSalesModule() {
                                 <AlertCircle className="h-4 w-4" />
                                 {toUserFacingError(error, '售后工单加载失败，请稍后重试')}
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => refetch()}
                                 className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
                             <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <AdminInput
                                     value={searchTerm}
                                     onChange={event => {
                                         setSearchTerm(event.target.value);
@@ -582,7 +585,7 @@ export function AfterSalesModule() {
                                     className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
@@ -592,7 +595,7 @@ export function AfterSalesModule() {
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                             <span className="text-xs text-slate-500">
@@ -667,17 +670,17 @@ export function AfterSalesModule() {
                                                     className="group h-[52px] hover:bg-slate-50/80"
                                                 >
                                                     <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() => openRequest(request)}
                                                             className="block max-w-40 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
                                                             title={request.code}
                                                         >
                                                             {request.code}
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                     <td className="h-[52px] max-w-44 px-3 py-0">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() =>
                                                                 navigate(
@@ -693,7 +696,7 @@ export function AfterSalesModule() {
                                                             title={request.order.code}
                                                         >
                                                             {request.order.code}
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                     <td className="h-[52px] max-w-36 px-3 py-0">
                                                         <span
@@ -749,13 +752,13 @@ export function AfterSalesModule() {
                                                         {formatDateTime(request.createdAt)}
                                                     </td>
                                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() => openRequest(request)}
                                                             className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
                                                         >
                                                             审核详情
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -774,7 +777,7 @@ export function AfterSalesModule() {
                                     onPageSizeChange={setPageSize}
                                     disabled={loading}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.max(0, current - 1))}
                                     disabled={loading || page === 0}
@@ -782,8 +785,8 @@ export function AfterSalesModule() {
                                     aria-label="上一页"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
                                     disabled={loading || page >= totalPages - 1}
@@ -791,7 +794,7 @@ export function AfterSalesModule() {
                                     aria-label="下一页"
                                 >
                                     <ChevronRight className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </section>
@@ -830,7 +833,7 @@ export function AfterSalesModule() {
                                     申请于 {formatDateTime(selectedRequest.createdAt)}
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
                                 disabled={workflowBusy}
@@ -838,13 +841,13 @@ export function AfterSalesModule() {
                                 aria-label="关闭"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </header>
                         <div className="flex-1 space-y-5 overflow-y-auto p-6">
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div className="text-[10px] font-semibold text-slate-400">关联订单</div>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             navigate(`/sales/orders/${selectedRequest.order.id}`, {
@@ -854,7 +857,7 @@ export function AfterSalesModule() {
                                         className="mt-2 font-mono text-sm font-semibold text-blue-700 hover:underline"
                                     >
                                         {selectedRequest.order.code}
-                                    </button>
+                                    </AdminButton>
                                     <div className="mt-1 text-[11px] text-slate-500">
                                         订单状态 {getOrderStateLabel(selectedRequest.order.state)}
                                     </div>
@@ -900,7 +903,8 @@ export function AfterSalesModule() {
                                                     title="买家图片凭证"
                                                 />
                                             </h4>
-                                            <button
+                                            <AdminButton
+                                                refreshPage
                                                 type="button"
                                                 disabled={loading}
                                                 className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50"
@@ -918,7 +922,7 @@ export function AfterSalesModule() {
                                                 }}
                                             >
                                                 刷新图片
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                         <div className="grid max-w-md grid-cols-3 gap-3">
                                             {selectedRequest.evidence.map((image, index) => {
@@ -1045,14 +1049,14 @@ export function AfterSalesModule() {
                                             onChange={setWorkflowNote}
                                             placeholder="填写仓库签收结果、包裹外观和签收人"
                                         >
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void handleReceiveReturn()}
                                                 disabled={workflowBusy}
                                                 className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                             >
                                                 确认退货已签收
-                                            </button>
+                                            </AdminButton>
                                         </WorkflowTextArea>
                                     )}
                                     {selectedRequest.returnStatus === 'RECEIVED' && (
@@ -1069,7 +1073,7 @@ export function AfterSalesModule() {
                                                         </div>
                                                         <label className="text-[11px] text-slate-600">
                                                             合格入库
-                                                            <input
+                                                            <AdminInput
                                                                 type="number"
                                                                 min={0}
                                                                 max={item.quantity}
@@ -1090,7 +1094,7 @@ export function AfterSalesModule() {
                                                         </label>
                                                         <label className="text-[11px] text-slate-600">
                                                             拒收/报损
-                                                            <input
+                                                            <AdminInput
                                                                 type="number"
                                                                 min={0}
                                                                 max={item.quantity}
@@ -1113,7 +1117,7 @@ export function AfterSalesModule() {
                                                             <>
                                                                 <label className="text-[11px] text-slate-600">
                                                                     入库仓库
-                                                                    <select
+                                                                    <AdminSelect
                                                                         value={draft?.stockLocationId ?? ''}
                                                                         onChange={event =>
                                                                             setInspection(current => ({
@@ -1139,11 +1143,11 @@ export function AfterSalesModule() {
                                                                                 {location.name}
                                                                             </option>
                                                                         ))}
-                                                                    </select>
+                                                                    </AdminSelect>
                                                                 </label>
                                                                 <label className="text-[11px] text-slate-600">
                                                                     退货批次号
-                                                                    <input
+                                                                    <AdminInput
                                                                         value={draft?.lotCode ?? ''}
                                                                         onChange={event =>
                                                                             setInspection(current => ({
@@ -1168,14 +1172,14 @@ export function AfterSalesModule() {
                                                 onChange={setWorkflowNote}
                                                 placeholder="填写质检结论和拒收/报损依据"
                                             >
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => void handleInspectReturn()}
                                                     disabled={workflowBusy}
                                                     className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                                 >
                                                     提交质检并审计入库
-                                                </button>
+                                                </AdminButton>
                                             </WorkflowTextArea>
                                         </div>
                                     )}
@@ -1190,14 +1194,14 @@ export function AfterSalesModule() {
                                                 onTrackingChange={setWorkflowTrackingCode}
                                                 onNoteChange={setWorkflowNote}
                                             >
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => void handleReplacement('SHIPPED')}
                                                     disabled={workflowBusy}
                                                     className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                                 >
                                                     登记换货/补发发出
-                                                </button>
+                                                </AdminButton>
                                             </ReplacementFields>
                                         )}
                                     {['SHIPPED', 'EXCEPTION'].includes(selectedRequest.replacementStatus) && (
@@ -1208,33 +1212,33 @@ export function AfterSalesModule() {
                                                 placeholder="填写配送进展、异常原因或送达说明"
                                             >
                                                 {selectedRequest.replacementStatus === 'SHIPPED' && (
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => void handleReplacement('EXCEPTION')}
                                                         disabled={workflowBusy}
                                                         className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50"
                                                     >
                                                         登记配送异常
-                                                    </button>
+                                                    </AdminButton>
                                                 )}
                                             </WorkflowTextArea>
                                             <label className="block text-[11px] text-slate-600">
                                                 送达凭证引用
-                                                <input
+                                                <AdminInput
                                                     value={workflowProof}
                                                     onChange={event => setWorkflowProof(event.target.value)}
                                                     placeholder="签收单、客服确认号或承运商凭证"
                                                     className="mt-1 w-full rounded-md border border-slate-300 p-2"
                                                 />
                                             </label>
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void handleReplacement('DELIVERED')}
                                                 disabled={workflowBusy}
                                                 className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                             >
                                                 确认换货/补发已送达
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     )}
                                 </section>
@@ -1249,7 +1253,7 @@ export function AfterSalesModule() {
                                     <label className="mt-3 block text-xs font-semibold text-slate-700">
                                         处理说明 *
                                     </label>
-                                    <textarea
+                                    <AdminTextArea
                                         value={resolution}
                                         onChange={event => setResolution(event.target.value)}
                                         rows={4}
@@ -1264,7 +1268,7 @@ export function AfterSalesModule() {
                                                     <label className="mt-3 block text-xs font-semibold text-slate-700">
                                                         退货地址与寄回说明 *
                                                     </label>
-                                                    <textarea
+                                                    <AdminTextArea
                                                         value={returnInstructions}
                                                         onChange={event =>
                                                             setReturnInstructions(event.target.value)
@@ -1277,7 +1281,7 @@ export function AfterSalesModule() {
                                             <label className="mt-3 block text-xs font-semibold text-slate-700">
                                                 通过金额 *
                                             </label>
-                                            <input
+                                            <AdminInput
                                                 value={approvedAmount}
                                                 onChange={event => setApprovedAmount(event.target.value)}
                                                 inputMode="decimal"
@@ -1294,7 +1298,7 @@ export function AfterSalesModule() {
                                                 <label className="mt-3 block text-xs font-semibold text-slate-700">
                                                     关联已成功退款 *
                                                 </label>
-                                                <select
+                                                <AdminSelect
                                                     value={refundId}
                                                     onChange={event => setRefundId(event.target.value)}
                                                     className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm"
@@ -1309,11 +1313,11 @@ export function AfterSalesModule() {
                                                             )}
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </AdminSelect>
                                                 {settledRefunds.length === 0 && (
                                                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                                                         <span>订单下还没有已成功的退款记录。</span>
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() =>
                                                                 navigate(
@@ -1323,7 +1327,7 @@ export function AfterSalesModule() {
                                                             className="font-semibold text-blue-700 hover:underline"
                                                         >
                                                             前往订单执行退款
-                                                        </button>
+                                                        </AdminButton>
                                                     </div>
                                                 )}
                                             </>
@@ -1383,18 +1387,18 @@ export function AfterSalesModule() {
                             )}
                         </div>
                         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
                                 disabled={workflowBusy}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
                                 关闭
-                            </button>
+                            </AdminButton>
                             <div className="flex gap-2">
                                 {selectedRequest.state === 'PENDING' && (
                                     <>
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => handleTransition('REJECTED')}
                                             disabled={workflowBusy}
@@ -1402,8 +1406,8 @@ export function AfterSalesModule() {
                                         >
                                             <XCircle className="h-3.5 w-3.5" />
                                             驳回申请
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => handleTransition('APPROVED')}
                                             disabled={workflowBusy}
@@ -1415,11 +1419,11 @@ export function AfterSalesModule() {
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                             )}
                                             审核通过
-                                        </button>
+                                        </AdminButton>
                                     </>
                                 )}
                                 {selectedRequest.state === 'APPROVED' && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => handleTransition('COMPLETED')}
                                         disabled={workflowBusy || !completionReady}
@@ -1433,7 +1437,7 @@ export function AfterSalesModule() {
                                         {afterSalesRequiresReplacement(selectedRequest.type)
                                             ? '确认送达并完成'
                                             : '确认退款并完成'}
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                         </footer>
@@ -1457,7 +1461,7 @@ function WorkflowTextArea({
 }) {
     return (
         <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
-            <textarea
+            <AdminTextArea
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 rows={3}
@@ -1490,7 +1494,7 @@ function ReplacementFields({
         <div className="grid gap-2 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-2">
             <label className="text-[11px] text-slate-600">
                 承运商
-                <input
+                <AdminInput
                     value={carrier}
                     onChange={event => onCarrierChange(event.target.value)}
                     className="mt-1 w-full rounded-md border border-slate-300 p-2"
@@ -1498,7 +1502,7 @@ function ReplacementFields({
             </label>
             <label className="text-[11px] text-slate-600">
                 运单号
-                <input
+                <AdminInput
                     value={trackingCode}
                     onChange={event => onTrackingChange(event.target.value)}
                     className="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono"
@@ -1506,7 +1510,7 @@ function ReplacementFields({
             </label>
             <label className="text-[11px] text-slate-600 sm:col-span-2">
                 发货说明
-                <textarea
+                <AdminTextArea
                     value={note}
                     onChange={event => onNoteChange(event.target.value)}
                     rows={3}

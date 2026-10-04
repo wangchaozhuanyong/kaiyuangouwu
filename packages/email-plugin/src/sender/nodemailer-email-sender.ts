@@ -4,7 +4,7 @@ import { Logger } from '@vendure/core';
 import fs from 'fs-extra';
 import { createTransport } from 'nodemailer';
 import { default as Mail } from 'nodemailer/lib/mailer';
-import { LogLevel } from 'nodemailer/lib/shared';
+import { type LoggerLevel as LogLevel } from 'nodemailer/lib/shared';
 import path from 'path';
 import { Stream } from 'stream';
 import { format } from 'util';

@@ -47,16 +47,17 @@
         gap: 3px;
     }
     .desktop-coupon-value strong {
-        font-size: 29px;
-        line-height: 1;
+        font-size: var(--type-coupon-size);
+        line-height: var(--type-coupon-leading);
         font-variant-numeric: tabular-nums;
     }
     .desktop-coupon-value small {
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-coupon-value > span {
-        font-size: 11px;
-        line-height: 1.5;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         overflow-wrap: anywhere;
     }
     .desktop-coupon-info {
@@ -71,14 +72,14 @@
     }
     .desktop-coupon-info > strong {
         grid-column: 1 / -1;
-        font-size: 14px;
-        line-height: 1.5;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
         overflow-wrap: anywhere;
     }
     .desktop-coupon-info > :is(span, small) {
         color: var(--muted);
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         overflow-wrap: anywhere;
     }
     .desktop-coupon-info > span {
@@ -111,8 +112,8 @@
         color: var(--text);
         box-shadow: none;
         font: inherit;
-        font-size: 12px;
-        line-height: 1.4;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
     .desktop-coupon-ticket .desktop-coupon-action > button:not(:disabled) {
         color: var(--accent-ink);

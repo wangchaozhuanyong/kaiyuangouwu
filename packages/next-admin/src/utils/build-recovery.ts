@@ -1,3 +1,6 @@
+import { hasAdminDrafts, requestDiscardAdminDrafts } from '../hooks/use-unsaved-changes-warning';
+import { pendingAdminWrites } from '../runtime/admin-resource-events';
+import { publishAdminFeedback } from './admin-feedback';
 const BUILD_RECOVERY_STORAGE_KEY = 'vendure-admin-build-recovery-at';
 const BUILD_RECOVERY_COOLDOWN_MS = 60_000;
 const BUILD_RECOVERY_QUERY_KEY = '__vendure_admin_build';
@@ -54,15 +57,25 @@ export function buildRecoveryUrl(currentUrl: string, recoveryAt: number) {
     return url.toString();
 }
 
-export function loadLatestBuild(environment: BuildRecoveryEnvironment = browserEnvironment()) {
+export function loadLatestBuild(environment?: BuildRecoveryEnvironment) {
+    if (!environment && pendingAdminWrites()) {
+        publishAdminFeedback({
+            kind: 'info',
+            title: '操作正在提交',
+            message: '等待当前操作返回后，再加载最新版本。',
+        });
+        return false;
+    }
+    if (!environment && !requestDiscardAdminDrafts()) return false;
+    environment ??= browserEnvironment();
     environment.replace(buildRecoveryUrl(environment.currentUrl(), environment.now()));
+    return true;
 }
 
-export function tryRecoverFromBuildError(
-    error: unknown,
-    environment: BuildRecoveryEnvironment = browserEnvironment(),
-) {
+export function tryRecoverFromBuildError(error: unknown, environment?: BuildRecoveryEnvironment) {
     if (!isRecoverableBuildError(error)) return false;
+    if (!environment && (hasAdminDrafts() || pendingAdminWrites())) return false;
+    environment ??= browserEnvironment();
 
     const now = environment.now();
     try {

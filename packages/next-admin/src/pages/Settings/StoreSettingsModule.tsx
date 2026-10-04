@@ -1,4 +1,5 @@
-import { useQuery } from '@apollo/client/react';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import {
     ADMINISTRATOR_ACCESS_SCOPE_QUERY,
     type AdministratorAccessScopeResult,
@@ -12,13 +13,11 @@ import { ErrorState, SettingsContentSkeleton } from './settings-ui';
 
 export function StoreSettingsModule() {
     const { hasAnyPermission } = useAdminPermissions();
-    const accessQuery = useQuery<AdministratorAccessScopeResult>(ADMINISTRATOR_ACCESS_SCOPE_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const accessQuery = useQuery<AdministratorAccessScopeResult>(ADMINISTRATOR_ACCESS_SCOPE_QUERY, {});
     if (!accessQuery.data && !accessQuery.error) {
         return <SettingsContentSkeleton label="正在识别管理账号范围" sections={2} />;
     }
-    if (accessQuery.error || !accessQuery.data) {
+    if ((accessQuery.error && !accessQuery.data) || !accessQuery.data) {
         return (
             <ErrorState
                 message={toUserFacingError(accessQuery.error, '无法识别当前管理账号范围')}

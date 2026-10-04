@@ -151,14 +151,16 @@ const mailboxCrudPermissions = [
 ] as const;
 
 function mailboxMachineContext(permissions: readonly string[]) {
+    const permissionMock = vi.fn((requested: Permission[]) =>
+        requested.some(permission => permissions.includes(permission)),
+    );
     return {
         ...merchantContext,
         session: { authenticationStrategy: API_KEY_AUTH_STRATEGY_NAME },
         channel: { code: '__default_channel__' },
-        userHasPermissions: vi.fn((requested: Permission[]) =>
-            requested.some(permission => permissions.includes(permission)),
-        ),
-    };
+        userHasPermissions: permissionMock,
+        permissionMock,
+    } as RequestContext & { permissionMock: typeof permissionMock };
 }
 
 describe('MerchantCatalogAccessService', () => {
@@ -184,7 +186,7 @@ describe('MerchantCatalogAccessService', () => {
                     extensions: { code: 'USER_INPUT_ERROR' },
                 });
             }
-            expect(ctx.userHasPermissions).toHaveBeenCalledWith([requiredPermission]);
+            expect(ctx.permissionMock).toHaveBeenCalledWith([requiredPermission]);
             expect(connection.getRepository).not.toHaveBeenCalled();
         },
     );
@@ -251,10 +253,11 @@ describe('MerchantCatalogAccessService', () => {
         ['Shop API', { apiType: 'shop' }],
         ['non-default channel', { channel: { code: 'store-a' } }],
     ])('does not grant a mailbox machine exception with %s', (_label, override) => {
-        const machine = mailboxMachineContext(['ReadIcloudRelay']);
-        const ctx = { ...machine, ...override } as RequestContext;
+        const ctx = { ...mailboxMachineContext(['ReadIcloudRelay']), ...override } as ReturnType<
+            typeof mailboxMachineContext
+        >;
         expect(hasMachineMailboxAccess(ctx, 'Query.icloudPrimaryAccounts')).toBe(false);
-        expect(machine.userHasPermissions).not.toHaveBeenCalled();
+        expect(ctx.permissionMock).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -266,7 +269,7 @@ describe('MerchantCatalogAccessService', () => {
     ])('does not match an unrelated root field %s', rootField => {
         const ctx = mailboxMachineContext(mailboxCrudPermissions);
         expect(hasMachineMailboxAccess(ctx, rootField)).toBe(false);
-        expect(ctx.userHasPermissions).not.toHaveBeenCalled();
+        expect(ctx.permissionMock).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -293,7 +296,6 @@ describe('MerchantCatalogAccessService', () => {
                         channelPermissions: [
                             {
                                 id: permissionsChannelId,
-                                code: permissionsChannelId,
                                 token: 'fixture-channel-token',
                                 permissions: [...permissions] as Permission[],
                             },

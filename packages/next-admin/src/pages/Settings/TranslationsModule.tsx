@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -14,6 +14,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { AdminButton, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
 import {
@@ -25,6 +26,7 @@ import {
     type ContentTranslationStateRecord,
 } from '../../graphql/plugins.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { getTranslationStatusLabel } from '../../utils/status-labels';
@@ -80,7 +82,7 @@ export function TranslationsModule() {
                 entityType: entityType === 'ALL' ? undefined : entityType,
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     // Keep the search/filter controls mounted while a different page is loading.
@@ -110,15 +112,15 @@ export function TranslationsModule() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setTestOpen(true)}
                             className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
                         >
                             <FlaskConical className="h-3.5 w-3.5" />
                             测试翻译
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setBackfillOpen(true)}
                             disabled={!audit?.configured}
@@ -126,16 +128,19 @@ export function TranslationsModule() {
                         >
                             <WandSparkles className="h-3.5 w-3.5" />
                             补齐历史翻译
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading}
                             className="rounded-lg border border-slate-300 p-2 text-slate-600"
                             aria-label="刷新"
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
-                        </button>
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -155,7 +160,7 @@ export function TranslationsModule() {
                 )}
                 {query.loading && !audit ? (
                     <LoadingState />
-                ) : query.error ? (
+                ) : query.error && !query.data ? (
                     <ErrorState
                         message={toUserFacingError(query.error, '翻译任务数据读取失败')}
                         onRetry={() => void query.refetch()}
@@ -229,7 +234,7 @@ export function TranslationsModule() {
                                                 className={`${inputClass} pl-8`}
                                             />
                                         </div>
-                                        <select
+                                        <AdminSelect
                                             value={entityType}
                                             onChange={event => {
                                                 setEntityType(event.target.value);
@@ -244,8 +249,8 @@ export function TranslationsModule() {
                                                     {label}
                                                 </option>
                                             ))}
-                                        </select>
-                                        <select
+                                        </AdminSelect>
+                                        <AdminSelect
                                             value={status}
                                             onChange={event => {
                                                 setStatus(event.target.value);
@@ -261,7 +266,7 @@ export function TranslationsModule() {
                                                         : getTranslationStatusLabel(value)}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </AdminSelect>
                                     </div>
                                 </div>
                                 <div
@@ -317,7 +322,7 @@ export function TranslationsModule() {
                                         <tbody className="divide-y divide-slate-100">
                                             {!query.loading &&
                                                 states.map(item => <AuditRow key={item.id} item={item} />)}
-                                            {query.loading && (
+                                            {query.loading && !query.data && (
                                                 <tr>
                                                     <td
                                                         colSpan={11}
@@ -387,9 +392,7 @@ export function TranslationsModule() {
 }
 
 function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
-    const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION, {
-        refetchQueries: [CONTENT_TRANSLATION_AUDIT_QUERY],
-    });
+    const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION);
     return (
         <tr className="group h-[52px] hover:bg-slate-50">
             <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-800 group-hover:bg-slate-50">
@@ -442,14 +445,14 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
             </td>
             <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                 {!item.locked && ['PENDING', 'FAILED', 'NOTIFY_PENDING'].includes(item.status) && (
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={retryState.loading}
                         className="mr-3 text-blue-600 disabled:opacity-50"
                         onClick={() => void retry({ variables: { ids: [item.id] } }).catch(() => undefined)}
                     >
                         {retryState.loading ? '排队中' : '重试'}
-                    </button>
+                    </AdminButton>
                 )}
                 {retryState.error && (
                     <span role="alert" className="mr-2 text-rose-600">
@@ -535,7 +538,7 @@ function BackfillDialog({
             onClose={onClose}
         >
             <Field label="内容类型">
-                <select
+                <AdminSelect
                     value={entityType}
                     onChange={event => {
                         setEntityType(event.target.value);
@@ -550,7 +553,7 @@ function BackfillDialog({
                             {label}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
             </Field>
             {!configured && (
                 <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
@@ -584,16 +587,16 @@ function BackfillDialog({
                 </div>
             )}
             <div className="mt-5 flex justify-end gap-2">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     disabled={state.loading}
                     className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
                 >
                     {result && !result.hasMore ? '关闭' : '取消'}
-                </button>
+                </AdminButton>
                 {(!result || result.hasMore) && (
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void run()}
                         disabled={state.loading || !configured}
@@ -605,7 +608,7 @@ function BackfillDialog({
                             <Play className="h-3.5 w-3.5" />
                         )}
                         {result ? '继续下一批' : '开始第一批'}
-                    </button>
+                    </AdminButton>
                 )}
             </div>
         </Modal>
@@ -653,18 +656,18 @@ function TranslationTestDialog({
             onClose={onClose}
         >
             <div className="flex justify-end">
-                <select
+                <AdminSelect
                     value={format}
                     onChange={event => setFormat(event.target.value as 'TEXT' | 'HTML')}
                     className={inputClass}
                 >
                     <option value="TEXT">纯文本</option>
                     <option value="HTML">HTML</option>
-                </select>
+                </AdminSelect>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="中文源内容">
-                    <textarea
+                    <AdminTextArea
                         rows={8}
                         value={source}
                         onChange={event => setSource(event.target.value)}
@@ -673,7 +676,7 @@ function TranslationTestDialog({
                     />
                 </Field>
                 <Field label="English 结果">
-                    <textarea
+                    <AdminTextArea
                         rows={8}
                         value={translated}
                         readOnly
@@ -684,14 +687,14 @@ function TranslationTestDialog({
             </div>
             {!configured && <p className="mt-3 text-xs text-amber-700">服务未配置，无法测试。</p>}
             <div className="mt-5 flex justify-end gap-2">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
                 >
                     关闭
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => void run()}
                     disabled={state.loading || !configured || !source.trim()}
@@ -703,7 +706,7 @@ function TranslationTestDialog({
                         <FlaskConical className="h-3.5 w-3.5" />
                     )}
                     执行测试
-                </button>
+                </AdminButton>
             </div>
         </Modal>
     );
@@ -804,9 +807,14 @@ function Modal({
                             <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
                         )}
                     </div>
-                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="p-1 text-slate-400"
+                        aria-label="关闭"
+                    >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </div>
@@ -835,13 +843,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">翻译审计加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -861,9 +869,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

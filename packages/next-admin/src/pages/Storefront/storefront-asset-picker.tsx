@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { ChevronLeft, ChevronRight, Image as ImageIcon, Search, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -45,7 +47,6 @@ export function AssetPicker({
             },
         },
         skip: !open || !canReadAssets,
-        fetchPolicy: 'cache-first',
     });
     const items = assets.data?.assets.items ?? [];
     const totalItems = assets.data?.assets.totalItems ?? 0;
@@ -82,7 +83,7 @@ export function AssetPicker({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                         <ImageAssetUploadButton ariaLabel={`上传${label}`} onUploaded={selectUploadedImage} />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setOpen(true)}
                             disabled={!canReadAssets}
@@ -90,15 +91,15 @@ export function AssetPicker({
                             className="rounded-lg bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
                         >
                             从素材库选择
-                        </button>
+                        </AdminButton>
                         {preview && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onChange(null)}
                                 className="rounded-lg px-2 py-1.5 text-[11px] text-rose-600 hover:bg-rose-50"
                             >
                                 清除
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -131,19 +132,19 @@ export function AssetPicker({
                                     ariaLabel={`上传${label}`}
                                     onUploaded={selectUploadedImage}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setOpen(false)}
                                     className="p-2 text-slate-400"
                                     aria-label="关闭"
                                 >
                                     <X className="h-5 w-5" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                         <div className="relative mt-4">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
+                            <AdminInput
                                 value={search}
                                 onChange={event => {
                                     setSearch(event.target.value);
@@ -163,7 +164,7 @@ export function AssetPicker({
                                       />
                                   ))
                                 : items.map(asset => (
-                                      <button
+                                      <AdminButton
                                           key={asset.id}
                                           type="button"
                                           onClick={() => {
@@ -180,7 +181,7 @@ export function AssetPicker({
                                           <div className="truncate p-2 text-[11px] font-bold text-slate-700">
                                               {asset.name}
                                           </div>
-                                      </button>
+                                      </AdminButton>
                                   ))}
                             {!assets.loading && !items.length && (
                                 <div className="col-span-full py-12 text-center text-xs text-slate-400">
@@ -200,7 +201,7 @@ export function AssetPicker({
                                     onPageSizeChange={setPageSize}
                                     disabled={assets.loading}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.max(0, current - 1))}
                                     disabled={page === 0 || assets.loading}
@@ -208,8 +209,8 @@ export function AssetPicker({
                                     aria-label="上一页"
                                 >
                                     <ChevronLeft className="h-3.5 w-3.5" />
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
                                     disabled={page >= totalPages - 1 || assets.loading}
@@ -217,7 +218,7 @@ export function AssetPicker({
                                     aria-label="下一页"
                                 >
                                     <ChevronRight className="h-3.5 w-3.5" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </AccessibleDialogSurface>

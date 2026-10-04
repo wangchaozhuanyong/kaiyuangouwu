@@ -138,9 +138,9 @@
 
 .not-found-code {
     color: var(--accent-ink);
-    font-size: 76px;
-    font-weight: 700;
-    line-height: 0.9;
+    font-size: var(--type-error-code-size);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--type-error-code-leading);
     font-variant-numeric: tabular-nums;
 }
 
@@ -163,8 +163,8 @@
 
 .not-found-content h1 {
     margin: 24px 0 0;
-    font-size: 23px;
-    line-height: var(--line-height-tight);
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
     text-wrap: balance;
 }
 
@@ -194,7 +194,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     transition: background 180ms ease;
 }
 
@@ -243,9 +243,9 @@
     display: none;
     margin: 0 0 12px;
     color: var(--text);
-    font-size: 13px;
-    font-weight: 650;
-    line-height: var(--line-height-tight);
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-section-leading);
 }
 
 .legal-document-navigation nav {
@@ -266,7 +266,8 @@
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     text-align: left;
     cursor: pointer;
     transition:
@@ -288,7 +289,7 @@
 .legal-document-navigation button.is-active:hover {
     background: transparent;
     color: var(--accent-ink);
-    font-weight: 650;
+    font-weight: var(--font-weight-semibold);
 }
 
 .legal-document-navigation button.is-active > span:first-child {
@@ -326,8 +327,8 @@
 
 .legal-draft-intro h1 {
     margin: 14px 0 0;
-    font-size: 28px;
-    line-height: var(--line-height-tight);
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
     text-wrap: balance;
 }
 
@@ -359,14 +360,15 @@
 .legal-identity-card dt {
     margin-bottom: 5px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .legal-identity-card dd {
     margin: 0;
     overflow-wrap: anywhere;
     color: var(--text);
-    font-weight: 650;
+    font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-relaxed);
 }
 
@@ -386,7 +388,8 @@
 
 .legal-draft-content > footer span {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .legal-managed-body {
@@ -401,8 +404,8 @@
     margin-top: 28px;
     padding-top: 16px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: var(--line-height-relaxed);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .legal-managed-empty {
@@ -450,8 +453,9 @@
     }
 
     .legal-identity-card dd {
-        font-size: 13px;
-        font-weight: 500;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
+        font-weight: var(--font-weight-medium);
     }
 }
 

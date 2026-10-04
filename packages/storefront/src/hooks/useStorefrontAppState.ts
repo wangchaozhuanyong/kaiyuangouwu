@@ -11,6 +11,7 @@ import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    refreshStorefrontQueries,
     storefrontQueryKeys,
 } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
@@ -831,7 +832,13 @@ export function useStorefrontAppState() {
         customer,
         customerLoadState,
         customerLoadError,
-        retryAccount: () => customerQuery.refetch(),
+        retryAccount: () => customerQuery.refetch({ cancelRefetch: false }),
+        retryPageLoad: () =>
+            refreshStorefrontQueries(queryClient, {
+                marketCode: storefrontQueryKeys.market(market),
+                languageCode: vendureLanguageCode,
+                includePrivate: true,
+            }),
         online,
         isZh,
         displayedRoute,

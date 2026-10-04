@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { AdminButton } from './AdminControls';
 
 import { loadLatestBuild, tryRecoverFromBuildError } from '../utils/build-recovery';
 
@@ -49,13 +50,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
                             : '可能是后台版本已更新或浏览器保留了过期资源。请刷新后重试。'}
                     </p>
                     {!isRecovering && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => loadLatestBuild()}
                             className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
                             加载最新后台
-                        </button>
+                        </AdminButton>
                     )}
                 </section>
             </main>

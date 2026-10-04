@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ShopApi } from '../api';
 import { filterProductsByVisitDate, type ProductVisitTimes, type VisitPeriod } from '../browsing-history';
 import { useDesktopLayout } from '../desktop-layout';
-import { offlineLoadError } from '../loading-state';
+import { storefrontInitialQueryError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -66,11 +66,7 @@ export function BrowsingHistoryPage() {
     const loading = activityLoading || (productIds.length > 0 && historyQuery.isLoading);
     const historyError = activityError
         ? storefrontErrorMessage(activityError, language)
-        : !historyProducts.length && historyQuery.isPaused
-          ? offlineLoadError(language)
-          : !historyProducts.length && historyQuery.error instanceof Error
-            ? storefrontErrorMessage(historyQuery.error, language)
-            : '';
+        : storefrontInitialQueryError(historyQuery, language);
 
     return (
         <main className="page subpage history-page">
@@ -136,7 +132,11 @@ export function BrowsingHistoryPage() {
                     title={isZh ? '浏览足迹加载失败' : 'Could not load browsing history'}
                     detail={historyError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => (activityError ? onActivityRetry?.() : void historyQuery.refetch())}
+                    onAction={() =>
+                        activityError
+                            ? onActivityRetry?.()
+                            : void historyQuery.refetch({ cancelRefetch: false })
+                    }
                 />
             ) : historyProducts.length ? (
                 visibleProducts.length || !desktop ? (
