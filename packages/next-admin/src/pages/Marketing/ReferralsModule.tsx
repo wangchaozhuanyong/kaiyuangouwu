@@ -138,6 +138,15 @@ function ReferralManagement() {
         }
     };
 
+    const tabs = [
+        ['SETTINGS', '功能设置', Settings2],
+        ['PROMOTERS', `推广员团队 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`, Users],
+        ['RELATIONSHIPS', `邀请关系明细 ${reports.data?.referralRelationships.totalItems ?? 0}`, UserPlus],
+        ['REWARDS', `返利订单 ${reports.data?.referralRewards.totalItems ?? 0}`, Gift],
+        ['LEDGER', '钱包流水', WalletCards],
+        ['WITHDRAWALS', `提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`, CircleDollarSign],
+    ] as const;
+
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
@@ -226,66 +235,19 @@ function ReferralManagement() {
                                 aria-label="分销与返利子导航"
                                 className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
                             >
-                                <TabButton
-                                    active={activeTab === 'SETTINGS'}
-                                    onClick={() => {
-                                        setActiveTab('SETTINGS');
-                                        changeSearch('');
-                                    }}
-                                    icon={<Settings2 className="h-3.5 w-3.5" />}
-                                >
-                                    功能设置
-                                </TabButton>
-                                <TabButton
-                                    active={activeTab === 'PROMOTERS'}
-                                    onClick={() => {
-                                        setActiveTab('PROMOTERS');
-                                        changeSearch('');
-                                    }}
-                                    icon={<Users className="h-3.5 w-3.5" />}
-                                >
-                                    {`推广员团队 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`}
-                                </TabButton>
-                                <TabButton
-                                    active={activeTab === 'RELATIONSHIPS'}
-                                    onClick={() => {
-                                        setActiveTab('RELATIONSHIPS');
-                                        changeSearch('');
-                                    }}
-                                    icon={<UserPlus className="h-3.5 w-3.5" />}
-                                >
-                                    {`邀请关系明细 ${reports.data?.referralRelationships.totalItems ?? 0}`}
-                                </TabButton>
-                                <TabButton
-                                    active={activeTab === 'REWARDS'}
-                                    onClick={() => {
-                                        setActiveTab('REWARDS');
-                                        changeSearch('');
-                                    }}
-                                    icon={<Gift className="h-3.5 w-3.5" />}
-                                >
-                                    {`返利订单 ${reports.data?.referralRewards.totalItems ?? 0}`}
-                                </TabButton>
-                                <TabButton
-                                    active={activeTab === 'LEDGER'}
-                                    onClick={() => {
-                                        setActiveTab('LEDGER');
-                                        changeSearch('');
-                                    }}
-                                    icon={<WalletCards className="h-3.5 w-3.5" />}
-                                >
-                                    钱包流水
-                                </TabButton>
-                                <TabButton
-                                    active={activeTab === 'WITHDRAWALS'}
-                                    onClick={() => {
-                                        setActiveTab('WITHDRAWALS');
-                                        changeSearch('');
-                                    }}
-                                    icon={<CircleDollarSign className="h-3.5 w-3.5" />}
-                                >
-                                    {`提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`}
-                                </TabButton>
+                                {tabs.map(([tab, label, Icon]) => (
+                                    <TabButton
+                                        key={tab}
+                                        active={activeTab === tab}
+                                        onClick={() => {
+                                            setActiveTab(tab);
+                                            changeSearch('');
+                                        }}
+                                        icon={<Icon className="h-3.5 w-3.5" />}
+                                    >
+                                        {label}
+                                    </TabButton>
+                                ))}
                             </nav>
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
