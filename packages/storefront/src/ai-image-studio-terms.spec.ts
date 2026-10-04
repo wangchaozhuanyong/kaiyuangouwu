@@ -88,7 +88,10 @@ describe('AI Image Studio responsive generation flow', () => {
         expect(pageSource).toContain("? '上传成功'");
         expect(pageSource).toContain('className={`ai-studio-reference-card is-${item.state.toLowerCase()}`}');
         expect(stylesheet).toContain('.ai-studio-reference-card');
-        expect(stylesheet).toMatch(/\.ai-studio-prompt-wrap textarea \{[^}]*font-size: 16px;/);
+        expect(stylesheet).toMatch(
+            /\.ai-studio-prompt-wrap textarea \{[^}]*font-size: var\(--type-input-size\);/,
+        );
+        expect(stylesheet).toContain('--type-input-size: 16px');
         expect(stylesheet).toContain('overflow-x: clip');
     });
 
@@ -133,8 +136,10 @@ describe('AI Image Studio responsive generation flow', () => {
     });
 
     it('uses readable compact typography instead of 9px and 10px operational text', () => {
-        expect(stylesheet).toContain('--ai-font-caption: 12px');
-        expect(stylesheet).toContain('--ai-font-body: 13px');
+        expect(stylesheet).toContain('--ai-font-caption: var(--type-helper-size)');
+        expect(stylesheet).toContain('--ai-font-body: var(--type-body-size)');
+        expect(stylesheet).toContain('--type-helper-size: 13px');
+        expect(stylesheet).toContain('--type-body-size: 14px');
         expect(stylesheet).toContain('.ai-generation-card-content > p,');
         expect(stylesheet).toContain('.ai-generation-progress-copy,');
         expect(stylesheet).toContain('.ai-studio-history-filters button {');

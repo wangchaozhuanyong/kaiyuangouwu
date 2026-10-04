@@ -15,7 +15,7 @@
         "test:compat": "bun run build && playwright test --config=e2e/playwright.compat.config.ts",
         "check:interaction": "node scripts/check-interaction-standard.mjs",
         "check:typography": "node scripts/check-typography.mjs",
-        "test:typography": "node --test scripts/check-typography.spec.mjs"
+        "test:typography": "vitest run scripts/check-typography.spec.mjs"
     },
     "dependencies": {
         "@tanstack/react-query": "^5.91.0",
