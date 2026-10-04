@@ -14,6 +14,7 @@ import {
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
@@ -825,10 +826,16 @@ function InlineMessage({ tone, children }: { tone: 'success' | 'warning' | 'erro
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <label className="block text-xs font-medium text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-medium text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 

@@ -18,6 +18,7 @@ import { serviceMessageDisplay } from '../../../../common/src/display-localizati
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { validateIcloudInput } from '../../../../icloud-relay-plugin/src/client/admin-validation.js';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -1219,8 +1220,11 @@ export function IcloudRelayModule() {
                     onClose={() => setPrimaryDialog(prev => ({ ...prev, open: false }))}
                 >
                     <div className="space-y-4 pt-4 text-xs">
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-1">iCloud 邮箱地址 *</label>
+                        <AdminField
+                            label={
+                                <span className="block text-slate-700 font-bold mb-1">iCloud 邮箱地址 *</span>
+                            }
+                        >
                             <AdminInput
                                 type="email"
                                 value={primaryDialog.email}
@@ -1228,11 +1232,23 @@ export function IcloudRelayModule() {
                                 placeholder="example@icloud.com"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 text-xs"
                             />
-                        </div>
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-1">
-                                App 专用密码 {primaryDialog.editing ? '(如不修改请留空)' : '*'}
-                            </label>
+                        </AdminField>
+                        <AdminField
+                            label={
+                                <span className="block text-slate-700 font-bold mb-1">
+                                    App 专用密码
+                                    {primaryDialog.editing ? '(如不修改请留空)' : '*'}
+                                </span>
+                            }
+                            description={
+                                <>
+                                    <p className="mt-1 text-[11px] text-slate-400">
+                                        💡 前往 appleid.apple.com 登录，在「登录与安全」-「App
+                                        专用密码」中生成。
+                                    </p>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 type="password"
                                 value={primaryDialog.appPassword}
@@ -1240,12 +1256,10 @@ export function IcloudRelayModule() {
                                 placeholder="xxxx-xxxx-xxxx-xxxx"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 font-mono text-xs"
                             />
-                            <p className="mt-1 text-[11px] text-slate-400">
-                                💡 前往 appleid.apple.com 登录，在「登录与安全」-「App 专用密码」中生成。
-                            </p>
-                        </div>
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-1">备注说明</label>
+                        </AdminField>
+                        <AdminField
+                            label={<span className="block text-slate-700 font-bold mb-1">备注说明</span>}
+                        >
                             <AdminInput
                                 type="text"
                                 value={primaryDialog.note}
@@ -1253,9 +1267,14 @@ export function IcloudRelayModule() {
                                 placeholder="例如：主号1号、客户专用"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 text-xs"
                             />
-                        </div>
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-1">查询码有效周期 (天)</label>
+                        </AdminField>
+                        <AdminField
+                            label={
+                                <span className="block text-slate-700 font-bold mb-1">
+                                    查询码有效周期 (天)
+                                </span>
+                            }
+                        >
                             <AdminInput
                                 type="number"
                                 min={1}
@@ -1269,7 +1288,7 @@ export function IcloudRelayModule() {
                                 }
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 text-xs"
                             />
-                        </div>
+                        </AdminField>
                         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                             <AdminButton
                                 type="button"
@@ -1303,8 +1322,11 @@ export function IcloudRelayModule() {
                 >
                     <div className="space-y-4 pt-4 text-xs">
                         {!virtualDialog.editing && (
-                            <div>
-                                <label className="block text-slate-700 font-bold mb-1">所属主邮箱 *</label>
+                            <AdminField
+                                label={
+                                    <span className="block text-slate-700 font-bold mb-1">所属主邮箱 *</span>
+                                }
+                            >
                                 <AdminSelect
                                     value={virtualDialog.primaryAccountId}
                                     onChange={e =>
@@ -1319,15 +1341,14 @@ export function IcloudRelayModule() {
                                         </option>
                                     ))}
                                 </AdminSelect>
-                            </div>
+                            </AdminField>
                         )}
-                        <div>
-                            <label
-                                htmlFor="icloud-virtual-email"
-                                className="block text-slate-700 font-bold mb-1"
-                            >
-                                虚拟邮箱地址 *
-                            </label>
+                        <AdminField
+                            htmlFor="icloud-virtual-email"
+                            label={
+                                <span className="block text-slate-700 font-bold mb-1">虚拟邮箱地址 *</span>
+                            }
+                        >
                             <AdminInput
                                 id="icloud-virtual-email"
                                 type="email"
@@ -1337,14 +1358,11 @@ export function IcloudRelayModule() {
                                 placeholder="alias@icloud.com"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 disabled:bg-slate-100 text-xs"
                             />
-                        </div>
-                        <div>
-                            <label
-                                htmlFor="icloud-virtual-note"
-                                className="block text-slate-700 font-bold mb-1"
-                            >
-                                备注说明
-                            </label>
+                        </AdminField>
+                        <AdminField
+                            htmlFor="icloud-virtual-note"
+                            label={<span className="block text-slate-700 font-bold mb-1">备注说明</span>}
+                        >
                             <AdminInput
                                 id="icloud-virtual-note"
                                 type="text"
@@ -1353,7 +1371,7 @@ export function IcloudRelayModule() {
                                 placeholder="例如：买家张三、订单号#1001"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 text-xs"
                             />
-                        </div>
+                        </AdminField>
                         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                             <AdminButton
                                 type="button"
@@ -1386,8 +1404,9 @@ export function IcloudRelayModule() {
                     onClose={() => setBatchDialog(prev => ({ ...prev, open: false }))}
                 >
                     <div className="space-y-4 pt-4 text-xs">
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-1">所属主邮箱 *</label>
+                        <AdminField
+                            label={<span className="block text-slate-700 font-bold mb-1">所属主邮箱 *</span>}
+                        >
                             <AdminSelect
                                 value={batchDialog.primaryAccountId}
                                 onChange={e =>
@@ -1402,7 +1421,7 @@ export function IcloudRelayModule() {
                                     </option>
                                 ))}
                             </AdminSelect>
-                        </div>
+                        </AdminField>
                         <div>
                             <label className="block text-slate-700 font-bold mb-1">
                                 邮箱列表 (一行一个) *

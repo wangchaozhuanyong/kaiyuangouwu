@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import {
     ConfigurableOperationField,
     ConfigurableOperationTechnicalDetails,
@@ -1316,10 +1317,9 @@ function OperationEditor({
 
 function Field({ children, label }: { children: React.ReactNode; label: string }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            {label}
+        <AdminField className="block text-xs font-bold text-slate-700" label={label}>
             <span className="mt-1.5 block">{children}</span>
-        </label>
+        </AdminField>
     );
 }
 

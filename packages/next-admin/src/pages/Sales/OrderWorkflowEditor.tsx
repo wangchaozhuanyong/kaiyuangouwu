@@ -14,6 +14,7 @@ import {
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -651,8 +652,11 @@ export function DraftOrderEditor() {
                                             ['company', '公司'],
                                         ] as Array<[keyof AddressForm, string]>
                                     ).map(([key, label]) => (
-                                        <label key={key} className="text-xs font-semibold text-slate-700">
-                                            {label}
+                                        <AdminField
+                                            key={key}
+                                            className="text-xs font-semibold text-slate-700"
+                                            label={label}
+                                        >
                                             <AdminInput
                                                 value={address[key]}
                                                 onChange={event =>
@@ -663,7 +667,7 @@ export function DraftOrderEditor() {
                                                 }
                                                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-normal"
                                             />
-                                        </label>
+                                        </AdminField>
                                     ))}
                                 </div>
                                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -778,10 +782,20 @@ export function DraftOrderEditor() {
                                     <FeatureHelpButton topic="sales.fulfillment" title="配送方式" />
                                 </h2>
                                 <div className="mt-3">
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-700">
-                                            配送方式
-                                        </label>
+                                    <AdminField
+                                        label={
+                                            <span className="text-xs font-semibold text-slate-700">
+                                                配送方式
+                                            </span>
+                                        }
+                                        description={
+                                            !order.shippingAddress?.streetLine1 && (
+                                                <p className="mt-2 text-[10px] text-amber-700">
+                                                    先保存地址后才能计算可用配送方式
+                                                </p>
+                                            )
+                                        }
+                                    >
                                         <AdminSelect
                                             value={order.shippingLines[0]?.shippingMethod.id ?? ''}
                                             onChange={event => void chooseShippingMethod(event.target.value)}
@@ -799,12 +813,7 @@ export function DraftOrderEditor() {
                                                 </option>
                                             ))}
                                         </AdminSelect>
-                                        {!order.shippingAddress?.streetLine1 && (
-                                            <p className="mt-2 text-[10px] text-amber-700">
-                                                先保存地址后才能计算可用配送方式
-                                            </p>
-                                        )}
-                                    </div>
+                                    </AdminField>
                                 </div>
                             </section>{' '}
                         </div>

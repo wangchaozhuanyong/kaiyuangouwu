@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import {
     ConfigurableOperationField,
     ConfigurableOperationTechnicalDetails,
@@ -1462,29 +1463,41 @@ export function CategoriesModule() {
                                     </AdminButton>
                                 </div>
                             )}
-                        <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">中文名称 *</label>
+                        <AdminField
+                            label={
+                                <span className="mb-1 block text-xs font-bold text-slate-700">
+                                    中文名称 *
+                                </span>
+                            }
+                            description={
+                                <>
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                                        英文由翻译引擎生成，并可在“多语言翻译”中复核。
+                                    </p>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 value={formName}
                                 onChange={event => setFormName(event.target.value)}
                                 className="w-full rounded-lg border border-slate-300 p-2.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
                                 autoFocus
                             />
-                            <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                                英文由翻译引擎生成，并可在“多语言翻译”中复核。
-                            </p>
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                {activeTab === 'CATEGORIES' ? 'Slug' : '编码 Code'}
-                            </label>
+                        </AdminField>
+                        <AdminField
+                            label={
+                                <span className="mb-1 block text-xs font-bold text-slate-700">
+                                    {activeTab === 'CATEGORIES' ? 'Slug' : '编码 Code'}
+                                </span>
+                            }
+                        >
                             <AdminInput
                                 value={formCode}
                                 onChange={event => setFormCode(event.target.value)}
                                 placeholder="留空自动生成"
                                 className="w-full rounded-lg border border-slate-300 p-2.5 font-mono text-xs outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                        </div>
+                        </AdminField>
                         {activeTab === 'CATEGORIES' ? (
                             <>
                                 <CategoryImageField
@@ -1492,10 +1505,13 @@ export function CategoriesModule() {
                                     onChange={setFormFeaturedAsset}
                                     disabled={saving}
                                 />
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-slate-700">
-                                        上级分类
-                                    </label>
+                                <AdminField
+                                    label={
+                                        <span className="mb-1 block text-xs font-bold text-slate-700">
+                                            上级分类
+                                        </span>
+                                    }
+                                >
                                     <AdminSelect
                                         value={formParentId}
                                         onChange={event => setFormParentId(event.target.value)}
@@ -1510,7 +1526,7 @@ export function CategoriesModule() {
                                                 </option>
                                             ))}
                                     </AdminSelect>
-                                </div>
+                                </AdminField>
                                 <CollectionFiltersEditor
                                     values={formFilters}
                                     definitions={data?.collectionFilters ?? []}

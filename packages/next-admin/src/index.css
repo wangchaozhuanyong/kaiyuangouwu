@@ -586,6 +586,65 @@
     }
 }
 
+/* Field width, rather than viewport width, decides whether a short control fits beside its title. */
+.admin-field {
+    container: admin-field / inline-size;
+    min-width: 0;
+    flex: 1 1 20rem;
+}
+.admin-field-row {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 0.5rem 0.75rem;
+}
+.admin-field-label,
+.admin-field-control {
+    display: block;
+    min-width: 0;
+}
+.admin-field-label {
+    overflow-wrap: anywhere;
+}
+.admin-field-label > *,
+.admin-field-control > :first-child {
+    margin-block-start: 0;
+}
+.admin-field-label > * {
+    margin-block-end: 0;
+    min-height: 0;
+}
+.admin-field-control > .admin-control {
+    width: 100%;
+    min-width: 0;
+}
+.admin-field-help {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.admin-field-help:empty {
+    display: none;
+}
+@container admin-field (min-width: 20rem) {
+    .admin-field-row {
+        grid-template-columns: fit-content(9rem) minmax(0, 1fr);
+        align-items: center;
+    }
+    .admin-field-help {
+        grid-column: 2;
+    }
+}
+/* Long content, uploads, and compound editors keep a full-width reading/editing area. */
+.admin-field[data-admin-field='stacked'] > .admin-field-row,
+.admin-field-row:has(textarea, input[type='file'], [data-admin-field='stacked']) {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+}
+.admin-field[data-admin-field='stacked'] > .admin-field-row > .admin-field-help,
+.admin-field-row:has(textarea, input[type='file'], [data-admin-field='stacked']) > .admin-field-help {
+    grid-column: 1;
+}
+
 /* The shared touch target contract takes precedence over compact desktop utilities. */
 @media (pointer: coarse) {
     .admin-button {

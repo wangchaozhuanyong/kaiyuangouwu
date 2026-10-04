@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { AlertTriangle, Plus, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -304,8 +305,7 @@ function Field({
     placeholder?: string;
 }) {
     return (
-        <label className="block text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-xs font-bold text-slate-600" label={label}>
             <AdminInput
                 type={type}
                 value={value}
@@ -313,7 +313,7 @@ function Field({
                 placeholder={placeholder}
                 className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-3 text-xs font-normal"
             />
-        </label>
+        </AdminField>
     );
 }
 

@@ -26,6 +26,7 @@ import { imageReplacements } from '../../../../storefront-content-plugin/src/ima
 import { getClientPluginDisplay } from '../../../../storefront-content-plugin/src/shared/client-plugin-display';
 import { channelRequestContext } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -755,10 +756,16 @@ function validateDraft(block: StorefrontContentBlock): string | null {
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function IconButton({

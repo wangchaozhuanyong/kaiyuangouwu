@@ -2,6 +2,7 @@ import { ExternalLink, Image as ImageIcon, X } from 'lucide-react';
 import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -177,13 +178,21 @@ export function ProductBasicTab() {
                             )}
                         </div>
 
-                        <div>
-                            <label
-                                htmlFor={`${fieldId}-refund-policy`}
-                                className="mb-2 block text-xs font-bold text-slate-700"
-                            >
-                                售后退款政策
-                            </label>
+                        <AdminField
+                            htmlFor={`${fieldId}-refund-policy`}
+                            label={
+                                <span className="mb-2 block text-xs font-bold text-slate-700">
+                                    售后退款政策
+                                </span>
+                            }
+                            description={
+                                <>
+                                    <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                                        虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
+                                    </p>
+                                </>
+                            }
+                        >
                             <AdminSelect
                                 id={`${fieldId}-refund-policy`}
                                 value={refundPolicy}
@@ -194,20 +203,26 @@ export function ProductBasicTab() {
                                 <option value="SEVEN_DAY_NO_REASON">7 天无理由</option>
                                 <option value="NON_REFUNDABLE">不支持退款</option>
                             </AdminSelect>
-                            <p className="mt-2 text-[10px] leading-4 text-slate-400">
-                                虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
-                            </p>
-                        </div>
+                        </AdminField>
                     </div>
 
                     {effectiveFulfillmentType === 'digital' && (
-                        <div className="max-w-sm">
-                            <label
-                                htmlFor={`${fieldId}-manual-delivery-sla`}
-                                className="mb-1 block text-xs font-bold text-slate-700"
-                            >
-                                人工交付预计时长（分钟）
-                            </label>
+                        <AdminField
+                            className="max-w-sm"
+                            htmlFor={`${fieldId}-manual-delivery-sla`}
+                            label={
+                                <span className="mb-1 block text-xs font-bold text-slate-700">
+                                    人工交付预计时长（分钟）
+                                </span>
+                            }
+                            description={
+                                <>
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                                        仅人工交付 SKU 使用；商品页、结账页和订单详情会展示该预计时效。
+                                    </p>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 id={`${fieldId}-manual-delivery-sla`}
                                 type="number"
@@ -220,10 +235,7 @@ export function ProductBasicTab() {
                                 }
                                 className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                                仅人工交付 SKU 使用；商品页、结账页和订单详情会展示该预计时效。
-                            </p>
-                        </div>
+                        </AdminField>
                     )}
                 </section>
             </div>

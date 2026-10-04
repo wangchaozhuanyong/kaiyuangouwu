@@ -3,6 +3,7 @@ import { CircleDollarSign, RefreshCw, Save, WalletCards } from 'lucide-react';
 import { useState } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -241,15 +242,14 @@ export function CurrencyAndRatesPanel() {
                         options={[5, 10, 15, 30, 60].map(value => [String(value), `${value} 分钟`])}
                     />
                 ) : (
-                    <label className="text-xs font-bold text-slate-600">
-                        每日采集时间
+                    <AdminField className="text-xs font-bold text-slate-600" label="每日采集时间">
                         <AdminInput
                             type="time"
                             value={draft.usdtRateDailyTime}
                             onChange={event => update('usdtRateDailyTime', event.target.value)}
                             className={inputClass}
                         />
-                    </label>
+                    </AdminField>
                 )}
             </div>
             <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-xs text-slate-600 md:grid-cols-2">
@@ -517,8 +517,7 @@ function SelectField({
     options: Array<readonly [string, string]>;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="text-xs font-bold text-slate-600" label={label}>
             <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -530,7 +529,7 @@ function SelectField({
                     </option>
                 ))}
             </AdminSelect>
-        </label>
+        </AdminField>
     );
 }
 function NumberField({
@@ -551,8 +550,7 @@ function NumberField({
     disabled?: boolean;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="text-xs font-bold text-slate-600" label={label}>
             <AdminInput
                 type="number"
                 value={value}
@@ -563,7 +561,7 @@ function NumberField({
                 onChange={event => onChange(Number(event.target.value))}
                 className={`${inputClass} disabled:bg-slate-100`}
             />
-        </label>
+        </AdminField>
     );
 }
 function ToggleField({

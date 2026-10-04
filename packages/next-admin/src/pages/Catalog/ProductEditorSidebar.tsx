@@ -1,6 +1,7 @@
 import { Boxes, Image as ImageIcon, Link2, Package, Sparkles, Tag, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
@@ -164,13 +165,22 @@ export function ProductEditorSidebar() {
                         )}
                     </div>
 
-                    <div>
-                        <label
-                            htmlFor={`${fieldId}-name`}
-                            className="mb-1 block text-xs font-bold text-slate-700"
-                        >
-                            名称 <span className="text-rose-500">*</span>
-                        </label>
+                    <AdminField
+                        htmlFor={`${fieldId}-name`}
+                        label={
+                            <span className="mb-1 block text-xs font-bold text-slate-700">
+                                名称
+                                <span className="text-rose-500">*</span>
+                            </span>
+                        }
+                        description={
+                            formErrors.name && (
+                                <p id={`${fieldId}-name-error`} className="mt-1 text-[11px] text-rose-500">
+                                    {formErrors.name}
+                                </p>
+                            )
+                        }
+                    >
                         <AdminInput
                             type="text"
                             disabled={saving}
@@ -191,21 +201,17 @@ export function ProductEditorSidebar() {
                                     : 'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
                             }`}
                         />
-                        {formErrors.name && (
-                            <p id={`${fieldId}-name-error`} className="mt-1 text-[11px] text-rose-500">
-                                {formErrors.name}
-                            </p>
-                        )}
-                    </div>
+                    </AdminField>
 
-                    <div>
-                        <label
-                            htmlFor={`${fieldId}-slug`}
-                            className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700"
-                        >
-                            <Link2 className="h-3.5 w-3.5 text-slate-400" />
-                            URL 唯一别名
-                        </label>
+                    <AdminField
+                        htmlFor={`${fieldId}-slug`}
+                        label={
+                            <span className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                <Link2 className="h-3.5 w-3.5 text-slate-400" />
+                                URL 唯一别名
+                            </span>
+                        }
+                    >
                         <AdminInput
                             type="text"
                             disabled={saving}
@@ -215,7 +221,7 @@ export function ProductEditorSidebar() {
                             placeholder="留空按标题自动生成"
                             className="w-full rounded-lg border border-slate-300 bg-white p-2.5 font-mono text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
-                    </div>
+                    </AdminField>
 
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                         <div>

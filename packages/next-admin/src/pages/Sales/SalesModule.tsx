@@ -1,4 +1,5 @@
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
@@ -1040,17 +1041,20 @@ export function SalesModule() {
                             </AdminButton>
                         </header>
                         <div className="flex-1 space-y-4 overflow-y-auto p-6">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold text-slate-700">
-                                    物流公司 / 配送方式 *
-                                </label>
+                            <AdminField
+                                label={
+                                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                                        物流公司 / 配送方式 *
+                                    </span>
+                                }
+                            >
                                 <AdminInput
                                     value={carrier}
                                     onChange={event => setCarrier(event.target.value)}
                                     placeholder="例如：顺丰速运"
                                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
-                            </div>
+                            </AdminField>
                             <div className="space-y-2">
                                 <div className="text-xs font-semibold text-slate-700">订单与运单号</div>
                                 {selectedOrders.map(order => (

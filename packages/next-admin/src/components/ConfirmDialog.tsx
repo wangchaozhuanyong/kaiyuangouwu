@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { registerSensitiveActionPasswordPrompt } from '../apollo-sensitive-action';
 import { useAccessibleDialog } from '../hooks/use-accessible-dialog';
 import { AdminButton, AdminInput } from './AdminControls';
+import { AdminField } from './AdminField';
 import {
     ConfirmDialogContext,
     type ConfirmDialogOptions,
@@ -120,8 +121,10 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                         className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
                                         readOnly
                                     />
-                                    <label className="mt-5 block text-xs font-bold text-slate-700">
-                                        当前管理员密码
+                                    <AdminField
+                                        className="mt-5 block text-xs font-bold text-slate-700"
+                                        label="当前管理员密码"
+                                    >
                                         <AdminInput
                                             type="password"
                                             name="current-password"
@@ -132,7 +135,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                             placeholder="仅用于本次操作校验，不会保存"
                                             className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                                         />
-                                    </label>
+                                    </AdminField>
                                 </>
                             )}
                             <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">

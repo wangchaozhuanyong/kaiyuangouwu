@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -186,9 +187,11 @@ export function CardPoolModule() {
                         {actionError}
                     </Message>
                 )}
-                <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
-                    <label className="block w-full max-w-lg text-[10px] font-bold text-slate-500">
-                        查找卡密 SKU
+                <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <AdminField
+                        className="block w-full max-w-lg text-[10px] font-bold text-slate-500"
+                        label="查找卡密 SKU"
+                    >
                         <span className="relative mt-1 block">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                             <AdminInput
@@ -203,7 +206,7 @@ export function CardPoolModule() {
                                 className={`${inputClass} pl-8`}
                             />
                         </span>
-                    </label>
+                    </AdminField>
                     <span className="text-[10px] text-slate-400">
                         {variantsQuery.data
                             ? `找到 ${variantsQuery.data.productVariants.totalItems} 个自动发卡 SKU`
@@ -222,8 +225,10 @@ export function CardPoolModule() {
                 ) : (
                     <>
                         <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 xl:flex-row xl:items-center xl:justify-between">
-                            <div>
-                                <div className="text-[10px] font-bold text-slate-400">当前卡密 SKU</div>
+                            <AdminField
+                                label="当前卡密 SKU"
+                                className="w-full xl:max-w-xl text-[10px] font-bold text-slate-400"
+                            >
                                 <AdminSelect
                                     value={selectedVariant?.id ?? ''}
                                     onChange={event => {
@@ -231,7 +236,7 @@ export function CardPoolModule() {
                                         setPoolPage(0);
                                         setDeliveryPage(0);
                                     }}
-                                    className={`${inputClass} mt-1 min-w-80`}
+                                    className={inputClass}
                                 >
                                     {variants.map(item => (
                                         <option key={item.id} value={item.id}>
@@ -239,7 +244,7 @@ export function CardPoolModule() {
                                         </option>
                                     ))}
                                 </AdminSelect>
-                            </div>
+                            </AdminField>
                             {config ? (
                                 <div className="flex flex-wrap gap-2 text-[10px]">
                                     <StatusPill
@@ -1089,10 +1094,16 @@ function ModalActions({
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function EmptyState() {

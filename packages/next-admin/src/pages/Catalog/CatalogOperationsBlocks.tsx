@@ -3,6 +3,7 @@ import { Boxes, CalendarClock, CircleDollarSign, PackageOpen, Plus, RefreshCw, S
 import { useEffect, useMemo, useState } from 'react';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
@@ -210,8 +211,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                     </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
-                    <label className="text-xs font-bold text-slate-600">
-                        当前仓库
+                    <AdminField className="text-xs font-bold text-slate-600" label="当前仓库">
                         <AdminSelect
                             value={stockLocationId}
                             onChange={event => changeWarehouse(event.target.value)}
@@ -223,7 +223,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                 </option>
                             ))}
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                     <AdminButton
                         type="button"
                         onClick={() => void save()}
@@ -289,11 +289,17 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                             </span>
                                         </div>
                                     </div>
-                                    <label className="text-xs font-bold text-slate-600">
-                                        供货商
-                                        <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
-                                            记录这个 SKU 从谁处采购；没有固定供货商可不关联。
-                                        </span>
+                                    <AdminField
+                                        className="text-xs font-bold text-slate-600"
+                                        label="供货商"
+                                        description={
+                                            <>
+                                                <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                                                    记录这个 SKU 从谁处采购；没有固定供货商可不关联。
+                                                </span>
+                                            </>
+                                        }
+                                    >
                                         <AdminSelect
                                             value={draft.supplierId}
                                             onChange={event =>
@@ -308,7 +314,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                 </option>
                                             ))}
                                         </AdminSelect>
-                                    </label>
+                                    </AdminField>
                                 </div>
                                 <details className="border-t border-slate-100">
                                     <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
@@ -1285,13 +1291,17 @@ function TextField({
     type?: string;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
-            {description && (
-                <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
-                    {description}
-                </span>
-            )}
+        <AdminField
+            className="text-xs font-bold text-slate-600"
+            label={label}
+            description={
+                description && (
+                    <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                        {description}
+                    </span>
+                )
+            }
+        >
             <AdminInput
                 type={type}
                 min={type === 'number' ? 0 : undefined}
@@ -1300,7 +1310,7 @@ function TextField({
                 onChange={event => onChange(event.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
             />
-        </label>
+        </AdminField>
     );
 }
 
@@ -1316,15 +1326,21 @@ function UnitField({
     onChange: (value: string) => void;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
-            <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
-                {description}
-            </span>
+        <AdminField
+            className="text-xs font-bold text-slate-600"
+            label={label}
+            description={
+                <>
+                    <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                        {description}
+                    </span>
+                </>
+            }
+        >
             <div className="mt-1.5">
                 <CatalogUnitInput value={value} onChange={onChange} ariaLabel={label} />
             </div>
-        </label>
+        </AdminField>
     );
 }
 function SelectField({
@@ -1339,8 +1355,7 @@ function SelectField({
     options: Array<{ id: string; name: string; sku: string }>;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="text-xs font-bold text-slate-600" label={label}>
             <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -1352,7 +1367,7 @@ function SelectField({
                     </option>
                 ))}
             </AdminSelect>
-        </label>
+        </AdminField>
     );
 }
 function Toggle({

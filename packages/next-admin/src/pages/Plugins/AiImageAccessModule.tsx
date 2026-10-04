@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     IMAGE_PROVIDER_ADMIN_QUERY,
@@ -539,10 +540,16 @@ function providerPurposeLabel(purpose: ImageProviderRecord['purpose']) {
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function LoadingState() {

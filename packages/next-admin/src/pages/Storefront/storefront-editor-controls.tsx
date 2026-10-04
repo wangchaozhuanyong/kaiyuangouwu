@@ -1,5 +1,6 @@
 import { ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
 import { inputClass } from './storefront-editor-model';
@@ -87,13 +88,9 @@ export function Field({
     children: React.ReactNode;
 }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField label={label} description={helpText} className="text-xs font-bold text-slate-700">
             {children}
-            {helpText && (
-                <span className="mt-1 block text-[11px] font-normal text-slate-400">{helpText}</span>
-            )}
-        </label>
+        </AdminField>
     );
 }
 

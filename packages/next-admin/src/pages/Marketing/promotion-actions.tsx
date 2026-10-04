@@ -1,6 +1,7 @@
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import type { StoreCouponAppearanceTheme, StoreCouponRecord } from '../../graphql/marketing.graphql';
 import { couponAppearanceOptions, SensitiveAction, sensitiveCopy } from './promotion-model';
 import { FormInput, Modal, ModalFooter } from './promotion-ui';
@@ -116,8 +117,7 @@ export function SensitiveDialog({
                     />
                 </label>
             )}
-            <label className="mt-4 block text-xs font-bold text-slate-700">
-                管理员密码确认 *
+            <AdminField className="mt-4 block text-xs font-bold text-slate-700" label="管理员密码确认 *">
                 <AdminInput
                     type="password"
                     name="promotion-sensitive-action-confirmation"
@@ -126,7 +126,7 @@ export function SensitiveDialog({
                     onChange={event => setPassword(event.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"
                 />
-            </label>
+            </AdminField>
             <ModalFooter
                 onCancel={onClose}
                 onConfirm={() => void onConfirm(password, reason)}

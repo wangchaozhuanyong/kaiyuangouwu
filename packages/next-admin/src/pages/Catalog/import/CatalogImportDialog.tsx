@@ -1,5 +1,6 @@
 import { serviceMessageDisplay } from '../../../../../common/src/display-localization';
 import { AdminButton, AdminInput, AdminSelect } from '../../../components/AdminControls';
+import { AdminField } from '../../../components/AdminField';
 import { PageSizeSelect } from '../../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../../hooks/use-admin-query';
 import { usePageSize } from '../../../hooks/use-page-size';
@@ -791,15 +792,38 @@ function UploadPanel({
                         支持 Numbers、Excel 和 CSV；单个文件最大 20MB，最多 20,000 行。
                     </span>
                 </label>
-                <label className="space-y-2">
-                    <span className="text-xs font-bold text-slate-700">目标店铺</span>
+                <AdminField
+                    className="space-y-2"
+                    label={
+                        <>
+                            <span className="text-xs font-bold text-slate-700">目标店铺</span>
+                        </>
+                    }
+                    description={
+                        <>
+                            <span className="block text-[11px] text-slate-500">
+                                导入文件“导入商店”列使用店铺编码：{channelCode}
+                            </span>
+                        </>
+                    }
+                >
                     <AdminInput className={inputClass} value={channelName} disabled />
-                    <span className="block text-[11px] text-slate-500">
-                        导入文件“导入商店”列使用店铺编码：{channelCode}
-                    </span>
-                </label>
-                <label className="space-y-2">
-                    <span className="text-xs font-bold text-slate-700">目标仓库</span>
+                </AdminField>
+                <AdminField
+                    className="space-y-2"
+                    label={
+                        <>
+                            <span className="text-xs font-bold text-slate-700">目标仓库</span>
+                        </>
+                    }
+                    description={
+                        <>
+                            <span className="block text-[11px] text-amber-700">
+                                请明确选择本次库存要写入的仓库；系统不会代选。
+                            </span>
+                        </>
+                    }
+                >
                     <AdminSelect
                         className={inputClass}
                         value={stockLocationId}
@@ -813,12 +837,15 @@ function UploadPanel({
                             </option>
                         ))}
                     </AdminSelect>
-                    <span className="block text-[11px] text-amber-700">
-                        请明确选择本次库存要写入的仓库；系统不会代选。
-                    </span>
-                </label>
-                <label className="space-y-2">
-                    <span className="text-xs font-bold text-slate-700">目标币种</span>
+                </AdminField>
+                <AdminField
+                    className="space-y-2"
+                    label={
+                        <>
+                            <span className="text-xs font-bold text-slate-700">目标币种</span>
+                        </>
+                    }
+                >
                     <AdminSelect
                         className={inputClass}
                         value={currencyCode}
@@ -832,7 +859,7 @@ function UploadPanel({
                             </option>
                         ))}
                     </AdminSelect>
-                </label>
+                </AdminField>
                 <label className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 md:col-span-3">
                     <AdminInput
                         type="checkbox"
@@ -1075,8 +1102,15 @@ function FieldMappingEditor({
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {preview.headers.filter(Boolean).map(header => (
-                    <label key={header} className="space-y-1">
-                        <span className="text-[11px] font-bold text-slate-700">{header}</span>
+                    <AdminField
+                        key={header}
+                        className="space-y-1"
+                        label={
+                            <>
+                                <span className="text-[11px] font-bold text-slate-700">{header}</span>
+                            </>
+                        }
+                    >
                         <AdminSelect
                             className={inputClass}
                             value={mapping[header] || CATALOG_MAPPING_UNKNOWN}
@@ -1099,7 +1133,7 @@ function FieldMappingEditor({
                                 );
                             })}
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                 ))}
             </div>
         </div>

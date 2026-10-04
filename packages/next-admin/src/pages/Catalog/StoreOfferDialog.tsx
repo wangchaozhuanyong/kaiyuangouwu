@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -108,8 +109,7 @@ export function StoreOfferDialog({
                                     ? '暂停'
                                     : '已撤销'}
                         </p>
-                        <label className="block text-sm">
-                            本店销售状态
+                        <AdminField className="block text-sm" label="本店销售状态">
                             <AdminSelect
                                 className="ml-3 rounded-lg border border-slate-200 p-2"
                                 disabled={offer.state === 'REVOKED'}
@@ -119,7 +119,7 @@ export function StoreOfferDialog({
                                 <option value="ACTIVE">启用销售</option>
                                 <option value="PAUSED">暂停销售</option>
                             </AdminSelect>
-                        </label>
+                        </AdminField>
                         {offer.variants.map(v => (
                             <label key={v.id} className="flex items-center justify-between gap-4 text-sm">
                                 {v.name} · {v.currencyCode}

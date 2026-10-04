@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useActiveInterval } from '../../hooks/use-page-activity';
@@ -206,8 +207,7 @@ export function FormInput({
     placeholder?: string;
 }) {
     return (
-        <label className="block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-[11px] font-bold text-slate-600" label={label}>
             <AdminInput
                 type={type}
                 value={value}
@@ -215,7 +215,7 @@ export function FormInput({
                 placeholder={placeholder}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900 outline-none focus:border-blue-500"
             />
-        </label>
+        </AdminField>
     );
 }
 
@@ -240,8 +240,7 @@ export function FormSelect({
     options: string[][];
 }) {
     return (
-        <label className="block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-[11px] font-bold text-slate-600" label={label}>
             <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -253,7 +252,7 @@ export function FormSelect({
                     </option>
                 ))}
             </AdminSelect>
-        </label>
+        </AdminField>
     );
 }
 

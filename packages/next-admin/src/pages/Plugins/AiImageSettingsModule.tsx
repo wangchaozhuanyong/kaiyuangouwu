@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
@@ -1744,10 +1745,16 @@ function Tab({
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function LoadingState() {

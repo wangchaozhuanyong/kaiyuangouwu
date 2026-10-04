@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -623,10 +624,9 @@ function WalletStatusBadge({ status }: { status: StoreUsdtWalletRecord['reviewSt
 
 function Field({ children, label }: { children: React.ReactNode; label: string }) {
     return (
-        <label className="block text-[10px] font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-[10px] font-bold text-slate-600" label={label}>
             <span className="mt-1.5 block">{children}</span>
-        </label>
+        </AdminField>
     );
 }
 

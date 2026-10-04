@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -457,8 +458,7 @@ function ManualPaymentEditor({
             <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">
                 将按后端订单未结金额添加：<strong>{formatMoney(outstanding, currencyCode)}</strong>
             </p>
-            <label className={labelClass}>
-                支付方式
+            <AdminField className={labelClass} label="支付方式">
                 <AdminSelect
                     value={method}
                     onChange={event => setMethod(event.target.value)}
@@ -471,15 +471,14 @@ function ManualPaymentEditor({
                         </option>
                     ))}
                 </AdminSelect>
-            </label>
-            <label className={labelClass}>
-                真实交易号
+            </AdminField>
+            <AdminField className={labelClass} label="真实交易号">
                 <AdminInput
                     value={transactionId}
                     onChange={event => setTransactionId(event.target.value)}
                     className={`${inputClass} font-mono`}
                 />
-            </label>
+            </AdminField>
         </Editor>
     );
 }
@@ -503,14 +502,13 @@ function RefundSettlementEditor({
             <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                 仅在支付渠道已经确认退款成功后填写真实退款交易号。
             </p>
-            <label className={labelClass}>
-                退款交易号
+            <AdminField className={labelClass} label="退款交易号">
                 <AdminInput
                     value={transactionId}
                     onChange={event => setTransactionId(event.target.value)}
                     className={`${inputClass} font-mono`}
                 />
-            </label>
+            </AdminField>
         </Editor>
     );
 }

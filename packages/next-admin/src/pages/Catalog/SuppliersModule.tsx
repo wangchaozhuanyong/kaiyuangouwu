@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Search, Truck, X } 
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
@@ -506,15 +507,14 @@ function Field({
     className?: string;
 }) {
     return (
-        <label className={`text-xs font-bold text-slate-700 ${className}`}>
-            {label}
+        <AdminField className={`text-xs font-bold text-slate-700 ${className}`} label={label}>
             <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
             />
-        </label>
+        </AdminField>
     );
 }
 

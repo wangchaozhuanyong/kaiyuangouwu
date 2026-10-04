@@ -2,6 +2,7 @@ import { Download } from 'lucide-react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CouponDailyMetricRecord,
@@ -65,8 +66,7 @@ export function CouponReport({
                         onChange={value => setFilter({ ...filter, to: value })}
                         type="date"
                     />
-                    <label className="text-[10px] font-bold text-slate-500">
-                        优惠券
+                    <AdminField className="text-[10px] font-bold text-slate-500" label="优惠券">
                         <AdminSelect
                             value={filter.campaignId}
                             onChange={event => setFilter({ ...filter, campaignId: event.target.value })}
@@ -79,7 +79,7 @@ export function CouponReport({
                                 </option>
                             ))}
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                     <AdminButton
                         type="button"
                         onClick={() => exportReport(metrics, currencyCode)}

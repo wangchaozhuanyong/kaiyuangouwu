@@ -8,6 +8,7 @@ import {
 import { AlertTriangle, Download, FileSpreadsheet, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -195,8 +196,24 @@ export function CatalogExportAction() {
                                     SKU，两者都可再次导入。
                                 </p>
                             </div>
-                            <label className="block space-y-2">
-                                <span className="text-xs font-bold text-slate-700">默认回导仓库</span>
+                            <AdminField
+                                className="block space-y-2"
+                                label={
+                                    <>
+                                        <span className="text-xs font-bold text-slate-700">默认回导仓库</span>
+                                    </>
+                                }
+                                description={
+                                    <>
+                                        <span className="block text-[11px] text-slate-500">
+                                            主表的库存量和上下限来自该仓库；库存是绝对值。
+                                        </span>
+                                        <span className="block text-[11px] text-amber-700">
+                                            请明确选择本次回导对应的仓库；系统不会代选。
+                                        </span>
+                                    </>
+                                }
+                            >
                                 <AdminSelect
                                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
                                     value={stockLocationId}
@@ -210,13 +227,7 @@ export function CatalogExportAction() {
                                         </option>
                                     ))}
                                 </AdminSelect>
-                                <span className="block text-[11px] text-slate-500">
-                                    主表的库存量和上下限来自该仓库；库存是绝对值。
-                                </span>
-                                <span className="block text-[11px] text-amber-700">
-                                    请明确选择本次回导对应的仓库；系统不会代选。
-                                </span>
-                            </label>
+                            </AdminField>
                             {integrityPending && !summary && (
                                 <p className="py-6 text-center text-sm text-slate-500" role="status">
                                     正在检查商品完整性…

@@ -53,6 +53,21 @@ function runExistingCheck(directory) {
 }
 
 describe('Admin mandatory architecture gate', () => {
+    it('rejects stacked short fields while accepting shared fields, inline controls and long editors', () => {
+        const { sourceRoot } = fixture({
+            'features/new-business/Fields.tsx': `
+                export const bad = <label className="block text-xs">名称<AdminInput /></label>;
+                export const shared = <AdminField label="名称"><AdminInput /></AdminField>;
+                export const inline = <label className="flex items-center">数量<AdminInput type="number" /></label>;
+                export const long = <label className="block">说明<AdminTextArea /></label>;
+                export const toggle = <label className="block">开启<AdminInput type="checkbox" /></label>;
+            `,
+        });
+        const violations = auditAdminInteraction(sourceRoot).violations;
+        expect(violations).toHaveLength(1);
+        expect(violations[0]).toContain('短字段标题与控件须使用 AdminField');
+    });
+
     it('accepts shared integration in a newly named production directory', () => {
         const { sourceRoot } = fixture({
             'features/new-business/write.ts':

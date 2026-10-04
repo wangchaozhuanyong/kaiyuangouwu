@@ -28,6 +28,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
@@ -1834,10 +1835,16 @@ function ModalActions({
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {

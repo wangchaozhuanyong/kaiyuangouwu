@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { createElement, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../components/AdminControls';
+import { AdminField } from '../components/AdminField';
 import { FeatureHelpButton } from '../components/FeatureHelp';
 import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
@@ -65,9 +66,7 @@ export function DynamicCustomFieldsForm({
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
             </div>
-            <div
-                className={columns === 1 ? 'grid gap-3 [&>label]:col-span-full' : 'grid gap-4 md:grid-cols-2'}
-            >
+            <div className={columns === 1 ? 'grid gap-3' : 'grid gap-4 md:grid-cols-2'}>
                 {visibleFields.map(field => (
                     <CustomFieldControl
                         key={field.name}
@@ -360,14 +359,15 @@ function FieldShell({
     children: React.ReactNode;
 }) {
     return (
-        <label className={`block min-w-0 ${fullWidth ? 'md:col-span-2' : ''}`}>
-            <span className="text-xs font-semibold text-slate-700">{label}</span>
-            {description && (
-                <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{description}</span>
-            )}
-            <div className="mt-1.5">{children}</div>
-            {error && <span className="mt-1 block text-[10px] text-rose-600">{error}</span>}
-        </label>
+        <AdminField
+            label={label}
+            description={description}
+            error={error}
+            layout={fullWidth ? 'stacked' : 'auto'}
+            className={`text-xs font-semibold text-slate-700 ${fullWidth ? 'md:col-span-2' : ''}`}
+        >
+            {children}
+        </AdminField>
     );
 }
 

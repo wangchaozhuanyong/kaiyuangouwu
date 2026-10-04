@@ -21,6 +21,7 @@ import {
 } from '../../../../common/src/system-display-labels';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CUSTOMER_SERVICE_REVIEWS_QUERY } from '../../graphql/telegram-notifications.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
@@ -1367,13 +1368,9 @@ function NumberField({
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
     return (
-        <label className="block text-[10px] font-bold text-slate-600">
-            <span className="mb-1.5 flex items-center justify-between gap-2">
-                <span>{label}</span>
-                {hint && <span className="font-normal text-slate-400">{hint}</span>}
-            </span>
+        <AdminField label={label} description={hint} className="text-[10px] font-bold text-slate-600">
             {children}
-        </label>
+        </AdminField>
     );
 }
 

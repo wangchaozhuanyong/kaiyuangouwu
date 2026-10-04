@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { AlertCircle, Calculator, Check, RefreshCw, Save } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
@@ -249,8 +250,14 @@ function ExpenseField({
     onChange: (value: string) => void;
 }) {
     return (
-        <label className="text-[11px] font-semibold text-slate-600">
-            <span>{label}</span>
+        <AdminField
+            className="text-[11px] font-semibold text-slate-600"
+            label={
+                <>
+                    <span>{label}</span>
+                </>
+            }
+        >
             <div className="mt-1 flex overflow-hidden rounded-lg border border-slate-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
                 <span className="flex items-center border-r border-slate-200 bg-slate-50 px-2.5 font-mono text-[10px] text-slate-500">
                     {currencyCode}
@@ -264,6 +271,6 @@ function ExpenseField({
                     className="min-w-0 flex-1 px-3 py-2 font-mono text-xs outline-none disabled:bg-slate-50"
                 />
             </div>
-        </label>
+        </AdminField>
     );
 }
