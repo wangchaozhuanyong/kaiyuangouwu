@@ -88,6 +88,20 @@ import { IcloudRelayPluginOptions } from './types';
         if (!config.authOptions.customPermissions.includes(manageIcloudRelayPermission)) {
             config.authOptions.customPermissions.push(manageIcloudRelayPermission);
         }
+        // MySQL TEXT is limited to 64 KB. Keep portable entity definitions while
+        // matching the lossless production migration for both mail body formats.
+        const bodyType = ['mysql', 'mariadb'].includes(config.dbConnectionOptions.type) ? 'longtext' : 'text';
+        config.entityOptions.metadataModifiers ??= [];
+        config.entityOptions.metadataModifiers.push(metadata => {
+            for (const column of metadata.columns) {
+                if (
+                    column.target === IcloudReceivedMail &&
+                    ['bodyHtml', 'bodyText'].includes(column.propertyName)
+                ) {
+                    column.options.type = bodyType;
+                }
+            }
+        });
         return config;
     },
     compatibility: '^3.7.0',
