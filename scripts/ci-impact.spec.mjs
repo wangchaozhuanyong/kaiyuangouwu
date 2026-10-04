@@ -273,7 +273,7 @@ test('CI-only changes are checked without deploying, and cannot accumulate into 
         assert.equal(classifyChanges([...files, file], inventory).lane, 'runtime', file);
 });
 
-test('shared hero CSS rebuilds the client and Admin preview while shared executable changes retain runtime scope', () => {
+test('shared hero CSS rebuilds the client and Admin preview while shared server inputs retain runtime scope', () => {
     const css = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
     const plan = classifyChanges([css], inventory);
     assert.equal(plan.lane, 'frontend');
@@ -283,7 +283,7 @@ test('shared hero CSS rebuilds the client and Admin preview while shared executa
     assert.equal(plan.publishing, false);
     for (const runtime of [
         'packages/core/src/service.ts',
-        'packages/storefront-content-plugin/src/shared/hero-scene.tsx',
+        'packages/storefront-content-plugin/src/shared/hero-theme.ts',
     ])
         assert.equal(
             classifyChanges(
@@ -305,4 +305,20 @@ test('artifact input hashing is a release control rather than serving process co
     assert.equal(plan.lane, 'frontend');
     assert.equal(plan.controls, true);
     assert.deepEqual(plan.packages, []);
+});
+
+// Shared content renderers are compiled only by the two browser apps.
+test('shared browser text renderers select both static apps without server checks', () => {
+    for (const file of [
+        'packages/storefront-content-plugin/src/shared/content-text.tsx',
+        'packages/storefront-content-plugin/src/shared/content-text.css',
+        'packages/storefront-content-plugin/src/shared/hero-scene.tsx',
+        'packages/storefront-content-plugin/src/shared/auth-visual.tsx',
+    ]) {
+        const plan = classifyChanges([file], inventory);
+        assert.equal(plan.lane, 'frontend', file);
+        assert.deepEqual(plan.frontends, ['next-admin', 'storefront'], file);
+        assert.deepEqual(plan.packages, [], file);
+        assert.equal(plan.publishing, false, file);
+    }
 });

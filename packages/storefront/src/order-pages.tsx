@@ -22,6 +22,7 @@ import {
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { fulfillmentStateDisplayLabel } from '../../common/src/display-localization';
+import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
@@ -831,7 +832,7 @@ function AfterSalesList({
                                             <span aria-hidden="true" />
                                             <div>
                                                 <strong>{afterSalesStateLabel(event.state, language)}</strong>
-                                                {event.note && <p>{event.note}</p>}
+                                                {event.note && <ContentText>{event.note}</ContentText>}
                                                 <small>{formatOrderDate(event.createdAt, locale)}</small>
                                             </div>
                                         </li>

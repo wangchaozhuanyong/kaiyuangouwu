@@ -21,6 +21,7 @@ import {
 import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
@@ -315,10 +316,12 @@ export function SectionHeader({
                         {title && <h2>{title}</h2>}
                         {titleSuffix}
                     </div>
-                    {subtitle && !subtitleAtEnd ? <p>{subtitle}</p> : null}
+                    {subtitle && !subtitleAtEnd ? <ContentText>{subtitle}</ContentText> : null}
                 </div>
             )}
-            {subtitle && subtitleAtEnd ? <p className="section-header-end-subtitle">{subtitle}</p> : null}
+            {subtitle && subtitleAtEnd ? (
+                <ContentText className="section-header-end-subtitle">{subtitle}</ContentText>
+            ) : null}
             {centerLabel &&
                 (title ? (
                     <span className="section-header-center-label">{centerLabel}</span>
