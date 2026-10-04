@@ -1,3 +1,4 @@
+import type { Type } from '@nestjs/common';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     ContentTranslationPlugin,
@@ -5,15 +6,23 @@ import {
 } from '@vendure/content-translation-plugin';
 import {
     ChannelService,
+    ConfigService,
     Customer,
     ExternalAuthenticationMethod,
     ExternalAuthenticationService,
     mergeConfig,
+    PaymentMethod,
     PaymentMethodHandler,
+    Refund,
     RequestContextService,
     Role,
+    RoleService,
+    ShippingMethod,
+    StockLocation,
     TransactionalConnection,
     User,
+    type ID,
+    type RequestContext,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
@@ -28,6 +37,8 @@ import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-conf
 import { DataConsentService } from '../src/data-consent.service';
 import { DataConsentRecord } from '../src/entities/data-consent-record.entity';
 import { ReferralAccount } from '../src/entities/referral-account.entity';
+import { ReferralBalanceUse } from '../src/entities/referral-balance-use.entity';
+import { ReferralLedgerEntry } from '../src/entities/referral-ledger-entry.entity';
 import { ReferralProgramConfig } from '../src/entities/referral-program-config.entity';
 import { ReferralRelationship } from '../src/entities/referral-relationship.entity';
 import { StoreProfile } from '../src/entities/store-profile.entity';
@@ -81,6 +92,8 @@ const config = mergeConfig(testConfig(), {
 });
 
 const { server, adminClient, shopClient } = createTestEnvironment(config);
+const primaryChannelToken = 'referral-primary-fixture';
+let platformChannelToken: string;
 
 const PROGRAM = gql`
     query ReferralProgramE2E {
@@ -458,7 +471,131 @@ describe('referral rebate closed loop', () => {
         const superadminCredentials = config.authOptions.superadminCredentials;
         if (!superadminCredentials) throw new Error('Superadmin credentials are required for this test');
         adminClient.setRequestHeader('x-vendure-sensitive-action-password', superadminCredentials.password);
-        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        await adminClient.query(gql`
+            mutation ReferralFixtureLanguages {
+                updateGlobalSettings(input: { availableLanguages: [en, zh_Hans] }) {
+                    ... on GlobalSettings {
+                        availableLanguages
+                    }
+                }
+            }
+        `);
+        const methods = await adminClient.query(gql`
+            query ReferralFixturePlatformMethods {
+                paymentMethods {
+                    items {
+                        code
+                    }
+                }
+            }
+        `);
+        if (
+            !methods.paymentMethods.items.some(
+                (method: { code: string }) => method.code === externalPaymentHandler.code,
+            )
+        ) {
+            await adminClient.query(
+                gql`
+                    mutation ReferralFixtureCreatePayment($input: CreatePaymentMethodInput!) {
+                        createPaymentMethod(input: $input) {
+                            code
+                        }
+                    }
+                `,
+                {
+                    input: {
+                        code: externalPaymentHandler.code,
+                        enabled: true,
+                        handler: { code: externalPaymentHandler.code, arguments: [] },
+                        translations: [LanguageCode.en, LanguageCode.zh_Hans].map(languageCode => ({
+                            languageCode,
+                            name: 'Referral isolated fixture payment',
+                            description: '',
+                        })),
+                    },
+                },
+            );
+        }
+        const platformCtx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        platformChannelToken = platformCtx.channel.token;
+        const defaultTaxZone = platformCtx.channel.defaultTaxZone;
+        const defaultShippingZone = platformCtx.channel.defaultShippingZone;
+        if (!defaultTaxZone || !defaultShippingZone) throw new Error('Fixture requires default zones');
+        const connection = server.app.get(TransactionalConnection);
+        const channelService = server.app.get(ChannelService);
+        const primary = await channelService.create(platformCtx, {
+            code: primaryChannelToken,
+            token: primaryChannelToken,
+            defaultLanguageCode: LanguageCode.zh_Hans,
+            availableLanguageCodes: [LanguageCode.en, LanguageCode.zh_Hans],
+            defaultCurrencyCode: platformCtx.channel.defaultCurrencyCode,
+            pricesIncludeTax: platformCtx.channel.pricesIncludeTax,
+            defaultTaxZoneId: defaultTaxZone.id,
+            defaultShippingZoneId: defaultShippingZone.id,
+        });
+        if (!('id' in primary)) throw new Error(primary.message);
+        const roles = server.app.get(RoleService);
+        await roles.assignRoleToChannel(
+            platformCtx,
+            (await roles.getSuperAdminRole(platformCtx)).id,
+            primary.id,
+        );
+        await roles.assignRoleToChannel(
+            platformCtx,
+            (await roles.getCustomerRole(platformCtx)).id,
+            primary.id,
+        );
+        const assignFixtureResources = async <T extends PaymentMethod | ShippingMethod | StockLocation>(
+            entity: Type<T>,
+        ) => {
+            const records = await connection.rawConnection.getRepository(entity).find();
+            for (const record of records)
+                await channelService.assignToChannels(platformCtx, entity, record.id, [primary.id]);
+        };
+        await assignFixtureResources(PaymentMethod);
+        await assignFixtureResources(ShippingMethod);
+        await assignFixtureResources(StockLocation);
+        const ctx = await server.app
+            .get(RequestContextService)
+            .create({ apiType: 'admin', channelOrToken: primaryChannelToken });
+        await connection.getRepository(ctx, StoreProfile).save(
+            new StoreProfile({
+                channelId: ctx.channelId,
+                status: 'ACTIVE',
+                descriptionZh: '',
+                descriptionEn: '',
+            }),
+        );
+        adminClient.setChannelToken(primaryChannelToken);
+        await adminClient.asSuperAdmin();
+        const paymentOptions = await adminClient.query(gql`
+            query ReferralFixturePaymentOptions {
+                myStorePaymentOptions {
+                    id
+                    code
+                    handlerCode
+                    platformEnabled
+                }
+            }
+        `);
+        expect(paymentOptions.myStorePaymentOptions.map((option: { code: string }) => option.code)).toEqual(
+            expect.arrayContaining([externalPaymentHandler.code, 'referral-balance']),
+        );
+        for (const option of paymentOptions.myStorePaymentOptions) {
+            if (![externalPaymentHandler.code, 'referral-balance'].includes(option.code)) continue;
+            expect(option.platformEnabled).toBe(true);
+            const enabled = await adminClient.query(
+                gql`
+                    mutation ReferralFixtureEnablePayment($id: ID!) {
+                        setMyStorePaymentOptionEnabled(id: $id, enabled: true) {
+                            effectiveEnabled
+                        }
+                    }
+                `,
+                { id: option.id },
+            );
+            expect(enabled.setMyStorePaymentOptionEnabled.effectiveEnabled).toBe(true);
+        }
         const legalBlocks = server.app
             .get(TransactionalConnection)
             .getRepository(ctx, StorefrontContentBlock);
@@ -501,6 +638,7 @@ describe('referral rebate closed loop', () => {
             ],
         });
         expect(variantResult.createProductVariants).toHaveLength(1);
+        adminClient.setChannelToken(platformChannelToken);
     }, TEST_SETUP_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -554,6 +692,8 @@ describe('referral rebate closed loop', () => {
     });
 
     it('binds an invitation, rewards paid product spend, claws back refunds, spends balance and handles an authorized withdrawal', async () => {
+        adminClient.setChannelToken(primaryChannelToken);
+        shopClient.setChannelToken(primaryChannelToken);
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
         expect(disabled.referralProgram.attributionWindowDays).toBe(0);
@@ -587,20 +727,20 @@ describe('referral rebate closed loop', () => {
         expect((await shopClient.query(PROGRAM)).referralProgram.attributionWindowDays).toBe(0);
 
         await register('inviter@example.com');
-        await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+        await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
         const inviterOverview = await shopClient.query(OVERVIEW);
         const inviteCode = inviterOverview.myReferralOverview.inviteCode as string;
         expect(inviteCode).toMatch(/^[A-Z2-9]{8}$/);
 
         await register('invitee@example.com', inviteCode, 'POSTER');
-        await shopClient.asUserWithCredentials('invitee@example.com', 'ReferralPass123!');
+        await loginShopCustomer('invitee@example.com', 'ReferralPass123!');
         await recordTrafficVisit('referral-e2e-visitor-0001');
 
         const inviteeOrder = await createAndPayOrder();
         const eligibleAmount = inviteeOrder.totalWithTax - inviteeOrder.shippingWithTax;
         const expectedReward = Math.round(eligibleAmount * 0.1);
 
-        await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+        await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
         const rewardedOverview = await shopClient.query(OVERVIEW);
         expect(rewardedOverview.myReferralOverview).toMatchObject({
             invitedCount: 1,
@@ -649,20 +789,110 @@ describe('referral rebate closed loop', () => {
             (payment: any) => payment.method === 'referral-balance',
         );
         expect(referralPayment.amount).toBe(expectedReward);
+        const firstBalanceRefundAmount = Math.floor(expectedReward * 0.3);
+        expect(firstBalanceRefundAmount).toBeGreaterThan(0);
+        const connection = server.app.get(TransactionalConnection);
+        const ctx = await server.app
+            .get(RequestContextService)
+            .create({ apiType: 'admin', channelOrToken: primaryChannelToken });
+        const service = server.app.get(ReferralService);
+        const refundHandler = service as unknown as {
+            handleSettledRefund(ctx: RequestContext, orderId: ID, refundId: ID): Promise<void>;
+        };
+        const idStrategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        if (!idStrategy) throw new Error('Fixture requires its configured entity ID strategy');
+        const balanceOrderId = idStrategy.decodeId(completedInviterOrder.addPaymentToOrder.id);
+        const useWhere = { channelId: ctx.channelId, orderId: balanceOrderId };
+        // A failure after the wallet, receipt and use update must roll all three back.
+        await expect(
+            connection.withTransaction(ctx, async txCtx => {
+                const probe = await connection.getRepository(txCtx, Refund).save(
+                    new Refund({
+                        state: 'Settled',
+                        paymentId: idStrategy.decodeId(referralPayment.id),
+                        method: 'referral-balance',
+                        total: firstBalanceRefundAmount,
+                        items: 0,
+                        shipping: 0,
+                        adjustment: firstBalanceRefundAmount,
+                        metadata: {},
+                        reason: 'Local transaction rollback probe',
+                    }),
+                );
+                await refundHandler.handleSettledRefund(txCtx, balanceOrderId, probe.id);
+                throw new Error('referral rollback probe');
+            }),
+        ).rejects.toThrow('referral rollback probe');
+        expect(
+            (await connection.getRepository(ctx, ReferralBalanceUse).findOneByOrFail(useWhere))
+                .refundedAmount,
+        ).toBe(0);
+        expect(
+            await connection.getRepository(ctx, ReferralLedgerEntry).countBy({
+                channelId: ctx.channelId,
+                orderId: balanceOrderId,
+                eventType: 'SPEND_REFUNDED',
+            }),
+        ).toBe(0);
+        expect(walletFor(await shopClient.query(OVERVIEW), inviteeOrder.currencyCode).availableBalance).toBe(
+            -expectedReward,
+        );
+        const firstBalanceRefund = await adminClient.query(REFUND, {
+            input: {
+                lines: [],
+                shipping: 0,
+                adjustment: 0,
+                amount: firstBalanceRefundAmount,
+                paymentId: referralPayment.id,
+                reason: 'First partial referral balance refund',
+            },
+        });
+        assertSuccess(firstBalanceRefund.refundOrder);
+        expect(firstBalanceRefund.refundOrder.state).toBe('Settled');
+        await connection.withTransaction(ctx, txCtx =>
+            refundHandler.handleSettledRefund(
+                txCtx,
+                balanceOrderId,
+                idStrategy.decodeId(firstBalanceRefund.refundOrder.id),
+            ),
+        );
+        const afterReplay = await connection.getRepository(ctx, ReferralBalanceUse).findOneByOrFail(useWhere);
+        expect(afterReplay.refundedAmount).toBe(firstBalanceRefundAmount);
+        expect(afterReplay.status).toBe('PARTIALLY_REFUNDED');
+        const afterPartial = await shopClient.query(OVERVIEW);
+        expect(walletFor(afterPartial, inviteeOrder.currencyCode).availableBalance).toBe(
+            -expectedReward + firstBalanceRefundAmount,
+        );
+        expect(
+            afterPartial.myReferralOverview.ledger.filter((item: any) => item.eventType === 'SPEND_REFUNDED'),
+        ).toHaveLength(1);
+
         const balanceRefund = await adminClient.query(REFUND, {
             input: {
                 lines: [],
                 shipping: 0,
                 adjustment: 0,
-                amount: expectedReward,
+                amount: expectedReward - firstBalanceRefundAmount,
                 paymentId: referralPayment.id,
-                reason: 'Referral balance refund in E2E test',
+                reason: 'Remaining referral balance refund in E2E test',
             },
         });
         assertSuccess(balanceRefund.refundOrder);
         expect(balanceRefund.refundOrder.state).toBe('Settled');
         const afterBalanceRefund = await shopClient.query(OVERVIEW);
         expect(walletFor(afterBalanceRefund, inviteeOrder.currencyCode).availableBalance).toBe(0);
+        const fullyRefunded = await connection
+            .getRepository(ctx, ReferralBalanceUse)
+            .findOneByOrFail(useWhere);
+        expect(fullyRefunded.refundedAmount).toBe(expectedReward);
+        expect(fullyRefunded.status).toBe('REFUNDED');
+        const refundReceipts = await connection.getRepository(ctx, ReferralLedgerEntry).findBy({
+            channelId: ctx.channelId,
+            orderId: balanceOrderId,
+            eventType: 'SPEND_REFUNDED',
+        });
+        expect(refundReceipts).toHaveLength(2);
+        expect(refundReceipts.reduce((sum, item) => sum + item.availableDelta, 0)).toBe(expectedReward);
 
         const customerResult = await adminClient.query(FIND_CUSTOMER, { email: 'inviter@example.com' });
         const inviterCustomerId = customerResult.customers.items[0].id;
@@ -744,6 +974,7 @@ describe('referral rebate closed loop', () => {
                 inviteeOrder.totalWithTax +
                 completedInviterOrder.addPaymentToOrder.totalWithTax -
                 productRefund.refundOrder.total -
+                firstBalanceRefund.refundOrder.total -
                 balanceRefund.refundOrder.total,
         });
 
@@ -799,8 +1030,8 @@ describe('referral rebate closed loop', () => {
     );
 
     it("keeps one customer's referral overview separate across two stores", async () => {
-        shopClient.setChannelToken(null);
-        await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+        shopClient.setChannelToken(primaryChannelToken);
+        await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
         const primaryOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
         expect(primaryOverview.invitedCount).toBeGreaterThan(0);
         expect(primaryOverview.ledger.length).toBeGreaterThan(0);
@@ -879,7 +1110,14 @@ describe('referral rebate closed loop', () => {
                 .add(foreignContext.channelId);
         }
 
+        const roles = server.app.get(RoleService);
+        await roles.assignRoleToChannel(
+            context,
+            (await roles.getSuperAdminRole(context)).id,
+            foreignContext.channelId,
+        );
         adminClient.setChannelToken(token);
+        await adminClient.asSuperAdmin();
         try {
             const foreignProgram = (await adminClient.query(PROGRAM)).referralProgram;
             expect(foreignProgram.enabled).toBe(false);
@@ -902,7 +1140,7 @@ describe('referral rebate closed loop', () => {
 
         try {
             shopClient.setChannelToken(token);
-            await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+            await loginShopCustomer('inviter@example.com', 'ReferralPass123!', token);
             const foreignOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
             expect(foreignOverview).toMatchObject({
                 invitedCount: 0,
@@ -917,7 +1155,7 @@ describe('referral rebate closed loop', () => {
             ).toBe(false);
         } finally {
             shopClient.setChannelToken(primary.token);
-            await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+            await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
         }
         const restored = (await shopClient.query(OVERVIEW)).myReferralOverview;
         expect(restored.inviteCode).toBe(primaryOverview.inviteCode);
@@ -1194,7 +1432,9 @@ describe('referral rebate closed loop', () => {
     }, 30_000);
 
     it('keeps external registration, consent and referral atomic in the real database', async () => {
-        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const ctx = await server.app
+            .get(RequestContextService)
+            .create({ apiType: 'admin', channelOrToken: primaryChannelToken });
         const connection = server.app.get(TransactionalConnection);
         const external = server.app.get(ExternalAuthenticationService);
         const referrals = server.app.get(ReferralService);
@@ -1203,7 +1443,7 @@ describe('referral rebate closed loop', () => {
         const original = await configs.findOne({ where: { channelId: ctx.channelId } });
         const program = await configs.save(
             new ReferralProgramConfig({
-                ...(original ?? {}),
+                ...original,
                 channelId: ctx.channelId,
                 enabled: true,
                 currencyCode: ctx.channel.defaultCurrencyCode,
@@ -1449,6 +1689,7 @@ async function createOrderAtPayment(): Promise<any> {
             },
         });
         expect(reviewed.reviewFraudRiskCase.status).toBe('APPROVED');
+        await apply({ reopen: true });
         prepared = await command({ preparePayment: true });
     }
     expect(prepared.status, prepared.message ?? prepared.errorCode).toBe('APPLIED');
@@ -1473,4 +1714,10 @@ function assertSuccess(result: { __typename?: string; message?: string }): void 
 
 function walletFor(result: any, currencyCode: string): any {
     return result.myReferralOverview.wallets.find((wallet: any) => wallet.currencyCode === currencyCode);
+}
+
+async function loginShopCustomer(email: string, password: string, channelToken = primaryChannelToken) {
+    await shopClient.asUserWithCredentials(email, password);
+    // The testing client adopts the login response's sole channel; choose the fixture store explicitly.
+    shopClient.setChannelToken(channelToken);
 }

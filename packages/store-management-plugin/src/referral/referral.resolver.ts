@@ -112,8 +112,9 @@ export class ReferralAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('skip') skip?: number,
         @Args('take') take?: number,
+        @Args('search') search?: string,
     ) {
-        return this.referralService.adminRelationships(ctx, skip, take);
+        return this.referralService.adminRelationships(ctx, skip, take, search);
     }
 
     @Query()
@@ -122,20 +123,31 @@ export class ReferralAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('skip') skip?: number,
         @Args('take') take?: number,
+        @Args('search') search?: string,
     ) {
-        return this.referralService.adminInviterSummaries(ctx, skip, take);
+        return this.referralService.adminInviterSummaries(ctx, skip, take, search);
     }
 
     @Query()
     @Allow(referralPermission.Read)
-    referralLedger(@Ctx() ctx: RequestContext, @Args('skip') skip?: number, @Args('take') take?: number) {
-        return this.referralService.adminLedger(ctx, skip, take);
+    referralLedger(
+        @Ctx() ctx: RequestContext,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+        @Args('search') search?: string,
+    ) {
+        return this.referralService.adminLedger(ctx, skip, take, search);
     }
 
     @Query()
     @Allow(referralPermission.Read)
-    referralRewards(@Ctx() ctx: RequestContext, @Args('skip') skip?: number, @Args('take') take?: number) {
-        return this.referralService.adminRewards(ctx, skip, take);
+    referralRewards(
+        @Ctx() ctx: RequestContext,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+        @Args('search') search?: string,
+    ) {
+        return this.referralService.adminRewards(ctx, skip, take, search);
     }
 
     @Query()
@@ -160,8 +172,9 @@ export class ReferralAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('skip') skip?: number,
         @Args('take') take?: number,
+        @Args('search') search?: string,
     ) {
-        return this.referralService.adminWithdrawals(ctx, skip, take);
+        return this.referralService.adminWithdrawals(ctx, skip, take, search);
     }
 
     @Query()

@@ -1,7 +1,10 @@
-import type { RequestContext } from '@vendure/core';
+import { Refund, type RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ReferralBalanceUse } from '../entities/referral-balance-use.entity';
+import { ReferralLedgerEntry } from '../entities/referral-ledger-entry.entity';
 import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
+import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 
 import { referralPosterCopy } from './referral-poster-presets';
@@ -19,6 +22,132 @@ describe('referral database locking', () => {
             expect(supportsReferralPessimisticLock(driverType)).toBe(false);
         },
     );
+});
+
+describe('referral balance refund receipts', () => {
+    function fixture(driver = 'mysql') {
+        const wallet = {
+            id: 'wallet',
+            customerId: 'customer',
+            currencyCode: 'MYR',
+            availableBalance: 0,
+            pendingBalance: 0,
+            reservedBalance: 0,
+        };
+        const use = {
+            id: 'use',
+            walletId: wallet.id,
+            amount: 1000,
+            refundedAmount: 0,
+            status: 'CAPTURED',
+            wallet,
+        };
+        const entries = new Map<string, unknown>();
+        const useRepository = {
+            findOne: vi.fn((_options: unknown) => Promise.resolve({ ...use })),
+            save: vi.fn((value: typeof use) => Promise.resolve(Object.assign(use, value))),
+        };
+        const ledgerRepository = {
+            findOne: vi.fn(({ where }) => Promise.resolve(entries.get(where.idempotencyKey))),
+            save: vi.fn(entry => {
+                entries.set(entry.idempotencyKey, entry);
+                return Promise.resolve(entry);
+            }),
+        };
+        const walletRepository = {
+            findOneByOrFail: vi.fn(() => Promise.resolve({ ...wallet })),
+            save: vi.fn((value: typeof wallet) => Promise.resolve(Object.assign(wallet, value))),
+        };
+        const service = Object.assign(Object.create(ReferralService.prototype), {
+            connection: {
+                rawConnection: { options: { type: driver } },
+                getRepository: (_ctx: unknown, entity: unknown) => {
+                    if (entity === Refund)
+                        return {
+                            findOne: ({ where }: { where: { id: string } }) =>
+                                Promise.resolve({
+                                    id: where.id,
+                                    total: where.id === 'refund-a' ? 300 : 700,
+                                    payment: { method: 'referral-balance' },
+                                }),
+                        };
+                    if (entity === ReferralReward) return { findOne: () => Promise.resolve(null) };
+                    if (entity === ReferralBalanceUse) return useRepository;
+                    if (entity === ReferralLedgerEntry) return ledgerRepository;
+                    if (entity === ReferralWallet) return walletRepository;
+                    throw new Error('Unexpected entity');
+                },
+            },
+            lockRow: vi.fn(() => Promise.resolve(undefined)),
+        });
+        return { service, wallet, use, entries, useRepository, ledgerRepository };
+    }
+
+    it('ignores a duplicate receipt without reducing the remaining refundable amount', async () => {
+        const { service, use, wallet, entries, useRepository, ledgerRepository } = fixture();
+        const ctx = { channelId: 'store' } as RequestContext;
+        await service.restoreBalanceUseForRefund(ctx, 'order', 'refund-a');
+        await service.restoreBalanceUseForRefund(ctx, 'order', 'refund-a');
+        expect(use.refundedAmount).toBe(300);
+        expect(wallet.availableBalance).toBe(300);
+        expect(useRepository.save).toHaveBeenCalledTimes(1);
+        expect(useRepository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { channelId: 'store', orderId: 'order' },
+                lock: { mode: 'pessimistic_write' },
+            }),
+        );
+        expect(ledgerRepository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+        );
+        await service.restoreBalanceUseForRefund(ctx, 'order', 'refund-b');
+        expect(use.refundedAmount).toBe(1000);
+        expect(wallet.availableBalance).toBe(1000);
+        expect(use.status).toBe('REFUNDED');
+        expect(entries.size).toBe(2);
+    });
+
+    it('credits a partial refund toward debt without requiring the wallet to reach zero', async () => {
+        const { service, use, wallet, entries } = fixture();
+        wallet.availableBalance = -1000;
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
+        expect(wallet.availableBalance).toBe(-700);
+        expect(use.refundedAmount).toBe(300);
+        expect(entries.size).toBe(1);
+    });
+
+    it('refunds the remainder on cancellation and ignores later refund events', async () => {
+        const { service, use, wallet, entries, useRepository } = fixture();
+        wallet.availableBalance = -1000;
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
+        await service.handleCancelledOrder({ channelId: 'store' }, 'order');
+        expect(wallet.availableBalance).toBe(0);
+        expect(use).toMatchObject({ refundedAmount: 1000, status: 'RELEASED' });
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-b');
+        await service.handleCancelledOrder({ channelId: 'store' }, 'order');
+        expect(wallet.availableBalance).toBe(0);
+        expect(entries.size).toBe(2);
+        expect(
+            useRepository.findOne.mock.calls.every(([options]) => (options as { lock?: unknown }).lock),
+        ).toBe(true);
+    });
+
+    it('does not reimburse again after cancellation released the entire balance use', async () => {
+        const { service, use, wallet, entries } = fixture();
+        Object.assign(use, { refundedAmount: 1000, status: 'RELEASED' });
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
+        expect(wallet.availableBalance).toBe(0);
+        expect(use.refundedAmount).toBe(1000);
+        expect(entries.size).toBe(0);
+    });
+
+    it('keeps replay protection on drivers without row locks', async () => {
+        const { service, use, useRepository } = fixture('sqljs');
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
+        expect(use.refundedAmount).toBe(300);
+        expect(useRepository.findOne.mock.calls[0][0]).not.toHaveProperty('lock');
+    });
 });
 
 describe('referral program optimistic concurrency', () => {

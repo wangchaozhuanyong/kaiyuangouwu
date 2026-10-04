@@ -97,6 +97,23 @@ export interface ProcessReferralWithdrawalInput {
     note?: string | null;
 }
 
+export interface ReferralWalletAuditItem {
+    walletId: ID;
+    customerId: ID;
+    customerName: string;
+    customerEmail: string;
+    currencyCode: CurrencyCode;
+    actualAvailableBalance: number;
+    actualPendingBalance: number;
+    actualReservedBalance: number;
+    ledgerAvailableBalance: number;
+    ledgerPendingBalance: number;
+    ledgerReservedBalance: number;
+    availableDifference: number;
+    pendingDifference: number;
+    reservedDifference: number;
+}
+
 interface WalletDeltaInput {
     eventType: string;
     idempotencyKey: string;
@@ -778,24 +795,24 @@ export class ReferralService implements OnApplicationBootstrap {
         });
     }
 
-    async adminRelationships(ctx: RequestContext, skip = 0, take = 100) {
-        return this.reports.adminRelationships(ctx, skip, take);
+    async adminRelationships(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        return this.reports.adminRelationships(ctx, skip, take, search);
     }
 
-    async adminInviterSummaries(ctx: RequestContext, skip = 0, take = 50) {
-        return this.reports.adminInviterSummaries(ctx, skip, take);
+    async adminInviterSummaries(ctx: RequestContext, skip = 0, take = 50, search?: string) {
+        return this.reports.adminInviterSummaries(ctx, skip, take, search);
     }
 
-    async adminLedger(ctx: RequestContext, skip = 0, take = 100) {
-        return this.reports.adminLedger(ctx, skip, take);
+    async adminLedger(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        return this.reports.adminLedger(ctx, skip, take, search);
     }
 
-    async adminRewards(ctx: RequestContext, skip = 0, take = 100) {
-        return this.reports.adminRewards(ctx, skip, take);
+    async adminRewards(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        return this.reports.adminRewards(ctx, skip, take, search);
     }
 
-    async adminWithdrawals(ctx: RequestContext, skip = 0, take = 100) {
-        return this.reports.adminWithdrawals(ctx, skip, take);
+    async adminWithdrawals(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        return this.reports.adminWithdrawals(ctx, skip, take, search);
     }
 
     async adminCustomerWallets(ctx: RequestContext, customerId: ID) {
@@ -850,56 +867,79 @@ export class ReferralService implements OnApplicationBootstrap {
         ledgerRepository: ReturnType<TransactionalConnection['getRepository']>,
         channelId?: ID,
     ) {
-        const wallets = (await walletRepository.find({
-            ...(channelId ? { where: { channelId } } : {}),
-            relations: { customer: true },
-            take: 5_000,
-            order: { id: 'ASC' },
-        })) as ReferralWallet[];
-        const ledgerQuery = ledgerRepository
-            .createQueryBuilder('entry')
-            .select('entry.walletId', 'walletId')
-            .addSelect('COALESCE(SUM(entry.availableDelta), 0)', 'availableBalance')
-            .addSelect('COALESCE(SUM(entry.pendingDelta), 0)', 'pendingBalance')
-            .addSelect('COALESCE(SUM(entry.reservedDelta), 0)', 'reservedBalance')
-            .groupBy('entry.walletId');
-        if (channelId) ledgerQuery.where('entry.channelId = :channelId', { channelId });
-        const ledgerBalances = await ledgerQuery.getRawMany<{
-            walletId: string | number;
-            availableBalance: string | number;
-            pendingBalance: string | number;
-            reservedBalance: string | number;
-        }>();
-        const ledgerByWallet = new Map(ledgerBalances.map(item => [item.walletId.toString(), item]));
-        const items = wallets.flatMap(wallet => {
-            const ledger = ledgerByWallet.get(wallet.id.toString());
-            const ledgerAvailableBalance = Number(ledger?.availableBalance ?? 0);
-            const ledgerPendingBalance = Number(ledger?.pendingBalance ?? 0);
-            const ledgerReservedBalance = Number(ledger?.reservedBalance ?? 0);
-            const availableDifference = wallet.availableBalance - ledgerAvailableBalance;
-            const pendingDifference = wallet.pendingBalance - ledgerPendingBalance;
-            const reservedDifference = wallet.reservedBalance - ledgerReservedBalance;
-            if (!availableDifference && !pendingDifference && !reservedDifference) return [];
-            return [
-                {
-                    walletId: wallet.id,
-                    customerId: wallet.customerId,
-                    customerName: customerName(wallet.customer),
-                    customerEmail: wallet.customer.emailAddress,
-                    currencyCode: wallet.currencyCode,
-                    actualAvailableBalance: wallet.availableBalance,
-                    actualPendingBalance: wallet.pendingBalance,
-                    actualReservedBalance: wallet.reservedBalance,
-                    ledgerAvailableBalance,
-                    ledgerPendingBalance,
-                    ledgerReservedBalance,
-                    availableDifference,
-                    pendingDifference,
-                    reservedDifference,
-                },
-            ];
-        });
-        return { auditedWallets: wallets.length, items };
+        const items: ReferralWalletAuditItem[] = [];
+        let auditedWallets = 0;
+        const walletQuery = walletRepository.createQueryBuilder('wallet');
+        if (channelId) walletQuery.where('wallet.channelId = :channelId', { channelId });
+        // Freeze the upper ID bound so newly created wallets cannot prolong this run.
+        const upperBound = await walletQuery
+            .clone()
+            .select('MAX(wallet.id)', 'id')
+            .getRawOne<{ id: ID | null }>();
+        if (upperBound?.id == null) return { auditedWallets, items };
+        let cursor: ID | undefined;
+        while (true) {
+            const batch = walletQuery
+                .clone()
+                .leftJoinAndSelect('wallet.customer', 'customer')
+                .andWhere('wallet.id <= :upperBound', { upperBound: upperBound.id })
+                .orderBy('wallet.id', 'ASC')
+                .take(500);
+            if (cursor != null) batch.andWhere('wallet.id > :cursor', { cursor });
+            const wallets = (await batch.getMany()) as ReferralWallet[];
+            if (!wallets.length) break;
+            const ledgerQuery = ledgerRepository
+                .createQueryBuilder('entry')
+                .select('entry.walletId', 'walletId')
+                .addSelect('COALESCE(SUM(entry.availableDelta), 0)', 'availableBalance')
+                .addSelect('COALESCE(SUM(entry.pendingDelta), 0)', 'pendingBalance')
+                .addSelect('COALESCE(SUM(entry.reservedDelta), 0)', 'reservedBalance')
+                .groupBy('entry.walletId');
+            ledgerQuery.where('entry.walletId IN (:...walletIds)', {
+                walletIds: wallets.map(wallet => wallet.id),
+            });
+            if (channelId) ledgerQuery.andWhere('entry.channelId = :channelId', { channelId });
+            const ledgerBalances = await ledgerQuery.getRawMany<{
+                walletId: string | number;
+                availableBalance: string | number;
+                pendingBalance: string | number;
+                reservedBalance: string | number;
+            }>();
+            const ledgerByWallet = new Map(ledgerBalances.map(item => [item.walletId.toString(), item]));
+            items.push(
+                ...wallets.flatMap(wallet => {
+                    const ledger = ledgerByWallet.get(wallet.id.toString());
+                    const ledgerAvailableBalance = Number(ledger?.availableBalance ?? 0);
+                    const ledgerPendingBalance = Number(ledger?.pendingBalance ?? 0);
+                    const ledgerReservedBalance = Number(ledger?.reservedBalance ?? 0);
+                    const availableDifference = wallet.availableBalance - ledgerAvailableBalance;
+                    const pendingDifference = wallet.pendingBalance - ledgerPendingBalance;
+                    const reservedDifference = wallet.reservedBalance - ledgerReservedBalance;
+                    if (!availableDifference && !pendingDifference && !reservedDifference) return [];
+                    return [
+                        {
+                            walletId: wallet.id,
+                            customerId: wallet.customerId,
+                            customerName: customerName(wallet.customer),
+                            customerEmail: wallet.customer.emailAddress,
+                            currencyCode: wallet.currencyCode,
+                            actualAvailableBalance: wallet.availableBalance,
+                            actualPendingBalance: wallet.pendingBalance,
+                            actualReservedBalance: wallet.reservedBalance,
+                            ledgerAvailableBalance,
+                            ledgerPendingBalance,
+                            ledgerReservedBalance,
+                            availableDifference,
+                            pendingDifference,
+                            reservedDifference,
+                        },
+                    ];
+                }),
+            );
+            auditedWallets += wallets.length;
+            cursor = wallets[wallets.length - 1].id;
+        }
+        return { auditedWallets, items };
     }
 
     private async rewardSettledOrder(ctx: RequestContext, orderId: ID, settledAt: Date): Promise<void> {
@@ -1093,19 +1133,32 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!refund || refund.payment?.method !== REFERRAL_BALANCE_PAYMENT_METHOD_CODE) return;
         const use = await this.connection.getRepository(ctx, ReferralBalanceUse).findOne({
             where: { channelId: ctx.channelId, orderId },
-            relations: { wallet: true },
+            ...this.balanceUseReadLock(),
         });
         if (!use) return;
+        const idempotencyKey = `SPEND_REFUNDED:${use.id}:${refundId}`;
+        // Serialize refunds and cancellation on the same balance use. A current read sees
+        // the committed receipt after waiting for its lock, including under MySQL RR.
+        const duplicate = await this.connection.getRepository(ctx, ReferralLedgerEntry).findOne({
+            where: { idempotencyKey },
+            ...this.balanceUseReadLock(),
+        });
+        if (duplicate) return;
         const delta = Math.min(refund.total, Math.max(0, use.amount - use.refundedAmount));
         if (delta <= 0) return;
-        await this.applyWalletDelta(ctx, use.wallet, {
+        const wallet = await this.connection
+            .getRepository(ctx, ReferralWallet)
+            .findOneByOrFail({ id: use.walletId });
+        await this.applyWalletDelta(ctx, wallet, {
             eventType: 'SPEND_REFUNDED',
-            idempotencyKey: `SPEND_REFUNDED:${use.id}:${refundId}`,
+            idempotencyKey,
             availableDelta: delta,
             orderId,
             refundId,
             actorType: 'SYSTEM',
             note: '订单退款已退回返利余额',
+            // A positive refund can reduce existing debt even when it does not clear it.
+            allowNegativeAvailable: true,
         });
         use.refundedAmount += delta;
         use.status = use.refundedAmount >= use.amount ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
@@ -1150,11 +1203,14 @@ export class ReferralService implements OnApplicationBootstrap {
 
         const use = await this.connection.getRepository(ctx, ReferralBalanceUse).findOne({
             where: { channelId: ctx.channelId, orderId },
-            relations: { wallet: true },
+            ...this.balanceUseReadLock(),
         });
         if (use && use.refundedAmount < use.amount && use.status !== 'RELEASED') {
             const delta = use.amount - use.refundedAmount;
-            await this.applyWalletDelta(ctx, use.wallet, {
+            const wallet = await this.connection
+                .getRepository(ctx, ReferralWallet)
+                .findOneByOrFail({ id: use.walletId });
+            await this.applyWalletDelta(ctx, wallet, {
                 eventType: 'SPEND_CANCELLED',
                 idempotencyKey: `SPEND_CANCELLED:${use.id}:${orderId}`,
                 availableDelta: delta,
@@ -1162,6 +1218,7 @@ export class ReferralService implements OnApplicationBootstrap {
                 orderId,
                 actorType: 'SYSTEM',
                 note: '订单取消，退回返利余额',
+                allowNegativeAvailable: true,
             });
             use.refundedAmount = use.amount;
             use.status = 'RELEASED';
@@ -1463,6 +1520,12 @@ export class ReferralService implements OnApplicationBootstrap {
             { reload: false },
         );
         return fresh;
+    }
+
+    private balanceUseReadLock() {
+        return supportsReferralPessimisticLock(this.connection.rawConnection.options.type)
+            ? { lock: { mode: 'pessimistic_write' as const } }
+            : {};
     }
 
     private async lockRow<T extends { id: ID }>(

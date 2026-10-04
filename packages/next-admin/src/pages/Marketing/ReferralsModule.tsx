@@ -7,13 +7,15 @@ import {
     Save,
     Search,
     Settings2,
+    UserPlus,
     Users,
     WalletCards,
     X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminButton } from '../../components/AdminControls';
+import { SearchInput } from '../../components/SearchInput';
 import {
     REFERRAL_PROGRAM_QUERY,
     REFERRAL_REPORTS_QUERY,
@@ -31,6 +33,7 @@ import { majorInputToMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
 import { FinancialDialog, WithdrawalActionDialog } from './ReferralDialogs';
 import {
+    InviteRelationshipsPanel,
     LedgerPanel,
     ProgramSettings,
     PromotersPanel,
@@ -76,6 +79,7 @@ function ReferralManagement() {
     });
     const reports = useQuery<ReferralReportsResult>(REFERRAL_REPORTS_QUERY, {
         variables: {
+            search,
             take: pageSize,
             summarySkip: skips.summaries,
             relationshipSkip: skips.relationships,
@@ -103,6 +107,11 @@ function ReferralManagement() {
     };
     const changeSkip = (key: ReportKey, value: number) =>
         setSkips(current => ({ ...current, [key]: Math.max(0, value) }));
+    const changeSearch = (value: string) => {
+        if (value === search) return;
+        setSearch(value);
+        setSkips({ summaries: 0, relationships: 0, rewards: 0, ledger: 0, withdrawals: 0 });
+    };
 
     const saveProgram = async () => {
         if (!canUpdate || !draft) return;
@@ -213,12 +222,15 @@ function ReferralManagement() {
                     program.data && (
                         <>
                             <TodayOverview data={program.data.referralTodayMetrics} />
-                            <nav className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs">
+                            <nav
+                                aria-label="分销与返利子导航"
+                                className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
+                            >
                                 <TabButton
                                     active={activeTab === 'SETTINGS'}
                                     onClick={() => {
                                         setActiveTab('SETTINGS');
-                                        setSearch('');
+                                        changeSearch('');
                                     }}
                                     icon={<Settings2 className="h-3.5 w-3.5" />}
                                 >
@@ -228,17 +240,27 @@ function ReferralManagement() {
                                     active={activeTab === 'PROMOTERS'}
                                     onClick={() => {
                                         setActiveTab('PROMOTERS');
-                                        setSearch('');
+                                        changeSearch('');
                                     }}
                                     icon={<Users className="h-3.5 w-3.5" />}
                                 >
-                                    {`推广员 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`}
+                                    {`推广员团队 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`}
+                                </TabButton>
+                                <TabButton
+                                    active={activeTab === 'RELATIONSHIPS'}
+                                    onClick={() => {
+                                        setActiveTab('RELATIONSHIPS');
+                                        changeSearch('');
+                                    }}
+                                    icon={<UserPlus className="h-3.5 w-3.5" />}
+                                >
+                                    {`邀请关系明细 ${reports.data?.referralRelationships.totalItems ?? 0}`}
                                 </TabButton>
                                 <TabButton
                                     active={activeTab === 'REWARDS'}
                                     onClick={() => {
                                         setActiveTab('REWARDS');
-                                        setSearch('');
+                                        changeSearch('');
                                     }}
                                     icon={<Gift className="h-3.5 w-3.5" />}
                                 >
@@ -248,7 +270,7 @@ function ReferralManagement() {
                                     active={activeTab === 'LEDGER'}
                                     onClick={() => {
                                         setActiveTab('LEDGER');
-                                        setSearch('');
+                                        changeSearch('');
                                     }}
                                     icon={<WalletCards className="h-3.5 w-3.5" />}
                                 >
@@ -258,7 +280,7 @@ function ReferralManagement() {
                                     active={activeTab === 'WITHDRAWALS'}
                                     onClick={() => {
                                         setActiveTab('WITHDRAWALS');
-                                        setSearch('');
+                                        changeSearch('');
                                     }}
                                     icon={<CircleDollarSign className="h-3.5 w-3.5" />}
                                 >
@@ -268,11 +290,12 @@ function ReferralManagement() {
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                    <AdminInput
+                                    <SearchInput
+                                        key={activeTab}
                                         type="search"
                                         autoComplete="off"
                                         value={search}
-                                        onChange={event => setSearch(event.target.value)}
+                                        onValueChange={changeSearch}
                                         aria-label="搜索分销流水"
                                         placeholder="搜索姓名、邮箱、订单号或流水号"
                                         className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
@@ -280,7 +303,7 @@ function ReferralManagement() {
                                     {search && (
                                         <AdminButton
                                             type="button"
-                                            onClick={() => setSearch('')}
+                                            onClick={() => changeSearch('')}
                                             className="absolute right-2.5 top-2 text-slate-400"
                                             aria-label="清空分销数据搜索"
                                         >
@@ -305,9 +328,20 @@ function ReferralManagement() {
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reportError}
-                                    search={search}
-                                    skips={skips}
-                                    changeSkip={changeSkip}
+                                    skip={skips.summaries}
+                                    changeSkip={value => changeSkip('summaries', value)}
+                                    onRetry={() => void reports.refetch()}
+                                />
+                            )}
+                            {activeTab === 'RELATIONSHIPS' && (
+                                <InviteRelationshipsPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
+                                    data={reports.data}
+                                    loading={reports.loading}
+                                    error={reportError}
+                                    skip={skips.relationships}
+                                    changeSkip={value => changeSkip('relationships', value)}
                                     onRetry={() => void reports.refetch()}
                                 />
                             )}
@@ -318,7 +352,6 @@ function ReferralManagement() {
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reportError}
-                                    search={search}
                                     skip={skips.rewards}
                                     changeSkip={value => changeSkip('rewards', value)}
                                     onRetry={() => void reports.refetch()}
@@ -331,7 +364,6 @@ function ReferralManagement() {
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reportError}
-                                    search={search}
                                     skip={skips.ledger}
                                     changeSkip={value => changeSkip('ledger', value)}
                                     onRetry={() => void reports.refetch()}
@@ -344,7 +376,6 @@ function ReferralManagement() {
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reportError}
-                                    search={search}
                                     skip={skips.withdrawals}
                                     changeSkip={value => changeSkip('withdrawals', value)}
                                     onAction={setWithdrawalAction}

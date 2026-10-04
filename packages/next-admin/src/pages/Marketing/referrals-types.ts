@@ -3,12 +3,13 @@ import { ReferralReportsResult } from '../../graphql/marketing.graphql';
 export const REFERRAL_TABS = {
     settings: 'SETTINGS',
     promoters: 'PROMOTERS',
+    relationships: 'RELATIONSHIPS',
     rewards: 'REWARDS',
     ledger: 'LEDGER',
     withdrawals: 'WITHDRAWALS',
 } as const;
 
-export type ReferralTab = 'SETTINGS' | 'PROMOTERS' | 'REWARDS' | 'LEDGER' | 'WITHDRAWALS';
+export type ReferralTab = (typeof REFERRAL_TABS)[keyof typeof REFERRAL_TABS];
 
 export type ReportKey = 'summaries' | 'relationships' | 'rewards' | 'ledger' | 'withdrawals';
 

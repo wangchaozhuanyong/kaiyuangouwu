@@ -1005,11 +1005,11 @@ export const adminApiExtensions = gql`
         storeFlashSales: [StoreFlashSale!]!
         systemAnnouncements: [SystemAnnouncement!]!
         referralProgram: ReferralProgram!
-        referralRelationships(skip: Int, take: Int): ReferralRelationshipAdminList!
-        referralInviterSummaries(skip: Int, take: Int): ReferralInviterSummaryList!
-        referralLedger(skip: Int, take: Int): ReferralLedgerAdminList!
-        referralRewards(skip: Int, take: Int): ReferralRewardAdminList!
-        referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
+        referralRelationships(skip: Int, take: Int, search: String): ReferralRelationshipAdminList!
+        referralInviterSummaries(skip: Int, take: Int, search: String): ReferralInviterSummaryList!
+        referralLedger(skip: Int, take: Int, search: String): ReferralLedgerAdminList!
+        referralRewards(skip: Int, take: Int, search: String): ReferralRewardAdminList!
+        referralWithdrawals(skip: Int, take: Int, search: String): ReferralWithdrawalList!
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
         storefrontTraffic(days: Int = 7): StorefrontTrafficReport!

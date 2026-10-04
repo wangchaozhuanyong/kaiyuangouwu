@@ -1,6 +1,7 @@
 import { CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE } from '@vendure/common/lib/controlled-test-payment';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { CustomerStoreEntry, ID, Order, RequestContext, TransactionalConnection } from '@vendure/core';
+import { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 
 import { ReferralAccount } from '../entities/referral-account.entity';
 import { ReferralLedgerEntry } from '../entities/referral-ledger-entry.entity';
@@ -22,16 +23,28 @@ import {
 export class ReferralReportQuery {
     constructor(private readonly connection: TransactionalConnection) {}
 
-    async adminRelationships(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
+    async adminRelationships(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        const query = this.connection
             .getRepository(ctx, ReferralRelationship)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { inviterCustomer: true, inviteeCustomer: true },
-                order: { boundAt: 'DESC', id: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
+            .createQueryBuilder('relationship')
+            .leftJoinAndSelect('relationship.inviterCustomer', 'inviter')
+            .leftJoinAndSelect('relationship.inviteeCustomer', 'invitee')
+            .where('relationship.channelId = :channelId', { channelId: ctx.channelId });
+        this.applySearch(
+            query,
+            [
+                ...this.customerSearchColumns('inviter'),
+                ...this.customerSearchColumns('invitee'),
+                'relationship.inviteCodeSnapshot',
+            ],
+            search,
+        );
+        const [items, totalItems] = await query
+            .orderBy('relationship.boundAt', 'DESC')
+            .addOrderBy('relationship.id', 'DESC')
+            .skip(Math.max(0, skip))
+            .take(pageSize(take))
+            .getManyAndCount();
         return {
             totalItems,
             items: items.map(item => ({
@@ -44,9 +57,9 @@ export class ReferralReportQuery {
         };
     }
 
-    async adminInviterSummaries(ctx: RequestContext, skip = 0, take = 50) {
-        const repository = this.connection.getRepository(ctx, ReferralRelationship);
-        const rows = await repository
+    async adminInviterSummaries(ctx: RequestContext, skip = 0, take = 50, search?: string) {
+        const query = this.connection
+            .getRepository(ctx, ReferralRelationship)
             .createQueryBuilder('relationship')
             .innerJoin('relationship.inviterCustomer', 'customer')
             .innerJoin(
@@ -54,6 +67,10 @@ export class ReferralReportQuery {
                 'account',
                 'account.customerId = relationship.inviterCustomerId AND account.channelId = relationship.channelId',
             )
+            .where('relationship.channelId = :channelId', { channelId: ctx.channelId });
+        this.applySearch(query, [...this.customerSearchColumns('customer'), 'account.inviteCode'], search);
+        const rows = await query
+            .clone()
             .select('relationship.inviterCustomerId', 'customerId')
             .addSelect('customer.firstName', 'firstName')
             .addSelect('customer.lastName', 'lastName')
@@ -64,7 +81,6 @@ export class ReferralReportQuery {
                 'SUM(CASE WHEN relationship.firstPaidOrderAt IS NULL THEN 0 ELSE 1 END)',
                 'purchasedInviteeCount',
             )
-            .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
             .groupBy('relationship.inviterCustomerId')
             .addGroupBy('customer.firstName')
             .addGroupBy('customer.lastName')
@@ -72,8 +88,9 @@ export class ReferralReportQuery {
             .addGroupBy('account.inviteCode')
             .orderBy('invitedCount', 'DESC')
             .addOrderBy('relationship.inviterCustomerId', 'ASC')
-            .skip(Math.max(0, skip))
-            .take(pageSize(take))
+            // Raw aggregate queries require SQL limit/offset, not entity skip/take.
+            .offset(Math.max(0, skip))
+            .limit(pageSize(take))
             .getRawMany<{
                 customerId: string | number;
                 firstName: string;
@@ -83,10 +100,9 @@ export class ReferralReportQuery {
                 invitedCount: string | number;
                 purchasedInviteeCount: string | number;
             }>();
-        const total = await repository
-            .createQueryBuilder('relationship')
+        const total = await query
+            .clone()
             .select('COUNT(DISTINCT relationship.inviterCustomerId)', 'count')
-            .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
             .getRawOne<{ count: string | number }>();
         return {
             totalItems: Number(total?.count ?? 0),
@@ -101,16 +117,43 @@ export class ReferralReportQuery {
         };
     }
 
-    async adminLedger(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
+    async adminLedger(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        const query = this.connection
             .getRepository(ctx, ReferralLedgerEntry)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { customer: true },
-                order: { createdAt: 'DESC', id: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
+            .createQueryBuilder('entry')
+            .leftJoinAndSelect('entry.customer', 'customer')
+            .where('entry.channelId = :channelId', { channelId: ctx.channelId });
+        if (search?.trim()) {
+            query
+                .leftJoin(
+                    Order,
+                    'ledgerOrder',
+                    'ledgerOrder.id = entry.orderId AND ledgerOrder.salesChannelId = entry.channelId',
+                )
+                .leftJoin(
+                    ReferralWithdrawal,
+                    'withdrawal',
+                    'withdrawal.id = entry.withdrawalId AND withdrawal.channelId = entry.channelId',
+                );
+            this.applySearch(
+                query,
+                [
+                    ...this.customerSearchColumns('customer'),
+                    'entry.eventType',
+                    'entry.note',
+                    'ledgerOrder.code',
+                    'withdrawal.code',
+                ],
+                search,
+                ['entry.id', 'entry.orderId', 'entry.withdrawalId'],
+            );
+        }
+        const [items, totalItems] = await query
+            .orderBy('entry.createdAt', 'DESC')
+            .addOrderBy('entry.id', 'DESC')
+            .skip(Math.max(0, skip))
+            .take(pageSize(take))
+            .getManyAndCount();
         return {
             totalItems,
             items: items.map(item => ({
@@ -121,14 +164,29 @@ export class ReferralReportQuery {
         };
     }
 
-    async adminRewards(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection.getRepository(ctx, ReferralReward).findAndCount({
-            where: { channelId: ctx.channelId },
-            relations: { inviterCustomer: true, inviteeCustomer: true, order: true },
-            order: { earnedAt: 'DESC', id: 'DESC' },
-            skip: Math.max(0, skip),
-            take: pageSize(take),
-        });
+    async adminRewards(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        const query = this.connection
+            .getRepository(ctx, ReferralReward)
+            .createQueryBuilder('reward')
+            .leftJoinAndSelect('reward.inviterCustomer', 'inviter')
+            .leftJoinAndSelect('reward.inviteeCustomer', 'invitee')
+            .leftJoinAndSelect('reward.order', 'rewardOrder')
+            .where('reward.channelId = :channelId', { channelId: ctx.channelId });
+        this.applySearch(
+            query,
+            [
+                ...this.customerSearchColumns('inviter'),
+                ...this.customerSearchColumns('invitee'),
+                'rewardOrder.code',
+            ],
+            search,
+        );
+        const [items, totalItems] = await query
+            .orderBy('reward.earnedAt', 'DESC')
+            .addOrderBy('reward.id', 'DESC')
+            .skip(Math.max(0, skip))
+            .take(pageSize(take))
+            .getManyAndCount();
         return {
             totalItems,
             items: items.map(item => ({
@@ -143,17 +201,65 @@ export class ReferralReportQuery {
         };
     }
 
-    async adminWithdrawals(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
+    async adminWithdrawals(ctx: RequestContext, skip = 0, take = 100, search?: string) {
+        const query = this.connection
             .getRepository(ctx, ReferralWithdrawal)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { customer: true },
-                order: { createdAt: 'DESC', id: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
+            .createQueryBuilder('withdrawal')
+            .leftJoinAndSelect('withdrawal.customer', 'customer')
+            .where('withdrawal.channelId = :channelId', { channelId: ctx.channelId });
+        this.applySearch(
+            query,
+            [...this.customerSearchColumns('customer'), 'withdrawal.code', 'withdrawal.externalReference'],
+            search,
+        );
+        const [items, totalItems] = await query
+            .orderBy('withdrawal.createdAt', 'DESC')
+            .addOrderBy('withdrawal.id', 'DESC')
+            .skip(Math.max(0, skip))
+            .take(pageSize(take))
+            .getManyAndCount();
         return { totalItems, items: items.map(item => withdrawalView(item, item.customer)) };
+    }
+
+    private customerSearchColumns(alias: string): string[] {
+        const last = `COALESCE(${alias}.lastName, '')`;
+        const first = `COALESCE(${alias}.firstName, '')`;
+        const driver = this.connection.rawConnection.options.type;
+        const fullName =
+            driver === 'mysql' || driver === 'mariadb'
+                ? `CONCAT(${last}, ${first})`
+                : driver === 'mssql'
+                  ? `(${last} + ${first})`
+                  : `(${last} || ${first})`;
+        return [`${alias}.firstName`, `${alias}.lastName`, `${alias}.emailAddress`, fullName];
+    }
+
+    private applySearch<T extends ObjectLiteral>(
+        query: SelectQueryBuilder<T>,
+        columns: string[],
+        search?: string,
+        identifiers: string[] = [],
+    ): void {
+        const term = search?.trim().slice(0, 255).toLowerCase();
+        if (!term) return;
+        // Parameterize input and treat SQL LIKE wildcards as literal characters.
+        const clauses = columns.map(column => `LOWER(${column}) LIKE :referralSearch ESCAPE '!'`);
+        const parameters: Record<string, string> = {
+            referralSearch: `%${term.replace(/[!%_]/g, value => `!${value}`)}%`,
+        };
+        if (/^[0-9]{1,20}$/.test(term) && identifiers.length) {
+            const driver = this.connection.rawConnection.options.type;
+            const idType =
+                driver === 'mysql' || driver === 'mariadb'
+                    ? 'CHAR'
+                    : driver === 'mssql'
+                      ? 'NVARCHAR(255)'
+                      : 'TEXT';
+            // Compare ID text so a long numeric keyword cannot overflow an integer DB column.
+            clauses.push(...identifiers.map(column => `CAST(${column} AS ${idType}) = :referralSearchId`));
+            parameters.referralSearchId = term.replace(/^0+(?=\d)/, '');
+        }
+        query.andWhere(`(${clauses.join(' OR ')})`, parameters);
     }
 
     async adminCustomerWallets(ctx: RequestContext, customerId: ID) {

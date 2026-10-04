@@ -604,6 +604,7 @@ export const REFERRAL_PROGRAM_QUERY = gql`
 
 export const REFERRAL_REPORTS_QUERY = gql`
     query AdminReferralReports(
+        $search: String
         $take: Int!
         $summarySkip: Int!
         $relationshipSkip: Int!
@@ -611,7 +612,7 @@ export const REFERRAL_REPORTS_QUERY = gql`
         $ledgerSkip: Int!
         $withdrawalSkip: Int!
     ) {
-        referralRelationships(skip: $relationshipSkip, take: $take) {
+        referralRelationships(skip: $relationshipSkip, take: $take, search: $search) {
             totalItems
             items {
                 id
@@ -627,7 +628,7 @@ export const REFERRAL_REPORTS_QUERY = gql`
                 firstPaidOrderAt
             }
         }
-        referralInviterSummaries(skip: $summarySkip, take: $take) {
+        referralInviterSummaries(skip: $summarySkip, take: $take, search: $search) {
             totalItems
             items {
                 customerId
@@ -638,7 +639,7 @@ export const REFERRAL_REPORTS_QUERY = gql`
                 purchasedInviteeCount
             }
         }
-        referralRewards(skip: $rewardSkip, take: $take) {
+        referralRewards(skip: $rewardSkip, take: $take, search: $search) {
             totalItems
             items {
                 id
@@ -663,7 +664,7 @@ export const REFERRAL_REPORTS_QUERY = gql`
                 releasedAt
             }
         }
-        referralLedger(skip: $ledgerSkip, take: $take) {
+        referralLedger(skip: $ledgerSkip, take: $take, search: $search) {
             totalItems
             items {
                 id
@@ -704,7 +705,7 @@ export const REFERRAL_REPORTS_QUERY = gql`
                 reservedDifference
             }
         }
-        referralWithdrawals(skip: $withdrawalSkip, take: $take) {
+        referralWithdrawals(skip: $withdrawalSkip, take: $take, search: $search) {
             totalItems
             items {
                 id
