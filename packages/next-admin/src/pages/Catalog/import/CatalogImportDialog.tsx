@@ -1,8 +1,11 @@
 import { serviceMessageDisplay } from '../../../../../common/src/display-localization';
+import { AdminButton, AdminInput, AdminSelect } from '../../../components/AdminControls';
 import { PageSizeSelect } from '../../../components/PageSizeSelect';
+import { useAdminQuery as useQuery } from '../../../hooks/use-admin-query';
 import { usePageSize } from '../../../hooks/use-page-size';
+import { invalidateAdminResources } from '../../../runtime/admin-resource-events';
 /* eslint-disable max-lines -- the import workbench keeps its state machine and review UI in one lazy chunk */
-import { useApolloClient, useQuery } from '@apollo/client/react';
+import { useApolloClient } from '@apollo/client/react';
 import {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_FIELD_OPTIONS,
@@ -60,7 +63,6 @@ import {
     type CatalogImportResolution,
     type CatalogImportRowRecord,
 } from '../../../graphql/catalog-import.graphql';
-import { GET_PRODUCTS } from '../../../graphql/catalog.graphql';
 import { useAdminPermissions } from '../../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../../utils/channel-display';
 import { toUserFacingError } from '../../../utils/user-facing-error';
@@ -124,19 +126,17 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
 
     const contextQuery = useQuery<ImportContextData>(CATALOG_IMPORT_CONTEXT_QUERY, {
         skip: !open,
-        fetchPolicy: 'cache-and-network',
     });
     const historyQuery = useQuery<{
         catalogImportJobs: { items: CatalogImportJobRecord[]; totalItems: number };
     }>(CATALOG_IMPORT_JOBS_QUERY, {
         variables: { skip: 0, take: 50 },
         skip: !open,
-        fetchPolicy: 'cache-and-network',
     });
     const jobQuery = useQuery<{ catalogImportJob: CatalogImportJobRecord }>(CATALOG_IMPORT_JOB_QUERY, {
         variables: { id: jobId },
         skip: !jobId,
-        fetchPolicy: 'network-only',
+
         notifyOnNetworkStatusChange: true,
     });
     const { startPolling, stopPolling } = jobQuery;
@@ -150,7 +150,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
             take: pageSize,
         },
         skip: !jobId,
-        fetchPolicy: 'network-only',
+
         notifyOnNetworkStatusChange: true,
     });
 
@@ -182,11 +182,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
         if (!job || !['COMPLETED', 'COMPLETED_WITH_ERRORS', 'ROLLED_BACK'].includes(job.state)) return;
         if (refreshedJobRef.current === `${job.id}:${job.state}`) return;
         refreshedJobRef.current = `${job.id}:${job.state}`;
-        void Promise.all([
-            client.refetchQueries({ include: [GET_PRODUCTS] }),
-            historyQuery.refetch(),
-            rowsQuery.refetch(),
-        ]).catch(() => undefined);
+        invalidateAdminResources(['catalog'], 'event');
+        void Promise.all([historyQuery.refetch(), rowsQuery.refetch()]).catch(() => undefined);
     }, [client, historyQuery, job, rowsQuery]);
 
     const resetWorkbench = () => {
@@ -549,7 +546,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                             先本地解析和预览差异，只有点击“确认执行”后才会写入数据库。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={!closeAllowed}
@@ -557,7 +554,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                         className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
 
                 <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-5 py-2 sm:px-6">
@@ -782,7 +779,7 @@ function UploadPanel({
             <section className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-3">
                 <label className="space-y-2 md:col-span-3">
                     <span className="text-xs font-bold text-slate-700">商品资料文件</span>
-                    <input
+                    <AdminInput
                         ref={fileInputRef}
                         type="file"
                         accept=".numbers,.xlsx,.xls,.csv"
@@ -796,14 +793,14 @@ function UploadPanel({
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标店铺</span>
-                    <input className={inputClass} value={channelName} disabled />
+                    <AdminInput className={inputClass} value={channelName} disabled />
                     <span className="block text-[11px] text-slate-500">
                         导入文件“导入商店”列使用店铺编码：{channelCode}
                     </span>
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标仓库</span>
-                    <select
+                    <AdminSelect
                         className={inputClass}
                         value={stockLocationId}
                         onChange={event => onStockLocationChange(event.target.value)}
@@ -815,14 +812,14 @@ function UploadPanel({
                                 {location.name}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                     <span className="block text-[11px] text-amber-700">
                         请明确选择本次库存要写入的仓库；系统不会代选。
                     </span>
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标币种</span>
-                    <select
+                    <AdminSelect
                         className={inputClass}
                         value={currencyCode}
                         onChange={event => onCurrencyCodeChange(event.target.value)}
@@ -834,10 +831,10 @@ function UploadPanel({
                                 {code}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </label>
                 <label className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 md:col-span-3">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={clearBlankFields}
                         onChange={event => onClearBlankFieldsChange(event.target.checked)}
@@ -886,15 +883,15 @@ function UploadPanel({
                     />
                 )}
                 <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4 md:col-span-3">
-                    <button
+                    <AdminButton
                         type="button"
                         className={secondaryButton}
                         onClick={onDownloadTemplate}
                         disabled={locked}
                     >
                         <Download className="h-3.5 w-3.5" /> 下载标准模板
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         className={preview ? secondaryButton : primaryButton}
                         disabled={!file || locked}
@@ -902,9 +899,9 @@ function UploadPanel({
                     >
                         {parsing && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                         {mappingDirty ? '应用映射并重新预检' : preview ? '重新本地预检' : '浏览器本地预检'}
-                    </button>
+                    </AdminButton>
                     {preview && (
-                        <button
+                        <AdminButton
                             type="button"
                             className={primaryButton}
                             disabled={!canCreatePreview}
@@ -912,7 +909,7 @@ function UploadPanel({
                         >
                             {submitting && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                             生成数据库差异预览
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             </section>
@@ -1080,7 +1077,7 @@ function FieldMappingEditor({
                 {preview.headers.filter(Boolean).map(header => (
                     <label key={header} className="space-y-1">
                         <span className="text-[11px] font-bold text-slate-700">{header}</span>
-                        <select
+                        <AdminSelect
                             className={inputClass}
                             value={mapping[header] || CATALOG_MAPPING_UNKNOWN}
                             onChange={event => onChange(header, event.target.value)}
@@ -1101,7 +1098,7 @@ function FieldMappingEditor({
                                     </option>
                                 );
                             })}
-                        </select>
+                        </AdminSelect>
                     </label>
                 ))}
             </div>
@@ -1194,15 +1191,15 @@ function JobWorkspace({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             onClick={onReset}
                             disabled={busy !== null}
                         >
                             选择其他文件
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             onClick={onDownloadReport}
@@ -1214,9 +1211,9 @@ function JobWorkspace({
                                 <Download className="h-3.5 w-3.5" />
                             )}
                             下载报告
-                        </button>
+                        </AdminButton>
                         {canRollback && ['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state) && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={secondaryButton}
                                 onClick={onRollback}
@@ -1228,10 +1225,10 @@ function JobWorkspace({
                                     <RotateCcw className="h-3.5 w-3.5" />
                                 )}
                                 安全回滚
-                            </button>
+                            </AdminButton>
                         )}
                         {!terminal && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={primaryButton}
                                 onClick={onExecute}
@@ -1243,7 +1240,7 @@ function JobWorkspace({
                                     <Play className="h-3.5 w-3.5" />
                                 )}
                                 确认执行
-                            </button>
+                            </AdminButton>
                         )}
                         {['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state) && (
                             <CatalogExportAction />
@@ -1280,7 +1277,7 @@ function JobWorkspace({
                                 'ERROR',
                             ] as ActionFilter[]
                         ).map(filter => (
-                            <button
+                            <AdminButton
                                 key={filter}
                                 type="button"
                                 onClick={() => onFilterChange(filter)}
@@ -1288,20 +1285,20 @@ function JobWorkspace({
                                 className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${actionFilter === filter ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'}`}
                             >
                                 {actionLabel(filter)}
-                            </button>
+                            </AdminButton>
                         ))}
                     </div>
                     {canUpdate && (
                         <div className="flex flex-wrap gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={secondaryButton}
                                 disabled={batchApplyCount === 0 || busy !== null}
                                 onClick={onBatchApply}
                             >
                                 {batchApplyLabel}
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 className={secondaryButton}
                                 disabled={
@@ -1311,7 +1308,7 @@ function JobWorkspace({
                                 onClick={onBatchSkip}
                             >
                                 批量跳过全部 {job.conflictCount + job.warningCount + job.errorCount || ''}
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                 </div>
@@ -1365,22 +1362,22 @@ function JobWorkspace({
                             onPageSizeChange={onPageSizeChange}
                             disabled={rowsLoading || busy !== null}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             disabled={rowsLoading || busy !== null || rowPage === 0}
                             onClick={() => onPageChange(Math.max(0, rowPage - 1))}
                         >
                             <ChevronLeft className="h-3.5 w-3.5" /> 上一页
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             disabled={rowsLoading || busy !== null || rowPage + 1 >= totalPages}
                             onClick={() => onPageChange(rowPage + 1)}
                         >
                             下一页 <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </section>
@@ -1449,68 +1446,68 @@ function ImportRow({
                 <p className="mb-2 leading-5 text-slate-500">{row.message || '—'}</p>
                 {canUpdate && row.action === 'WARNING' && (
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             className={primaryButton}
                             disabled={busy}
                             onClick={() => onResolve('APPLY')}
                         >
                             确认应用
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             disabled={busy}
                             onClick={() => onResolve('SKIP')}
                         >
                             跳过
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
                 {canUpdate && row.action === 'ERROR' && !row.appliedAt && (
                     <div className="flex gap-2">
                         {['CREATE', 'UPDATE'].includes(safeAction) && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={primaryButton}
                                 disabled={busy}
                                 onClick={() => onResolve('APPLY')}
                             >
                                 确认重试
-                            </button>
+                            </AdminButton>
                         )}
-                        <button
+                        <AdminButton
                             type="button"
                             className={secondaryButton}
                             disabled={busy}
                             onClick={() => onResolve('SKIP')}
                         >
                             标记跳过
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
                 {canUpdate && row.action === 'CONFLICT' && (
                     <div className="space-y-2">
                         <div className="flex gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={primaryButton}
                                 disabled={busy}
                                 onClick={() => onResolve('CREATE_NEW')}
                             >
                                 作为新 SKU
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 className={secondaryButton}
                                 disabled={busy}
                                 onClick={() => onResolve('SKIP')}
                             >
                                 跳过
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="flex gap-2">
-                            <input
+                            <AdminInput
                                 className={inputClass}
                                 value={targetVariantId}
                                 onChange={event => onTargetVariantChange(event.target.value)}
@@ -1518,14 +1515,14 @@ function ImportRow({
                                 aria-label={`第 ${row.rowNumber} 行目标 SKU ID`}
                                 disabled={busy}
                             />
-                            <button
+                            <AdminButton
                                 type="button"
                                 className={secondaryButton}
                                 disabled={busy || !targetVariantId.trim()}
                                 onClick={() => onResolve('UPDATE_EXISTING', targetVariantId.trim())}
                             >
                                 更新该 SKU
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 )}
@@ -1618,13 +1615,13 @@ function ImportHistory({
                             </td>
                             <td className="p-3">{formatDateTime(job.createdAt)}</td>
                             <td className="p-3 text-right">
-                                <button
+                                <AdminButton
                                     type="button"
                                     className={secondaryButton}
                                     onClick={() => onOpenJob(job.id)}
                                 >
                                     查看详情
-                                </button>
+                                </AdminButton>
                             </td>
                         </tr>
                     ))}
@@ -1644,13 +1641,13 @@ function TabButton({
     children: ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${active ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -1703,9 +1700,9 @@ function Message({
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{children}</span>
             </div>
-            <button type="button" onClick={onClose} aria-label="关闭提示">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭提示">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1756,9 +1753,9 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-8 text-center">
             <XCircle className="mx-auto h-7 w-7 text-rose-500" />
             <p className="mt-3 text-xs text-rose-800">{message}</p>
-            <button type="button" className={`${secondaryButton} mt-4`} onClick={onRetry}>
+            <AdminButton type="button" className={`${secondaryButton} mt-4`} onClick={onRetry}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }

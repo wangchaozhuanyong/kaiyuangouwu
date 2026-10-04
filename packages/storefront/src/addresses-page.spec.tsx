@@ -411,6 +411,7 @@ describe('AddressesPage checkout selection and editing', () => {
             activeCustomer: vi.fn().mockResolvedValue(customer),
             updateAddress: vi.fn().mockResolvedValue(address),
             createAddress: vi.fn().mockResolvedValue(address),
+            deleteAddress: vi.fn<ShopApi['deleteAddress']>().mockResolvedValue(undefined),
         };
         const props: ComponentProps<typeof AddressesPage> = {
             api: api as unknown as ShopApi,
@@ -470,6 +471,33 @@ describe('AddressesPage checkout selection and editing', () => {
             ),
         );
     }
+
+    it('confirms deletion in the app, supports cancellation and guards repeated submits', async () => {
+        const page = mount();
+        await interact(() => {
+            expect(container.querySelector('.addresses-page')).not.toBeNull();
+        });
+        await interact(() => button('删除').click());
+        expect(container.querySelector('[role="dialog"]')?.textContent).toContain('确定删除这个地址');
+        expect(page.api.deleteAddress).not.toHaveBeenCalled();
+        await interact(() => button('取消').click());
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        let release!: () => void;
+        vi.mocked(page.api.deleteAddress).mockImplementationOnce(
+            () =>
+                new Promise<void>(resolve => {
+                    release = () => resolve();
+                }),
+        );
+        await interact(() => button('删除').click());
+        await interact(() => {
+            button('确认删除').click();
+        });
+        expect(page.api.deleteAddress).toHaveBeenCalledTimes(1);
+        expect(button('删除中…').disabled).toBe(true);
+        await interact(() => release());
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+    });
 
     it('selects for this checkout only, keeping default unchanged until the user confirms', async () => {
         const second = { ...address, id: 'address-2', fullName: '第二收货人', defaultShippingAddress: false };
@@ -556,17 +584,20 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(props.selection?.onUse).toHaveBeenCalledWith(address);
     });
 
-    it('waits for refreshed customer data and retries a saved address without duplicating it', async () => {
+    it('waits for refreshed customer data and retries the read without replaying a successful save', async () => {
         const { api, props } = mount({ customer: mockCustomer });
+        client.setDefaultOptions({ queries: { retry: false } });
         vi.mocked(api.activeCustomer).mockRejectedValueOnce(new Error('NETWORK_ERROR'));
         await paste('张三，13800138000，广东省深圳市南山区科技园 518000');
         await save();
         expect(api.createAddress).toHaveBeenCalledTimes(1);
         expect(props.selection?.onUse).not.toHaveBeenCalled();
         expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(container.textContent).toContain('地址已保存，列表更新失败');
         await save();
         expect(api.createAddress).toHaveBeenCalledTimes(1);
-        expect(api.updateAddress).toHaveBeenCalledWith(expect.objectContaining({ id: address.id }));
+        expect(api.updateAddress).not.toHaveBeenCalled();
+        expect(api.activeCustomer).toHaveBeenCalledTimes(2);
         const customerCall = (props.onCustomerChange as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
         const selectionCall = (props.selection?.onUse as ReturnType<typeof vi.fn>).mock
             .invocationCallOrder[0];

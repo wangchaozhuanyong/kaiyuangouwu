@@ -199,7 +199,7 @@ export function NotificationsPage() {
                 ) : afterSalesQuery.isLoading && !orders.length ? (
                     <PageSkeleton label={isZh ? '正在加载通知' : 'Loading notifications'} />
                 ) : ((afterSalesQuery.isPaused && afterSalesQuery.data === undefined) ||
-                      afterSalesQuery.isError) &&
+                      (afterSalesQuery.isError && afterSalesQuery.data === undefined)) &&
                   !orders.length ? (
                     <EmptyState
                         icon={<WifiOff />}
@@ -212,7 +212,7 @@ export function NotificationsPage() {
                                   : ''
                         }
                         action={isZh ? '重试' : 'Retry'}
-                        onAction={() => void afterSalesQuery.refetch()}
+                        onAction={() => void afterSalesQuery.refetch({ cancelRefetch: false })}
                     />
                 ) : orders.length || afterSalesRequests.length ? (
                     <section className="notification-workbench">
@@ -262,7 +262,10 @@ export function NotificationsPage() {
                         {readQuery.isError && (
                             <p className="notification-read-error" role="alert">
                                 {isZh ? '已读状态加载失败，请重试。' : 'Read status could not be loaded.'}{' '}
-                                <button type="button" onClick={() => void readQuery.refetch()}>
+                                <button
+                                    type="button"
+                                    onClick={() => void readQuery.refetch({ cancelRefetch: false })}
+                                >
                                     {isZh ? '重试' : 'Retry'}
                                 </button>
                             </p>
@@ -409,7 +412,7 @@ export function NotificationsPage() {
                                     onClick={() => {
                                         if (readError && selectedEntry.reference)
                                             void markRead([selectedEntry.reference]);
-                                        else void readQuery.refetch();
+                                        else void readQuery.refetch({ cancelRefetch: false });
                                     }}
                                 >
                                     {isZh ? '重试' : 'Retry'}

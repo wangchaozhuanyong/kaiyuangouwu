@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { ComponentPropsWithoutRef } from 'react';
 import type { SortDirection } from '../hooks/use-url-sort-state';
+import { AdminButton } from './AdminControls';
 
 interface SortableTableHeaderProps<TSortField extends string> extends Omit<
     ComponentPropsWithoutRef<'th'>,
@@ -49,7 +50,7 @@ export function SortableTableHeader<TSortField extends string>({
             aria-sort={active ? (sortDirection === 'ASC' ? 'ascending' : 'descending') : 'none'}
             className={className}
         >
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => onSort(sortField, initialDirection)}
                 aria-label={
@@ -77,7 +78,7 @@ export function SortableTableHeader<TSortField extends string>({
                         className="h-3.5 w-3.5 shrink-0 opacity-40 transition-opacity group-hover:opacity-80"
                     />
                 )}
-            </button>
+            </AdminButton>
         </th>
     );
 }

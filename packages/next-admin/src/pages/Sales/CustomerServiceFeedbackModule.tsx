@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { gql } from 'graphql-tag';
 import { RefreshCw, Star } from 'lucide-react';
 import { useState } from 'react';
@@ -49,7 +51,7 @@ export function CustomerServiceFeedbackModule() {
     const [page, setPage] = useState(0);
     const { data, loading, error, refetch } = useQuery<FeedbackQueryResult>(FEEDBACK_QUERY, {
         variables: { skip: page * PAGE_SIZE, take: PAGE_SIZE },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const result = data?.customerServiceFeedbacks;
@@ -64,14 +66,15 @@ export function CustomerServiceFeedbackModule() {
                     </h1>
                     <p className="mt-1 text-xs text-slate-500">客户提交后同步到这里；按当前店铺隔离。</p>
                 </div>
-                <button
+                <AdminButton
+                    refreshPage
                     type="button"
                     onClick={() => void refetch()}
                     disabled={loading}
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                     <RefreshCw size={15} aria-hidden="true" /> 刷新
-                </button>
+                </AdminButton>
             </header>
             <main className="space-y-4 px-5 py-6 sm:px-8">
                 {error && (
@@ -133,22 +136,22 @@ export function CustomerServiceFeedbackModule() {
                     <nav className="flex items-center justify-between" aria-label="客服评价分页">
                         <span className="text-xs text-slate-500">共 {result?.totalItems} 条</span>
                         <div className="flex gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={page === 0}
                                 onClick={() => setPage(page - 1)}
                                 className="rounded-lg border px-3 py-2 text-xs disabled:opacity-40"
                             >
                                 上一页
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 disabled={(page + 1) * PAGE_SIZE >= (result?.totalItems ?? 0)}
                                 onClick={() => setPage(page + 1)}
                                 className="rounded-lg border px-3 py-2 text-xs disabled:opacity-40"
                             >
                                 下一页
-                            </button>
+                            </AdminButton>
                         </div>
                     </nav>
                 )}

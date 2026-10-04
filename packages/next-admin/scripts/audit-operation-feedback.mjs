@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { auditAdminInteraction } from './audit-admin-interaction.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = path.join(packageRoot, 'src');
@@ -42,12 +43,18 @@ if (!mainSource.includes('<AdminFeedbackCenter')) {
     violations.push('main.tsx: AdminFeedbackCenter is not mounted');
 }
 
+const interaction = auditAdminInteraction(sourceRoot);
+violations.push(...interaction.violations);
+
 if (violations.length) {
     process.stderr.write(`Admin operation feedback audit failed:\n- ${violations.join('\n- ')}\n`);
     process.exit(1);
 }
 
 process.stdout.write('Admin operation feedback audit passed\n');
+process.stdout.write(
+    `Admin loading/refresh/interaction audit passed (${interaction.coverage.sourceFiles} source files; ${interaction.coverage.mappedMutations} business mutations)\n`,
+);
 
 function sourceFiles(directory) {
     return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

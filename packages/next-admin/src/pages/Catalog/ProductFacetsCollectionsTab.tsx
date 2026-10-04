@@ -1,4 +1,5 @@
 import { Check, CornerDownRight, FolderTree, Search, Tag } from 'lucide-react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -73,7 +74,7 @@ export function ProductFacetsCollectionsTab() {
                 </div>
                 <div className="relative max-w-md">
                     <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                    <input
+                    <AdminInput
                         aria-label="搜索商品属性"
                         value={facetSearch}
                         onChange={event => {
@@ -93,13 +94,13 @@ export function ProductFacetsCollectionsTab() {
                         className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
                     >
                         <span>{toUserFacingError(facetsError, '属性标签读取失败，请稍后重试')}</span>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void refetchFacets()}
                             className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : facetsData?.facets?.items && facetsData.facets.items.length > 0 ? (
                     <div className="space-y-4">
@@ -114,7 +115,7 @@ export function ProductFacetsCollectionsTab() {
                                     {facet.values.map(fv => {
                                         const isSelected = selectedFacetValueIds.includes(fv.id);
                                         return (
-                                            <button
+                                            <AdminButton
                                                 key={fv.id}
                                                 type="button"
                                                 onClick={() => toggleFacetValue(fv.id)}
@@ -122,7 +123,7 @@ export function ProductFacetsCollectionsTab() {
                                             >
                                                 {isSelected && <Check className="w-3 h-3" />}
                                                 <span>{fv.name}</span>
-                                            </button>
+                                            </AdminButton>
                                         );
                                     })}
                                 </div>
@@ -157,7 +158,7 @@ export function ProductFacetsCollectionsTab() {
                 </div>
                 <div className="relative max-w-md">
                     <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                    <input
+                    <AdminInput
                         aria-label="搜索商品分类或专辑"
                         value={collectionSearch}
                         onChange={event => setCollectionSearch(event.target.value)}
@@ -174,13 +175,13 @@ export function ProductFacetsCollectionsTab() {
                         className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
                     >
                         <span>{toUserFacingError(collectionsError, '商品分类读取失败，请稍后重试')}</span>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void refetchCollections()}
                             className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : collectionGroups.length > 0 ? (
                     <div className="space-y-3 pt-1">
@@ -287,7 +288,7 @@ function CollectionAssignmentOption({
         <label
             className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg text-xs transition-colors ${isPrimary ? 'flex-1 px-1 py-1' : `border p-3 ${selected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50'}`}`}
         >
-            <input
+            <AdminInput
                 type="checkbox"
                 checked={selected}
                 onChange={() => onToggle(collection.id)}

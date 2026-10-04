@@ -16,9 +16,10 @@
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted);
-    font-size: clamp(10.5px, 3.35vw, 14px);
-    font-weight: 500;
-    letter-spacing: -0.01em;
+    font-size: var(--type-navigation-compact-size);
+    line-height: var(--type-navigation-compact-leading);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--tracking-normal);
     white-space: nowrap;
     cursor: pointer;
     transition:

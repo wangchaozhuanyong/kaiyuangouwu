@@ -31,7 +31,7 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
                 error={runtime.customerLoadError}
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.customerQuery.refetch()}
+                onRetry={() => void runtime.customerQuery.refetch({ cancelRefetch: false })}
             />
         );
     }
@@ -46,7 +46,7 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
                 error={runtime.cartQueryError ?? ''}
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.cartQuery.refetch()}
+                onRetry={() => void runtime.cartQuery.refetch({ cancelRefetch: false })}
             />
         );
     }

@@ -8,9 +8,11 @@ import { SearchInput } from './SearchInput';
 const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
+    vi.useRealTimers();
 });
 
-async function mount(value = '') {
+async function mount(value = '', debounceMs = 0) {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.append(container);
@@ -18,7 +20,14 @@ async function mount(value = '') {
     const onValueChange = vi.fn();
     const render = async (next: string) => {
         await act(async () => {
-            root.render(<SearchInput aria-label="搜索" value={next} onValueChange={onValueChange} />);
+            root.render(
+                <SearchInput
+                    debounceMs={debounceMs}
+                    aria-label="搜索"
+                    value={next}
+                    onValueChange={onValueChange}
+                />,
+            );
         });
     };
     await render(value);
@@ -42,6 +51,36 @@ async function mount(value = '') {
 }
 
 describe('SearchInput', () => {
+    it('debounces query commits while typing and submits Enter immediately', async () => {
+        vi.useFakeTimers();
+        const field = await mount('', 250);
+        await field.type('a');
+        await field.type('ab');
+        expect(field.input.value).toBe('ab');
+        expect(field.onValueChange).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTime(250));
+        expect(field.onValueChange.mock.calls).toEqual([['ab']]);
+        await field.type('abc');
+        await act(async () =>
+            field.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+        );
+        expect(field.onValueChange.mock.calls).toEqual([['ab'], ['abc']]);
+        await act(async () => vi.advanceTimersByTime(500));
+        expect(field.onValueChange).toHaveBeenCalledTimes(2);
+    });
+    it('cancels pending search when the page becomes hidden and resumes the draft once visible', async () => {
+        vi.useFakeTimers();
+        const field = await mount('', 250);
+        await field.type('draft');
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+        await act(async () => vi.advanceTimersByTime(500));
+        expect(field.onValueChange).not.toHaveBeenCalled();
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+        await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+        await act(async () => vi.advanceTimersByTime(250));
+        expect(field.onValueChange.mock.calls).toEqual([['draft']]);
+    });
     it('keeps a synchronous draft while the URL update is pending', async () => {
         const field = await mount();
         await field.type('a');

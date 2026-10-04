@@ -1,4 +1,6 @@
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+// organize-imports-ignore -- Keep route type imports before runtime imports for the repository lint rule.
+import type { RouteState } from '../storefront-router';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
     ArrowLeft,
@@ -19,11 +21,10 @@ import {
     useRef,
     useState,
 } from 'react';
-// eslint-disable-next-line import/order -- organize-imports keeps route types after packages.
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import allCategoriesIcon from '../assets/icons/catalog-directory-color.webp';
+import { nextCatalogPageParam, validateCatalogPage } from '../catalog-pagination';
 import {
     catalogInputFromRoute,
     catalogRouteSearch,
@@ -35,11 +36,12 @@ import { ProductRow } from '../components/common/product-row';
 import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
 import { isInputMethodKey } from '../input-method';
-import { offlineLoadError } from '../loading-state';
+import { storefrontInitialQueryError } from '../loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    storefrontPlaceholderData,
     storefrontQueryKeys,
 } from '../query-client';
 import { SafeImage } from '../safe-image';
@@ -51,7 +53,7 @@ import { DailyRecommendationSection } from '../storefront-ui/daily-recommendatio
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import '../styles/search-surfaces.css';
-import { CollectionSummary, MarketConfig, Product, StorefrontLanguage } from '../types';
+import { CollectionSummary, MarketConfig, Product, ProductSearchPage, StorefrontLanguage } from '../types';
 
 export interface SearchPageProps {
     api: ShopApi;
@@ -159,19 +161,37 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         ...catalogInputFromRoute({ name: 'search', term, ...filters }),
         inStockOnly: filters.inStockOnly || undefined,
     };
+    const queryClient = useQueryClient();
     const searchQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
-        queryFn: ({ pageParam, signal }) =>
-            api.catalog({ ...searchInput, skip: pageParam, take: 20 }, signal),
-        initialPageParam: 0,
-        getNextPageParam: (lastPage, pages) => {
-            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
-            return loaded < lastPage.totalItems ? loaded : undefined;
+        queryFn: async ({ pageParam, signal }) => {
+            const page = await api.catalog({ ...searchInput, skip: pageParam, take: 20 }, signal);
+            const cached = queryClient.getQueryData<{ pages: ProductSearchPage[]; pageParams: number[] }>(
+                storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
+            );
+            const previousIds = new Set(
+                cached?.pages.flatMap((previous, index) =>
+                    cached.pageParams[index] < pageParam ? previous.items.map(item => item.id) : [],
+                ) ?? [],
+            );
+            return validateCatalogPage(
+                page,
+                pageParam,
+                previousIds,
+                isZh ? '暂时无法加载更多商品，请重试' : 'Could not load more products. Please retry.',
+            );
         },
+        initialPageParam: 0,
+        getNextPageParam: nextCatalogPageParam,
         enabled: !!term && (!embedded || embedded.active),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) =>
+            storefrontPlaceholderData(
+                previous,
+                previousQuery?.queryKey,
+                storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
+            ),
         meta: publicQueryMeta(),
     });
     const suggestionsQuery = useQuery({
@@ -203,18 +223,20 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         ...suggestionProducts.map(product => ({ label: product.name, term: product.name })),
         ...suggestionCollections.map(collection => ({ label: collection.name, collectionId: collection.id })),
     ];
-    const results = useMemo(
-        () => searchQuery.data?.pages.flatMap(page => page.items) ?? [],
-        [searchQuery.data?.pages],
-    );
+    const results = useMemo(() => {
+        const seen = new Set<string>();
+        return (searchQuery.data?.pages.flatMap(page => page.items) ?? []).filter(product => {
+            if (seen.has(product.id)) return false;
+            seen.add(product.id);
+            return true;
+        });
+    }, [searchQuery.data?.pages]);
     const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
     const searching = searchQuery.isLoading;
-    const searchError =
-        searchQuery.isPaused && searchQuery.data === undefined
-            ? offlineLoadError(language)
-            : searchQuery.error instanceof Error
-              ? storefrontErrorMessage(searchQuery.error, language)
-              : '';
+    const searchError = storefrontInitialQueryError(searchQuery, language);
+    const loadMoreError = searchQuery.isFetchNextPageError
+        ? storefrontErrorMessage(searchQuery.error, language)
+        : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
         .slice(0, desktop ? 4 : 2);
@@ -710,7 +732,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             title={isZh ? '搜索暂时不可用' : 'Search unavailable'}
                             detail={searchError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void searchQuery.refetch()}
+                            onAction={() => void searchQuery.refetch({ cancelRefetch: false })}
                         />
                     ) : results.length ? (
                         <div className="product-list" aria-busy={searchQuery.isPlaceholderData}>
@@ -737,10 +759,15 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                     />
                                 ))
                             )}
-                            {searchError && (
+                            {loadMoreError && (
                                 <div className="search-load-error" role="alert">
-                                    <span>{searchError}</span>
-                                    <button type="button" onClick={() => void searchQuery.fetchNextPage()}>
+                                    <span>{loadMoreError}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            void searchQuery.fetchNextPage({ cancelRefetch: false })
+                                        }
+                                    >
                                         {isZh ? '重试' : 'Retry'}
                                     </button>
                                 </div>
@@ -750,7 +777,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                     className="load-more-button search-load-more"
                                     type="button"
                                     disabled={searchQuery.isFetchingNextPage || searchQuery.isPlaceholderData}
-                                    onClick={() => void searchQuery.fetchNextPage()}
+                                    onClick={() => void searchQuery.fetchNextPage({ cancelRefetch: false })}
                                 >
                                     {searchQuery.isFetchingNextPage
                                         ? isZh

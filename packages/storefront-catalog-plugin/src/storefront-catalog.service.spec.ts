@@ -37,6 +37,7 @@ function fluentQueryBuilder() {
         'offset',
         'limit',
         'setParameters',
+        'orderBy',
     ]) {
         queryBuilder[method] = vi.fn(() => queryBuilder);
     }
@@ -65,11 +66,17 @@ function createCatalogService(queryBuilder = fluentQueryBuilder()) {
         getRepository: vi.fn(() => ({ createQueryBuilder: () => queryBuilder })),
     };
     const productService = { findByIds: vi.fn().mockResolvedValue([]) };
+    const variantService = { findByIds: vi.fn().mockResolvedValue([]) };
     return {
-        service: new StorefrontCatalogService(connection as any, productService as any),
+        service: new StorefrontCatalogService(
+            connection as any,
+            productService as any,
+            variantService as any,
+        ),
         queryBuilder,
         countBuilder,
         productService,
+        variantService,
     };
 }
 
@@ -95,7 +102,43 @@ describe('normalizeCatalogInput', () => {
 });
 
 describe('StorefrontCatalogService query construction', () => {
-    const context = { channelId: 'channel-1', languageCode: 'zh_Hans' } as any;
+    const context = {
+        channelId: 'channel-1',
+        languageCode: 'zh_Hans',
+        currencyCode: 'CNY',
+        channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+    } as any;
+
+    it('filters tax-exclusive converted request prices before computing the total and page', async () => {
+        const { service, queryBuilder, variantService, productService } = createCatalogService();
+        queryBuilder.getRawMany
+            .mockResolvedValueOnce([{ productId: 'p1' }, { productId: 'p2' }])
+            .mockResolvedValueOnce([
+                { variantId: 'v1', productId: 'p1' },
+                { variantId: 'v2', productId: 'p2' },
+            ]);
+        variantService.findByIds.mockResolvedValue([
+            { id: 'v1', productId: 'p1', priceWithTax: 100 },
+            { id: 'v2', productId: 'p2', priceWithTax: 200 },
+        ]);
+        productService.findByIds.mockResolvedValue([{ id: 'p1' }]);
+        const ctx = {
+            ...context,
+            currencyCode: 'MYR',
+            channel: {
+                ...context.channel,
+                pricesIncludeTax: false,
+                defaultTaxZone: { id: 'tax-zone' },
+                customFields: { cnyToMyrRate: 0.53, currencyRoundingMode: 'WHOLE' },
+            },
+        };
+        const result = await service.find(ctx, { maxPriceWithTax: 100, take: 1, sort: 'PRICE_ASC' });
+        expect(result).toEqual({ totalItems: 1, items: [{ id: 'p1' }] });
+        expect(variantService.findByIds).toHaveBeenCalledWith(ctx, ['v1', 'v2']);
+        expect(queryBuilder.having).not.toHaveBeenCalled();
+        expect(queryBuilder.limit).not.toHaveBeenCalled();
+        expect(productService.findByIds).toHaveBeenCalledWith(ctx, ['p1']);
+    });
 
     it('applies Channel, language, collection, fulfillment, stock and price filters on the server', () => {
         const { service, queryBuilder } = createCatalogService();

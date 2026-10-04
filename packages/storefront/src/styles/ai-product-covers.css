@@ -76,25 +76,25 @@
 }
 
 .ai-cover-company {
-    font-size: 7.5px;
-    font-weight: 800;
-    letter-spacing: 0.05em;
+    font-size: var(--type-artwork-caption-size);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     color: rgba(255, 255, 255, 0.95);
     text-transform: uppercase;
-    line-height: 1;
+    line-height: var(--type-artwork-caption-leading);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .ai-cover-status {
-    font-size: 7px;
-    font-weight: 800;
+    font-size: var(--type-artwork-caption-size);
+    font-weight: var(--font-weight-bold);
     color: #bbf7d0;
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(187, 247, 208, 0.45);
     border-radius: 3px;
     padding: 0.5px 3px;
-    line-height: 1.1;
-    letter-spacing: 0.02em;
+    line-height: var(--type-artwork-caption-leading);
+    letter-spacing: var(--tracking-normal);
 }
 
 /* Center Logo Prism Container */
@@ -139,12 +139,12 @@
 }
 
 .ai-cover-brand-title {
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
+    font-size: var(--type-artwork-title-size);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
     color: #ffffff;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-    line-height: 1;
+    line-height: var(--type-artwork-title-leading);
 }
 
 /* Bottom Tier / Feature Badge */
@@ -165,16 +165,16 @@
     border: 1px solid rgba(255, 255, 255, 0.4);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    font-size: 8px;
-    font-weight: 800;
+    font-size: var(--type-artwork-caption-size);
+    font-weight: var(--font-weight-bold);
     color: #fef08a;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--tracking-normal);
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-    line-height: 1.15;
+    line-height: var(--type-artwork-caption-leading);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
@@ -211,8 +211,9 @@
     align-items: center;
     justify-content: center;
     gap: 2px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
     white-space: nowrap;
     transition: color 160ms ease;
 }
@@ -230,7 +231,7 @@
     background: var(--selection);
     border-radius: var(--skin-control-radius);
     color: var(--selection-foreground);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
 }
 
 .sort-bar button.is-active:hover:not(:disabled) {
@@ -288,9 +289,9 @@
 
 .price-range-inputs label span {
     flex: none;
-    line-height: 1;
-    font-size: 12px;
-    font-weight: 700;
+    line-height: var(--type-label-leading);
+    font-size: var(--type-label-size);
+    font-weight: var(--font-weight-bold);
     color: var(--muted);
 }
 
@@ -303,8 +304,9 @@
     border: 0;
     outline: 0;
     background: transparent;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+    font-weight: var(--font-weight-semibold);
     color: var(--text);
 }
 
@@ -318,7 +320,7 @@
 .price-separator {
     text-align: center;
     color: var(--muted);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     user-select: none;
 }
 
@@ -342,8 +344,9 @@
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     color: var(--text);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
     transition:
         background-color 150ms ease,
         border-color 150ms ease,
@@ -367,7 +370,7 @@
     border-color: var(--selection);
     background: var(--selection);
     color: var(--selection-foreground);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     box-shadow: none;
 }
 
@@ -405,8 +408,9 @@
 }
 
 .filter-stock-title {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-bold);
     color: var(--text);
 }
 
@@ -418,8 +422,9 @@
 
 .filter-legend {
     margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-bold);
     color: var(--text);
 }
 
@@ -436,8 +441,9 @@
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
     transition:
         background-color 150ms ease,
         border-color 150ms ease,
@@ -460,7 +466,7 @@
     border-color: var(--selection);
     background: var(--selection);
     color: var(--selection-foreground);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     box-shadow: none;
 }
 
@@ -520,8 +526,9 @@
     border-radius: 9999px;
     background: var(--soft);
     color: var(--text);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
     transition:
         background-color 150ms ease,
         border-color 150ms ease,
@@ -542,8 +549,9 @@
     border-radius: 9999px;
     background: var(--accent);
     color: var(--accent-foreground);
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
     box-shadow: var(--accent-shadow);
     transition:
         transform 150ms ease,
@@ -591,7 +599,7 @@
 }
 
 .select-all b {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .group-select {
@@ -762,13 +770,14 @@
 
 .coupon-row strong,
 .security-row strong {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .coupon-row small,
 .security-row > span:last-child {
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .coupon-row > span:last-child {
@@ -839,7 +848,7 @@
     color: var(--muted);
     font: inherit;
     font-size: var(--type-body-size);
-    line-height: var(--line-height-body);
+    line-height: var(--type-body-leading);
     cursor: pointer;
 }
 
@@ -866,6 +875,7 @@
 .review-section-count {
     color: inherit;
     font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-variant-numeric: tabular-nums;
 }
 
@@ -943,13 +953,14 @@
 
 .review-candidate-copy strong {
     overflow-wrap: anywhere;
-    line-height: 1.5;
+    line-height: var(--line-height-body);
 }
 
 .review-candidate-copy small {
     margin-top: 3px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -970,7 +981,8 @@
     border: 1px solid var(--line-subtle);
     border-radius: var(--skin-control-radius);
     background: transparent;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
     white-space: nowrap;
 }
@@ -994,7 +1006,8 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -1012,8 +1025,8 @@
     margin: 0;
     padding: 24px 18px;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     text-align: center;
 }
 
@@ -1059,7 +1072,7 @@
 .review-composer-summary strong,
 .review-composer-summary small {
     display: block;
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .review-composer-summary small {
     margin-top: 4px;
@@ -1141,7 +1154,9 @@
     margin-bottom: 7px;
     color: var(--muted);
     display: block;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
 }
 
 .review-rating-input {
@@ -1183,6 +1198,8 @@
     background: var(--surface);
     color: var(--text);
     font: inherit;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
     transition:
         border-color 180ms ease,
         box-shadow 180ms ease;
@@ -1196,7 +1213,8 @@
     display: block;
     margin-bottom: 8px;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .review-image-previews {
@@ -1248,7 +1266,8 @@
     gap: 3px;
     color: var(--accent-ink);
     cursor: pointer;
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .review-image-add svg {
@@ -1290,8 +1309,8 @@
     align-items: flex-start;
     gap: 9px;
     color: var(--text-muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .review-composer .review-anonymous-option input {
@@ -1373,7 +1392,7 @@
 .product-review-list article > p {
     margin: 6px 0 0;
     color: var(--muted);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     white-space: pre-wrap;
 }
 
@@ -1381,7 +1400,8 @@
     margin-top: 10px;
     color: var(--muted);
     display: block;
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .review-state {
@@ -1390,7 +1410,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .review-state.is-approved {
@@ -1428,8 +1449,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .my-review-list blockquote {
@@ -1478,7 +1499,7 @@
 .product-review-copy > p {
     margin: 6px 0 0;
     color: var(--muted);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
@@ -1528,7 +1549,8 @@
 
 .product-review-list article > header {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .product-review-copy > em {
@@ -1537,7 +1559,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     font-style: normal;
 }
 
@@ -1576,10 +1599,12 @@
         border-radius: 12px;
     }
     .desktop-store-layout .ai-cover-company {
-        font-size: 11px;
+        font-size: var(--type-artwork-caption-size);
+        line-height: var(--type-artwork-caption-leading);
     }
     .desktop-store-layout .ai-cover-status {
-        font-size: 10px;
+        font-size: var(--type-artwork-caption-size);
+        line-height: var(--type-artwork-caption-leading);
         padding: 2px 6px;
     }
     .desktop-store-layout .ai-cover-logo-prism {
@@ -1592,11 +1617,13 @@
         height: 32px;
     }
     .desktop-store-layout .ai-cover-brand-title {
-        font-size: 13px;
+        font-size: var(--type-artwork-title-size);
+        line-height: var(--type-artwork-title-leading);
         margin-top: 4px;
     }
     .desktop-store-layout .ai-cover-tier-badge {
-        font-size: 11px;
+        font-size: var(--type-artwork-caption-size);
+        line-height: var(--type-artwork-caption-leading);
         padding: 4px 8px;
         border-radius: 6px;
     }
@@ -1610,7 +1637,8 @@
     color: #59635f;
     display: grid;
     place-items: center;
-    font-size: 21px;
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
     font-weight: var(--font-weight-semibold);
 }
 

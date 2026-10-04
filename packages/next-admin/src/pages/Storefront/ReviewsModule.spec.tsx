@@ -98,3 +98,6 @@ describe('review feature switch', () => {
         expect(host.querySelector<HTMLButtonElement>('[role="switch"]')?.disabled).toBe(true);
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

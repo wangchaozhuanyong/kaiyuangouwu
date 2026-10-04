@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShopApi } from '../api';
 import type { CustomerProductActivity } from '../types';
 
-import { enabledMarkets } from '../i18n';
+import { enabledMarkets, languageCodeFor } from '../i18n';
+import { storefrontQueryKeys } from '../query-client';
 
 import { useCustomerProductActivity } from './useCustomerProductActivity';
 
@@ -93,6 +94,29 @@ describe('account product activity', () => {
         await render();
         expect(result.favoriteProductIds).toEqual([]);
         expect(load).not.toHaveBeenCalled();
+    });
+
+    it('uses the private customer scope and preserves confirmed favorites after a failed refresh', async () => {
+        load.mockResolvedValue({ favoriteProductIds: ['product-a'], recentProductVisits: [] });
+        await render();
+        await vi.waitFor(() => expect(result.favoriteProductIds).toEqual(['product-a']));
+        const key = storefrontQueryKeys.customerProductActivity(
+            storefrontQueryKeys.market(enabledMarkets[0]),
+            languageCodeFor('zh'),
+            'customer-a',
+        );
+        expect(client.getQueryData(key)).toEqual({
+            favoriteProductIds: ['product-a'],
+            recentProductVisits: [],
+        });
+        load.mockRejectedValueOnce(new Error('Read unavailable'));
+        await act(async () => {
+            await result.retry();
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+        expect(result.favoriteProductIds).toEqual(['product-a']);
+        expect(result.error).toBeNull();
+        expect(client.getQueryState(key)?.status).toBe('error');
     });
 
     it('does not write a favorite into the next account after a delayed ownership read', async () => {

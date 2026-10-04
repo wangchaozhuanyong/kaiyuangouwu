@@ -1,6 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, RefreshCw, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
@@ -94,19 +95,19 @@ export function OrderExpenseImportDialog({
                             。文件在浏览器本地解析，只有通过验证的订单号和费用数据会发送给后端。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         aria-label="关闭费用导入"
                     >
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </header>
 
                 <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => inputRef.current?.click()}
                             disabled={parsing || importState.loading}
@@ -118,15 +119,15 @@ export function OrderExpenseImportDialog({
                                 <Upload className="h-3.5 w-3.5" />
                             )}
                             选择费用文件
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => downloadExpenseTemplate(currencyCode)}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                         >
                             <Download className="h-3.5 w-3.5" /> 下载 CSV 模板
-                        </button>
-                        <input
+                        </AdminButton>
+                        <AdminInput
                             ref={inputRef}
                             type="file"
                             accept=".numbers,.xlsx,.xls,.csv"
@@ -254,7 +255,7 @@ export function OrderExpenseImportDialog({
 
                 <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
                     <label className="flex items-start gap-2 text-[11px] leading-5 text-slate-600">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={confirmed}
                             onChange={event => setConfirmed(event.target.checked)}
@@ -264,15 +265,15 @@ export function OrderExpenseImportDialog({
                         <span>我已核对当前店铺、{currencyCode} 币种和订单号，确认写入费用记录。</span>
                     </label>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700"
                         >
                             {result ? '完成' : '取消'}
-                        </button>
+                        </AdminButton>
                         {!result && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void executeImport()}
                                 disabled={
@@ -286,7 +287,7 @@ export function OrderExpenseImportDialog({
                             >
                                 {importState.loading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
                                 确认导入 {preview?.rows.length ?? 0} 行
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </footer>

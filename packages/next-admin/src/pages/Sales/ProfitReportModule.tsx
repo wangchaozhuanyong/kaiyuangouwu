@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import {
     AlertCircle,
     AlertTriangle,
@@ -48,7 +50,7 @@ export function ProfitReportModule() {
             },
         },
         skip: range == null,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const report = query.data?.catalogProfitReport;
@@ -93,23 +95,26 @@ export function ProfitReportModule() {
                                 setPage(0);
                             }}
                         />
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={!range || query.loading}
                             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                                className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
                             刷新
-                        </button>
+                        </AdminButton>
                         {canImportExpenses && summary && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setImportOpen(true)}
                                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white transition hover:bg-emerald-700"
                             >
                                 <FileSpreadsheet className="h-3.5 w-3.5" /> 导入实际费用
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -130,13 +135,13 @@ export function ProfitReportModule() {
                     <Message tone="warning" icon={<AlertTriangle className="h-4 w-4" />}>
                         {summary.missingCostOrderCount} 笔订单、{summary.missingCostLineCount}{' '}
                         条商品行缺少成本。为避免假利润，成本、毛利润和毛利率不会显示合计值。
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => navigate('/catalog/list')}
                             className="ml-2 inline-flex items-center gap-1 font-bold underline underline-offset-2"
                         >
                             去补商品成本 <ArrowRight className="h-3 w-3" />
-                        </button>
+                        </AdminButton>
                     </Message>
                 )}
                 {summary && summary.estimatedCostLineCount > 0 && (
@@ -151,13 +156,13 @@ export function ProfitReportModule() {
                         {summary.missingPaymentFeeOrderCount}{' '}
                         笔订单缺支付手续费。缺任一费用的订单不计算净利润；没有费用也要明确填 0。
                         {canImportExpenses && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setImportOpen(true)}
                                 className="ml-2 inline-flex items-center gap-1 font-bold underline underline-offset-2"
                             >
                                 批量补费用 <ArrowRight className="h-3 w-3" />
-                            </button>
+                            </AdminButton>
                         )}
                     </Message>
                 )}
@@ -225,7 +230,7 @@ export function ProfitReportModule() {
                                     {report.items.map(item => (
                                         <tr key={item.id} className="hover:bg-slate-50/70">
                                             <Cell>
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() =>
                                                         navigate(`/sales/orders/${item.id}`, {
@@ -237,7 +242,7 @@ export function ProfitReportModule() {
                                                     className="font-bold text-blue-700 hover:underline"
                                                 >
                                                     {item.code}
-                                                </button>
+                                                </AdminButton>
                                             </Cell>
                                             <Cell>{formatDateTime(item.orderPlacedAt)}</Cell>
                                             <Cell>{item.quantity}</Cell>
@@ -520,7 +525,7 @@ function DateField({
     return (
         <label className="space-y-1 text-[11px] font-bold text-slate-600">
             <span>{label}</span>
-            <input
+            <AdminInput
                 type="date"
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -589,13 +594,13 @@ function ExpenseCell({
     if (value != null) return <MoneyCell value={value} currency={currency} />;
     return (
         <Cell>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onEdit}
                 className="font-bold text-rose-600 underline decoration-dotted underline-offset-2"
             >
                 待补{label}
-            </button>
+            </AdminButton>
         </Cell>
     );
 }
@@ -610,14 +615,14 @@ function PageButton({
     children: ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             disabled={disabled}
             onClick={onClick}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }
 

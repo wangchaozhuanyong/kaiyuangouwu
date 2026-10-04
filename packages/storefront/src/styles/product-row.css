@@ -72,9 +72,9 @@
     display: block;
     margin: 0;
     color: var(--text);
-    font-size: 15px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1.45;
+    line-height: var(--type-body-leading);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -86,8 +86,8 @@
     max-width: 100%;
     overflow: hidden;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
     white-space: nowrap;
     text-overflow: ellipsis;
 }
@@ -98,8 +98,8 @@
     gap: 4px 6px;
     min-width: 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;
 }
 
@@ -122,17 +122,17 @@
 }
 
 .product-row-price .price-lockup {
-    font-size: 20px;
+    font-size: var(--type-metric-size);
     font-weight: var(--font-weight-bold);
-    line-height: 1.2;
+    line-height: var(--type-metric-leading);
 }
 
 .product-row-stock {
     max-width: 100%;
     margin-left: auto;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-align: right;
     overflow-wrap: anywhere;
 }

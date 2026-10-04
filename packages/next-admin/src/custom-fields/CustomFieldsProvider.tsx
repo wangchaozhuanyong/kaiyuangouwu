@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton } from '../components/AdminControls';
+import { useAdminQuery as useQuery } from '../hooks/use-admin-query';
+
 import { RefreshCw } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import type { CustomFieldServerConfigData } from './custom-field-types';
@@ -29,7 +31,7 @@ export function CustomFieldsProvider({ children }: { children: ReactNode }) {
         );
     }
 
-    if (query.error) {
+    if (query.error && !query.data) {
         return (
             <div className="flex h-full items-center justify-center p-6">
                 <section className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm">
@@ -37,13 +39,13 @@ export function CustomFieldsProvider({ children }: { children: ReactNode }) {
                     <p className="mt-2 text-xs leading-5 text-rose-600">
                         {toUserFacingError(query.error, '暂时无法读取服务器自定义字段配置。')}
                     </p>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void query.refetch()}
                         className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                         重新读取
-                    </button>
+                    </AdminButton>
                 </section>
             </div>
         );

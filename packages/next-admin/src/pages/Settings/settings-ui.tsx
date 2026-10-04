@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, LoaderCircle, X } from 'lucide-react';
 import type React from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -30,14 +31,14 @@ export function TabButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`tablet-touch-target flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
         >
             {icon}
             {children}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -76,9 +77,14 @@ export function Modal({
                             <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
                         )}
                     </div>
-                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="p-1 text-slate-400"
+                        aria-label="关闭"
+                    >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </div>
@@ -101,13 +107,13 @@ export function ModalActions({
 }) {
     return (
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
+            <AdminButton type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
                 取消
-            </button>
-            <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+            </AdminButton>
+            <AdminButton type="button" onClick={onSave} disabled={saving} className={primaryButton}>
                 {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                 {saveLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -225,7 +231,7 @@ export function CheckboxControl({
 }) {
     return (
         <label className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 has-[:focus-visible]:border-blue-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-100 has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-slate-50 has-[:disabled]:text-slate-400">
-            <input
+            <AdminInput
                 type="checkbox"
                 checked={checked}
                 onChange={onChange}
@@ -344,9 +350,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">店铺配置加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
+            <AdminButton type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -369,9 +375,9 @@ export function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

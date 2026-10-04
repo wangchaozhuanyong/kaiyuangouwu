@@ -1,9 +1,10 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Camera, Check, LoaderCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { uploadAdminFile } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import {
@@ -14,6 +15,7 @@ import {
     USE_CATALOG_IMAGE_OUTPUT,
 } from '../../graphql/catalog-image-studio.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 export const DEFAULT_PRODUCT_IMAGE_DESCRIPTION =
@@ -97,12 +99,11 @@ export function ProductAiImageDialog({
     const isSuperAdmin = permissions.includes('SuperAdmin');
     const configQuery = useQuery<CatalogImageConfigData>(CATALOG_IMAGE_STUDIO_CONFIG, {
         skip: !open,
-        fetchPolicy: 'network-only',
     });
     const jobsQuery = useQuery<CatalogImageJobsData>(CATALOG_IMAGE_GENERATION_JOBS, {
         variables: { skip: 0, take: 8 },
         skip: !open,
-        fetchPolicy: 'network-only',
+
         pollInterval: open ? 2_500 : 0,
     });
     const [createGeneration] = useMutation<CreatedGenerationData>(CREATE_CATALOG_IMAGE_GENERATION);
@@ -211,19 +212,19 @@ export function ProductAiImageDialog({
                             固定生成 1 张 1:1 / 1K 主图，使用后还需保存商品
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
 
                 <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[1.05fr_.95fr]">
                     <section className="space-y-4 border-b border-slate-200 p-4 dark:border-slate-800 sm:p-6 lg:border-b-0 lg:border-r">
-                        {configQuery.loading ? (
+                        {configQuery.loading && !configQuery.data ? (
                             <p className="text-sm text-slate-500 dark:text-slate-400">
                                 正在读取店铺生图配置…
                             </p>
@@ -244,17 +245,17 @@ export function ProductAiImageDialog({
                                             商品照片
                                         </label>
                                         {file && (
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => inputRef.current?.click()}
                                                 className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
                                             >
                                                 <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
                                                 重新拍摄/选择
-                                            </button>
+                                            </AdminButton>
                                         )}
                                     </div>
-                                    <input
+                                    <AdminInput
                                         ref={inputRef}
                                         className="sr-only"
                                         type="file"
@@ -269,17 +270,17 @@ export function ProductAiImageDialog({
                                                 alt="原始商品照片预览"
                                                 className="h-full w-full object-contain"
                                             />
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => setFile(null)}
                                                 className="absolute right-2 top-2 rounded-full bg-slate-950/70 p-2 text-white hover:bg-slate-950"
                                                 aria-label="移除照片"
                                             >
                                                 <X className="h-4 w-4" />
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     ) : (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => inputRef.current?.click()}
                                             className="flex aspect-4/3 min-h-[140px] max-h-[190px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-600 transition-colors hover:border-violet-400 hover:bg-violet-50/50 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-violet-500 dark:hover:bg-violet-950/20"
@@ -289,7 +290,7 @@ export function ProductAiImageDialog({
                                             <span className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                                                 支持 JPEG、PNG、WebP，最大 10MB
                                             </span>
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                                 <div>
@@ -299,7 +300,7 @@ export function ProductAiImageDialog({
                                     >
                                         主图效果描述
                                     </label>
-                                    <textarea
+                                    <AdminTextArea
                                         id="catalog-image-description"
                                         rows={4}
                                         maxLength={1500}
@@ -313,7 +314,7 @@ export function ProductAiImageDialog({
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={termsAccepted}
                                             onChange={event => setTermsAccepted(event.target.checked)}
@@ -332,7 +333,7 @@ export function ProductAiImageDialog({
                                         </details>
                                     )}
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     disabled={working || !config?.enabled}
                                     onClick={generate}
@@ -344,7 +345,7 @@ export function ProductAiImageDialog({
                                         <Sparkles className="h-4 w-4" />
                                     )}
                                     生成商品主图
-                                </button>
+                                </AdminButton>
                             </>
                         )}
                     </section>
@@ -388,7 +389,7 @@ export function ProductAiImageDialog({
                                     </div>
                                 )}
                                 {result && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={working}
                                         onClick={applyResult}
@@ -396,7 +397,7 @@ export function ProductAiImageDialog({
                                     >
                                         <Check className="h-4 w-4" />
                                         {result.catalogAssetId ? '已使用，再次返回同一素材' : '使用为主图'}
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                         ) : (
@@ -413,7 +414,7 @@ export function ProductAiImageDialog({
                         {(jobs?.length ?? 0) > 1 && (
                             <div className="space-y-2">
                                 {jobs?.map(job => (
-                                    <button
+                                    <AdminButton
                                         key={job.id}
                                         type="button"
                                         onClick={() => setSelectedJobId(job.id)}
@@ -429,7 +430,7 @@ export function ProductAiImageDialog({
                                         <span className="ml-3 shrink-0 text-slate-500 dark:text-slate-400">
                                             {getSystemLabel(job.state, statusText, 'zh', 'status')}
                                         </span>
-                                    </button>
+                                    </AdminButton>
                                 ))}
                             </div>
                         )}

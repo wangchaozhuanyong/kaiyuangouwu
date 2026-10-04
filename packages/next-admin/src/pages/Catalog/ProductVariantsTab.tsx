@@ -1,4 +1,5 @@
 import { Check, FolderTree, Layers, Plus, Search, Trash2 } from 'lucide-react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { DigitalDeliveryMode, DigitalStockPolicy } from '../../graphql/commerce.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
@@ -129,13 +130,13 @@ export function ProductVariantsTab() {
                                 : '普通单品维护一行即可；如有颜色、容量或多包装等区分，请展开下方【规格模板】生成多规格'}
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={handleAddVariant}
                         className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                     >
                         <Plus className="w-3.5 h-3.5" /> 添加一个销售规格
-                    </button>
+                    </AdminButton>
                 </div>
 
                 <details
@@ -174,13 +175,13 @@ export function ProductVariantsTab() {
                                         未生成矩阵时将直接按普通单品保存，不会强制关联选中的模板。若需多规格，请点击右侧【生成
                                         SKU 矩阵】。
                                     </div>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setSelectedOptionGroupIds([])}
                                         className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-slate-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-300 dark:hover:bg-slate-700 cursor-pointer shadow-2xs"
                                     >
                                         清空已选模板
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             )}
                         <div className="flex items-center justify-between gap-3">
@@ -191,26 +192,26 @@ export function ProductVariantsTab() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setIsQuickCreateSpecOpen(true)}
                                     className="flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 cursor-pointer transition-colors shadow-2xs"
                                 >
                                     <Plus className="h-3.5 w-3.5" /> 快速新建规格
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={handleGenerateVariantMatrix}
                                     disabled={selectedReusableOptionGroupIds.length === 0}
                                     className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                                 >
                                     生成 SKU 矩阵
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                         <div className="relative max-w-md">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <input
+                            <AdminInput
                                 aria-label="搜索规格模板"
                                 value={optionGroupSearch}
                                 onChange={event => {
@@ -257,7 +258,7 @@ export function ProductVariantsTab() {
                                 {optionGroupsData?.productOptionGroups.items.map(group => {
                                     const isSelected = selectedOptionGroupIds.includes(group.id);
                                     return (
-                                        <button
+                                        <AdminButton
                                             key={group.id}
                                             type="button"
                                             onClick={() => {
@@ -280,7 +281,7 @@ export function ProductVariantsTab() {
                                             <div className="mt-0.5 font-mono text-[10px] opacity-70">
                                                 {group.options.length} 个选项
                                             </div>
-                                        </button>
+                                        </AdminButton>
                                     );
                                 })}
                             </div>
@@ -375,7 +376,7 @@ export function ProductVariantsTab() {
                                         >
                                             {/* Variant Name */}
                                             <td className="h-[52px] px-3 py-2">
-                                                <input
+                                                <AdminInput
                                                     type="text"
                                                     aria-label={`第 ${index + 1} 行规格名称`}
                                                     value={variant.name}
@@ -393,7 +394,7 @@ export function ProductVariantsTab() {
 
                                             {/* SKU */}
                                             <td className="h-[52px] px-3 py-2">
-                                                <input
+                                                <AdminInput
                                                     type="text"
                                                     aria-label={`第 ${index + 1} 行 SKU 编码`}
                                                     value={variant.sku}
@@ -416,7 +417,7 @@ export function ProductVariantsTab() {
                                                     <span className="text-slate-400 font-mono">
                                                         {activeCurrencyCode}
                                                     </span>
-                                                    <input
+                                                    <AdminInput
                                                         type="number"
                                                         aria-label={`第 ${index + 1} 行成本价`}
                                                         step="0.01"
@@ -446,7 +447,7 @@ export function ProductVariantsTab() {
                                                         <span className="text-slate-400 font-mono">
                                                             {activeCurrencyCode}
                                                         </span>
-                                                        <input
+                                                        <AdminInput
                                                             type="number"
                                                             aria-label={`第 ${index + 1} 行销售价`}
                                                             step="0.01"
@@ -505,7 +506,7 @@ export function ProductVariantsTab() {
                                             {effectiveFulfillmentType === 'digital' ? (
                                                 <>
                                                     <td className="h-[52px] px-3 py-2">
-                                                        <select
+                                                        <AdminSelect
                                                             aria-label={`第 ${index + 1} 行数字交付方式`}
                                                             value={variant.digitalDeliveryMode}
                                                             onChange={event =>
@@ -520,11 +521,11 @@ export function ProductVariantsTab() {
                                                             <option value="manual_service">人工交付</option>
                                                             <option value="file_download">文件下载</option>
                                                             <option value="auto_card">号池自动发卡</option>
-                                                        </select>
+                                                        </AdminSelect>
                                                     </td>
                                                     <td className="h-[52px] px-3 py-2">
                                                         {variant.digitalDeliveryMode === 'file_download' ? (
-                                                            <select
+                                                            <AdminSelect
                                                                 aria-label={`第 ${index + 1} 行数字库存规则`}
                                                                 value={variant.digitalStockPolicy}
                                                                 onChange={event =>
@@ -539,7 +540,7 @@ export function ProductVariantsTab() {
                                                             >
                                                                 <option value="limited">限制库存</option>
                                                                 <option value="unlimited">无限库存</option>
-                                                            </select>
+                                                            </AdminSelect>
                                                         ) : (
                                                             <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
                                                                 {variant.digitalDeliveryMode === 'auto_card'
@@ -563,7 +564,7 @@ export function ProductVariantsTab() {
                                                                 无限
                                                             </span>
                                                         ) : (
-                                                            <input
+                                                            <AdminInput
                                                                 type="number"
                                                                 aria-label={`第 ${index + 1} 行可售库存`}
                                                                 min="0"
@@ -588,7 +589,7 @@ export function ProductVariantsTab() {
                                                 <>
                                                     {/* Stock on Hand */}
                                                     <td className="h-[52px] px-3 py-2">
-                                                        <input
+                                                        <AdminInput
                                                             type="number"
                                                             aria-label={`第 ${index + 1} 行在手库存`}
                                                             min="0"
@@ -616,7 +617,7 @@ export function ProductVariantsTab() {
 
                                             {/* Enabled */}
                                             <td className="h-[52px] px-3 py-2 text-center">
-                                                <input
+                                                <AdminInput
                                                     type="checkbox"
                                                     aria-label={`第 ${index + 1} 行 SKU 启用状态`}
                                                     checked={variant.enabled}
@@ -633,14 +634,14 @@ export function ProductVariantsTab() {
 
                                             {/* Actions */}
                                             <td className="h-[52px] px-3 py-2 text-right">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => handleDeleteVariant(index)}
                                                     className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                                                     title="删除该规格"
                                                 >
                                                     <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                                </AdminButton>
                                             </td>
                                         </tr>
                                     );

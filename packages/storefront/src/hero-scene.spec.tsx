@@ -12,17 +12,19 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
-    it('moves intact copy when image, viewport or configured content changes and releases observers', () => {
+    it('keeps configured copy over the image and measures media overlays without losing content', () => {
         let imageHeight = 300;
+        let overlayHeight = 40;
         const callbacks: ResizeObserverCallback[] = [];
         const disconnect = vi.fn();
+        const observe = vi.fn();
         vi.stubGlobal(
             'ResizeObserver',
             class {
                 constructor(callback: ResizeObserverCallback) {
                     callbacks.push(callback);
                 }
-                observe = vi.fn();
+                observe = observe;
                 disconnect = disconnect;
             },
         );
@@ -30,11 +32,13 @@ describe('shared hero content layout', () => {
         vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
             this: HTMLElement,
         ) {
-            const height = this.classList.contains('hero-rich-media')
-                ? imageHeight
-                : this.classList.contains('hero-rich-content')
-                  ? 200 + this.querySelectorAll('.hero-stat-badge').length * 20
-                  : 40;
+            const height = this.classList.contains('test-trust')
+                ? overlayHeight
+                : this.classList.contains('hero-rich-media')
+                  ? imageHeight
+                  : this.classList.contains('hero-rich-content')
+                    ? 200 + this.querySelectorAll('.hero-stat-badge').length * 20
+                    : 40;
             const top = this.classList.contains('test-trust') ? imageHeight - 52 : 0;
             return new DOMRect(0, top, 450, height);
         });
@@ -72,9 +76,17 @@ describe('shared hero content layout', () => {
         try {
             render();
             expect(layout()).toBe('overlay');
+            expect(observe).toHaveBeenCalledWith(host.querySelector('.test-trust'));
+            expect(
+                (host.firstElementChild as HTMLElement).style.getPropertyValue('--hero-overlay-height'),
+            ).toBe('40px');
             imageHeight = 220;
+            overlayHeight = 72;
             resize();
-            expect(layout()).toBe('below');
+            expect(layout()).toBe('overlay');
+            expect(
+                (host.firstElementChild as HTMLElement).style.getPropertyValue('--hero-overlay-height'),
+            ).toBe('72px');
             imageHeight = 500;
             resize();
             expect(layout()).toBe('overlay');
@@ -84,7 +96,7 @@ describe('shared hero content layout', () => {
             }));
             imageHeight = 300;
             render();
-            expect(layout()).toBe('below');
+            expect(layout()).toBe('overlay');
             expect(host.querySelectorAll('.hero-stat-badge')).toHaveLength(8);
             for (const text of [content.subtitle, content.title, content.body, content.ctaLabel]) {
                 expect(host.textContent).toContain(text);
@@ -100,16 +112,14 @@ describe('shared hero content layout', () => {
             act(() => {
                 window.dispatchEvent(new Event('resize'));
             });
-            expect(layout()).toBe('below');
+            expect(layout()).toBe('overlay');
             vi.stubGlobal('innerWidth', 1440);
             act(() => {
                 window.dispatchEvent(new Event('resize'));
             });
             expect(layout()).toBe('overlay');
-            const removeListener = vi.spyOn(window, 'removeEventListener');
             act(() => root.unmount());
             expect(disconnect).toHaveBeenCalled();
-            expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
         } finally {
             act(() => root.unmount());
             host.remove();

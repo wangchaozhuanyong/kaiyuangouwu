@@ -43,7 +43,7 @@ import {
 
 type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' };
 const referralCurrencyBadgeClassName =
-    'grid min-h-11 place-items-center rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold text-amber-700';
+    'grid min-h-11 place-items-center rounded-xl border border-amber-200 bg-white px-3 type-body weight-bold text-amber-700';
 
 export function PaymentPage({
     api,
@@ -266,7 +266,7 @@ export function PaymentPage({
             }
             const result = await api.useReferralBalance(amount);
             onOrderChange(result.order);
-            await referralOverviewQuery.refetch();
+            await referralOverviewQuery.refetch({ cancelRefetch: false });
             if (isPaymentCompletedOrderState(result.order.state)) {
                 await onComplete(result.order, confirmationTokenRef.current);
             }
@@ -361,18 +361,18 @@ export function PaymentPage({
                                     </strong>
                                     {usdtQuoteQuery.data ? (
                                         <>
-                                            <span className="mt-1 block text-2xl font-black text-emerald-700">
+                                            <span className="mt-1 block type-page weight-bold text-emerald-700">
                                                 ₮{usdtQuoteQuery.data.usdtAmount.toFixed(6)}
                                             </span>
-                                            <small className="mt-2 block leading-5 text-slate-600">
+                                            <small className="mt-2 block [line-height:var(--line-height-body)] text-slate-600">
                                                 {usdtQuoteDescription(usdtQuoteQuery.data, locale, language)}
                                             </small>
                                             <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
                                                 <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-xs font-bold text-slate-500">
+                                                    <span className="type-helper weight-bold text-slate-500">
                                                         {usdtQuoteQuery.data.network} USDT
                                                     </span>
-                                                    <span className="text-xs font-semibold text-emerald-700">
+                                                    <span className="type-helper weight-semibold text-emerald-700">
                                                         {usdtQuoteQuery.data.paymentStatus === 'PENDING'
                                                             ? isZh
                                                                 ? '等待链上到账'
@@ -392,12 +392,12 @@ export function PaymentPage({
                                                                   : 'Quote expired'}
                                                     </span>
                                                 </div>
-                                                <code className="mt-2 block break-all text-sm font-bold text-slate-900">
+                                                <code className="mt-2 block break-all type-body weight-bold text-slate-900">
                                                     {usdtQuoteQuery.data.receivingAddress}
                                                 </code>
                                                 <button
                                                     type="button"
-                                                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-sm font-bold text-white"
+                                                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 type-action text-white"
                                                     disabled={usdtQuoteQuery.data.paymentStatus !== 'PENDING'}
                                                     onClick={() => void copyUsdtAddress()}
                                                 >
@@ -411,11 +411,11 @@ export function PaymentPage({
                                                           : 'Copy address'}
                                                 </button>
                                             </div>
-                                            <small className="mt-2 block break-all leading-5 text-slate-500">
+                                            <small className="mt-2 block break-all [line-height:var(--line-height-body)] text-slate-500">
                                                 {isZh ? '钱包校验码：' : 'Wallet verification: '}
                                                 {usdtQuoteQuery.data.receivingAddressFingerprint.slice(0, 16)}
                                             </small>
-                                            <small className="mt-1 block leading-5 font-semibold text-amber-700">
+                                            <small className="mt-1 block [line-height:var(--line-height-body)] weight-semibold text-amber-700">
                                                 {usdtQuoteQuery.data.paymentStatus === 'MANUAL_REVIEW'
                                                     ? isZh
                                                         ? '这笔付款需要人工复核，请停止继续转账并联系客服。'
@@ -429,11 +429,11 @@ export function PaymentPage({
                                             </small>
                                         </>
                                     ) : usdtQuoteQuery.isLoading ? (
-                                        <span className="mt-2 block text-sm text-slate-600">
+                                        <span className="mt-2 block type-body text-slate-600">
                                             {isZh ? '正在锁定当前报价…' : 'Locking the current quote…'}
                                         </span>
                                     ) : (
-                                        <span className="mt-2 block text-sm text-red-600">
+                                        <span className="mt-2 block type-body text-red-600">
                                             {usdtQuoteQuery.error instanceof Error
                                                 ? storefrontErrorMessage(usdtQuoteQuery.error, language)
                                                 : isZh
@@ -492,7 +492,7 @@ export function PaymentPage({
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
                                 <div className="flex items-center justify-between gap-3">
-                                    <span className="flex items-center gap-2 font-bold text-slate-800">
+                                    <span className="flex items-center gap-2 weight-bold text-slate-800">
                                         <Gift aria-hidden="true" className="size-4 text-amber-600" />
                                         {isZh ? '可用余额' : 'Available balance'}
                                     </span>
@@ -505,7 +505,7 @@ export function PaymentPage({
                                     </strong>
                                 </div>
                                 {appliedReferralAmount > 0 ? (
-                                    <p className="mb-0 mt-3 text-sm font-semibold text-emerald-700">
+                                    <p className="mb-0 mt-3 type-body weight-semibold text-emerald-700">
                                         {isZh
                                             ? `已抵扣 ${formatSettlementMoney(appliedReferralAmount, order.currencyCode, locale)}，剩余金额请继续选择支付方式。`
                                             : `${formatSettlementMoney(appliedReferralAmount, order.currencyCode, locale)} applied. Choose a method for the remainder.`}
@@ -520,7 +520,7 @@ export function PaymentPage({
                                         </span>
                                         <input
                                             id="referral-balance-amount"
-                                            className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-base outline-none focus:border-amber-500"
+                                            className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 type-input outline-none focus:border-amber-500"
                                             type="number"
                                             min="0.01"
                                             max={(maximumReferralAmount / 100).toFixed(2)}
@@ -531,7 +531,7 @@ export function PaymentPage({
                                         />
                                         <button
                                             type="button"
-                                            className="min-h-11 rounded-xl bg-amber-500 px-4 font-extrabold text-white disabled:opacity-50"
+                                            className="min-h-11 rounded-xl bg-amber-500 px-4 weight-bold text-white disabled:opacity-50"
                                             disabled={applyingReferral || submitting}
                                             onClick={() => void applyReferralBalance()}
                                         >
@@ -545,7 +545,7 @@ export function PaymentPage({
                                         </button>
                                     </div>
                                 ) : (
-                                    <p className="mb-0 mt-3 text-sm text-slate-500">
+                                    <p className="mb-0 mt-3 type-body text-slate-500">
                                         {referralProgramQuery.data.allowBalanceSpend
                                             ? isZh
                                                 ? '当前币种暂无可用返利余额。'
@@ -566,7 +566,7 @@ export function PaymentPage({
                             <InlineError
                                 message={methodLoadError}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void methodsQuery.refetch()}
+                                onAction={() => void methodsQuery.refetch({ cancelRefetch: false })}
                             />
                         ) : methods.length ? (
                             <fieldset className="payment-method-list">
@@ -624,7 +624,7 @@ export function PaymentPage({
                                           : 'No payment provider is configured. Your order is preserved.'
                                 }
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void methodsQuery.refetch()}
+                                onAction={() => void methodsQuery.refetch({ cancelRefetch: false })}
                             />
                         ) : (
                             <InlineError
@@ -725,7 +725,7 @@ export function PaymentPage({
                             disabled={
                                 !usdtConfirmationTokenQuery.data?.token || usdtPaidOrderQuery.isFetching
                             }
-                            onClick={() => void usdtPaidOrderQuery.refetch()}
+                            onClick={() => void usdtPaidOrderQuery.refetch({ cancelRefetch: false })}
                         >
                             <WalletCards aria-hidden="true" />
                             {usdtPaidOrderQuery.isFetching
@@ -866,7 +866,11 @@ export function OrderConfirmationPage({
                               : 'The confirmation link is missing its security token. Sign in to view your orders.')
                     }
                     action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
-                    onAction={() => (loadError ? void orderQuery.refetch() : navigateTo({ name: 'home' }))}
+                    onAction={() =>
+                        loadError
+                            ? void orderQuery.refetch({ cancelRefetch: false })
+                            : navigateTo({ name: 'home' })
+                    }
                 />
             </Subpage>
         );

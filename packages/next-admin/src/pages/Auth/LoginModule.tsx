@@ -12,6 +12,7 @@ import {
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { prepareAuthSession, setInitialActiveChannel } from '../../apollo';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 import {
     ADMIN_BEGIN_LOGIN,
@@ -168,7 +169,7 @@ export function LoginModule() {
                                         </label>
                                         <div className="relative">
                                             <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                                            <input
+                                            <AdminInput
                                                 id="admin-username"
                                                 name="username"
                                                 type="text"
@@ -197,7 +198,7 @@ export function LoginModule() {
                                         </label>
                                         <div className="relative">
                                             <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                                            <input
+                                            <AdminInput
                                                 id="admin-password"
                                                 name="password"
                                                 type={showPassword ? 'text' : 'password'}
@@ -212,7 +213,7 @@ export function LoginModule() {
                                                 placeholder="请输入登录密码"
                                                 required
                                             />
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => setShowPassword(current => !current)}
                                                 disabled={loading}
@@ -225,13 +226,13 @@ export function LoginModule() {
                                                 ) : (
                                                     <Eye className="h-5 w-5" />
                                                 )}
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                         <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-slate-600">
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 checked={rememberMe}
                                                 onChange={event => setRememberMe(event.target.checked)}
@@ -254,7 +255,7 @@ export function LoginModule() {
                                     >
                                         {useRecoveryCode ? '一次性恢复码' : '验证器 2FA 动态码'}
                                     </label>
-                                    <input
+                                    <AdminInput
                                         id="admin-two-factor-code"
                                         name="code"
                                         type="text"
@@ -276,7 +277,7 @@ export function LoginModule() {
                                             : '在你的验证器中查看动态码，无需手机号或短信。'}
                                     </p>
                                     <div className="flex flex-wrap justify-between gap-3 text-xs">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             disabled={loading}
                                             onClick={() => {
@@ -287,8 +288,8 @@ export function LoginModule() {
                                             className="text-blue-700 underline"
                                         >
                                             {useRecoveryCode ? '使用验证器动态码' : '使用一次性恢复码'}
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             disabled={loading}
                                             onClick={() => {
@@ -299,12 +300,12 @@ export function LoginModule() {
                                             className="text-slate-500 underline"
                                         >
                                             返回账号密码
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </div>
                             )}
 
-                            <button
+                            <AdminButton
                                 type="submit"
                                 disabled={loading}
                                 aria-busy={loading}
@@ -320,7 +321,7 @@ export function LoginModule() {
                                         <ChevronRight className="h-5 w-5" />
                                     </>
                                 )}
-                            </button>
+                            </AdminButton>
                         </form>
 
                         <p className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-400">

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowDown,
@@ -24,6 +24,7 @@ import {
 } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -43,6 +44,7 @@ import {
 } from '../../graphql/storefront.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontAccountRecommendationsPanel } from './StorefrontAccountRecommendationsPanel';
@@ -97,7 +99,6 @@ export function StorefrontModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
-        fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
     const mutationOptions = query.data
@@ -435,31 +436,34 @@ export function StorefrontModule() {
                         <p className="mt-1 text-xs text-slate-500">管理当前店铺的皮肤、首页楼层与双语内容</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading}
                             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                                className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
                             刷新
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setSettingsOpen(true)}
                             className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                         >
                             <Palette className="h-3.5 w-3.5" />
                             装修设置
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setCarouselOpen(true)}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
                             <ImageIcon className="h-3.5 w-3.5" />
                             首页轮播图
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -511,7 +515,7 @@ export function StorefrontModule() {
                         </div>
                         {query.loading && !query.data ? (
                             <LoadingState />
-                        ) : query.error ? (
+                        ) : query.error && !query.data ? (
                             <ErrorState
                                 message={toUserFacingError(query.error, '店铺首页内容读取失败')}
                                 onRetry={() => void query.refetch()}
@@ -594,7 +598,7 @@ export function StorefrontModule() {
                                         ? undefined
                                         : homepageBlocks.find(block => block.type === descriptor.type);
                                     return (
-                                        <button
+                                        <AdminButton
                                             key={descriptor.type}
                                             type="button"
                                             aria-label={custom ? `新增${descriptor.name}` : undefined}
@@ -629,7 +633,7 @@ export function StorefrontModule() {
                                             >
                                                 {custom ? '新增' : existing ? '已配置' : '配置'}
                                             </span>
-                                        </button>
+                                        </AdminButton>
                                     );
                                 })}
                             <div className="rounded-lg border border-slate-200 p-3 sm:col-span-2">
@@ -645,19 +649,19 @@ export function StorefrontModule() {
                                             每组独立配置标题、副标题、图片、跳转和轮播间隔，可重复添加。
                                         </p>
                                     </div>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={pending || !canCreate}
                                         onClick={addScrollingAds}
                                         className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50"
                                     >
                                         新增滚动广告楼层
-                                    </button>
+                                    </AdminButton>
                                 </div>
                                 {scrollingAdBlocks.length > 0 && (
                                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                         {scrollingAdBlocks.map(block => (
-                                            <button
+                                            <AdminButton
                                                 key={block.id ?? block.code}
                                                 type="button"
                                                 aria-label={`编辑滚动广告：${block.internalName}`}
@@ -677,7 +681,7 @@ export function StorefrontModule() {
                                                 <span className="shrink-0 text-[11px] font-bold text-blue-700">
                                                     编辑
                                                 </span>
-                                            </button>
+                                            </AdminButton>
                                         ))}
                                     </div>
                                 )}
@@ -689,7 +693,7 @@ export function StorefrontModule() {
                 <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
                     <label className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-600">
                         预览语言
-                        <select
+                        <AdminSelect
                             aria-label="预览语言"
                             value={previewLanguage}
                             onChange={event =>
@@ -699,7 +703,7 @@ export function StorefrontModule() {
                         >
                             <option value="zh_Hans">中文</option>
                             <option value="en">英文</option>
-                        </select>
+                        </AdminSelect>
                     </label>
                     <StorefrontDecorationPreview
                         key={allBlocks
@@ -743,7 +747,7 @@ export function StorefrontModule() {
                                 数据与隐私”中显示“导出我的个人数据”。
                             </p>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             role="switch"
                             aria-label="个人数据导出入口"
@@ -762,7 +766,7 @@ export function StorefrontModule() {
                             <span
                                 className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${query.data?.storefrontContentSettings.personalDataExportEnabled === true ? 'translate-x-5' : 'translate-x-0'}`}
                             />
-                        </button>
+                        </AdminButton>
                     </div>
                     {personalDataExportState.loading && (
                         <p role="status" className="mt-3 text-xs text-slate-500">
@@ -885,14 +889,14 @@ function StorefrontSettingsDrawer({
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">{channelName} · 管理店铺皮肤与装修选项</p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         aria-label="关闭装修设置"
                         onClick={onClose}
                         className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
                 <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-7">{children}</div>
             </aside>
@@ -949,13 +953,13 @@ function CarouselRow({
                     onClick={() => onMove(1)}
                     icon={ArrowDown}
                 />
-                <button
+                <AdminButton
                     type="button"
                     onClick={onManage}
                     className="ml-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
                 >
                     管理轮播图
-                </button>
+                </AdminButton>
             </div>
         </article>
     );
@@ -1017,7 +1021,7 @@ function CarouselManager({
                             统一管理图片、文案、跳转链接、播放顺序和轮播间隔。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         aria-label="关闭轮播图管理"
                         disabled={pending}
@@ -1025,7 +1029,7 @@ function CarouselManager({
                         className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
                 <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-7">
                     {notice && (
@@ -1069,7 +1073,7 @@ function CarouselManager({
                                             按从上到下的顺序播放；编辑可设置图片、文案、链接和排期。
                                         </p>
                                     </div>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={disabled || !canCreate}
                                         onClick={onAdd}
@@ -1077,7 +1081,7 @@ function CarouselManager({
                                     >
                                         <Plus className="h-3.5 w-3.5" />
                                         新增轮播图
-                                    </button>
+                                    </AdminButton>
                                 </div>
                                 <div className="divide-y divide-slate-100">
                                     {blocks.map((block, index) => (
@@ -1139,7 +1143,7 @@ function CarouselInterval({
         >
             <label className="flex-1 text-xs font-bold text-slate-700">
                 轮播间隔（秒）
-                <input
+                <AdminInput
                     type="number"
                     required
                     min={3}
@@ -1151,13 +1155,13 @@ function CarouselInterval({
                     className="mt-2 block w-full min-w-24 rounded-lg border border-slate-300 px-3 py-2 font-mono disabled:opacity-50"
                 />
             </label>
-            <button
+            <AdminButton
                 type="submit"
                 disabled={!canUpdate || pending || draft === String(value)}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
                 保存间隔
-            </button>
+            </AdminButton>
             <p className="w-full text-[11px] text-slate-500">所有轮播图共用，支持 3–30 秒。</p>
         </form>
     );
@@ -1292,13 +1296,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-7 w-7 text-rose-500" />
             <h3 className="mt-3 text-sm font-bold text-slate-800">楼层加载失败</h3>
             <p className="mt-1 max-w-md text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1320,7 +1324,7 @@ function ActionIcon({
     const { hasAnyPermission } = useAdminPermissions();
     const canAct = hasAnyPermission([danger ? 'DeleteStorefrontContent' : 'UpdateStorefrontContent']);
     return (
-        <button
+        <AdminButton
             type="button"
             title={tooltip ?? label}
             aria-label={label}
@@ -1329,7 +1333,7 @@ function ActionIcon({
             className={`rounded-md p-1.5 disabled:opacity-30 ${danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-500 hover:bg-slate-100'}`}
         >
             <Icon className="h-3.5 w-3.5" />
-        </button>
+        </AdminButton>
     );
 }
 function Message({
@@ -1353,9 +1357,9 @@ function Message({
                 <AlertCircle className="h-4 w-4 shrink-0" />
             )}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1395,22 +1399,22 @@ function ConfirmDialog({
                     </p>
                 )}
                 <div className="mt-5 flex justify-end gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={pending}
                         className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={onConfirm}
                         disabled={pending}
                         className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                     >
                         {pending ? '正在删除…' : '确认删除'}
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>

@@ -1,6 +1,7 @@
 import { ExternalLink, Image as ImageIcon, X } from 'lucide-react';
 import { useId } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -74,7 +75,7 @@ export function ProductBasicTab() {
                         >
                             商品描述 <span className="text-rose-500">*</span>
                         </label>
-                        <textarea
+                        <AdminTextArea
                             rows={4}
                             id={`${fieldId}-description`}
                             value={description}
@@ -162,7 +163,7 @@ export function ProductBasicTab() {
                                             ['physical', '实物商品', '需要地址、库存与物流配送'],
                                         ] as const
                                     ).map(([value, label, detail]) => (
-                                        <button
+                                        <AdminButton
                                             key={value}
                                             type="button"
                                             onClick={() => setFulfillmentType(value)}
@@ -170,7 +171,7 @@ export function ProductBasicTab() {
                                         >
                                             <span className="block text-xs font-bold">{label}</span>
                                             <span className="mt-1 block text-[10px] leading-4">{detail}</span>
-                                        </button>
+                                        </AdminButton>
                                     ))}
                                 </div>
                             )}
@@ -183,7 +184,7 @@ export function ProductBasicTab() {
                             >
                                 售后退款政策
                             </label>
-                            <select
+                            <AdminSelect
                                 id={`${fieldId}-refund-policy`}
                                 value={refundPolicy}
                                 onChange={event => setRefundPolicy(event.target.value as RefundPolicy)}
@@ -192,7 +193,7 @@ export function ProductBasicTab() {
                                 <option value="MERCHANT_REVIEW">允许申请退款，由商家审核</option>
                                 <option value="SEVEN_DAY_NO_REASON">7 天无理由</option>
                                 <option value="NON_REFUNDABLE">不支持退款</option>
-                            </select>
+                            </AdminSelect>
                             <p className="mt-2 text-[10px] leading-4 text-slate-400">
                                 虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
                             </p>
@@ -207,7 +208,7 @@ export function ProductBasicTab() {
                             >
                                 人工交付预计时长（分钟）
                             </label>
-                            <input
+                            <AdminInput
                                 id={`${fieldId}-manual-delivery-sla`}
                                 type="number"
                                 min="5"
@@ -246,7 +247,7 @@ export function ProductBasicTab() {
                             disabled={saving}
                             onUploaded={addUploadedGalleryAssets}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={saving}
                             onClick={() => {
@@ -256,7 +257,7 @@ export function ProductBasicTab() {
                             className="shrink-0 cursor-pointer rounded-lg bg-slate-200/70 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             管理详情图 ({selectedAssetIds.length})
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
 
@@ -279,7 +280,7 @@ export function ProductBasicTab() {
                                     ) : (
                                         <ImageIcon className="absolute inset-0 m-auto h-5 w-5 text-slate-300" />
                                     )}
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={saving}
                                         onClick={() =>
@@ -289,13 +290,13 @@ export function ProductBasicTab() {
                                         className="absolute right-1.5 top-1.5 rounded bg-slate-950/70 p-1 text-white opacity-100 transition hover:bg-rose-600 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
                                     >
                                         <X className="h-3 w-3" />
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             );
                         })}
                     </div>
                 ) : (
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={saving}
                         onClick={() => {
@@ -307,7 +308,7 @@ export function ProductBasicTab() {
                         <ImageIcon className="h-8 w-8 text-slate-300" />
                         <div className="text-xs font-bold text-slate-600">暂未添加详情图</div>
                         <div className="text-[11px] text-slate-400">点击从素材库多选图片</div>
-                    </button>
+                    </AdminButton>
                 )}
             </section>
             <section
@@ -324,14 +325,14 @@ export function ProductBasicTab() {
                             品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-blue-700">
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={saving}
                                 onClick={() => setActiveTab('FACETS_COLLECTIONS')}
                                 className="rounded-lg border border-blue-200 px-3 py-2 hover:bg-blue-50 disabled:opacity-50"
                             >
                                 选择本商品的属性标签
-                            </button>
+                            </AdminButton>
                             <Link
                                 to="/catalog/categories?tab=facets"
                                 target="_blank"

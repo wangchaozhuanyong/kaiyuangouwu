@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { ShopApi } from '../api';
 import { useDesktopLayout } from '../desktop-layout';
-import { offlineLoadError } from '../loading-state';
+import { storefrontInitialQueryError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -60,11 +60,7 @@ export function FavoriteProductsPage() {
     const loading = activityLoading || (productIds.length > 0 && favoritesQuery.isLoading);
     const favoriteError = activityError
         ? storefrontErrorMessage(activityError, language)
-        : !favoriteProducts.length && favoritesQuery.isPaused
-          ? offlineLoadError(language)
-          : !favoriteProducts.length && favoritesQuery.error instanceof Error
-            ? storefrontErrorMessage(favoritesQuery.error, language)
-            : '';
+        : storefrontInitialQueryError(favoritesQuery, language);
     const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
     const selected = selectedIds.filter(id => availableProducts.some(product => product.id === id));
     const allSelected = availableProducts.length > 0 && selected.length === availableProducts.length;
@@ -149,7 +145,11 @@ export function FavoriteProductsPage() {
                     title={isZh ? '收藏商品加载失败' : 'Could not load favorites'}
                     detail={favoriteError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => (activityError ? onActivityRetry?.() : void favoritesQuery.refetch())}
+                    onAction={() =>
+                        activityError
+                            ? onActivityRetry?.()
+                            : void favoritesQuery.refetch({ cancelRefetch: false })
+                    }
                 />
             ) : availableProducts.length ? (
                 <ProductSection

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import { AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import {
     type StorefrontContentBlock,
     type StorefrontContentItem,
@@ -62,7 +63,7 @@ export function ItemEditor({
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between gap-3">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={item.enabled}
                         onChange={event => onChange({ ...item, enabled: event.target.checked })}
@@ -93,7 +94,7 @@ export function ItemEditor({
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}名称 *`}>
-                    <input
+                    <AdminInput
                         value={translation.label}
                         onChange={event => updateTranslation({ label: event.target.value })}
                         className={inputClass}
@@ -102,14 +103,14 @@ export function ItemEditor({
                 <div className={legal ? 'sm:col-span-2' : undefined}>
                     <Field label={legal ? '法律正文' : '说明'}>
                         {legal ? (
-                            <textarea
+                            <AdminTextArea
                                 rows={8}
                                 value={translation.description}
                                 onChange={event => updateTranslation({ description: event.target.value })}
                                 className={`${inputClass} min-h-40 resize-y`}
                             />
                         ) : (
-                            <input
+                            <AdminInput
                                 value={translation.description}
                                 onChange={event => updateTranslation({ description: event.target.value })}
                                 className={inputClass}
@@ -119,7 +120,7 @@ export function ItemEditor({
                 </div>
                 {auth && (
                     <Field label="卖点图标（已选子项图片优先）">
-                        <select
+                        <AdminSelect
                             className={inputClass}
                             value={stringSetting(item.settings?.authIcon, '')}
                             onChange={event =>
@@ -137,13 +138,13 @@ export function ItemEditor({
                             <option value="shield-check">安全</option>
                             <option value="headphones">客服</option>
                             <option value="sparkles">精选</option>
-                        </select>
+                        </AdminSelect>
                     </Field>
                 )}
                 {coreCategories && (
                     <>
                         <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}角标文案`}>
-                            <input
+                            <AdminInput
                                 value={stringSetting(
                                     item.settings?.[localizedItemSettingKey('badgeLabel', language)],
                                     '',
@@ -153,7 +154,7 @@ export function ItemEditor({
                             />
                         </Field>
                         <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}卡片按钮文案`}>
-                            <input
+                            <AdminInput
                                 value={stringSetting(
                                     item.settings?.[localizedItemSettingKey('ctaLabel', language)],
                                     '',
@@ -166,7 +167,7 @@ export function ItemEditor({
                 )}
                 {support && (
                     <Field label="客服渠道">
-                        <select
+                        <AdminSelect
                             value={supportChannel}
                             onChange={event => {
                                 const nextChannel = event.target.value;
@@ -194,12 +195,12 @@ export function ItemEditor({
                             <option value="WHATSAPP">WhatsApp</option>
                             <option value="TELEGRAM">Telegram</option>
                             <option value="QQ_GROUP">QQ 群</option>
-                        </select>
+                        </AdminSelect>
                     </Field>
                 )}
                 {support && supportChannel && (
                     <Field label={accountCopy.label}>
-                        <input
+                        <AdminInput
                             value={supportAccount}
                             onChange={event => {
                                 const nextAccount = normalizeSupportAccount(
@@ -224,7 +225,7 @@ export function ItemEditor({
                 )}
                 {support && automaticSupportLink && (
                     <Field label="系统生成跳转地址">
-                        <input
+                        <AdminInput
                             value={generatedSupportLink ?? ''}
                             readOnly
                             className={`${inputClass} bg-slate-100 text-slate-500`}
@@ -234,7 +235,7 @@ export function ItemEditor({
                 )}
                 {legal && (
                     <Field label="法律文件">
-                        <select
+                        <AdminSelect
                             value={item.targetValue ?? ''}
                             onChange={event =>
                                 onChange({
@@ -248,12 +249,12 @@ export function ItemEditor({
                             <option value="">请选择</option>
                             <option value="/legal?id=privacy">隐私政策</option>
                             <option value="/legal?id=terms">使用条款</option>
-                        </select>
+                        </AdminSelect>
                     </Field>
                 )}
                 {!support && !legal && (
                     <Field label="跳转类型">
-                        <select
+                        <AdminSelect
                             value={navigation ? 'PAGE' : item.targetType}
                             disabled={navigation}
                             onChange={event =>
@@ -270,7 +271,7 @@ export function ItemEditor({
                                     {label}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                 )}
                 {!support && !legal && (
@@ -290,7 +291,7 @@ export function ItemEditor({
                 )}
                 {support && supportChannel && !wechatSupport && !automaticSupportLink && (
                     <Field label={supportChannel === 'QQ_GROUP' ? 'QQ群邀请链接 *' : '客服链接 *'}>
-                        <input
+                        <AdminInput
                             value={item.targetValue ?? ''}
                             onChange={event =>
                                 onChange({

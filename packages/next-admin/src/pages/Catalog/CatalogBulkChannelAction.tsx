@@ -1,6 +1,8 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Layers3, Search, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -34,7 +36,7 @@ export function CatalogBulkChannelAction() {
             },
         },
         skip: !open,
-        fetchPolicy: 'network-only',
+
         notifyOnNetworkStatusChange: true,
     });
     const [assign, assignState] = useMutation<{ assignProductsToChannel: Array<{ id: string }> }>(
@@ -123,7 +125,7 @@ export function CatalogBulkChannelAction() {
     };
     return (
         <>
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => {
                     resetSelection();
@@ -133,7 +135,7 @@ export function CatalogBulkChannelAction() {
             >
                 <Layers3 className="h-4 w-4" />
                 批量店铺
-            </button>
+            </AdminButton>
             {open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
                     <AccessibleDialogSurface
@@ -151,14 +153,14 @@ export function CatalogBulkChannelAction() {
                                     同一商品可分配到多个店铺。先查看现有分配，再选择需要新增或移除的商品。
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setOpen(false)}
                                 disabled={busy}
                                 aria-label="关闭"
                             >
                                 <X className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="space-y-4 overflow-y-auto p-5">
                             {notice && <Notice tone="success" message={notice} />}
@@ -166,7 +168,7 @@ export function CatalogBulkChannelAction() {
                             <div className="grid gap-3 sm:grid-cols-3">
                                 <label className={labelClass}>
                                     操作
-                                    <select
+                                    <AdminSelect
                                         aria-label="操作"
                                         value={mode}
                                         disabled={busy}
@@ -178,11 +180,11 @@ export function CatalogBulkChannelAction() {
                                     >
                                         <option value="assign">分配到店铺</option>
                                         <option value="remove">从店铺移除</option>
-                                    </select>
+                                    </AdminSelect>
                                 </label>
                                 <label className={labelClass}>
                                     目标店铺
-                                    <select
+                                    <AdminSelect
                                         aria-label="目标店铺"
                                         value={channelId}
                                         disabled={busy || !ready}
@@ -198,12 +200,12 @@ export function CatalogBulkChannelAction() {
                                                 {getChannelDisplayName(channel)}
                                             </option>
                                         ))}
-                                    </select>
+                                    </AdminSelect>
                                 </label>
                                 {mode === 'assign' && (
                                     <label className={labelClass}>
                                         价格系数
-                                        <input
+                                        <AdminInput
                                             type="number"
                                             min="0.0001"
                                             step="0.01"
@@ -221,7 +223,7 @@ export function CatalogBulkChannelAction() {
                             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                    <input
+                                    <AdminInput
                                         value={search}
                                         aria-label="搜索商品"
                                         disabled={busy}
@@ -233,7 +235,7 @@ export function CatalogBulkChannelAction() {
                                         className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs"
                                     />
                                 </div>
-                                <select
+                                <AdminSelect
                                     aria-label="按目标店铺分配状态筛选"
                                     value={assignmentFilter}
                                     disabled={busy || !target || !ready}
@@ -246,16 +248,16 @@ export function CatalogBulkChannelAction() {
                                     <option value="all">全部分配状态</option>
                                     <option value="assigned">已在目标店铺</option>
                                     <option value="unassigned">未在目标店铺</option>
-                                </select>
+                                </AdminSelect>
                             </div>
                             {products.loading && !page ? (
                                 <p className="p-8 text-center text-xs text-slate-500">正在读取商品…</p>
-                            ) : products.error ? (
+                            ) : products.error && !products.data ? (
                                 <Notice tone="error" message="商品店铺分配读取失败，请关闭后重试" />
                             ) : (
                                 <div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
                                     <label className="flex items-center gap-3 border-b bg-slate-50 p-3 text-xs font-bold">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={
                                                 Boolean(selectable.length) &&
@@ -283,7 +285,7 @@ export function CatalogBulkChannelAction() {
                                             key={item.id}
                                             className="flex items-start gap-3 border-b border-slate-100 p-3 text-xs last:border-0"
                                         >
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 className="mt-1 shrink-0"
                                                 aria-label={`选择商品：${item.name}`}
@@ -343,22 +345,22 @@ export function CatalogBulkChannelAction() {
                         <div className="flex items-center justify-between border-t p-5">
                             <span className="text-xs text-slate-500">已选 {selected.length} 个商品</span>
                             <div className="flex gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setOpen(false)}
                                     disabled={busy}
                                     className={secondaryButton}
                                 >
                                     取消
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => void submit()}
                                     disabled={busy || !ready || !selected.length || !target}
                                     className={primaryButton}
                                 >
                                     {busy ? '后端处理中…' : mode === 'assign' ? '确认分配' : '确认移除'}
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </AccessibleDialogSurface>

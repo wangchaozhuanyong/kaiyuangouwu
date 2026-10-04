@@ -1,4 +1,5 @@
 import { Moon, Sun } from 'lucide-react';
+import { AdminButton } from './AdminControls';
 
 import { useTheme } from '../theme/theme-context';
 
@@ -13,7 +14,7 @@ export function ThemeToggleButton({ className = '' }: { className?: string }) {
     const label = isDark ? '切换为浅色模式' : '切换为深色模式';
 
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={() => setPreference(isDark ? 'light' : 'dark')}
             className={`${BASE_BUTTON_CLASS_NAME} ${className}`}
@@ -25,6 +26,6 @@ export function ThemeToggleButton({ className = '' }: { className?: string }) {
             ) : (
                 <Moon className="h-4 w-4" aria-hidden="true" />
             )}
-        </button>
+        </AdminButton>
     );
 }

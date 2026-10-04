@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { SEND_CLIENT_CHANNEL_TOKEN } from '../api/helpers';
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
 import { uiCopy } from '../i18n';
-import { offlineLoadError, QueryLoadState } from '../loading-state';
+import { QueryLoadState, storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -12,7 +12,6 @@ import {
     storefrontQueryKeys,
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
-import { storefrontErrorMessage } from '../storefront-errors';
 import { contentStringArraySetting } from '../storefront-utils';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
@@ -78,13 +77,14 @@ export function useStorefrontPublicData({
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
-    const reviewSettingsStatus = reviewSettingsQuery.isError
-        ? 'error'
-        : reviewSettingsQuery.data
-          ? reviewSettingsQuery.data.enabled
-              ? 'enabled'
-              : 'disabled'
-          : 'loading';
+    const reviewSettingsStatus =
+        reviewSettingsQuery.isError && reviewSettingsQuery.data === undefined
+            ? 'error'
+            : reviewSettingsQuery.data
+              ? reviewSettingsQuery.data.enabled
+                  ? 'enabled'
+                  : 'disabled'
+              : 'loading';
 
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
@@ -153,49 +153,24 @@ export function useStorefrontPublicData({
 
     const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery, contentQuery];
 
-    const loading =
-        (contentQuery.isPending && !contentQuery.isPaused && !configQuery.isError) ||
-        (rawProducts.length === 0 &&
-            criticalPublicQueries.some(
-                query => query.isLoading && query.data === undefined && !products.length,
-            ));
-
-    const publicPaused = criticalPublicQueries.some(
-        query => query.isPaused && query.data === undefined && !products.length,
-    );
-
-    const publicQueryError =
-        rawProducts.length === 0 && !products.length
-            ? criticalPublicQueries.find(query => query.error && query.data === undefined)?.error
-            : undefined;
-
-    const error = publicPaused
-        ? offlineLoadError(language)
-        : publicQueryError instanceof Error
-          ? storefrontErrorMessage(publicQueryError, language)
-          : publicQueryError
-            ? text.loadError
-            : null;
-
-    const publicLoadState: QueryLoadState = publicPaused
-        ? 'paused'
-        : loading
-          ? 'loading'
-          : error
-            ? 'error'
+    const presentations = criticalPublicQueries.map(storefrontQueryPresentation);
+    const initialFailure = criticalPublicQueries.find(query => query.data === undefined && query.isError);
+    const publicPaused = presentations.some(query => query.paused);
+    const error = initialFailure
+        ? storefrontInitialQueryError(initialFailure, language)
+        : publicPaused
+          ? (criticalPublicQueries.map(query => storefrontInitialQueryError(query, language)).find(Boolean) ??
+            text.loadError)
+          : null;
+    const loading = !error && presentations.some(query => query.initialLoading);
+    const publicLoadState: QueryLoadState = initialFailure
+        ? 'error'
+        : publicPaused
+          ? 'paused'
+          : loading
+            ? 'loading'
             : 'ready';
-
-    const contentError = error
-        ? ''
-        : contentQuery.isPaused && contentQuery.data === undefined
-          ? offlineLoadError(language)
-          : contentQuery.data !== undefined
-            ? ''
-            : contentQuery.error instanceof Error
-              ? storefrontErrorMessage(contentQuery.error, language)
-              : contentQuery.error
-                ? text.loadError
-                : '';
+    const contentError = storefrontInitialQueryError(contentQuery, language);
     return {
         productsQuery,
         collectionsQuery,

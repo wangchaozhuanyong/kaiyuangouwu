@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Info, LoaderCircle, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AdminButton } from './AdminControls';
 
 import {
     publishAdminFeedback,
@@ -152,7 +153,7 @@ export function AdminFeedbackCenter() {
                         {item.actions?.length ? (
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {item.actions.map(action => (
-                                    <button
+                                    <AdminButton
                                         key={action.label}
                                         type="button"
                                         onClick={() => {
@@ -163,13 +164,13 @@ export function AdminFeedbackCenter() {
                                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current dark:bg-black/15 dark:hover:bg-black/25"
                                     >
                                         {action.label}
-                                    </button>
+                                    </AdminButton>
                                 ))}
                             </div>
                         ) : null}
                     </div>
                     {item.kind !== 'loading' && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => dismiss(item.id)}
                             className="-mr-1 -mt-1 rounded-md p-1 opacity-60 hover:bg-black/5 hover:opacity-100
@@ -177,7 +178,7 @@ export function AdminFeedbackCenter() {
                             aria-label="关闭通知"
                         >
                             <X className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                     )}
                 </article>
             ))}

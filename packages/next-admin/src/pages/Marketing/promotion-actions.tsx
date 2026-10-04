@@ -1,5 +1,6 @@
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { AdminInput, AdminTextArea } from '../../components/AdminControls';
 import type { StoreCouponAppearanceTheme, StoreCouponRecord } from '../../graphql/marketing.graphql';
 import { couponAppearanceOptions, SensitiveAction, sensitiveCopy } from './promotion-model';
 import { FormInput, Modal, ModalFooter } from './promotion-ui';
@@ -34,7 +35,7 @@ export function CouponAppearanceDialog({
                             key={option.value}
                             className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-xs font-bold ${theme === value ? 'border-blue-500 bg-blue-50 text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
                         >
-                            <input
+                            <AdminInput
                                 type="radio"
                                 name="coupon-appearance-theme"
                                 value={option.value}
@@ -105,7 +106,7 @@ export function SensitiveDialog({
             {action.kind === 'REVOKE' && (
                 <label className="mt-4 block text-xs font-bold text-slate-700">
                     作废原因
-                    <textarea
+                    <AdminTextArea
                         value={reason}
                         onChange={event => setReason(event.target.value)}
                         rows={2}
@@ -117,7 +118,7 @@ export function SensitiveDialog({
             )}
             <label className="mt-4 block text-xs font-bold text-slate-700">
                 管理员密码确认 *
-                <input
+                <AdminInput
                     type="password"
                     name="promotion-sensitive-action-confirmation"
                     autoComplete="off"

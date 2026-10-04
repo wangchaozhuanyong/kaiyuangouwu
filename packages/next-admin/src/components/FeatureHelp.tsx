@@ -14,6 +14,7 @@ import {
     type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { AdminButton } from './AdminControls';
 
 import { copyAdminText } from '../utils/admin-clipboard';
 import { featureHelpContent, featureHelpCopyText, type FeatureHelpTopic } from './feature-help-content';
@@ -153,7 +154,7 @@ export function FeatureHelpButton({ topic, title }: { topic: FeatureHelpTopic; t
     const isActive = context.active?.instanceId === instanceId;
 
     return (
-        <button
+        <AdminButton
             type="button"
             className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-semibold leading-none text-slate-500 shadow-xs transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             aria-label={`查看“${title}”功能说明`}
@@ -175,7 +176,7 @@ export function FeatureHelpButton({ topic, title }: { topic: FeatureHelpTopic; t
         >
             <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
             说明
-        </button>
+        </AdminButton>
     );
 }
 
@@ -272,14 +273,14 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
                         {state.title}
                     </h2>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={context.close}
                     className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label="关闭功能说明"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
-                </button>
+                </AdminButton>
             </div>
 
             <div className="max-h-[min(28rem,calc(100vh-7rem))] space-y-3 overflow-y-auto py-3 pr-1 text-xs leading-5 text-slate-600">
@@ -299,7 +300,7 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
                 <p className="text-[10px] text-slate-400">
                     {state.pinned ? '已固定，点按钮或关闭图标收起' : '可选中说明文字复制'}
                 </p>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void copy()}
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -310,7 +311,7 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
                         <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                     )}
                     {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '请手动复制' : '复制说明'}
-                </button>
+                </AdminButton>
             </div>
         </section>,
         document.body,

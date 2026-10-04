@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { offlineLoadError, type QueryLoadState } from '../loading-state';
+import { storefrontInitialQueryError, type QueryLoadState } from '../loading-state';
 import { orderStatusRefreshInterval } from '../order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -8,7 +8,6 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
-import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteState } from '../storefront-router';
 import { ActiveCustomer } from '../types';
 
@@ -50,12 +49,7 @@ export function useStorefrontRouteData({
 
     const routeProductLoading = productQuery.isLoading;
 
-    const routeProductError =
-        productQuery.isPaused && productQuery.data === undefined
-            ? offlineLoadError(language)
-            : productQuery.error instanceof Error
-              ? storefrontErrorMessage(productQuery.error, language)
-              : '';
+    const routeProductError = storefrontInitialQueryError(productQuery, language);
 
     const orderQuery = useQuery({
         queryKey: storefrontQueryKeys.order(
@@ -80,12 +74,7 @@ export function useStorefrontRouteData({
 
     const routeOrderLoading = orderQuery.isLoading;
 
-    const routeOrderError =
-        orderQuery.isPaused && orderQuery.data === undefined
-            ? offlineLoadError(language)
-            : orderQuery.error instanceof Error
-              ? storefrontErrorMessage(orderQuery.error, language)
-              : '';
+    const routeOrderError = storefrontInitialQueryError(orderQuery, language);
     return {
         productQuery,
         routeProduct,

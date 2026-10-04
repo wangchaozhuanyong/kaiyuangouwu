@@ -1090,8 +1090,8 @@ describe('storefront skin system', () => {
         expect(card).toMatch(
             /\.product-card-price \.price-lockup\s*\{[^}]*font-size:\s*var\(--type-price-size\);/,
         );
-        expect(stylesheet('./styles/experience-foundations.css')).toContain('--type-price-size: 18px;');
-        expect(stylesheet('./styles/experience-foundations.css')).toContain('--type-input-size: 16px;');
+        expect(stylesheet('./styles/typography.css')).toContain('--type-price-size: 18px;');
+        expect(stylesheet('./styles/typography.css')).toContain('--type-input-size: 16px;');
         expect(card).not.toContain('.product-card-price b');
     });
 

@@ -57,15 +57,16 @@ describe('storefront traffic panel', () => {
         }
     });
 
-    it('renders an error without presenting stale counts as the current report', () => {
+    it('retains the previous report with an explicit failed-update label', () => {
         apollo.useQuery.mockReturnValue({
             error: new Error('unavailable'),
             data: { storefrontTraffic: report },
             refetch: vi.fn(),
         });
         const html = renderToStaticMarkup(<StorefrontTrafficPanel />);
-        expect(html).toContain('访问统计加载失败');
-        expect(html).not.toContain('今日浏览量');
+        expect(html).toContain('访问统计更新失败');
+        expect(html).toContain('上次成功读取的数据');
+        expect(html).toContain('今日浏览量');
     });
 
     it('provides date controls without pointing to a hidden storefront setting', () => {
@@ -77,3 +78,6 @@ describe('storefront traffic panel', () => {
         expect(html).not.toContain('已排除本浏览器访问');
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

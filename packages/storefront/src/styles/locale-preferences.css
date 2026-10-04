@@ -11,9 +11,9 @@
     align-items: center;
     justify-content: center;
     gap: 7px;
-    font-size: 12px;
+    font-size: var(--type-label-size);
     font-weight: var(--font-weight-semibold);
-    line-height: 1;
+    line-height: var(--type-label-leading);
     white-space: nowrap;
 }
 
@@ -85,7 +85,8 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 12px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -168,13 +169,14 @@
 }
 
 .locale-preferences-currencies strong {
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .locale-preferences-currencies small {
     color: var(--muted);
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .locale-preferences-save {
@@ -190,7 +192,8 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-weight: var(--font-weight-bold);
 }
 

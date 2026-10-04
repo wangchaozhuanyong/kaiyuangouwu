@@ -1,4 +1,5 @@
-import { useQuery } from '@apollo/client/react';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { Store } from 'lucide-react';
 import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -14,9 +15,7 @@ import { DomainsPanel } from './StorePanels';
 export function MyStoreSettingsModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const query = useQuery<MyStoreSettingsResult>(MY_STORE_SETTINGS_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<MyStoreSettingsResult>(MY_STORE_SETTINGS_QUERY, {});
     if (query.error && !query.data) {
         return (
             <ErrorState

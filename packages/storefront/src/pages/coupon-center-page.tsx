@@ -28,6 +28,7 @@ import {
     isLockedCoupon,
 } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
+import { storefrontInitialQueryError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import {
     StorefrontCouponCard,
@@ -140,18 +141,14 @@ export function CouponCenterPage() {
     });
     const usageRecords = pagination ? (historyPage.data?.items ?? []) : initialUsageRecords;
     const myCouponsLoading =
-        pagination && activeTab === 'UNUSED' ? ownedPage.isFetching : initialMyCouponsLoading;
-    const usageRecordsLoading = pagination ? historyPage.isFetching : initialUsageRecordsLoading;
+        pagination && activeTab === 'UNUSED' ? ownedPage.isLoading : initialMyCouponsLoading;
+    const usageRecordsLoading = pagination ? historyPage.isLoading : initialUsageRecordsLoading;
     const myCouponsError =
         pagination && activeTab === 'UNUSED'
-            ? ownedPage.error instanceof Error
-                ? storefrontErrorMessage(ownedPage.error, language)
-                : ''
+            ? storefrontInitialQueryError(ownedPage, language)
             : initialMyCouponsError;
     const usageRecordsError = pagination
-        ? historyPage.error instanceof Error
-            ? storefrontErrorMessage(historyPage.error, language)
-            : ''
+        ? storefrontInitialQueryError(historyPage, language)
         : initialUsageRecordsError;
     const totalItems =
         activeTab === 'UNUSED' ? (ownedPage.data?.totalItems ?? 0) : (historyPage.data?.totalItems ?? 0);
@@ -364,7 +361,11 @@ export function CouponCenterPage() {
                             error={myCouponsError}
                             hasData={visibleCustomerCoupons.length > 0}
                             language={language}
-                            onRetry={pagination ? () => void ownedPage.refetch() : onRetryMyCoupons}
+                            onRetry={
+                                pagination
+                                    ? () => void ownedPage.refetch({ cancelRefetch: false })
+                                    : onRetryMyCoupons
+                            }
                             empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
                         >
                             <section className="coupon-center-panel" aria-busy={loading}>
@@ -414,7 +415,11 @@ export function CouponCenterPage() {
                             error={usageRecordsError}
                             hasData={usageRecords.length > 0}
                             language={language}
-                            onRetry={pagination ? () => void historyPage.refetch() : onRetryUsageRecords}
+                            onRetry={
+                                pagination
+                                    ? () => void historyPage.refetch({ cancelRefetch: false })
+                                    : onRetryUsageRecords
+                            }
                             empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
                         >
                             <section className="coupon-center-panel" aria-busy={loading}>

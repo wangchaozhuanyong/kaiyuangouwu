@@ -1,4 +1,5 @@
 @import 'tailwindcss' source(none);
+@import '../src/styles/typography.css';
 @source '../src/client-plugins/two-factor';
 @source '../src/storefront-ui/page-shell.tsx';
 @source './main.tsx';
@@ -15,10 +16,9 @@
 
 :root {
     --shadow-sm: var(--skin-card-shadow);
-    font-family:
-        system-ui,
-        -apple-system,
-        sans-serif;
+    font-family: var(--font-ui);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     color: var(--text);
     background: var(--surface);
 }

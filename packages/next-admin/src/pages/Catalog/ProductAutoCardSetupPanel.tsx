@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import {
     IMPORT_AUTO_CARD_ITEMS_MUTATION,
@@ -103,7 +105,7 @@ export function ProductAutoCardSetupPanel({
                         </p>
                     </div>
                     {needsProductSave && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void onSaveProduct()}
                             disabled={productSaving}
@@ -115,13 +117,13 @@ export function ProductAutoCardSetupPanel({
                                 <PackageCheck className="h-4 w-4" />
                             )}
                             {selected.variant.id ? '先保存商品修改' : '保存商品并继续设置'}
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
                 {entries.length > 1 && (
                     <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="选择自动发卡 SKU">
                         {entries.map(entry => (
-                            <button
+                            <AdminButton
                                 key={entry.key}
                                 type="button"
                                 onClick={() => setSelectedKey(entry.key)}
@@ -137,7 +139,7 @@ export function ProductAutoCardSetupPanel({
                                 <span className="mt-0.5 block font-mono text-[10px] opacity-75">
                                     {entry.variant.sku || '待填写 SKU'}
                                 </span>
-                            </button>
+                            </AdminButton>
                         ))}
                     </div>
                 )}
@@ -180,14 +182,14 @@ function PersistedAutoCardSetup({
     const canReadOrders = hasAnyPermission(['ReadOrder']);
     const setupQuery = useQuery<ProductAutoCardSetupResult>(PRODUCT_AUTO_CARD_SETUP_QUERY, {
         variables: { productVariantId: variant.id },
-        fetchPolicy: 'cache-and-network',
+
         skip: !variant.id,
     });
     const deliveriesQuery = useQuery<ProductAutoCardDeliveriesResult>(PRODUCT_AUTO_CARD_DELIVERIES_QUERY, {
         variables: {
             options: { productVariantId: variant.id, skip: 0, take: 5 },
         },
-        fetchPolicy: 'cache-and-network',
+
         skip: !variant.id || !canReadOrders,
     });
 
@@ -199,19 +201,20 @@ function PersistedAutoCardSetup({
             </div>
         );
     }
-    if (setupQuery.error) {
+    if (setupQuery.error && !setupQuery.data) {
         return (
             <div className="p-5 sm:p-6">
                 <InlineMessage tone="error">
                     <span>{toUserFacingError(setupQuery.error, '卡密设置读取失败')}</span>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void setupQuery.refetch()}
                         className={secondaryButtonClass}
                     >
                         <RefreshCw className="h-3.5 w-3.5" />
                         重试
-                    </button>
+                    </AdminButton>
                 </InlineMessage>
             </div>
         );
@@ -448,7 +451,7 @@ function AutoCardSetupEditor({
                             </p>
                         </div>
                         <label className="flex shrink-0 items-center gap-2 text-[11px] font-medium text-slate-600">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={enabled}
                                 onChange={event => setEnabled(event.target.checked)}
@@ -458,7 +461,7 @@ function AutoCardSetupEditor({
                             启用自动发卡
                         </label>
                     </div>
-                    <select
+                    <AdminSelect
                         aria-label="卡密格式"
                         value={formatPreset}
                         onChange={event => applyPreset(event.target.value as AutoCardFormatPreset)}
@@ -468,13 +471,13 @@ function AutoCardSetupEditor({
                         <option value="account_password">账号 + 密码</option>
                         <option value="single_code">单卡密</option>
                         <option value="custom">自定义格式</option>
-                    </select>
+                    </AdminSelect>
                     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
                         <span className="text-slate-400">每行格式：</span>
                         <code className="ml-1 font-mono font-semibold text-slate-800">{example}</code>
                     </div>
 
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setAdvancedOpen(value => !value)}
                         className="flex w-full items-center justify-between border-t border-slate-200 pt-3 text-left text-xs font-semibold text-slate-700"
@@ -484,7 +487,7 @@ function AutoCardSetupEditor({
                         <ChevronDown
                             className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
                         />
-                    </button>
+                    </AdminButton>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 p-4 sm:p-5">
@@ -492,7 +495,7 @@ function AutoCardSetupEditor({
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">
                         每行一条。先脱敏预览，确认无误后才会加密入库。
                     </p>
-                    <textarea
+                    <AdminTextArea
                         rows={8}
                         value={rawText}
                         onChange={event => {
@@ -507,7 +510,7 @@ function AutoCardSetupEditor({
                     {previewResult && <ImportPreview result={previewResult} />}
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
                         {!rawText.trim() ? (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void saveOnly()}
                                 disabled={!canEdit || busy}
@@ -515,9 +518,9 @@ function AutoCardSetupEditor({
                             >
                                 {saveState.loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
                                 保存发卡设置
-                            </button>
+                            </AdminButton>
                         ) : !previewResult ? (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void runPreview()}
                                 disabled={!canEdit || busy}
@@ -527,9 +530,9 @@ function AutoCardSetupEditor({
                                     <LoaderCircle className="h-4 w-4 animate-spin" />
                                 )}
                                 保存设置并检查卡密
-                            </button>
+                            </AdminButton>
                         ) : (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void commitImport()}
                                 disabled={
@@ -542,7 +545,7 @@ function AutoCardSetupEditor({
                             >
                                 {importState.loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
                                 确认导入 {previewResult.validCount} 条
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -552,7 +555,7 @@ function AutoCardSetupEditor({
                 <div className="space-y-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
                     <div className="grid gap-4 sm:grid-cols-3">
                         <Field label="格式名称">
-                            <input
+                            <AdminInput
                                 value={formatName}
                                 onChange={event => {
                                     setFormatPreset('custom');
@@ -563,7 +566,7 @@ function AutoCardSetupEditor({
                             />
                         </Field>
                         <Field label="字段分隔符">
-                            <input
+                            <AdminInput
                                 value={delimiter}
                                 onChange={event => {
                                     setFormatPreset('custom');
@@ -575,7 +578,7 @@ function AutoCardSetupEditor({
                             />
                         </Field>
                         <Field label="低库存提醒值">
-                            <input
+                            <AdminInput
                                 type="number"
                                 min={0}
                                 value={threshold}
@@ -588,7 +591,7 @@ function AutoCardSetupEditor({
                     <div>
                         <div className="mb-2 flex items-center justify-between">
                             <strong className="text-xs font-semibold text-slate-800">卡密字段</strong>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setFormatPreset('custom');
@@ -602,7 +605,7 @@ function AutoCardSetupEditor({
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 添加字段
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="space-y-2">
                             {fields.map((field, index) => (
@@ -610,7 +613,7 @@ function AutoCardSetupEditor({
                                     key={`${field.key}-${index}`}
                                     className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]"
                                 >
-                                    <input
+                                    <AdminInput
                                         aria-label={`第 ${index + 1} 个字段 key`}
                                         value={field.key}
                                         onChange={event => updateField(index, { key: event.target.value })}
@@ -618,7 +621,7 @@ function AutoCardSetupEditor({
                                         placeholder="key"
                                         className={`${inputClass} font-mono`}
                                     />
-                                    <input
+                                    <AdminInput
                                         aria-label={`第 ${index + 1} 个字段中文名称`}
                                         value={field.label}
                                         onChange={event => updateField(index, { label: event.target.value })}
@@ -626,7 +629,7 @@ function AutoCardSetupEditor({
                                         placeholder="中文名称"
                                         className={inputClass}
                                     />
-                                    <input
+                                    <AdminInput
                                         aria-label={`第 ${index + 1} 个字段英文名称`}
                                         value={field.labelEn}
                                         onChange={event =>
@@ -637,7 +640,7 @@ function AutoCardSetupEditor({
                                         className={inputClass}
                                     />
                                     <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={field.secret}
                                             onChange={event =>
@@ -647,7 +650,7 @@ function AutoCardSetupEditor({
                                         />
                                         敏感
                                     </label>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setFormatPreset('custom');
@@ -659,14 +662,14 @@ function AutoCardSetupEditor({
                                         aria-label={`移除第 ${index + 1} 个字段`}
                                     >
                                         <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             ))}
                         </div>
                     </div>
                     <div className="grid gap-4 lg:grid-cols-2">
                         <Field label="中文发货说明">
-                            <textarea
+                            <AdminTextArea
                                 rows={4}
                                 value={instructionsZh}
                                 onChange={event => setInstructionsZh(event.target.value)}
@@ -675,7 +678,7 @@ function AutoCardSetupEditor({
                             />
                         </Field>
                         <Field label="英文交付说明">
-                            <textarea
+                            <AdminTextArea
                                 rows={4}
                                 value={instructionsEn}
                                 onChange={event => setInstructionsEn(event.target.value)}

@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, KeyRound, Loader2, LogOut, ShieldCheck } fro
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logoutAdministrator } from '../../apollo';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 import {
     COMPLETE_INITIAL_PASSWORD_CHANGE_MUTATION,
@@ -167,7 +168,7 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
                                 </ul>
                             </div>
 
-                            <button
+                            <AdminButton
                                 type="submit"
                                 disabled={busy}
                                 aria-busy={loading}
@@ -181,8 +182,8 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
                                 ) : (
                                     <>确认并重新登录</>
                                 )}
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void handleLogout()}
@@ -194,7 +195,7 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
                                     <LogOut className="h-4 w-4" aria-hidden="true" />
                                 )}
                                 退出登录
-                            </button>
+                            </AdminButton>
                         </form>
                     </div>
                 </section>
@@ -221,7 +222,7 @@ function PasswordField({
             <label htmlFor={id} className="mb-2 block text-sm font-semibold text-slate-700">
                 {label}
             </label>
-            <input
+            <AdminInput
                 id={id}
                 type="password"
                 autoComplete="new-password"

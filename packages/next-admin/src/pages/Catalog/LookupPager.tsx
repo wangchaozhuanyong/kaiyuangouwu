@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AdminButton } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 
 export function LookupPager({
@@ -24,7 +25,7 @@ export function LookupPager({
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.max(0, page - 1))}
                     disabled={loading || page === 0}
@@ -32,8 +33,8 @@ export function LookupPager({
                     aria-label="上一页"
                 >
                     <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
                     disabled={loading || page >= totalPages - 1}
@@ -41,7 +42,7 @@ export function LookupPager({
                     aria-label="下一页"
                 >
                     <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );

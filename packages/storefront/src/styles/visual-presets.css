@@ -4,7 +4,6 @@ html[data-storefront-preset] {
     --radius-md: var(--skin-card-radius, 16px);
     --skin-background: var(--bg);
     --skin-foreground: var(--text);
-    --font-display: var(--skin-display-font, var(--font-ui));
     --line-subtle: color-mix(in srgb, var(--skin-divider) 68%, transparent);
     --product-media-bg: color-mix(in srgb, var(--soft) 72%, var(--surface));
     --accent-disabled-bg: var(--soft);

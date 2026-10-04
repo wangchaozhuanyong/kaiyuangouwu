@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,7 +16,7 @@ export function StorefrontTrafficPanel() {
     const [days, setDays] = useState(7);
     const query = useQuery<StorefrontTrafficData>(STOREFRONT_TRAFFIC_QUERY, {
         variables: { days },
-        fetchPolicy: 'network-only',
+
         pollInterval: 60_000,
     });
 
@@ -23,7 +25,7 @@ export function StorefrontTrafficPanel() {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex gap-1 rounded-lg bg-slate-50 p-1" aria-label="访问统计日期范围">
                     {[7, 30].map(value => (
-                        <button
+                        <AdminButton
                             key={value}
                             type="button"
                             aria-pressed={days === value}
@@ -31,20 +33,26 @@ export function StorefrontTrafficPanel() {
                             className={`rounded-md px-3 py-1.5 text-xs font-bold ${days === value ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
                         >
                             最近 {value} 天
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
-                <button
+                <AdminButton
+                    refreshPage
                     type="button"
                     onClick={() => void query.refetch()}
                     disabled={query.loading}
                     className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 disabled:opacity-50"
                 >
-                    <RefreshCw className={`h-3 w-3 ${query.loading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-3 w-3 ${query.loading && !query.data ? 'animate-spin' : ''}`} />
                     刷新
-                </button>
+                </AdminButton>
             </div>
-            {query.error ? (
+            {query.error && query.data && (
+                <p role="status" className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                    访问统计更新失败，以下为上次成功读取的数据。请点击刷新重试。
+                </p>
+            )}
+            {query.error && !query.data ? (
                 <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">
                     访问统计加载失败，请点击刷新重试。
                 </p>

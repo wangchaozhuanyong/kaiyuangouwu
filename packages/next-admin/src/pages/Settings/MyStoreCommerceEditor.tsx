@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     UPDATE_MY_STORE_COMMERCE_CONFIGURATION_MUTATION,
@@ -118,7 +119,7 @@ export function MyStoreCommerceEditor({
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.pricesIncludeTax}
                         onChange={event => update('pricesIncludeTax', event.target.checked)}
@@ -126,7 +127,7 @@ export function MyStoreCommerceEditor({
                     商品价格含税
                 </label>
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={draft.shippingPriceIncludesTax}
                         onChange={event => update('shippingPriceIncludesTax', event.target.checked)}
@@ -147,14 +148,14 @@ export function MyStoreCommerceEditor({
                 />
             </div>
             <div className="mt-4 flex justify-end">
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
                     disabled={updateState.loading}
                     className={primaryButton}
                 >
                     保存税务与配送
-                </button>
+                </AdminButton>
             </div>
         </section>
     );

@@ -1,7 +1,9 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { AlertTriangle, RefreshCw, Scale, X } from 'lucide-react';
 import { useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -37,12 +39,11 @@ export function InventoryControlModule() {
             items: CatalogInventoryReconciliationRecord[];
             totalItems: number;
         };
-    }>(CATALOG_INVENTORY_RECONCILIATION_QUERY, { fetchPolicy: 'cache-and-network' });
+    }>(CATALOG_INVENTORY_RECONCILIATION_QUERY, {});
     const operations = useQuery<{
         catalogInventoryOperations: { items: CatalogInventoryOperationRecord[]; totalItems: number };
     }>(CATALOG_INVENTORY_OPERATIONS_QUERY, {
         variables: { skip: page * PAGE_SIZE, take: PAGE_SIZE },
-        fetchPolicy: 'cache-and-network',
     });
     const [resolve, resolveState] = useMutation(RESOLVE_CATALOG_INVENTORY_RECONCILIATION_MUTATION);
     const differences = reconciliation.data?.catalogInventoryReconciliation.items ?? [];
@@ -85,7 +86,7 @@ export function InventoryControlModule() {
                             对齐批次总数与平台库存，查看手工盘点、转仓与差异处理证据。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         aria-label="刷新库存控制台"
                         onClick={refresh}
@@ -94,7 +95,7 @@ export function InventoryControlModule() {
                         <RefreshCw
                             className={`h-4 w-4 ${reconciliation.loading || operations.loading ? 'animate-spin' : ''}`}
                         />
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="flex-1 space-y-5 overflow-auto p-5 sm:p-8">
@@ -110,7 +111,7 @@ export function InventoryControlModule() {
                     </div>
                     {reconciliation.loading && !reconciliation.data ? (
                         <State label="正在对账…" />
-                    ) : reconciliation.error ? (
+                    ) : reconciliation.error && !reconciliation.data ? (
                         <State label="对账加载失败" error />
                     ) : differences.length === 0 ? (
                         <State label="当前批次数量与平台库存一致" />
@@ -140,7 +141,7 @@ export function InventoryControlModule() {
                                                 {signed(item.difference)}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => {
                                                         setError('');
@@ -155,7 +156,7 @@ export function InventoryControlModule() {
                                                     className="font-bold text-blue-700"
                                                 >
                                                     处理差异
-                                                </button>
+                                                </AdminButton>
                                             </td>
                                         </tr>
                                     ))}
@@ -173,7 +174,7 @@ export function InventoryControlModule() {
                     </div>
                     {operations.loading && !operations.data ? (
                         <State label="正在读取流水…" />
-                    ) : operations.error ? (
+                    ) : operations.error && !operations.data ? (
                         <State label="库存流水加载失败" error />
                     ) : ledger.length === 0 ? (
                         <State label="暂无手工库存操作流水" />
@@ -234,25 +235,25 @@ export function InventoryControlModule() {
                         </div>
                     )}
                     <div className="flex items-center justify-end gap-2 border-t px-4 py-3 text-xs">
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={page === 0}
                             onClick={() => setPage(value => value - 1)}
                             className="rounded border px-3 py-1.5 disabled:opacity-30"
                         >
                             上一页
-                        </button>
+                        </AdminButton>
                         <span>
                             {page + 1} / {totalPages}
                         </span>
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={page + 1 >= totalPages}
                             onClick={() => setPage(value => value + 1)}
                             className="rounded border px-3 py-1.5 disabled:opacity-30"
                         >
                             下一页
-                        </button>
+                        </AdminButton>
                     </div>
                 </section>
             </main>
@@ -272,9 +273,9 @@ export function InventoryControlModule() {
                                 处理库存差异
                                 <FeatureHelpButton topic="catalog.inventory" title="处理库存差异" />
                             </h2>
-                            <button type="button" onClick={() => setDraft(null)} aria-label="关闭">
+                            <AdminButton type="button" onClick={() => setDraft(null)} aria-label="关闭">
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <p className="mt-4 text-xs text-slate-500">
                             {draft.item.sku} · {draft.item.stockLocationName}，当前差异{' '}
@@ -282,7 +283,7 @@ export function InventoryControlModule() {
                         </p>
                         <label className="mt-4 block text-xs font-bold">
                             处理方式
-                            <select
+                            <AdminSelect
                                 value={draft.mode}
                                 onChange={event =>
                                     setDraft({
@@ -296,11 +297,11 @@ export function InventoryControlModule() {
                                 {draft.item.canCreateBaselineLot && (
                                     <option value="CREATE_BASELINE_LOT">以总库存为准，建立期初批次</option>
                                 )}
-                            </select>
+                            </AdminSelect>
                         </label>
                         <label className="mt-4 block text-xs font-bold">
                             处理原因
-                            <input
+                            <AdminInput
                                 value={draft.reason}
                                 onChange={event => setDraft({ ...draft, reason: event.target.value })}
                                 className={inputClass}
@@ -317,22 +318,22 @@ export function InventoryControlModule() {
                             </div>
                         )}
                         <div className="mt-5 flex justify-end gap-2 border-t pt-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setDraft(null)}
                                 disabled={resolveState.loading}
                                 className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void submit()}
                                 disabled={resolveState.loading || !draft.reason.trim()}
                                 className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                             >
                                 {resolveState.loading ? '处理中…' : '确认处理'}
-                            </button>
+                            </AdminButton>
                         </div>
                     </AccessibleDialogSurface>
                 </div>

@@ -331,7 +331,7 @@ describe('product save orchestration', () => {
         const { handleSave } = useProductEditorSave(input);
         mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mockRejectedValueOnce(new Error('SKU write failed'));
         await handleSave();
-        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重新加载失败'));
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重新读取失败'));
         expect(input.controls.showError).not.toHaveBeenCalledWith(
             expect.stringContaining('页面已按后端当前数据重新加载'),
         );
@@ -571,3 +571,6 @@ describe('product save orchestration', () => {
         );
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

@@ -1,9 +1,12 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, WalletCards } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { sensitiveActionContext } from '../../apollo';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
@@ -16,9 +19,8 @@ import {
     type FinanceData,
     type SupportedCurrency,
 } from '../../graphql/store-finance.graphql';
-import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { useServerDraft } from '../../hooks/use-server-draft';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import {
     storePaymentMethodLabel,
@@ -46,18 +48,14 @@ interface CurrencyDraft {
 type ProtectedAction = 'save' | 'refresh-fiat' | 'refresh-usdt' | 'submit-wallet';
 
 export function CurrencyAndRatesPanel() {
-    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, { fetchPolicy: 'cache-and-network' });
+    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, {});
     const configuration = query.data?.myStoreCurrencyConfiguration;
-    const [storedDraft, setDraft] = useState<CurrencyDraft | null>(() =>
-        configuration ? toDraft(configuration) : null,
-    );
-    const [draftSignature, setDraftSignature] = useState(configuration?.updatedAt ?? '');
-    const draft = resolveVersionedDraft(
+    const serverDraft = useServerDraft<CurrencyDraft>(
+        'currency-config',
         configuration?.updatedAt ?? '',
-        draftSignature,
         configuration ? toDraft(configuration) : null,
-        storedDraft,
     );
+    const { draft, setDraft, dirty, sourceChanged } = serverDraft;
     const [protectedAction, setProtectedAction] = useState<ProtectedAction | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -71,17 +69,6 @@ export function CurrencyAndRatesPanel() {
         refreshMyStoreUsdtRate: CurrencyConfigurationRecord;
     }>(REFRESH_MY_STORE_USDT_RATE_MUTATION);
 
-    /* oxlint-disable react/set-state-in-effect -- the versioned finance response initializes the edit draft. */
-    useEffect(() => {
-        if (!configuration || configuration.updatedAt === draftSignature) return;
-        setDraft(toDraft(configuration));
-        setDraftSignature(configuration.updatedAt);
-    }, [configuration, draftSignature]);
-    /* oxlint-enable react/set-state-in-effect */
-    const dirty = Boolean(
-        configuration && draft && JSON.stringify(draft) !== JSON.stringify(toDraft(configuration)),
-    );
-    useUnsavedChangesWarning(dirty, '币种与汇率尚未保存，确定离开？');
     const loading = saveState.loading || fiatState.loading || usdtState.loading;
 
     if (query.loading && !configuration) return <PanelState label="正在读取币种与汇率…" />;
@@ -112,7 +99,7 @@ export function CurrencyAndRatesPanel() {
         );
     };
     const execute = async (password: string) => {
-        if (!protectedAction) return;
+        if (!protectedAction || (protectedAction === 'save' && sourceChanged)) return;
         setError('');
         setNotice('');
         try {
@@ -125,7 +112,7 @@ export function CurrencyAndRatesPanel() {
                 const saved = result.data?.updateMyStoreCurrencyConfiguration as
                     CurrencyConfigurationRecord | undefined;
                 if (!saved) throw new Error('后端未返回已保存配置');
-                setDraft(toDraft(saved));
+                serverDraft.accept(toDraft(saved), saved.updatedAt);
                 setNotice('币种、汇率和取整规则已保存');
             } else {
                 const saved =
@@ -135,11 +122,15 @@ export function CurrencyAndRatesPanel() {
                         : (await refreshUsdt({ context: sensitiveActionContext(password) })).data
                               ?.refreshMyStoreUsdtRate;
                 if (!saved) throw new Error('后端未返回新汇率');
-                setDraft(toDraft(saved));
+                if (!dirty) serverDraft.accept(toDraft(saved), saved.updatedAt);
                 setNotice(protectedAction === 'refresh-fiat' ? '已更新 CNY/MYR 汇率' : '已更新 USDT 收购价');
             }
             setProtectedAction(null);
-            await query.refetch();
+            try {
+                await query.refetch();
+            } catch {
+                setError('操作已完成，但最新配置读取失败。请重试读取核对结果，勿重复提交。');
+            }
         } catch (cause) {
             setError(toUserFacingError(cause, '敏感配置操作失败'));
         }
@@ -147,6 +138,7 @@ export function CurrencyAndRatesPanel() {
 
     return (
         <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
+            {sourceChanged && <DraftUpdateNotice onReload={serverDraft.reload} />}
             <PanelHeading
                 icon={<CircleDollarSign className="h-5 w-5 text-blue-600" />}
                 title="网站币种与换算"
@@ -175,7 +167,7 @@ export function CurrencyAndRatesPanel() {
                             key={currency}
                             className="flex items-center gap-2 text-xs font-bold text-slate-700"
                         >
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={draft.availableCurrencyCodes.includes(currency)}
                                 disabled={currency === draft.defaultCurrencyCode}
@@ -251,7 +243,7 @@ export function CurrencyAndRatesPanel() {
                 ) : (
                     <label className="text-xs font-bold text-slate-600">
                         每日采集时间
-                        <input
+                        <AdminInput
                             type="time"
                             value={draft.usdtRateDailyTime}
                             onChange={event => update('usdtRateDailyTime', event.target.value)}
@@ -289,15 +281,15 @@ export function CurrencyAndRatesPanel() {
                 >
                     刷新 USDT 价格
                 </SecondaryButton>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => setProtectedAction('save')}
-                    disabled={!dirty}
+                    disabled={!dirty || sourceChanged}
                     className={primaryButton}
                 >
                     <Save className="h-4 w-4" />
                     保存配置
-                </button>
+                </AdminButton>
             </div>
             <SensitiveActionDialog
                 open={protectedAction !== null}
@@ -319,7 +311,7 @@ export function CurrencyAndRatesPanel() {
 }
 
 export function StoreUsdtPanel() {
-    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, { fetchPolicy: 'cache-and-network' });
+    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, {});
     const [address, setAddress] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [notice, setNotice] = useState('');
@@ -350,7 +342,7 @@ export function StoreUsdtPanel() {
         }
     };
     if (query.loading && !query.data) return <PanelState label="正在读取 USDT 收款配置…" />;
-    if (query.error || !wallet)
+    if ((query.error && !query.data) || !wallet)
         return <PanelState tone="error" label="USDT 收款配置加载失败" action={() => void query.refetch()} />;
 
     return (
@@ -527,13 +519,17 @@ function SelectField({
     return (
         <label className="text-xs font-bold text-slate-600">
             {label}
-            <select value={value} onChange={event => onChange(event.target.value)} className={inputClass}>
+            <AdminSelect
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                className={inputClass}
+            >
                 {options.map(([id, text]) => (
                     <option key={id} value={id}>
                         {text}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </label>
     );
 }
@@ -557,7 +553,7 @@ function NumberField({
     return (
         <label className="text-xs font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type="number"
                 value={value}
                 min={min}
@@ -581,7 +577,11 @@ function ToggleField({
 }) {
     return (
         <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
-            <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+            <AdminInput
+                type="checkbox"
+                checked={checked}
+                onChange={event => onChange(event.target.checked)}
+            />
             {label}
         </label>
     );
@@ -596,14 +596,14 @@ function SecondaryButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
         >
             {icon}
             {children}
-        </button>
+        </AdminButton>
     );
 }
 function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
@@ -642,13 +642,13 @@ function PanelState({
         >
             <p>{label}</p>
             {action && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={action}
                     className="mt-3 rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

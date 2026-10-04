@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { renderReferralPoster } from '../../../../storefront/src/referral-poster-layout';
+import { AdminInput, AdminSelect } from '../../components/AdminControls';
 import { PosterAssetChoice, PosterDraft } from './referrals-types';
 
 export function ReferralPosterPreview({
@@ -73,17 +74,17 @@ export function ReferralPosterPreview({
                 <div className="flex gap-3 text-xs">
                     <label>
                         预览语言{' '}
-                        <select
+                        <AdminSelect
                             aria-label="海报预览语言"
                             value={language}
                             onChange={event => setLanguage(event.target.value as 'zh' | 'en')}
                         >
                             <option value="zh">中文</option>
                             <option value="en">英文</option>
-                        </select>
+                        </AdminSelect>
                     </label>
                     <label className="flex gap-1">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={safe}
                             onChange={event => setSafe(event.target.checked)}

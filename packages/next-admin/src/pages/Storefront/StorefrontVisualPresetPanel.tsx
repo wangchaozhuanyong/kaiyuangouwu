@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { ExternalLink, Monitor, Smartphone, X } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../../../../storefront-content-plugin/src/visual-presets';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     STOREFRONT_VISUAL_PRESET_QUERY,
@@ -20,6 +21,7 @@ import {
     type StorefrontVisualPresetResult,
 } from '../../graphql/storefront-visual-preset.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
@@ -149,20 +151,20 @@ export function StorefrontVisualPresetPanel() {
                     店铺皮肤
                     <FeatureHelpButton topic="storefront.decoration" title="店铺皮肤" />
                 </h2>
-                <button
+                <AdminButton
                     type="button"
                     disabled={busy}
                     onClick={() => void reload()}
                     className="text-sm text-blue-700 disabled:opacity-40"
                 >
                     重新读取
-                </button>
+                </AdminButton>
             </div>
             <p className="mt-2 text-xs text-slate-500">
                 一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。
                 经典皮肤保留品牌身份色，并自动派生可读的界面强调色。
             </p>
-            {query.loading && (
+            {query.loading && !query.data && (
                 <p role="status" className="mt-3 text-sm">
                     正在读取当前店铺配置…
                 </p>
@@ -183,7 +185,7 @@ export function StorefrontVisualPresetPanel() {
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     {storefrontVisualPresets.map(option => (
                         <label key={option.id} className="flex gap-3 rounded-lg border border-slate-200 p-3">
-                            <input
+                            <AdminInput
                                 type="radio"
                                 name="presetId"
                                 value={option.id}
@@ -204,19 +206,23 @@ export function StorefrontVisualPresetPanel() {
                     ))}
                 </div>
             </fieldset>
-            <button
+            <AdminButton
                 type="button"
                 disabled={disabled || !dirty}
                 onClick={() => void apply()}
                 className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
                 {mutation.loading ? '正在保存…' : '保存到当前店铺'}
-            </button>
+            </AdminButton>
             <div className="mt-3 flex gap-4 text-sm">
-                <button type="button" disabled={!consistent || busy} onClick={() => setPreview('mobile')}>
+                <AdminButton
+                    type="button"
+                    disabled={!consistent || busy}
+                    onClick={() => setPreview('mobile')}
+                >
                     预览效果
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     disabled={disabled || selected?.presetId === 'classic'}
                     onClick={() => {
@@ -226,7 +232,7 @@ export function StorefrontVisualPresetPanel() {
                     }}
                 >
                     恢复默认皮肤（保存后生效）
-                </button>
+                </AdminButton>
                 {previewUrl && (
                     <a
                         href={previewUrl}
@@ -275,7 +281,7 @@ export function StorefrontVisualPresetPanel() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
-                                <button
+                                <AdminButton
                                     type="button"
                                     aria-pressed={preview === 'mobile'}
                                     onClick={() => setPreview('mobile')}
@@ -283,8 +289,8 @@ export function StorefrontVisualPresetPanel() {
                                 >
                                     <Smartphone className="h-4 w-4" />
                                     手机
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     aria-pressed={preview === 'desktop'}
                                     onClick={() => setPreview('desktop')}
@@ -292,10 +298,14 @@ export function StorefrontVisualPresetPanel() {
                                 >
                                     <Monitor className="h-4 w-4" />
                                     电脑
-                                </button>
-                                <button type="button" aria-label="关闭预览" onClick={() => setPreview(null)}>
+                                </AdminButton>
+                                <AdminButton
+                                    type="button"
+                                    aria-label="关闭预览"
+                                    onClick={() => setPreview(null)}
+                                >
                                     <X className="h-5 w-5" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </header>
                         <div className="min-h-0 min-w-0 overflow-auto bg-slate-100 p-3">

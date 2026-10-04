@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     Activity,
     AlertCircle,
@@ -14,6 +14,7 @@ import {
 import { useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     IMAGE_PROVIDER_ADMIN_QUERY,
@@ -22,6 +23,7 @@ import {
     type ImageProviderRecord,
     type ImageProviderScope,
 } from '../../graphql/plugins.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 export function AiImageAccessModule() {
@@ -29,9 +31,10 @@ export function AiImageAccessModule() {
     const [actionError, setActionError] = useState('');
     const [drawerError, setDrawerError] = useState('');
     const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
-    const query = useQuery<{ imageProviderAdminConfigs: ImageProviderRecord[] }>(IMAGE_PROVIDER_ADMIN_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<{ imageProviderAdminConfigs: ImageProviderRecord[] }>(
+        IMAGE_PROVIDER_ADMIN_QUERY,
+        {},
+    );
     const providers = query.data?.imageProviderAdminConfigs ?? [];
     const activeProvider = providers.find(provider => provider.id === activeProviderId);
     return (
@@ -48,15 +51,18 @@ export function AiImageAccessModule() {
                             平台超管配置 OpenAI / Gemini 网关、密钥和提示词优化模型；密钥不会回显
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         disabled={query.loading}
                         className="flex items-center gap-1.5 self-start rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="mx-auto w-full max-w-none flex-1 overflow-y-auto p-5 sm:p-8">
@@ -82,7 +88,7 @@ export function AiImageAccessModule() {
                     </section>
                     {query.loading && !query.data ? (
                         <LoadingState />
-                    ) : query.error ? (
+                    ) : query.error && !query.data ? (
                         <ErrorState
                             message={toUserFacingError(query.error, 'AI 服务商配置读取失败')}
                             onRetry={() => void query.refetch()}
@@ -181,14 +187,14 @@ function ProviderRow({ value, onOpen }: { value: ImageProviderRecord; onOpen: ()
                     </div>
                 </div>
             </div>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onOpen}
                 className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto"
             >
                 <PanelRightOpen className="h-3.5 w-3.5" />
                 设置修改
-            </button>
+            </AdminButton>
         </article>
     );
 }
@@ -307,7 +313,7 @@ function ProviderDrawer({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={pending}
@@ -315,7 +321,7 @@ function ProviderDrawer({
                         className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </header>
 
                 <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
@@ -361,7 +367,7 @@ function ProviderDrawer({
                         </p>
                         <div className="mt-4 space-y-4">
                             <Field label="接口基础地址 *">
-                                <input
+                                <AdminInput
                                     value={baseUrl}
                                     onChange={event => setBaseUrl(event.target.value)}
                                     placeholder={
@@ -375,7 +381,7 @@ function ProviderDrawer({
                             <Field
                                 label={'提示词优化模型 ID ' + (value.purpose === 'IMAGE' ? '（可选）' : '*')}
                             >
-                                <input
+                                <AdminInput
                                     value={textModelId}
                                     onChange={event => setTextModelId(event.target.value)}
                                     placeholder="由当前网关支持的文本模型 ID"
@@ -397,7 +403,7 @@ function ProviderDrawer({
                             <Field
                                 label={'API Key ' + (value.credentialConfigured ? '（留空保留原密钥）' : '*')}
                             >
-                                <input
+                                <AdminInput
                                     type="password"
                                     autoComplete="new-password"
                                     value={apiKey}
@@ -417,7 +423,7 @@ function ProviderDrawer({
                                         停用后不会删除已保存的加密密钥。
                                     </small>
                                 </span>
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={enabled}
                                     onChange={event => setEnabled(event.target.checked)}
@@ -439,7 +445,7 @@ function ProviderDrawer({
                             {validation ?? (dirty ? '有未保存修改' : '没有待保存修改')}
                         </p>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void testProvider()}
                                 disabled={pending || !value.credentialConfigured || dirty}
@@ -452,16 +458,16 @@ function ProviderDrawer({
                                     <Activity className="h-3.5 w-3.5" />
                                 )}
                                 {testState.loading ? '测试中…' : '测试连通性'}
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={onClose}
                                 disabled={pending}
                                 className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void saveProvider()}
                                 disabled={saveState.loading || !dirty || Boolean(validation)}
@@ -469,7 +475,7 @@ function ProviderDrawer({
                             >
                                 <Save className="h-3.5 w-3.5" />
                                 {saveState.loading ? '正在保存…' : '保存凭据'}
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </footer>
@@ -553,13 +559,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">服务商配置加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -579,9 +585,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

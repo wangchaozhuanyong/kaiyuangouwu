@@ -1,4 +1,5 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Save } from 'lucide-react';
+import { AdminButton } from '../../components/AdminControls';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ProductAssetPickerModal } from './ProductAssetPickerModal';
 import { ProductEditorProvider } from './ProductEditorContext';
@@ -37,7 +38,7 @@ export function ProductEditor() {
                 {/* Top Header */}
                 <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-md sm:px-8">
                     <div className="flex items-center gap-3">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={leaveToProductList}
                             className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
@@ -45,19 +46,19 @@ export function ProductEditor() {
                             aria-label="返回商品列表"
                         >
                             <ArrowLeft className="w-5 h-5" />
-                        </button>
+                        </AdminButton>
                         <ProductEditorTitle isCreateMode={isCreateMode} />
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={leaveToProductList}
                             className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                         >
                             取消
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={handleSave}
                             disabled={saving || legacyTypeMismatch}
@@ -80,7 +81,7 @@ export function ProductEditor() {
                                     )}
                                 </>
                             )}
-                        </button>
+                        </AdminButton>
                     </div>
                 </header>
 
@@ -130,13 +131,13 @@ export function ProductEditor() {
                                         )}
                                     </span>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void refetchChannel()}
                                     className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
                                 >
                                     重试
-                                </button>
+                                </AdminButton>
                             </div>
                         )}
 
@@ -154,13 +155,13 @@ export function ProductEditor() {
                                         )}
                                     </span>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void refetchCatalogChannels()}
                                     className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white hover:bg-rose-700"
                                 >
                                     重试
-                                </button>
+                                </AdminButton>
                             </div>
                         )}
 
@@ -176,13 +177,13 @@ export function ProductEditor() {
                                         {toUserFacingError(productError, '商品详情读取失败，请稍后重试')}
                                     </span>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => refetchProduct()}
                                     className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold cursor-pointer"
                                 >
                                     重试查询
-                                </button>
+                                </AdminButton>
                             </div>
                         )}
 
@@ -208,13 +209,13 @@ export function ProductEditor() {
                                     <p className="mt-1 text-xs text-amber-700">
                                         请返回商品列表重新选择，不会使用空白数据覆盖商品。
                                     </p>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={leaveToProductList}
                                         className="mt-4 rounded-lg bg-amber-700 px-4 py-2 text-xs font-bold text-white"
                                     >
                                         返回商品列表
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             )}
 

@@ -1,5 +1,6 @@
 import { Boxes, Image as ImageIcon, Link2, Package, Sparkles, Tag, X } from 'lucide-react';
 import { useId, useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
@@ -97,7 +98,7 @@ export function ProductEditorSidebar() {
                                     onUploaded={setUploadedFeaturedAsset}
                                 />
                                 {canEditProduct && canCreateAsset && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={saving}
                                         onClick={() => setAiDialogOpen(true)}
@@ -105,10 +106,10 @@ export function ProductEditorSidebar() {
                                     >
                                         <Sparkles className="h-3.5 w-3.5" />
                                         AI 生成主图
-                                    </button>
+                                    </AdminButton>
                                 )}
                                 {featuredAssetId && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={saving}
                                         onClick={() => {
@@ -118,7 +119,7 @@ export function ProductEditorSidebar() {
                                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         更换主图
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                         </div>
@@ -131,7 +132,7 @@ export function ProductEditorSidebar() {
                                 />
                                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-slate-950/80 to-transparent px-3 pb-2.5 pt-8 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                                     <span className="truncate text-[10px]">素材编号 #{featuredAssetId}</span>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={saving}
                                         onClick={() => {
@@ -143,11 +144,11 @@ export function ProductEditorSidebar() {
                                         aria-label="移除商品主图"
                                     >
                                         <X className="h-3.5 w-3.5" />
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         ) : (
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={saving}
                                 onClick={() => {
@@ -159,7 +160,7 @@ export function ProductEditorSidebar() {
                                 <ImageIcon className="h-7 w-7 text-slate-300" />
                                 <span className="text-xs font-bold text-slate-600">选择商品主图</span>
                                 <span className="text-[10px] text-slate-400">从真实素材库中选择</span>
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
 
@@ -170,7 +171,7 @@ export function ProductEditorSidebar() {
                         >
                             名称 <span className="text-rose-500">*</span>
                         </label>
-                        <input
+                        <AdminInput
                             type="text"
                             disabled={saving}
                             id={`${fieldId}-name`}
@@ -205,7 +206,7 @@ export function ProductEditorSidebar() {
                             <Link2 className="h-3.5 w-3.5 text-slate-400" />
                             URL 唯一别名
                         </label>
-                        <input
+                        <AdminInput
                             type="text"
                             disabled={saving}
                             id={`${fieldId}-slug`}
@@ -227,7 +228,7 @@ export function ProductEditorSidebar() {
                             </div>
                         </div>
                         <label className="flex shrink-0 cursor-pointer items-center gap-2">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 disabled={saving}
                                 checked={enabled}

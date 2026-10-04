@@ -1,8 +1,10 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 const OFFER = gql`
@@ -34,7 +36,6 @@ export function StoreOfferDialog({
 }) {
     const query = useQuery<{ myProductSalesOffer: Offer }>(OFFER, {
         variables: { productId },
-        fetchPolicy: 'network-only',
     });
     const [save, status] = useMutation(SAVE);
     const [prices, setPrices] = useState<Record<string, string>>({});
@@ -82,14 +83,14 @@ export function StoreOfferDialog({
                         本店商品经营设置
                         <FeatureHelpButton topic="catalog.store-offer" title="本店商品经营设置" />
                     </h2>
-                    <button onClick={onClose} aria-label="关闭经营设置">
+                    <AdminButton onClick={onClose} aria-label="关闭经营设置">
                         关闭
-                    </button>
+                    </AdminButton>
                 </div>
                 <p className="my-3 text-sm text-slate-500">
                     修改本店售价与销售状态。维护店铺管理商品资料、规格及来源交付资源。
                 </p>
-                {query.loading && <p role="status">读取本店授权中…</p>}
+                {query.loading && !query.data && <p role="status">读取本店授权中…</p>}
                 {(query.error || error) && (
                     <p role="alert" className="text-red-600 dark:text-red-400 text-sm">
                         {error || toUserFacingError(query.error, '授权读取失败，请重试')}
@@ -109,7 +110,7 @@ export function StoreOfferDialog({
                         </p>
                         <label className="block text-sm">
                             本店销售状态
-                            <select
+                            <AdminSelect
                                 className="ml-3 rounded-lg border border-slate-200 p-2"
                                 disabled={offer.state === 'REVOKED'}
                                 value={state ?? (offer.state === 'ACTIVE' ? 'ACTIVE' : 'PAUSED')}
@@ -117,12 +118,12 @@ export function StoreOfferDialog({
                             >
                                 <option value="ACTIVE">启用销售</option>
                                 <option value="PAUSED">暂停销售</option>
-                            </select>
+                            </AdminSelect>
                         </label>
                         {offer.variants.map(v => (
                             <label key={v.id} className="flex items-center justify-between gap-4 text-sm">
                                 {v.name} · {v.currencyCode}
-                                <input
+                                <AdminInput
                                     aria-label={`${v.name}本店售价`}
                                     type="number"
                                     step="1"
@@ -138,13 +139,13 @@ export function StoreOfferDialog({
                             售价按最小货币单位填写，例如 CNY 100 表示
                             ¥1.00。库存为零显示缺货，卡密还需平台供货授权。
                         </p>
-                        <button
+                        <AdminButton
                             disabled={status.loading || offer.state === 'REVOKED'}
                             onClick={() => void submit()}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
                             {status.loading ? '保存并回读…' : '保存本店设置'}
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
             </AccessibleDialogSurface>

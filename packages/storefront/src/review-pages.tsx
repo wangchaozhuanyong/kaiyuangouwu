@@ -153,8 +153,8 @@ export function ReviewCenterPage({
                     </div>
                 ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
                   (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
-                  reviewsQuery.isError ||
-                  candidatesQuery.isError ? (
+                  (reviewsQuery.isError && reviewsQuery.data === undefined) ||
+                  (candidatesQuery.isError && candidatesQuery.data === undefined) ? (
                     <EmptyState
                         icon={<RefreshCw />}
                         title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
@@ -168,7 +168,12 @@ export function ReviewCenterPage({
                                     : ''
                         }
                         action={isZh ? '重试' : 'Retry'}
-                        onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
+                        onAction={() =>
+                            void Promise.all([
+                                reviewsQuery.refetch({ cancelRefetch: false }),
+                                candidatesQuery.refetch({ cancelRefetch: false }),
+                            ])
+                        }
                     />
                 ) : (
                     <div className="review-center-workspace">
@@ -321,7 +326,9 @@ export function ReviewCenterPage({
                                             onClick={() => {
                                                 if (!showAllCandidates) setShowAllCandidates(true);
                                                 else if (candidatesQuery.hasNextPage)
-                                                    void candidatesQuery.fetchNextPage();
+                                                    void candidatesQuery.fetchNextPage({
+                                                        cancelRefetch: false,
+                                                    });
                                                 else setShowAllCandidates(false);
                                             }}
                                         >
@@ -500,7 +507,11 @@ export function ProductReviewsSection({
                 </div>
             ) : (query.isPaused && query.data === undefined) ||
               (query.isError && query.data === undefined) ? (
-                <button className="product-review-retry" type="button" onClick={() => void query.refetch()}>
+                <button
+                    className="product-review-retry"
+                    type="button"
+                    onClick={() => void query.refetch({ cancelRefetch: false })}
+                >
                     <RefreshCw aria-hidden="true" />
                     {query.isPaused
                         ? offlineLoadError(language)
@@ -545,7 +556,7 @@ export function ProductReviewsSection({
                             className="product-review-retry"
                             type="button"
                             disabled={query.isFetchingNextPage}
-                            onClick={() => void query.fetchNextPage()}
+                            onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
                         >
                             {query.isFetchingNextPage
                                 ? isZh

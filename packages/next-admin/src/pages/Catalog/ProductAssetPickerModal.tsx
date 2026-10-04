@@ -1,5 +1,6 @@
 import { AlertCircle, Image as ImageIcon, Search, X } from 'lucide-react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
@@ -78,20 +79,20 @@ export function ProductAssetPickerModal() {
                             multiple={assetPickerMode === 'GALLERY'}
                             onUploaded={selectUploadedAssets}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setIsAssetPickerOpen(false)}
                             className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                             aria-label="关闭"
                         >
                             <X className="h-5 w-5" />
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
 
                 <div className="relative">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
+                    <AdminInput
                         aria-label="搜索图片素材"
                         value={assetSearch}
                         onChange={event => {
@@ -104,7 +105,7 @@ export function ProductAssetPickerModal() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto min-h-[300px]">
-                    {assetsLoading && (
+                    {assetsLoading && !assetsData && (
                         <div className="p-12 text-center text-slate-400 text-xs">正在加载素材库...</div>
                     )}
 
@@ -115,13 +116,13 @@ export function ProductAssetPickerModal() {
                         >
                             <AlertCircle className="h-8 w-8 text-rose-500" />
                             <span>{toUserFacingError(assetsError, '素材库读取失败，请稍后重试')}</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void refetchAssets()}
                                 className="rounded-lg bg-rose-600 px-4 py-2 font-bold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
 
@@ -142,7 +143,7 @@ export function ProductAssetPickerModal() {
                                         ? featuredAssetId === asset.id
                                         : selectedAssetIds.includes(asset.id);
                                 return (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         key={asset.id}
                                         aria-pressed={isSelected}
@@ -173,7 +174,7 @@ export function ProductAssetPickerModal() {
                                         <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] p-1 truncate font-mono">
                                             {asset.name}
                                         </div>
-                                    </button>
+                                    </AdminButton>
                                 );
                             })}
                         </div>
@@ -189,13 +190,13 @@ export function ProductAssetPickerModal() {
                         totalItems={assetsData?.assets.totalItems ?? 0}
                         onPageChange={setAssetPage}
                     />
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setIsAssetPickerOpen(false)}
                         className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
                     >
                         关闭
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </div>

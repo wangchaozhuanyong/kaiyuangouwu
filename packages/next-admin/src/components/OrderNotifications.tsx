@@ -1,7 +1,9 @@
 import { Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { AdminButton } from './AdminControls';
 
 import { openAdminOrderEvents } from '../apollo';
+import { invalidateAdminResources } from '../runtime/admin-resource-events';
 import { publishAdminFeedback } from '../utils/admin-feedback';
 import { readAdminOrderStream } from '../utils/admin-order-stream';
 import { ORDER_NOTIFICATION_COPY, orderNotificationLanguage } from '../utils/order-notifications';
@@ -126,6 +128,7 @@ export function OrderNotifications({
                             const isReminder = event.kind === 'order-pending';
                             const key = isReminder ? `reminder:${event.id}` : `placed:${event.orderId}`;
                             if (seenNotifications.has(key)) return;
+                            if (!isReminder) invalidateAdminResources(['orders', 'catalog'], 'event');
                             seenNotifications.add(key);
                             if (seenNotifications.size > 2000)
                                 seenNotifications.delete(seenNotifications.values().next().value!);
@@ -189,7 +192,7 @@ export function OrderNotifications({
     const label = !muted && audioReady ? copy.mute : copy.enable;
     const Icon = muted || !audioReady ? VolumeX : Volume2;
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={toggleSound}
             aria-label={label}
@@ -201,6 +204,6 @@ export function OrderNotifications({
             {disconnected && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
             )}
-        </button>
+        </AdminButton>
     );
 }

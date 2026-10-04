@@ -48,7 +48,7 @@ export function DailyRecommendationSection({
                     title={title}
                     detail={language === 'zh' ? '推荐暂时无法加载' : 'Recommendations unavailable'}
                     action={language === 'zh' ? '重试' : 'Retry'}
-                    onAction={() => void query.refetch()}
+                    onAction={() => void query.refetch({ cancelRefetch: false })}
                 />
             </section>
         );

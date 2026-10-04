@@ -1837,7 +1837,6 @@ describe('ShopApi storefront mutations', () => {
             input: {
                 collectionId: 'collection-1',
                 groupByProduct: true,
-                inStock: true,
                 skip: 0,
                 take: 100,
             },

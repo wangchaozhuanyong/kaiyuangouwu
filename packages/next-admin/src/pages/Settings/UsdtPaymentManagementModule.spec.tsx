@@ -85,3 +85,6 @@ describe('UsdtPaymentManagementModule', () => {
 function renderToStaticMarkup(element: ReactElement) {
     return renderMarkup(<FeatureHelpProvider>{element}</FeatureHelpProvider>);
 }
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

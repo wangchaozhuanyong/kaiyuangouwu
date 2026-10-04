@@ -1,5 +1,6 @@
 import { Layers, Sliders, Tag } from 'lucide-react';
 import { useId } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 
 import { ProductBasicTab } from './ProductBasicTab';
@@ -32,7 +33,7 @@ export function ProductEditorWorkspace() {
                 aria-label="商品编辑步骤"
                 className="sticky top-0 z-20 order-1 flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xs lg:col-start-2 lg:row-start-1"
             >
-                <button
+                <AdminButton
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'BASIC'}
@@ -46,8 +47,8 @@ export function ProductEditorWorkspace() {
                 >
                     <Sliders className="h-3.5 w-3.5" />
                     <span>基础图文</span>
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'VARIANTS'}
@@ -75,8 +76,8 @@ export function ProductEditorWorkspace() {
                     >
                         {variants.length}
                     </span>
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     role="tab"
                     aria-selected={activeTab === 'FACETS_COLLECTIONS'}
@@ -100,7 +101,7 @@ export function ProductEditorWorkspace() {
                     >
                         {selectedFacetValueIds.length + selectedCollectionIds.length}
                     </span>
-                </button>
+                </AdminButton>
             </div>
 
             {activeTab === 'BASIC' && (

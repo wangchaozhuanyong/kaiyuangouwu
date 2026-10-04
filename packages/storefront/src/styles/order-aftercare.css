@@ -26,8 +26,8 @@
 .after-sales-evidence > p {
     margin: 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .after-sales-evidence-grid {
     display: grid;
@@ -58,7 +58,8 @@
     object-fit: contain;
 }
 .after-sales-evidence-item > span {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     color: var(--muted);
 }
 .after-sales-evidence-actions {
@@ -116,7 +117,7 @@
     display: block;
     margin-top: 6px;
     color: var(--muted);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .digital-delivery-panel > div > article {
     display: grid;
@@ -136,12 +137,13 @@
 }
 .digital-delivery-panel article strong {
     font-weight: var(--font-weight-semibold);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .digital-delivery-panel article small {
     margin-top: 4px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .digital-delivery-panel article em {
     justify-self: start;
@@ -150,8 +152,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-style: normal;
 }
 .digital-delivery-panel article a {
@@ -191,14 +193,15 @@
 }
 .after-sales-card > header small {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .after-sales-facts {
     display: grid;
     gap: 12px;
     margin: 0;
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .after-sales-facts > div {
     display: grid;
@@ -219,8 +222,8 @@
 }
 .after-sales-status {
     min-width: 0;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 .after-sales-summary {
     display: grid;
@@ -238,15 +241,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: var(--type-body-size);
     font-weight: var(--font-weight-medium);
-    line-height: 1.6;
+    line-height: var(--type-body-leading);
 }
 .after-sales-summary small,
 .after-sales-card > footer > small {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .after-sales-summary > div:first-child > small {
     margin-top: 4px;
@@ -256,7 +259,8 @@
 }
 .after-sales-summary-amount > strong {
     margin-top: 4px;
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
@@ -280,7 +284,8 @@
     color: var(--accent-ink);
     background: var(--control-surface);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
 }
@@ -295,8 +300,8 @@
 .after-sales-next-action {
     margin: 0;
     color: var(--accent-ink);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 .after-sales-detail-body {
     min-height: 0;
@@ -311,19 +316,21 @@
     padding-bottom: 24px;
 }
 .after-sales-detail-status > .after-sales-status {
-    font-size: 18px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 .after-sales-detail-status > small {
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .after-sales-detail-section + .after-sales-detail-section {
     margin-top: 28px;
 }
 .after-sales-detail-section > h3 {
     margin: 0 0 16px;
-    font-size: 14px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
     font-weight: var(--font-weight-semibold);
 }
 .after-sales-detail-section .after-sales-order-link {
@@ -332,8 +339,8 @@
 }
 .after-sales-detail-note {
     margin-top: 16px;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .after-sales-detail-note > strong {
     font-weight: var(--font-weight-medium);
@@ -345,7 +352,8 @@
 }
 .after-sales-timeline-empty {
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .after-sales-details-button:focus-visible {
     outline: 2px solid var(--accent-ink);
@@ -393,7 +401,7 @@
 }
 .after-sales-items strong {
     font-weight: var(--font-weight-semibold);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .after-sales-items small {
     margin-top: 4px;
@@ -407,8 +415,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .after-sales-instructions p {
     margin: 6px 0 0;
@@ -438,7 +446,7 @@
 }
 .after-sales-timeline li p {
     margin: 4px 0;
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .after-sales-timeline li small {
     color: var(--muted);
@@ -508,6 +516,8 @@
     background: var(--control-surface);
     color: var(--text);
     font: inherit;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 .after-sales-field textarea {
     min-height: 112px;
@@ -547,8 +557,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--warning-bg);
     color: var(--warning-text);
-    line-height: 1.6;
-    font-size: 12px;
+    line-height: var(--type-helper-leading);
+    font-size: var(--type-helper-size);
 }
 .after-sales-quantity {
     display: flex;
@@ -574,7 +584,7 @@
 .after-sales-request-total small {
     grid-column: 1 / -1;
     color: var(--muted);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 .after-sales-sheet > form {
     padding: 20px 16px calc(20px + var(--safe-bottom));

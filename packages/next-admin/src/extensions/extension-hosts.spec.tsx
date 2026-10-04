@@ -2,7 +2,7 @@
 
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineNextAdminExtension, resetNextAdminExtensionsForTests } from './extension-api';
 import { NextAdminActions } from './extension-hosts';
 
@@ -29,6 +29,44 @@ async function renderActions() {
 }
 
 describe('collapsible extension actions', () => {
+    it('retries a failed extension without resetting a sibling action draft', async () => {
+        let unavailable = true;
+        function RecoverableAction() {
+            if (unavailable) throw new Error('test extension unavailable');
+            return <button>已恢复扩展</button>;
+        }
+        function SiblingAction() {
+            const [count, setCount] = useState(0);
+            return <button onClick={() => setCount(value => value + 1)}>相邻草稿 {count}</button>;
+        }
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            defineNextAdminExtension({
+                id: 'recoverable',
+                actions: [
+                    { id: 'failed', label: '恢复扩展', pageId: 'product-list', component: RecoverableAction },
+                    { id: 'sibling', label: '相邻草稿', pageId: 'product-list', component: SiblingAction },
+                ],
+            });
+            const container = await renderActions();
+            const sibling = Array.from(container.querySelectorAll('button')).find(button =>
+                button.textContent?.startsWith('相邻草稿'),
+            )!;
+            await act(async () => sibling.click());
+            const retry = Array.from(container.querySelectorAll('button')).find(
+                button => button.textContent === '重试扩展',
+            )!;
+            expect(container.querySelector('[data-admin-extension-error]')).not.toBeNull();
+            unavailable = false;
+            await act(async () => retry.click());
+            expect(container.querySelector('[data-admin-extension-error]')).toBeNull();
+            expect(container.textContent).toContain('已恢复扩展');
+            expect(sibling.textContent).toBe('相邻草稿 1');
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
     it('preserves one action instance and its draft state across collapse cycles', async () => {
         let mounts = 0;
         function Action() {

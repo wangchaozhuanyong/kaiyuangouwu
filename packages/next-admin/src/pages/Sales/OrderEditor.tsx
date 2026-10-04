@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowLeft,
@@ -23,10 +23,12 @@ import {
     X,
     XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -50,7 +52,10 @@ import {
     UPDATE_FULFILLMENT_DELIVERY,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useAdminReturn } from '../../hooks/use-admin-return';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -263,7 +268,6 @@ export function OrderEditor() {
         () => addCustomFieldsToDocument(GET_SALES_ORDER, 'Order', orderCustomFieldDefinitions, ['order']),
         [orderCustomFieldDefinitions],
     );
-    const [orderCustomFieldValues, setOrderCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [newNote, setNewNote] = useState('');
@@ -290,7 +294,7 @@ export function OrderEditor() {
     const { data, loading, error, refetch } = useQuery<OrderQueryData>(orderDetailDocument, {
         variables: { id },
         skip: !id,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [addNote, { loading: addingNote }] = useMutation<{ addNoteToOrder: { id: string } }>(
@@ -322,14 +326,16 @@ export function OrderEditor() {
     const inSalesStore = canManageOrderInChannel(order, data?.activeChannel?.id);
     const canUpdateOrder = inSalesStore && hasAnyPermission(['UpdateOrder']);
     const canUpdateProfitExpenses = canUpdateOrder && hasAnyPermission(['UpdateCatalogOperations']);
-    /* oxlint-disable react/set-state-in-effect */
-    useEffect(() => {
-        if (!order) return;
-        setOrderCustomFieldValues(
-            customFieldValuesFromEntity(orderCustomFieldDefinitions, order.customFields),
-        );
-    }, [order, orderCustomFieldDefinitions]);
-    /* oxlint-enable react/set-state-in-effect */
+    const customFieldSource = order
+        ? customFieldValuesFromEntity(orderCustomFieldDefinitions, order.customFields)
+        : null;
+    const orderFieldDraft = useServerDraft<CustomFieldValueMap>(
+        order?.id ?? '',
+        customFieldSource ? JSON.stringify(customFieldSource) : '',
+        customFieldSource,
+    );
+    const orderCustomFieldValues = orderFieldDraft.draft ?? {};
+    const setOrderCustomFieldValues = orderFieldDraft.setDraft;
     const remainingPhysicalLines = order ? getRemainingPhysicalLines(order) : [];
     const manualHandlerAvailable =
         data?.fulfillmentHandlers.some(handler => handler.code === 'manual-fulfillment') ?? false;
@@ -363,9 +369,9 @@ export function OrderEditor() {
         window.setTimeout(() => setNotification(''), 4000);
     };
     const refreshAfterMutation = async (message: string) => {
-        await refetch();
         setActionError('');
         showNotice(message);
+        await refreshAfterAdminWrite(() => refetch(), setActionError);
     };
 
     const handleAddNote = async () => {
@@ -384,6 +390,7 @@ export function OrderEditor() {
     };
 
     const handleSaveCustomFields = async () => {
+        if (orderFieldDraft.sourceChanged) return;
         if (!order) return;
         const errors = validateCustomFieldValues(orderCustomFieldDefinitions, orderCustomFieldValues);
         if (Object.keys(errors).length > 0) {
@@ -405,6 +412,7 @@ export function OrderEditor() {
             if (!response.data?.setOrderCustomFields) {
                 throw new Error('后端未返回更新后的订单');
             }
+            orderFieldDraft.accept(orderCustomFieldValues);
             await refreshAfterMutation('订单扩展字段已保存');
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '订单扩展字段保存失败'));
@@ -638,7 +646,7 @@ export function OrderEditor() {
                 </div>
             </div>
         );
-    if (error)
+    if (error && !data)
         return (
             <div className="flex h-full items-center justify-center bg-slate-50 p-6">
                 <div className="max-w-lg rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-sm">
@@ -648,20 +656,20 @@ export function OrderEditor() {
                         {toUserFacingError(error, '订单详情加载失败，请稍后重试')}
                     </p>
                     <div className="mt-4 flex justify-center gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={returnToList}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold"
                         >
                             返回列表
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => refetch()}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </div>
@@ -674,13 +682,13 @@ export function OrderEditor() {
                     <h1 className="mt-3 text-sm font-semibold text-slate-800">
                         订单不存在或当前账号无权查看
                     </h1>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={returnToList}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                     >
                         返回订单列表
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         );
@@ -690,14 +698,14 @@ export function OrderEditor() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={returnToList}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
                             aria-label="返回订单列表"
                         >
                             <ArrowLeft className="h-5 w-5" />
-                        </button>
+                        </AdminButton>
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                                 <h1 className="truncate font-mono text-base font-semibold text-slate-950">
@@ -722,7 +730,7 @@ export function OrderEditor() {
                         />
                         {canUpdateOrder &&
                             (order.state === 'Modifying' || order.nextStates.includes('Modifying')) && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void handleBeginModify()}
                                     disabled={busy}
@@ -730,10 +738,10 @@ export function OrderEditor() {
                                 >
                                     <PencilLine className="h-3.5 w-3.5" />
                                     {order.state === 'Modifying' ? '继续修改订单' : '修改订单'}
-                                </button>
+                                </AdminButton>
                             )}
                         {canUpdateOrder && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={openRefund}
                                 disabled={paymentsWithBalances.length === 0 || busy}
@@ -741,18 +749,18 @@ export function OrderEditor() {
                             >
                                 <RotateCcw className="h-3.5 w-3.5" />
                                 执行退款
-                            </button>
+                            </AdminButton>
                         )}
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => window.print()}
                             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                             <Printer className="h-3.5 w-3.5" />
                             打印订单
-                        </button>
+                        </AdminButton>
                         {canUpdateOrder && order.nextStates.includes('Cancelled') && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setCancelReason('');
@@ -765,10 +773,10 @@ export function OrderEditor() {
                             >
                                 <XCircle className="h-3.5 w-3.5" />
                                 取消订单
-                            </button>
+                            </AdminButton>
                         )}
                         {canUpdateOrder && remainingPhysicalLines.length > 0 && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setActionError('');
@@ -788,7 +796,7 @@ export function OrderEditor() {
                             >
                                 <Truck className="h-4 w-4" />
                                 创建实物发货
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -812,14 +820,14 @@ export function OrderEditor() {
                         >
                             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>{actionError}</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setActionError('')}
                                 className="ml-auto text-rose-500"
                                 aria-label="关闭错误提示"
                             >
                                 <X className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     {!manualHandlerAvailable && remainingPhysicalLines.length > 0 && (
@@ -1036,7 +1044,7 @@ export function OrderEditor() {
                                                         <div className="flex flex-wrap justify-end gap-1.5">
                                                             {fulfillment.deliveryEvidence?.status !==
                                                                 'EXCEPTION' && (
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() =>
                                                                         openDeliveryAction(
@@ -1048,11 +1056,11 @@ export function OrderEditor() {
                                                                     className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                                                                 >
                                                                     登记异常
-                                                                </button>
+                                                                </AdminButton>
                                                             )}
                                                             {fulfillment.deliveryEvidence?.status ===
                                                                 'EXCEPTION' && (
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() =>
                                                                         openDeliveryAction(
@@ -1064,9 +1072,9 @@ export function OrderEditor() {
                                                                     className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                                                                 >
                                                                     重新发运
-                                                                </button>
+                                                                </AdminButton>
                                                             )}
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openDeliveryAction(
@@ -1079,7 +1087,7 @@ export function OrderEditor() {
                                                             >
                                                                 <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                                                                 确认送达
-                                                            </button>
+                                                            </AdminButton>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1182,6 +1190,9 @@ export function OrderEditor() {
                             >
                                 {orderCustomFieldDefinitions.length > 0 && (
                                     <div className="min-w-0 [&_textarea]:h-14 [&_textarea]:min-h-14 [&_textarea]:resize-y">
+                                        {orderFieldDraft.sourceChanged && (
+                                            <DraftUpdateNotice onReload={orderFieldDraft.reload} />
+                                        )}
                                         <DynamicCustomFieldsForm
                                             fields={orderCustomFieldDefinitions}
                                             values={orderCustomFieldValues}
@@ -1193,17 +1204,20 @@ export function OrderEditor() {
                                             description="查看客户备注与交付资料，按需补充订单信息。"
                                             footer={
                                                 canUpdateOrder ? (
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => void handleSaveCustomFields()}
-                                                        disabled={savingCustomFields}
+                                                        disabled={
+                                                            savingCustomFields ||
+                                                            orderFieldDraft.sourceChanged
+                                                        }
                                                         className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                                     >
                                                         {savingCustomFields && (
                                                             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                                                         )}
                                                         保存扩展信息
-                                                    </button>
+                                                    </AdminButton>
                                                 ) : null
                                             }
                                         />
@@ -1239,7 +1253,7 @@ export function OrderEditor() {
                                     </div>
                                     {canUpdateOrder && (
                                         <div className="mt-3 flex gap-2">
-                                            <input
+                                            <AdminInput
                                                 value={newNote}
                                                 onChange={event => setNewNote(event.target.value)}
                                                 onKeyDown={event => {
@@ -1249,7 +1263,7 @@ export function OrderEditor() {
                                                 placeholder="输入仅管理员可见的跟进备注"
                                                 className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                             />
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={handleAddNote}
                                                 disabled={addingNote || !newNote.trim()}
@@ -1261,7 +1275,7 @@ export function OrderEditor() {
                                                     <Send className="h-3.5 w-3.5" />
                                                 )}
                                                 保存
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     )}
                                     <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
@@ -1552,13 +1566,13 @@ export function OrderEditor() {
                     <label className="block text-xs font-semibold text-slate-700">
                         物流公司 / 配送方式 *
                     </label>
-                    <input
+                    <AdminInput
                         value={carrier}
                         onChange={event => setCarrier(event.target.value)}
                         className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
                     <label className="mt-4 block text-xs font-semibold text-slate-700">真实运单号 *</label>
-                    <input
+                    <AdminInput
                         value={trackingCode}
                         onChange={event => setTrackingCode(event.target.value)}
                         placeholder="请从物流系统复制运单号"
@@ -1599,7 +1613,7 @@ export function OrderEditor() {
                             <label className="block text-xs font-semibold text-slate-700">
                                 新物流公司 / 配送方式 *
                             </label>
-                            <input
+                            <AdminInput
                                 value={deliveryCarrier}
                                 onChange={event => setDeliveryCarrier(event.target.value)}
                                 className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -1607,7 +1621,7 @@ export function OrderEditor() {
                             <label className="mt-4 block text-xs font-semibold text-slate-700">
                                 新运单号 *
                             </label>
-                            <input
+                            <AdminInput
                                 value={deliveryTrackingCode}
                                 onChange={event => setDeliveryTrackingCode(event.target.value)}
                                 className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -1617,7 +1631,7 @@ export function OrderEditor() {
                     {deliveryAction.status === 'DELIVERED' && (
                         <>
                             <label className="block text-xs font-semibold text-slate-700">送达凭证 *</label>
-                            <input
+                            <AdminInput
                                 value={deliveryProof}
                                 onChange={event => setDeliveryProof(event.target.value)}
                                 placeholder="签收单号、物流回执编号或可追溯凭证"
@@ -1630,7 +1644,7 @@ export function OrderEditor() {
                     >
                         操作说明 *
                     </label>
-                    <textarea
+                    <AdminTextArea
                         value={deliveryNote}
                         onChange={event => setDeliveryNote(event.target.value)}
                         rows={3}
@@ -1659,7 +1673,7 @@ export function OrderEditor() {
                     confirmLabel="提交退款"
                 >
                     <label className="block text-xs font-semibold text-slate-700">退款支付记录 *</label>
-                    <select
+                    <AdminSelect
                         value={selectedPayment?.payment.id ?? ''}
                         onChange={event => {
                             const next = paymentsWithBalances.find(
@@ -1677,16 +1691,16 @@ export function OrderEditor() {
                                 {formatMoney(item.remaining, order.currencyCode)}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                     <label className="mt-4 block text-xs font-semibold text-slate-700">退款金额 *</label>
-                    <input
+                    <AdminInput
                         value={refundAmount}
                         onChange={event => setRefundAmount(event.target.value)}
                         inputMode="decimal"
                         className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm font-semibold outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
                     />
                     <label className="mt-4 block text-xs font-semibold text-slate-700">退款原因 *</label>
-                    <textarea
+                    <AdminTextArea
                         value={refundReason}
                         onChange={event => setRefundReason(event.target.value)}
                         rows={3}
@@ -1696,7 +1710,7 @@ export function OrderEditor() {
                     <label className="mt-4 block text-xs font-semibold text-slate-700">
                         当前管理员密码 *
                     </label>
-                    <input
+                    <AdminInput
                         type="password"
                         autoComplete="current-password"
                         value={refundCurrentPassword}
@@ -1722,7 +1736,7 @@ export function OrderEditor() {
                     confirmLabel="确认取消"
                 >
                     <label className="block text-xs font-semibold text-slate-700">取消原因 *</label>
-                    <textarea
+                    <AdminTextArea
                         value={cancelReason}
                         onChange={event => setCancelReason(event.target.value)}
                         rows={4}
@@ -1732,7 +1746,7 @@ export function OrderEditor() {
                     <label className="mt-4 block text-xs font-semibold text-slate-700">
                         当前管理员密码 *
                     </label>
-                    <input
+                    <AdminInput
                         type="password"
                         autoComplete="current-password"
                         value={cancelCurrentPassword}
@@ -1797,7 +1811,7 @@ function ActionDialog({
                             </h2>
                             <p className="mt-1.5 text-xs leading-5 text-slate-500">{description}</p>
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={busy}
@@ -1805,7 +1819,7 @@ function ActionDialog({
                             aria-label="关闭"
                         >
                             <X className="h-5 w-5" />
-                        </button>
+                        </AdminButton>
                     </header>
                     <div className="p-6">
                         {children}
@@ -1820,22 +1834,22 @@ function ActionDialog({
                         )}
                     </div>
                     <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={busy}
                             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                         >
                             取消
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="submit"
                             disabled={busy}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             {busy && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
                             {confirmLabel}
-                        </button>
+                        </AdminButton>
                     </footer>
                 </form>
             </AccessibleDialogSurface>

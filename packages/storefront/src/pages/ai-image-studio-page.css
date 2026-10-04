@@ -37,13 +37,15 @@
 .ai-studio-history-heading h3 {
     margin: 3px 0 0;
     color: #0f172a;
-    font-size: 17px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
 }
 
 .ai-studio-heading span,
 .ai-studio-balance small {
     color: #64748b;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-balance {
@@ -81,6 +83,8 @@
     color: #0f172a;
     background: transparent;
     font: inherit;
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
 }
 
 .ai-studio-prompt-wrap textarea:focus,
@@ -105,7 +109,8 @@
     padding: 9px 12px;
     border-top: 0;
     color: #64748b;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-prompt-tools button,
@@ -119,7 +124,7 @@
     border: 0;
     color: #047857;
     background: transparent;
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     cursor: pointer;
 }
 
@@ -140,7 +145,8 @@
     margin-top: 12px;
     padding: 10px 12px;
     border-radius: 12px;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-optimized {
@@ -205,7 +211,8 @@
     border-radius: 4px;
     color: #fff;
     background: rgb(15 23 42 / 72%);
-    font-size: 9px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-reference-preview button {
@@ -250,7 +257,8 @@
 .ai-studio-model-grid small {
     overflow: hidden;
     color: #64748b;
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-overflow: ellipsis;
 }
 
@@ -263,20 +271,23 @@
     flex: 1;
     gap: 5px;
     color: #64748b;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-checkout > label {
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-studio-checkout details {
     margin: 10px 0;
     color: #64748b;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-error {
@@ -316,14 +327,15 @@
 
 .ai-studio-settlement-amount small {
     color: #64748b;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-settlement-amount strong {
     color: #6d28d9;
-    font-size: 25px;
+    font-size: var(--type-metric-size);
     font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    line-height: var(--type-metric-leading);
 }
 
 .ai-studio-settlement-refund {
@@ -352,16 +364,16 @@
 
 .ai-studio-settlement-refund strong {
     color: #0f172a;
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-studio-settlement-refund span,
 .ai-studio-history-heading p,
 .ai-generation-card > footer > span {
     color: #64748b;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-generate-button {
@@ -377,8 +389,9 @@
     color: #fff;
     background: #6d28d9;
     box-shadow: 0 8px 18px rgb(109 40 217 / 18%);
-    font-size: 15px;
-    font-weight: 800;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-bold);
     transition:
         background-color 160ms ease,
         box-shadow 160ms ease,
@@ -410,8 +423,8 @@
     gap: 8px;
     color: #92400e;
     background: #fffbeb;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-studio-low-balance svg {
@@ -437,7 +450,8 @@
 
 .ai-generation-card > header code {
     color: #64748b;
-    font-size: 11px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .ai-generation-status {
@@ -445,8 +459,9 @@
     border-radius: 999px;
     color: #475569;
     background: #f1f5f9;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 .ai-generation-status.is-succeeded {
@@ -463,7 +478,8 @@
 .ai-generation-card > p {
     margin: 12px 0;
     color: #334155;
-    font-size: 13px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .ai-generation-grid {
@@ -497,7 +513,8 @@
 .ai-generation-output-actions {
     justify-content: flex-end;
     padding: 8px;
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .ai-generation-card > footer {

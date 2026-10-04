@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     Check,
@@ -16,6 +16,7 @@ import {
 import { useState } from 'react';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
@@ -25,6 +26,7 @@ import {
     UPDATE_STOREFRONT_REVIEW_SETTINGS,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -98,7 +100,7 @@ export function ReviewsModule() {
 
     const settingsQuery = useQuery<{ storefrontReviewSettings: { enabled: boolean } }>(
         GET_STOREFRONT_REVIEW_SETTINGS,
-        { fetchPolicy: 'network-only', context: channelContext },
+        { context: channelContext },
     );
     const [updateReviewSettings, { loading: savingSettings }] = useMutation<{
         updateStorefrontReviewSettings: { enabled: boolean };
@@ -114,7 +116,7 @@ export function ReviewsModule() {
                 ...(searchTerm.trim() ? { search: searchTerm.trim() } : {}),
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [moderateReview, { loading: moderating }] = useMutation<{
@@ -198,15 +200,16 @@ export function ReviewsModule() {
                             审核订单关联评价，并维护商家公开回复
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => refetch()}
                         disabled={loading}
                         className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 ${loading && !data ? 'animate-spin' : ''}`} />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <section
@@ -223,7 +226,7 @@ export function ReviewsModule() {
                             关闭后隐藏客户端评价入口与内容，并停止新评价提交；后台历史评价仍可管理。
                         </p>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         role="switch"
                         aria-checked={savedReviewSetting ?? false}
@@ -239,7 +242,7 @@ export function ReviewsModule() {
                         }
                         className={`min-h-11 rounded-lg px-4 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${savedReviewSetting ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-700 hover:bg-slate-800'}`}
                     >
-                        {settingsQuery.loading
+                        {settingsQuery.loading && !settingsQuery.data
                             ? '读取中…'
                             : savingSettings
                               ? '保存中…'
@@ -250,7 +253,7 @@ export function ReviewsModule() {
                                   : savedReviewSetting === false
                                     ? '已关闭 · 点击开启'
                                     : '等待设置…'}
-                    </button>
+                    </AdminButton>
                 </div>
                 {(settingsError || settingsQuery.error) && (
                     <p role="alert" className="mt-2 text-xs text-rose-700">
@@ -264,7 +267,7 @@ export function ReviewsModule() {
             >
                 <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
-                        <button
+                        <AdminButton
                             key={tab.id}
                             type="button"
                             aria-current={activeTab === tab.id ? 'page' : undefined}
@@ -276,7 +279,7 @@ export function ReviewsModule() {
                             className={`border-b-2 py-3.5 text-xs font-semibold transition ${activeTab === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
                         >
                             {tab.label}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             </nav>
@@ -310,20 +313,20 @@ export function ReviewsModule() {
                                 <AlertCircle className="h-4 w-4" />
                                 {toUserFacingError(error, '评价数据加载失败，请稍后重试')}
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => refetch()}
                                 className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
                             <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <AdminInput
                                     value={searchTerm}
                                     onChange={event => {
                                         setSearchTerm(event.target.value);
@@ -334,7 +337,7 @@ export function ReviewsModule() {
                                     className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
@@ -344,7 +347,7 @@ export function ReviewsModule() {
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                             <span className="text-xs text-slate-500">
@@ -500,7 +503,7 @@ export function ReviewsModule() {
                                                             : '-'}
                                                     </td>
                                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() => openReview(review)}
                                                             className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${review.state === 'PENDING' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
@@ -508,7 +511,7 @@ export function ReviewsModule() {
                                                             {review.state === 'PENDING'
                                                                 ? '审核回复'
                                                                 : '查看详情'}
-                                                        </button>
+                                                        </AdminButton>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -527,7 +530,7 @@ export function ReviewsModule() {
                                     onPageSizeChange={setPageSize}
                                     disabled={loading}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.max(0, current - 1))}
                                     disabled={loading || page === 0}
@@ -535,8 +538,8 @@ export function ReviewsModule() {
                                     aria-label="上一页"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
                                     disabled={loading || page >= totalPages - 1}
@@ -544,7 +547,7 @@ export function ReviewsModule() {
                                     aria-label="下一页"
                                 >
                                     <ChevronRight className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </section>
@@ -578,7 +581,7 @@ export function ReviewsModule() {
                                     {selectedReview.productName} · {selectedReview.sku}
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedReview(null)}
                                 disabled={moderating}
@@ -586,7 +589,7 @@ export function ReviewsModule() {
                                 aria-label="关闭"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </header>
                         <div className="space-y-4 p-6">
                             <div className="flex items-center justify-between">
@@ -641,28 +644,28 @@ export function ReviewsModule() {
                             {selectedReview.state === 'PENDING' ? (
                                 <>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setDecision('APPROVED')}
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border p-2.5 text-xs font-semibold ${decision === 'APPROVED' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}
                                         >
                                             <CheckCircle2 className="h-4 w-4" />
                                             审核通过并公开
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setDecision('REJECTED')}
                                             className={`flex items-center justify-center gap-1.5 rounded-lg border p-2.5 text-xs font-semibold ${decision === 'REJECTED' ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}
                                         >
                                             <XCircle className="h-4 w-4" />
                                             驳回评价
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-700">
                                             {decision === 'APPROVED' ? '商家公开回复（可选）' : '驳回原因 *'}
                                         </label>
-                                        <textarea
+                                        <AdminTextArea
                                             value={responseText}
                                             onChange={event => setResponseText(event.target.value)}
                                             rows={4}
@@ -703,23 +706,23 @@ export function ReviewsModule() {
                             )}
                         </div>
                         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedReview(null)}
                                 disabled={moderating}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
                                 关闭
-                            </button>
+                            </AdminButton>
                             {selectedReview.state === 'PENDING' && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={handleModerate}
                                     disabled={moderating}
                                     className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                 >
                                     {moderating && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}确认处理
-                                </button>
+                                </AdminButton>
                             )}
                         </footer>
                     </AccessibleDialogSurface>

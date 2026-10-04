@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArchiveRestore,
@@ -16,6 +16,8 @@ import {
 import { useMemo, useState } from 'react';
 import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -186,7 +188,6 @@ export function DataManagementModule() {
         dataSubjectRequests: SubjectRequest[];
         dataConsentRecords: ConsentRecord[];
     }>(DATA_RETENTION_QUERY, {
-        fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
     const [setLegalHold, holdState] = useMutation(SET_LEGAL_HOLD_MUTATION);
@@ -298,15 +299,18 @@ export function DataManagementModule() {
                             查看数据恢复区、到期清理、同意证据、个人数据导出、账户注销、失败重试和法律保留记录
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         disabled={query.loading}
                         className="flex items-center gap-1.5 self-start rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
@@ -340,7 +344,7 @@ export function DataManagementModule() {
                                 最新 100 条；已删除的资源仍保留审计记录
                             </p>
                         </div>
-                        <select
+                        <AdminSelect
                             value={filter}
                             onChange={event => setFilter(event.target.value as Filter)}
                             aria-label="筛选数据保留状态"
@@ -351,7 +355,7 @@ export function DataManagementModule() {
                                     {filterLabel(value)}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </div>
                     {query.loading && !query.data ? (
                         <div className="flex items-center justify-center gap-2 p-12 text-xs text-slate-500">
@@ -421,17 +425,17 @@ export function DataManagementModule() {
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-2">
                                                     {record.legalHold ? (
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             disabled={busy}
                                                             onClick={() => void releaseHold(record)}
                                                             className={buttonClass}
                                                         >
                                                             <ShieldAlert className="h-3.5 w-3.5" /> 解除保留
-                                                        </button>
+                                                        </AdminButton>
                                                     ) : record.status !== 'PURGED' &&
                                                       record.status !== 'RESTORED' ? (
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             disabled={busy}
                                                             onClick={() => {
@@ -441,20 +445,20 @@ export function DataManagementModule() {
                                                             className={buttonClass}
                                                         >
                                                             <ShieldCheck className="h-3.5 w-3.5" /> 法律保留
-                                                        </button>
+                                                        </AdminButton>
                                                     ) : null}
                                                     {['FAILED', 'BLOCKED_REFERENCE'].includes(
                                                         record.status,
                                                     ) &&
                                                         !record.legalHold && (
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 disabled={busy}
                                                                 onClick={() => void retry(record)}
                                                                 className={buttonClass}
                                                             >
                                                                 <RotateCcw className="h-3.5 w-3.5" /> 重试
-                                                            </button>
+                                                            </AdminButton>
                                                         )}
                                                 </div>
                                             </td>
@@ -531,14 +535,14 @@ export function DataManagementModule() {
                                         <td className="px-4 py-3 text-right">
                                             {request.requestType === 'ACCOUNT_CLOSURE' &&
                                                 ['BLOCKED', 'FAILED'].includes(request.status) && (
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         disabled={busy}
                                                         onClick={() => void retrySubjectRequest(request)}
                                                         className={buttonClass}
                                                     >
                                                         <RotateCcw className="h-3.5 w-3.5" /> 重试
-                                                    </button>
+                                                    </AdminButton>
                                                 )}
                                         </td>
                                     </tr>
@@ -652,11 +656,11 @@ export function DataManagementModule() {
                                     保留期间定时任务不会删除该资源，必须记录业务或法律原因。
                                 </p>
                             </div>
-                            <button type="button" onClick={() => setHoldTarget(null)} aria-label="关闭">
+                            <AdminButton type="button" onClick={() => setHoldTarget(null)} aria-label="关闭">
                                 <X className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
-                        <textarea
+                        <AdminTextArea
                             autoFocus
                             value={holdReason}
                             onChange={event => setHoldReason(event.target.value)}
@@ -666,10 +670,14 @@ export function DataManagementModule() {
                             className="mt-4 w-full rounded-xl border border-slate-300 p-3 text-sm outline-none focus:border-blue-500"
                         />
                         <div className="mt-4 flex justify-end gap-2">
-                            <button type="button" onClick={() => setHoldTarget(null)} className={buttonClass}>
+                            <AdminButton
+                                type="button"
+                                onClick={() => setHoldTarget(null)}
+                                className={buttonClass}
+                            >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 disabled={!holdReason.trim() || holdState.loading}
                                 onClick={() => void applyHold()}
@@ -681,7 +689,7 @@ export function DataManagementModule() {
                                     <ArchiveRestore className="h-3.5 w-3.5" />
                                 )}
                                 启用保留
-                            </button>
+                            </AdminButton>
                         </div>
                     </AccessibleDialogSurface>
                 </div>
@@ -810,9 +818,9 @@ function Message({ kind, text, onClose }: { kind: 'success' | 'error'; text: str
             className={`flex items-center justify-between rounded-xl border px-4 py-3 text-xs ${kind === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
         >
             <span>{text}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-3.5 w-3.5" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

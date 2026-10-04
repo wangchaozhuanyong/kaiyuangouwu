@@ -1,3 +1,4 @@
+import { AdminButton, AdminInput, AdminSelect } from '../components/AdminControls';
 import { getAdminDisplayLanguage } from '../utils/admin-language';
 import { getChannelDisplayName } from '../utils/channel-display';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
@@ -57,6 +58,7 @@ import type { ThemePreference } from '../theme/theme';
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
 import { AdminPermissionsProvider } from '../components/admin-permissions-context';
+import { AdminPageWorkspace, PageSkeleton } from '../components/AdminPageWorkspace';
 import { OrderNotifications } from '../components/OrderNotifications';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
@@ -75,6 +77,7 @@ import {
 } from '../graphql/auth.graphql';
 import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
+import { pendingAdminWrites } from '../runtime/admin-resource-events';
 import { useTheme } from '../theme/theme-context';
 import {
     canAccessAdminPath,
@@ -565,6 +568,10 @@ export function AppShell() {
     };
 
     const handleChannelChange = async (channelToken: string) => {
+        if (pendingAdminWrites()) {
+            setChannelError('有操作正在提交，请等待结果返回后再切换店铺');
+            return;
+        }
         if (!accessibleChannels.some(channel => channel.token === channelToken)) {
             setChannelError('当前账号没有管理该店铺的权限');
             return;
@@ -775,7 +782,7 @@ export function AppShell() {
                 跳到主要内容
             </a>
             {isSidebarOpen && (
-                <button
+                <AdminButton
                     type="button"
                     className="fixed inset-0 z-30 bg-slate-950/50 xl:hidden"
                     onClick={() => setIsSidebarOpen(false)}
@@ -862,7 +869,7 @@ export function AppShell() {
                     </NavLink>
                     {/* 2. 🛍️ 商品 */}
                     <div hidden={isPlatformContext}>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="商品管理"
                             aria-expanded={openMenu === 'catalog'}
@@ -880,7 +887,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'catalog' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'catalog' ? 'max-h-96 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -937,7 +944,7 @@ export function AppShell() {
 
                     {/* 3. 📦 订单与售后 */}
                     <div hidden={isPlatformContext}>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="订单与售后"
                             aria-expanded={openMenu === 'sales'}
@@ -955,7 +962,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'sales' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'sales' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -1026,7 +1033,7 @@ export function AppShell() {
 
                     {/* 5. 🎯 营销 */}
                     <div hidden={isPlatformContext}>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="营销管理"
                             aria-expanded={openMenu === 'marketing'}
@@ -1044,7 +1051,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'marketing' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'marketing' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -1077,7 +1084,7 @@ export function AppShell() {
 
                     {/* 5. 🎨 店铺 */}
                     <div hidden={isPlatformContext}>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="店铺管理"
                             aria-expanded={openMenu === 'storefront'}
@@ -1095,7 +1102,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'storefront' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'storefront' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -1128,7 +1135,7 @@ export function AppShell() {
 
                     {/* 6. 🔌 插件与服务 */}
                     <div>
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="插件与服务"
                             aria-expanded={openMenu === 'plugins'}
@@ -1146,7 +1153,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'plugins' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'plugins' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -1165,7 +1172,7 @@ export function AppShell() {
 
                     {/* 7. ⚙️ 系统与权限 */}
                     <div className="pb-4">
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="系统与权限"
                             aria-expanded={openMenu === 'settings'}
@@ -1183,7 +1190,7 @@ export function AppShell() {
                                     className={`w-3.5 h-3.5 transition-transform ${openMenu === 'settings' ? 'rotate-180' : ''}`}
                                 />
                             )}
-                        </button>
+                        </AdminButton>
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
@@ -1228,7 +1235,7 @@ export function AppShell() {
                 className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative"
             >
                 <header className="relative z-30 flex h-14 shrink-0 items-center justify-between bg-white px-3 shadow-2xs sm:px-6">
-                    <button
+                    <AdminButton
                         ref={sidebarToggleRef}
                         type="button"
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1238,7 +1245,7 @@ export function AppShell() {
                         aria-controls="app-sidebar"
                     >
                         <Menu className="w-5 h-5" />
-                    </button>
+                    </AdminButton>
 
                     <div className="flex items-center gap-2 sm:gap-4">
                         {activeAdministrator &&
@@ -1256,7 +1263,7 @@ export function AppShell() {
                         <label className="relative flex items-center gap-1.5 text-xs font-bold text-slate-600">
                             <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
                             <span className="sr-only sm:not-sr-only">当前店铺</span>
-                            <select
+                            <AdminSelect
                                 value={channelData?.activeChannel.token ?? ''}
                                 onChange={event => void handleChannelChange(event.target.value)}
                                 disabled={
@@ -1275,9 +1282,9 @@ export function AppShell() {
                                         {getChannelDisplayLabel(channel)}
                                     </option>
                                 ))}
-                            </select>
+                            </AdminSelect>
                         </label>
-                        <button
+                        <AdminButton
                             type="button"
                             className="relative hidden w-64 items-center rounded-lg bg-slate-100 py-1.5 pl-9 pr-2 text-xs text-slate-400 transition-colors hover:bg-blue-50 md:flex"
                             onClick={() => {
@@ -1290,8 +1297,8 @@ export function AppShell() {
                             <span className="flex items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-500 shadow-2xs">
                                 <Command className="h-3 w-3" />K
                             </span>
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => {
                                 setIsCmdKOpen(true);
@@ -1301,11 +1308,11 @@ export function AppShell() {
                             aria-label="搜索管理功能"
                         >
                             <Search className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                         <ThemeToggleButton />
                         {/* 右上角用户菜单 (包含个人中心与退出) */}
                         <div className="relative">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setIsMoreTabsOpen(false);
@@ -1318,7 +1325,7 @@ export function AppShell() {
                                 aria-controls="administrator-menu"
                             >
                                 {administratorInitial}
-                            </button>
+                            </AdminButton>
 
                             {isUserMenuOpen && (
                                 <>
@@ -1341,7 +1348,7 @@ export function AppShell() {
                                         </div>
 
                                         <div className="py-1">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 role="menuitem"
                                                 onClick={() => {
@@ -1352,8 +1359,8 @@ export function AppShell() {
                                             >
                                                 <User className="w-4 h-4 text-slate-400" />
                                                 <span>个人中心与密码</span>
-                                            </button>
-                                            <button
+                                            </AdminButton>
+                                            <AdminButton
                                                 type="button"
                                                 role="menuitem"
                                                 onClick={() => {
@@ -1364,7 +1371,7 @@ export function AppShell() {
                                             >
                                                 <Settings2 className="w-4 h-4 text-slate-400" />
                                                 <span>店铺综合设置</span>
-                                            </button>
+                                            </AdminButton>
                                         </div>
 
                                         <div className="border-t border-slate-100 px-3 py-3">
@@ -1393,7 +1400,7 @@ export function AppShell() {
                                                             : 'text-slate-500 hover:bg-white/70 hover:text-slate-800',
                                                     ].join(' ');
                                                     return (
-                                                        <button
+                                                        <AdminButton
                                                             key={option.value}
                                                             type="button"
                                                             role="menuitemradio"
@@ -1406,14 +1413,14 @@ export function AppShell() {
                                                                 aria-hidden="true"
                                                             />
                                                             <span>{option.label}</span>
-                                                        </button>
+                                                        </AdminButton>
                                                     );
                                                 })}
                                             </div>
                                         </div>
 
                                         <div className="border-t border-slate-100 pt-1">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 role="menuitem"
                                                 disabled={isLoggingOut}
@@ -1426,7 +1433,7 @@ export function AppShell() {
                                                     <LogOut className="w-4 h-4 text-rose-500" />
                                                 )}
                                                 <span>{isLoggingOut ? '正在退出...' : '退出系统登录'}</span>
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </div>
                                 </>
@@ -1453,14 +1460,14 @@ export function AppShell() {
                                         {tab.label}
                                     </NavLink>
                                     {tabs.length > 1 && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={event => closeTab(event, tab.path)}
                                             aria-label={`关闭${tab.label}标签`}
                                             className="mr-1 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                                         >
                                             <X className="h-3 w-3" />
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                             );
@@ -1493,7 +1500,7 @@ export function AppShell() {
 
                     {/* 右侧【更多 (N) ▾】下拉按钮 */}
                     <div className="relative z-20 flex h-full shrink-0 items-center justify-center border-l border-slate-200 bg-white px-3">
-                        <button
+                        <AdminButton
                             type="button"
                             className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors ${overflowTabs.length ? 'cursor-pointer' : 'cursor-default'} ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
                             onClick={() => {
@@ -1515,7 +1522,7 @@ export function AppShell() {
                             <ChevronDown
                                 className={`w-3.5 h-3.5 transition-transform ${isMoreTabsOpen ? 'rotate-180 text-blue-600' : ''}`}
                             />
-                        </button>
+                        </AdminButton>
 
                         {/* 更多标签下拉弹窗 */}
                         {isMoreTabsOpen && overflowTabs.length > 0 && (
@@ -1533,16 +1540,16 @@ export function AppShell() {
                                         <span>更多标签 ({overflowTabs.length})</span>
                                         <div className="flex gap-2 text-[11px]">
                                             {tabs.length > 1 && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     role="menuitem"
                                                     className="text-slate-500 hover:text-blue-600 cursor-pointer"
                                                     onClick={closeOtherTabs}
                                                 >
                                                     关闭其他
-                                                </button>
+                                                </AdminButton>
                                             )}
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 role="menuitem"
                                                 className="text-rose-600 hover:text-rose-700 font-normal cursor-pointer"
@@ -1567,7 +1574,7 @@ export function AppShell() {
                                                 }}
                                             >
                                                 关闭全部
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </div>
 
@@ -1579,7 +1586,7 @@ export function AppShell() {
                                                     key={tab.path}
                                                     className={`flex items-center justify-between text-xs transition-colors ${isActive ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
                                                 >
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         role="menuitem"
                                                         className="flex min-w-0 flex-1 items-center gap-2 px-4 py-2 text-left"
@@ -1592,9 +1599,9 @@ export function AppShell() {
                                                             className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-blue-600' : 'bg-slate-300'}`}
                                                         ></span>
                                                         <span className="truncate">{tab.label}</span>
-                                                    </button>
+                                                    </AdminButton>
                                                     {tabs.length > 1 && (
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             role="menuitem"
                                                             className="mr-3 shrink-0 cursor-pointer rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
@@ -1606,7 +1613,7 @@ export function AppShell() {
                                                             }}
                                                         >
                                                             <X className="w-3 h-3" />
-                                                        </button>
+                                                        </AdminButton>
                                                     )}
                                                 </div>
                                             );
@@ -1644,13 +1651,13 @@ export function AppShell() {
                                         '暂时无法核验平台级访问权限，请重新加载。',
                                     )}
                                 </p>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => void refetchProfile()}
                                     className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                 >
                                     重新核验权限
-                                </button>
+                                </AdminButton>
                             </section>
                         </div>
                     ) : currentRouteRequiresPermission && !canAccessCurrentRoute ? (
@@ -1661,13 +1668,13 @@ export function AppShell() {
                                 <p className="mt-2 text-xs leading-5 text-slate-500">
                                     当前账号在所选店铺中缺少访问该页面所需的权限。
                                 </p>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => navigate('/dashboard')}
                                     className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                 >
                                     返回工作台
-                                </button>
+                                </AdminButton>
                             </section>
                         </div>
                     ) : (
@@ -1683,7 +1690,8 @@ export function AppShell() {
                                                 commerceModeAllowsPath(commerceMode, tab.path),
                                         )
                                         .map(tab => tab.path)}
-                                    fallback={<RouteLoadingFallback />}
+                                    fallback={<PageSkeleton />}
+                                    pageFrame={AdminPageWorkspace}
                                 />
                             </CustomFieldsProvider>
                         </AdminPermissionsProvider>
@@ -1705,7 +1713,7 @@ export function AppShell() {
                     >
                         <div className="flex items-center px-4 border-b border-slate-100">
                             <Search className="w-5 h-5 text-blue-500" />
-                            <input
+                            <AdminInput
                                 type="search"
                                 autoComplete="off"
                                 autoCorrect="off"
@@ -1758,7 +1766,7 @@ export function AppShell() {
                                     const Icon = item.icon;
                                     const isSelected = idx === cmdSelectedIndex;
                                     return (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             key={idx}
                                             id={`command-result-${idx}`}
@@ -1797,7 +1805,7 @@ export function AppShell() {
                                                     className={`w-3.5 h-3.5 text-blue-500 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}
                                                 />
                                             </div>
-                                        </button>
+                                        </AdminButton>
                                     );
                                 })
                             )}

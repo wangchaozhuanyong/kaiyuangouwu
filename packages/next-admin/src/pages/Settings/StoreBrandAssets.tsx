@@ -1,5 +1,6 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { BrandAssetPickerDialog } from './BrandAssetPickerDialog';
@@ -65,7 +66,7 @@ export function StoreBrandAssets({
                                     });
                                 }}
                             />
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={disabled}
                                 aria-label={`选择${label}`}
@@ -73,9 +74,9 @@ export function StoreBrandAssets({
                                 className={secondaryButton}
                             >
                                 选择图片
-                            </button>
+                            </AdminButton>
                             {assets[field] && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     disabled={disabled}
                                     aria-label={`清除${label}`}
@@ -83,7 +84,7 @@ export function StoreBrandAssets({
                                     className="text-xs text-slate-500 hover:text-rose-600 disabled:opacity-50"
                                 >
                                     清除
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     </div>

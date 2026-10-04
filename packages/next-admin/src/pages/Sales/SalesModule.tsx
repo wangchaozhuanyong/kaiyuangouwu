@@ -1,6 +1,8 @@
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     Check,
@@ -237,7 +239,7 @@ export function SalesModule() {
 
     const { data, loading, error, refetch } = useQuery<SalesOrdersData>(GET_SALES_ORDERS, {
         variables: queryVariables,
-        fetchPolicy: 'cache-first',
+
         notifyOnNetworkStatusChange: true,
     });
     const [addFulfillment, { loading: fulfilling }] =
@@ -438,7 +440,7 @@ export function SalesModule() {
                     </div>
                     <div className="flex items-center gap-2">
                         {canCreateOrder && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void handleCreateDraftOrder()}
                                 disabled={creatingDraft}
@@ -450,25 +452,26 @@ export function SalesModule() {
                                     <Plus className="h-3.5 w-3.5" />
                                 )}
                                 新建草稿订单
-                            </button>
+                            </AdminButton>
                         )}
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => refetch()}
                             disabled={loading}
                             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`h-3.5 w-3.5 ${loading && !data ? 'animate-spin' : ''}`} />
                             刷新
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={exportCurrentPage}
                             className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 active:scale-[0.98]"
                         >
                             <Download className="h-3.5 w-3.5" />
                             导出当前页
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -479,7 +482,7 @@ export function SalesModule() {
             >
                 <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
-                        <button
+                        <AdminButton
                             key={tab.id}
                             type="button"
                             aria-current={activeTab === tab.id ? 'page' : undefined}
@@ -487,7 +490,7 @@ export function SalesModule() {
                             className={`border-b-2 py-3.5 text-xs font-semibold transition ${activeTab === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
                         >
                             {tab.label}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             </nav>
@@ -550,14 +553,14 @@ export function SalesModule() {
                         >
                             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>{actionError}</span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setActionError('')}
                                 className="ml-auto text-rose-500"
                                 aria-label="关闭错误提示"
                             >
                                 <X className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     {error && (
@@ -569,13 +572,13 @@ export function SalesModule() {
                                 <AlertCircle className="h-4 w-4" />
                                 {toUserFacingError(error, '订单数据加载失败，请稍后重试')}
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => refetch()}
                                 className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white"
                             >
                                 重试
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
 
@@ -594,7 +597,7 @@ export function SalesModule() {
                                     className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
@@ -603,12 +606,12 @@ export function SalesModule() {
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
 
                             {isFiltered && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={resetFilters}
                                     className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
@@ -616,7 +619,7 @@ export function SalesModule() {
                                 >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                                     <span>重置筛选</span>
-                                </button>
+                                </AdminButton>
                             )}
                             <div className="flex items-center gap-3">
                                 <span className="text-xs text-slate-500">
@@ -627,7 +630,7 @@ export function SalesModule() {
                                     笔
                                 </span>
                                 {canUpdateOrder && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={openBatchFulfillment}
                                         disabled={selectedOrders.length === 0}
@@ -635,7 +638,7 @@ export function SalesModule() {
                                     >
                                         <Truck className="h-3.5 w-3.5" />
                                         批量填写运单并发货
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                         </div>
@@ -664,7 +667,7 @@ export function SalesModule() {
                                                     scope="col"
                                                     className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
                                                 >
-                                                    <input
+                                                    <AdminInput
                                                         type="checkbox"
                                                         checked={allSelectableChecked}
                                                         onChange={toggleAll}
@@ -780,7 +783,7 @@ export function SalesModule() {
                                                         <td
                                                             className={`sticky left-0 z-10 h-[52px] w-12 px-3 py-0 ${stickyBackground}`}
                                                         >
-                                                            <input
+                                                            <AdminInput
                                                                 type="checkbox"
                                                                 checked={isSelected}
                                                                 disabled={!canFulfill}
@@ -797,7 +800,7 @@ export function SalesModule() {
                                                         <td
                                                             className={`sticky left-12 z-10 h-[52px] max-w-48 px-3 py-0 ${stickyBackground}`}
                                                         >
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     navigate(`/sales/orders/${order.id}`, {
@@ -810,7 +813,7 @@ export function SalesModule() {
                                                                 title={order.code}
                                                             >
                                                                 {order.code}
-                                                            </button>
+                                                            </AdminButton>
                                                             <span
                                                                 className="block truncate text-[10px] text-slate-500"
                                                                 title={
@@ -931,7 +934,7 @@ export function SalesModule() {
                                                         <td
                                                             className={`sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 px-3 py-0 text-right ${stickyBackground}`}
                                                         >
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() =>
                                                                     navigate(`/sales/orders/${order.id}`, {
@@ -943,7 +946,7 @@ export function SalesModule() {
                                                                 className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
                                                             >
                                                                 查看处理
-                                                            </button>
+                                                            </AdminButton>
                                                         </td>
                                                     </tr>
                                                 );
@@ -967,7 +970,7 @@ export function SalesModule() {
                                     }}
                                     disabled={loading}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setPage(Math.max(0, page - 1));
@@ -978,8 +981,8 @@ export function SalesModule() {
                                     aria-label="上一页"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setPage(Math.min(totalPages - 1, page + 1));
@@ -990,7 +993,7 @@ export function SalesModule() {
                                     aria-label="下一页"
                                 >
                                     <ChevronRight className="h-4 w-4" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     </section>
@@ -1026,7 +1029,7 @@ export function SalesModule() {
                                     每笔订单必须填写真实运单号，不自动生成虚假物流信息。
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setIsBatchOpen(false)}
                                 disabled={fulfilling || transitioning}
@@ -1034,14 +1037,14 @@ export function SalesModule() {
                                 aria-label="关闭"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </header>
                         <div className="flex-1 space-y-4 overflow-y-auto p-6">
                             <div>
                                 <label className="mb-1.5 block text-xs font-semibold text-slate-700">
                                     物流公司 / 配送方式 *
                                 </label>
-                                <input
+                                <AdminInput
                                     value={carrier}
                                     onChange={event => setCarrier(event.target.value)}
                                     placeholder="例如：顺丰速运"
@@ -1067,7 +1070,7 @@ export function SalesModule() {
                                                 件实物
                                             </span>
                                         </span>
-                                        <input
+                                        <AdminInput
                                             value={trackingCodes[order.id] ?? ''}
                                             onChange={event =>
                                                 setTrackingCodes(current => ({
@@ -1097,15 +1100,15 @@ export function SalesModule() {
                             )}
                         </div>
                         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setIsBatchOpen(false)}
                                 disabled={fulfilling || transitioning}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={handleBatchFulfillment}
                                 disabled={fulfilling || transitioning}
@@ -1115,7 +1118,7 @@ export function SalesModule() {
                                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                                 )}
                                 确认创建履约
-                            </button>
+                            </AdminButton>
                         </footer>
                     </AccessibleDialogSurface>
                 </div>

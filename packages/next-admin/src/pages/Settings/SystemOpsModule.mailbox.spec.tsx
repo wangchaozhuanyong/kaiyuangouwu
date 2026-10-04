@@ -184,3 +184,7 @@ describe('mailbox API key recovery', () => {
         expect(mocks.updateApiKey).not.toHaveBeenCalled();
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));
+vi.mock('../../hooks/use-admin-read-resource', () => import('../../test/admin-query-mock'));

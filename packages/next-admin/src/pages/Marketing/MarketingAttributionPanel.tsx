@@ -1,6 +1,8 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { AlertTriangle, Plus, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -23,7 +25,7 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
     const query = useQuery<MarketingAttributionReportResult>(MARKETING_ATTRIBUTION_REPORT_QUERY, {
         variables: { input: { from: range?.from, to: range?.to, currencyCode } },
         skip: !range,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const report = query.data?.marketingAttributionReport;
@@ -44,24 +46,27 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                 <div className="flex flex-wrap items-end gap-2">
                     <DateField label="开始日期" value={from} onChange={setFrom} />
                     <DateField label="结束日期" value={to} onChange={setTo} />
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         disabled={!range || query.loading}
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 disabled:opacity-50"
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新
-                    </button>
+                    </AdminButton>
                     {canRecordCost && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setCostOpen(true)}
                             className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
                         >
                             <Plus className="h-3.5 w-3.5" />
                             记录投放费用
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             </div>
@@ -264,21 +269,21 @@ function CampaignCostDialog({
                     <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>
                 )}
                 <div className="flex justify-end gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg border px-4 py-2 text-xs font-bold"
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => void save()}
                         disabled={state.loading}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                     >
                         {state.loading ? '保存中…' : '追加费用'}
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         </div>
@@ -301,7 +306,7 @@ function Field({
     return (
         <label className="block text-xs font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}

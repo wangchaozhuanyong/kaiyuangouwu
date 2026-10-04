@@ -4,7 +4,7 @@ import { Logger } from '@vendure/core';
 import fs from 'fs-extra';
 import { createTransport } from 'nodemailer';
 import { default as Mail } from 'nodemailer/lib/mailer';
-import { LogLevel } from 'nodemailer/lib/shared';
+import { type Logger as NodemailerLogger } from 'nodemailer/lib/shared';
 import path from 'path';
 import { Stream } from 'stream';
 import { format } from 'util';
@@ -19,6 +19,8 @@ import {
 } from '../types';
 
 import { EmailSender } from './email-sender';
+
+type LogLevel = keyof Pick<NodemailerLogger, 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'>;
 
 export type StreamTransportInfo = {
     envelope: {

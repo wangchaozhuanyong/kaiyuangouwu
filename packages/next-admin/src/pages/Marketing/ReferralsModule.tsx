@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     CircleDollarSign,
     Gift,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import {
     REFERRAL_PROGRAM_QUERY,
     REFERRAL_REPORTS_QUERY,
@@ -22,6 +23,7 @@ import {
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -70,7 +72,6 @@ function ReferralManagement() {
     const [financialDialog, setFinancialDialog] = useState<'WITHDRAW' | 'ADJUST' | null>(null);
 
     const program = useQuery<ReferralProgramResult>(REFERRAL_PROGRAM_QUERY, {
-        fetchPolicy: 'cache-and-network',
         pollInterval: 60_000,
     });
     const reports = useQuery<ReferralReportsResult>(REFERRAL_REPORTS_QUERY, {
@@ -82,7 +83,6 @@ function ReferralManagement() {
             ledgerSkip: skips.ledger,
             withdrawalSkip: skips.withdrawals,
         },
-        fetchPolicy: 'cache-and-network',
     });
     const reportError = reports.error ? toUserFacingError(reports.error, '分销报表读取失败') : undefined;
     const [updateProgram, updateState] = useMutation(UPDATE_REFERRAL_PROGRAM_MUTATION);
@@ -141,7 +141,8 @@ function ReferralManagement() {
                         >
                             分享设置
                         </Link>
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void refreshAll()}
                             disabled={program.loading || reports.loading}
@@ -151,9 +152,9 @@ function ReferralManagement() {
                                 className={`h-3.5 w-3.5 ${program.loading || reports.loading ? 'animate-spin' : ''}`}
                             />
                             刷新
-                        </button>
+                        </AdminButton>
                         {activeTab === 'WITHDRAWALS' && canWithdraw && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={!canReadCustomers}
                                 title={canReadCustomers ? undefined : '需要客户读取权限才能选择客户'}
@@ -162,10 +163,10 @@ function ReferralManagement() {
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 代客发起提款
-                            </button>
+                            </AdminButton>
                         )}
                         {activeTab === 'LEDGER' && canAdjust && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={!canReadCustomers}
                                 title={canReadCustomers ? undefined : '需要客户读取权限才能选择客户'}
@@ -174,10 +175,10 @@ function ReferralManagement() {
                             >
                                 <WalletCards className="h-3.5 w-3.5" />
                                 人工余额调整
-                            </button>
+                            </AdminButton>
                         )}
                         {activeTab === 'SETTINGS' && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void saveProgram()}
                                 disabled={!canUpdate || !draft || !isDirty || updateState.loading}
@@ -185,7 +186,7 @@ function ReferralManagement() {
                             >
                                 <Save className="h-3.5 w-3.5" />
                                 {updateState.loading ? '保存中…' : '保存设置'}
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -203,7 +204,7 @@ function ReferralManagement() {
                 )}
                 {program.loading && !program.data ? (
                     <LoadingState />
-                ) : program.error ? (
+                ) : program.error && !program.data ? (
                     <ErrorState
                         message={toUserFacingError(program.error, '分销设置读取失败')}
                         onRetry={() => void program.refetch()}
@@ -267,7 +268,7 @@ function ReferralManagement() {
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                    <input
+                                    <AdminInput
                                         type="search"
                                         autoComplete="off"
                                         value={search}
@@ -277,14 +278,14 @@ function ReferralManagement() {
                                         className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
                                     />
                                     {search && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setSearch('')}
                                             className="absolute right-2.5 top-2 text-slate-400"
                                             aria-label="清空分销数据搜索"
                                         >
                                             <X className="h-4 w-4" />
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                             )}

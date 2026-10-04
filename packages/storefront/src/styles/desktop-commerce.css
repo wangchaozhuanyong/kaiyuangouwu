@@ -1,15 +1,13 @@
 /* Desktop commerce owns the shell and its page compositions; mobile styles stay separate. */
 @media (min-width: 1024px) {
     .desktop-store-layout {
-        --font-display:
-            -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
         --desktop-header-height: 72px;
         width: 100%;
         max-width: none;
         background: var(--bg);
         color: var(--text);
         font-family:
-            -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            var(--font-ui);
     }
     html,
     body {
@@ -26,8 +24,8 @@
         background: var(--bg);
     }
     .desktop-store-layout :is(h1, h2, h3) {
-        font-family: var(--skin-display-font, inherit);
-        letter-spacing: 0;
+        font-family: var(--skin-display-font, var(--font-ui));
+        letter-spacing: var(--tracking-normal);
     }
     .desktop-account-layout {
         width: min(calc(100% - 2 * var(--page-inline-gutter)), var(--desktop-shell-width));
@@ -64,14 +62,17 @@
     .desktop-header button,
     .desktop-header select {
         font: inherit;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
         cursor: pointer;
     }
     .desktop-utility-bar {
         background: color-mix(in srgb, var(--soft, #f8fafc) 80%, transparent);
         border-bottom: 0;
         color: var(--muted);
-        font-size: 12px;
-        font-weight: 500;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+        font-weight: var(--font-weight-medium);
     }
     .desktop-utility-inner {
         min-height: 32px;
@@ -85,7 +86,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        letter-spacing: -0.01em;
+        letter-spacing: var(--tracking-normal);
         color: var(--muted);
     }
     .desktop-utility-inner nav {
@@ -146,9 +147,10 @@
         height: 26px;
     }
     .desktop-brand strong {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.025em;
+        font-size: var(--type-brand-size);
+        line-height: var(--type-brand-leading);
+        font-weight: var(--font-weight-bold);
+        letter-spacing: var(--tracking-normal);
         color: var(--text, #0f172a);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -183,7 +185,8 @@
         border: 0;
         background: transparent;
         color: var(--text, #0f172a);
-        font-size: 13.5px;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
         outline: none;
     }
     .desktop-search input::placeholder {
@@ -200,10 +203,10 @@
         border-radius: 4px;
         background: rgba(0, 0, 0, 0.04);
         color: var(--muted);
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 11px;
-        font-weight: 600;
-        line-height: 1;
+        font-family: var(--font-code);
+        font-size: var(--type-meta-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-meta-leading);
         pointer-events: none;
         user-select: none;
         flex: none;
@@ -223,8 +226,9 @@
         border-radius: 9999px;
         background: var(--accent);
         color: var(--accent-foreground);
-        font-size: 13px;
-        font-weight: 500;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+        font-weight: var(--font-weight-medium);
         padding: 0 16px;
         cursor: pointer;
         transition:
@@ -245,8 +249,9 @@
         border: 1px solid color-mix(in srgb, var(--line, #cbd5e1) 75%, transparent);
         border-radius: 9999px;
         background: color-mix(in srgb, var(--paper, #fff) 90%, transparent);
-        font-size: 13px;
-        font-weight: 500;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
+        font-weight: var(--font-weight-medium);
         color: var(--text, #1e293b);
         text-decoration: none;
         transition:
@@ -278,9 +283,9 @@
         border-radius: 9999px;
         background: var(--accent);
         color: var(--accent-foreground);
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 1;
+        font-size: var(--type-meta-size);
+        font-weight: var(--font-weight-bold);
+        line-height: var(--type-meta-leading);
     }
     .desktop-store-nav {
         display: flex;
@@ -299,8 +304,9 @@
         border-bottom: 0;
         border-radius: var(--skin-control-radius);
         background: none;
-        font-size: 14px;
-        font-weight: 500;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+        font-weight: var(--font-weight-medium);
         color: var(--muted);
         text-decoration: none;
         transition:
@@ -319,7 +325,7 @@
     .desktop-store-nav [aria-pressed='true'] {
         color: var(--selection-foreground);
         background: var(--selection);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-store-nav [aria-current='page']:hover:not(:disabled),
     .desktop-store-nav [aria-pressed='true']:hover:not(:disabled) {
@@ -376,14 +382,15 @@
     }
     .desktop-store-layout .product-grid-card > strong {
         padding-inline: 14px;
-        font-size: 14px;
-        font-weight: 500;
-        line-height: 1.5;
+        font-size: var(--type-body-size);
+        font-weight: var(--font-weight-medium);
+        line-height: var(--type-body-leading);
         min-height: 42px;
     }
     .desktop-store-layout .product-grid-card > span {
         padding-inline: 14px;
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-store-layout .product-grid-card > footer {
         padding-inline: 14px;
@@ -458,18 +465,21 @@
     }
     .desktop-account-profile-copy > strong {
         overflow-wrap: anywhere;
-        font-size: 14px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
         color: var(--identity-text);
     }
     .desktop-account-profile-copy > span {
         overflow-wrap: anywhere;
-        font-size: 12px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         color: var(--identity-muted);
     }
     .desktop-account-navigation .desktop-account-profile-copy > a {
         min-height: 32px;
         padding: 0;
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         color: var(--identity-text);
     }
     .desktop-account-navigation .desktop-account-profile-copy > a:focus-visible {
@@ -484,7 +494,8 @@
         border-left: 0;
         text-decoration: none;
         color: var(--text);
-        font-size: 14px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         transition:
             background-color var(--experience-motion-standard) var(--experience-ease-standard),
             color var(--experience-motion-standard) var(--experience-ease-standard);
@@ -508,10 +519,10 @@
     .desktop-account-group-title {
         padding: 0 22px 5px;
         color: var(--muted);
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-        line-height: 1.4;
+        font-size: var(--type-helper-size);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: var(--tracking-normal);
+        line-height: var(--type-helper-leading);
     }
     .desktop-account-navigation .desktop-account-group > a {
         gap: 12px;
@@ -519,9 +530,9 @@
         margin-inline: 12px;
         padding: 8px 10px;
         border-radius: var(--skin-control-radius);
-        font-size: 12px;
-        font-weight: 550;
-        line-height: 1.4;
+        font-size: var(--type-label-size);
+        font-weight: var(--font-weight-medium);
+        line-height: var(--type-label-leading);
     }
     .desktop-account-navigation-icon {
         width: 30px;
@@ -614,7 +625,8 @@
         background: none;
         color: var(--muted);
         padding: 0;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
     .desktop-account-page :is(header, .desktop-account-heading) button svg {
         width: 16px;
@@ -671,8 +683,9 @@
     }
     .desktop-member-identity h2 {
         overflow-wrap: anywhere;
-        font-size: 22px;
-        font-weight: 600;
+        font-size: var(--type-identity-size);
+        line-height: var(--type-identity-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-member-identity button {
         display: flex;
@@ -682,7 +695,8 @@
         border: 0;
         padding: 8px 0 0;
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
     .desktop-member-identity button svg {
         width: 13px;
@@ -699,7 +713,8 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-account-continue:hover {
         background: var(--accent-soft);
@@ -730,16 +745,19 @@
     }
     .desktop-member-asset small {
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-member-asset strong {
         color: var(--accent-ink);
-        font-size: 26px;
-        font-weight: 600;
+        font-size: var(--type-metric-size);
+        line-height: var(--type-metric-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-member-asset span {
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-account-orders {
         background: var(--paper, #fff);
@@ -766,7 +784,8 @@
         border: 0;
         border-radius: var(--skin-control-radius);
         background: transparent;
-        font-size: 14px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         transition: color 160ms ease;
     }
     .desktop-order-statuses button:hover {
@@ -786,7 +805,7 @@
     }
     .desktop-order-statuses button > span:nth-child(2) {
         min-width: 0;
-        line-height: 1.3;
+        line-height: var(--line-height-body);
         overflow-wrap: anywhere;
     }
     .desktop-order-statuses button + button {
@@ -795,8 +814,9 @@
     .desktop-order-statuses strong {
         margin-left: auto;
         color: var(--muted);
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--type-card-size);
+        line-height: var(--type-card-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-order-statuses strong[data-has-items='true'] {
         color: var(--accent-ink);
@@ -815,15 +835,16 @@
         flex: none;
     }
     .desktop-orders-empty strong {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--type-card-size);
+        line-height: var(--type-card-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-orders-empty p,
     .desktop-delivery-summary p {
         margin-top: 8px;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
         color: var(--muted);
-        line-height: 1.6;
+        line-height: var(--type-helper-leading);
     }
     .desktop-orders-empty > button {
         margin-left: auto;
@@ -833,14 +854,16 @@
         border: 0;
         background: var(--accent-soft);
         color: var(--accent-ink);
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         border-radius: var(--skin-control-radius);
     }
     .desktop-account-query-error {
         display: flex;
         gap: 12px;
         padding-top: 16px;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         color: var(--muted);
     }
     .desktop-account-query-error button {
@@ -860,7 +883,8 @@
         padding: 18px 0;
         border-radius: 0;
         background: transparent;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-recent-orders article + article {
         border-top: 1px solid var(--line-subtle);
@@ -894,7 +918,7 @@
     }
     .desktop-order-product strong {
         display: block;
-        font-weight: 500;
+        font-weight: var(--font-weight-medium);
     }
     .desktop-order-product small {
         display: block;
@@ -948,8 +972,9 @@
         stroke-width: 1.4;
     }
     .desktop-delivery-summary strong {
-        font-size: 14px;
-        font-weight: 400;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+        font-weight: var(--font-weight-normal);
     }
     .desktop-account-detail-grid h2,
     #desktop-my-orders {
@@ -998,7 +1023,8 @@
         padding: 14px;
         text-align: left;
         color: var(--text);
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
     .desktop-account-help button > span {
         display: grid;
@@ -1006,7 +1032,8 @@
     }
     .desktop-account-help small {
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-account-help strong > small {
         margin-left: 6px;
@@ -1048,7 +1075,8 @@
         color: var(--text);
     }
     .desktop-account-support small {
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .desktop-account-support > svg:first-child {
         flex: none;
@@ -1115,12 +1143,13 @@
     }
     .desktop-catalog-help h2 {
         margin: 0 0 10px;
-        font-size: 15px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
     }
     .desktop-catalog-help p {
         color: var(--muted);
-        font-size: 13px;
-        line-height: 1.6;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-catalog-help button {
         margin-top: 12px;
@@ -1139,9 +1168,9 @@
         align-items: center;
         gap: 10px;
         padding: 8px 10px 18px;
-        font-size: 15px;
-        font-weight: 650;
-        line-height: 1.4;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-semibold);
+        line-height: var(--type-section-leading);
         color: var(--text);
     }
     .desktop-category-entry {
@@ -1224,7 +1253,8 @@
         min-height: 44px;
         flex: none;
         cursor: pointer;
-        font-size: 14px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         white-space: nowrap;
     }
     .desktop-category-directory-title,
@@ -1239,8 +1269,8 @@
         min-height: 52px;
         padding: 8px 10px;
         color: var(--text);
-        font-weight: 500;
-        line-height: 1.4;
+        font-weight: var(--font-weight-medium);
+        line-height: var(--line-height-body);
     }
     .desktop-category-name {
         flex: 1;
@@ -1301,7 +1331,7 @@
     .desktop-category-navigation .desktop-category-entry > button[aria-pressed='true'] {
         color: var(--accent-ink);
         background: transparent;
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-local-navigation > button[aria-pressed='true']:hover:not(:disabled),
     .desktop-category-entry > button[aria-pressed='true']:hover:not(:disabled) {
@@ -1322,7 +1352,8 @@
         background: var(--interaction-hover);
     }
     .desktop-category-status {
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         color: var(--muted);
         margin: 10px 12px 4px;
     }
@@ -1349,8 +1380,9 @@
         display: block;
         padding: 0 10px 14px;
         color: var(--text);
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--type-card-size);
+        line-height: var(--type-card-leading);
+        font-weight: var(--font-weight-semibold);
         overflow-wrap: anywhere;
     }
     .desktop-subcategory-sidebar nav {
@@ -1382,9 +1414,9 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--muted);
-        font-size: 14px;
+        font-size: var(--type-label-size);
         text-align: left;
-        line-height: 1.45;
+        line-height: var(--type-label-leading);
         white-space: normal;
         cursor: pointer;
     }
@@ -1420,7 +1452,7 @@
     .desktop-subcategory-sidebar nav > button[aria-pressed='true'] {
         color: var(--accent-ink);
         background: var(--selection-soft);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         box-shadow: none;
     }
     .desktop-subcategory-sidebar nav > button[aria-pressed='true']:hover:not(:disabled) {
@@ -1490,14 +1522,14 @@
     }
     .desktop-catalog-label {
         margin: 0;
-        font-size: 18px;
-        font-weight: 500;
-        line-height: 1.2;
+        font-size: var(--type-section-size);
+        font-weight: var(--font-weight-medium);
+        line-height: var(--type-section-leading);
     }
     .desktop-result-count {
-        font-size: 12px;
+        font-size: var(--type-meta-size);
         color: var(--muted);
-        line-height: 1.2;
+        line-height: var(--type-meta-leading);
     }
     .desktop-catalog-actions {
         display: flex;
@@ -1525,8 +1557,9 @@
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+        font-weight: var(--font-weight-medium);
         transition:
             background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
             box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
@@ -1543,7 +1576,7 @@
     .desktop-sort button[aria-pressed='true'] {
         background: transparent;
         color: var(--accent-ink);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         box-shadow: none;
     }
     .desktop-sort button[aria-pressed='true']:hover:not(:disabled) {
@@ -1561,7 +1594,8 @@
         min-height: var(--experience-control-min);
         color: var(--muted);
         cursor: pointer;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         transition:
             background-color 0.15s ease,
             color 0.15s ease;
@@ -1591,7 +1625,8 @@
         min-height: var(--experience-control-min);
         gap: 7px;
         align-items: center;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         color: var(--muted);
         cursor: pointer;
     }
@@ -1613,7 +1648,8 @@
     .desktop-catalog-filters label {
         display: grid;
         gap: 8px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         color: var(--muted);
     }
     .desktop-catalog-filters :is(input, select) {
@@ -1629,12 +1665,14 @@
         width: auto;
         min-height: 36px;
         padding: 6px 18px;
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         border-radius: var(--skin-control-radius);
     }
     .desktop-price-error {
         color: var(--accent);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-product-grid {
         display: grid;
@@ -1661,7 +1699,8 @@
         background: var(--surface);
         box-shadow: var(--shadow-sm);
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         border: var(--skin-card-outline, 0);
     }
     .desktop-catalog-footer nav {
@@ -1681,7 +1720,8 @@
         color: var(--text);
     }
     .desktop-store-highlights {
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         color: var(--muted);
     }
     .desktop-store-highlights summary {
@@ -1755,7 +1795,8 @@
         border: 0;
         border-radius: var(--skin-control-radius);
         background: transparent;
-        font-size: 15px;
+        font-size: var(--type-navigation-compact-size);
+        line-height: var(--type-navigation-compact-leading);
     }
     .desktop-store-layout .order-tabs button.is-active,
     .desktop-store-layout .order-tabs button[aria-selected='true'] {
@@ -1818,15 +1859,17 @@
         min-width: 0;
         overflow: hidden;
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         text-overflow: ellipsis;
         white-space: nowrap;
     }
     .order-summary-state {
         flex: none;
         color: var(--accent-ink);
-        font-size: 13px;
-        font-weight: 600;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .order-summary-product {
         display: grid;
@@ -1861,8 +1904,8 @@
         display: -webkit-box;
         min-height: 40px;
         overflow: hidden;
-        font-size: 14px;
-        line-height: 20px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
         overflow-wrap: anywhere;
         -webkit-box-orient: vertical;
         -webkit-line-clamp: 2;
@@ -1870,7 +1913,8 @@
     .order-summary-copy small,
     .desktop-order-date {
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
     .order-summary-total {
         display: flex;
@@ -1879,7 +1923,8 @@
         gap: 8px;
     }
     .order-summary-total strong {
-        font-size: 18px;
+        font-size: var(--type-price-size);
+        line-height: var(--type-price-leading);
         color: var(--text);
         font-variant-numeric: tabular-nums;
     }
@@ -1902,7 +1947,8 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--accent-ink);
-        font-size: 13px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
         white-space: nowrap;
         cursor: pointer;
     }
@@ -1922,7 +1968,8 @@
         padding: 28px 0;
         text-align: center;
         color: var(--muted);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
     .desktop-orders-end p {
         margin: 0;
@@ -1965,14 +2012,16 @@
         .desktop-order-statuses button {
             gap: 6px;
             padding: 8px;
-            font-size: 12px;
+            font-size: var(--type-label-size);
+            line-height: var(--type-label-leading);
         }
         .desktop-order-status-icon {
             width: 30px;
             height: 30px;
         }
         .desktop-order-statuses strong {
-            font-size: 14px;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-leading);
         }
         .desktop-account-orders,
         .desktop-account-detail-grid > section {
@@ -2002,7 +2051,8 @@
         flex: 0 0 100%;
         text-align: center;
         white-space: nowrap;
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
     .desktop-order-statuses strong {
         margin-left: 0;

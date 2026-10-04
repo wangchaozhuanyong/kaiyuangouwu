@@ -105,7 +105,7 @@ function OrderDetailsDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                                 title={isZh ? '订单详情暂不可用' : 'Order details unavailable'}
                                 detail={error}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void query.refetch()}
+                                onAction={() => void query.refetch({ cancelRefetch: false })}
                             />
                         ) : (
                             <PageSkeleton label={isZh ? '正在加载订单详情' : 'Loading order details'} />
@@ -117,7 +117,7 @@ function OrderDetailsDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                             <InlineError
                                 message={error}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void query.refetch()}
+                                onAction={() => void query.refetch({ cancelRefetch: false })}
                             />
                         )}
                         <LazyOrderDetailPage
@@ -238,7 +238,11 @@ export function OrderDetailRoutePage() {
                     title={isZh ? '没有找到订单' : 'Order not found'}
                     detail={runtime.routeOrderError}
                     action={runtime.routeOrderError ? (isZh ? '重试' : 'Retry') : undefined}
-                    onAction={runtime.routeOrderError ? () => void runtime.orderQuery.refetch() : undefined}
+                    onAction={
+                        runtime.routeOrderError
+                            ? () => void runtime.orderQuery.refetch({ cancelRefetch: false })
+                            : undefined
+                    }
                 />
             </Subpage>
         );
@@ -272,7 +276,7 @@ export function OrderDetailRoutePage() {
                     onCreateAfterSales={runtime.createAfterSalesRequest}
                     onConfirmDelivery={async fulfillmentId => {
                         await runtime.api.confirmFulfillmentDelivery(fulfillmentId);
-                        await runtime.orderQuery.refetch();
+                        await runtime.orderQuery.refetch({ cancelRefetch: false });
                         runtime.notify(isZh ? '已确认收货，订单状态已更新' : 'Delivery confirmed');
                     }}
                     onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}

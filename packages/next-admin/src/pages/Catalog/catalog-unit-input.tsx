@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AdminInput, AdminSelect } from '../../components/AdminControls';
 
 import type { NextAdminCustomFieldInputProps } from '../../extensions/extension-api';
 import { CATALOG_UNIT_PRESET_GROUPS, CATALOG_UNIT_PRESETS } from './catalog-unit-presets';
@@ -23,7 +24,7 @@ export function CatalogUnitInput({
 
     return (
         <div className="space-y-2">
-            <select
+            <AdminSelect
                 value={presetSelected ? currentValue : showCustomInput ? CUSTOM_UNIT_VALUE : ''}
                 onChange={event => {
                     if (event.target.value === CUSTOM_UNIT_VALUE) {
@@ -49,9 +50,9 @@ export function CatalogUnitInput({
                     </optgroup>
                 ))}
                 <option value={CUSTOM_UNIT_VALUE}>自定义单位…</option>
-            </select>
+            </AdminSelect>
             {showCustomInput && (
-                <input
+                <AdminInput
                     type="text"
                     value={presetSelected ? '' : currentValue}
                     onChange={event => onChange(event.target.value)}

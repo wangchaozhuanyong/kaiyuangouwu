@@ -18,15 +18,16 @@
 
 .traffic-consent-banner strong {
     display: block;
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .traffic-consent-banner p {
     max-width: 520px;
     margin: 5px 0 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 
 .traffic-consent-banner a {
@@ -49,8 +50,9 @@
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     color: var(--text);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-bold);
 }
 
 .traffic-consent-actions button.is-primary {

@@ -7,6 +7,14 @@ import type {
     StorefrontCatalogInput,
 } from '../types';
 
+import {
+    PUBLIC_QUERY_GC_TIME,
+    PUBLIC_QUERY_STALE_TIME,
+    publicQueryMeta,
+    storefrontQueryClient,
+    storefrontQueryKeys,
+} from '../query-client';
+
 import { BaseDomainApi } from './base-domain-api';
 import { productFields, productPackagingFields } from './fragments';
 import {
@@ -18,23 +26,18 @@ import {
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
 
-function collectionIdentity(value: string): string {
-    return value.normalize('NFKC').trim().toLowerCase();
+function awaitCatalogSnapshot<T>(snapshot: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return snapshot;
+    if (signal.aborted) return Promise.reject(new DOMException('The request was aborted', 'AbortError'));
+    return new Promise((resolve, reject) => {
+        const abort = () => reject(new DOMException('The request was aborted', 'AbortError'));
+        signal.addEventListener('abort', abort, { once: true });
+        snapshot.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    });
 }
 
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Vendure appends a numeric suffix when an import accidentally creates a root
- * collection with the same name and slug as an existing nested collection.
- * Prefer the existing nested collection in storefront navigation while keeping
- * unrelated same-name roots visible.
- * Category artwork also configures an entry before its first product is added.
- */
+/** Keep configured category entries; names and slug suffixes do not establish identity. */
 export function storefrontNavigationCollections(items: CollectionSummary[]): CollectionSummary[] {
-    const nestedByName = new Map<string, CollectionSummary[]>();
     const visibleItems = items
         .map(item => ({
             ...item,
@@ -53,22 +56,7 @@ export function storefrontNavigationCollections(items: CollectionSummary[]): Col
                 (item.children?.length ?? 0) > 0,
         );
 
-    for (const item of visibleItems) {
-        for (const child of item.children ?? []) {
-            const name = collectionIdentity(child.name);
-            nestedByName.set(name, [...(nestedByName.get(name) ?? []), child]);
-        }
-    }
-
-    return visibleItems.filter(item => {
-        if (item.children?.length) return true;
-        const nestedMatches = nestedByName.get(collectionIdentity(item.name)) ?? [];
-        const rootSlug = collectionIdentity(item.slug);
-        return !nestedMatches.some(child => {
-            const childSlug = collectionIdentity(child.slug);
-            return new RegExp(`^${escapeRegExp(childSlug)}-\\d+$`, 'u').test(rootSlug);
-        });
-    });
+    return visibleItems;
 }
 
 export class CatalogApi extends BaseDomainApi {
@@ -199,6 +187,64 @@ export class CatalogApi extends BaseDomainApi {
         input: StorefrontCatalogInput,
         signal?: AbortSignal,
     ): Promise<ProductSearchPage> {
+        if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
+        const products = await awaitCatalogSnapshot(
+            storefrontQueryClient.fetchQuery({
+                queryKey: [
+                    ...storefrontQueryKeys.scope(storefrontQueryKeys.market(this.market), this.languageCode),
+                    'native-catalog',
+                    {
+                        term: input.term?.trim() ?? '',
+                        collectionId: input.collectionId ?? null,
+                        inStockOnly: input.inStockOnly === true,
+                    },
+                ],
+                queryFn: ({ signal: querySignal }) => this.loadNativeCatalog(input, querySignal),
+                // A first-page refresh obtains a new snapshot; later offsets reuse that snapshot.
+                staleTime: (input.skip ?? 0) > 0 ? PUBLIC_QUERY_STALE_TIME : 0,
+                gcTime: PUBLIC_QUERY_GC_TIME,
+                meta: publicQueryMeta(),
+            }),
+            signal,
+        );
+        if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
+        const filteredProducts = products.filter(product => matchesCatalogFilters(product, input));
+        let sortedProducts = sortNativeCatalogProducts(filteredProducts, input, this.market.locale);
+        if (input.sort === 'sales') {
+            const productIds = products.map(product => product.id);
+            const sales = await awaitCatalogSnapshot(
+                storefrontQueryClient.fetchQuery({
+                    queryKey: [
+                        ...storefrontQueryKeys.scope(
+                            storefrontQueryKeys.market(this.market),
+                            this.languageCode,
+                        ),
+                        'native-catalog-sales',
+                        productIds,
+                    ],
+                    queryFn: ({ signal: querySignal }) => this.productSales(productIds, querySignal),
+                    staleTime: (input.skip ?? 0) > 0 ? PUBLIC_QUERY_STALE_TIME : 0,
+                    gcTime: PUBLIC_QUERY_GC_TIME,
+                    meta: publicQueryMeta(),
+                }),
+                signal,
+            );
+            sortedProducts = [...filteredProducts].sort(
+                (left, right) =>
+                    (sales[right.id] ?? 0) - (sales[left.id] ?? 0) ||
+                    Date.parse(right.createdAt) - Date.parse(left.createdAt) ||
+                    left.id.localeCompare(right.id),
+            );
+        }
+        const skip = Math.max(0, Math.trunc(input.skip ?? 0));
+        const take = Math.min(STOREFRONT_CATALOG_MAX_TAKE, Math.max(1, Math.trunc(input.take ?? 12)));
+        return {
+            items: sortedProducts.slice(skip, skip + take),
+            totalItems: sortedProducts.length,
+        };
+    }
+
+    private async loadNativeCatalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<Product[]> {
         const productIds: string[] = [];
         const seenProductIds = new Set<string>();
         let searchSkip = 0;
@@ -221,7 +267,8 @@ export class CatalogApi extends BaseDomainApi {
                         ...(input.term?.trim() ? { term: input.term.trim() } : {}),
                         ...(input.collectionId ? { collectionId: input.collectionId } : {}),
                         groupByProduct: true,
-                        ...(input.inStockOnly ? { inStock: true } : {}),
+                        // Legacy index stock can lag behind live auto-card inventory.
+                        // Filter hydrated variants before slicing the cached result.
                         skip: searchSkip,
                         take: NATIVE_CATALOG_BATCH_SIZE,
                     },
@@ -247,14 +294,7 @@ export class CatalogApi extends BaseDomainApi {
                 )),
             );
         }
-        const filteredProducts = products.filter(product => matchesCatalogFilters(product, input));
-        const sortedProducts = sortNativeCatalogProducts(filteredProducts, input, this.market.locale);
-        const skip = Math.max(0, Math.trunc(input.skip ?? 0));
-        const take = Math.min(STOREFRONT_CATALOG_MAX_TAKE, Math.max(1, Math.trunc(input.take ?? 12)));
-        return {
-            items: sortedProducts.slice(skip, skip + take),
-            totalItems: sortedProducts.length,
-        };
+        return products;
     }
 
     async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {
@@ -268,7 +308,7 @@ export class CatalogApi extends BaseDomainApi {
         return result.storefrontDailyRecommendations;
     }
 
-    async productSales(productIds: string[]): Promise<Record<string, number>> {
+    async productSales(productIds: string[], signal?: AbortSignal): Promise<Record<string, number>> {
         const uniqueProductIds = [...new Set(productIds)];
         const quantities: Record<string, number> = {};
         const batchSize = 100;
@@ -287,6 +327,7 @@ export class CatalogApi extends BaseDomainApi {
                     }
                 `,
                 { productIds: batch },
+                signal,
             );
             for (const item of result.storefrontProductSales) {
                 quantities[item.productId] = item.quantity;

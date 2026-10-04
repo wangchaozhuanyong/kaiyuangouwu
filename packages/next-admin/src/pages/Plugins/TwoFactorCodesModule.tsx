@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -19,6 +19,9 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useActiveInterval } from '../../hooks/use-page-activity';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -65,7 +68,6 @@ const EMPTY_TWO_FACTOR_ACCOUNTS: DashboardTwoFactorAccount[] = [];
 export function TwoFactorCodesModule() {
     const requestConfirmation = useConfirmDialog();
     const query = useQuery<DashboardTwoFactorAccountsResult>(DASHBOARD_TWO_FACTOR_ACCOUNTS_QUERY, {
-        fetchPolicy: 'network-only',
         notifyOnNetworkStatusChange: true,
     });
     const [createAccount, createState] = useMutation<CreatedAccountResult>(
@@ -117,10 +119,7 @@ export function TwoFactorCodesModule() {
         };
     }, []);
 
-    useEffect(() => {
-        const interval = window.setInterval(() => setNow(Date.now()), 1_000);
-        return () => window.clearInterval(interval);
-    }, []);
+    useActiveInterval(() => setNow(Date.now()), 1_000);
 
     useEffect(() => {
         let active = true;
@@ -364,19 +363,20 @@ export function TwoFactorCodesModule() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading || mutationBusy || migrating}
                             className={secondaryButtonClass}
                         >
                             <RefreshCw
-                                className={`h-3.5 w-3.5 ${query.loading ? 'animate-spin' : ''}`}
+                                className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
                                 aria-hidden="true"
                             />
                             刷新
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setBatchDialogOpen(true)}
                             disabled={!storageReady || mutationBusy}
@@ -384,8 +384,8 @@ export function TwoFactorCodesModule() {
                         >
                             <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                             批量导入
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setAccountDialog({ account: null, defaultSecret: '' })}
                             disabled={
@@ -395,7 +395,7 @@ export function TwoFactorCodesModule() {
                         >
                             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                             添加账号
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -414,7 +414,7 @@ export function TwoFactorCodesModule() {
                 {migrationError && (
                     <Message kind="error" onClose={() => setMigrationError('')}>
                         <span>{migrationError}</span>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => {
                                 setMigrationError('');
@@ -423,7 +423,7 @@ export function TwoFactorCodesModule() {
                             className="ml-2 rounded border border-rose-300 px-2 py-1 font-bold"
                         >
                             重试迁移
-                        </button>
+                        </AdminButton>
                     </Message>
                 )}
                 {migrating && (
@@ -546,7 +546,7 @@ function QuickQueryCard({
                 </span>
             </div>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <input
+                <AdminInput
                     type="password"
                     autoComplete="off"
                     spellCheck={false}
@@ -563,11 +563,11 @@ function QuickQueryCard({
                     aria-label="2FA Base32 密钥"
                     className={`${inputClass} min-w-0 flex-1 font-mono`}
                 />
-                <button type="button" onClick={onPaste} className={secondaryButtonClass}>
+                <AdminButton type="button" onClick={onPaste} className={secondaryButtonClass}>
                     <Clipboard className="h-3.5 w-3.5" aria-hidden="true" />
                     粘贴
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={onQuery}
                     disabled={!input.trim() || querying}
@@ -579,7 +579,7 @@ function QuickQueryCard({
                         <KeyRound className="h-3.5 w-3.5" />
                     )}
                     查询验证码
-                </button>
+                </AdminButton>
             </div>
             {code && (
                 <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4" aria-live="polite">
@@ -593,11 +593,11 @@ function QuickQueryCard({
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={onCopy} className={primaryButtonClass}>
+                            <AdminButton type="button" onClick={onCopy} className={primaryButtonClass}>
                                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                                 复制验证码
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={onSave}
                                 disabled={saveDisabled}
@@ -605,10 +605,10 @@ function QuickQueryCard({
                             >
                                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                                 保存账号
-                            </button>
-                            <button type="button" onClick={onClear} className={secondaryButtonClass}>
+                            </AdminButton>
+                            <AdminButton type="button" onClick={onClear} className={secondaryButtonClass}>
                                 清除
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                     <Countdown secondsRemaining={secondsRemaining} />
@@ -701,7 +701,7 @@ function AccountList({
                     <label className="relative min-w-0 sm:w-72">
                         <span className="sr-only">搜索项目名称</span>
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                        <input
+                        <AdminInput
                             type="search"
                             value={search}
                             onChange={event => setSearch(event.target.value)}
@@ -710,7 +710,7 @@ function AccountList({
                         />
                     </label>
                     {accounts.length > 0 && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClearAll}
                             disabled={busy}
@@ -718,7 +718,7 @@ function AccountList({
                         >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                             清空全部
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             </div>
@@ -737,13 +737,13 @@ function AccountList({
                 <div className="flex min-h-48 flex-col items-center justify-center p-8 text-center">
                     <Search className="h-7 w-7 text-slate-300" aria-hidden="true" />
                     <h3 className="mt-3 text-sm font-bold text-slate-700">没有匹配的项目</h3>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => setSearch('')}
                         className="mt-3 text-xs font-bold text-blue-600"
                     >
                         清除搜索条件
-                    </button>
+                    </AdminButton>
                 </div>
             ) : (
                 <>
@@ -846,7 +846,7 @@ function AccountList({
                                         </IconButton>
                                     </div>
                                 </div>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => onCopy(account)}
                                     disabled={busy || !codes[account.id]}
@@ -864,7 +864,7 @@ function AccountList({
                                         <Copy className="h-4 w-4 text-blue-600" aria-hidden="true" />
                                     </span>
                                     <Countdown secondsRemaining={secondsRemaining} compact />
-                                </button>
+                                </AdminButton>
                                 <SecretValue
                                     account={account}
                                     revealed={revealedIds.has(account.id)}
@@ -893,14 +893,14 @@ function SecretValue({
             <code className="max-w-56 truncate rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600">
                 {revealed ? account.secret : '••••••••••••••••'}
             </code>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onToggle}
                 aria-label={revealed ? '隐藏 2FA 密钥' : '显示 2FA 密钥'}
                 className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             >
                 {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -949,7 +949,7 @@ function AccountDialog({
                 </div>
                 <form onSubmit={event => void submit(event)} className="mt-5 space-y-4">
                     <Field label="项目名称 *" htmlFor="two-factor-project-name">
-                        <input
+                        <AdminInput
                             id="two-factor-project-name"
                             autoFocus
                             maxLength={80}
@@ -961,7 +961,7 @@ function AccountDialog({
                     </Field>
                     <Field label="2FA Base32 密钥 *" htmlFor="two-factor-account-secret">
                         <div className="flex gap-2">
-                            <input
+                            <AdminInput
                                 id="two-factor-account-secret"
                                 type={revealed ? 'text' : 'password'}
                                 autoComplete="off"
@@ -971,14 +971,14 @@ function AccountDialog({
                                 placeholder="输入 Base32 密钥"
                                 className={`${inputClass} min-w-0 flex-1 font-mono`}
                             />
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setRevealed(value => !value)}
                                 aria-label={revealed ? '隐藏 2FA 密钥' : '显示 2FA 密钥'}
                                 className={`${secondaryButtonClass} px-3`}
                             >
                                 {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
+                            </AdminButton>
                         </div>
                     </Field>
                     {error && (
@@ -987,18 +987,18 @@ function AccountDialog({
                         </p>
                     )}
                     <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onClose}
                             disabled={submitting}
                             className={secondaryButtonClass}
                         >
                             取消
-                        </button>
-                        <button type="submit" disabled={submitting} className={primaryButtonClass}>
+                        </AdminButton>
+                        <AdminButton type="submit" disabled={submitting} className={primaryButtonClass}>
                             {submitting && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                             {value.account ? '保存修改' : '添加账号'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </form>
             </AccessibleDialogSurface>
@@ -1048,7 +1048,7 @@ function BatchImportDialog({
                 </div>
                 <label className="mt-5 block text-xs font-bold text-slate-700">
                     导入内容
-                    <textarea
+                    <AdminTextArea
                         rows={10}
                         value={input}
                         onChange={event => {
@@ -1083,15 +1083,15 @@ function BatchImportDialog({
                     </div>
                 )}
                 <div className="mt-5 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         disabled={submitting}
                         className={secondaryButtonClass}
                     >
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         onClick={() => void submit()}
                         disabled={!input.trim() || submitting}
@@ -1099,7 +1099,7 @@ function BatchImportDialog({
                     >
                         {submitting && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                         导入账号
-                    </button>
+                    </AdminButton>
                 </div>
             </AccessibleDialogSurface>
         </DialogBackdrop>
@@ -1121,14 +1121,14 @@ function DialogBackdrop({ children, onRequestClose }: { children: ReactNode; onR
 
 function CloseButton({ onClick }: { onClick: () => void }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             aria-label="关闭"
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
         >
             <X className="h-4 w-4" />
-        </button>
+        </AdminButton>
     );
 }
 
@@ -1163,7 +1163,7 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             aria-label={label}
             title={label}
@@ -1172,7 +1172,7 @@ function IconButton({
             className={`rounded-lg p-2 disabled:opacity-40 ${danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
         >
             {children}
-        </button>
+        </AdminButton>
     );
 }
 
@@ -1202,9 +1202,9 @@ function ErrorState({ message, onRetry }: { message: unknown; onRetry: () => voi
             <p className="mt-1 max-w-lg text-xs text-rose-600">
                 {toUserFacingError(message, '暂时无法读取 2FA 账号，请稍后重试')}
             </p>
-            <button type="button" onClick={onRetry} className={`${secondaryButtonClass} mt-4`}>
+            <AdminButton type="button" onClick={onRetry} className={`${secondaryButtonClass} mt-4`}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1233,14 +1233,14 @@ function Message({
             <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="flex flex-1 flex-wrap items-center">{children}</span>
             {onClose && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     aria-label="关闭提示"
                     className="rounded p-1 hover:bg-black/5"
                 >
                     <X className="h-4 w-4" />
-                </button>
+                </AdminButton>
             )}
         </div>
     );

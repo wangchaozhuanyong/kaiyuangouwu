@@ -273,3 +273,7 @@ it('uses the independent Worker heartbeat when API-local queues are stopped', as
         vi.unstubAllGlobals();
     }
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));
+vi.mock('../../hooks/use-admin-read-resource', () => import('../../test/admin-query-mock'));

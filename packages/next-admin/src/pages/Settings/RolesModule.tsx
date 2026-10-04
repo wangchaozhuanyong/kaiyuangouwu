@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowRightLeft,
@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logoutAdministrator, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -36,6 +37,7 @@ import {
     type RoleRecord,
     type TeamManagementResult,
 } from '../../graphql/management.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
@@ -53,9 +55,7 @@ export function RolesModule() {
     const [actionError, setActionError] = useState('');
     const [roleEditor, setRoleEditor] = useState<RoleRecord | 'NEW' | null>(null);
     const [memberEditor, setMemberEditor] = useState<AdministratorRecord | 'NEW' | null>(null);
-    const query = useQuery<TeamManagementResult>(TEAM_MANAGEMENT_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<TeamManagementResult>(TEAM_MANAGEMENT_QUERY, {});
     const isTeamInitializing = !query.error && !query.data;
 
     const roles = query.data?.manageableRoles ?? [];
@@ -107,17 +107,20 @@ export function RolesModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading}
                             className={secondaryButton}
                             aria-label="刷新"
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
-                        </button>
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
+                        </AdminButton>
                         {canManageTeam && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() =>
                                     tab === 'MEMBERS' ? setMemberEditor('NEW') : setRoleEditor('NEW')
@@ -126,7 +129,7 @@ export function RolesModule() {
                             >
                                 <Plus className="h-4 w-4" />
                                 {tab === 'MEMBERS' ? '新增员工' : '新建角色'}
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -200,7 +203,7 @@ export function RolesModule() {
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                        <input
+                        <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
                             placeholder={tab === 'MEMBERS' ? '搜索姓名、邮箱或角色' : '搜索角色、渠道或权限'}
@@ -464,7 +467,7 @@ function MembersTable({
                                         {actorAccess?.authority === 'OWNER' &&
                                             member.access.scope === 'PLATFORM' &&
                                             member.access.status === 'ACTIVE' && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => void transfer(member, 'PLATFORM')}
                                                     disabled={
@@ -476,7 +479,7 @@ function MembersTable({
                                                 >
                                                     <ArrowRightLeft className="h-3 w-3" />
                                                     移交所有权
-                                                </button>
+                                                </AdminButton>
                                             )}
                                         {(actorAccess?.authority === 'OWNER' ||
                                             actorAccess?.authority === 'ADMIN') &&
@@ -485,7 +488,7 @@ function MembersTable({
                                                 actorAccess.channel?.id === member.access.channel?.id) &&
                                             ['MANAGER', 'STAFF'].includes(member.access.authority) &&
                                             member.access.status === 'ACTIVE' && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => void transfer(member, 'STORE')}
                                                     disabled={
@@ -497,9 +500,9 @@ function MembersTable({
                                                 >
                                                     <ArrowRightLeft className="h-3 w-3" />
                                                     移交主管理员
-                                                </button>
+                                                </AdminButton>
                                             )}
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => onEdit(member)}
                                             disabled={
@@ -512,8 +515,8 @@ function MembersTable({
                                             aria-label="编辑"
                                         >
                                             <Pencil className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => void destroy(member)}
                                             disabled={
@@ -527,7 +530,7 @@ function MembersTable({
                                             aria-label="停用"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 </td>
                             </tr>
@@ -627,13 +630,13 @@ function RolesTable({
                                     </td>
                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                         <div className="flex justify-end gap-1">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => onEdit(role)}
                                                 className={secondaryButton}
                                             >
                                                 {system ? '查看权限' : '配置权限'}
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </td>
                                 </tr>
@@ -744,14 +747,14 @@ function MemberEditor({
         >
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="名 *">
-                    <input
+                    <AdminInput
                         value={firstName}
                         onChange={event => setFirstName(event.target.value)}
                         className={inputClass}
                     />
                 </Field>
                 <Field label="姓 *">
-                    <input
+                    <AdminInput
                         value={lastName}
                         onChange={event => setLastName(event.target.value)}
                         className={inputClass}
@@ -760,7 +763,7 @@ function MemberEditor({
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="登录邮箱 *">
-                    <input
+                    <AdminInput
                         type="email"
                         value={emailAddress}
                         onChange={event => setEmailAddress(event.target.value)}
@@ -768,7 +771,7 @@ function MemberEditor({
                     />
                 </Field>
                 <Field label={existing ? '新密码（不改请留空）' : '初始密码 *'}>
-                    <input
+                    <AdminInput
                         type="password"
                         value={password}
                         onChange={event => setPassword(event.target.value)}
@@ -779,7 +782,7 @@ function MemberEditor({
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="账号层级 *">
-                    <select
+                    <AdminSelect
                         value={authority}
                         onChange={event => {
                             setAuthority(event.target.value as 'ADMIN' | 'MANAGER' | 'STAFF');
@@ -794,11 +797,11 @@ function MemberEditor({
                             {scope === 'STORE' ? '店铺普通管理员' : '公司业务管理员'}
                         </option>
                         <option value="STAFF">{scope === 'STORE' ? '店铺员工' : '公司员工'}</option>
-                    </select>
+                    </AdminSelect>
                 </Field>
                 {access?.scope === 'PLATFORM' && !existing ? (
                     <Field label="数据范围 *">
-                        <select
+                        <AdminSelect
                             value={scope}
                             onChange={event => {
                                 const nextScope = event.target.value as 'PLATFORM' | 'STORE';
@@ -810,11 +813,11 @@ function MemberEditor({
                         >
                             <option value="PLATFORM">公司跨店</option>
                             <option value="STORE">固定店铺</option>
-                        </select>
+                        </AdminSelect>
                     </Field>
                 ) : (
                     <Field label="数据范围">
-                        <input
+                        <AdminInput
                             value={
                                 scope === 'PLATFORM'
                                     ? '公司跨店'
@@ -829,7 +832,7 @@ function MemberEditor({
             {scope === 'STORE' && access?.scope === 'PLATFORM' && !existing && (
                 <div className="mt-4">
                     <Field label="所属店铺 *">
-                        <select
+                        <AdminSelect
                             value={channelId}
                             onChange={event => {
                                 setChannelId(event.target.value);
@@ -844,7 +847,7 @@ function MemberEditor({
                                         {getChannelDisplayName(channel)}
                                     </option>
                                 ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                 </div>
             )}
@@ -861,7 +864,7 @@ function MemberEditor({
                                 key={role.id}
                                 className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-xs"
                             >
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={roleIds.includes(role.id)}
                                     onChange={() =>
@@ -1013,7 +1016,7 @@ function RoleEditor({
             {!existing && (
                 <div className="mb-4">
                     <Field label="岗位模板">
-                        <select
+                        <AdminSelect
                             value={templateCode}
                             onChange={event => {
                                 const next = templates.find(item => item.code === event.target.value);
@@ -1031,13 +1034,13 @@ function RoleEditor({
                                     {template.name}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                 </div>
             )}
             <div className="space-y-4">
                 <Field label="角色名称 *">
-                    <input
+                    <AdminInput
                         value={description}
                         onChange={event => setDescription(event.target.value)}
                         disabled={system}
@@ -1049,7 +1052,7 @@ function RoleEditor({
                     <summary className="cursor-pointer text-xs font-bold text-slate-600">高级详情</summary>
                     <div className="mt-3">
                         <Field label="内部角色代码 *">
-                            <input
+                            <AdminInput
                                 value={code}
                                 onChange={event => setCode(event.target.value)}
                                 disabled={Boolean(existing)}
@@ -1062,7 +1065,7 @@ function RoleEditor({
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Field label="角色数据范围 *">
-                    <select
+                    <AdminSelect
                         value={scope}
                         disabled={system || access.scope === 'STORE' || Boolean(existing)}
                         onChange={event => {
@@ -1074,11 +1077,11 @@ function RoleEditor({
                     >
                         {access.scope === 'PLATFORM' && <option value="PLATFORM">公司跨店角色</option>}
                         <option value="STORE">单店角色</option>
-                    </select>
+                    </AdminSelect>
                 </Field>
                 {scope === 'STORE' ? (
                     <Field label="所属店铺 *">
-                        <select
+                        <AdminSelect
                             value={channelId}
                             disabled={system || access.scope === 'STORE' || Boolean(existing)}
                             onChange={event => setChannelId(event.target.value)}
@@ -1091,11 +1094,11 @@ function RoleEditor({
                                         {getChannelDisplayName(channel)}
                                     </option>
                                 ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                 ) : (
                     <Field label="未来新店">
-                        <input value="自动覆盖所有现有及未来经营店铺" disabled className={inputClass} />
+                        <AdminInput value="自动覆盖所有现有及未来经营店铺" disabled className={inputClass} />
                     </Field>
                 )}
             </div>
@@ -1114,7 +1117,7 @@ function RoleEditor({
                         <div key={group.name} className="rounded-xl border border-slate-200">
                             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
                                 <strong className="text-xs text-slate-800">{group.label}</strong>
-                                <button
+                                <AdminButton
                                     type="button"
                                     disabled={system}
                                     onClick={() => {
@@ -1131,7 +1134,7 @@ function RoleEditor({
                                     {group.items.every(item => permissions.includes(item.name))
                                         ? '取消本组'
                                         : '全选本组'}
-                                </button>
+                                </AdminButton>
                             </div>
                             <div className="grid gap-1 p-3 sm:grid-cols-2">
                                 {group.items.map(item => (
@@ -1139,7 +1142,7 @@ function RoleEditor({
                                         key={item.name}
                                         className="flex cursor-pointer items-start gap-2 rounded-lg p-2 hover:bg-slate-50"
                                     >
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={system || permissions.includes(item.name)}
                                             onChange={() => togglePermission(item.name)}
@@ -1217,14 +1220,14 @@ function TabButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
         >
             {icon}
             {children}
-        </button>
+        </AdminButton>
     );
 }
 function Modal({
@@ -1254,9 +1257,14 @@ function Modal({
                             <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
                         )}
                     </div>
-                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="p-1 text-slate-400"
+                        aria-label="关闭"
+                    >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </AccessibleDialogSurface>
@@ -1279,14 +1287,14 @@ function ModalActions({
     return (
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
             {!hideCancel && (
-                <button type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
+                <AdminButton type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
                     取消
-                </button>
+                </AdminButton>
             )}
-            <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+            <AdminButton type="button" onClick={onSave} disabled={saving} className={primaryButton}>
                 {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                 {saveLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1313,9 +1321,9 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">员工与权限加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
+            <AdminButton type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1335,9 +1343,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

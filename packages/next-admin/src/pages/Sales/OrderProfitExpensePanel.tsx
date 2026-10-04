@@ -1,7 +1,12 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { AlertCircle, Calculator, Check, RefreshCw, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 
 import {
     CATALOG_ORDER_PROFIT_EXPENSE_QUERY,
@@ -30,29 +35,40 @@ export function OrderProfitExpensePanel({
     const query = useQuery<CatalogOrderProfitExpenseQueryResult>(CATALOG_ORDER_PROFIT_EXPENSE_QUERY, {
         variables: { orderId },
         skip: !canRead,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const [saveExpense, saveState] = useMutation<SaveResult>(SAVE_CATALOG_ORDER_PROFIT_EXPENSE_MUTATION);
-    const [carrierCost, setCarrierCost] = useState('');
-    const [paymentFee, setPaymentFee] = useState('');
-    const [chargeback, setChargeback] = useState('');
-    const [note, setNote] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const expense = query.data?.catalogOrderProfitExpense;
-
-    /* oxlint-disable react/set-state-in-effect -- query data initializes the editable expense draft. */
-    useEffect(() => {
-        if (!query.data) return;
-        setCarrierCost(expenseMicrounitsToInput(expense?.carrierShippingCostMicrounits));
-        setPaymentFee(expenseMicrounitsToInput(expense?.paymentFeeMicrounits));
-        setChargeback(expenseMicrounitsToInput(expense?.chargebackMicrounits));
-        setNote(expense?.note ?? '');
-    }, [expense, query.data]);
-    /* oxlint-enable react/set-state-in-effect */
+    const source = query.data
+        ? {
+              carrierCost: expenseMicrounitsToInput(expense?.carrierShippingCostMicrounits),
+              paymentFee: expenseMicrounitsToInput(expense?.paymentFeeMicrounits),
+              chargeback: expenseMicrounitsToInput(expense?.chargebackMicrounits),
+              note: expense?.note ?? '',
+              updatedAt: expense?.updatedAt ?? null,
+          }
+        : null;
+    const draftOwner = useServerDraft(orderId, source ? JSON.stringify(source) : '', source);
+    const draft = draftOwner.draft ?? {
+        carrierCost: '',
+        paymentFee: '',
+        chargeback: '',
+        note: '',
+        updatedAt: null,
+    };
+    const { carrierCost, paymentFee, chargeback, note } = draft;
+    const setField = (field: 'carrierCost' | 'paymentFee' | 'chargeback' | 'note', value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), [field]: value }));
+    const setCarrierCost = (value: string) => setField('carrierCost', value);
+    const setPaymentFee = (value: string) => setField('paymentFee', value);
+    const setChargeback = (value: string) => setField('chargeback', value);
+    const setNote = (value: string) => setField('note', value);
 
     const handleSave = async () => {
+        if (draftOwner.sourceChanged) return;
         setError('');
         setMessage('');
         try {
@@ -67,15 +83,16 @@ export function OrderProfitExpensePanel({
                         paymentFeeMicrounits: expenseInputToMicrounits(paymentFee, '支付手续费'),
                         chargebackMicrounits: expenseInputToMicrounits(chargeback, '拒付损失'),
                         note: note.trim() || null,
-                        expectedUpdatedAt: expense?.updatedAt ?? null,
+                        expectedUpdatedAt: draft.updatedAt,
                         idempotencyKey: `next-admin:${crypto.randomUUID()}`,
                     },
                 },
             });
             const saved = response.data?.saveCatalogOrderProfitExpense;
             if (!saved) throw new Error('后端未返回费用记录');
-            await query.refetch();
+            draftOwner.accept({ ...draft, updatedAt: saved.updatedAt });
             setMessage('经营费用已保存，利润报表将重新核算');
+            await refreshAfterAdminWrite(() => query.refetch(), setError);
         } catch (mutationError) {
             setError(toUserFacingError(mutationError, '经营费用保存失败'));
         }
@@ -110,7 +127,7 @@ export function OrderProfitExpensePanel({
                 <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" /> 正在读取经营费用
                 </div>
-            ) : query.error ? (
+            ) : query.error && !query.data ? (
                 <div
                     role="alert"
                     className="mt-4 flex items-start gap-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700"
@@ -120,6 +137,7 @@ export function OrderProfitExpensePanel({
                 </div>
             ) : (
                 <>
+                    {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <ExpenseField
                             label="承运商实际物流成本"
@@ -145,7 +163,7 @@ export function OrderProfitExpensePanel({
                     </div>
                     <label className="mt-3 block text-[11px] font-semibold text-slate-600">
                         <span>财务备注</span>
-                        <textarea
+                        <AdminTextArea
                             value={note}
                             onChange={event => setNote(event.target.value)}
                             disabled={!canUpdate || saveState.loading}
@@ -170,10 +188,10 @@ export function OrderProfitExpensePanel({
                     )}
                     {canUpdate && (
                         <div className="mt-4 flex justify-end">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void handleSave()}
-                                disabled={saveState.loading}
+                                disabled={saveState.loading || draftOwner.sourceChanged}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                             >
                                 {saveState.loading ? (
@@ -182,7 +200,7 @@ export function OrderProfitExpensePanel({
                                     <Save className="h-3.5 w-3.5" />
                                 )}
                                 保存经营费用
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                     {(query.data?.catalogOrderProfitExpenseEvents?.length ?? 0) > 0 && (
@@ -237,7 +255,7 @@ function ExpenseField({
                 <span className="flex items-center border-r border-slate-200 bg-slate-50 px-2.5 font-mono text-[10px] text-slate-500">
                     {currencyCode}
                 </span>
-                <input
+                <AdminInput
                     inputMode="decimal"
                     value={value}
                     onChange={event => onChange(event.target.value)}

@@ -74,7 +74,7 @@ const channelSchema = new EntitySchema({
     tableName: 'channel',
     columns: { id: { type: Number, primary: true }, code: { type: String } },
 });
-const methodSchema = new EntitySchema<PaymentMethod>({
+const methodSchema = new EntitySchema({
     name: 'PaymentMethod',
     target: PaymentMethod,
     tableName: 'payment_method',

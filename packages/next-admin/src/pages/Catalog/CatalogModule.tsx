@@ -1,8 +1,10 @@
 import { gql } from '@apollo/client';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { useAdminPageRefresh, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { StoreOfferDialog } from './StoreOfferDialog';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     AlertTriangle,
@@ -221,7 +223,7 @@ export function CatalogModule() {
                 myStoreCatalogStatus
             }
         `,
-        { fetchPolicy: 'cache-and-network' },
+        {},
     );
     const storeStatus = statusQuery.data?.myStoreCatalogStatus;
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
@@ -237,9 +239,7 @@ export function CatalogModule() {
     const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
     const [deletePassword, setDeletePassword] = useState('');
     const deferredSearchTerm = useDeferredValue(searchTerm);
-    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
-        fetchPolicy: 'cache-first',
-    });
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
     const collectionsQuery = useQuery<{
         collections: { items: CollectionFilterItem[]; totalItems: number };
@@ -247,7 +247,6 @@ export function CatalogModule() {
         variables: {
             options: { topLevelOnly: false, take: 250, sort: { name: 'ASC', id: 'ASC' } },
         },
-        fetchPolicy: 'cache-first',
     });
 
     useEffect(() => {
@@ -302,7 +301,7 @@ export function CatalogModule() {
             assignmentFilter: { mode: assignmentMode },
         },
         skip: !isAssignmentFilter,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const assignmentIds = useMemo(
@@ -326,7 +325,7 @@ export function CatalogModule() {
         skip:
             (statusFilter !== 'ALL' && !storeStatus) ||
             (isAssignmentFilter && (assignmentQuery.loading || assignmentIds.length === 0)),
-        fetchPolicy: 'cache-first',
+
         notifyOnNetworkStatusChange: true,
     });
     const { data } = productQuery;
@@ -336,23 +335,12 @@ export function CatalogModule() {
         (statusFilter !== 'ALL' ? statusQuery.error : undefined) ??
         (isAssignmentFilter ? assignmentQuery.error : undefined) ??
         productQuery.error;
-    const refetch = async () => {
-        await statusQuery.refetch();
-        if (isAssignmentFilter) {
-            await assignmentQuery.refetch();
-            if (assignmentIds.length) await productQuery.refetch();
-        } else {
-            await productQuery.refetch();
-        }
-    };
-    const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
-        fetchPolicy: 'cache-first',
-    });
+    const refetch = useAdminPageRefresh();
+    const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {});
     const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);
     const operationsQuery = useQuery<CatalogProductOperationsResult>(CATALOG_PRODUCT_OPERATIONS_QUERY, {
         variables: { productIds },
         skip: productIds.length === 0,
-        fetchPolicy: 'cache-and-network',
     });
 
     const channelAssignmentsQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
@@ -363,7 +351,6 @@ export function CatalogModule() {
             },
         },
         skip: productIds.length === 0,
-        fetchPolicy: 'cache-and-network',
     });
 
     const channelAssignmentsByProduct = useMemo(() => {
@@ -459,7 +446,8 @@ export function CatalogModule() {
 
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">
                     <NextAdminActions pageId="product-list" collapseOnMobile />
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => refetch()}
                         disabled={loading}
@@ -467,9 +455,9 @@ export function CatalogModule() {
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
                         <span>刷新</span>
-                    </button>
+                    </AdminButton>
 
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() =>
                             navigate('/catalog/products/new', {
@@ -480,7 +468,7 @@ export function CatalogModule() {
                     >
                         <Plus className="w-4 h-4" />
                         发布新商品
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
 
@@ -526,24 +514,25 @@ export function CatalogModule() {
                     <p className="w-full text-xs text-slate-500">
                         范围为本店已授权商品；上架要求本店售价与交付配置完整，缺货单列。其他店铺统计请在平台管理中心查看。
                     </p>
-                    {statusQuery.error && (
+                    {statusQuery.error && !storeStatus && (
                         <p className="w-full text-xs text-rose-600">本店统计未获取，请刷新重试。</p>
                     )}
                 </section>
                 {/* 错误态：真实 API 错误提示 (杜绝假数据回退) */}
-                {error && (
+                {error && !data && (
                     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-rose-800 text-xs animate-fadeIn">
                         <div className="flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                             <span>商品数据加载失败，请稍后重试或联系系统管理员。</span>
                         </div>
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => refetch()}
                             className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold cursor-pointer transition-colors"
                         >
-                            重试连接
-                        </button>
+                            重试本页
+                        </AdminButton>
                     </div>
                 )}
 
@@ -555,7 +544,7 @@ export function CatalogModule() {
                         className="sticky -top-5 z-30 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 sm:-top-8"
                     >
                         <div className="flex gap-1.5">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('ALL');
@@ -563,8 +552,8 @@ export function CatalogModule() {
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
                                 全部商品
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('ENABLED');
@@ -572,8 +561,8 @@ export function CatalogModule() {
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'ENABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
                                 已上架
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('DISABLED');
@@ -581,11 +570,11 @@ export function CatalogModule() {
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'DISABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
                                 未上架
-                            </button>
+                            </AdminButton>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <select
+                            <AdminSelect
                                 value={categoryId}
                                 onChange={event => setFilter('category', event.target.value)}
                                 aria-label="按商品分类筛选"
@@ -597,7 +586,7 @@ export function CatalogModule() {
                                         {collection.name}
                                     </option>
                                 ))}
-                            </select>
+                            </AdminSelect>
                             <div className="relative">
                                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                 <SearchInput
@@ -611,7 +600,7 @@ export function CatalogModule() {
                                     className="pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-64 bg-white"
                                 />
                                 {searchTerm && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
@@ -620,12 +609,12 @@ export function CatalogModule() {
                                         aria-label="清空商品搜索"
                                     >
                                         <X className="w-3.5 h-3.5" />
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
 
                             {isFiltered && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={resetFilters}
                                     className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
@@ -633,7 +622,7 @@ export function CatalogModule() {
                                 >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                                     <span>重置筛选</span>
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                     </div>
@@ -643,13 +632,13 @@ export function CatalogModule() {
                             <span>
                                 已选 {selectedProductIds.length} 个商品。跨店销售授权由平台管理中心分配。
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedProductIds([])}
                                 className="rounded border border-blue-200 bg-white px-2 py-1 font-bold text-blue-700"
                             >
                                 取消选择
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
 
@@ -690,7 +679,7 @@ export function CatalogModule() {
                                     })}
                                 </p>
                                 <div className="mt-2 flex flex-wrap justify-center gap-2">
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             navigate('/catalog/products/new', {
@@ -700,7 +689,7 @@ export function CatalogModule() {
                                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
                                     >
                                         发布新商品
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         )}
@@ -714,7 +703,7 @@ export function CatalogModule() {
                                             scope="col"
                                             className="sticky left-0 z-20 w-10 bg-slate-50 px-3 py-3"
                                         >
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 aria-label="全选本页商品"
                                                 checked={
@@ -891,7 +880,7 @@ export function CatalogModule() {
                                             >
                                                 {/* Checkbox */}
                                                 <td className="sticky left-0 z-10 h-[52px] w-10 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <input
+                                                    <AdminInput
                                                         type="checkbox"
                                                         aria-label={`选择商品 ${product.name}`}
                                                         checked={selectedProductIds.includes(product.id)}
@@ -908,7 +897,7 @@ export function CatalogModule() {
 
                                                 {/* Featured Asset (真实素材) */}
                                                 <td className="sticky left-10 z-10 h-[52px] w-14 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() =>
                                                             navigate(`/catalog/products/${product.id}`, {
@@ -933,12 +922,12 @@ export function CatalogModule() {
                                                                 <ImageIcon className="w-4 h-4 text-slate-300" />
                                                             }
                                                         />
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
 
                                                 {/* Name */}
                                                 <td className="sticky left-24 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() =>
                                                             navigate(`/catalog/products/${product.id}`, {
@@ -951,7 +940,7 @@ export function CatalogModule() {
                                                         title={product.name}
                                                     >
                                                         {product.name}
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
 
                                                 {/* Slug */}
@@ -993,12 +982,12 @@ export function CatalogModule() {
 
                                                 {/* 当前店铺销售授权与经营入口 */}
                                                 <td className="h-[52px] px-3 py-0 whitespace-nowrap">
-                                                    <button
+                                                    <AdminButton
                                                         className="mr-2 text-xs font-medium text-blue-600"
                                                         onClick={() => setOfferProductId(product.id)}
                                                     >
                                                         本店经营设置
-                                                    </button>
+                                                    </AdminButton>
                                                     {(() => {
                                                         const assigned = channelAssignmentsByProduct.get(
                                                             product.id,
@@ -1196,7 +1185,7 @@ export function CatalogModule() {
                                                 {/* Actions */}
                                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                     <div className="flex items-center justify-end gap-1.5">
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() =>
                                                                 navigate(`/catalog/products/${product.id}`, {
@@ -1208,8 +1197,8 @@ export function CatalogModule() {
                                                             className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                                                         >
                                                             <Edit3 className="w-3.5 h-3.5" /> 编辑
-                                                        </button>
-                                                        <button
+                                                        </AdminButton>
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() => {
                                                                 setDeletePassword('');
@@ -1222,7 +1211,7 @@ export function CatalogModule() {
                                                             title="删除商品"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        </AdminButton>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1248,22 +1237,22 @@ export function CatalogModule() {
                                 onPageSizeChange={setPageSize}
                                 disabled={loading}
                             />
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={loading || page === 0}
                                 onClick={() => setPage(Math.max(0, page - 1))}
                                 className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
                             >
                                 <ChevronLeft className="w-3.5 h-3.5" /> 上一页
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 disabled={loading || page + 1 >= totalPages}
                                 onClick={() => setPage(page + 1)}
                                 className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
                             >
                                 下一页 <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </div>
@@ -1305,7 +1294,7 @@ export function CatalogModule() {
                             }}
                             className="space-y-4"
                         >
-                            <input
+                            <AdminInput
                                 type="text"
                                 name="username"
                                 autoComplete="username"
@@ -1316,7 +1305,7 @@ export function CatalogModule() {
                             />
                             <label className="block text-xs font-bold text-slate-700">
                                 当前管理员密码 *
-                                <input
+                                <AdminInput
                                     type="password"
                                     name="current-password"
                                     autoComplete="current-password"
@@ -1328,7 +1317,7 @@ export function CatalogModule() {
                             </label>
 
                             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setProductToDelete(null);
@@ -1338,15 +1327,15 @@ export function CatalogModule() {
                                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
                                 >
                                     取消
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="submit"
                                     disabled={deleting || !deletePassword}
                                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {deleting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                                     <span>确认删除</span>
-                                </button>
+                                </AdminButton>
                             </div>
                         </form>
                     </AccessibleDialogSurface>

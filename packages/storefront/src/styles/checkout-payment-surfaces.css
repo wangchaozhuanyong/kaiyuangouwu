@@ -94,7 +94,8 @@
     background: var(--surface);
     color: var(--text);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     cursor: pointer;
 }
 
@@ -131,7 +132,8 @@
     background: transparent;
     color: var(--accent-ink);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     cursor: pointer;
 }
 
@@ -176,7 +178,8 @@
 .price-summary .shipping-estimate-detail {
     min-height: 28px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .price-summary .tax-detail dd,
@@ -201,7 +204,8 @@
 
 .price-summary .summary-total dd {
     color: var(--accent-ink);
-    font-size: 18px;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
     font-weight: var(--font-weight-bold);
 }
 
@@ -295,8 +299,8 @@
 .payment-test-notice span {
     margin-top: 3px;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .payment-method-section h2 {
@@ -369,7 +373,7 @@
 .payment-method-list small {
     margin-top: 3px;
     color: var(--muted);
-    line-height: 1.4;
+    line-height: var(--line-height-body);
 }
 
 .payment-summary > header {
@@ -409,7 +413,7 @@
 .payment-summary-lines span {
     min-width: 0;
     overflow-wrap: anywhere;
-    line-height: 1.5;
+    line-height: var(--line-height-body);
 }
 
 .payment-summary-lines small,
@@ -494,7 +498,8 @@
 
 .order-confirmation-hero h1 {
     margin: 6px 0 12px;
-    font-size: 26px;
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
     font-weight: var(--font-weight-bold);
 }
 
@@ -503,8 +508,8 @@
 .order-confirmation-summary dt,
 .order-confirmation-summary > small {
     color: var(--muted);
-    font-size: 14px;
-    line-height: var(--line-height-relaxed);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 
 .order-confirmation-summary {
@@ -583,6 +588,7 @@
 .checkout-total-hint {
     display: block;
     color: var(--muted);
-    font-size: 12px;
-    font-weight: normal;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-normal);
 }

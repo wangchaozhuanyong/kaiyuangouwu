@@ -374,7 +374,7 @@ describe('desktop catalog category navigation', () => {
         expect(result[1].children?.map(c => c.id)).toEqual(['child-2a', 'child-2b']);
     });
 
-    it('keeps nested categories out of primary navigation when an import created a suffixed root duplicate', async () => {
+    it('preserves root categories with matching names or suffixed slugs and keeps children nested', async () => {
         const mockRequest = vi.fn().mockResolvedValue({
             collections: {
                 items: [
@@ -430,6 +430,7 @@ describe('desktop catalog category navigation', () => {
 
         expect(result.map(collection => collection.id)).toEqual([
             'tobacco',
+            'peony-root-duplicate',
             'legitimate-root',
             'ai-subscription',
         ]);

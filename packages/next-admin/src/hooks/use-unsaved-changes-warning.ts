@@ -1,9 +1,16 @@
-import { useCallback, useContext, useEffect } from 'react';
+import { useCallback, useContext, useEffect, useId } from 'react';
 
 import { TabPageContext } from '../layouts/tab-page-context';
 
 export const BEFORE_APP_NAVIGATION_EVENT = 'vendure:before-app-navigation';
 const BEFORE_APP_TABS_CLOSE_EVENT = 'vendure:before-app-tabs-close';
+const BEFORE_APP_DISCARD_EVENT = 'vendure:before-app-discard';
+const dirtyPages = new Map<string, string | undefined>();
+export const hasAdminDrafts = () => dirtyPages.size > 0;
+export const isAdminPageDirty = (path: string) => [...dirtyPages.values()].includes(path);
+export function requestDiscardAdminDrafts() {
+    return window.dispatchEvent(new Event(BEFORE_APP_DISCARD_EVENT, { cancelable: true }));
+}
 
 export function requestAppTabsClose(paths: string[]): boolean {
     return window.dispatchEvent(
@@ -24,6 +31,7 @@ export function requestAppNavigation(target: string): boolean {
  * 防止复杂编辑页在刷新、点击导航或 AppShell 跳转时直接丢失未保存内容。
  */
 export function useUnsavedChangesWarning(active: boolean, message: string) {
+    const ownerId = useId();
     const tabPage = useContext(TabPageContext);
     const tabPath = tabPage?.path;
     const basename = tabPage?.basename;
@@ -31,6 +39,7 @@ export function useUnsavedChangesWarning(active: boolean, message: string) {
 
     useEffect(() => {
         if (!active) return;
+        dirtyPages.set(ownerId, tabPath);
 
         const shouldGuardTarget = (target: string) => {
             const nextUrl = new URL(target, window.location.href);
@@ -82,18 +91,27 @@ export function useUnsavedChangesWarning(active: boolean, message: string) {
                 event.stopImmediatePropagation();
             }
         };
+        const handleDiscard = (event: Event) => {
+            if (!window.confirm(message)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
         document.addEventListener('click', handleDocumentClick, true);
         window.addEventListener(BEFORE_APP_NAVIGATION_EVENT, handleAppNavigation);
         window.addEventListener(BEFORE_APP_TABS_CLOSE_EVENT, handleTabsClose);
+        window.addEventListener(BEFORE_APP_DISCARD_EVENT, handleDiscard);
         return () => {
+            dirtyPages.delete(ownerId);
             window.removeEventListener('beforeunload', handleBeforeUnload);
             document.removeEventListener('click', handleDocumentClick, true);
             window.removeEventListener(BEFORE_APP_NAVIGATION_EVENT, handleAppNavigation);
             window.removeEventListener(BEFORE_APP_TABS_CLOSE_EVENT, handleTabsClose);
+            window.removeEventListener(BEFORE_APP_DISCARD_EVENT, handleDiscard);
         };
-    }, [active, message, tabPath, basename]);
+    }, [active, message, tabPath, basename, ownerId]);
 
     return confirmNavigation;
 }

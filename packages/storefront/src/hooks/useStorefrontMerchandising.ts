@@ -100,7 +100,11 @@ export function useStorefrontMerchandising({
             'home-best-seller-sales',
             bestSellerCandidates.map(product => product.id),
         ],
-        queryFn: () => api.productSales(bestSellerCandidates.map(product => product.id)),
+        queryFn: ({ signal }) =>
+            api.productSales(
+                bestSellerCandidates.map(product => product.id),
+                signal,
+            ),
         enabled: bestSellersEnabled && !bestSellerCatalogQuery.isPending && bestSellerCandidates.length > 0,
         ...publicOptions,
     });

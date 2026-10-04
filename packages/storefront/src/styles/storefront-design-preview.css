@@ -27,7 +27,8 @@
 .storefront-preview-toolbar > div span,
 .storefront-preview-toolbar label > span {
     color: #cbd5e1;
-    font-size: 11px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
 
 .storefront-preview-toolbar label {

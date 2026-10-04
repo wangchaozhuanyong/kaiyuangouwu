@@ -1,4 +1,6 @@
-import { useQuery } from '@apollo/client/react';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+
 import { useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
@@ -75,7 +77,7 @@ export function AiImageUsagePanel() {
             <div className="flex flex-wrap items-center gap-3 text-sm">
                 <label>
                     记录类型{' '}
-                    <select
+                    <AdminSelect
                         aria-label="记录类型"
                         value={recordType}
                         className="rounded-lg border border-slate-300 bg-white p-2"
@@ -87,10 +89,10 @@ export function AiImageUsagePanel() {
                         <option value="">全部</option>
                         <option value="IMAGE_GENERATION">图片生成</option>
                         <option value="PROMPT_OPTIMIZATION">描述优化</option>
-                    </select>
+                    </AdminSelect>
                 </label>
                 <label className="flex items-center gap-2">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={missingCostOnly}
                         onChange={event => {
@@ -100,18 +102,19 @@ export function AiImageUsagePanel() {
                     />
                     仅看费用待核对
                 </label>
-                <button
+                <AdminButton
+                    refreshPage
                     type="button"
                     className={buttonClass}
                     disabled={query.loading}
                     onClick={() => void query.refetch()}
                 >
                     刷新费用
-                </button>
+                </AdminButton>
             </div>
-            {query.loading ? (
+            {query.loading && !query.data ? (
                 <p role="status">正在读取使用记录…</p>
-            ) : query.error ? (
+            ) : query.error && !query.data ? (
                 <p role="alert" className="text-sm text-red-700">
                     {toUserFacingError(query.error, '使用记录读取失败，请重试')}
                 </p>
@@ -167,13 +170,13 @@ export function AiImageUsagePanel() {
                                         <ImageUsageCost record={record} />
                                     </td>
                                     <td className="p-3">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             className={buttonClass}
                                             onClick={() => setSelected(record)}
                                         >
                                             查看调用明细
-                                        </button>
+                                        </AdminButton>
                                     </td>
                                 </tr>
                             ))}
@@ -189,23 +192,23 @@ export function AiImageUsagePanel() {
                         onPageSizeChange={setPageSize}
                         disabled={query.loading}
                     />
-                    <button
+                    <AdminButton
                         type="button"
                         className={buttonClass}
                         disabled={query.loading || page === 0}
                         onClick={() => setPage(value => value - 1)}
                     >
                         上一页
-                    </button>
+                    </AdminButton>
                     <span>第 {page + 1} 页</span>
-                    <button
+                    <AdminButton
                         type="button"
                         className={buttonClass}
                         disabled={query.loading || (page + 1) * pageSize >= total}
                         onClick={() => setPage(value => value + 1)}
                     >
                         下一页
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             {selected && (
@@ -239,18 +242,22 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                         调用明细 #{record.id}
                         <FeatureHelpButton topic="plugins.ai-usage" title="AI 图片调用明细" />
                     </h2>
-                    <button type="button" className={buttonClass} onClick={onClose}>
+                    <AdminButton type="button" className={buttonClass} onClick={onClose}>
                         关闭
-                    </button>
+                    </AdminButton>
                 </header>
-                {query.loading ? (
+                {query.loading && !query.data ? (
                     <p role="status">正在读取调用明细…</p>
-                ) : query.error ? (
+                ) : query.error && !query.data ? (
                     <div role="alert" className="space-y-3 text-sm text-red-700">
                         <p>{toUserFacingError(query.error, '调用明细读取失败')}</p>
-                        <button type="button" className={buttonClass} onClick={() => void query.refetch()}>
+                        <AdminButton
+                            type="button"
+                            className={buttonClass}
+                            onClick={() => void query.refetch()}
+                        >
                             重试读取
-                        </button>
+                        </AdminButton>
                     </div>
                 ) : (
                     detail && (

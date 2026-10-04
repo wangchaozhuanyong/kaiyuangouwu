@@ -36,8 +36,8 @@
 
 .checkout-items article strong {
     display: block;
-    font-weight: 600;
-    line-height: 1.4;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
     overflow-wrap: anywhere;
 }
 
@@ -47,9 +47,9 @@
     max-width: 100%;
     margin-top: 6px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
     font-style: normal;
-    line-height: 1.5;
+    line-height: var(--type-meta-leading);
 }
 
 .checkout-items article small {
@@ -69,7 +69,7 @@
 
 .checkout-line-meta b {
     display: block;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -82,12 +82,14 @@
 }
 
 .purchase-page .checkout-items article strong {
-    font-size: 15px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
 .purchase-page .checkout-line-meta b {
     color: var(--accent-ink);
-    font-size: 16px;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
 }
 
 @media (max-width: 370px) {

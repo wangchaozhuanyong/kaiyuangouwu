@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from './AdminControls';
 import { TechnicalDetails } from './TechnicalDetails';
 
 import {
@@ -43,25 +44,25 @@ export function ConfigurableOperationField({
                 {definition.required ? ' *' : ''}
             </span>
             {type.includes('boolean') && !definition.list ? (
-                <select
+                <AdminSelect
                     {...commonProps}
                     value={value || 'false'}
                     onChange={event => onChange(event.target.value)}
                 >
                     <option value="true">是</option>
                     <option value="false">否</option>
-                </select>
+                </AdminSelect>
             ) : options.length && !definition.list ? (
-                <select {...commonProps} value={value} onChange={event => onChange(event.target.value)}>
+                <AdminSelect {...commonProps} value={value} onChange={event => onChange(event.target.value)}>
                     <option value="">请选择</option>
                     {options.map(option => (
                         <option key={option.value} value={option.value}>
                             {option.label}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
             ) : definition.list ? (
-                <textarea
+                <AdminTextArea
                     {...commonProps}
                     rows={3}
                     value={configurableListValueForDisplay(value)}
@@ -70,7 +71,7 @@ export function ConfigurableOperationField({
                 />
             ) : (
                 <div className="relative">
-                    <input
+                    <AdminInput
                         {...commonProps}
                         type={
                             type.includes('password')
@@ -124,7 +125,7 @@ export function ConfigurableOperationField({
                         { code: 'SG', label: '新加坡 (SG)' },
                         { code: 'CN', label: '中国 (CN)' },
                     ].map(c => (
-                        <button
+                        <AdminButton
                             key={c.code}
                             type="button"
                             onClick={() => {
@@ -141,7 +142,7 @@ export function ConfigurableOperationField({
                             className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
                         >
                             + {c.label}
-                        </button>
+                        </AdminButton>
                     ))}
                 </div>
             )}

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     Activity,
     AlertCircle,
@@ -27,8 +27,11 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useAdminReadResource } from '../../hooks/use-admin-read-resource';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
@@ -113,7 +116,7 @@ export function SystemOpsModule() {
                 sort: { createdAt: 'DESC', id: 'DESC' },
             },
         },
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
         pollInterval:
             activeTab === 'HEALTH' || activeTab === 'JOBS' || activeTab === 'SCHEDULES' ? 10_000 : 0,
@@ -144,15 +147,18 @@ export function SystemOpsModule() {
                             查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         disabled={query.loading}
                         className={secondaryButton}
                     >
-                        <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新数据
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
@@ -297,18 +303,13 @@ interface HealthResult {
 }
 
 function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; graphQLError?: string }) {
-    const [health, setHealth] = useState<HealthResult>({
-        state: 'checking',
-        latencyMs: null,
-        checkedAt: null,
-        message: '正在检查服务…',
-    });
-
-    useEffect(() => {
-        let disposed = false;
-        const check = async () => {
+    const healthQuery = useAdminReadResource<HealthResult>(
+        'server-health',
+        async signal => {
             const controller = new AbortController();
-            const timeout = window.setTimeout(() => controller.abort(), 8_000);
+            const abort = () => controller.abort();
+            signal.addEventListener('abort', abort, { once: true });
+            const timeout = window.setTimeout(abort, 8_000);
             const startedAt = performance.now();
             try {
                 const response = await fetch(getServerHealthUrl(), {
@@ -318,35 +319,32 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                 const payload = (await response.json().catch(() => null)) as { status?: string } | null;
                 if (!response.ok || payload?.status !== 'ok')
                     throw new Error(`健康检查返回 ${response.status}`);
-                if (!disposed)
-                    setHealth({
-                        state: 'healthy',
-                        latencyMs: Math.round(performance.now() - startedAt),
-                        checkedAt: new Date().toISOString(),
-                        message: '服务端健康检查通过',
-                    });
-            } catch (error) {
-                if (!disposed)
-                    setHealth({
-                        state: 'unhealthy',
-                        latencyMs: null,
-                        checkedAt: new Date().toISOString(),
-                        message:
-                            error instanceof Error && error.name === 'AbortError'
-                                ? '健康检查超时'
-                                : toUserFacingError(error, '无法访问服务健康接口'),
-                    });
+                return {
+                    state: 'healthy',
+                    latencyMs: Math.round(performance.now() - startedAt),
+                    checkedAt: new Date().toISOString(),
+                    message: '服务端健康检查通过',
+                };
             } finally {
                 window.clearTimeout(timeout);
+                signal.removeEventListener('abort', abort);
             }
-        };
-        void check();
-        const interval = window.setInterval(() => void check(), 30_000);
-        return () => {
-            disposed = true;
-            window.clearInterval(interval);
-        };
-    }, []);
+        },
+        30_000,
+    );
+    const health: HealthResult = healthQuery.error
+        ? {
+              state: 'unhealthy',
+              latencyMs: null,
+              checkedAt: healthQuery.data?.checkedAt ?? null,
+              message: toUserFacingError(healthQuery.error, '无法访问服务健康接口'),
+          }
+        : (healthQuery.data ?? {
+              state: 'checking',
+              latencyMs: null,
+              checkedAt: null,
+              message: '正在检查服务…',
+          });
 
     const queues = data?.jobQueues ?? [];
     const jobs = data?.jobs.items ?? [];
@@ -547,7 +545,7 @@ function JobsPanel({
                     <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                         <div className="relative min-w-0">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <input
+                            <AdminInput
                                 value={search}
                                 onChange={event => {
                                     setSearch(event.target.value);
@@ -558,7 +556,7 @@ function JobsPanel({
                                 className={`${inputClass} pl-8`}
                             />
                         </div>
-                        <select
+                        <AdminSelect
                             value={queue}
                             onChange={event => {
                                 setQueue(event.target.value);
@@ -573,8 +571,8 @@ function JobsPanel({
                                     {item.name}
                                 </option>
                             ))}
-                        </select>
-                        <select
+                        </AdminSelect>
+                        <AdminSelect
                             value={stateFilter}
                             onChange={event => {
                                 setStateFilter(event.target.value);
@@ -589,7 +587,7 @@ function JobsPanel({
                                     {jobStateLabel(state)}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </div>
                 </div>
                 <div
@@ -684,7 +682,7 @@ function JobsPanel({
                                     </td>
                                     <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                         {!job.isSettled && (
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void cancelJob(job)}
                                                 disabled={cancelState.loading}
@@ -692,7 +690,7 @@ function JobsPanel({
                                             >
                                                 <CircleStop className="h-3.5 w-3.5" />
                                                 取消
-                                            </button>
+                                            </AdminButton>
                                         )}
                                     </td>
                                 </tr>
@@ -860,16 +858,16 @@ function SchedulesPanel({
                                 </td>
                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                     <div className="flex justify-end gap-2">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => void toggle(task)}
                                             disabled={busy || task.isRunning}
                                             className={secondaryButton}
                                         >
                                             {task.enabled ? '停用' : '启用'}
-                                        </button>
+                                        </AdminButton>
                                         {task.enabled && (
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => void execute(task)}
                                                 disabled={busy || task.isRunning}
@@ -877,7 +875,7 @@ function SchedulesPanel({
                                             >
                                                 <Play className="h-3.5 w-3.5" />
                                                 立即执行
-                                            </button>
+                                            </AdminButton>
                                         )}
                                     </div>
                                 </td>
@@ -937,7 +935,7 @@ function SettingsStorePanel({
                 <div className="flex gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                        <input
+                        <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
                             aria-label="搜索系统配置"
@@ -945,7 +943,7 @@ function SettingsStorePanel({
                             className={`${inputClass} w-60 pl-8`}
                         />
                     </div>
-                    <select
+                    <AdminSelect
                         value={scope}
                         onChange={event => setScope(event.target.value)}
                         className={inputClass}
@@ -956,7 +954,7 @@ function SettingsStorePanel({
                                 {scopeLabel(value)}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </div>
             </div>
             <div className="divide-y divide-slate-100">
@@ -989,7 +987,7 @@ function SettingsStorePanel({
                         {!field.readonly &&
                             (typeof field.currentValue === 'boolean' ? (
                                 <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-600">
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={field.currentValue}
                                         onChange={event => void update(field, event.target.checked)}
@@ -998,14 +996,14 @@ function SettingsStorePanel({
                                     {field.currentValue ? '已开启' : '已关闭'}
                                 </label>
                             ) : (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setEditor(field)}
                                     className={secondaryButton}
                                 >
                                     <Braces className="h-3.5 w-3.5" />
                                     编辑值
-                                </button>
+                                </AdminButton>
                             ))}
                     </div>
                 ))}
@@ -1061,7 +1059,6 @@ function ApiKeysPanel({
     const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
     const mailboxAccess = useQuery<MailboxIntegrationAccessResult>(MAILBOX_INTEGRATION_ACCESS_QUERY, {
         skip: !canManageMailboxAccess,
-        fetchPolicy: 'network-only',
     });
     const [createMailboxRole, createMailboxRoleState] = useMutation<{
         createMailboxIntegrationRole: { id: string };
@@ -1197,10 +1194,10 @@ function ApiKeysPanel({
                     </h2>
                     <p className="mt-1 text-xs text-slate-400">密钥明文只在创建或轮转成功后显示一次</p>
                 </div>
-                <button type="button" onClick={() => setCreateOpen(true)} className={primaryButton}>
+                <AdminButton type="button" onClick={() => setCreateOpen(true)} className={primaryButton}>
                     <Plus className="h-3.5 w-3.5" />
                     创建密钥
-                </button>
+                </AdminButton>
             </div>
             {canManageMailboxAccess && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-blue-50/60 px-5 py-3 text-xs">
@@ -1221,14 +1218,14 @@ function ApiKeysPanel({
                         </p>
                     </div>
                     {channel?.code === '__default_channel__' && roleList?.totalItems === 0 && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void createDedicatedRole()}
                             disabled={busy}
                             className={secondaryButton}
                         >
                             创建邮箱专用角色
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             )}
@@ -1261,16 +1258,16 @@ function ApiKeysPanel({
                         <div className="flex flex-wrap gap-2">
                             {mailboxRole &&
                                 (key.user.roles.length !== 1 || key.user.roles[0]?.id !== mailboxRole.id) && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void restrictKeyToMailbox(key)}
                                         disabled={busy}
                                         className={secondaryButton}
                                     >
                                         设为邮箱专用密钥
-                                    </button>
+                                    </AdminButton>
                                 )}
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setEditingKey(key)}
                                 disabled={busy}
@@ -1278,8 +1275,8 @@ function ApiKeysPanel({
                             >
                                 <Pencil className="h-3.5 w-3.5" />
                                 编辑
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void rotateKey(key)}
                                 disabled={busy}
@@ -1287,8 +1284,8 @@ function ApiKeysPanel({
                             >
                                 <RefreshCw className="h-3.5 w-3.5" />
                                 轮转
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void destroy(key)}
                                 disabled={busy}
@@ -1296,7 +1293,7 @@ function ApiKeysPanel({
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 删除
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 ))}
@@ -1314,7 +1311,7 @@ function ApiKeysPanel({
                         onPageSizeChange={onPageSizeChange}
                         disabled={loading}
                     />
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={page === 0 || loading}
                         onClick={() => onPageChange(page - 1)}
@@ -1322,8 +1319,8 @@ function ApiKeysPanel({
                         aria-label="上一页"
                     >
                         <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         disabled={page + 1 >= totalPages || loading}
                         onClick={() => onPageChange(page + 1)}
@@ -1331,7 +1328,7 @@ function ApiKeysPanel({
                         aria-label="下一页"
                     >
                         <ChevronRight className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
             {createOpen && (
@@ -1457,7 +1454,7 @@ function EditApiKeyDialog({
             onClose={onClose}
         >
             <Field label="用途名称 *">
-                <input
+                <AdminInput
                     value={name}
                     onChange={event => setName(event.target.value)}
                     className={inputClass}
@@ -1472,7 +1469,7 @@ function EditApiKeyDialog({
                             key={role.id}
                             className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-3 text-xs"
                         >
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={roleIds.includes(role.id)}
                                 onChange={() =>
@@ -1545,7 +1542,7 @@ function CreateApiKeyDialog({
     return (
         <Modal title="创建 API 密钥" description="密钥只能获得当前账号已有的角色权限" onClose={onClose}>
             <Field label="用途名称 *">
-                <input
+                <AdminInput
                     value={name}
                     onChange={event => setName(event.target.value)}
                     className={inputClass}
@@ -1561,7 +1558,7 @@ function CreateApiKeyDialog({
                             key={role.id}
                             className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-3 text-xs"
                         >
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={roleIds.includes(role.id)}
                                 onChange={() =>
@@ -1602,7 +1599,7 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
                 </code>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => {
                         void copyAdminText(value, 'API 密钥').then(copied => {
@@ -1613,10 +1610,10 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
                 >
                     <Copy className="h-3.5 w-3.5" />
                     {copied ? '已复制' : '复制密钥'}
-                </button>
-                <button type="button" onClick={onClose} className={primaryButton}>
+                </AdminButton>
+                <AdminButton type="button" onClick={onClose} className={primaryButton}>
                     我已安全保存
-                </button>
+                </AdminButton>
             </div>
         </Modal>
     );
@@ -1662,7 +1659,7 @@ function SettingsValueEditor({
             description={`作用域：${scopeLabel(field.scopeType)}；将按 ${complex ? 'JSON' : typeof field.currentValue} 类型保存`}
             onClose={onClose}
         >
-            <textarea
+            <AdminTextArea
                 rows={complex ? 16 : 5}
                 value={draft}
                 onChange={event => setDraft(event.target.value)}
@@ -1760,7 +1757,7 @@ function TabButton({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={[
@@ -1770,7 +1767,7 @@ function TabButton({
         >
             {icon}
             {children}
-        </button>
+        </AdminButton>
     );
 }
 function Modal({
@@ -1798,14 +1795,14 @@ function Modal({
                             <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
                         )}
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded p-1 text-slate-400 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </AccessibleDialogSurface>
@@ -1825,13 +1822,13 @@ function ModalActions({
 }) {
     return (
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
+            <AdminButton type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
                 取消
-            </button>
-            <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+            </AdminButton>
+            <AdminButton type="button" onClick={onSave} disabled={saving} className={primaryButton}>
                 {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                 {saveLabel}
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1858,9 +1855,9 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="h-8 w-8 text-rose-500" />
             <h2 className="mt-3 text-sm font-bold text-slate-800">系统运维数据加载失败</h2>
             <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
+            <AdminButton type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1885,9 +1882,9 @@ function Message({
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }

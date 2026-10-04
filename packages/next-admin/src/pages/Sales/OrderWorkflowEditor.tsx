@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowLeft,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -33,6 +34,7 @@ import {
     SET_DRAFT_ORDER_SHIPPING_METHOD,
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useAdminReturn } from '../../hooks/use-admin-return';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -197,7 +199,6 @@ function VariantSearch({
             },
         },
         skip: query.length === 0,
-        fetchPolicy: 'cache-first',
     });
 
     return (
@@ -205,19 +206,19 @@ function VariantSearch({
             <label className="text-xs font-semibold text-slate-700">添加商品</label>
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
+                <AdminInput
                     value={search}
                     onChange={event => setSearch(event.target.value)}
                     placeholder="输入商品名称或 SKU"
                     className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
             </div>
-            {loading && <p className="text-[11px] text-slate-400">正在搜索商品…</p>}
+            {loading && !data && <p className="text-[11px] text-slate-400">正在搜索商品…</p>}
             {error && <p className="text-[11px] text-rose-600">商品搜索失败，请重试</p>}
             {query && !loading && !error && (
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-1">
                     {(data?.productVariants.items ?? []).map(variant => (
-                        <button
+                        <AdminButton
                             key={variant.id}
                             type="button"
                             disabled={disabled}
@@ -233,7 +234,7 @@ function VariantSearch({
                             <span className="shrink-0 font-mono text-xs text-slate-700">
                                 {formatMoney(variant.price, variant.currencyCode || currencyCode)}
                             </span>
-                        </button>
+                        </AdminButton>
                     ))}
                     {data?.productVariants.items.length === 0 && (
                         <p className="p-3 text-center text-xs text-slate-400">没有匹配的可用规格</p>
@@ -264,7 +265,7 @@ export function DraftOrderEditor() {
     const orderQuery = useQuery<OrderQueryData>(GET_SALES_ORDER, {
         variables: { id },
         skip: !id,
-        fetchPolicy: 'cache-and-network',
+
         notifyOnNetworkStatusChange: true,
     });
     const customerTerm = deferredCustomerSearch.trim();
@@ -286,7 +287,6 @@ export function DraftOrderEditor() {
             },
         },
         skip: customerTerm.length === 0,
-        fetchPolicy: 'cache-first',
     });
     const shippingMethodsQuery = useQuery<{
         eligibleShippingMethodsForDraftOrder: Array<{
@@ -299,7 +299,6 @@ export function DraftOrderEditor() {
     }>(GET_DRAFT_ORDER_SHIPPING_METHODS, {
         variables: { orderId: id },
         skip: !id || !orderQuery.data?.order?.shippingAddress?.streetLine1,
-        fetchPolicy: 'network-only',
     });
 
     const [addItem, addItemState] = useMutation<{ addItemToDraftOrder: ResultPayload }>(
@@ -514,7 +513,7 @@ export function DraftOrderEditor() {
     };
 
     if (orderQuery.loading && !orderQuery.data) return <WorkflowLoading label="正在加载草稿订单…" />;
-    if (orderQuery.error || !order)
+    if ((orderQuery.error && !orderQuery.data) || !order)
         return (
             <WorkflowError
                 message={toUserFacingError(orderQuery.error, '草稿订单不存在或加载失败')}
@@ -542,14 +541,14 @@ export function DraftOrderEditor() {
                 subtitle={`状态：${getOrderStateLabel(order.state)} · 所有修改直接写入草稿`}
                 onBack={returnToList}
                 actions={
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={busy}
                         onClick={() => void handleDelete()}
                         className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                     >
                         删除草稿
-                    </button>
+                    </AdminButton>
                 }
             />
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -582,7 +581,7 @@ export function DraftOrderEditor() {
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     disabled={busy}
                                                     onClick={() =>
@@ -592,11 +591,11 @@ export function DraftOrderEditor() {
                                                     aria-label={`减少${line.productVariant.name}数量`}
                                                 >
                                                     <ChevronDown className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                                 <span className="w-8 text-center font-mono text-xs font-semibold">
                                                     {line.quantity}
                                                 </span>
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     disabled={busy}
                                                     onClick={() =>
@@ -606,8 +605,8 @@ export function DraftOrderEditor() {
                                                     aria-label={`增加${line.productVariant.name}数量`}
                                                 >
                                                     <ChevronUp className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
+                                                </AdminButton>
+                                                <AdminButton
                                                     type="button"
                                                     disabled={busy}
                                                     onClick={() => void changeLineQuantity(line, 0)}
@@ -615,7 +614,7 @@ export function DraftOrderEditor() {
                                                     aria-label={`移除${line.productVariant.name}`}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         </div>
                                     ))}
@@ -654,7 +653,7 @@ export function DraftOrderEditor() {
                                     ).map(([key, label]) => (
                                         <label key={key} className="text-xs font-semibold text-slate-700">
                                             {label}
-                                            <input
+                                            <AdminInput
                                                 value={address[key]}
                                                 onChange={event =>
                                                     setAddress(current => ({
@@ -669,21 +668,21 @@ export function DraftOrderEditor() {
                                 </div>
                                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                                     <label className="flex items-center gap-2 text-xs text-slate-600">
-                                        <input
+                                        <AdminInput
                                             type="checkbox"
                                             checked={billingSame}
                                             onChange={event => setBillingSame(event.target.checked)}
                                         />
                                         账单地址与收货地址相同
                                     </label>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={busy}
                                         onClick={() => void saveAddress()}
                                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                     >
                                         保存地址
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </section>{' '}
                         </div>
@@ -699,7 +698,7 @@ export function DraftOrderEditor() {
                                         <p className="mt-1 text-blue-700">{order.customer.emailAddress}</p>
                                     </div>
                                 )}
-                                <input
+                                <AdminInput
                                     value={customerSearch}
                                     onChange={event => setCustomerSearch(event.target.value)}
                                     placeholder="搜索姓名、手机号或邮箱"
@@ -708,7 +707,7 @@ export function DraftOrderEditor() {
                                 {customerTerm && (
                                     <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-1">
                                         {(customerQuery.data?.customers.items ?? []).map(customer => (
-                                            <button
+                                            <AdminButton
                                                 key={customer.id}
                                                 type="button"
                                                 disabled={busy}
@@ -719,7 +718,7 @@ export function DraftOrderEditor() {
                                                 <span className="ml-2 text-slate-400">
                                                     {customer.emailAddress}
                                                 </span>
-                                            </button>
+                                            </AdminButton>
                                         ))}
                                         {!customerQuery.loading &&
                                             customerQuery.data?.customers.items.length === 0 && (
@@ -742,25 +741,25 @@ export function DraftOrderEditor() {
                                     </strong>
                                 </div>
                                 <div className="mt-3 flex gap-2">
-                                    <input
+                                    <AdminInput
                                         value={couponCode}
                                         onChange={event => setCouponCode(event.target.value)}
                                         placeholder="优惠码"
                                         className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"
                                     />
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         disabled={busy || !couponCode.trim()}
                                         onClick={() => void handleApplyCoupon()}
                                         className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                     >
                                         应用
-                                    </button>
+                                    </AdminButton>
                                 </div>
                                 {order.couponCodes.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {order.couponCodes.map(code => (
-                                            <button
+                                            <AdminButton
                                                 key={code}
                                                 type="button"
                                                 disabled={busy}
@@ -768,7 +767,7 @@ export function DraftOrderEditor() {
                                                 className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"
                                             >
                                                 {code} ×
-                                            </button>
+                                            </AdminButton>
                                         ))}
                                     </div>
                                 )}
@@ -783,7 +782,7 @@ export function DraftOrderEditor() {
                                         <label className="text-xs font-semibold text-slate-700">
                                             配送方式
                                         </label>
-                                        <select
+                                        <AdminSelect
                                             value={order.shippingLines[0]?.shippingMethod.id ?? ''}
                                             onChange={event => void chooseShippingMethod(event.target.value)}
                                             disabled={busy || shippingMethodsQuery.loading}
@@ -799,7 +798,7 @@ export function DraftOrderEditor() {
                                                     {formatMoney(method.priceWithTax, order.currencyCode)}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </AdminSelect>
                                         {!order.shippingAddress?.streetLine1 && (
                                             <p className="mt-2 text-[10px] text-amber-700">
                                                 先保存地址后才能计算可用配送方式
@@ -817,7 +816,7 @@ export function DraftOrderEditor() {
                     <p className="text-xs font-semibold text-slate-700">完成草稿</p>
                     <div className="flex flex-wrap gap-2">
                         {order.nextStates.map(state => (
-                            <button
+                            <AdminButton
                                 key={state}
                                 type="button"
                                 disabled={busy}
@@ -825,7 +824,7 @@ export function DraftOrderEditor() {
                                 className={`rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50 ${state === 'Cancelled' ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                             >
                                 完成草稿并进入{getOrderStateLabel(state)}
-                            </button>
+                            </AdminButton>
                         ))}
                         {order.nextStates.length === 0 && (
                             <p className="text-xs text-slate-400">当前状态没有可用的下一步</p>
@@ -864,7 +863,6 @@ export function ModifyOrderEditor() {
     const orderQuery = useQuery<OrderQueryData>(GET_SALES_ORDER, {
         variables: { id },
         skip: !id,
-        fetchPolicy: 'cache-and-network',
     });
     const [adjustments, setAdjustments] = useState<Record<string, number>>({});
     const [addedItems, setAddedItems] = useState<Record<string, { variant: VariantItem; quantity: number }>>(
@@ -1032,7 +1030,7 @@ export function ModifyOrderEditor() {
     };
 
     if (orderQuery.loading && !orderQuery.data) return <WorkflowLoading label="正在加载订单修改数据…" />;
-    if (orderQuery.error || !order)
+    if ((orderQuery.error && !orderQuery.data) || !order)
         return (
             <WorkflowError
                 message={toUserFacingError(orderQuery.error, '订单不存在或加载失败')}
@@ -1093,33 +1091,33 @@ export function ModifyOrderEditor() {
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setLineQuantity(line, quantity - 1)}
                                                     className="rounded border border-slate-300 p-1.5"
                                                     aria-label={`减少${line.productVariant.name}数量`}
                                                 >
                                                     <ChevronDown className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                                 <span className="w-8 text-center font-mono text-xs font-semibold">
                                                     {quantity}
                                                 </span>
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setLineQuantity(line, quantity + 1)}
                                                     className="rounded border border-slate-300 p-1.5"
                                                     aria-label={`增加${line.productVariant.name}数量`}
                                                 >
                                                     <ChevronUp className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
+                                                </AdminButton>
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setLineQuantity(line, 0)}
                                                     className="rounded p-1.5 text-rose-600"
                                                     aria-label={`移除${line.productVariant.name}`}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         </div>
                                     );
@@ -1138,7 +1136,7 @@ export function ModifyOrderEditor() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() =>
                                                     setAddedQuantity(item.variant.id, item.quantity - 1)
@@ -1146,11 +1144,11 @@ export function ModifyOrderEditor() {
                                                 className="rounded border border-emerald-300 p-1.5"
                                             >
                                                 <ChevronDown className="h-3.5 w-3.5" />
-                                            </button>
+                                            </AdminButton>
                                             <span className="w-8 text-center font-mono text-xs font-semibold">
                                                 {item.quantity}
                                             </span>
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() =>
                                                     setAddedQuantity(item.variant.id, item.quantity + 1)
@@ -1158,7 +1156,7 @@ export function ModifyOrderEditor() {
                                                 className="rounded border border-emerald-300 p-1.5"
                                             >
                                                 <ChevronUp className="h-3.5 w-3.5" />
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                     </div>
                                 ))}
@@ -1178,7 +1176,7 @@ export function ModifyOrderEditor() {
                                     附加费用
                                     <FeatureHelpButton topic="sales.totals" title="附加费用" />
                                 </h2>
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setSurcharges(current => [
@@ -1190,12 +1188,12 @@ export function ModifyOrderEditor() {
                                     className="flex items-center gap-1 text-xs font-semibold text-blue-600"
                                 >
                                     <Plus className="h-3.5 w-3.5" /> 添加费用
-                                </button>
+                                </AdminButton>
                             </div>
                             <div className="mt-3 space-y-2">
                                 {surcharges.map(item => (
                                     <div key={item.id} className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-                                        <input
+                                        <AdminInput
                                             value={item.description}
                                             onChange={event => {
                                                 setSurcharges(current =>
@@ -1213,7 +1211,7 @@ export function ModifyOrderEditor() {
                                             placeholder="费用说明"
                                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
                                         />
-                                        <input
+                                        <AdminInput
                                             value={item.price}
                                             onChange={event => {
                                                 setSurcharges(current =>
@@ -1229,7 +1227,7 @@ export function ModifyOrderEditor() {
                                             placeholder="金额"
                                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
                                         />
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => {
                                                 setSurcharges(current =>
@@ -1241,7 +1239,7 @@ export function ModifyOrderEditor() {
                                             aria-label="删除附加费用"
                                         >
                                             <Trash2 className="h-4 w-4" />
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 ))}
                                 {surcharges.length === 0 && (
@@ -1253,7 +1251,7 @@ export function ModifyOrderEditor() {
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                             <label className="text-sm font-semibold text-slate-900">
                                 修改原因 *
-                                <textarea
+                                <AdminTextArea
                                     value={note}
                                     onChange={event => {
                                         setNote(event.target.value);
@@ -1292,7 +1290,7 @@ export function ModifyOrderEditor() {
                                 </div>
                             )}
                         </section>
-                        <button
+                        <AdminButton
                             type="button"
                             disabled={!hasChanges || modifyState.loading}
                             onClick={() => void handlePreview()}
@@ -1300,15 +1298,15 @@ export function ModifyOrderEditor() {
                         >
                             {modifyState.loading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
                             预览修改结果
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             disabled={preview?.__typename !== 'Order' || modifyState.loading}
                             onClick={() => void handleConfirm()}
                             className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Check className="h-4 w-4" /> 确认写入订单
-                        </button>
+                        </AdminButton>
                         <p className="text-[10px] leading-5 text-slate-400">
                             减价会从已结算支付中分配退款；加价后需在订单支付流程中继续收取补款。
                         </p>
@@ -1334,14 +1332,14 @@ function WorkflowHeader({
         <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onBack}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
                         aria-label="返回订单"
                     >
                         <ArrowLeft className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                     <div className="min-w-0">
                         <h1 className="truncate text-base font-semibold text-slate-950">{title}</h1>
                         <p className="mt-1 text-[11px] text-slate-500">{subtitle}</p>
@@ -1373,9 +1371,14 @@ function WorkflowMessages({
                 <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{error}</span>
-                    <button type="button" onClick={onClose} className="ml-auto" aria-label="关闭错误提示">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        className="ml-auto"
+                        aria-label="关闭错误提示"
+                    >
                         ×
-                    </button>
+                    </AdminButton>
                 </div>
             )}
         </>
@@ -1406,21 +1409,21 @@ function WorkflowError({
                 <h1 className="mt-3 text-sm font-semibold text-slate-900">订单操作暂不可用</h1>
                 <p className="mt-2 text-xs leading-5 text-slate-500">{message}</p>
                 <div className="mt-4 flex justify-center gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onBack}
                         className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold"
                     >
                         返回
-                    </button>
+                    </AdminButton>
                     {onRetry && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onRetry}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
             </section>

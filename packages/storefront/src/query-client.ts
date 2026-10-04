@@ -41,6 +41,8 @@ export function createStorefrontQueryClient(): QueryClient {
                 gcTime: PUBLIC_QUERY_GC_TIME,
                 refetchOnMount: storefrontRefetchPolicy,
                 refetchOnWindowFocus: storefrontRefetchPolicy,
+                refetchOnReconnect: storefrontRefetchPolicy,
+                refetchIntervalInBackground: false,
                 networkMode: 'online',
             },
             mutations: {
@@ -60,6 +62,38 @@ export function publicQueryMeta() {
 export function storefrontRefetchPolicy(_query: { meta?: Record<string, unknown> }): true {
     // Let React Query refetch only stale queries instead of forcing every persisted query to refresh.
     return true;
+}
+
+export interface StorefrontRefreshScope {
+    marketCode: string;
+    languageCode: string;
+    includePrivate?: boolean;
+}
+
+export function isStorefrontQueryInScope(queryKey: QueryKey, scope: StorefrontRefreshScope): boolean {
+    return (
+        queryKey[0] === 'storefront' &&
+        queryKey[1] === scope.marketCode &&
+        (queryKey[2] === scope.languageCode || queryKey[2] === 'commerce-mode') &&
+        (scope.includePrivate === true || queryKey[3] !== 'private')
+    );
+}
+
+/** Placeholder continuity is limited to the same store, settlement currency and language. */
+export function storefrontPlaceholderData<T>(
+    previous: T | undefined,
+    previousKey: QueryKey | undefined,
+    nextKey: QueryKey,
+): T | undefined {
+    return previousKey?.slice(0, 3).every((part, index) => part === nextKey[index]) ? previous : undefined;
+}
+
+/** Refresh active reads together; repeated clicks join the existing request and never replay writes. */
+export function refreshStorefrontQueries(client: QueryClient, scope: StorefrontRefreshScope) {
+    return client.refetchQueries(
+        { type: 'active', predicate: query => isStorefrontQueryInScope(query.queryKey, scope) },
+        { cancelRefetch: false },
+    );
 }
 
 const reusablePublicQueries = new Set([
@@ -87,10 +121,23 @@ export function persistPublicQueryCache(
 ): void {
     const state = dehydrate(client, {
         shouldDehydrateQuery: query =>
-            query.state.status === 'success' &&
+            query.state.data !== undefined &&
             query.meta?.persistPublic === true &&
             isReusablePublicQuery(query.queryKey),
     });
+    // Persist confirmed public data, never the error object from a later failed refresh.
+    // Keep the original dataUpdatedAt so hydration cannot make old data appear fresh.
+    state.queries = state.queries.map(query => ({
+        ...query,
+        state: {
+            ...query.state,
+            error: null,
+            fetchFailureReason: null,
+            fetchFailureCount: 0,
+            status: 'success',
+            fetchStatus: 'idle',
+        },
+    }));
     const payload: PersistedPublicQueryCache = {
         version: PUBLIC_QUERY_CACHE_VERSION,
         savedAt,
@@ -228,6 +275,11 @@ export const storefrontQueryKeys = {
         ] as const,
     customerReviews: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'reviews'] as const,
+    customerProductActivity: (marketCode: string, languageCode: string, customerId: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'product-activity',
+        ] as const,
     reviewCandidates: (marketCode: string, languageCode: string, customerId: string) =>
         [
             ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),

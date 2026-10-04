@@ -977,9 +977,9 @@ describe('controlled test payments', () => {
             }
         `;
         const readClient = async (c: SimpleGraphQLClient) => (await c.query(query)).storefrontCart;
-        const commandFor = async (c: SimpleGraphQLClient, operation: object) => {
+        const sendFor = async (c: SimpleGraphQLClient, operation: object) => {
             const cart = await readClient(c);
-            const result = (
+            return (
                 await c.query(mutation, {
                     input: {
                         commandId: randomUUID(),
@@ -989,6 +989,9 @@ describe('controlled test payments', () => {
                     },
                 })
             ).applyStorefrontCartCommand;
+        };
+        const commandFor = async (c: SimpleGraphQLClient, operation: object) => {
+            const result = await sendFor(c, operation);
             expect(result.status, result.message).toBe('APPLIED');
             return result.cart;
         };
@@ -1015,6 +1018,64 @@ describe('controlled test payments', () => {
                     },
                 );
             await commandFor(c, { deliveryEmail: { emailAddress: email, confirmEmailAddress: email } });
+            if (c === guest) {
+                // Guest orders retain the real risk hold. Review this disposable fixture
+                // through the shop-scoped Admin API before testing payment eligibility.
+                const held = await sendFor(c, { preparePayment: true });
+                expect(held.status).toBe('REJECTED');
+                expect(held.message).toMatch(/订单需人工风险复核（FR-[A-F0-9]{12}）/);
+                const caseCode = held.message.match(/FR-[A-F0-9]{12}/)?.[0];
+                const orderId = (await readClient(c)).checkoutOrder.id;
+                expect((await readClient(c)).checkoutOrder.state).not.toBe('ArrangingPayment');
+                adminClient.setChannelToken(cartChannelToken);
+                try {
+                    const cases = (
+                        await adminClient.query(gql`
+                            query {
+                                fraudRiskCases {
+                                    items {
+                                        id
+                                        caseCode
+                                        orderId
+                                        status
+                                    }
+                                }
+                            }
+                        `)
+                    ).fraudRiskCases.items;
+                    const riskCase = cases.find((item: { caseCode: string }) => item.caseCode === caseCode);
+                    expect(riskCase).toMatchObject({ orderId, status: 'OPEN' });
+                    const reviewed = (
+                        await adminClient.query(
+                            gql`
+                                mutation ($input: ReviewFraudRiskCaseInput!) {
+                                    reviewFraudRiskCase(input: $input) {
+                                        id
+                                        status
+                                        decisionCode
+                                    }
+                                }
+                            `,
+                            {
+                                input: {
+                                    id: riskCase.id,
+                                    action: 'RELEASE',
+                                    reason: 'Synthetic guest order ownership confirmed for local checkout fixture.',
+                                    idempotencyKey: randomUUID(),
+                                },
+                            },
+                        )
+                    ).reviewFraudRiskCase;
+                    expect(reviewed).toMatchObject({
+                        id: riskCase.id,
+                        status: 'APPROVED',
+                        decisionCode: 'RELEASE',
+                    });
+                } finally {
+                    adminClient.setChannelToken(null);
+                    adminClient.setRequestHeader(config.apiOptions.channelTokenKey ?? 'vendure-token', null);
+                }
+            }
             return commandFor(c, { preparePayment: true });
         };
         await client.asUserWithCredentials('controlled-payment@example.test', 'local-controlled-test-only');

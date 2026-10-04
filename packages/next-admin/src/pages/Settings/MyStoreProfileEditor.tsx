@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -148,7 +149,7 @@ export function MyStoreProfileEditor({
                                 <p className="mt-1 text-xs text-rose-700">请先验证并设置主域名。</p>
                             )}
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             role="switch"
                             aria-checked={profile.isPublished}
@@ -158,7 +159,7 @@ export function MyStoreProfileEditor({
                             className={profile.isPublished ? secondaryButton : primaryButton}
                         >
                             {profile.isPublished ? '关闭预览' : '开放预览'}
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             )}
@@ -227,14 +228,14 @@ export function MyStoreProfileEditor({
                 ))}
             </div>
             <div className="mt-4 flex justify-end">
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
                     disabled={updateState.loading}
                     className={primaryButton}
                 >
                     保存本店资料
-                </button>
+                </AdminButton>
             </div>
             <div className="mt-5 border-t border-slate-100 pt-5">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -260,14 +261,14 @@ export function MyStoreProfileEditor({
                                 ? '已通过'
                                 : '未提交'}
                     </span>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void submitLegal()}
                         disabled={submitState.loading}
                         className={secondaryButton}
                     >
                         提交主体审核
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         </section>

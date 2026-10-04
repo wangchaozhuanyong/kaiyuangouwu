@@ -64,13 +64,14 @@
     .ai-studio-desktop-heading h2,
     .ai-studio-history h3 {
         margin: 0;
-        font-size: 17px;
-        line-height: 24px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
     }
 
     .ai-studio-desktop-heading > span {
         color: var(--muted);
-        font-size: 12px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .ai-studio-prompt-wrap {
@@ -89,8 +90,8 @@
         height: 100px;
         padding: 12px;
         resize: vertical;
-        font-size: 14px;
-        line-height: 1.65;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
     }
 
     .ai-studio-prompt-tools {
@@ -153,7 +154,8 @@
         grid-template-columns: 64px minmax(0, 1fr);
         align-items: center;
         gap: 12px;
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
         font-weight: var(--font-weight-semibold);
     }
 
@@ -176,6 +178,8 @@
         background: var(--soft);
         color: var(--text);
         font: inherit;
+        font-size: var(--type-input-size);
+        line-height: var(--type-input-leading);
         font-weight: var(--font-weight-normal);
         text-overflow: ellipsis;
         cursor: pointer;
@@ -201,7 +205,8 @@
     .ai-studio-desktop-field legend {
         margin-bottom: 8px;
         padding: 0;
-        font-size: 13px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
         font-weight: var(--font-weight-semibold);
     }
 
@@ -242,8 +247,8 @@
         gap: 6px;
         color: var(--muted);
         background: var(--soft);
-        font-size: 12px;
-        line-height: 1.2;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .ai-studio-desktop-ratios i {
@@ -256,11 +261,13 @@
 
     .ai-studio-desktop-resolutions strong {
         color: var(--text);
-        font-size: 13px;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .ai-studio-desktop-resolutions small {
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
         text-align: center;
         overflow-wrap: anywhere;
     }
@@ -306,11 +313,13 @@
     }
 
     .ai-studio-settlement-amount strong {
-        font-size: 22px;
+        font-size: var(--type-metric-size);
+        line-height: var(--type-metric-leading);
     }
 
     .ai-studio-settlement-amount strong.is-balance {
-        font-size: 18px;
+        font-size: var(--type-metric-size);
+        line-height: var(--type-metric-leading);
     }
 
     .ai-studio-settlement-refund {
@@ -325,7 +334,8 @@
 
     .ai-studio-terms-row {
         margin-top: 10px;
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .ai-studio-fixed-generate {
@@ -380,7 +390,8 @@
         border-radius: var(--skin-control-radius);
         border: 0;
         background: transparent;
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .ai-studio-page .ai-studio-history .ai-studio-history-filters button.is-active {
@@ -450,7 +461,8 @@
     .ai-studio-desktop-empty h4 {
         margin: 0;
         color: var(--text);
-        font-size: 20px;
+        font-size: var(--type-section-size);
+        line-height: var(--type-section-leading);
         font-weight: var(--font-weight-semibold);
     }
 
@@ -458,8 +470,8 @@
         max-width: 330px;
         margin: 12px 0 20px;
         color: var(--muted);
-        font-size: 13px;
-        line-height: 1.8;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .ai-studio-desktop-empty button {
@@ -469,7 +481,8 @@
         border-radius: 7px;
         background: transparent;
         color: var(--text);
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
     }
 
     .ai-studio-desktop-empty button:hover {
@@ -508,8 +521,8 @@
 
     .ai-generation-card-content > p {
         margin-top: 8px;
-        font-size: 13px;
-        line-height: 1.6;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
     }
 
     .ai-generation-card header time,
@@ -517,7 +530,8 @@
     .ai-generation-meta span,
     .ai-generation-card footer > strong,
     .ai-generation-card footer button {
-        font-size: 11px;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
     }
 
     .ai-generation-card footer {

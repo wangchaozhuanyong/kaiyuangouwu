@@ -1,9 +1,10 @@
 import { gql } from '@apollo/client';
-import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Beaker, CreditCard, Info, Pencil, Plus, Sparkles, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import {
     ConfigurableOperationField,
     ConfigurableOperationTechnicalDetails,
@@ -33,6 +34,7 @@ import {
     type StoreManagementResult,
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import {
     configurableArgumentLabel,
@@ -96,9 +98,9 @@ function TestPaymentAvailabilityNotice({
                     : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
-                <button type="button" onClick={onConfigure} className={`${secondaryButton} mt-3`}>
+                <AdminButton type="button" onClick={onConfigure} className={`${secondaryButton} mt-3`}>
                     配置测试支付
-                </button>
+                </AdminButton>
             )}
         </aside>
     );
@@ -120,9 +122,7 @@ export function PaymentShippingManager({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
-    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
-        fetchPolicy: 'cache-first',
-    });
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
     const { hasAnyPermission } = useAdminPermissions();
     const isPlatform = data.activeChannel.code === '__default_channel__';
@@ -216,13 +216,13 @@ export function PaymentShippingManager({
                                 </p>
                             </div>
                             {canCreatePayment && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setEditor({ kind: 'payment' })}
                                     className={primaryButton}
                                 >
                                     <Plus className="h-3.5 w-3.5" /> 新增
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                         <div className="px-5 pt-4 empty:hidden">
@@ -276,7 +276,7 @@ export function PaymentShippingManager({
                                             {systemManaged ? (
                                                 <span className="text-[10px] font-bold text-slate-500">
                                                     {canUpdatePayment && (
-                                                        <input
+                                                        <AdminInput
                                                             type="checkbox"
                                                             aria-label="平台 USDT 全局开关"
                                                             checked={item.enabled}
@@ -292,7 +292,7 @@ export function PaymentShippingManager({
                                                 <>
                                                     {canUpdatePayment && (
                                                         <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                                            <input
+                                                            <AdminInput
                                                                 type="checkbox"
                                                                 checked={item.enabled}
                                                                 onChange={event =>
@@ -307,7 +307,7 @@ export function PaymentShippingManager({
                                                         </label>
                                                     )}
                                                     {canUpdatePayment && (
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             onClick={() =>
                                                                 setEditor({ kind: 'payment', item })
@@ -316,10 +316,10 @@ export function PaymentShippingManager({
                                                             aria-label={`编辑支付方式${displayName}`}
                                                         >
                                                             <Pencil className="h-3.5 w-3.5" />
-                                                        </button>
+                                                        </AdminButton>
                                                     )}
                                                     {canDeletePayment && (
-                                                        <button
+                                                        <AdminButton
                                                             type="button"
                                                             disabled={deleting}
                                                             onClick={() =>
@@ -329,7 +329,7 @@ export function PaymentShippingManager({
                                                             aria-label={`删除支付方式${displayName}`}
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
+                                                        </AdminButton>
                                                     )}
                                                 </>
                                             )}
@@ -357,13 +357,13 @@ export function PaymentShippingManager({
                                 </p>
                             </div>
                             {canCreateShipping && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setEditor({ kind: 'shipping' })}
                                     className={primaryButton}
                                 >
                                     <Plus className="h-3.5 w-3.5" /> 新增
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                         <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3.5">
@@ -426,17 +426,17 @@ export function PaymentShippingManager({
                                         </div>
                                         <div className="flex shrink-0 items-center gap-1">
                                             {canUpdateShipping && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setEditor({ kind: 'shipping', item })}
                                                     className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
                                                     aria-label={`编辑配送方式${displayName}`}
                                                 >
                                                     <Pencil className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                             )}
                                             {canDeleteShipping && (
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     disabled={deleting}
                                                     onClick={() =>
@@ -446,7 +446,7 @@ export function PaymentShippingManager({
                                                     aria-label={`删除配送方式${displayName}`}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
+                                                </AdminButton>
                                             )}
                                         </div>
                                     </div>
@@ -541,9 +541,7 @@ function StorePaymentSwitches({
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStoreProfile']);
-    const query = useQuery<{ myStorePaymentOptions: StorePaymentOption[] }>(STORE_PAYMENT_SWITCHES, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<{ myStorePaymentOptions: StorePaymentOption[] }>(STORE_PAYMENT_SWITCHES, {});
     const [save, saving] = useMutation(SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION);
     const toggle = async (item: StorePaymentOption, enabled: boolean) => {
         try {
@@ -587,7 +585,7 @@ function StorePaymentSwitches({
                     </div>
                     {canUpdate && (
                         <label className="flex shrink-0 items-center gap-2 text-xs">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 aria-label={`本店${item.name}开关`}
                                 checked={item.enabled}
@@ -923,9 +921,9 @@ function MethodEditorDialog({
                         </h2>
                         <p className="mt-1 text-xs text-slate-400">参数值会直接写入 Vendure 配置</p>
                     </div>
-                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500">
+                    <AdminButton type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </header>
                 <div className="space-y-5 p-5">
                     {state.kind === 'shipping' && (
@@ -941,7 +939,7 @@ function MethodEditorDialog({
                             </div>
                             <div className="mt-2.5 grid gap-2 sm:grid-cols-3">
                                 {SHIPPING_PRESETS.map(preset => (
-                                    <button
+                                    <AdminButton
                                         key={preset.key}
                                         type="button"
                                         onClick={() => applyShippingPreset(preset.key)}
@@ -958,14 +956,14 @@ function MethodEditorDialog({
                                         <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-500">
                                             {preset.description}
                                         </p>
-                                    </button>
+                                    </AdminButton>
                                 ))}
                             </div>
                         </div>
                     )}
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="配置代码 *">
-                            <input
+                            <AdminInput
                                 value={code}
                                 disabled={isControlledTest}
                                 onChange={event => setCode(event.target.value)}
@@ -973,7 +971,7 @@ function MethodEditorDialog({
                             />
                         </Field>
                         <Field label="显示名称 *">
-                            <input
+                            <AdminInput
                                 value={name}
                                 onChange={event => setName(event.target.value)}
                                 className={inputClass}
@@ -981,7 +979,7 @@ function MethodEditorDialog({
                         </Field>
                     </div>
                     <Field label="描述">
-                        <textarea
+                        <AdminTextArea
                             value={description}
                             onChange={event => setDescription(event.target.value)}
                             rows={3}
@@ -990,7 +988,7 @@ function MethodEditorDialog({
                     </Field>
                     {state.kind === 'payment' && (
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                            <input
+                            <AdminInput
                                 type="checkbox"
                                 checked={enabled}
                                 onChange={event => setEnabled(event.target.checked)}
@@ -1054,7 +1052,7 @@ function MethodEditorDialog({
                                 onValuesChange={setCalculatorArgs}
                             />
                             <Field label="履约处理器 *">
-                                <select
+                                <AdminSelect
                                     value={fulfillmentHandler}
                                     onChange={event => setFulfillmentHandler(event.target.value)}
                                     className={inputClass}
@@ -1065,7 +1063,7 @@ function MethodEditorDialog({
                                             {configurableOperationLabel(definition, '履约处理方式')}
                                         </option>
                                     ))}
-                                </select>
+                                </AdminSelect>
                             </Field>
                             {fulfillmentDefinition && (
                                 <ConfigurableOperationTechnicalDetails definition={fulfillmentDefinition} />
@@ -1091,17 +1089,17 @@ function MethodEditorDialog({
                     />
                 </div>
                 <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-                    <button type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
                         取消
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         disabled={busy}
                         onClick={() => void submit()}
                         className={primaryButton}
                     >
                         {busy ? '保存中…' : '保存配置'}
-                    </button>
+                    </AdminButton>
                 </footer>
             </AccessibleDialogSurface>
         </div>
@@ -1182,14 +1180,14 @@ function ShippingMethodTester({
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <Field label="商品 SKU ID *">
-                    <input
+                    <AdminInput
                         value={variantId}
                         onChange={event => setVariantId(event.target.value)}
                         className={inputClass}
                     />
                 </Field>
                 <Field label="数量 *">
-                    <input
+                    <AdminInput
                         type="number"
                         min="1"
                         value={quantity}
@@ -1198,7 +1196,7 @@ function ShippingMethodTester({
                     />
                 </Field>
                 <Field label="国家代码 *">
-                    <input
+                    <AdminInput
                         value={countryCode}
                         maxLength={2}
                         onChange={event => setCountryCode(event.target.value)}
@@ -1206,21 +1204,21 @@ function ShippingMethodTester({
                     />
                 </Field>
                 <Field label="地址第一行 *">
-                    <input
+                    <AdminInput
                         value={streetLine1}
                         onChange={event => setStreetLine1(event.target.value)}
                         className={inputClass}
                     />
                 </Field>
                 <Field label="城市">
-                    <input
+                    <AdminInput
                         value={city}
                         onChange={event => setCity(event.target.value)}
                         className={inputClass}
                     />
                 </Field>
                 <Field label="邮编">
-                    <input
+                    <AdminInput
                         value={postalCode}
                         onChange={event => setPostalCode(event.target.value)}
                         className={inputClass}
@@ -1241,7 +1239,7 @@ function ShippingMethodTester({
                         : '当前地址与商品不符合此配送方式条件'}
                 </div>
             )}
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => void run()}
                 disabled={result.loading || !checkerCode || !calculatorCode}
@@ -1249,7 +1247,7 @@ function ShippingMethodTester({
             >
                 <Beaker className="h-3.5 w-3.5" />
                 {result.loading ? '试算中…' : '执行试算'}
-            </button>
+            </AdminButton>
         </section>
     );
 }
@@ -1278,7 +1276,7 @@ function OperationEditor({
     return (
         <section className="rounded-xl border border-slate-200 p-4">
             <Field label={label}>
-                <select
+                <AdminSelect
                     value={code}
                     onChange={event => onCodeChange(event.target.value)}
                     className={inputClass}
@@ -1289,7 +1287,7 @@ function OperationEditor({
                             {configurableOperationLabel(item, `${label}选项`)}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
             </Field>
             {definition && (
                 <div className="mt-2">

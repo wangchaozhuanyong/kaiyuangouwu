@@ -1,4 +1,5 @@
 import { Component, Suspense, useId, useMemo, useState, type ReactNode } from 'react';
+import { AdminButton } from '../components/AdminControls';
 
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
 
@@ -23,8 +24,16 @@ class ExtensionBoundary extends Component<{ children: ReactNode; extensionId: st
                 <div
                     className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800"
                     role="alert"
+                    data-admin-extension-error
                 >
                     扩展区块加载失败，核心页面未受影响。
+                    <AdminButton
+                        type="button"
+                        onClick={() => this.setState({ failed: false })}
+                        className="ml-3 rounded border border-amber-300 px-3 py-1 font-semibold"
+                    >
+                        重试扩展
+                    </AdminButton>
                 </div>
             );
         }
@@ -41,11 +50,15 @@ function ExtensionLoadingSurface({ compact = false }: { compact?: boolean }) {
         <div
             className={
                 compact
-                    ? 'h-9 min-w-24 animate-pulse rounded-lg bg-slate-100'
-                    : 'h-24 animate-pulse rounded-xl bg-slate-100'
+                    ? 'h-9 min-w-24 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none'
+                    : 'h-24 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none'
             }
-            aria-hidden="true"
-        />
+            role="status"
+            aria-label="正在加载扩展"
+            data-admin-extension-loading
+        >
+            <span className="sr-only">正在加载扩展…</span>
+        </div>
     );
 }
 
@@ -101,7 +114,7 @@ export function NextAdminActions({
     return (
         <div className="contents" data-extension-location={`${pageId}:actions`}>
             {collapseOnMobile && (
-                <button
+                <AdminButton
                     type="button"
                     aria-expanded={expanded}
                     aria-controls={actionsId}
@@ -109,7 +122,7 @@ export function NextAdminActions({
                     className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 sm:hidden"
                 >
                     {expanded ? '收起操作' : '更多操作'}
-                </button>
+                </AdminButton>
             )}
             <div
                 id={actionsId}

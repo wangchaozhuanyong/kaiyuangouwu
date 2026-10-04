@@ -2,6 +2,7 @@ import { AlertTriangle, HelpCircle, ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { registerSensitiveActionPasswordPrompt } from '../apollo-sensitive-action';
 import { useAccessibleDialog } from '../hooks/use-accessible-dialog';
+import { AdminButton, AdminInput } from './AdminControls';
 import {
     ConfirmDialogContext,
     type ConfirmDialogOptions,
@@ -110,7 +111,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                             </p>
                             {options.requireCurrentPassword && (
                                 <>
-                                    <input
+                                    <AdminInput
                                         type="text"
                                         name="username"
                                         autoComplete="username"
@@ -121,7 +122,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                     />
                                     <label className="mt-5 block text-xs font-bold text-slate-700">
                                         当前管理员密码
-                                        <input
+                                        <AdminInput
                                             type="password"
                                             name="current-password"
                                             value={currentPassword}
@@ -135,21 +136,21 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                 </>
                             )}
                             <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => settle(false)}
                                     autoFocus={!options.requireCurrentPassword}
                                     className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100"
                                 >
                                     {options.cancelLabel ?? '取消'}
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="submit"
                                     disabled={options.requireCurrentPassword && !currentPassword}
                                     className={`rounded-lg px-4 py-2 text-xs font-bold text-white focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${confirmClass}`}
                                 >
                                     {options.confirmLabel ?? '确认'}
-                                </button>
+                                </AdminButton>
                             </div>
                         </form>
                     </section>

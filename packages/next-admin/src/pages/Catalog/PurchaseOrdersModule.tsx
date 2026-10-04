@@ -1,7 +1,9 @@
-import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
+import { useApolloClient, useMutation } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
 import { AlertTriangle, ClipboardCheck, Plus, RefreshCw, X } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -75,7 +77,6 @@ export function PurchaseOrdersModule() {
                 exceptionsOnly,
             },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const result = query.data?.catalogPurchaseOrders;
     const totalPages = Math.max(1, Math.ceil((result?.totalItems ?? 0) / PAGE_SIZE));
@@ -93,27 +94,30 @@ export function PurchaseOrdersModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             aria-label="刷新采购单"
                             onClick={() => void query.refetch()}
                             className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600"
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
-                        </button>
-                        <button
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => setCreateOpen(true)}
                             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
                         >
                             <Plus className="h-4 w-4" /> 新建采购单
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
             <main className="flex-1 space-y-4 overflow-auto p-5 sm:p-8">
                 <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row">
-                    <input
+                    <AdminInput
                         value={text}
                         onChange={event => {
                             setText(event.target.value);
@@ -122,7 +126,7 @@ export function PurchaseOrdersModule() {
                         placeholder="搜索采购单号或供货商"
                         className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     />
-                    <select
+                    <AdminSelect
                         value={status}
                         onChange={event => {
                             setStatus(event.target.value as typeof status);
@@ -136,9 +140,9 @@ export function PurchaseOrdersModule() {
                                 {label}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                     <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={exceptionsOnly}
                             onChange={event => {
@@ -152,7 +156,7 @@ export function PurchaseOrdersModule() {
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {query.loading && !query.data ? (
                         <State label="正在读取采购单…" />
-                    ) : query.error ? (
+                    ) : query.error && !query.data ? (
                         <State label="采购单加载失败" tone="error" />
                     ) : !result?.items.length ? (
                         <State label="当前筛选下没有采购单" />
@@ -201,25 +205,25 @@ export function PurchaseOrdersModule() {
                     <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
                         <span>共 {result?.totalItems ?? 0} 张</span>
                         <div className="flex gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={page === 0}
                                 onClick={() => setPage(value => value - 1)}
                                 className="rounded border px-3 py-1.5 disabled:opacity-30"
                             >
                                 上一页
-                            </button>
+                            </AdminButton>
                             <span className="px-2 py-1.5">
                                 {page + 1} / {totalPages}
                             </span>
-                            <button
+                            <AdminButton
                                 type="button"
                                 disabled={page + 1 >= totalPages}
                                 onClick={() => setPage(value => value + 1)}
                                 className="rounded border px-3 py-1.5 disabled:opacity-30"
                             >
                                 下一页
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </section>
@@ -272,7 +276,6 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
             },
         },
         skip: !deferredSkuSearch,
-        fetchPolicy: 'cache-and-network',
     });
     const [create, createState] = useMutation<{
         createCatalogPurchaseOrder: CatalogPurchaseOrderRecord;
@@ -336,7 +339,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                     }))}
                 />
                 <Field label="预计到货日">
-                    <input
+                    <AdminInput
                         type="date"
                         value={draft.expectedAt}
                         onChange={event => setDraft({ ...draft, expectedAt: event.target.value })}
@@ -344,7 +347,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                     />
                 </Field>
                 <Field label="内部备注">
-                    <input
+                    <AdminInput
                         value={draft.notes}
                         onChange={event => setDraft({ ...draft, notes: event.target.value })}
                         className={inputClass}
@@ -354,7 +357,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
             <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                     <span>SKU 明细</span>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() =>
                             setDraft({
@@ -365,9 +368,9 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                         className="text-blue-700"
                     >
                         + 添加 SKU
-                    </button>
+                    </AdminButton>
                 </div>
-                <input
+                <AdminInput
                     value={skuSearch}
                     onChange={event => setSkuSearch(event.target.value)}
                     aria-label="搜索采购 SKU"
@@ -377,25 +380,25 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                 {context.error && (
                     <p role="alert" className="text-xs text-red-600 dark:text-red-300">
                         收货仓库加载失败，请重试。
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void context.refetch()}
                             className="ml-2 underline"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </p>
                 )}
                 {variantsQuery.error && (
                     <p role="alert" className="text-xs text-red-600 dark:text-red-300">
                         SKU 搜索失败，请重试。
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void variantsQuery.refetch()}
                             className="ml-2 underline"
                         >
                             重试
-                        </button>
+                        </AdminButton>
                     </p>
                 )}
                 {deferredSkuSearch &&
@@ -409,7 +412,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                         key={index}
                         className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_110px_130px_32px]"
                     >
-                        <select
+                        <AdminSelect
                             aria-label={`选择第 ${index + 1} 个采购 SKU`}
                             value={line.variantId}
                             onChange={event => {
@@ -450,8 +453,8 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                                         {item.name} · {item.sku}
                                     </option>
                                 ))}
-                        </select>
-                        <input
+                        </AdminSelect>
+                        <AdminInput
                             type="number"
                             min="1"
                             value={line.quantity}
@@ -467,7 +470,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                             }
                             className={inputClass}
                         />
-                        <input
+                        <AdminInput
                             type="number"
                             min="0"
                             step="0.001"
@@ -484,7 +487,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                             }
                             className={inputClass}
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             aria-label="删除 SKU"
                             onClick={() =>
@@ -492,7 +495,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                             }
                         >
                             <X className="h-4 w-4" />
-                        </button>
+                        </AdminButton>
                     </div>
                 ))}
             </div>
@@ -523,7 +526,7 @@ function OrderDetailDialog({
     const client = useApolloClient();
     const detail = useQuery<{ catalogPurchaseOrder: CatalogPurchaseOrderRecord }>(
         CATALOG_PURCHASE_ORDER_QUERY,
-        { variables: { id }, fetchPolicy: 'network-only' },
+        { variables: { id } },
     );
     const order = detail.data?.catalogPurchaseOrder;
     const execute = async (mutation: DocumentNode, variables: Record<string, unknown>) => {
@@ -766,7 +769,7 @@ function OrderActionDialog({
                 {mode === 'RECEIVE' && (
                     <>
                         <Field label="供货商送货单号">
-                            <input
+                            <AdminInput
                                 value={receiptReference}
                                 onChange={event => setReceiptReference(event.target.value)}
                                 className={inputClass}
@@ -791,7 +794,7 @@ function OrderActionDialog({
                                                     }[field]
                                                 }
                                             >
-                                                <input
+                                                <AdminInput
                                                     type="number"
                                                     min="0"
                                                     value={line[field]}
@@ -809,7 +812,7 @@ function OrderActionDialog({
                                         ))}
                                     </div>
                                     <Field label="批次号">
-                                        <input
+                                        <AdminInput
                                             value={line.lotCode}
                                             onChange={event =>
                                                 setReceiptLines(
@@ -824,7 +827,7 @@ function OrderActionDialog({
                                     </Field>
                                     {Number(line.rejected) > 0 && (
                                         <Field label="不合格原因">
-                                            <input
+                                            <AdminInput
                                                 value={line.rejectionReason}
                                                 onChange={event =>
                                                     setReceiptLines(
@@ -846,7 +849,7 @@ function OrderActionDialog({
                 {mode === 'RETURN' && (
                     <>
                         <Field label="供货商确认编号">
-                            <input
+                            <AdminInput
                                 value={supplierAcknowledgement}
                                 onChange={event => setSupplierAcknowledgement(event.target.value)}
                                 className={inputClass}
@@ -873,7 +876,7 @@ function OrderActionDialog({
                                         }))}
                                     />
                                     <Field label="数量">
-                                        <input
+                                        <AdminInput
                                             type="number"
                                             min="0"
                                             value={line.quantity}
@@ -889,7 +892,7 @@ function OrderActionDialog({
                                         />
                                     </Field>
                                     <Field label="原因">
-                                        <input
+                                        <AdminInput
                                             value={line.reason}
                                             onChange={event =>
                                                 setReturnLines(
@@ -910,7 +913,7 @@ function OrderActionDialog({
                 {mode === 'PAY' && (
                     <>
                         <Field label="付款金额">
-                            <input
+                            <AdminInput
                                 type="number"
                                 min="0"
                                 step="0.001"
@@ -920,7 +923,7 @@ function OrderActionDialog({
                             />
                         </Field>
                         <Field label="付款凭证号">
-                            <input
+                            <AdminInput
                                 value={reference}
                                 onChange={event => setReference(event.target.value)}
                                 className={inputClass}
@@ -929,7 +932,7 @@ function OrderActionDialog({
                     </>
                 )}
                 <Field label={mode === 'RECEIVE' || mode === 'RETURN' || mode === 'PAY' ? '备注' : '原因'}>
-                    <textarea
+                    <AdminTextArea
                         value={note}
                         onChange={event => setNote(event.target.value)}
                         className={`${inputClass} min-h-20`}
@@ -973,9 +976,9 @@ function Modal({
             >
                 <div className="mb-5 flex items-center justify-between border-b pb-3">
                     <h2 className="text-base font-bold">{title}</h2>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 {children}
             </AccessibleDialogSurface>
@@ -1002,22 +1005,22 @@ function ModalFooter({
         <>
             <div className="mt-5">{error && <Notice message={error} />}</div>
             <div className="mt-5 flex justify-end gap-2 border-t pt-4">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     disabled={pending}
                     className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold"
                 >
                     取消
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={onSubmit}
                     disabled={pending || !valid}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                 >
                     {pending ? '处理中…' : label}
-                </button>
+                </AdminButton>
             </div>
         </>
     );
@@ -1044,14 +1047,18 @@ function SelectField({
 }) {
     return (
         <Field label={label}>
-            <select value={value} onChange={event => onChange(event.target.value)} className={inputClass}>
+            <AdminSelect
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                className={inputClass}
+            >
                 <option value="">请选择</option>
                 {options.map(option => (
                     <option key={option.value} value={option.value}>
                         {option.label}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         </Field>
     );
 }
@@ -1067,13 +1074,13 @@ function ActionButton({
     danger?: boolean;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`rounded-lg px-3 py-2 text-xs font-bold ${danger ? 'bg-rose-600 text-white' : secondary ? 'border border-slate-300 bg-white' : 'bg-blue-600 text-white'}`}
         >
             {label}
-        </button>
+        </AdminButton>
     );
 }
 function Status({ order }: { order: CatalogPurchaseOrderRecord }) {

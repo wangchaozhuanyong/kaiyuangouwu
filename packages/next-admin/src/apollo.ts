@@ -1,9 +1,11 @@
-import { ApolloClient, ApolloLink, InMemoryCache, Observable, createHttpLink, gql } from '@apollo/client';
+import { ApolloClient, ApolloLink, Observable, createHttpLink, gql } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
 import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
-import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
+import { createAdminCache } from './runtime/admin-cache';
+import { adminReadTimeoutLink } from './runtime/admin-read-timeout';
+import { createResourceInvalidationLink } from './runtime/admin-resource-events';
 import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
 import { getAdminDisplayLanguage } from './utils/admin-language';
 import { clearAllListSearch } from './utils/list-state-storage';
@@ -45,6 +47,9 @@ export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
 let channelRevision = 0;
+
+/** Opaque, non-secret identity for query metadata; session transitions already advance this revision. */
+export const getAdminQueryScope = () => `${channelRevision}:${getAdminDisplayLanguage()}`;
 
 const replaceActiveChannelToken = (channelToken: string | null) => {
     if (getActiveChannelToken() !== channelToken) channelRevision++;
@@ -278,38 +283,12 @@ export const client = new ApolloClient({
         authLink,
         adminMutationFeedbackLink,
         channelScopeResponseLink,
+        createResourceInvalidationLink(getAdminQueryScope),
+        adminReadTimeoutLink,
         sensitiveActionPasswordLink,
         httpLink,
     ]),
-    cache: new InMemoryCache({
-        possibleTypes: {
-            ...CUSTOM_FIELD_POSSIBLE_TYPES,
-            StockMovement: ['StockAdjustment', 'Allocation', 'Sale', 'Cancellation', 'Return', 'Release'],
-        },
-        typePolicies: {
-            StorePaymentDetail: {
-                keyFields: ['id', 'channelId'],
-            },
-            Product: {
-                keyFields: ['id'],
-            },
-            Order: {
-                keyFields: ['id'],
-            },
-            Asset: {
-                keyFields: ['id'],
-            },
-            Collection: {
-                keyFields: ['id'],
-            },
-            Administrator: {
-                keyFields: ['id'],
-            },
-            Customer: {
-                keyFields: ['id'],
-            },
-        },
-    }),
+    cache: createAdminCache(),
 });
 
 const LOGOUT_MUTATION = gql`

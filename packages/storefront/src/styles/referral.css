@@ -54,9 +54,10 @@
     gap: 8px;
     margin-bottom: 14px;
     color: var(--referral-gold);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-eyebrow);
 }
 .referral-invite-kicker svg {
     width: 20px;
@@ -66,16 +67,16 @@
     margin: 0;
     color: var(--referral-hero-ink);
     font-family: var(--skin-display-font, var(--font-ui));
-    font-size: clamp(24px, 2.1vw, 28px);
-    font-weight: 700;
-    line-height: 1.4;
-    letter-spacing: -0.02em;
+    font-size: var(--type-section-size);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--type-section-leading);
+    letter-spacing: var(--tracking-normal);
 }
 .referral-invite-description {
     margin: 10px 0 0;
     color: var(--referral-hero-muted);
-    font-size: 13px;
-    line-height: 1.8;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
 }
 .referral-invite-code {
     margin-top: 22px;
@@ -85,9 +86,10 @@
 }
 .referral-invite-code-label {
     color: var(--muted);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-code);
 }
 .referral-invite-code-row {
     display: flex;
@@ -100,11 +102,11 @@
     min-width: 0;
     overflow-wrap: anywhere;
     color: var(--accent-ink);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 25px;
-    font-weight: 700;
-    line-height: 1.4;
-    letter-spacing: 0.12em;
+    font-family: var(--font-code);
+    font-size: var(--type-page-size);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--type-page-leading);
+    letter-spacing: var(--tracking-code);
 }
 .referral-invite-copy {
     display: grid;
@@ -126,8 +128,8 @@
     margin: 6px 0 0;
     overflow: hidden;
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.6;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -148,8 +150,9 @@
     padding: 10px 8px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
 }
 .referral-invite-actions svg {
     flex-shrink: 0;
@@ -210,7 +213,7 @@
 .referral-overview-heading h2 {
     margin: 0;
     font-family: var(--skin-display-font, var(--font-ui));
-    letter-spacing: 0;
+    letter-spacing: var(--tracking-normal);
     font-size: var(--type-section-size);
     font-weight: var(--font-weight-semibold);
     line-height: var(--type-section-leading);
@@ -230,7 +233,8 @@
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     cursor: pointer;
     white-space: nowrap;
 }
@@ -257,8 +261,8 @@
     border-radius: var(--skin-control-radius);
     background: var(--surface);
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.8;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     text-align: start;
     box-shadow: var(--skin-card-hover-shadow);
 }
@@ -266,8 +270,9 @@
     display: block;
     margin-bottom: 6px;
     color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-semibold);
 }
 .referral-stat-grid {
     display: grid;
@@ -287,8 +292,8 @@
     justify-content: center;
     gap: 8px;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .referral-stat-icon {
     color: var(--accent-ink);
@@ -297,14 +302,15 @@
     margin: auto 0 0;
     padding-top: 10px;
     overflow-wrap: anywhere;
-    font-size: 22px;
-    font-weight: 600;
-    line-height: 1.2;
+    font-size: var(--type-metric-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-metric-leading);
     font-variant-numeric: tabular-nums;
 }
 .referral-stat.is-prominent dd {
     color: var(--accent-ink);
-    font-size: clamp(24px, 2.2vw, 32px);
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-leading);
 }
 .referral-stat.is-prominent:nth-child(2) dd,
 .referral-stat.is-prominent:nth-child(2) .referral-stat-icon {
@@ -336,14 +342,16 @@
 }
 .referral-reward-totals dt {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .referral-reward-totals dd {
     margin: auto 0 0;
     padding-top: 10px;
     overflow-wrap: anywhere;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 .referral-record-tabs {
@@ -368,9 +376,9 @@
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.4;
+    font-size: var(--type-label-size);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--type-label-leading);
     cursor: pointer;
 }
 .referral-record-tabs button:hover {
@@ -379,10 +387,11 @@
 .referral-record-tabs button[aria-selected='true'] {
     background: var(--selection);
     color: var(--selection-foreground);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 .referral-record-tabs span {
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     opacity: 0.8;
     font-variant-numeric: tabular-nums;
 }
@@ -408,13 +417,15 @@
 .referral-record-row small {
     display: block;
     margin-top: 4px;
-    font-size: 12px;
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
 }
 .referral-ledger-amount {
     max-width: 42%;
     overflow-wrap: anywhere;
     text-align: right;
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     font-variant-numeric: tabular-nums;
 }
 .referral-record-empty {
@@ -425,7 +436,8 @@
     margin: 0;
     padding: 28px 12px;
     color: var(--muted);
-    font-size: 14px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
     text-align: center;
 }
 .referral-record-empty > svg {

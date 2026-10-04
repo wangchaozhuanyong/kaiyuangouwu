@@ -1,7 +1,12 @@
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import {
     AlertCircle,
     Check,
@@ -243,20 +248,15 @@ export function CustomersModule() {
     const allCustomers = useQuery<CustomersResult>(CUSTOMERS_QUERY, {
         variables: { options },
         skip: selectedGroupId !== 'ALL',
-        fetchPolicy: 'cache-first',
     });
     const groupCustomers = useQuery<CustomerGroupMembersResult>(CUSTOMER_GROUP_MEMBERS_QUERY, {
         variables: { id: selectedGroupId, options },
         skip: selectedGroupId === 'ALL',
-        fetchPolicy: 'cache-first',
     });
     const groupQuery = useQuery<CustomerGroupsResult>(CUSTOMER_GROUPS_QUERY, {
         variables: { options: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
-        fetchPolicy: 'cache-first',
     });
-    const followUpCounts = useQuery<CustomerFollowUpCountsResult>(CUSTOMER_FOLLOW_UP_COUNTS_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const followUpCounts = useQuery<CustomerFollowUpCountsResult>(CUSTOMER_FOLLOW_UP_COUNTS_QUERY, {});
     const {
         data: groupData,
         error: groupError,
@@ -420,23 +420,23 @@ export function CustomersModule() {
                     </div>
                     <div className="flex items-center gap-2">
                         {canCreateCustomer && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setCreateOpen(true)}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 新建客户
-                            </button>
+                            </AdminButton>
                         )}
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setGroupManagerOpen(true)}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                         >
                             管理客户分组
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
                             type="button"
                             onClick={() => void refresh()}
                             disabled={activeQuery.loading}
@@ -446,7 +446,7 @@ export function CustomersModule() {
                                 className={`h-3.5 w-3.5 ${activeQuery.loading ? 'animate-spin' : ''}`}
                             />
                             刷新
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             </header>
@@ -497,7 +497,7 @@ export function CustomersModule() {
                                     className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
@@ -506,11 +506,11 @@ export function CustomersModule() {
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                             {isFiltered && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={resetFilters}
                                     className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
@@ -518,7 +518,7 @@ export function CustomersModule() {
                                 >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                                     <span>重置筛选</span>
-                                </button>
+                                </AdminButton>
                             )}
                         </div>
                         <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-xs">
@@ -555,7 +555,7 @@ export function CustomersModule() {
                             </strong>
                             {canUpdateCustomer && (
                                 <>
-                                    <select
+                                    <AdminSelect
                                         value={bulkGroupId}
                                         onChange={event => setBulkGroupId(event.target.value)}
                                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -566,48 +566,48 @@ export function CustomersModule() {
                                                 {group.name}
                                             </option>
                                         ))}
-                                    </select>
-                                    <button
+                                    </AdminSelect>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void changeSelectedGroup('add')}
                                         disabled={!bulkGroupId || addBulkState.loading}
                                         className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold disabled:opacity-40"
                                     >
                                         加入分组
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void changeSelectedGroup('remove')}
                                         disabled={!bulkGroupId || removeBulkState.loading}
                                         className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold disabled:opacity-40"
                                     >
                                         移出分组
-                                    </button>
+                                    </AdminButton>
                                 </>
                             )}
                             {canDeleteCustomer && (
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => setDeleteDialogOpen(true)}
                                     className="rounded-lg border border-rose-300 px-3 py-2 text-xs font-bold text-rose-700"
                                 >
                                     删除所选
-                                </button>
+                                </AdminButton>
                             )}
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setSelectedCustomerIds([])}
                                 className="text-xs font-bold text-slate-500"
                             >
                                 取消选择
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                 </section>
 
                 {activeQuery.loading && !list ? (
                     <LoadingState label="正在读取客户数据…" />
-                ) : activeQuery.error ? (
+                ) : activeQuery.error && !activeQuery.data ? (
                     <ErrorState
                         message={toUserFacingError(activeQuery.error, '客户数据读取失败')}
                         onRetry={() => void activeQuery.refetch()}
@@ -621,7 +621,7 @@ export function CustomersModule() {
                                 <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                     <tr>
                                         <th scope="col" className="w-10 bg-slate-50 px-3 py-3">
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 aria-label="选择当前页全部客户"
                                                 checked={
@@ -705,7 +705,7 @@ export function CustomersModule() {
                                                 className="group h-[52px] hover:bg-slate-50/80"
                                             >
                                                 <td className="h-[52px] px-3 py-0">
-                                                    <input
+                                                    <AdminInput
                                                         type="checkbox"
                                                         aria-label={`选择 ${customerName(customer)}`}
                                                         checked={selectedCustomerIds.includes(customer.id)}
@@ -721,14 +721,14 @@ export function CustomersModule() {
                                                     />
                                                 </td>
                                                 <td className="sticky left-10 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => setSelectedCustomerId(customer.id)}
                                                         className="block max-w-40 truncate whitespace-nowrap text-left font-bold text-slate-900 hover:text-blue-600"
                                                         title={customerName(customer)}
                                                     >
                                                         {customerName(customer)}
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
                                                 <td className="h-[52px] max-w-56 px-3 py-0">
                                                     <span
@@ -796,13 +796,13 @@ export function CustomersModule() {
                                                     {formatDateTime(customer.createdAt)}
                                                 </td>
                                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => setSelectedCustomerId(customer.id)}
                                                         className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                                     >
                                                         查看客户
-                                                    </button>
+                                                    </AdminButton>
                                                 </td>
                                             </tr>
                                         );
@@ -910,24 +910,41 @@ function CustomerDrawer({
     const { data, loading, error, refetch } = useQuery<CustomerDetailResult>(customerDetailDocument, {
         variables: { id: customerId },
         skip: !customerId,
-        fetchPolicy: 'cache-and-network',
     });
     const customer = data?.customer;
     const [editing, setEditing] = useState(false);
-    const [formDraft, setFormDraft] = useState<CustomerForm | null>(null);
-    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
-    const [customFieldSourceId, setCustomFieldSourceId] = useState('');
+    const customerSource = customer
+        ? {
+              form: {
+                  title: customer.title ?? '',
+                  firstName: customer.firstName,
+                  lastName: customer.lastName,
+                  emailAddress: customer.emailAddress,
+                  phoneNumber: customer.phoneNumber ?? '',
+              },
+              customFieldValues: customFieldValuesFromEntity(customerCustomFields, customer.customFields),
+          }
+        : null;
+    const customerDraft = useServerDraft(
+        customerId ?? '',
+        customerSource ? JSON.stringify(customerSource) : '',
+        customerSource,
+    );
+    const formDraft = customerDraft.draft?.form ?? null;
+    const setFormDraft = (next: CustomerForm | null) => {
+        if (next === null) customerDraft.reload();
+        else
+            customerDraft.setDraft(current => ({
+                form: next,
+                customFieldValues: current?.customFieldValues ?? customerSource?.customFieldValues ?? {},
+            }));
+    };
+    const customFieldValues = customerDraft.draft?.customFieldValues ?? {};
+    const setCustomFieldValues = (next: CustomFieldValueMap) =>
+        customerDraft.setDraft(current => (current ? { ...current, customFieldValues: next } : null));
     const [note, setNote] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('');
     const [addressEditor, setAddressEditor] = useState<CustomerAddressRecord | 'create' | null>(null);
-
-    /* oxlint-disable react/set-state-in-effect -- the versioned customer response initializes the edit draft. */
-    useEffect(() => {
-        if (!customer || customer.id === customFieldSourceId) return;
-        setCustomFieldValues(customFieldValuesFromEntity(customerCustomFields, customer.customFields));
-        setCustomFieldSourceId(customer.id);
-    }, [customer, customerCustomFields, customFieldSourceId]);
-    /* oxlint-enable react/set-state-in-effect */
 
     const { hasAnyPermission } = useAdminPermissions();
     const contextQuery = useQuery<{ activeChannel: { code: string } }>(GET_ACTIVE_CHANNEL);
@@ -939,7 +956,6 @@ function CustomerDrawer({
     const requestConfirmation = useConfirmDialog();
     const countriesQuery = useQuery<CustomerAddressCountriesResult>(CUSTOMER_ADDRESS_COUNTRIES_QUERY, {
         skip: !addressEditor,
-        fetchPolicy: 'cache-first',
     });
 
     const [updateCustomer, updateState] = useMutation(UPDATE_CUSTOMER_MUTATION);
@@ -979,6 +995,7 @@ function CustomerDrawer({
     const availableGroups = allGroups.filter(group => !customer?.groups.some(item => item.id === group.id));
 
     const saveCustomer = async () => {
+        if (customerDraft.sourceChanged) return onError('服务端客户资料已有更新，请先重新读取后再保存');
         if (!customer) return;
         const validationError = validateCustomerEmail(form.emailAddress);
         if (validationError) return onError(validationError);
@@ -1007,9 +1024,11 @@ function CustomerDrawer({
             )?.updateCustomer;
             if (payload?.__typename !== 'Customer') throw new Error(getMutationError(payload));
             setEditing(false);
-            setFormDraft(null);
-            await refetch();
-            await onChanged('客户资料已更新');
+            customerDraft.accept(customerDraft.draft);
+            await refreshAfterAdminWrite(async () => {
+                await refetch();
+                await onChanged('客户资料已更新');
+            }, onError);
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -1019,8 +1038,10 @@ function CustomerDrawer({
         try {
             await addNote({ variables: { customerId: customer.id, note: note.trim() } });
             setNote('');
-            await refetch();
-            await onChanged('内部跟进记录已保存');
+            await refreshAfterAdminWrite(async () => {
+                await refetch();
+                await onChanged('内部跟进记录已保存');
+            }, onError);
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -1031,8 +1052,10 @@ function CustomerDrawer({
             const mutation = kind === 'add' ? addToGroup : removeFromGroup;
             await mutation({ variables: { customerId: customer.id, groupId } });
             setSelectedGroup('');
-            await refetch();
-            await onChanged(kind === 'add' ? '客户已加入分组' : '客户已移出分组');
+            await refreshAfterAdminWrite(async () => {
+                await refetch();
+                await onChanged(kind === 'add' ? '客户已加入分组' : '客户已移出分组');
+            }, onError);
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -1054,8 +1077,10 @@ function CustomerDrawer({
                 });
             }
             setAddressEditor(null);
-            await refetch();
-            await onChanged(addressEditor === 'create' ? '客户地址已新增' : '客户地址已更新');
+            await refreshAfterAdminWrite(async () => {
+                await refetch();
+                await onChanged(addressEditor === 'create' ? '客户地址已新增' : '客户地址已更新');
+            }, onError);
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -1073,8 +1098,10 @@ function CustomerDrawer({
             const success = (result.data as { deleteCustomerAddress?: { success?: boolean } } | undefined)
                 ?.deleteCustomerAddress?.success;
             if (!success) throw new Error('后端未确认地址已删除');
-            await refetch();
-            await onChanged('客户地址已删除');
+            await refreshAfterAdminWrite(async () => {
+                await refetch();
+                await onChanged('客户地址已删除');
+            }, onError);
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -1082,7 +1109,7 @@ function CustomerDrawer({
 
     return (
         <>
-            <button
+            <AdminButton
                 type="button"
                 className="fixed inset-0 z-40 cursor-default bg-slate-900/40 backdrop-blur-2xs"
                 onClick={onClose}
@@ -1110,19 +1137,19 @@ function CustomerDrawer({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
                     {loading && !customer ? (
                         <LoadingState label="正在读取客户详情…" />
-                    ) : error ? (
+                    ) : error && !data ? (
                         <ErrorState
                             message={toUserFacingError(error, '客户详情读取失败')}
                             onRetry={() => void refetch()}
@@ -1162,6 +1189,9 @@ function CustomerDrawer({
                                 onError={onError}
                             />
                             <section className="rounded-xl border border-slate-200 p-4">
+                                {customerDraft.sourceChanged && (
+                                    <DraftUpdateNotice onReload={customerDraft.reload} />
+                                )}
                                 <div className="mb-3 flex items-center justify-between">
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <CircleUserRound className="h-4 w-4 text-blue-600" />
@@ -1172,14 +1202,14 @@ function CustomerDrawer({
                                         />
                                     </h3>
                                     {!editing && canManageIdentity && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setEditing(true)}
                                             className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
                                         >
                                             <Edit3 className="h-3 w-3" />
                                             编辑
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                                 {!canManageIdentity && (
@@ -1238,7 +1268,7 @@ function CustomerDrawer({
                                             >
                                                 {group.name}
                                                 {canUpdateCustomer && (
-                                                    <button
+                                                    <AdminButton
                                                         type="button"
                                                         onClick={() => void changeGroup('remove', group.id)}
                                                         disabled={actionPending}
@@ -1246,7 +1276,7 @@ function CustomerDrawer({
                                                         aria-label={`移出${group.name}`}
                                                     >
                                                         <X className="h-3 w-3" />
-                                                    </button>
+                                                    </AdminButton>
                                                 )}
                                             </span>
                                         ))
@@ -1256,7 +1286,7 @@ function CustomerDrawer({
                                 </div>
                                 {canUpdateCustomer && availableGroups.length > 0 && (
                                     <div className="mt-3 flex gap-2">
-                                        <select
+                                        <AdminSelect
                                             value={selectedGroup}
                                             onChange={event => setSelectedGroup(event.target.value)}
                                             className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -1267,15 +1297,15 @@ function CustomerDrawer({
                                                     {group.name}
                                                 </option>
                                             ))}
-                                        </select>
-                                        <button
+                                        </AdminSelect>
+                                        <AdminButton
                                             type="button"
                                             disabled={!selectedGroup || actionPending}
                                             onClick={() => void changeGroup('add', selectedGroup)}
                                             className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                                         >
                                             加入
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 )}
                             </section>
@@ -1287,14 +1317,14 @@ function CustomerDrawer({
                                         <FeatureHelpButton topic="customers.management" title="客户地址" />
                                     </h3>
                                     {canCreateAddress && (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => setAddressEditor('create')}
                                             className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
                                         >
                                             <Plus className="h-3 w-3" />
                                             新增地址
-                                        </button>
+                                        </AdminButton>
                                     )}
                                 </div>
                                 <div className="space-y-2">
@@ -1326,7 +1356,7 @@ function CustomerDrawer({
                                                     {(canManageIdentity || canDeleteAddress) && (
                                                         <div className="flex shrink-0 gap-1">
                                                             {canManageIdentity && (
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() => setAddressEditor(address)}
                                                                     disabled={actionPending}
@@ -1334,10 +1364,10 @@ function CustomerDrawer({
                                                                     aria-label="编辑地址"
                                                                 >
                                                                     <Edit3 className="h-3.5 w-3.5" />
-                                                                </button>
+                                                                </AdminButton>
                                                             )}
                                                             {canDeleteAddress && (
-                                                                <button
+                                                                <AdminButton
                                                                     type="button"
                                                                     onClick={() =>
                                                                         void removeAddress(address)
@@ -1347,7 +1377,7 @@ function CustomerDrawer({
                                                                     aria-label="删除地址"
                                                                 >
                                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                                </button>
+                                                                </AdminButton>
                                                             )}
                                                         </div>
                                                     )}
@@ -1383,7 +1413,7 @@ function CustomerDrawer({
                                 </p>
                                 {canUpdateCustomer ? (
                                     <div className="flex gap-2">
-                                        <textarea
+                                        <AdminTextArea
                                             value={note}
                                             onChange={event => setNote(event.target.value)}
                                             rows={2}
@@ -1391,14 +1421,14 @@ function CustomerDrawer({
                                             placeholder="记录回访、偏好或异常情况，仅后台可见"
                                             className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                         />
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             onClick={() => void saveNote()}
                                             disabled={!note.trim() || noteState.loading}
                                             className="self-end rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                                         >
                                             保存
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 ) : (
                                     <p className="text-xs text-slate-400">当前账号仅可查看跟进记录</p>
@@ -1438,17 +1468,17 @@ function CustomerDrawer({
                                             title="客户最近订单"
                                         />
                                     </h3>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => onViewOrders(customer.emailAddress)}
                                         className="text-[11px] font-bold text-blue-600 hover:underline"
                                     >
                                         查看全部订单
-                                    </button>
+                                    </AdminButton>
                                 </div>
                                 <div className="space-y-2">
                                     {customer.orders.items.slice(0, 8).map(order => (
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             key={order.id}
                                             onClick={() => onViewOrder(order.id)}
@@ -1472,7 +1502,7 @@ function CustomerDrawer({
                                                     {getOrderStateLabel(order.state)}
                                                 </span>
                                             </div>
-                                        </button>
+                                        </AdminButton>
                                     ))}
                                     {!customer.orders.items.length && (
                                         <p className="text-xs text-slate-400">该客户尚未下单</p>
@@ -1484,13 +1514,13 @@ function CustomerDrawer({
                 </div>
                 <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-[11px] text-slate-500">
                     <span>{actionPending ? '正在保存变更…' : '所有操作直接写入真实客户数据'}</span>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded-lg bg-slate-200 px-4 py-2 font-bold text-slate-700 hover:bg-slate-300"
                     >
                         关闭
-                    </button>
+                    </AdminButton>
                 </div>
             </aside>
             {addressEditor && (
@@ -1521,7 +1551,6 @@ function CustomerOperationsPanel({
 }) {
     const { data, loading, error, refetch } = useQuery<CustomerOperationsResult>(CUSTOMER_OPERATIONS_QUERY, {
         variables: { customerId },
-        fetchPolicy: 'cache-and-network',
     });
     const [showCreate, setShowCreate] = useState(false);
     const [title, setTitle] = useState('客户回访');
@@ -1623,15 +1652,15 @@ function CustomerOperationsPanel({
                 </div>
                 <div className="flex gap-2">
                     {canUpdate && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setShowCreate(value => !value)}
                             className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-blue-700"
                         >
                             {showCreate ? '取消新任务' : '新建跟进'}
-                        </button>
+                        </AdminButton>
                     )}
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void refresh()}
                         disabled={refreshState.loading}
@@ -1639,18 +1668,18 @@ function CustomerOperationsPanel({
                     >
                         <RefreshCw className={`h-3 w-3 ${refreshState.loading ? 'animate-spin' : ''}`} />
                         重算
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
 
             {loading && !profile ? (
                 <p className="mt-4 text-xs text-blue-700">正在计算客户画像…</p>
-            ) : error ? (
+            ) : error && !data ? (
                 <div className="mt-4 flex items-center justify-between rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
                     <span>客户画像读取失败</span>
-                    <button type="button" onClick={() => void refetch()} className="font-bold underline">
+                    <AdminButton type="button" onClick={() => void refetch()} className="font-bold underline">
                         重试
-                    </button>
+                    </AdminButton>
                 </div>
             ) : profile ? (
                 <>
@@ -1714,7 +1743,7 @@ function CustomerOperationsPanel({
                     <TextInput label="跟进标题" value={title} onChange={setTitle} />
                     <label className="text-xs font-bold text-slate-700">
                         优先级
-                        <select
+                        <AdminSelect
                             value={priority}
                             onChange={event => setPriority(event.target.value)}
                             className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-normal"
@@ -1722,11 +1751,11 @@ function CustomerOperationsPanel({
                             <option value="P1">P1 紧急</option>
                             <option value="P2">P2 普通</option>
                             <option value="P3">P3 低优先</option>
-                        </select>
+                        </AdminSelect>
                     </label>
                     <label className="text-xs font-bold text-slate-700">
                         跟进时间
-                        <input
+                        <AdminInput
                             type="datetime-local"
                             value={dueAt}
                             onChange={event => setDueAt(event.target.value)}
@@ -1735,7 +1764,7 @@ function CustomerOperationsPanel({
                     </label>
                     <label className="text-xs font-bold text-slate-700 sm:col-span-2">
                         跟进说明
-                        <textarea
+                        <AdminTextArea
                             value={createNote}
                             onChange={event => setCreateNote(event.target.value)}
                             rows={2}
@@ -1744,14 +1773,14 @@ function CustomerOperationsPanel({
                         />
                     </label>
                     <div className="flex justify-end sm:col-span-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void create()}
                             disabled={createState.loading}
                             className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
                             创建跟进任务
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             )}
@@ -1789,7 +1818,7 @@ function CustomerOperationsPanel({
                             </div>
                             {canUpdate && (
                                 <div className="flex gap-1">
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setActionDraft({
@@ -1803,8 +1832,8 @@ function CustomerOperationsPanel({
                                         className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"
                                     >
                                         登记结果
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setActionDraft({
@@ -1820,8 +1849,8 @@ function CustomerOperationsPanel({
                                         className="rounded bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700"
                                     >
                                         改期
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setActionDraft({
@@ -1835,7 +1864,7 @@ function CustomerOperationsPanel({
                                         className="rounded bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600"
                                     >
                                         关闭
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             )}
                         </div>
@@ -1844,7 +1873,7 @@ function CustomerOperationsPanel({
                                 {actionDraft.action === 'COMPLETE' && (
                                     <label className="text-[10px] font-bold text-slate-600">
                                         跟进结果
-                                        <select
+                                        <AdminSelect
                                             value={actionDraft.outcomeCode}
                                             onChange={event =>
                                                 setActionDraft({
@@ -1859,13 +1888,13 @@ function CustomerOperationsPanel({
                                             <option value="NO_RESPONSE">未联系上，7 天后再跟进</option>
                                             <option value="DO_NOT_CONTACT">客户要求停止联系</option>
                                             <option value="NOT_NEEDED">无需继续跟进</option>
-                                        </select>
+                                        </AdminSelect>
                                     </label>
                                 )}
                                 {actionDraft.action === 'RESCHEDULE' && (
                                     <label className="text-[10px] font-bold text-slate-600">
                                         新的跟进时间
-                                        <input
+                                        <AdminInput
                                             type="datetime-local"
                                             value={actionDraft.dueAt}
                                             onChange={event =>
@@ -1877,7 +1906,7 @@ function CustomerOperationsPanel({
                                 )}
                                 <label className="text-[10px] font-bold text-slate-600 sm:col-span-2">
                                     操作说明
-                                    <textarea
+                                    <AdminTextArea
                                         value={actionDraft.note}
                                         onChange={event =>
                                             setActionDraft({ ...actionDraft, note: event.target.value })
@@ -1888,21 +1917,21 @@ function CustomerOperationsPanel({
                                     />
                                 </label>
                                 <div className="flex justify-end gap-2 sm:col-span-2">
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setActionDraft(null)}
                                         className="rounded bg-slate-100 px-3 py-1.5 text-[10px] font-bold"
                                     >
                                         取消
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void submitAction()}
                                         disabled={updateState.loading}
                                         className="rounded bg-blue-600 px-3 py-1.5 text-[10px] font-bold text-white disabled:opacity-50"
                                     >
                                         保存结果
-                                    </button>
+                                    </AdminButton>
                                 </div>
                             </div>
                         )}
@@ -2024,7 +2053,7 @@ function CustomerAddressEditor({
                 />
                 <label className="text-xs font-bold text-slate-700">
                     国家或地区 *
-                    <select
+                    <AdminSelect
                         value={form.countryCode}
                         onChange={event => setForm({ ...form, countryCode: event.target.value })}
                         disabled={countriesLoading}
@@ -2036,7 +2065,7 @@ function CustomerAddressEditor({
                                 {country.name}（{country.code}）
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </label>
                 <div className="sm:col-span-2">
                     <TextInput
@@ -2070,7 +2099,7 @@ function CustomerAddressEditor({
             </div>
             <div className="mt-4 flex flex-wrap gap-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                 <label className="flex items-center gap-2">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={form.defaultShippingAddress}
                         onChange={event => setForm({ ...form, defaultShippingAddress: event.target.checked })}
@@ -2078,7 +2107,7 @@ function CustomerAddressEditor({
                     设为默认收货地址
                 </label>
                 <label className="flex items-center gap-2">
-                    <input
+                    <AdminInput
                         type="checkbox"
                         checked={form.defaultBillingAddress}
                         onChange={event => setForm({ ...form, defaultBillingAddress: event.target.checked })}
@@ -2087,21 +2116,21 @@ function CustomerAddressEditor({
                 </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onClose}
                     className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
                 >
                     取消
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={() => onSave(form)}
                     disabled={pending || !form.streetLine1.trim() || !form.countryCode}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
                     {pending ? '保存中…' : address ? '保存地址' : '新增地址'}
-                </button>
+                </AdminButton>
             </div>
         </Modal>
     );
@@ -2168,21 +2197,21 @@ export function CustomerEditForm({
                 </div>
             </div>
             <div className="flex justify-end gap-2">
-                <button
+                <AdminButton
                     type="button"
                     onClick={onCancel}
                     className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700"
                 >
                     取消
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     onClick={onSave}
                     disabled={pending || Boolean(emailError) || Boolean(phoneError)}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                 >
                     {pending ? '保存中…' : '保存资料'}
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -2259,7 +2288,7 @@ export function GroupManager({
             <div className="space-y-4">
                 {!deleting && (
                     <div className="flex gap-2">
-                        <input
+                        <AdminInput
                             autoComplete="off"
                             aria-label="新分组名称"
                             value={newName}
@@ -2272,7 +2301,7 @@ export function GroupManager({
                             placeholder="输入新分组名称"
                             className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500"
                         />
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => void create()}
                             disabled={!newName.trim() || pending}
@@ -2280,7 +2309,7 @@ export function GroupManager({
                         >
                             <Plus className="h-3.5 w-3.5" />
                             新建
-                        </button>
+                        </AdminButton>
                     </div>
                 )}
                 <div className="max-h-[420px] space-y-2 overflow-y-auto">
@@ -2290,7 +2319,7 @@ export function GroupManager({
                             className="flex items-center gap-2 rounded-lg border border-slate-200 p-3"
                         >
                             {editing?.id === group.id ? (
-                                <input
+                                <AdminInput
                                     value={editing.name}
                                     onChange={event => setEditing({ ...editing, name: event.target.value })}
                                     className="min-w-0 flex-1 rounded border border-blue-300 px-2 py-1 text-xs"
@@ -2307,7 +2336,7 @@ export function GroupManager({
                             )}
                             {editing?.id === group.id ? (
                                 <>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => void update()}
                                         disabled={pending}
@@ -2315,19 +2344,19 @@ export function GroupManager({
                                         aria-label="保存分组名称"
                                     >
                                         <Check className="h-4 w-4" />
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setEditing(null)}
                                         className="rounded p-1.5 text-slate-400 hover:bg-slate-100"
                                         aria-label="取消编辑"
                                     >
                                         <X className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 </>
                             ) : (
                                 <>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() => setEditing({ id: group.id, name: group.name })}
                                         disabled={Boolean(deleting) || pending}
@@ -2335,8 +2364,8 @@ export function GroupManager({
                                         aria-label="重命名分组"
                                     >
                                         <Edit3 className="h-4 w-4" />
-                                    </button>
-                                    <button
+                                    </AdminButton>
+                                    <AdminButton
                                         type="button"
                                         onClick={() => {
                                             setEditing(null);
@@ -2348,7 +2377,7 @@ export function GroupManager({
                                         aria-label="删除分组"
                                     >
                                         <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    </AdminButton>
                                 </>
                             )}
                         </div>
@@ -2362,7 +2391,7 @@ export function GroupManager({
                         <p>确认删除分组“{deleting.name}”？客户不会被删除。</p>
                         <label className="mt-3 block font-bold">
                             当前管理员密码 *
-                            <input
+                            <AdminInput
                                 type="password"
                                 autoComplete="current-password"
                                 value={deletePassword}
@@ -2372,7 +2401,7 @@ export function GroupManager({
                             />
                         </label>
                         <div className="mt-2 flex justify-end gap-2">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setDeleting(null);
@@ -2381,15 +2410,15 @@ export function GroupManager({
                                 className="rounded bg-white px-3 py-1.5 font-bold"
                             >
                                 取消
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void remove()}
                                 disabled={pending || !deletePassword}
                                 className="rounded bg-rose-600 px-3 py-1.5 font-bold text-white disabled:opacity-50"
                             >
                                 确认删除
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 )}
@@ -2420,7 +2449,7 @@ function TextInput({
     return (
         <label className="block text-[11px] font-bold text-slate-600">
             {label}
-            <input
+            <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -2466,13 +2495,13 @@ function GroupFilterButton({
     onClick: () => void;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className={`shrink-0 rounded-md px-3 py-1.5 font-bold ${active ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}
         >
             {label}
-        </button>
+        </AdminButton>
     );
 }
 function Pagination({
@@ -2499,7 +2528,7 @@ function Pagination({
             </span>
             <div className="flex flex-wrap items-center gap-2">
                 <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
-                <button
+                <AdminButton
                     type="button"
                     disabled={loading || page === 0}
                     onClick={() => onPageChange(page - 1)}
@@ -2507,8 +2536,8 @@ function Pagination({
                     aria-label="上一页"
                 >
                     <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
+                </AdminButton>
+                <AdminButton
                     type="button"
                     disabled={loading || page + 1 >= totalPages}
                     onClick={() => onPageChange(page + 1)}
@@ -2516,7 +2545,7 @@ function Pagination({
                     aria-label="下一页"
                 >
                     <ChevronRight className="h-4 w-4" />
-                </button>
+                </AdminButton>
             </div>
         </div>
     );
@@ -2540,9 +2569,9 @@ function StatusMessage({
                 <AlertCircle className="h-4 w-4 shrink-0" />
             )}
             <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭提示">
+            <AdminButton type="button" onClick={onClose} aria-label="关闭提示">
                 <X className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -2560,13 +2589,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
             <AlertCircle className="mx-auto h-8 w-8 text-rose-500" />
             <h3 className="mt-3 text-sm font-bold text-slate-900">客户数据读取失败</h3>
             <p className="mx-auto mt-1 max-w-xl text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
             >
                 重新加载
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -2615,14 +2644,14 @@ function Modal({
                         </h2>
                         {description && <p className="mt-1 text-[11px] text-slate-500">{description}</p>}
                     </div>
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={onClose}
                         className="rounded p-1 text-slate-400 hover:bg-slate-100"
                         aria-label="关闭"
                     >
                         <X className="h-5 w-5" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="p-5">{children}</div>
             </div>

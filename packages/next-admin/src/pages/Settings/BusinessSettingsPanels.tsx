@@ -1,11 +1,12 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Languages, MapPin, Pencil, ReceiptText, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
-import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,
@@ -33,6 +34,8 @@ import {
     UPDATE_GLOBAL_SETTINGS_MUTATION,
     type BusinessSettingsResult,
 } from '../../graphql/management.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { runVerifiedMutation } from '../../utils/verified-mutation';
@@ -152,7 +155,6 @@ export function BusinessBasicsPanel({
             taxCategoryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
             taxRateOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const {
         data: businessSettingsData,
@@ -222,7 +224,7 @@ export function BusinessBasicsPanel({
         onError,
     ]);
     if (query.loading && !query.data) return <LoadingState />;
-    if (query.error || !query.data)
+    if ((query.error && !query.data) || !query.data)
         return (
             <ErrorState
                 message={
@@ -302,15 +304,27 @@ function GlobalBusinessSettings({
     onChanged: (message: string, expected: GlobalSettingsExpectation) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const [languages, setLanguages] = useState([...settings.availableLanguages]);
-    const [trackInventory, setTrackInventory] = useState(settings.trackInventory);
-    const [outOfStockThreshold, setOutOfStockThreshold] = useState(String(settings.outOfStockThreshold));
+    const source = {
+        languages: [...settings.availableLanguages],
+        trackInventory: settings.trackInventory,
+        outOfStockThreshold: String(settings.outOfStockThreshold),
+    };
+    const draftOwner = useServerDraft('global-settings', JSON.stringify(source), source);
+    const draft = draftOwner.draft ?? source;
+    const { languages, trackInventory, outOfStockThreshold } = draft;
+    const setLanguages = (value: string[]) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), languages: value }));
+    const setTrackInventory = (value: boolean) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), trackInventory: value }));
+    const setOutOfStockThreshold = (value: string) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), outOfStockThreshold: value }));
     const [update, state] = useMutation<{
         updateGlobalSettings:
             | ({ __typename: 'GlobalSettings' } & GlobalSettingsExpectation)
             | { __typename: 'ChannelDefaultLanguageError'; message?: string };
     }>(UPDATE_GLOBAL_SETTINGS_MUTATION);
     const submit = async () => {
+        if (draftOwner.sourceChanged) return;
         const availableLanguages = languages;
         const threshold = Number(outOfStockThreshold);
         if (!availableLanguages.length) return onError('至少保留一种平台可用语言');
@@ -338,6 +352,7 @@ function GlobalBusinessSettings({
                         throw new Error(result?.message || '全局设置更新被拒绝');
                     }
                     assertGlobalSettingsPersisted(result, expected);
+                    draftOwner.accept(draft);
                     await onChanged('平台全局语言和库存默认值已更新', expected);
                 },
             });
@@ -347,6 +362,7 @@ function GlobalBusinessSettings({
     };
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
+            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -355,14 +371,14 @@ function GlobalBusinessSettings({
                     </h2>
                     <p className="mt-1 text-xs text-slate-400">影响所有 Channel 可选语言和库存默认行为</p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void submit()}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                     className={primaryButton}
                 >
                     {state.loading ? '保存中…' : '保存全局设置'}
-                </button>
+                </AdminButton>
             </div>
             <SettingsFormGrid columns={3} className="mt-4">
                 <MultiValueChoiceField
@@ -372,10 +388,10 @@ function GlobalBusinessSettings({
                     choices={BUSINESS_LANGUAGE_CHOICES}
                     addLabel="选择要添加的语言"
                     onChange={setLanguages}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                 />
                 <Field label="全局缺货阈值" description="为使用全局规则的 SKU 设置库存可售边界。">
-                    <input
+                    <AdminInput
                         type="number"
                         min="0"
                         value={outOfStockThreshold}
@@ -389,7 +405,7 @@ function GlobalBusinessSettings({
                     checkboxLabel="默认跟踪库存"
                     checked={trackInventory}
                     onChange={event => setTrackInventory(event.target.checked)}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                 />
             </SettingsFormGrid>
         </section>
@@ -411,29 +427,53 @@ function ChannelBusinessSettings({
     onChanged: (message: string, expected: ChannelSettingsExpectation) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const [languages, setLanguages] = useState([...channel.availableLanguageCodes]);
-    const [currencies, setCurrencies] = useState([...channel.availableCurrencyCodes]);
-    const [defaultLanguage, setDefaultLanguage] = useState(channel.defaultLanguageCode);
-    const [defaultCurrency, setDefaultCurrency] = useState(channel.defaultCurrencyCode);
-    const [taxZoneId, setTaxZoneId] = useState(channel.defaultTaxZone?.id ?? '');
-    const [shippingZoneId, setShippingZoneId] = useState(channel.defaultShippingZone?.id ?? '');
-    const [pricesIncludeTax, setPricesIncludeTax] = useState(channel.pricesIncludeTax);
-    const [trackInventory, setTrackInventory] = useState(channel.trackInventory ?? true);
-    const [outOfStockThreshold, setOutOfStockThreshold] = useState(String(channel.outOfStockThreshold ?? 0));
-    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
-        customFieldValuesFromEntity(customFieldDefinitions, channel.customFields),
-    );
+    const source = {
+        languages: [...channel.availableLanguageCodes],
+        currencies: [...channel.availableCurrencyCodes],
+        defaultLanguage: channel.defaultLanguageCode,
+        defaultCurrency: channel.defaultCurrencyCode,
+        taxZoneId: channel.defaultTaxZone?.id ?? '',
+        shippingZoneId: channel.defaultShippingZone?.id ?? '',
+        pricesIncludeTax: channel.pricesIncludeTax,
+        trackInventory: channel.trackInventory ?? true,
+        outOfStockThreshold: String(channel.outOfStockThreshold ?? 0),
+        customFieldValues: customFieldValuesFromEntity(customFieldDefinitions, channel.customFields),
+    };
+    const draftOwner = useServerDraft(channel.id, JSON.stringify(source), source);
+    const draft = draftOwner.draft ?? source;
+    const {
+        languages,
+        currencies,
+        defaultLanguage,
+        defaultCurrency,
+        taxZoneId,
+        shippingZoneId,
+        pricesIncludeTax,
+        trackInventory,
+        outOfStockThreshold,
+        customFieldValues,
+    } = draft;
+    const setField = <K extends keyof typeof draft>(field: K, value: (typeof draft)[K]) =>
+        draftOwner.setDraft(current => ({ ...(current ?? draft), [field]: value }));
+    const setLanguages = (value: typeof draft.languages) => setField('languages', value);
+    const setCurrencies = (value: typeof draft.currencies) => setField('currencies', value);
+    const setDefaultLanguage = (value: typeof draft.defaultLanguage) => setField('defaultLanguage', value);
+    const setDefaultCurrency = (value: typeof draft.defaultCurrency) => setField('defaultCurrency', value);
+    const setTaxZoneId = (value: typeof draft.taxZoneId) => setField('taxZoneId', value);
+    const setShippingZoneId = (value: typeof draft.shippingZoneId) => setField('shippingZoneId', value);
+    const setPricesIncludeTax = (value: typeof draft.pricesIncludeTax) => setField('pricesIncludeTax', value);
+    const setTrackInventory = (value: typeof draft.trackInventory) => setField('trackInventory', value);
+    const setOutOfStockThreshold = (value: typeof draft.outOfStockThreshold) =>
+        setField('outOfStockThreshold', value);
+    const setCustomFieldValues = (value: typeof draft.customFieldValues) =>
+        setField('customFieldValues', value);
     const [update, state] = useMutation<{
         updateChannel:
             | ({ __typename: 'Channel'; id: string; code: string } & PersistedChannelSettings)
             | { __typename: 'LanguageNotAvailableError'; message?: string };
     }>(UPDATE_BUSINESS_CHANNEL_MUTATION);
-    /* oxlint-disable react/set-state-in-effect */
-    useEffect(() => {
-        setCustomFieldValues(customFieldValuesFromEntity(customFieldDefinitions, channel.customFields));
-    }, [channel.customFields, channel.id, customFieldDefinitions]);
-    /* oxlint-enable react/set-state-in-effect */
     const submit = async () => {
+        if (draftOwner.sourceChanged) return;
         const availableLanguageCodes = languages;
         const availableCurrencyCodes = currencies;
         if (!availableLanguageCodes.includes(defaultLanguage)) return onError('默认语言必须包含在可用语言中');
@@ -480,6 +520,7 @@ function ChannelBusinessSettings({
                         throw new Error(result?.message || '后端拒绝更新渠道配置');
                     }
                     assertChannelSettingsPersisted(result, expected);
+                    draftOwner.accept(draft);
                     await onChanged('当前店铺的语言、币种和业务参数已更新', expected);
                 },
             });
@@ -489,6 +530,7 @@ function ChannelBusinessSettings({
     };
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
+            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -500,14 +542,14 @@ function ChannelBusinessSettings({
                         {getChannelDisplayName(channel)} · 直接选择店铺要使用的选项
                     </p>
                 </div>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void submit()}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                     className={primaryButton}
                 >
                     {state.loading ? '保存中…' : '保存基础参数'}
-                </button>
+                </AdminButton>
             </div>
             <SettingsFormGrid columns={4} className="mt-4">
                 <MultiValueChoiceField
@@ -524,10 +566,10 @@ function ChannelBusinessSettings({
                         if (!nextLanguages.includes(defaultLanguage))
                             setDefaultLanguage(nextLanguages[0] ?? '');
                     }}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                 />
                 <Field label="默认语言" description="新内容优先采用的语言。">
-                    <select
+                    <AdminSelect
                         value={defaultLanguage}
                         onChange={event => setDefaultLanguage(event.target.value)}
                         className={inputClass}
@@ -537,7 +579,7 @@ function ChannelBusinessSettings({
                                 {businessChoiceLabel(language, BUSINESS_LANGUAGE_CHOICES)}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <MultiValueChoiceField
                     label="店铺结算币种"
@@ -550,10 +592,10 @@ function ChannelBusinessSettings({
                         if (!nextCurrencies.includes(defaultCurrency))
                             setDefaultCurrency(nextCurrencies[0] ?? '');
                     }}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                 />
                 <Field label="默认币种" description="商品定价和订单结算的默认币种。">
-                    <select
+                    <AdminSelect
                         value={defaultCurrency}
                         onChange={event => setDefaultCurrency(event.target.value)}
                         className={inputClass}
@@ -563,10 +605,10 @@ function ChannelBusinessSettings({
                                 {businessChoiceLabel(currency, BUSINESS_CURRENCY_CHOICES)}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <Field label="默认计税区域" description="没有单独指定时使用的税务区域。">
-                    <select
+                    <AdminSelect
                         value={taxZoneId}
                         onChange={event => setTaxZoneId(event.target.value)}
                         className={inputClass}
@@ -577,10 +619,10 @@ function ChannelBusinessSettings({
                                 {zone.name}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <Field label="默认配送区域" description="没有单独指定时使用的配送区域。">
-                    <select
+                    <AdminSelect
                         value={shippingZoneId}
                         onChange={event => setShippingZoneId(event.target.value)}
                         className={inputClass}
@@ -591,10 +633,10 @@ function ChannelBusinessSettings({
                                 {zone.name}
                             </option>
                         ))}
-                    </select>
+                    </AdminSelect>
                 </Field>
                 <Field label="缺货阈值" description="当前店铺用于判断可售库存的安全边界。">
-                    <input
+                    <AdminInput
                         type="number"
                         min="0"
                         value={outOfStockThreshold}
@@ -608,13 +650,13 @@ function ChannelBusinessSettings({
                             label="商品价格已含税"
                             checked={pricesIncludeTax}
                             onChange={event => setPricesIncludeTax(event.target.checked)}
-                            disabled={state.loading}
+                            disabled={state.loading || draftOwner.sourceChanged}
                         />
                         <CheckboxControl
                             label="默认跟踪库存"
                             checked={trackInventory}
                             onChange={event => setTrackInventory(event.target.checked)}
-                            disabled={state.loading}
+                            disabled={state.loading || draftOwner.sourceChanged}
                         />
                     </div>
                 </FieldGroup>
@@ -625,7 +667,7 @@ function ChannelBusinessSettings({
                     fields={customFieldDefinitions}
                     values={customFieldValues}
                     onChange={setCustomFieldValues}
-                    disabled={state.loading}
+                    disabled={state.loading || draftOwner.sourceChanged}
                     title="当前店铺扩展参数"
                 />
             </div>
@@ -802,14 +844,14 @@ function TaxBusinessSettings({
                         description="为商品选择对应的税务规则分组。"
                     >
                         {editingCategoryId ? (
-                            <input
+                            <AdminInput
                                 value={categoryName}
                                 onChange={event => setCategoryName(event.target.value)}
                                 placeholder="税类名称"
                                 className={inputClass}
                             />
                         ) : (
-                            <select
+                            <AdminSelect
                                 value={categoryPreset}
                                 onChange={event => {
                                     const value = event.target.value;
@@ -832,12 +874,12 @@ function TaxBusinessSettings({
                                     </option>
                                 ))}
                                 <option value="__custom__">自定义税类</option>
-                            </select>
+                            </AdminSelect>
                         )}
                     </Field>
                     {categoryPreset === '__custom__' && !editingCategoryId && (
                         <Field label="自定义税类名称" description="仅用于预设列表以外的业务场景。">
-                            <input
+                            <AdminInput
                                 value={categoryName}
                                 onChange={event => setCategoryName(event.target.value)}
                                 placeholder="例如：特殊服务"
@@ -855,16 +897,16 @@ function TaxBusinessSettings({
                     />
                 </SettingsFormGrid>
                 <div className="flex flex-wrap gap-2">
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => void addCategory()}
                         disabled={busy || !categoryName.trim()}
                         className={secondaryButton}
                     >
                         {editingCategoryId ? '保存税类' : '新增税类'}
-                    </button>
+                    </AdminButton>
                     {editingCategoryId && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => {
                                 setEditingCategoryId('');
@@ -875,7 +917,7 @@ function TaxBusinessSettings({
                             className={secondaryButton}
                         >
                             取消
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -886,7 +928,7 @@ function TaxBusinessSettings({
                         >
                             {category.name}
                             {category.isDefault && <strong className="text-blue-600">默认</strong>}
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setEditingCategoryId(category.id);
@@ -902,22 +944,22 @@ function TaxBusinessSettings({
                                 aria-label={`编辑税类${category.name}`}
                             >
                                 <Pencil className="h-3 w-3" />
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void removeCategory(category.id, category.name)}
                                 className="text-rose-600"
                                 aria-label={`删除税类${category.name}`}
                             >
                                 <Trash2 className="h-3 w-3" />
-                            </button>
+                            </AdminButton>
                         </span>
                     ))}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                     {editingRateId && (
                         <Field label="税率名称">
-                            <input
+                            <AdminInput
                                 value={rateName}
                                 onChange={event => setRateName(event.target.value)}
                                 placeholder="税率名称"
@@ -926,7 +968,7 @@ function TaxBusinessSettings({
                         </Field>
                     )}
                     <Field label="税率百分比">
-                        <input
+                        <AdminInput
                             type="number"
                             min="0"
                             step="0.01"
@@ -937,7 +979,7 @@ function TaxBusinessSettings({
                         />
                     </Field>
                     <Field label="应用到哪个税类">
-                        <select
+                        <AdminSelect
                             value={categoryId}
                             onChange={event => setCategoryId(event.target.value)}
                             className={inputClass}
@@ -948,10 +990,10 @@ function TaxBusinessSettings({
                                     {category.name}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                     <Field label="适用哪个业务区域">
-                        <select
+                        <AdminSelect
                             value={zoneId}
                             onChange={event => setZoneId(event.target.value)}
                             className={inputClass}
@@ -962,7 +1004,7 @@ function TaxBusinessSettings({
                                     {zone.name}
                                 </option>
                             ))}
-                        </select>
+                        </AdminSelect>
                     </Field>
                 </div>
                 {!editingRateId && categoryId && zoneId && rateValue && (
@@ -971,16 +1013,16 @@ function TaxBusinessSettings({
                         {`${categories.find(category => category.id === categoryId)?.name ?? '税类'} · ${zones.find(zone => zone.id === zoneId)?.name ?? '业务区域'}`}
                     </p>
                 )}
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void addRate()}
                     disabled={busy || !rateValue.trim() || !categoryId || !zoneId}
                     className={primaryButton}
                 >
                     {editingRateId ? '保存税率' : '创建税率'}
-                </button>
+                </AdminButton>
                 {editingRateId && (
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => {
                             setEditingRateId('');
@@ -990,7 +1032,7 @@ function TaxBusinessSettings({
                         className={secondaryButton}
                     >
                         取消编辑
-                    </button>
+                    </AdminButton>
                 )}
             </div>
             <div className="divide-y divide-slate-100 border-t border-slate-100">
@@ -1006,7 +1048,7 @@ function TaxBusinessSettings({
                         </div>
                         <div className="flex items-center gap-2">
                             <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={rate.enabled}
                                     onChange={event => void toggleRate(rate.id, event.target.checked)}
@@ -1014,7 +1056,7 @@ function TaxBusinessSettings({
                                 />
                                 {rate.enabled ? '已启用' : '已停用'}
                             </label>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setEditingRateId(rate.id);
@@ -1027,15 +1069,15 @@ function TaxBusinessSettings({
                                 aria-label={`编辑税率${rate.name}`}
                             >
                                 <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void removeRate(rate.id, rate.name)}
                                 className="rounded p-1 text-rose-600"
                                 aria-label={`删除税率${rate.name}`}
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 ))}
@@ -1240,7 +1282,7 @@ function ZoneBusinessSettings({
             <div className="space-y-3 p-5">
                 {!editingZoneId && (
                     <Field label="选择要创建的业务区域">
-                        <select
+                        <AdminSelect
                             value={zonePresetCountryId}
                             onChange={event => {
                                 const countryId = event.target.value;
@@ -1265,12 +1307,12 @@ function ZoneBusinessSettings({
                                     </option>
                                 ))}
                             <option value="__custom__">自定义多个国家/地区组合</option>
-                        </select>
+                        </AdminSelect>
                     </Field>
                 )}
                 {(editingZoneId || zonePresetCountryId === '__custom__') && (
                     <Field label="业务区域名称">
-                        <input
+                        <AdminInput
                             value={name}
                             onChange={event => setName(event.target.value)}
                             placeholder="例如：东南亚区域"
@@ -1287,7 +1329,7 @@ function ZoneBusinessSettings({
                                     key={country.id}
                                     className="flex items-center gap-2 rounded px-2 py-1.5 text-[11px] hover:bg-slate-50"
                                 >
-                                    <input
+                                    <AdminInput
                                         type="checkbox"
                                         checked={memberIds.includes(country.id)}
                                         onChange={event =>
@@ -1315,16 +1357,16 @@ function ZoneBusinessSettings({
                         {countries.find(country => country.id === zonePresetCountryId)?.name}。
                     </p>
                 )}
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void submit()}
                     disabled={busy || !name.trim() || memberIds.length === 0}
                     className={primaryButton}
                 >
                     {editingZoneId ? '保存业务区域' : '创建业务区域'}
-                </button>
+                </AdminButton>
                 {editingZoneId && (
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => {
                             setEditingZoneId('');
@@ -1335,7 +1377,7 @@ function ZoneBusinessSettings({
                         className={secondaryButton}
                     >
                         取消编辑
-                    </button>
+                    </AdminButton>
                 )}
             </div>
             <div className="divide-y divide-slate-100 border-t border-slate-100">
@@ -1348,7 +1390,7 @@ function ZoneBusinessSettings({
                             </p>
                         </div>
                         <div className="flex gap-1">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => {
                                     setEditingZoneId(zone.id);
@@ -1360,15 +1402,15 @@ function ZoneBusinessSettings({
                                 aria-label={`编辑区域${zone.name}`}
                             >
                                 <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
+                            </AdminButton>
+                            <AdminButton
                                 type="button"
                                 onClick={() => void removeZone(zone.id, zone.name)}
                                 className="rounded p-1 text-rose-600"
                                 aria-label={`删除区域${zone.name}`}
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 ))}
@@ -1387,7 +1429,7 @@ function ZoneBusinessSettings({
                     </p>
                 </div>
                 <Field label={editingCountryId ? '正在编辑' : '选择国家/地区'}>
-                    <select
+                    <AdminSelect
                         value={countryPresetCode}
                         onChange={event => {
                             const code = event.target.value;
@@ -1414,12 +1456,12 @@ function ZoneBusinessSettings({
                             );
                         })}
                         <option value="__custom__">其他国家/地区（自定义）</option>
-                    </select>
+                    </AdminSelect>
                 </Field>
                 {(editingCountryId || countryPresetCode === '__custom__') && (
                     <div className="grid gap-2 sm:grid-cols-2">
                         <Field label="两位国家代码">
-                            <input
+                            <AdminInput
                                 value={countryCode}
                                 onChange={event => setCountryCode(event.target.value)}
                                 placeholder="例如：NZ"
@@ -1428,7 +1470,7 @@ function ZoneBusinessSettings({
                             />
                         </Field>
                         <Field label="中文显示名称">
-                            <input
+                            <AdminInput
                                 value={countryName}
                                 onChange={event => setCountryName(event.target.value)}
                                 placeholder="例如：新西兰"
@@ -1444,23 +1486,23 @@ function ZoneBusinessSettings({
                 )}
                 <div className="flex flex-wrap items-center gap-2">
                     <label className="flex items-center gap-2 text-xs text-slate-600">
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={countryEnabled}
                             onChange={event => setCountryEnabled(event.target.checked)}
                         />
                         启用
                     </label>
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={busy || !countryCode || !countryName}
                         onClick={() => void submitCountry()}
                         className={secondaryButton}
                     >
                         {editingCountryId ? '保存国家/地区' : '新增国家/地区'}
-                    </button>
+                    </AdminButton>
                     {editingCountryId && (
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => {
                                 setEditingCountryId('');
@@ -1472,7 +1514,7 @@ function ZoneBusinessSettings({
                             className={secondaryButton}
                         >
                             取消
-                        </button>
+                        </AdminButton>
                     )}
                 </div>
                 <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
@@ -1485,13 +1527,13 @@ function ZoneBusinessSettings({
                                 {country.name} ({country.code})
                             </span>
                             <div className="flex items-center gap-1">
-                                <input
+                                <AdminInput
                                     type="checkbox"
                                     checked={country.enabled}
                                     onChange={event => void toggleCountry(country.id, event.target.checked)}
                                     aria-label={`${country.name}启用状态`}
                                 />
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => {
                                         setEditingCountryId(country.id);
@@ -1508,15 +1550,15 @@ function ZoneBusinessSettings({
                                     aria-label={`编辑${country.name}`}
                                 >
                                     <Pencil className="h-3 w-3" />
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => void removeCountry(country.id, country.name)}
                                     className="rounded p-1 text-rose-600"
                                     aria-label={`删除${country.name}`}
                                 >
                                     <Trash2 className="h-3 w-3" />
-                                </button>
+                                </AdminButton>
                             </div>
                         </div>
                     ))}

@@ -7,7 +7,7 @@ import {
     RequestContext,
 } from '@vendure/core';
 
-import { convertMinorPrice } from './store-currency-settings.service';
+import { convertMinorPrice } from './store-currency-conversion';
 import { StoreCurrencyRoundingMode } from './types';
 
 interface CurrencyChannelFields {

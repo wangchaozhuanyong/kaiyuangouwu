@@ -1,5 +1,6 @@
 import { Image as ImageIcon, RotateCcw, Save } from 'lucide-react';
 import { useState } from 'react';
+import { AdminButton } from '../../components/AdminControls';
 
 import accountHeroDefaultImage from '../../../../storefront/src/assets/ui/account-refraction.webp';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -132,7 +133,7 @@ export function AccountHeroImagePanel({
                 )}
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button
+                    <AdminButton
                         type="button"
                         disabled={disabled || saving || !dirty}
                         onClick={() => void save()}
@@ -140,8 +141,8 @@ export function AccountHeroImagePanel({
                     >
                         <Save className="size-4" aria-hidden="true" />
                         {saving ? '正在保存…' : '保存到当前店铺'}
-                    </button>
-                    <button
+                    </AdminButton>
+                    <AdminButton
                         type="button"
                         disabled={disabled || saving || (!customPreview && !currentAsset)}
                         onClick={() => {
@@ -154,7 +155,7 @@ export function AccountHeroImagePanel({
                     >
                         <RotateCcw className="size-4" aria-hidden="true" />
                         恢复默认图（保存后生效）
-                    </button>
+                    </AdminButton>
                 </div>
                 <p className="mt-3 text-[11px] text-slate-400">
                     配置对象：{channelName}。恢复默认不会删除素材库中的图片。

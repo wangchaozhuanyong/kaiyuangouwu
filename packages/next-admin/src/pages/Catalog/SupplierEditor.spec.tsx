@@ -47,3 +47,6 @@ describe('supplier editor feedback', () => {
         expect(validateSupplierDraft({ name: ' ', email: '' })).toBe('供货商名称不能为空');
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

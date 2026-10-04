@@ -306,16 +306,14 @@ export function MailQueryPage({
     const handlePaste = useCallback(async () => {
         try {
             if (!navigator.clipboard || !navigator.clipboard.readText) {
-                const fallback = window.prompt(
-                    isZh ? '请在此粘贴您的查询码:' : 'Paste your query code here:',
+                inputRef.current?.focus();
+                showToast(
+                    'info',
+                    isZh ? '请手动粘贴' : 'Paste manually',
+                    isZh
+                        ? '浏览器无法读取剪贴板，请在查询码输入框中粘贴。'
+                        : 'Clipboard access is unavailable. Paste into the query code field.',
                 );
-                if (fallback) {
-                    const fallbackCleaned = cleanCode(fallback);
-                    if (fallbackCleaned) {
-                        setInputCode(fallbackCleaned);
-                        setToast(null);
-                    }
-                }
                 return;
             }
 
@@ -354,14 +352,14 @@ export function MailQueryPage({
                 setToast(null);
             }, 2000);
         } catch {
-            const fallback = window.prompt(isZh ? '请在此粘贴您的查询码:' : 'Paste your query code here:');
-            if (fallback) {
-                const promptCleaned = cleanCode(fallback);
-                if (promptCleaned) {
-                    setInputCode(promptCleaned);
-                    setToast(null);
-                }
-            }
+            inputRef.current?.focus();
+            showToast(
+                'info',
+                isZh ? '请手动粘贴' : 'Paste manually',
+                isZh
+                    ? '剪贴板读取未获允许，请在查询码输入框中粘贴。'
+                    : 'Clipboard access was denied. Paste into the query code field.',
+            );
         }
     }, [isZh, showToast]);
 
@@ -726,7 +724,8 @@ export function MailQueryPage({
                                 <span
                                     id="countdownText"
                                     style={{
-                                        fontSize: 11,
+                                        fontSize: 'var(--type-meta-size)',
+                                        lineHeight: 'var(--type-meta-leading)',
                                         color: 'var(--primary)',
                                         minWidth: 24,
                                     }}

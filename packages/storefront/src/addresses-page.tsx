@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { CircleCheck, Mail, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { FormEvent, useRef, useState } from 'react';
+
 import './styles/address-surfaces.css';
 import './styles/checkout-payment-surfaces.css';
 
@@ -13,8 +14,8 @@ import {
     isValidAddressPhoneNumber,
     shippingAddressInput,
 } from './checkout-address';
+import { DialogSheet as Sheet } from './components/common/dialog-sheet';
 import { languageCodeFor } from './i18n';
-import { isInputMethodKey } from './input-method';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -23,7 +24,6 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { PageSkeleton } from './route-loading';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
@@ -73,6 +73,7 @@ export function AddressesPage({
     onNotify: (message: string) => void;
 }) {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const vendureLanguage = languageCodeFor(language);
     // RouteGate resolves the customer before mounting. Initialize once, so closing the
@@ -93,7 +94,12 @@ export function AddressesPage({
     const setDraftField = (field: keyof CustomerAddressInput, value: string) =>
         setAddressDraft(current => ({ ...current, [field]: value }));
     const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
+    const savedAddressForRefresh = useRef<{ address: CustomerAddress; fingerprint: string } | null>(null);
     const [formError, setFormError] = useState('');
+    const [deleteTarget, setDeleteTarget] = useState<{ kind: 'address' | 'email'; id: string } | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const deletingRef = useRef(false);
     const [emailOpen, setEmailOpen] = useState(false);
     const [selectedTab, setSelectedTab] = useState<'physical' | 'email' | null>(null);
 
@@ -152,15 +158,22 @@ export function AddressesPage({
             </Subpage>
         );
     }
+    const refreshCustomer = () =>
+        queryClient.fetchQuery({
+            queryKey: storefrontQueryKeys.customer(storefrontQueryKeys.market(market), vendureLanguage),
+            queryFn: ({ signal }) => api.activeCustomer(signal),
+            staleTime: 0,
+        });
     const save = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (submitting) return;
+        if (submittingRef.current) return;
         const data = new FormData(event.currentTarget);
         const phoneNumber = formText(data, 'phoneNumber').trim();
         if (!isValidAddressPhoneNumber(phoneNumber)) {
             setFormError(isZh ? '请输入有效的电话号码' : 'Enter a valid phone number');
             return;
         }
+        submittingRef.current = true;
         setSubmitting(true);
         setFormError('');
         try {
@@ -176,12 +189,27 @@ export function AddressesPage({
                 defaultShippingAddress:
                     !customer.addresses?.length || data.get('defaultShippingAddress') === 'on',
             };
-            const savedAddress = editingAddress
-                ? await api.updateAddress({ ...input, id: editingAddress.id })
-                : await api.createAddress(input);
-            // Keep the saved ID if refreshing fails, so retry updates instead of creating a duplicate.
+            const fingerprint = JSON.stringify(input);
+            const savedAddress =
+                savedAddressForRefresh.current?.fingerprint === fingerprint
+                    ? savedAddressForRefresh.current.address
+                    : editingAddress
+                      ? await api.updateAddress({ ...input, id: editingAddress.id })
+                      : await api.createAddress(input);
+            // Retrying unchanged input after a read failure only retries the read.
+            savedAddressForRefresh.current = { address: savedAddress, fingerprint };
             setEditingAddress(savedAddress);
-            const updatedCustomer = await api.activeCustomer();
+            let updatedCustomer: ActiveCustomer | null;
+            try {
+                updatedCustomer = await refreshCustomer();
+            } catch {
+                setFormError(
+                    isZh
+                        ? '地址已保存，列表更新失败，请重试更新。'
+                        : 'Address saved. The list could not update; please retry the update.',
+                );
+                return;
+            }
             const refreshedAddress = updatedCustomer?.addresses?.find(
                 address => address.id === savedAddress.id,
             );
@@ -192,6 +220,7 @@ export function AddressesPage({
                 return;
             }
             onCustomerChange(updatedCustomer);
+            savedAddressForRefresh.current = null;
             setOpen(false);
             setEditingAddress(null);
             onNotify(isZh ? '地址已保存' : 'Address saved');
@@ -205,15 +234,13 @@ export function AddressesPage({
                       : 'Could not save address',
             );
         } finally {
+            submittingRef.current = false;
             setSubmitting(false);
         }
     };
     const remove = async (id: string) => {
-        if (!window.confirm(isZh ? '确定删除这个地址吗？' : 'Delete this address?')) return;
         try {
             await api.deleteAddress(id);
-            onCustomerChange(await api.activeCustomer());
-            onNotify(isZh ? '地址已删除' : 'Address deleted');
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
@@ -222,7 +249,19 @@ export function AddressesPage({
                       ? '删除失败'
                       : 'Could not delete address',
             );
+            return false;
         }
+        try {
+            onCustomerChange(await refreshCustomer());
+            onNotify(isZh ? '地址已删除' : 'Address deleted');
+        } catch {
+            onNotify(
+                isZh
+                    ? '地址已删除，列表更新失败，请重试更新。'
+                    : 'Address deleted. The list could not update; please retry the update.',
+            );
+        }
+        return true;
     };
     const makeDefault = async (address: CustomerAddress) => {
         if (!isValidAddressPhoneNumber(address.phoneNumber)) {
@@ -246,7 +285,16 @@ export function AddressesPage({
                 countryCode: address.country.code,
                 defaultShippingAddress: true,
             });
-            onCustomerChange(await api.activeCustomer());
+            try {
+                onCustomerChange(await refreshCustomer());
+            } catch {
+                onNotify(
+                    isZh
+                        ? '默认地址已更新，列表更新失败，请重试更新。'
+                        : 'Default address updated. The list could not update; please retry the update.',
+                );
+                return;
+            }
             onNotify(isZh ? '默认地址已更新' : 'Default address updated');
         } catch (requestError) {
             onNotify(
@@ -259,6 +307,7 @@ export function AddressesPage({
         }
     };
     const startEdit = (address: CustomerAddress | null) => {
+        savedAddressForRefresh.current = null;
         setEditingAddress(address);
         setAddressDraft(shippingAddressInput(address, market.countryCode));
         setSmartPasteText('');
@@ -268,7 +317,9 @@ export function AddressesPage({
     };
     const saveEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (submittingRef.current) return;
         const data = new FormData(event.currentTarget);
+        submittingRef.current = true;
         setSubmitting(true);
         setFormError('');
         try {
@@ -278,7 +329,7 @@ export function AddressesPage({
                 label: formText(data, 'label'),
                 isDefault: data.get('isDefault') === 'on',
             });
-            await deliveryEmailsQuery.refetch();
+            await deliveryEmailsQuery.refetch({ cancelRefetch: false });
             setEmailOpen(false);
             onNotify(isZh ? '交付邮箱已保存' : 'Delivery email saved');
         } catch (requestError) {
@@ -290,15 +341,16 @@ export function AddressesPage({
                       : 'Could not save email',
             );
         } finally {
+            submittingRef.current = false;
             setSubmitting(false);
         }
     };
     const removeEmail = async (id: string) => {
-        if (!window.confirm(isZh ? '确定删除这个交付邮箱吗？' : 'Delete this delivery email?')) return;
         try {
             await api.deleteDeliveryEmail(id);
-            await deliveryEmailsQuery.refetch();
+            await deliveryEmailsQuery.refetch({ cancelRefetch: false });
             onNotify(isZh ? '交付邮箱已删除' : 'Delivery email deleted');
+            return true;
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
@@ -312,7 +364,7 @@ export function AddressesPage({
     const makeDefaultEmail = async (id: string) => {
         try {
             await api.setDefaultDeliveryEmail(id);
-            await deliveryEmailsQuery.refetch();
+            await deliveryEmailsQuery.refetch({ cancelRefetch: false });
             onNotify(isZh ? '默认交付邮箱已更新' : 'Default delivery email updated');
         } catch (requestError) {
             onNotify(
@@ -361,8 +413,62 @@ export function AddressesPage({
             ? '收货信息'
             : 'Delivery contacts';
 
+    const confirmDelete = async () => {
+        if (!deleteTarget || deletingRef.current) return;
+        deletingRef.current = true;
+        setDeleting(true);
+        try {
+            const deleted =
+                deleteTarget.kind === 'address'
+                    ? await remove(deleteTarget.id)
+                    : await removeEmail(deleteTarget.id);
+            if (deleted) setDeleteTarget(null);
+        } finally {
+            deletingRef.current = false;
+            setDeleting(false);
+        }
+    };
+
     return (
         <main className={`page subpage addresses-page${selection ? ' is-selecting-address' : ''}`}>
+            {deleteTarget && (
+                <Sheet
+                    language={language}
+                    title={isZh ? '确认删除' : 'Confirm deletion'}
+                    onClose={() => {
+                        if (!deleting) setDeleteTarget(null);
+                    }}
+                >
+                    <p>
+                        {deleteTarget.kind === 'address'
+                            ? isZh
+                                ? '确定删除这个地址吗？'
+                                : 'Delete this address?'
+                            : isZh
+                              ? '确定删除这个交付邮箱吗？'
+                              : 'Delete this delivery email?'}
+                    </p>
+                    <div className="address-sheet-footer">
+                        <button
+                            type="button"
+                            className="secondary-action"
+                            disabled={deleting}
+                            onClick={() => setDeleteTarget(null)}
+                        >
+                            {isZh ? '取消' : 'Cancel'}
+                        </button>
+                        <button
+                            type="button"
+                            className="primary-action"
+                            disabled={deleting}
+                            aria-busy={deleting}
+                            onClick={() => void confirmDelete()}
+                        >
+                            {deleting ? (isZh ? '删除中…' : 'Deleting…') : isZh ? '确认删除' : 'Delete'}
+                        </button>
+                    </div>
+                </Sheet>
+            )}
             <SubHeader
                 title={pageTitle}
                 language={language}
@@ -514,7 +620,9 @@ export function AddressesPage({
                                         <button
                                             type="button"
                                             className="danger-action"
-                                            onClick={() => void remove(address.id)}
+                                            onClick={() =>
+                                                setDeleteTarget({ kind: 'address', id: address.id })
+                                            }
                                         >
                                             <Trash2 />
                                             {isZh ? '删除' : 'Delete'}
@@ -560,7 +668,7 @@ export function AddressesPage({
                                         <button
                                             type="button"
                                             className="danger-action"
-                                            onClick={() => void removeEmail(email.id)}
+                                            onClick={() => setDeleteTarget({ kind: 'email', id: email.id })}
                                         >
                                             <Trash2 />
                                             {isZh ? '删除' : 'Delete'}
@@ -918,93 +1026,6 @@ function ProvinceField({
                 ))}
             </select>
         </label>
-    );
-}
-function Sheet({
-    title,
-    language,
-    onClose,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onClose: () => void;
-    children: ReactNode;
-}) {
-    const dialogRef = useRef<HTMLElement>(null);
-    const previousFocus = useRef<HTMLElement | null>(null);
-    const closeRef = useRef(onClose);
-    const titleId = useId();
-    useEffect(() => {
-        closeRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector =
-            'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const items = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
-        const frame = requestAnimationFrame(() => (items()[0] ?? dialog).focus({ preventScroll: true }));
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                closeRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const focusable = items();
-            if (!focusable.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus({ preventScroll: true });
-        };
-    }, []);
-    return (
-        <div className="sheet-layer" role="presentation">
-            <button
-                className="sheet-mask"
-                type="button"
-                onClick={onClose}
-                aria-label={language === 'zh' ? '关闭' : 'Close'}
-            />
-            <section
-                ref={dialogRef}
-                className="sheet"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                tabIndex={-1}
-            >
-                <header>
-                    <strong id={titleId}>{title}</strong>
-                    <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
-                        <X aria-hidden="true" />
-                    </button>
-                </header>
-                {children}
-            </section>
-        </div>
     );
 }
 function addressText(address: CustomerAddress, provinces: readonly StorefrontProvince[]) {

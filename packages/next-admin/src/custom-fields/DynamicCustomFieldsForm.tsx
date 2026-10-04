@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { createElement, Suspense, useMemo, useState, type ReactNode } from 'react';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../components/AdminControls';
 import { FeatureHelpButton } from '../components/FeatureHelp';
 import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
@@ -155,7 +156,7 @@ function CustomFieldControl({
                                     languageCodes={languageCodes}
                                 />
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
                                 disabled={disabled}
@@ -163,10 +164,10 @@ function CustomFieldControl({
                                 aria-label={`删除${label}第 ${index + 1} 项`}
                             >
                                 <Trash2 className="h-4 w-4" />
-                            </button>
+                            </AdminButton>
                         </div>
                     ))}
-                    <button
+                    <AdminButton
                         type="button"
                         onClick={() => onChange([...items, defaultValueForField(field)])}
                         disabled={disabled}
@@ -177,7 +178,7 @@ function CustomFieldControl({
                         ].join(' ')}
                     >
                         <Plus className="h-3.5 w-3.5" /> 添加一项
-                    </button>
+                    </AdminButton>
                 </div>
             </FieldShell>
         );
@@ -193,7 +194,7 @@ function CustomFieldControl({
                   : [languageCode];
         return (
             <FieldShell label={label} description={description} error={error} fullWidth={fullWidth}>
-                <select
+                <AdminSelect
                     value={locale}
                     onChange={event => setLocale(event.target.value)}
                     className="mb-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
@@ -204,7 +205,7 @@ function CustomFieldControl({
                             {code}
                         </option>
                     ))}
-                </select>
+                </AdminSelect>
                 <ScalarInput
                     field={{ ...field, type: field.type === 'localeText' ? 'text' : 'string' }}
                     value={localized[locale] ?? ''}
@@ -254,7 +255,7 @@ function ScalarInput({
     if (field.type === 'boolean') {
         return (
             <label className="flex min-h-9 items-center gap-2 text-xs text-slate-700">
-                <input
+                <AdminInput
                     type="checkbox"
                     checked={Boolean(value)}
                     onChange={event => onChange(event.target.checked)}
@@ -285,7 +286,7 @@ function ScalarInput({
     }
     if (field.options?.length) {
         return (
-            <select
+            <AdminSelect
                 value={stringValue(value)}
                 onChange={event => onChange(event.target.value || null)}
                 disabled={disabled}
@@ -297,12 +298,12 @@ function ScalarInput({
                         {localizedText(option.label, languageCode, option.value)}
                     </option>
                 ))}
-            </select>
+            </AdminSelect>
         );
     }
     if (field.type === 'text') {
         return (
-            <textarea
+            <AdminTextArea
                 value={stringValue(value)}
                 onChange={event => onChange(event.target.value)}
                 disabled={disabled}
@@ -315,7 +316,7 @@ function ScalarInput({
     const isDateTime = field.type === 'datetime';
     const numberField = field as CustomFieldDefinition;
     return (
-        <input
+        <AdminInput
             type={isNumber ? 'number' : isDateTime ? 'datetime-local' : 'text'}
             value={dateTimeLocalValue(value, isDateTime)}
             onChange={event => {

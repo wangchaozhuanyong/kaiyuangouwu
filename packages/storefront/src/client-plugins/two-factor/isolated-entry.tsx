@@ -84,7 +84,7 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
     if (migrating)
         return (
             <div>
-                <p className="p-4 text-sm">
+                <p className="p-4 type-body">
                     {props.language === 'zh'
                         ? '在旧页面设置或输入口令，下载加密备份后，返回安全页面恢复。密钥不会通过页面通信传递。'
                         : 'Unlock or migrate old data and download an encrypted backup, then restore it in the secure page. Secrets are never sent between pages.'}

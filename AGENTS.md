@@ -70,7 +70,21 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - The 2FA fast lane must deliver every affected frontend artifact: the reusable storefront archive includes `dist-two-factor` under the private `.two-factor` companion directory. The isolated virtual host serves `/var/www/kaiyuangouwu-two-factor-current`, never a runtime-bound directory or a public storefront subroute. Validate the companion before switching and verify its own manifest/assets on the configured isolated origin. Without an isolated origin, report local artifact verification rather than invented public acceptance.
 - See `deploy/UI_RELEASE_LESSONS_20260927.md` for the failure evidence, completed fix, and remaining work. Record one release ledger and report code completion, local checks, merge, deployment, and live acceptance separately.
 
+## Next Admin mandatory contract
+
+- Changes under `packages/next-admin/**`, including new routes, dialogs, embedded panels and extensions, must follow `packages/next-admin/AGENTS.md` and `packages/next-admin/LOADING_REFRESH_INTERACTION_STANDARD.md` before implementation.
+- Reuse the shared Admin query/runtime, page refresh, draft protection, feedback and interaction components. New business features must not copy the authentication/bootstrap exceptions, introduce another server-data cache, or implement a separate refresh/loading lifecycle.
+- From `packages/next-admin`, run `bun run check:feedback` and the affected tests. The existing check and build entry automatically enforce the loading/refresh/interaction architecture gate across production source, including new directories. Fix violations in the shared mechanism or migrate the caller; do not disable the gate, expand exceptions, or raise budgets to make a page pass.
+- Validate the affected loading, refresh, failure, draft, scope and interaction scenarios using the package contract. Report static checks, runtime tests, browser acceptance and production/business results separately. These local rules do not authorize pushing or deployment.
+
 ## Development Workflow
+
+### Storefront typography contract
+
+- For every new or changed storefront page, read `packages/storefront/TYPOGRAPHY.md`. `src/styles/typography.css` is the only owner of type sizes, leading, weights, font stacks and tracking, shared across stores, presets, content previews and the isolated 2FA tool.
+- Select roles by purpose. Use `type-*` utilities or matching `--type-<role>-size` / `--type-<role>-leading` pairs. Never introduce literal type metrics, page-local typography tokens, or skin/channel density overrides. Navigation, primary actions and body text cannot use tiny metadata or artwork roles to fit their container.
+- Keep typography changes in the existing component owner. New cross-page roles require a documented purpose, responsive specifications and visual verification. Respect the narrowly documented artwork and canvas-export exceptions.
+- Run `bun run check:typography` and `bun run test:typography` in `packages/storefront`, then the affected checks/build. The dev/build entries enforce the source guard automatically. Verify the affected UI on mobile/desktop, Chinese/English and both presets; report only measured states and do not equate local verification with a release.
 
 1. Make changes to a package
 2. Build it (or `bun run watch` for continuous)

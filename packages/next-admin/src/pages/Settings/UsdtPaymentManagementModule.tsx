@@ -1,9 +1,11 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -80,7 +82,6 @@ export function UsdtPaymentManagementModule() {
             paymentOptions: { ...dateOptions, skip: paymentPage * paymentPageSize, take: paymentPageSize },
             refundOptions: { ...dateOptions, skip: refundPage * refundPageSize, take: refundPageSize },
         },
-        fetchPolicy: 'cache-and-network',
     });
     const [reviewWallet, reviewState] = useMutation<{ reviewStoreUsdtWallet: UsdtWalletRecord }>(
         REVIEW_STORE_USDT_WALLET_MUTATION,
@@ -179,15 +180,18 @@ export function UsdtPaymentManagementModule() {
                             平台级钱包审核、全部支付流水、链上意向和人工退款审计
                         </p>
                     </div>
-                    <button
+                    <AdminButton
+                        refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
                         disabled={query.loading}
                         className={secondaryButton}
                     >
-                        <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw
+                            className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                        />
                         刷新
-                    </button>
+                    </AdminButton>
                 </div>
             </header>
             <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
@@ -252,7 +256,7 @@ export function UsdtPaymentManagementModule() {
                             <div className="mt-4 grid gap-3 md:grid-cols-3">
                                 <label className={labelClass}>
                                     网店
-                                    <select
+                                    <AdminSelect
                                         value={channelId}
                                         onChange={event => {
                                             setChannelId(event.target.value);
@@ -267,11 +271,11 @@ export function UsdtPaymentManagementModule() {
                                                 {channelName(wallet.channelId, wallet.channelCode)}
                                             </option>
                                         ))}
-                                    </select>
+                                    </AdminSelect>
                                 </label>
                                 <label className={labelClass}>
                                     开始日期
-                                    <input
+                                    <AdminInput
                                         type="date"
                                         value={from}
                                         max={to || undefined}
@@ -285,7 +289,7 @@ export function UsdtPaymentManagementModule() {
                                 </label>
                                 <label className={labelClass}>
                                     结束日期
-                                    <input
+                                    <AdminInput
                                         type="date"
                                         value={to}
                                         min={from || undefined}
@@ -352,7 +356,7 @@ export function UsdtPaymentManagementModule() {
                                     ['intents', '链上收款意向'],
                                 ] as const
                             ).map(([view, label]) => (
-                                <button
+                                <AdminButton
                                     key={view}
                                     id={`finance-${view}-tab`}
                                     type="button"
@@ -369,7 +373,7 @@ export function UsdtPaymentManagementModule() {
                                             item => item.manualReviewCount > 0,
                                         ) &&
                                         ' · 有待复核'}
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
                         <section
@@ -444,13 +448,13 @@ export function UsdtPaymentManagementModule() {
                                                 <td className="px-3 py-3">
                                                     {payment.paymentMethodCode === 'usdt-trc20' &&
                                                         payment.paymentState === 'Settled' && (
-                                                            <button
+                                                            <AdminButton
                                                                 type="button"
                                                                 onClick={() => setRefundPayment(payment)}
                                                                 className="font-bold text-blue-600 hover:underline"
                                                             >
                                                                 记录人工退款
-                                                            </button>
+                                                            </AdminButton>
                                                         )}
                                                 </td>
                                             </tr>
@@ -578,13 +582,13 @@ export function UsdtPaymentManagementModule() {
                                         )}
                                         {intent.status === 'MANUAL_REVIEW' && (
                                             <div className="mt-2 flex justify-end">
-                                                <button
+                                                <AdminButton
                                                     type="button"
                                                     onClick={() => setReviewIntent(intent)}
                                                     className="font-bold text-blue-600 hover:underline"
                                                 >
                                                     处理对账异常
-                                                </button>
+                                                </AdminButton>
                                             </div>
                                         )}
                                     </article>
@@ -703,7 +707,7 @@ function WalletReview({
             </p>
             {wallet.reviewStatus === 'PENDING' && (
                 <div className="mt-3 border-t pt-3">
-                    <input
+                    <AdminInput
                         value={reason}
                         maxLength={500}
                         onChange={event => onReason(event.target.value)}
@@ -711,18 +715,18 @@ function WalletReview({
                         className={inputClass}
                     />
                     <div className="mt-2 flex justify-end gap-2">
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={onReject}
                             className={`${secondaryButton} text-rose-600`}
                         >
                             <X className="h-4 w-4" />
                             驳回
-                        </button>
-                        <button type="button" onClick={onApprove} className={primaryButton}>
+                        </AdminButton>
+                        <AdminButton type="button" onClick={onApprove} className={primaryButton}>
                             <Check className="h-4 w-4" />
                             通过
-                        </button>
+                        </AdminButton>
                     </div>
                 </div>
             )}
@@ -770,14 +774,14 @@ function ReconciliationEditor({
                             {serviceMessageDisplay(intent.failureReason, 'zh')}
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <label className={`${labelClass} sm:col-span-2`}>
                         处理方式
-                        <select
+                        <AdminSelect
                             value={draft.action}
                             onChange={event =>
                                 setDraft(current => ({
@@ -789,7 +793,7 @@ function ReconciliationEditor({
                         >
                             {retryAllowed && <option value="RETRY_SETTLEMENT">重试订单入账</option>}
                             <option value="CONFIRM_EXTERNAL_REFUND">核验并关闭外部链上退款</option>
-                        </select>
+                        </AdminSelect>
                     </label>
                     {draft.action === 'CONFIRM_EXTERNAL_REFUND' && (
                         <>
@@ -825,13 +829,13 @@ function ReconciliationEditor({
                     重试仅适用于暂时性入账异常；外部退款会校验固化交易、全额金额、收款地址和已审核退款钱包。
                 </p>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                    <button type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
                         取消
-                    </button>
-                    <button type="button" onClick={() => onSubmit(draft)} className={primaryButton}>
+                    </AdminButton>
+                    <AdminButton type="button" onClick={() => onSubmit(draft)} className={primaryButton}>
                         <ShieldCheck className="h-4 w-4" />
                         下一步验证密码
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         </div>
@@ -874,9 +878,9 @@ function RefundEditor({
                             订单 {payment.orderCode} · 支付 {payment.id}
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="关闭">
+                    <AdminButton type="button" onClick={onClose} aria-label="关闭">
                         <X className="h-4 w-4" />
-                    </button>
+                    </AdminButton>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <RefundField
@@ -910,13 +914,13 @@ function RefundEditor({
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                    <button type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
                         取消
-                    </button>
-                    <button type="button" onClick={() => onSubmit(draft)} className={primaryButton}>
+                    </AdminButton>
+                    <AdminButton type="button" onClick={() => onSubmit(draft)} className={primaryButton}>
                         <ShieldCheck className="h-4 w-4" />
                         下一步验证密码
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
         </div>
@@ -936,7 +940,7 @@ function RefundField({
     return (
         <label className={labelClass}>
             {label}
-            <input
+            <AdminInput
                 type={type}
                 min={type === 'number' ? 0 : undefined}
                 step={type === 'number' ? 'any' : undefined}
@@ -992,22 +996,22 @@ function Pager({
             <span>
                 {total} 条 · {page + 1}/{pages}
             </span>
-            <button
+            <AdminButton
                 type="button"
                 onClick={() => onChange(page - 1)}
                 disabled={loading || page === 0}
                 className={pagerButton}
             >
                 <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
                 type="button"
                 onClick={() => onChange(page + 1)}
                 disabled={loading || page + 1 >= pages}
                 className={pagerButton}
             >
                 <ChevronRight className="h-4 w-4" />
-            </button>
+            </AdminButton>
         </div>
     );
 }
@@ -1045,13 +1049,13 @@ function State({
         >
             <p>{label}</p>
             {action && (
-                <button
+                <AdminButton
                     type="button"
                     onClick={action}
                     className="mt-3 rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

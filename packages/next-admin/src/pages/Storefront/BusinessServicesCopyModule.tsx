@@ -1,12 +1,14 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
-import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { AssetPicker } from './storefront-asset-picker';
 
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
     STOREFRONT_CONTENT_QUERY,
@@ -15,9 +17,9 @@ import {
     type StorefrontContentResult,
 } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useServerDraft } from '../../hooks/use-server-draft';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import {
     businessServicesLinkIsValid,
     businessServicesLinkValue,
@@ -43,9 +45,7 @@ const defaults: Record<Language, { title: string; body: string; subtitle?: strin
 
 export function BusinessServicesCopyModule() {
     const { hasAnyPermission } = useAdminPermissions();
-    const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
-        fetchPolicy: 'cache-and-network',
-    });
+    const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
     const source = query.data?.storefrontContentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === BLOCK_CODE,
     );
@@ -60,13 +60,12 @@ export function BusinessServicesCopyModule() {
     const sourceSignature = channel
         ? `${channel.id}:${source ? `${source.id}:${source.updatedAt}` : 'empty'}`
         : '';
-    const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
+    const serverDraft = useServerDraft<StorefrontContentBlock>(
+        channel?.id ?? '',
+        sourceSignature,
         sourceSignature ? copyDraft(source) : null,
     );
-    const [originalDraft, setOriginalDraft] = useState<StorefrontContentBlock | null>(() =>
-        sourceSignature ? copyDraft(source) : null,
-    );
-    const [signature, setSignature] = useState(sourceSignature);
+    const { draft, setDraft, dirty, sourceChanged, baseline: originalDraft } = serverDraft;
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -77,7 +76,6 @@ export function BusinessServicesCopyModule() {
     const [update, updateState] = useMutation<{ updateStorefrontContentBlock: StorefrontContentBlock }>(
         UPDATE_STOREFRONT_BLOCK_MUTATION,
     );
-    const draft = resolveVersionedDraft(sourceSignature, signature, copyDraft(source), storedDraft);
     const imageChanges = source && draft ? imageReplacements(source, draft) : [];
     const imageReviewKey = `${sourceSignature}:${JSON.stringify(imageChanges)}`;
     const imagesConfirmed = imageChanges.length === 0 || reviewedImageKey === imageReviewKey;
@@ -87,18 +85,6 @@ export function BusinessServicesCopyModule() {
     const linkValue = draft ? businessServicesLinkValue(draft) : '';
     const linkIsValid = businessServicesLinkIsValid(linkValue);
 
-    /* oxlint-disable react/set-state-in-effect -- GraphQL result is the versioned draft source. */
-    useEffect(() => {
-        if (!sourceSignature || sourceSignature === signature) return;
-        setDraft(copyDraft(source));
-        setOriginalDraft(copyDraft(source));
-        setSignature(sourceSignature);
-        setNotice('');
-        setError('');
-    }, [signature, source, sourceSignature]);
-    /* oxlint-enable react/set-state-in-effect */
-
-    const dirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(copyDraft(source)));
     const valid = Boolean(
         draft &&
         linkIsValid &&
@@ -109,7 +95,6 @@ export function BusinessServicesCopyModule() {
     );
     const [verifying, setVerifying] = useState(false);
     const pending = verifying || createState.loading || updateState.loading;
-    useUnsavedChangesWarning(dirty || pending, '商业服务页修改尚未保存，离开后将放弃本次修改。');
 
     const change = (languageCode: Language, key: 'title' | 'body', value: string) =>
         setDraft(current =>
@@ -146,7 +131,7 @@ export function BusinessServicesCopyModule() {
         );
 
     const save = async () => {
-        if (!draft || !valid || !canEdit || pending || !channel || !imagesConfirmed) return;
+        if (!draft || !valid || !canEdit || pending || sourceChanged || !channel || !imagesConfirmed) return;
         const activeToken = getActiveChannelToken();
         const stillCurrent = () => getActiveChannelToken() === activeToken;
         const context = channelRequestContext(channel.token);
@@ -183,9 +168,7 @@ export function BusinessServicesCopyModule() {
                 saved,
             );
             const savedDraft = copyDraft(savedBlock);
-            setDraft(savedDraft);
-            setOriginalDraft(savedDraft);
-            setSignature(`${channel.id}:${savedBlock.id}:${savedBlock.updatedAt}`);
+            serverDraft.accept(savedDraft, `${channel.id}:${savedBlock.id}:${savedBlock.updatedAt}`);
             setNotice('已保存到当前店铺，并重新读取核对；中文文案将按翻译设置同步。');
         } catch (cause) {
             if (!stillCurrent()) return;
@@ -200,6 +183,7 @@ export function BusinessServicesCopyModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
+            {sourceChanged && <DraftUpdateNotice onReload={serverDraft.reload} />}
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -214,25 +198,28 @@ export function BusinessServicesCopyModule() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
                             disabled={query.loading}
                             className={secondaryButton}
                         >
-                            <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                                className={`h-4 w-4 ${query.loading && !query.data ? 'animate-spin' : ''}`}
+                            />
                             刷新
-                        </button>
+                        </AdminButton>
                         {canEdit && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => void save()}
-                                disabled={!dirty || !valid || pending || !imagesConfirmed}
+                                disabled={!dirty || !valid || pending || sourceChanged || !imagesConfirmed}
                                 className={primaryButton}
                             >
                                 <Save className="h-4 w-4" />
                                 {pending ? '保存中…' : '保存并发布'}
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -261,7 +248,7 @@ export function BusinessServicesCopyModule() {
                                     </p>
                                 </div>
                                 {canEdit && (
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setDraft(current =>
@@ -279,12 +266,12 @@ export function BusinessServicesCopyModule() {
                                     >
                                         <RotateCcw className="h-3.5 w-3.5" />
                                         恢复默认
-                                    </button>
+                                    </AdminButton>
                                 )}
                             </div>
                             <label className="flex items-center gap-3 text-xs font-semibold text-slate-700">
                                 <span className="shrink-0">编辑语言</span>
-                                <select
+                                <AdminSelect
                                     aria-label="编辑语言"
                                     value={previewLanguage}
                                     onChange={event => setPreviewLanguage(event.target.value as Language)}
@@ -292,7 +279,7 @@ export function BusinessServicesCopyModule() {
                                 >
                                     <option value="zh_Hans">中文</option>
                                     <option value="en">英文</option>
-                                </select>
+                                </AdminSelect>
                             </label>
                             {(['zh_Hans', 'en'] as const).map(language => {
                                 const translation = getTranslation(draft, language);
@@ -305,7 +292,7 @@ export function BusinessServicesCopyModule() {
                                     >
                                         <strong className="text-xs">{zh ? '中文' : '英文'}</strong>
                                         <Field label={`标题 ${translation.title.length}/${zh ? 40 : 80}`}>
-                                            <input
+                                            <AdminInput
                                                 value={translation.title}
                                                 maxLength={zh ? 40 : 80}
                                                 disabled={!canEdit}
@@ -316,7 +303,7 @@ export function BusinessServicesCopyModule() {
                                             />
                                         </Field>
                                         <Field label={`说明 ${translation.body.length}/200`}>
-                                            <textarea
+                                            <AdminTextArea
                                                 value={translation.body}
                                                 maxLength={200}
                                                 rows={2}
@@ -341,14 +328,14 @@ export function BusinessServicesCopyModule() {
                                             title="商业服务页前台预览"
                                         />
                                     </h2>
-                                    <select
+                                    <AdminSelect
                                         value={previewLanguage}
                                         onChange={event => setPreviewLanguage(event.target.value as Language)}
                                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                                     >
                                         <option value="zh_Hans">中文</option>
                                         <option value="en">英文</option>
-                                    </select>
+                                    </AdminSelect>
                                 </div>
                                 <div
                                     className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
@@ -404,7 +391,7 @@ export function BusinessServicesCopyModule() {
                                     </p>
                                     {imageChanges.length > 0 && (
                                         <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">
-                                            <input
+                                            <AdminInput
                                                 type="checkbox"
                                                 checked={imagesConfirmed}
                                                 onChange={event =>
@@ -419,7 +406,7 @@ export function BusinessServicesCopyModule() {
                                 </fieldset>
                                 <div className="space-y-2 border-t border-slate-200 pt-3">
                                     <Field label="跳转链接地址（可选）">
-                                        <input
+                                        <AdminInput
                                             type="url"
                                             inputMode="url"
                                             autoComplete="url"
@@ -540,9 +527,9 @@ function State({
         >
             {label}
             {action && (
-                <button type="button" onClick={action} className="ml-3 font-bold underline">
+                <AdminButton type="button" onClick={action} className="ml-3 font-bold underline">
                     重试
-                </button>
+                </AdminButton>
             )}
         </div>
     );

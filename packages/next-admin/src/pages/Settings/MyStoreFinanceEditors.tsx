@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION,
@@ -65,14 +66,14 @@ export function MyStorePayoutAccount({
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
                 <span>当前状态：{governanceStatusLabel(latestRequest)}</span>
-                <button
+                <AdminButton
                     type="button"
                     onClick={() => void save()}
                     disabled={state.loading}
                     className={secondaryButton}
                 >
                     提交审核
-                </button>
+                </AdminButton>
             </div>
             {approvedRequest && (
                 <p className="mt-2 text-xs text-slate-600">
@@ -149,7 +150,7 @@ export function MyStorePaymentOptions({
                                       : '本店未开启'}
                             </span>
                         </span>
-                        <input
+                        <AdminInput
                             type="checkbox"
                             checked={option.enabled}
                             disabled={state.loading || (!option.platformEnabled && !option.enabled)}

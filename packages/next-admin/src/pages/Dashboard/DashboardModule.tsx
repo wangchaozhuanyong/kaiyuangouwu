@@ -1,5 +1,7 @@
+import { AdminButton } from '../../components/AdminControls';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
-import { useQuery } from '@apollo/client/react';
+
 import {
     AlertCircle,
     ArrowRight,
@@ -25,6 +27,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePageRefreshPreparation } from '../../hooks/use-admin-query';
+import { useActiveInterval } from '../../hooks/use-page-activity';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminDashboardAlerts, NextAdminDashboardWidgets } from '../../extensions/extension-hosts';
@@ -158,10 +162,8 @@ export function DashboardModule() {
     const dateRange = useMemo(() => getMetricRange(period, rangeEnd), [period, rangeEnd]);
     const previousDateRange = useMemo(() => getPreviousMetricRange(dateRange), [dateRange]);
 
-    useEffect(() => {
-        const timer = window.setInterval(() => setRangeEnd(Date.now()), 60_000);
-        return () => window.clearInterval(timer);
-    }, []);
+    useActiveInterval(() => setRangeEnd(Date.now()), 60_000);
+    usePageRefreshPreparation(() => setRangeEnd(Date.now()));
 
     useEffect(() => {
         localStorage.setItem(DASHBOARD_WIDGET_STORAGE_KEY, JSON.stringify(widgetPreferences));
@@ -176,7 +178,7 @@ export function DashboardModule() {
                 storefrontNameEn?: string | null;
             } | null;
         };
-    }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
+    }>(GET_ACTIVE_CHANNEL, {});
     const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code ?? '');
     const businessQueryPaused = !channelContext.data || isPlatformContext;
     const canReadOrders = hasAnyPermission(['ReadOrder']);
@@ -198,6 +200,8 @@ export function DashboardModule() {
         canCreateProducts || canOpenAiSettings || canEditStorefront || canOpenStoreSettings;
 
     const metrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
+        context: { adminResource: { continuity: { period, comparison: false } } },
+        pollInterval: 0,
         variables: {
             input: {
                 types: ['OrderCount', 'OrderTotal'],
@@ -205,11 +209,13 @@ export function DashboardModule() {
                 ...dateRange,
             },
         },
-        fetchPolicy: 'cache-first',
+
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadOrders,
     });
     const previousMetrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
+        context: { adminResource: { continuity: { period, comparison: true } } },
+        pollInterval: 0,
         variables: {
             input: {
                 types: ['OrderCount', 'OrderTotal'],
@@ -217,22 +223,19 @@ export function DashboardModule() {
                 ...previousDateRange,
             },
         },
-        fetchPolicy: 'cache-first',
+
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadOrders,
     });
     const orderTodo = useQuery<DashboardOrderTodoData>(DASHBOARD_ORDER_TODO_QUERY, {
-        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadOrders,
     });
     const productTodo = useQuery<DashboardProductTodoData>(DASHBOARD_PRODUCT_TODO_QUERY, {
-        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadProducts,
     });
     const reviewTodo = useQuery<DashboardReviewTodoData>(DASHBOARD_REVIEW_TODO_QUERY, {
-        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadCatalog,
     });
@@ -244,12 +247,11 @@ export function DashboardModule() {
                 filter: { active: { eq: false } },
             },
         },
-        fetchPolicy: 'cache-first',
+
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadOrders,
     });
     const searchIndex = useQuery<DashboardSearchIndexData>(DASHBOARD_SEARCH_INDEX_QUERY, {
-        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
         skip: businessQueryPaused || !canReadSearchIndex,
     });
@@ -359,20 +361,20 @@ export function DashboardModule() {
                                 在这里管理员工、角色、权限与系统运维，不会将业务数据写入平台 Channel。
                             </p>
                             <div className="mt-4 flex flex-wrap gap-2">
-                                <button
+                                <AdminButton
                                     type="button"
                                     onClick={() => navigate('/settings/team')}
                                     className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                 >
                                     员工与权限
-                                </button>
-                                <button
+                                </AdminButton>
+                                <AdminButton
                                     type="button"
                                     onClick={() => navigate('/settings/system-ops')}
                                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                                 >
                                     系统运维
-                                </button>
+                                </AdminButton>
                             </div>
                         </section>
                     </div>
@@ -403,7 +405,7 @@ export function DashboardModule() {
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="flex rounded-lg bg-slate-100 p-1" aria-label="经营指标统计周期">
                             {PERIODS.map(item => (
-                                <button
+                                <AdminButton
                                     key={item.id}
                                     type="button"
                                     onClick={() => setPeriod(item.id)}
@@ -411,17 +413,18 @@ export function DashboardModule() {
                                     aria-pressed={period === item.id}
                                 >
                                     {item.label}
-                                </button>
+                                </AdminButton>
                             ))}
                         </div>
-                        <button
+                        <AdminButton
                             type="button"
                             onClick={() => setIsCustomizing(true)}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                         >
                             <LayoutGrid className="h-3.5 w-3.5" /> 调整工作台
-                        </button>
-                        <button
+                        </AdminButton>
+                        <AdminButton
+                            refreshPage
                             type="button"
                             onClick={refreshAll}
                             disabled={isRefreshing}
@@ -429,15 +432,15 @@ export function DashboardModule() {
                         >
                             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                             刷新
-                        </button>
+                        </AdminButton>
                         {canCreateProducts && (
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => navigate('/catalog/products/new')}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
                             >
                                 <Plus className="h-4 w-4" /> 发布商品
-                            </button>
+                            </AdminButton>
                         )}
                     </div>
                 </div>
@@ -469,7 +472,7 @@ export function DashboardModule() {
                             >
                                 {isCustomizing && (
                                     <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-lg border border-blue-200 bg-white p-1 shadow-sm">
-                                        <button
+                                        <AdminButton
                                             type="button"
                                             draggable
                                             onDragStart={() => setDraggedWidget(widgetId)}
@@ -479,15 +482,15 @@ export function DashboardModule() {
                                             title="拖动排序"
                                         >
                                             <GripVertical className="h-4 w-4" />
-                                        </button>
-                                        <button
+                                        </AdminButton>
+                                        <AdminButton
                                             type="button"
                                             onClick={() => toggleWidget(widgetId)}
                                             className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                                             aria-label={`隐藏${WIDGET_LABELS[widgetId]}`}
                                         >
                                             <EyeOff className="h-4 w-4" />
-                                        </button>
+                                        </AdminButton>
                                     </div>
                                 )}
 
@@ -646,13 +649,13 @@ export function DashboardModule() {
                                                     {recentOrders.data?.orders.totalItems ?? 0} 笔
                                                 </p>
                                             </div>
-                                            <button
+                                            <AdminButton
                                                 type="button"
                                                 onClick={() => navigate('/sales/orders')}
                                                 className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800"
                                             >
                                                 查看全部 <ArrowRight className="h-3.5 w-3.5" />
-                                            </button>
+                                            </AdminButton>
                                         </div>
                                         {recentOrders.error && !recentOrders.data ? (
                                             <div className="p-5">
@@ -734,7 +737,7 @@ export function DashboardModule() {
                                                                 className="group h-[52px] hover:bg-blue-50/40"
                                                             >
                                                                 <td className="sticky left-0 z-[1] h-[52px] bg-white px-4 py-0 group-hover:bg-blue-50">
-                                                                    <button
+                                                                    <AdminButton
                                                                         type="button"
                                                                         onClick={() =>
                                                                             navigate(
@@ -744,7 +747,7 @@ export function DashboardModule() {
                                                                         className="font-mono font-bold text-blue-700 hover:underline"
                                                                     >
                                                                         {order.code}
-                                                                    </button>
+                                                                    </AdminButton>
                                                                 </td>
                                                                 <td className="h-[52px] max-w-44 px-4 py-0 text-slate-700">
                                                                     <span
@@ -881,13 +884,13 @@ export function DashboardModule() {
                         <div className="sm:col-span-2 xl:col-span-12 rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
                             <LayoutGrid className="mx-auto h-9 w-9 text-slate-300" />
                             <p className="mt-3 text-sm font-bold text-slate-700">工作台暂时没有显示组件</p>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setIsCustomizing(true)}
                                 className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
                             >
                                 添加组件
-                            </button>
+                            </AdminButton>
                         </div>
                     )}
                 </div>
@@ -924,14 +927,14 @@ export function DashboardModule() {
                                     选择预设、显示组件；回到工作台可拖动排序
                                 </p>
                             </div>
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setIsCustomizing(false)}
                                 className="rounded p-1.5 text-slate-400 hover:bg-slate-100"
                                 aria-label="关闭工作台设置"
                             >
                                 <X className="h-5 w-5" />
-                            </button>
+                            </AdminButton>
                         </div>
                         <div className="flex-1 space-y-6 overflow-y-auto p-5">
                             <section>
@@ -945,7 +948,7 @@ export function DashboardModule() {
                                             [DashboardPresetId, (typeof DASHBOARD_PRESETS)[DashboardPresetId]]
                                         >
                                     ).map(([presetId, preset]) => (
-                                        <button
+                                        <AdminButton
                                             key={presetId}
                                             type="button"
                                             onClick={() => applyPreset(presetId)}
@@ -957,7 +960,7 @@ export function DashboardModule() {
                                             <span className="mt-1 block text-[11px] text-slate-500">
                                                 {preset.description}
                                             </span>
-                                        </button>
+                                        </AdminButton>
                                     ))}
                                 </div>
                             </section>
@@ -967,7 +970,7 @@ export function DashboardModule() {
                                         {allowedWidgets.length} 个可用工作台组件
                                         <FeatureHelpButton topic="dashboard.customizer" title="工作台组件" />
                                     </h3>
-                                    <button
+                                    <AdminButton
                                         type="button"
                                         onClick={() =>
                                             setWidgetPreferences({ order: ALL_WIDGETS, hidden: [] })
@@ -975,7 +978,7 @@ export function DashboardModule() {
                                         className="text-[11px] font-bold text-blue-600"
                                     >
                                         恢复默认
-                                    </button>
+                                    </AdminButton>
                                 </div>
                                 <div className="mt-3 space-y-2">
                                     {widgetPreferences.order
@@ -983,7 +986,7 @@ export function DashboardModule() {
                                         .map(widgetId => {
                                             const visible = !widgetPreferences.hidden.includes(widgetId);
                                             return (
-                                                <button
+                                                <AdminButton
                                                     key={widgetId}
                                                     type="button"
                                                     onClick={() => toggleWidget(widgetId)}
@@ -1002,20 +1005,20 @@ export function DashboardModule() {
                                                         )}
                                                         {visible ? '显示' : '隐藏'}
                                                     </span>
-                                                </button>
+                                                </AdminButton>
                                             );
                                         })}
                                 </div>
                             </section>
                         </div>
                         <div className="border-t border-slate-200 p-4">
-                            <button
+                            <AdminButton
                                 type="button"
                                 onClick={() => setIsCustomizing(false)}
                                 className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"
                             >
                                 完成调整
-                            </button>
+                            </AdminButton>
                         </div>
                     </aside>
                 </div>
@@ -1088,7 +1091,7 @@ function TodoCard({
     onClick: () => void;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className="group flex min-h-20 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-xs transition-colors hover:border-blue-200 hover:bg-blue-50/50"
@@ -1105,7 +1108,7 @@ function TodoCard({
             <span className="font-mono text-2xl font-bold text-slate-900">
                 {loading ? '—' : (count ?? 0)}
             </span>
-        </button>
+        </AdminButton>
     );
 }
 
@@ -1121,7 +1124,7 @@ function QuickAction({
     onClick: () => void;
 }) {
     return (
-        <button
+        <AdminButton
             type="button"
             onClick={onClick}
             className="group flex w-full items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 text-left hover:border-blue-200 hover:bg-blue-50/50"
@@ -1134,7 +1137,7 @@ function QuickAction({
                 <span className="mt-0.5 block text-[11px] text-slate-400">{description}</span>
             </span>
             <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-600" />
-        </button>
+        </AdminButton>
     );
 }
 
@@ -1148,13 +1151,13 @@ function ErrorPanel({ message, detail, onRetry }: { message: string; detail: str
                     <p className="mt-1 max-w-2xl text-[11px] text-rose-600">{toUserFacingError(detail)}</p>
                 </div>
             </div>
-            <button
+            <AdminButton
                 type="button"
                 onClick={onRetry}
                 className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 sm:mt-0"
             >
                 重试
-            </button>
+            </AdminButton>
         </div>
     );
 }

@@ -35,6 +35,7 @@ describe('build recovery', () => {
             throw new Error('SecurityError: session storage access is blocked');
         });
         vi.stubGlobal('window', {
+            dispatchEvent: vi.fn(() => true),
             location: { href: 'https://console.example.test/dashboard/catalog?tab=products#list', replace },
             get sessionStorage() {
                 return storage();

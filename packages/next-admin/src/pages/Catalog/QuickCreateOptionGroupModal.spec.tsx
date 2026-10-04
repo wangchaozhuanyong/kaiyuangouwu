@@ -60,3 +60,6 @@ describe('QuickCreateOptionGroupModal', () => {
         expect(html).not.toContain('智能平滑升级多规格');
     });
 });
+
+// The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
+vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));
