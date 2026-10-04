@@ -1840,7 +1840,7 @@ msgstr "业务日期"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.campaign"
-msgstr "广告活动"
+msgstr "推广活动"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1860,12 +1860,12 @@ msgstr "结账页浏览"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.conversion"
-msgstr "转化率"
+msgstr "付款转化率"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.cost"
-msgstr "费用"
+msgstr "投放费用"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1875,7 +1875,7 @@ msgstr "广告活动费用已追加"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.description"
-msgstr "采用 30 天内最后一次非直接访问归因。订单付款结算后归因固定；收入及回报指标扣除已结算退款。"
+msgstr "30 天内末次非直接访问归因，付款后固定订单来源。收入已扣除已结算退款；收入回报倍数为退款后收入除以投放费用，投放回报率为收入减投放费用后除以投放费用。尚未扣除商品、物流等其他成本，不等同于净利润。"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1900,17 +1900,17 @@ msgstr "媒介"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.netRevenue"
-msgstr "净收入"
+msgstr "退款后收入"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.orders"
-msgstr "订单"
+msgstr "付款订单数"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.productCheckout"
-msgstr "商品／结账"
+msgstr "浏览与结账"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1935,12 +1935,12 @@ msgstr "刷新"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.refundAdjustedRoas"
-msgstr "扣除退款后的 ROAS"
+msgstr "收入回报倍数"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.refundAdjustedRoi"
-msgstr "扣除退款后的 ROI"
+msgstr "投放回报率"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1955,12 +1955,12 @@ msgstr "来源"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.sourceMedium"
-msgstr "来源／媒介"
+msgstr "访问来源"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.title"
-msgstr "营销归因"
+msgstr "渠道效果报表"
 
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
@@ -1970,7 +1970,7 @@ msgstr "结束日期"
 #. js-lingui-explicit-id
 #: src/dashboard/marketing-attribution-page.tsx
 msgid "operations.marketingAttribution.visitors"
-msgstr "访客"
+msgstr "访问人数"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

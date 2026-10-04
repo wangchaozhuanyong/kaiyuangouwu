@@ -39,8 +39,10 @@ import {
     type TeamManagementResult,
 } from '../../graphql/management.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
@@ -50,19 +52,31 @@ type Tab = 'MEMBERS' | 'ROLES';
 const ROLE_TABS = { members: 'MEMBERS', roles: 'ROLES' } as const;
 
 export function RolesModule() {
+    const standalonePage = useStandaloneAdminPage();
     const [tab, setTab] = useUrlTab<Tab>(ROLE_TABS, 'members');
     const [search, setSearch] = useState('');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [roleEditor, setRoleEditor] = useState<RoleRecord | 'NEW' | null>(null);
     const [memberEditor, setMemberEditor] = useState<AdministratorRecord | 'NEW' | null>(null);
-    const query = useQuery<TeamManagementResult>(TEAM_MANAGEMENT_QUERY, {});
+    const query = useQuery<TeamManagementResult>(
+        standalonePage && tab === 'ROLES'
+            ? selectQueryFields(TEAM_MANAGEMENT_QUERY, [
+                  'activeAdministrator',
+                  'myAdministratorAccess',
+                  'manageableRoles',
+                  'manageableChannels',
+                  'permissionPolicyCatalog',
+              ])
+            : TEAM_MANAGEMENT_QUERY,
+        {},
+    );
     const isTeamInitializing = !query.error && !query.data;
 
     const roles = query.data?.manageableRoles ?? [];
     const canManageTeam = ['OWNER', 'ADMIN'].includes(query.data?.myAdministratorAccess.authority ?? '');
     const members =
-        query.data?.manageableAdministrators.map(access => ({
+        query.data?.manageableAdministrators?.map(access => ({
             ...access.administrator,
             access: {
                 id: access.id,
@@ -100,7 +114,7 @@ export function RolesModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Shield className="h-5 w-5 text-blue-600" />
-                            员工与权限
+                            {standalonePage?.title ?? '员工与权限'}
                             <FeatureHelpButton
                                 topic="settings.team"
                                 title="员工与权限"
@@ -187,22 +201,24 @@ export function RolesModule() {
                     </details>
                 )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
-                        <TabButton
-                            active={tab === 'MEMBERS'}
-                            onClick={() => setTab('MEMBERS')}
-                            icon={<Users className="h-3.5 w-3.5" />}
-                        >
-                            员工账号 {members.length}
-                        </TabButton>
-                        <TabButton
-                            active={tab === 'ROLES'}
-                            onClick={() => setTab('ROLES')}
-                            icon={<KeyRound className="h-3.5 w-3.5" />}
-                        >
-                            角色权限 {roles.length}
-                        </TabButton>
-                    </div>
+                    {!standalonePage && (
+                        <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
+                            <TabButton
+                                active={tab === 'MEMBERS'}
+                                onClick={() => setTab('MEMBERS')}
+                                icon={<Users className="h-3.5 w-3.5" />}
+                            >
+                                员工账号 {members.length}
+                            </TabButton>
+                            <TabButton
+                                active={tab === 'ROLES'}
+                                onClick={() => setTab('ROLES')}
+                                icon={<KeyRound className="h-3.5 w-3.5" />}
+                            >
+                                角色权限 {roles.length}
+                            </TabButton>
+                        </div>
+                    )}
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                         <AdminInput

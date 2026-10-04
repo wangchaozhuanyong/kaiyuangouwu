@@ -1,5 +1,5 @@
 import { useMutation } from '@apollo/client/react';
-import { Store } from 'lucide-react';
+import { RefreshCw, Store } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton } from '../../components/AdminControls';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -10,11 +10,14 @@ import {
     type PlatformGovernanceReviewResult,
 } from '../../graphql/management.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ErrorState, Message, SettingsContentSkeleton, primaryButton, secondaryButton } from './settings-ui';
+import { StoreGovernanceHistory } from './StoreGovernanceHistory';
 import { governancePayloadRows, governanceRequestTypeLabel } from './StoreGovernanceLabels';
 export function PlatformGovernanceReviewCenter() {
+    const standalonePage = useStandaloneAdminPage();
     const requestConfirmation = useConfirmDialog();
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
@@ -58,13 +61,19 @@ export function PlatformGovernanceReviewCenter() {
         );
     }
     if (!query.data) return <SettingsContentSkeleton label="正在读取治理审批队列" sections={2} />;
-    const pending = query.data.storeGovernanceChanges.filter(request => request.status === 'PENDING');
+    const pending = query.data.storeGovernanceChanges.filter(
+        request =>
+            request.status === 'PENDING' &&
+            (!standalonePage ||
+                request.requestType ===
+                    (standalonePage.detail === 'payout' ? 'PAYOUT_ACCOUNT' : 'LEGAL_IDENTITY')),
+    );
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                     <Store className="h-5 w-5 text-blue-600" />
-                    店铺治理审批
+                    {standalonePage?.title ?? '店铺治理审批'}
                     <FeatureHelpButton
                         topic="settings.store-profile"
                         title="店铺治理审批"
@@ -73,6 +82,10 @@ export function PlatformGovernanceReviewCenter() {
                         }
                     />
                 </h1>
+                <AdminButton refreshPage onClick={() => void query.refetch()} className={secondaryButton}>
+                    <RefreshCw className="h-4 w-4" />
+                    刷新
+                </AdminButton>
             </header>
             <main className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
@@ -138,6 +151,14 @@ export function PlatformGovernanceReviewCenter() {
                         </div>
                     )}
                 </section>
+                <StoreGovernanceHistory
+                    records={query.data.storeGovernanceChanges.filter(
+                        item =>
+                            !standalonePage ||
+                            item.requestType ===
+                                (standalonePage.detail === 'payout' ? 'PAYOUT_ACCOUNT' : 'LEGAL_IDENTITY'),
+                    )}
+                />
             </main>
         </div>
     );

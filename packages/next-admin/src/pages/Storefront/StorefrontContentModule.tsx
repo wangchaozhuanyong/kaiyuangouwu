@@ -47,9 +47,11 @@ import {
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     blockTranslation,
@@ -73,6 +75,7 @@ type ContentTab = 'PAGES' | 'ANNOUNCEMENTS' | 'LANDING';
 const CONTENT_TABS = { pages: 'PAGES', announcements: 'ANNOUNCEMENTS', landing: 'LANDING' } as const;
 
 export function StorefrontContentModule() {
+    const standalonePage = useStandaloneAdminPage();
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -87,7 +90,12 @@ export function StorefrontContentModule() {
     const [deletingAnnouncement, setDeletingAnnouncement] = useState<SystemAnnouncementRecord | null>(null);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
+    const content = useQuery<StorefrontContentResult>(
+        standalonePage && tab !== 'PAGES'
+            ? selectQueryFields(STOREFRONT_CONTENT_QUERY, ['activeChannel'])
+            : STOREFRONT_CONTENT_QUERY,
+        {},
+    );
     const announcements = useQuery<{ systemAnnouncements: SystemAnnouncementRecord[] }>(
         SYSTEM_ANNOUNCEMENTS_QUERY,
         {
@@ -101,7 +109,7 @@ export function StorefrontContentModule() {
         },
     );
     const requestedAnnouncementId = searchParams.get('announcementId');
-    const requestedAnnouncement = announcements.data?.systemAnnouncements.find(
+    const requestedAnnouncement = announcements.data?.systemAnnouncements?.find(
         item => item.id === requestedAnnouncementId,
     );
     const activeAnnouncementEditor = editingAnnouncement ?? requestedAnnouncement ?? null;
@@ -272,7 +280,7 @@ export function StorefrontContentModule() {
                 <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                            店铺内容与页面
+                            {standalonePage?.title ?? '店铺内容与页面'}
                             <FeatureHelpButton
                                 topic="storefront.content"
                                 title="店铺内容与页面"
@@ -301,30 +309,32 @@ export function StorefrontContentModule() {
                     </AdminButton>
                 </div>
             </header>
-            <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
-                    <TabButton
-                        active={tab === 'PAGES'}
-                        onClick={() => setTab('PAGES')}
-                        icon={FileText}
-                        label="固定内容"
-                    />
-                    {canManageAnnouncements && (
+            {!standalonePage && (
+                <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
+                    <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
                         <TabButton
-                            active={tab === 'ANNOUNCEMENTS'}
-                            onClick={() => setTab('ANNOUNCEMENTS')}
-                            icon={Megaphone}
-                            label="首页公告"
+                            active={tab === 'PAGES'}
+                            onClick={() => setTab('PAGES')}
+                            icon={FileText}
+                            label="固定内容"
                         />
-                    )}
-                    <TabButton
-                        active={tab === 'LANDING'}
-                        onClick={() => setTab('LANDING')}
-                        icon={Code2}
-                        label="推广落地页"
-                    />
-                </div>
-            </nav>
+                        {canManageAnnouncements && (
+                            <TabButton
+                                active={tab === 'ANNOUNCEMENTS'}
+                                onClick={() => setTab('ANNOUNCEMENTS')}
+                                icon={Megaphone}
+                                label="首页公告"
+                            />
+                        )}
+                        <TabButton
+                            active={tab === 'LANDING'}
+                            onClick={() => setTab('LANDING')}
+                            icon={Code2}
+                            label="推广落地页"
+                        />
+                    </div>
+                </nav>
+            )}
 
             <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (

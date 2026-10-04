@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { getStandaloneAdminPage } from '../navigation/admin-navigation';
 
 const EMPTY_RESET_PARAMETERS: string[] = [];
 
@@ -10,10 +11,19 @@ export function useUrlTab<T extends string>(
     resetParameters: string[] = EMPTY_RESET_PARAMETERS,
 ) {
     const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
+    const page = getStandaloneAdminPage(location.pathname);
     const defaultTab = tabs[defaultKey];
     if (!defaultTab) throw new Error(`Unknown default tab: ${defaultKey}`);
 
-    const selectedKey = searchParams.get(parameter) ?? defaultKey;
+    const stockStatus =
+        page?.sourcePath === '/catalog/inventory' && page.key === 'all' ? searchParams.get('status') : null;
+    const selectedKey =
+        stockStatus && ['low-stock', 'out-of-stock'].includes(stockStatus)
+            ? stockStatus
+            : page && page.tabKey in tabs
+              ? page.tabKey
+              : (searchParams.get(parameter) ?? defaultKey);
     const activeTab = tabs[selectedKey] ?? defaultTab;
 
     const setActiveTab = useCallback(
@@ -22,6 +32,12 @@ export function useUrlTab<T extends string>(
             setSearchParams(
                 current => {
                     const next = new URLSearchParams(current);
+                    if (page?.sourcePath === '/catalog/inventory' && page.key === 'all') {
+                        if (nextKey === 'all') next.delete('status');
+                        else next.set('status', nextKey);
+                        next.delete(parameter);
+                        return next;
+                    }
                     if (nextKey === defaultKey) next.delete(parameter);
                     else next.set(parameter, nextKey);
                     resetParameters.forEach(resetParameter => next.delete(resetParameter));
@@ -30,7 +46,7 @@ export function useUrlTab<T extends string>(
                 { replace: true },
             );
         },
-        [defaultKey, parameter, resetParameters, setSearchParams, tabs],
+        [defaultKey, parameter, resetParameters, setSearchParams, tabs, page],
     );
 
     return [activeTab, setActiveTab] as const;

@@ -36,6 +36,7 @@ import {
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import {
     configurableArgumentLabel,
@@ -122,6 +123,7 @@ export function PaymentShippingManager({
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const standalonePage = useStandaloneAdminPage();
     const requestConfirmation = useConfirmDialog();
     const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
@@ -197,7 +199,7 @@ export function PaymentShippingManager({
     };
 
     const deleting = deletePaymentState.loading || deleteShippingState.loading;
-    const testMethod = data.paymentMethods.items.find(item => item.handler.code === testPaymentHandler);
+    const testMethod = data.paymentMethods?.items.find(item => item.handler.code === testPaymentHandler);
     return (
         <>
             <div className="space-y-4">
@@ -479,7 +481,7 @@ export function PaymentShippingManager({
                     </section>
                 )}
             </div>
-            {section === 'payment' && isPlatform && (
+            {section === 'payment' && isPlatform && !standalonePage && (
                 <details className="rounded-xl border border-slate-200 bg-white p-4">
                     <summary className="cursor-pointer text-sm font-bold">
                         USDT 收款配置 · 展开查看状态、汇率与收款地址
@@ -685,7 +687,7 @@ function MethodEditorDialog({
         updateShippingState.loading;
 
     const isControlledTest = state.kind === 'payment' && handlerCode === testPaymentHandler;
-    const fulfillmentDefinition = data.fulfillmentHandlers.find(
+    const fulfillmentDefinition = data.fulfillmentHandlers?.find(
         definition => definition.code === fulfillmentHandler,
     );
 
@@ -858,7 +860,7 @@ function MethodEditorDialog({
                     code.trim().toLowerCase() === USDT_PAYMENT_METHOD_CODE ||
                     handlerCode === USDT_PAYMENT_HANDLER_CODE
                 ) {
-                    return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
+                    return onError('USDT 支付方式由专用收款设置自动管理，请到“支付管理 → USDT 收款设置”操作');
                 }
                 if (!handlerCode) return onError('请选择支付处理器');
                 const allowAllOrders = isControlledTest && handlerArgs.allowAllOrders === 'true';
@@ -1335,7 +1337,7 @@ function Field({ children, label }: { children: React.ReactNode; label: string }
 
 function argsToForm(
     operation: ConfigurableOperationRecord | null | undefined,
-    definitions: ConfigurableOperationDefinitionRecord[],
+    definitions: ConfigurableOperationDefinitionRecord[] = [],
 ) {
     const definition = definitions.find(candidate => candidate.code === operation?.code);
     return Object.fromEntries(
@@ -1376,7 +1378,7 @@ function displayValue(value: unknown) {
 function operationInput(
     code: string,
     values: Record<string, string>,
-    definitions: ConfigurableOperationDefinitionRecord[],
+    definitions: ConfigurableOperationDefinitionRecord[] = [],
 ) {
     const definition = definitions.find(candidate => candidate.code === code);
     if (!definition) throw new Error(`后端未注册处理器 ${code}`);

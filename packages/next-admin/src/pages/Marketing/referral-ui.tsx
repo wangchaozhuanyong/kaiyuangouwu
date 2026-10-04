@@ -9,7 +9,7 @@ import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
-import { PosterDraft, ProgramDraft, WithdrawalAction } from './referrals-types';
+import { PosterDraft, ProgramDraft } from './referrals-types';
 export { statusLabel };
 
 export function TableCard({
@@ -445,33 +445,15 @@ export function posterLabel(value: string, program?: ReferralProgramRecord) {
         )?.name ?? missingDisplayLabel('template')
     );
 }
-export function withdrawalActionLabel(status: WithdrawalAction['status']) {
-    return (
-        { APPROVED: '批准申请', PAID: '登记已打款', REJECTED: '驳回申请', CANCELLED: '取消申请' } as Record<
-            string,
-            string
-        >
-    )[status];
-}
-export function withdrawalSuccess(status: WithdrawalAction['status']) {
-    return (
-        {
-            APPROVED: '提款申请已批准，等待线下打款',
-            PAID: '外部打款已登记，冻结余额已扣除',
-            REJECTED: '提款申请已驳回，冻结金额已退回可用余额',
-            CANCELLED: '提款申请已取消，冻结金额已退回可用余额',
-        } as Record<string, string>
-    )[status];
-}
 export function errorText(error: unknown) {
     return toUserFacingError(error, '操作失败，请稍后重试');
 }
 
-export function ReferralHeading() {
+export function ReferralHeading({ title = '分销与返利' }: { title?: string } = {}) {
     return (
         <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                分销与返利
+                {title}
                 <FeatureHelpButton
                     topic="marketing.referrals"
                     title="分销与返利"

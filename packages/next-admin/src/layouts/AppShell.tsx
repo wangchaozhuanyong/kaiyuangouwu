@@ -1,4 +1,12 @@
 import { AdminButton, AdminInput, AdminSelect } from '../components/AdminControls';
+import {
+    ADMIN_NAV_SECTIONS,
+    CORE_ADMIN_NAV_ITEMS as coreNavItems,
+    getAdminSectionLabel,
+    getStandaloneAdminRedirect,
+    localizeAdminNavigationTitle,
+    standalonePageScopeAllows,
+} from '../navigation/admin-navigation';
 import { getAdminDisplayLanguage } from '../utils/admin-language';
 import { getChannelDisplayName } from '../utils/channel-display';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
@@ -10,17 +18,12 @@ import {
     CircleDollarSign,
     Command,
     CornerDownLeft,
-    FolderTree,
-    KeyRound,
-    Layers3,
+    Database,
     LayoutDashboard,
     LogOut,
-    Megaphone,
     Menu,
-    MessageSquare,
     Monitor,
     Moon,
-    Package,
     Palette,
     Percent,
     RotateCcw,
@@ -30,8 +33,6 @@ import {
     ShoppingBag,
     Store,
     Sun,
-    Terminal,
-    Ticket,
     User,
     Users,
     X,
@@ -145,18 +146,21 @@ function NavLink({
     );
 }
 
-function extensionSectionLabel(sectionId?: string) {
-    const labels: Record<string, string> = {
-        catalog: '商品',
-        sales: '订单与售后',
-        customers: '客户',
-        marketing: '营销',
-        storefront: '店铺',
-        plugins: '插件与服务',
-        settings: '系统与权限',
-    };
-    return labels[sectionId ?? ''] ?? '扩展功能';
-}
+const extensionSectionLabel = getAdminSectionLabel;
+const navIcons = {
+    LayoutDashboard,
+    Boxes,
+    ShoppingBag,
+    RotateCcw,
+    Users,
+    Percent,
+    Palette,
+    Blocks,
+    CircleDollarSign,
+    Database,
+    ShieldCheck,
+    Settings2,
+};
 
 const THEME_OPTIONS: Array<{
     value: ThemePreference;
@@ -300,10 +304,9 @@ export function AppShell() {
         ? getChannelDisplayName('__default_channel__', displayLanguage)
         : `${channelData?.activeChannel ? getChannelDisplayName(channelData.activeChannel) : displayLanguage === 'en' ? 'Loading store…' : '读取店铺中…'} · ${displayLanguage === 'en' ? 'Admin' : '管理后台'}`;
     const commerceMode = commerceContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
-    const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
-    const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const canAccessPath = useCallback(
         (path: string) => {
+            if (!standalonePageScopeAllows(path, isPlatformContext)) return false;
             if (path.startsWith('/platform/') && !isPlatformContext) return false;
             if (
                 isPlatformOwnerPath(path) &&
@@ -371,7 +374,7 @@ export function AppShell() {
     const [openMenu, setOpenMenu] = useState<string | null>('catalog');
 
     const [tabs, setTabs] = useState<OpenTab[]>([
-        { path: '/dashboard', href: '/dashboard', label: '工作台' },
+        { path: '/dashboard', href: '/dashboard', label: localizeAdminNavigationTitle('网站总览') },
     ]);
 
     const [isMoreTabsOpen, setIsMoreTabsOpen] = useState(false);
@@ -493,7 +496,7 @@ export function AppShell() {
         if (nextOpenMenu !== undefined) setOpenMenu(nextOpenMenu);
 
         const routeTitles: Record<string, string> = {
-            '/dashboard': '工作台',
+            '/dashboard': '网站总览',
             '/profile': '个人中心',
             '/catalog/list': '商品列表',
             '/platform/catalog': '平台商品分配中心',
@@ -517,7 +520,13 @@ export function AppShell() {
             '/settings/system-ops': '系统运维 [超管]',
         };
 
-        let currentTitle = extensionRoute?.title ?? routeTitles[location.pathname];
+        let currentTitle =
+            extensionRoute?.title ??
+            localizeAdminNavigationTitle(
+                coreNavItems.find(item => item.path === location.pathname)?.title ??
+                    routeTitles[location.pathname] ??
+                    '',
+            );
         if (!currentTitle) {
             if (location.pathname.startsWith('/catalog/products/')) {
                 currentTitle = '编辑商品详情';
@@ -527,7 +536,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
-            document.title = `${displayLanguage === 'en' ? (({ '/platform/catalog': 'Platform catalog', '/catalog/list': 'Products', '/catalog/categories': 'Categories and attributes', '/dashboard': 'Workspace' } as Record<string, string>)[location.pathname] ?? 'Admin') : currentTitle} · ${adminBrandName}`;
+            document.title = `${currentTitle} · ${adminBrandName}`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -589,7 +598,9 @@ export function AppShell() {
             // clearStore does not refetch mounted queries. Refresh the shell's active Channel
             // before returning to the dashboard so its selector and permissions match page data.
             await refetchAppShell();
-            setTabs([{ path: '/dashboard', href: '/dashboard', label: '工作台' }]);
+            setTabs([
+                { path: '/dashboard', href: '/dashboard', label: localizeAdminNavigationTitle('网站总览') },
+            ]);
             completeNavigation('/dashboard', { replace: true });
         } catch (error) {
             setChannelError(toUserFacingError(error, '店铺切换失败，请稍后重试'));
@@ -617,126 +628,51 @@ export function AppShell() {
         const currentTab = tabs.find(t => t.path === location.pathname) || {
             path: '/dashboard',
             href: '/dashboard',
-            label: '工作台',
+            label: localizeAdminNavigationTitle('网站总览'),
         };
         setTabs([currentTab]);
         setIsMoreTabsOpen(false);
     };
 
-    // ⌘K 快捷检索字典
+    const navigationItems = useMemo(() => {
+        const items = [
+            ...coreNavItems,
+            ...getNextAdminExtensionNavItems()
+                .filter(route => !getStandaloneAdminRedirect(route.path))
+                .map(route => ({
+                    path: route.path,
+                    title: route.navItem?.label ?? route.title,
+                    section: route.navItem?.sectionId ?? 'settings',
+                    order:
+                        route.path === '/storefront/business-services-copy'
+                            ? 1000
+                            : (route.navItem?.order ?? 500),
+                })),
+        ];
+        return [...new Map(items.map(item => [item.path, item])).values()]
+            .filter(item => canAccessPath(item.path) && commerceModeAllowsPath(commerceMode, item.path))
+            .filter(
+                item =>
+                    !item.path.startsWith('/settings/store-profile/usdt-') ||
+                    !items.some(
+                        other =>
+                            other.title === item.title &&
+                            other.path.startsWith('/settings/usdt-payments/') &&
+                            canAccessPath(other.path),
+                    ),
+            )
+            .map(item => ({ ...item, title: localizeAdminNavigationTitle(item.title, displayLanguage) }))
+            .sort((a, b) => a.order - b.order);
+    }, [canAccessPath, commerceMode, displayLanguage]);
     const allCmdItems = useMemo(
         () =>
-            [
-                { title: '工作台经营大盘与待办', path: '/dashboard', cat: '工作台', icon: LayoutDashboard },
-                { title: '商品列表与多条件筛选', path: '/catalog/list', cat: '商品', icon: Package },
-                { title: '平台商品分配中心', path: '/platform/catalog', cat: '商品', icon: Layers3 },
-                {
-                    title: '分类树、多规格模板与标签',
-                    path: '/catalog/categories',
-                    cat: '商品',
-                    icon: FolderTree,
-                },
-                ...(showsPhysicalCatalog
-                    ? [
-                          {
-                              title: '多仓库存总盘与出入库流水',
-                              path: '/catalog/inventory',
-                              cat: '商品',
-                              icon: Boxes,
-                          },
-                      ]
-                    : []),
-                ...(showsDigitalCatalog
-                    ? [
-                          {
-                              title: '发卡记录与异常',
-                              path: '/catalog/card-pool',
-                              cat: '商品',
-                              icon: KeyRound,
-                          },
-                      ]
-                    : []),
-                { title: '素材媒体库管理', path: '/catalog/assets', cat: '商品', icon: Palette },
-                {
-                    title: '全量交易订单与待发货打单',
-                    path: '/sales/orders',
-                    cat: '订单与售后',
-                    icon: ShoppingBag,
-                },
-                {
-                    title: '利润、成本与物流收入统计',
-                    path: '/sales/profit',
-                    cat: '订单与售后',
-                    icon: CircleDollarSign,
-                },
-                {
-                    title: '售后退款工单审核流',
-                    path: '/sales/after-sales',
-                    cat: '订单与售后',
-                    icon: RotateCcw,
-                },
-                {
-                    title: '买家评价审核与官方回复',
-                    path: '/sales/reviews',
-                    cat: '订单与售后',
-                    icon: MessageSquare,
-                },
-                { title: '客户资料、分组与订单关系', path: '/customers/list', cat: '客户', icon: Users },
-                {
-                    title: '优惠券、促销规则与秒杀专场',
-                    path: '/marketing/promotions',
-                    cat: '营销',
-                    icon: Ticket,
-                },
-                { title: '分销返利团队与提现审批', path: '/marketing/referrals', cat: '营销', icon: Users },
-                {
-                    title: '可视化首页装修与移动端视口',
-                    path: '/storefront/decoration',
-                    cat: '店铺',
-                    icon: Palette,
-                },
-                {
-                    title: '全站公告、法律页面与推广落地页',
-                    path: '/storefront/content',
-                    cat: '店铺',
-                    icon: Megaphone,
-                },
-                ...getNextAdminExtensionNavItems()
-                    .filter(
-                        route =>
-                            route.commandPalette !== false &&
-                            commerceModeAllowsPath(commerceMode, route.path),
-                    )
-                    .map(route => ({
-                        title: route.title,
-                        path: route.path,
-                        cat: extensionSectionLabel(route.navItem?.sectionId),
-                        icon: route.navItem?.icon ?? Blocks,
-                    })),
-                {
-                    title: '店铺设置 (多店铺/支付/运费/税率/域名)',
-                    path: '/settings/store-profile',
-                    cat: '系统与权限',
-                    icon: Settings2,
-                },
-                {
-                    title: '员工账号列表与角色权限矩阵',
-                    path: '/settings/team',
-                    cat: '系统与权限',
-                    icon: ShieldCheck,
-                },
-                ...(isSuperAdmin
-                    ? [
-                          {
-                              title: '系统运维、任务队列与全局配置',
-                              path: '/settings/system-ops',
-                              cat: '系统与权限',
-                              icon: Terminal,
-                          },
-                      ]
-                    : []),
-            ].filter(item => canAccessPath(item.path)),
-        [canAccessPath, commerceMode, isSuperAdmin, showsDigitalCatalog, showsPhysicalCatalog],
+            navigationItems.map(item => ({
+                title: item.title,
+                path: item.path,
+                cat: extensionSectionLabel(item.section),
+                icon: navIcons[ADMIN_NAV_SECTIONS.find(([id]) => id === item.section)?.[2] ?? 'Blocks'],
+            })),
+        [navigationItems],
     );
 
     const filteredCmdItems = useMemo(() => {
@@ -831,400 +767,75 @@ export function AppShell() {
                         }
                     }}
                 >
-                    {/* 1. 📊 工作台 */}
-                    <NavLink
-                        to="/dashboard"
-                        aria-label="工作台"
-                        className={({ isActive }) =>
-                            `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
-                        }
-                    >
-                        <LayoutDashboard className="w-4 h-4 shrink-0" />
-                        <span
-                            className={`ml-3 text-xs whitespace-nowrap ${isSidebarOpen ? 'block' : 'hidden'}`}
-                        >
-                            工作台
-                        </span>
-                    </NavLink>
-
-                    <div className="pt-2 pb-1">
-                        {isSidebarOpen ? (
-                            <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                {isPlatformContext ? '平台统筹' : '核心经营'}
-                            </span>
-                        ) : (
-                            <div className="h-px bg-white/10 mx-4"></div>
-                        )}
-                    </div>
-
-                    <NavLink
-                        allowed={canAccessPath('/platform/catalog')}
-                        to="/platform/catalog"
-                        className={navItemClass}
-                    >
-                        <Layers3 className="w-4 h-4 shrink-0" />
-                        <span className={`ml-3 text-xs ${isSidebarOpen ? 'block' : 'hidden'}`}>
-                            平台商品分配中心
-                        </span>
-                    </NavLink>
-                    {/* 2. 🛍️ 商品 */}
-                    <div hidden={isPlatformContext}>
-                        <AdminButton
-                            type="button"
-                            aria-label="商品管理"
-                            aria-expanded={openMenu === 'catalog'}
-                            onClick={() => toggleMenu('catalog')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <Package className="w-4 h-4 shrink-0 text-blue-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                商品
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'catalog' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'catalog' ? 'max-h-96 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            <NavLink
-                                allowed={canAccessPath('/catalog/list')}
-                                to="/catalog/list"
-                                className={navItemClass}
-                            >
-                                商品列表
-                            </NavLink>
-
-                            <NavLink
-                                allowed={canAccessPath('/catalog/categories')}
-                                to="/catalog/categories"
-                                className={navItemClass}
-                            >
-                                分类与属性
-                            </NavLink>
-                            <NavLink
-                                allowed={showsPhysicalCatalog && canAccessPath('/catalog/inventory')}
-                                to="/catalog/inventory"
-                                className={navItemClass}
-                            >
-                                库存与仓库
-                            </NavLink>
-                            <NavLink
-                                allowed={showsDigitalCatalog && canAccessPath('/catalog/card-pool')}
-                                to="/catalog/card-pool"
-                                className={navItemClass}
-                            >
-                                发卡记录与异常
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/catalog/assets')}
-                                to="/catalog/assets"
-                                className={navItemClass}
-                            >
-                                素材媒体库
-                            </NavLink>
-                            {getNextAdminExtensionNavItems('catalog')
-                                .filter(route => commerceModeAllowsPath(commerceMode, route.path))
-                                .map(route => (
-                                    <NavLink
-                                        key={route.id}
-                                        allowed={canAccessPath(route.path)}
-                                        to={route.path}
-                                        className={navItemClass}
-                                    >
-                                        {route.navItem?.label ?? route.title}
-                                    </NavLink>
-                                ))}
-                        </div>
-                    </div>
-
-                    {/* 3. 📦 订单与售后 */}
-                    <div hidden={isPlatformContext}>
-                        <AdminButton
-                            type="button"
-                            aria-label="订单与售后"
-                            aria-expanded={openMenu === 'sales'}
-                            onClick={() => toggleMenu('sales')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <ShoppingBag className="w-4 h-4 shrink-0 text-amber-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                订单与售后
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'sales' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'sales' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            <NavLink
-                                allowed={canAccessPath('/sales/orders')}
-                                to="/sales/orders"
-                                className={navItemClass}
-                            >
-                                订单列表
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/sales/profit')}
-                                to="/sales/profit"
-                                className={navItemClass}
-                            >
-                                利润统计
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/sales/after-sales')}
-                                to="/sales/after-sales"
-                                className={navItemClass}
-                            >
-                                售后与退款
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/sales/reviews')}
-                                to="/sales/reviews"
-                                className={navItemClass}
-                            >
-                                买家评价管理
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/sales/customer-service-feedback')}
-                                to="/sales/customer-service-feedback"
-                                className={navItemClass}
-                            >
-                                客服服务评价
-                            </NavLink>
-                            {getNextAdminExtensionNavItems('sales').map(route => (
+                    {ADMIN_NAV_SECTIONS.map(([section, label, iconName]) => {
+                        const items = navigationItems.filter(item => item.section === section);
+                        if (!items.length) return null;
+                        const Icon = navIcons[iconName];
+                        const single = section === 'dashboard' || section === 'customers';
+                        const labelText =
+                            displayLanguage === 'en'
+                                ? {
+                                      dashboard: 'Website overview',
+                                      catalog: 'Products',
+                                      sales: 'Orders',
+                                      'after-sales': 'After-sales',
+                                      customers: 'Customers',
+                                      marketing: 'Marketing',
+                                      storefront: 'Store design',
+                                      plugins: 'Plugins',
+                                      payments: 'Payments',
+                                      data: 'Data',
+                                      permissions: 'Permissions',
+                                      settings: 'System settings',
+                                  }[section]
+                                : label;
+                        if (single)
+                            return (
                                 <NavLink
-                                    key={route.id}
-                                    allowed={canAccessPath(route.path)}
-                                    to={route.path}
-                                    className={navItemClass}
+                                    key={section}
+                                    to={items[0].path}
+                                    aria-label={labelText}
+                                    className={({ isActive }) =>
+                                        `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
+                                    }
                                 >
-                                    {route.navItem?.label ?? route.title}
+                                    <Icon className="h-4 w-4 shrink-0" />
+                                    {isSidebarOpen && <span className="ml-3 text-xs">{labelText}</span>}
                                 </NavLink>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 4. 👥 客户 */}
-                    <NavLink
-                        allowed={canAccessPath('/customers/list')}
-                        to="/customers/list"
-                        aria-label="客户管理"
-                        className={({ isActive }) =>
-                            `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
-                        }
-                    >
-                        <Users className="w-4 h-4 shrink-0 text-violet-400" />
-                        <span
-                            className={`ml-3 text-xs whitespace-nowrap ${isSidebarOpen ? 'block' : 'hidden'}`}
-                        >
-                            客户
-                        </span>
-                    </NavLink>
-
-                    {/* 5. 🎯 营销 */}
-                    <div hidden={isPlatformContext}>
-                        <AdminButton
-                            type="button"
-                            aria-label="营销管理"
-                            aria-expanded={openMenu === 'marketing'}
-                            onClick={() => toggleMenu('marketing')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <Percent className="w-4 h-4 shrink-0 text-rose-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                营销
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'marketing' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'marketing' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            <NavLink
-                                allowed={canAccessPath('/marketing/promotions')}
-                                to="/marketing/promotions"
-                                className={navItemClass}
-                            >
-                                优惠与促销
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/marketing/referrals')}
-                                to="/marketing/referrals"
-                                className={navItemClass}
-                            >
-                                分销与返利
-                            </NavLink>
-                            {getNextAdminExtensionNavItems('marketing').map(route => (
-                                <NavLink
-                                    key={route.id}
-                                    allowed={canAccessPath(route.path)}
-                                    to={route.path}
-                                    className={navItemClass}
+                            );
+                        return (
+                            <div key={section} data-admin-nav-section={section}>
+                                <AdminButton
+                                    type="button"
+                                    aria-label={labelText}
+                                    aria-expanded={openMenu === section}
+                                    onClick={() => toggleMenu(section)}
+                                    className={`flex h-10 w-full items-center rounded-lg text-left text-slate-400 transition-colors hover:bg-white/5 hover:text-white ${isSidebarOpen ? 'px-3' : 'justify-center'}`}
                                 >
-                                    {route.navItem?.label ?? route.title}
-                                </NavLink>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 5. 🎨 店铺 */}
-                    <div hidden={isPlatformContext}>
-                        <AdminButton
-                            type="button"
-                            aria-label="店铺管理"
-                            aria-expanded={openMenu === 'storefront'}
-                            onClick={() => toggleMenu('storefront')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <Palette className="w-4 h-4 shrink-0 text-purple-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                店铺
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'storefront' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'storefront' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            <NavLink
-                                allowed={canAccessPath('/storefront/decoration')}
-                                to="/storefront/decoration"
-                                className={navItemClass}
-                            >
-                                商城装修
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/storefront/content')}
-                                to="/storefront/content"
-                                className={navItemClass}
-                            >
-                                内容与页面
-                            </NavLink>
-                        </div>
-                    </div>
-
-                    <div className="pt-2 pb-1">
-                        {isSidebarOpen ? (
-                            <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                扩展与系统
-                            </span>
-                        ) : (
-                            <div className="h-px bg-white/10 mx-4"></div>
-                        )}
-                    </div>
-
-                    {/* 6. 🔌 插件与服务 */}
-                    <div>
-                        <AdminButton
-                            type="button"
-                            aria-label="插件与服务"
-                            aria-expanded={openMenu === 'plugins'}
-                            onClick={() => toggleMenu('plugins')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <Blocks className="w-4 h-4 shrink-0 text-cyan-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                插件与服务
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'plugins' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'plugins' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            {getNextAdminExtensionNavItems('plugins').map(route => (
-                                <NavLink
-                                    key={route.id}
-                                    allowed={canAccessPath(route.path)}
-                                    to={route.path}
-                                    className={navItemClass}
-                                >
-                                    {route.navItem?.label ?? route.title}
-                                </NavLink>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 7. ⚙️ 系统与权限 */}
-                    <div className="pb-4">
-                        <AdminButton
-                            type="button"
-                            aria-label="系统与权限"
-                            aria-expanded={openMenu === 'settings'}
-                            onClick={() => toggleMenu('settings')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
-                        >
-                            <Settings2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                            <span
-                                className={`ml-3 text-xs whitespace-nowrap flex-1 ${isSidebarOpen ? 'block' : 'hidden'}`}
-                            >
-                                系统与权限
-                            </span>
-                            {isSidebarOpen && (
-                                <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${openMenu === 'settings' ? 'rotate-180' : ''}`}
-                                />
-                            )}
-                        </AdminButton>
-                        <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
-                        >
-                            <NavLink
-                                allowed={canAccessPath('/settings/store-profile')}
-                                to="/settings/store-profile"
-                                className={navItemClass}
-                            >
-                                店铺综合设置
-                            </NavLink>
-                            <NavLink
-                                allowed={canAccessPath('/settings/team')}
-                                to="/settings/team"
-                                className={navItemClass}
-                            >
-                                员工与权限
-                            </NavLink>
-                            {canAccessPath('/settings/system-ops') && (
-                                <NavLink to="/settings/system-ops" className={navItemClass}>
-                                    系统运维
-                                </NavLink>
-                            )}
-                            {getNextAdminExtensionNavItems('settings').map(route => (
-                                <NavLink
-                                    key={route.id}
-                                    allowed={canAccessPath(route.path)}
-                                    to={route.path}
-                                    className={navItemClass}
-                                >
-                                    {route.navItem?.label ?? route.title}
-                                </NavLink>
-                            ))}
-                        </div>
-                    </div>
+                                    <Icon className="h-4 w-4 shrink-0 text-blue-400" />
+                                    {isSidebarOpen && (
+                                        <>
+                                            <span className="ml-3 flex-1 whitespace-nowrap text-xs">
+                                                {labelText}
+                                            </span>
+                                            <ChevronDown
+                                                className={`h-3.5 w-3.5 transition-transform ${openMenu === section ? 'rotate-180' : ''}`}
+                                            />
+                                        </>
+                                    )}
+                                </AdminButton>
+                                {isSidebarOpen && openMenu === section && (
+                                    <div className="mt-1 space-y-0.5">
+                                        {items.map(item => (
+                                            <NavLink key={item.path} to={item.path} className={navItemClass}>
+                                                {item.title}
+                                            </NavLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </nav>
             </aside>
 
@@ -1234,7 +845,7 @@ export function AppShell() {
                 inert={!isDesktop && isSidebarOpen ? true : undefined}
                 className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative"
             >
-                <header className="relative z-30 flex h-14 shrink-0 items-center justify-between bg-white px-3 shadow-2xs sm:px-6">
+                <header className="admin-app-header relative z-30 shrink-0 bg-white px-3 shadow-2xs sm:px-6">
                     <AdminButton
                         ref={sidebarToggleRef}
                         type="button"
@@ -1247,7 +858,7 @@ export function AppShell() {
                         <Menu className="w-5 h-5" />
                     </AdminButton>
 
-                    <div className="flex items-center gap-2 sm:gap-4">
+                    <div className="admin-header-actions flex min-w-0 items-center justify-end gap-2 sm:gap-4">
                         {activeAdministrator &&
                             channelData?.activeChannel &&
                             !isChannelSwitching &&
@@ -1260,9 +871,9 @@ export function AppShell() {
                                     channelToken={channelData.activeChannel.token}
                                 />
                             )}
-                        <label className="relative flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <label className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600">
                             <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
-                            <span className="sr-only sm:not-sr-only">当前店铺</span>
+                            <span className="sr-only lg:not-sr-only">当前店铺</span>
                             <AdminSelect
                                 value={channelData?.activeChannel.token ?? ''}
                                 onChange={event => void handleChannelChange(event.target.value)}
@@ -1273,8 +884,11 @@ export function AppShell() {
                                     accessibleChannels.length <= 1
                                 }
                                 aria-label="切换当前店铺"
-                                title={channelError || '切换后商品、订单、库存等数据将按所选店铺重新加载'}
-                                className={`h-8 max-w-28 rounded-lg border bg-white pl-2 pr-6 text-xs font-bold outline-none sm:max-w-44 ${channelError ? 'border-rose-300 text-rose-700' : 'border-slate-200 text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
+                                title={
+                                    channelError ||
+                                    `${channelData?.activeChannel ? getChannelDisplayLabel(channelData.activeChannel) : '读取店铺中…'}；切换后商品、订单、库存等数据将按所选店铺重新加载`
+                                }
+                                className={`admin-store-select h-8 min-w-0 rounded-lg border bg-white pl-2 pr-6 text-xs font-bold outline-none ${channelError ? 'border-rose-300 text-rose-700' : 'border-slate-200 text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
                             >
                                 {!channelData && <option value="">读取店铺…</option>}
                                 {accessibleChannels.map(channel => (
@@ -1286,7 +900,7 @@ export function AppShell() {
                         </label>
                         <AdminButton
                             type="button"
-                            className="relative hidden w-64 items-center rounded-lg bg-slate-100 py-1.5 pl-9 pr-2 text-xs text-slate-400 transition-colors hover:bg-blue-50 md:flex"
+                            className="relative hidden w-64 items-center rounded-lg bg-slate-100 py-1.5 pl-9 pr-2 text-xs text-slate-400 transition-colors hover:bg-blue-50 lg:flex"
                             onClick={() => {
                                 setIsCmdKOpen(true);
                                 setCmdSelectedIndex(0);
@@ -1304,7 +918,7 @@ export function AppShell() {
                                 setIsCmdKOpen(true);
                                 setCmdSelectedIndex(0);
                             }}
-                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 md:hidden"
+                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 lg:hidden"
                             aria-label="搜索管理功能"
                         >
                             <Search className="h-4 w-4" />
@@ -1567,7 +1181,7 @@ export function AppShell() {
                                                         {
                                                             path: '/dashboard',
                                                             href: '/dashboard',
-                                                            label: '工作台',
+                                                            label: localizeAdminNavigationTitle('网站总览'),
                                                         },
                                                     ]);
                                                     setIsMoreTabsOpen(false);
@@ -1673,7 +1287,7 @@ export function AppShell() {
                                     onClick={() => navigate('/dashboard')}
                                     className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                 >
-                                    返回工作台
+                                    返回网站总览
                                 </AdminButton>
                             </section>
                         </div>

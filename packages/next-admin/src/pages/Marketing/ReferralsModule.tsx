@@ -27,7 +27,10 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { majorInputToMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
@@ -51,6 +54,7 @@ export function ReferralsModule() {
 }
 
 function ReferralManagement() {
+    const standalonePage = useStandaloneAdminPage();
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateReferral']);
     const canWithdraw = hasAnyPermission(['ManageReferralWithdrawal']);
@@ -74,20 +78,42 @@ function ReferralManagement() {
     const [withdrawalAction, setWithdrawalAction] = useState<WithdrawalAction | null>(null);
     const [financialDialog, setFinancialDialog] = useState<'WITHDRAW' | 'ADJUST' | null>(null);
 
-    const program = useQuery<ReferralProgramResult>(REFERRAL_PROGRAM_QUERY, {
-        pollInterval: 60_000,
-    });
-    const reports = useQuery<ReferralReportsResult>(REFERRAL_REPORTS_QUERY, {
-        variables: {
-            search,
-            take: pageSize,
-            summarySkip: skips.summaries,
-            relationshipSkip: skips.relationships,
-            rewardSkip: skips.rewards,
-            ledgerSkip: skips.ledger,
-            withdrawalSkip: skips.withdrawals,
+    const program = useQuery<ReferralProgramResult>(
+        standalonePage
+            ? selectQueryFields(REFERRAL_PROGRAM_QUERY, ['activeChannel', 'referralProgram'])
+            : REFERRAL_PROGRAM_QUERY,
+        {
+            pollInterval: 60_000,
         },
-    });
+    );
+    const reports = useQuery<ReferralReportsResult>(
+        standalonePage
+            ? selectQueryFields(
+                  REFERRAL_REPORTS_QUERY,
+                  activeTab === 'PROMOTERS'
+                      ? ['referralInviterSummaries']
+                      : activeTab === 'RELATIONSHIPS'
+                        ? ['referralRelationships']
+                        : activeTab === 'REWARDS'
+                          ? ['referralRewards']
+                          : activeTab === 'LEDGER'
+                            ? ['referralLedger', 'referralBalanceAudit']
+                            : ['referralWithdrawals'],
+              )
+            : REFERRAL_REPORTS_QUERY,
+        {
+            skip: activeTab === 'SETTINGS',
+            variables: {
+                search,
+                take: pageSize,
+                summarySkip: skips.summaries,
+                relationshipSkip: skips.relationships,
+                rewardSkip: skips.rewards,
+                ledgerSkip: skips.ledger,
+                withdrawalSkip: skips.withdrawals,
+            },
+        },
+    );
     const reportError = reports.error ? toUserFacingError(reports.error, '分销报表读取失败') : undefined;
     const [updateProgram, updateState] = useMutation(UPDATE_REFERRAL_PROGRAM_MUTATION);
 
@@ -100,10 +126,12 @@ function ReferralManagement() {
         program.data?.referralProgram &&
         JSON.stringify(draft) !== JSON.stringify(programDraft(program.data.referralProgram)),
     );
+    const confirmDiscard = useUnsavedChangesWarning(isDirty, '分销规则还有未保存的修改，确定放弃吗？');
     const refreshAll = async () => {
+        if (!confirmDiscard()) return;
         setActionError('');
         setDraftOverride(null);
-        await Promise.all([program.refetch(), reports.refetch()]);
+        await Promise.all([program.refetch(), ...(activeTab !== 'SETTINGS' ? [reports.refetch()] : [])]);
     };
     const changeSkip = (key: ReportKey, value: number) =>
         setSkips(current => ({ ...current, [key]: Math.max(0, value) }));
@@ -151,7 +179,7 @@ function ReferralManagement() {
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <ReferralHeading />
+                    <ReferralHeading title={standalonePage?.title} />
                     <div className="flex flex-wrap gap-2">
                         <Link
                             to="/marketing/sharing"
@@ -230,25 +258,27 @@ function ReferralManagement() {
                 ) : (
                     program.data && (
                         <>
-                            <TodayOverview data={program.data.referralTodayMetrics} />
-                            <nav
-                                aria-label="分销与返利子导航"
-                                className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
-                            >
-                                {tabs.map(([tab, label, Icon]) => (
-                                    <TabButton
-                                        key={tab}
-                                        active={activeTab === tab}
-                                        onClick={() => {
-                                            setActiveTab(tab);
-                                            changeSearch('');
-                                        }}
-                                        icon={<Icon className="h-3.5 w-3.5" />}
-                                    >
-                                        {label}
-                                    </TabButton>
-                                ))}
-                            </nav>
+                            {!standalonePage && <TodayOverview data={program.data.referralTodayMetrics} />}
+                            {!standalonePage && (
+                                <nav
+                                    aria-label="分销与返利子导航"
+                                    className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
+                                >
+                                    {tabs.map(([tab, label, Icon]) => (
+                                        <TabButton
+                                            key={tab}
+                                            active={activeTab === tab}
+                                            onClick={() => {
+                                                setActiveTab(tab);
+                                                changeSearch('');
+                                            }}
+                                            icon={<Icon className="h-3.5 w-3.5" />}
+                                        >
+                                            {label}
+                                        </TabButton>
+                                    ))}
+                                </nav>
+                            )}
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

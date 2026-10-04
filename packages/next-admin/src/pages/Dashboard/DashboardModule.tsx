@@ -434,7 +434,7 @@ export function DashboardModule() {
                             onClick={() => setIsCustomizing(true)}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                         >
-                            <LayoutGrid className="h-3.5 w-3.5" /> 调整工作台
+                            <LayoutGrid className="h-3.5 w-3.5" /> 调整网站总览
                         </AdminButton>
                         <AdminButton
                             refreshPage
@@ -896,7 +896,7 @@ export function DashboardModule() {
                     {visibleWidgets.length === 0 && (
                         <div className="sm:col-span-2 xl:col-span-12 rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
                             <LayoutGrid className="mx-auto h-9 w-9 text-slate-300" />
-                            <p className="mt-3 text-sm font-bold text-slate-700">工作台暂时没有显示组件</p>
+                            <p className="mt-3 text-sm font-bold text-slate-700">网站总览暂时没有显示组件</p>
                             <AdminButton
                                 type="button"
                                 onClick={() => setIsCustomizing(true)}
@@ -933,11 +933,11 @@ export function DashboardModule() {
                                     id={customizerTitleId}
                                     className="flex items-center gap-2 text-base font-bold text-slate-900"
                                 >
-                                    调整工作台
+                                    调整网站总览
                                     <FeatureHelpButton
                                         topic="dashboard.customizer"
-                                        title="调整工作台"
-                                        description={'选择预设、显示组件；回到工作台可拖动排序'}
+                                        title="调整网站总览"
+                                        description={'选择预设、显示组件；回到网站总览可拖动排序'}
                                     />
                                 </h2>
                             </div>
@@ -945,7 +945,7 @@ export function DashboardModule() {
                                 type="button"
                                 onClick={() => setIsCustomizing(false)}
                                 className="rounded p-1.5 text-slate-400 hover:bg-slate-100"
-                                aria-label="关闭工作台设置"
+                                aria-label="关闭网站总览设置"
                             >
                                 <X className="h-5 w-5" />
                             </AdminButton>
@@ -954,7 +954,10 @@ export function DashboardModule() {
                             <section>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                                     角色预设
-                                    <FeatureHelpButton topic="dashboard.customizer" title="工作台角色预设" />
+                                    <FeatureHelpButton
+                                        topic="dashboard.customizer"
+                                        title="网站总览角色预设"
+                                    />
                                 </h3>
                                 <div className="mt-3 grid gap-2">
                                     {(
@@ -981,8 +984,11 @@ export function DashboardModule() {
                             <section>
                                 <div className="flex items-center justify-between">
                                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                                        {allowedWidgets.length} 个可用工作台组件
-                                        <FeatureHelpButton topic="dashboard.customizer" title="工作台组件" />
+                                        {allowedWidgets.length} 个可用网站总览组件
+                                        <FeatureHelpButton
+                                            topic="dashboard.customizer"
+                                            title="网站总览组件"
+                                        />
                                     </h3>
                                     <AdminButton
                                         type="button"

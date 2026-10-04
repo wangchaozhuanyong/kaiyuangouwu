@@ -7,6 +7,7 @@ import {
     SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION,
     type MyStoreSettingsResult,
 } from '../../graphql/management.graphql';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { FieldInput } from './MyStoreFields';
 import { secondaryButton } from './settings-ui';
@@ -25,6 +26,10 @@ export function MyStorePayoutAccount({
     const [provider, setProvider] = useState('');
     const [accountHolder, setAccountHolder] = useState('');
     const [accountIdentifier, setAccountIdentifier] = useState('');
+    useUnsavedChangesWarning(
+        Boolean(provider || accountHolder || accountIdentifier),
+        '收款账户还有未提交的修改，确定放弃吗？',
+    );
     const [submit, state] = useMutation(SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION);
     const save = async () => {
         if (!provider.trim() || !accountHolder.trim() || !accountIdentifier.trim()) {
@@ -45,6 +50,8 @@ export function MyStorePayoutAccount({
                 },
             });
             setAccountIdentifier('');
+            setAccountHolder('');
+            setProvider('');
             await onCompleted('收款账户已加密提交平台审核，审核前不会替换已批准记录');
         } catch (error) {
             onError(toUserFacingError(error, '提交收款账户审核失败'));

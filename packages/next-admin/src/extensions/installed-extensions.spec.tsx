@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { STANDALONE_ADMIN_PAGES } from '../navigation/admin-navigation';
 
 import { getRequiredPermissionsForAdminPath, hasAnyAdminPermission } from '../utils/admin-permissions';
 import {
@@ -39,6 +40,7 @@ describe('installed next-admin extensions', () => {
             'operations-dashboard-plugin',
             'store-management-plugin',
             'store-domain-plugin',
+            'admin-standalone-business-pages',
         ]);
     });
 
@@ -60,7 +62,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(33);
+        expect(routes).toHaveLength(33 + STANDALONE_ADMIN_PAGES.length);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(
@@ -93,12 +95,12 @@ describe('installed next-admin extensions', () => {
         );
         expect(getNextAdminExtensionNavItems('plugins').map(route => route.path)).toEqual([
             '/plugins/client-plugins',
-            '/storefront/business-services-copy',
             '/plugins/ai-settings',
             '/plugins/ai-access',
             '/plugins/translations',
             '/plugins/two-factor-codes',
             '/plugins/icloud-relay',
+            ...STANDALONE_ADMIN_PAGES.filter(page => page.section === 'plugins').map(page => page.path),
         ]);
         expect(getNextAdminExtensionNavItems('plugins')).toContainEqual(
             expect.objectContaining({
@@ -116,7 +118,7 @@ describe('installed next-admin extensions', () => {
         );
     });
 
-    it('routes the legacy store currency entry to the USDT payment setup tab', () => {
-        expect(STORE_CURRENCY_COMPATIBILITY_TARGET).toBe('/settings/store-profile?tab=payment');
+    it('routes the legacy store currency entry to its independent currency settings', () => {
+        expect(STORE_CURRENCY_COMPATIBILITY_TARGET).toBe('/settings/store-profile?tab=currency');
     });
 });

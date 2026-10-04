@@ -8,7 +8,8 @@ import { TabPageContext } from '../layouts/tab-page-context';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
 import { useAdminQuery } from './use-admin-query';
 
-vi.mock('../apollo', () => ({ getAdminQueryScope: () => 'test-session:zh' }));
+const scope = vi.hoisted(() => ({ value: 'store-a:zh' }));
+vi.mock('../apollo', () => ({ getAdminQueryScope: () => scope.value }));
 const query = gql`
     query RuntimeProduct($id: ID!) {
         product(id: $id) {
@@ -21,6 +22,7 @@ const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
     vi.useRealTimers();
+    scope.value = 'store-a:zh';
 });
 async function setup() {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -54,7 +56,10 @@ async function setup() {
         act(async () =>
             root.render(
                 <ApolloProvider client={client}>
-                    <TabPageContext.Provider value={{ path: '/catalog/products/1', basename: '/', active }}>
+                    <TabPageContext.Provider
+                        key={scope.value}
+                        value={{ path: '/catalog/products/1', basename: '/', active }}
+                    >
                         <Probe id={id} />
                     </TabPageContext.Provider>
                 </ApolloProvider>,
@@ -112,6 +117,23 @@ describe('real Apollo admin query lifecycle', () => {
         expect(fixture.requests.at(-1)?.id).toBe('2');
         await fixture.resolve(1, 'second');
         expect(fixture.container.textContent).toBe('second');
+    });
+    it('does not retain old store data when the Apollo cache and request scope switch', async () => {
+        const fixture = await setup();
+        await fixture.resolve(0, 'store A product');
+        await act(async () => {
+            await fixture.client.clearStore();
+        });
+        scope.value = 'store-b:zh';
+        await fixture.render();
+        expect(fixture.container.textContent).not.toContain('store A product');
+        const refresh = fixture.result().refetch();
+        await act(async () => {
+            await Promise.resolve();
+        });
+        await fixture.resolve(fixture.requests.length - 1, 'store B product');
+        await refresh;
+        expect(fixture.container.textContent).toBe('store B product');
     });
     it('joins manual refresh to an already running initial read', async () => {
         const fixture = await setup();

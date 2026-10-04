@@ -12,13 +12,20 @@ import {
     WalletCards,
 } from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 
 import { routeModuleLoaders } from '../route-modules';
 
-import { defineNextAdminExtension } from './extension-api';
+import {
+    STANDALONE_ADMIN_PAGES,
+    localizeAdminNavigationTitle,
+    resolveAdminRedirectTarget,
+    standalonePagePermissions,
+} from '../navigation/admin-navigation';
+import { getRequiredPermissionsForAdminPath } from '../utils/admin-permissions';
+import { defineNextAdminExtension, getNextAdminExtensionRoutes } from './extension-api';
 
-export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=payment';
+export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=currency';
 
 // Extension registration stays eager so navigation and permission metadata are immediately
 // available. Heavy feature implementations remain route/surface scoped and are fetched only
@@ -159,7 +166,8 @@ const DataManagementModule = lazy(() =>
 
 function redirectTo(target: string): ComponentType {
     return function ExtensionRouteRedirect() {
-        return <Navigate to={target} replace />;
+        const location = useLocation();
+        return <Navigate to={resolveAdminRedirectTarget(target, location.search) + location.hash} replace />;
     };
 }
 
@@ -217,7 +225,7 @@ defineNextAdminExtension({
             component: TranslationsModule,
             permissions: ['ReadSettings', 'ReadCatalog'],
             navItem: {
-                label: '多语言内容翻译',
+                label: '内容翻译',
                 sectionId: 'plugins',
                 icon: Sparkles,
                 order: 40,
@@ -237,7 +245,7 @@ defineNextAdminExtension({
             title: '2FA 动态码',
             component: TwoFactorCodesModule,
             navItem: {
-                label: '2FA 动态码',
+                label: '动态验证码工具',
                 sectionId: 'plugins',
                 icon: KeyRound,
                 order: 50,
@@ -427,7 +435,7 @@ defineNextAdminExtension({
             permissions: ['ReadStorefrontContent'],
             navItem: {
                 label: '商业服务页文案',
-                sectionId: 'plugins',
+                sectionId: 'storefront',
                 icon: Sparkles,
                 order: 15,
             },
@@ -635,9 +643,9 @@ defineNextAdminExtension({
         {
             id: 'store-management-commerce-compatibility',
             path: '/settings/store-commerce',
-            legacyPaths: [{ path: '/store-commerce-settings', target: '/settings/store-profile?tab=stores' }],
+            legacyPaths: [{ path: '/store-commerce-settings', target: '/settings/store-profile/commerce' }],
             title: '店铺交易模式',
-            component: redirectTo('/settings/store-profile?tab=stores'),
+            component: redirectTo('/settings/store-profile/commerce'),
             permissions: ['ReadSettings'],
             commandPalette: false,
         },
@@ -684,4 +692,53 @@ defineNextAdminExtension({
             commandPalette: false,
         },
     ],
+});
+
+const standaloneModuleExports: Partial<Record<keyof typeof routeModuleLoaders, string>> = {
+    categories: 'CategoriesModule',
+    inventory: 'InventoryWarehouseModule',
+    cardPool: 'CardPoolModule',
+    promotions: 'PromotionsModule',
+    referrals: 'ReferralsModule',
+    storefrontContent: 'StorefrontContentModule',
+    aiImageSettings: 'AiImageSettingsModule',
+    roles: 'RolesModule',
+    systemOps: 'SystemOpsModule',
+    storeSettings: 'StoreSettingsModule',
+    usdtPayments: 'UsdtPaymentManagementModule',
+    dataManagement: 'DataManagementModule',
+};
+const existingRoutes = getNextAdminExtensionRoutes();
+defineNextAdminExtension({
+    id: 'admin-standalone-business-pages',
+    routes: STANDALONE_ADMIN_PAGES.map((page, index) => {
+        const source = existingRoutes.find(route => route.path === page.sourcePath);
+        const loader = routeModuleLoaders[page.module];
+        const Component = lazy(async () => {
+            const module = await loader();
+            return {
+                default: (module as unknown as Record<string, ComponentType>)[
+                    standaloneModuleExports[page.module]!
+                ],
+            };
+        });
+        return {
+            id: `standalone:${page.path}`,
+            path: page.path,
+            title: page.title,
+            titleTranslations: { en: localizeAdminNavigationTitle(page.title, 'en') },
+            component: Component,
+            permissions:
+                standalonePagePermissions(page) ??
+                source?.permissions ??
+                getRequiredPermissionsForAdminPath(page.sourcePath),
+            navItem: {
+                label: page.title,
+                labelTranslations: { en: localizeAdminNavigationTitle(page.title, 'en') },
+                sectionId: page.section,
+                order: 100 + index,
+            },
+            preload: loader,
+        };
+    }),
 });
