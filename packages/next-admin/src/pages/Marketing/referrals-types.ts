@@ -11,6 +11,15 @@ export const REFERRAL_TABS = {
 
 export type ReferralTab = (typeof REFERRAL_TABS)[keyof typeof REFERRAL_TABS];
 
+export const REFERRAL_REPORT_FIELDS: Record<ReferralTab, string[]> = {
+    SETTINGS: [],
+    PROMOTERS: ['referralInviterSummaries'],
+    RELATIONSHIPS: ['referralRelationships'],
+    REWARDS: ['referralRewards'],
+    LEDGER: ['referralLedger', 'referralBalanceAudit'],
+    WITHDRAWALS: ['referralWithdrawals'],
+};
+
 export type ReportKey = 'summaries' | 'relationships' | 'rewards' | 'ledger' | 'withdrawals';
 
 export type WithdrawalRecord = ReferralReportsResult['referralWithdrawals']['items'][number];

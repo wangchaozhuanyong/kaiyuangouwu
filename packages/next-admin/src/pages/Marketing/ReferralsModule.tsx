@@ -1,17 +1,5 @@
 import { useMutation } from '@apollo/client/react';
-import {
-    CircleDollarSign,
-    Gift,
-    Plus,
-    RefreshCw,
-    Save,
-    Search,
-    Settings2,
-    UserPlus,
-    Users,
-    WalletCards,
-    X,
-} from 'lucide-react';
+import { Plus, RefreshCw, Save, Search, WalletCards, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { AdminButton } from '../../components/AdminControls';
@@ -33,7 +21,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { majorInputToMoney } from '../Sales/sales-utils';
-import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
+import { ErrorState, LoadingState, Message } from '../Settings/settings-ui';
 import { FinancialDialog, WithdrawalActionDialog } from './ReferralDialogs';
 import {
     InviteRelationshipsPanel,
@@ -44,8 +32,15 @@ import {
     TodayOverview,
     WithdrawalsPanel,
 } from './ReferralPanels';
-import { ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
-import { ProgramDraft, REFERRAL_TABS, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
+import { ReferralHeading, ReferralTabs, errorText, programDraft, programDraftError } from './referral-ui';
+import {
+    ProgramDraft,
+    REFERRAL_REPORT_FIELDS,
+    REFERRAL_TABS,
+    ReferralTab,
+    ReportKey,
+    WithdrawalAction,
+} from './referrals-types';
 
 export function ReferralsModule() {
     const [params] = useSearchParams();
@@ -88,18 +83,7 @@ function ReferralManagement() {
     );
     const reports = useQuery<ReferralReportsResult>(
         standalonePage
-            ? selectQueryFields(
-                  REFERRAL_REPORTS_QUERY,
-                  activeTab === 'PROMOTERS'
-                      ? ['referralInviterSummaries']
-                      : activeTab === 'RELATIONSHIPS'
-                        ? ['referralRelationships']
-                        : activeTab === 'REWARDS'
-                          ? ['referralRewards']
-                          : activeTab === 'LEDGER'
-                            ? ['referralLedger', 'referralBalanceAudit']
-                            : ['referralWithdrawals'],
-              )
+            ? selectQueryFields(REFERRAL_REPORTS_QUERY, REFERRAL_REPORT_FIELDS[activeTab])
             : REFERRAL_REPORTS_QUERY,
         {
             skip: activeTab === 'SETTINGS',
@@ -165,15 +149,6 @@ function ReferralManagement() {
             setActionError(errorText(error));
         }
     };
-
-    const tabs = [
-        ['SETTINGS', '功能设置', Settings2],
-        ['PROMOTERS', `推广员团队 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`, Users],
-        ['RELATIONSHIPS', `邀请关系明细 ${reports.data?.referralRelationships.totalItems ?? 0}`, UserPlus],
-        ['REWARDS', `返利订单 ${reports.data?.referralRewards.totalItems ?? 0}`, Gift],
-        ['LEDGER', '钱包流水', WalletCards],
-        ['WITHDRAWALS', `提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`, CircleDollarSign],
-    ] as const;
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -260,24 +235,14 @@ function ReferralManagement() {
                         <>
                             {!standalonePage && <TodayOverview data={program.data.referralTodayMetrics} />}
                             {!standalonePage && (
-                                <nav
-                                    aria-label="分销与返利子导航"
-                                    className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
-                                >
-                                    {tabs.map(([tab, label, Icon]) => (
-                                        <TabButton
-                                            key={tab}
-                                            active={activeTab === tab}
-                                            onClick={() => {
-                                                setActiveTab(tab);
-                                                changeSearch('');
-                                            }}
-                                            icon={<Icon className="h-3.5 w-3.5" />}
-                                        >
-                                            {label}
-                                        </TabButton>
-                                    ))}
-                                </nav>
+                                <ReferralTabs
+                                    activeTab={activeTab}
+                                    reports={reports.data}
+                                    onChange={tab => {
+                                        setActiveTab(tab);
+                                        changeSearch('');
+                                    }}
+                                />
                             )}
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">

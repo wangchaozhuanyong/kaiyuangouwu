@@ -36,7 +36,8 @@ vi.mock('../../apollo', () => ({
     getActiveChannelToken: () => mocks.token,
     channelRequestContext: (token: string) => ({ headers: { 'vendure-token': token } }),
 }));
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router-dom', async importOriginal => ({
+    ...(await importOriginal<typeof import('react-router-dom')>()),
     useLocation: () => ({ search: '' }),
     useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));

@@ -1,3 +1,4 @@
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { StoreManagementResult } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { governancePayloadRows, governanceRequestTypeLabel } from './StoreGovernanceLabels';
@@ -11,7 +12,14 @@ export function StoreGovernanceHistory({
     const reviewed = records.filter(item => item.status !== 'PENDING');
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-bold text-slate-900">已审核记录</h2>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                已审核记录
+                <FeatureHelpButton
+                    topic="settings.stores"
+                    title="已审核记录"
+                    description="查看已批准或已驳回的店铺治理申请及审核意见，敏感资料仅显示脱敏摘要。"
+                />
+            </h2>
             {reviewed.length === 0 ? (
                 <p className="mt-3 text-xs text-slate-500">暂无已审核记录。</p>
             ) : (
