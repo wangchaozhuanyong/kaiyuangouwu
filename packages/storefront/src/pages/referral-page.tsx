@@ -8,6 +8,7 @@ import {
     Gift,
     Image,
     Info,
+    Link2,
     Share2,
     ShoppingBag,
     Users,
@@ -108,16 +109,12 @@ export function ReferralPage() {
         return displayLedger.slice(start, start + REFERRAL_LIST_PAGE_SIZE);
     }, [displayLedger, safeLedgerPage]);
 
-    const copyInvite = async () => {
+    const copyInviteLink = async () => {
         if (!overview) return;
         try {
-            await navigator.clipboard.writeText(
-                isZh
-                    ? `${storefrontName} 邀请你来逛逛\n邀请码：${overview.inviteCode}\n${shareUrl}`
-                    : `${storefrontName} invitation\nCode: ${overview.inviteCode}\n${shareUrl}`,
-            );
+            await navigator.clipboard.writeText(shareUrl);
             setCopied(true);
-            onNotify(isZh ? '邀请码和邀请链接已复制' : 'Invitation code and link copied');
+            onNotify(isZh ? '邀请链接已复制' : 'Invitation link copied');
             window.setTimeout(() => setCopied(false), 1800);
         } catch {
             onNotify(isZh ? '复制失败，请手动复制' : 'Could not copy');
@@ -127,7 +124,7 @@ export function ReferralPage() {
     const share = async () => {
         if (!overview) return;
         if (!navigator.share) {
-            await copyInvite();
+            await copyInviteLink();
             return;
         }
         try {
@@ -197,9 +194,7 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch({ cancelRefetch: false })}
                 />
             ) : (
-                // REFERRAL_CELEBRATION_20261002: user-approved campaign theme, independent of store skins.
-                // Keep this marker and the scoped palette in referral.css when repairing skin rules.
-                <SubpageBody className="desktop-referral-content" data-referral-theme="celebration">
+                <SubpageBody className="desktop-referral-content">
                     <section className="referral-invite">
                         <div className="referral-invite-kicker">
                             <Gift aria-hidden="true" />
@@ -214,21 +209,42 @@ export function ReferralPage() {
                                 : `Earn ${overview.rewardRate}% in rewards when a friend makes a purchase.`}
                         </p>
                         <div className="referral-invite-code">
-                            <small className="referral-invite-code-label">
-                                {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
-                            </small>
-                            <div className="referral-invite-code-row">
-                                <strong className="referral-invite-code-value">{overview.inviteCode}</strong>
-                                <button
-                                    type="button"
-                                    className="referral-invite-copy"
-                                    onClick={() => void copyInvite()}
-                                    aria-label={isZh ? '复制邀请码' : 'Copy invitation code'}
-                                >
-                                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                                </button>
-                            </div>
-                            <p className="referral-invite-url">{shareUrl}</p>
+                            <span className="referral-invite-code-label">
+                                {isZh ? '我的邀请码' : 'My invitation code'}
+                            </span>
+                            <strong className="referral-invite-code-value">{overview.inviteCode}</strong>
+                        </div>
+                        <div className="referral-invite-link">
+                            <label className="referral-invite-link-label" htmlFor={`${recordId}-link`}>
+                                <Link2 aria-hidden="true" className="size-4" />
+                                {isZh ? '邀请链接' : 'Invitation link'}
+                            </label>
+                            <input
+                                id={`${recordId}-link`}
+                                className="referral-invite-url"
+                                value={shareUrl}
+                                readOnly
+                                onFocus={event => event.currentTarget.select()}
+                                onClick={event => event.currentTarget.select()}
+                            />
+                            <button
+                                type="button"
+                                className="referral-invite-copy"
+                                onClick={() => void copyInviteLink()}
+                            >
+                                {copied ? (
+                                    <Check aria-hidden="true" className="size-4" />
+                                ) : (
+                                    <Copy aria-hidden="true" className="size-4" />
+                                )}
+                                {copied
+                                    ? isZh
+                                        ? '邀请链接已复制'
+                                        : 'Invitation link copied'
+                                    : isZh
+                                      ? '复制邀请链接'
+                                      : 'Copy invitation link'}
+                            </button>
                         </div>
                         <div className="referral-invite-actions">
                             <button

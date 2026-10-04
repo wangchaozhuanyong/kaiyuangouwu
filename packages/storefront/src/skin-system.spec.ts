@@ -160,34 +160,17 @@ describe('storefront skin system', () => {
         for (const page of ['notifications', 'referral']) {
             const css = stylesheet(`./styles/${page}.css`);
             expect(css).not.toMatch(/!important|data-storefront-preset/iu);
-            // REFERRAL_CELEBRATION_20261002: only the approved local theme may own fixed colors.
-            postcss.parse(css).walkDecls(declaration => {
-                if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
-                expect(page).toBe('referral');
-                expect(declaration.prop).toMatch(/^--/u);
-                expect((declaration.parent as postcss.Rule).selector).toBe(
-                    ".desktop-referral-content[data-referral-theme='celebration']",
-                );
-            });
+            expect(css).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgb|hsl)a?\(/iu);
             expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
         }
     });
 
-    it('preserves the approved referral campaign palette independently of storefront skins', () => {
+    it('keeps the referral page on the active skin without local palette overrides', () => {
         const css = postcss.parse(stylesheet('./styles/referral.css'));
-        const tokens = new Map<string, string>();
-        css.walkRules(".desktop-referral-content[data-referral-theme='celebration']", rule => {
-            rule.walkDecls(declaration => {
-                tokens.set(declaration.prop, declaration.value);
-            });
+        css.walkDecls(declaration => {
+            expect(declaration.prop).not.toMatch(/^--/u);
         });
-        // These approved campaign roles must not be replaced with store/skin-derived values.
-        expect(tokens.get('--accent')).toBe('#b92f32');
-        expect(tokens.get('--surface')).toBe('#fffdf9');
-        expect(tokens.get('--referral-gold')).toBe('#ffe0a0');
-        expect(tokens.get('--skin-card-radius')).toBe('22px');
-        expect([...tokens.values()].join(' ')).not.toContain('var(');
-        expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
+        expect(stylesheet('./pages/referral-page.tsx')).not.toContain('data-referral-theme');
     });
 
     it('preserves directory B without overriding the active storefront skin', () => {
@@ -303,11 +286,11 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // User-approved centered referral totals have one campaign-colored divider.
+                        // Centered referral totals use one subtle reading divider from the active skin.
                         if (
                             functionalKey === 'styles/referral.css|.referral-reward-totals::before' &&
                             border[1] === 'inline' &&
-                            border[2].trim() === '1px solid var(--line)'
+                            border[2].trim() === '1px solid var(--skin-divider)'
                         ) {
                             continue;
                         }
@@ -699,8 +682,7 @@ describe('storefront skin system', () => {
         const source = stylesheet('./styles/visual-presets.css');
         const lineOwners = new Set([
             'styles/experience-foundations.css',
-            // User-approved local campaign and service themes retain their boundaries.
-            'styles/referral.css',
+            // Existing service boundaries remain separately owned.
             'pages/business-services-page.css',
         ]);
         const visitLineOwners = (directory: string) => {

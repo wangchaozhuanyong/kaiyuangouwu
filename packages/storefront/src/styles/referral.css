@@ -1,59 +1,22 @@
-/* REFERRAL_CELEBRATION_20261002 — explicitly approved by the user.
- * Independent red/gold campaign theme across every store skin, scoped to this page only.
- * Do not normalize these tokens back to the storefront palette during skin repairs.
- * Ownership and regression contract: DESKTOP_SKIN_DESIGN_CONTRACT.md, skin-system.spec.ts.
+/* REFERRAL_SKIN_20261004 supersedes the independent red/gold campaign palette.
+ * Share the active skin and the AccountIdentity accent surface across all stores.
  */
-.desktop-referral-content[data-referral-theme='celebration'] {
-    --text: #45241f;
-    --text-soft: #694a3e;
-    --muted: #83685c;
-    --surface: #fffdf9;
-    --soft: #fff2e3;
-    --control-surface: #f8ecdf;
-    --control-surface-hover: #f3e2ce;
-    --accent: #b92f32;
-    --accent-hover: #a32528;
-    --accent-foreground: #fffaf0;
-    --accent-soft: #fff0df;
-    --accent-ink: #9d272b;
-    --selection: #b92f32;
-    --selection-foreground: #fffaf0;
-    --line: #dfbaa0;
-    --focus: #9d272b;
-    --success: #27754a;
-    --skin-card-radius: 22px;
-    --skin-control-radius: 12px;
-    --skin-card-outline: 1px solid #f0ddc7;
-    --skin-card-shadow: 0 6px 20px rgb(92 43 21 / 5%);
-    --skin-card-hover-shadow: 0 8px 24px rgb(92 43 21 / 12%);
-    --referral-hero-start: #b02930;
-    --referral-hero-end: #8f1e2b;
-    --referral-hero-ink: #fff9ee;
-    --referral-hero-muted: #ffe2c0;
-    --referral-hero-highlight: rgb(255 221 154 / 4%);
-    --referral-gold: #ffe0a0;
-    --referral-gold-hover: #ffe9ba;
-    --referral-gold-ink: #71381b;
-    --referral-gold-soft: #fff2db;
-}
 .referral-invite {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    padding: 24px 20px 20px;
+    padding: var(--space-24) var(--space-16) var(--space-16);
     border-radius: var(--skin-card-radius);
-    background:
-        radial-gradient(circle at 100% 0, var(--referral-hero-highlight) 0 22%, transparent 22.3%),
-        radial-gradient(circle at 100% 0, var(--referral-hero-highlight) 0 36%, transparent 36.3%),
-        linear-gradient(135deg, var(--referral-hero-start), var(--referral-hero-end));
-    color: var(--referral-hero-ink);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    box-shadow: var(--skin-card-shadow);
 }
 .referral-invite-kicker {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    color: var(--referral-gold);
+    gap: var(--space-8);
+    margin-bottom: var(--space-12);
+    color: inherit;
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-semibold);
@@ -65,7 +28,7 @@
 }
 .desktop-referral-content .referral-invite-title {
     margin: 0;
-    color: var(--referral-hero-ink);
+    color: inherit;
     font-family: var(--skin-display-font, var(--font-ui));
     font-size: var(--type-section-size);
     font-weight: var(--font-weight-bold);
@@ -73,114 +36,113 @@
     letter-spacing: var(--tracking-normal);
 }
 .referral-invite-description {
-    margin: 10px 0 0;
-    color: var(--referral-hero-muted);
+    margin: var(--space-8) 0 0;
+    color: inherit;
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
 }
 .referral-invite-code {
-    margin-top: 22px;
-    padding: 14px 16px;
-    border-radius: var(--skin-control-radius);
-    background: var(--surface);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-4) var(--space-12);
+    margin-top: var(--space-16);
 }
 .referral-invite-code-label {
-    color: var(--muted);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+}
+.referral-invite-code-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--font-code);
+    font-size: var(--type-code-size);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--type-code-leading);
+    letter-spacing: var(--tracking-code);
+    user-select: all;
+}
+.referral-invite-link {
+    display: grid;
+    gap: var(--space-12);
+    margin-top: var(--space-16);
+    padding: var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text);
+}
+.referral-invite-link-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
-    letter-spacing: var(--tracking-code);
-}
-.referral-invite-code-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 4px;
-}
-.referral-invite-code-value {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    color: var(--accent-ink);
-    font-family: var(--font-code);
-    font-size: var(--type-page-size);
-    font-weight: var(--font-weight-bold);
-    line-height: var(--type-page-leading);
-    letter-spacing: var(--tracking-code);
-}
-.referral-invite-copy {
-    display: grid;
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    place-items: center;
-    padding: 0;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: transparent;
-    color: var(--accent-ink);
-}
-.referral-invite-copy svg {
-    width: 20px;
-    height: 20px;
 }
 .referral-invite-url {
-    margin: 6px 0 0;
-    overflow: hidden;
-    color: var(--muted);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+}
+.referral-invite-copy,
+.referral-invite-actions button {
+    display: inline-flex;
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-12);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    font-family: inherit;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+.referral-invite-copy {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+.referral-invite-copy:hover {
+    background: var(--accent-hover);
 }
 .referral-invite-actions {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: var(--space-12);
     margin-top: auto;
-    padding-top: 22px;
+    padding-top: var(--space-16);
 }
 .referral-invite-actions button {
-    display: flex;
     flex: 1;
-    min-width: 0;
-    min-height: 46px;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 8px;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-    font-weight: var(--font-weight-semibold);
+    border: 1px solid var(--accent-foreground);
+    background: transparent;
+    color: inherit;
 }
-.referral-invite-actions svg {
+.referral-invite-actions button:hover {
+    background: var(--accent-hover);
+}
+.referral-invite :is(button, label) svg {
     flex-shrink: 0;
 }
-.referral-invite-share {
-    background: var(--referral-gold);
-    color: var(--referral-gold-ink);
-}
-.referral-invite-share:hover {
-    background: var(--referral-gold-hover);
-}
-.referral-invite-actions .referral-invite-poster {
-    border: 1px solid var(--referral-hero-muted);
-    background: transparent;
-    color: var(--referral-hero-ink);
-}
-.referral-invite-poster:hover {
-    background: var(--referral-hero-highlight);
-}
-.referral-invite-copy:hover {
-    background: var(--accent-soft);
-}
 .referral-invite button:focus-visible {
-    outline: 2px solid var(--referral-gold);
-    outline-offset: 3px;
+    outline: var(--experience-focus-width) solid var(--accent-foreground);
+    outline-offset: var(--experience-focus-offset);
 }
-.referral-invite .referral-invite-copy:focus-visible {
-    outline-color: var(--focus);
+.referral-invite-link :is(button, input):focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .desktop-referral-content {
@@ -201,7 +163,6 @@
 .referral-overview {
     display: flex;
     flex-direction: column;
-    background: linear-gradient(140deg, var(--surface) 45%, var(--referral-gold-soft));
 }
 .referral-overview-heading {
     display: flex;
@@ -312,10 +273,6 @@
     font-size: var(--type-display-size);
     line-height: var(--type-display-leading);
 }
-.referral-stat.is-prominent:nth-child(2) dd,
-.referral-stat.is-prominent:nth-child(2) .referral-stat-icon {
-    color: var(--referral-gold-ink);
-}
 .referral-reward-totals {
     position: relative;
     display: grid;
@@ -323,7 +280,7 @@
     margin: auto 0 0;
     padding: 14px 0;
     border-radius: var(--skin-control-radius);
-    background: var(--referral-gold-soft);
+    background: var(--control-surface);
 }
 .referral-reward-totals > div {
     display: flex;
@@ -332,13 +289,13 @@
     padding: 0 12px;
     text-align: center;
 }
-/* Approved summary reading separator; retain the campaign's red/gold palette. */
+/* Subtle reading separator shared with the active storefront skin. */
 .referral-reward-totals::before {
     content: '';
     position: absolute;
     inset-block: 14px;
     inset-inline-start: 50%;
-    border-inline-start: 1px solid var(--line);
+    border-inline-start: 1px solid var(--skin-divider);
 }
 .referral-reward-totals dt {
     color: var(--muted);
@@ -392,7 +349,6 @@
 .referral-record-tabs span {
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
-    opacity: 0.8;
     font-variant-numeric: tabular-nums;
 }
 .referral-records :focus-visible {
