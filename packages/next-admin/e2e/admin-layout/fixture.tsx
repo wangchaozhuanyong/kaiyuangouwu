@@ -317,6 +317,7 @@ const fixtureOrder = {
     payments: [],
 };
 const data: Record<string, unknown> = {
+    catalogTemplateLibrary: [],
     order: {
         ...fixtureOrder,
         id: 'layout-order',
