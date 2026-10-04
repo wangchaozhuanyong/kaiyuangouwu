@@ -1035,7 +1035,10 @@ describe('iCloud admin contract persistence', () => {
                     'Local fixture',
                 ].join('\r\n'),
             );
-            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockResolvedValue(undefined);
+            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockImplementation(async function () {
+                this.mailbox = { path: 'INBOX', uidValidity: BigInt(1) } as never;
+                await Promise.resolve();
+            });
             const imapLock = vi
                 .spyOn(ImapFlow.prototype, 'getMailboxLock')
                 .mockResolvedValue({ path: 'INBOX', release: vi.fn() });
@@ -1070,7 +1073,7 @@ describe('iCloud admin contract persistence', () => {
                 );
                 await blocker.commitTransaction();
                 const results = await Promise.all(operations);
-                expect(results[2]).toMatchObject({ success: true, syncedCount: 1 });
+                expect(results[2]).toEqual({ success: true, syncedCount: 1 });
                 const mailCount = await mails.count({ where: { primaryAccountId: owner.id } });
                 const stored = await connection.rawConnection
                     .getRepository(IcloudVirtualEmail)
