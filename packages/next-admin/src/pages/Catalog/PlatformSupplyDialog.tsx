@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -91,8 +92,7 @@ export function PlatformSupplyDialog({
                     !query.data?.platformAutoCardSupplyCatalog.configurations.length && (
                         <p>维护店铺尚未配置自动发卡，请先在维护店铺完成卡池配置。</p>
                     )}
-                <label className="block text-sm">
-                    原始发卡配置
+                <AdminField className="block text-sm" label="原始发卡配置">
                     <AdminSelect
                         aria-label="原始发卡配置"
                         className="ml-3 rounded-lg border border-slate-200 p-2"
@@ -106,9 +106,8 @@ export function PlatformSupplyDialog({
                             </option>
                         ))}
                     </AdminSelect>
-                </label>
-                <label className="block text-sm">
-                    目标销售店铺
+                </AdminField>
+                <AdminField className="block text-sm" label="目标销售店铺">
                     <AdminSelect
                         aria-label="目标销售店铺"
                         className="ml-3 rounded-lg border border-slate-200 p-2"
@@ -124,7 +123,7 @@ export function PlatformSupplyDialog({
                                 </option>
                             ))}
                     </AdminSelect>
-                </label>
+                </AdminField>
                 {grant && (
                     <p className="text-sm">
                         当前授权：{grant.enabled ? '启用' : '暂停'} · 版本 {grant.version}

@@ -3,6 +3,7 @@ import { useDeferredValue, useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import {
@@ -411,17 +412,29 @@ function DeliveryForm({
                 >
                     <legend className="px-1 font-semibold text-slate-800">成品包 {index + 1}</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1">
-                            <span>账号（可选）</span>
+                        <AdminField
+                            className="space-y-1"
+                            label={
+                                <>
+                                    <span>账号（可选）</span>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 aria-label={`成品包 ${index + 1} 账号`}
                                 value={item.account}
                                 onChange={event => setPackage(index, { account: event.target.value })}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
                             />
-                        </label>
-                        <label className="space-y-1">
-                            <span>密钥 / 密码（可选）</span>
+                        </AdminField>
+                        <AdminField
+                            className="space-y-1"
+                            label={
+                                <>
+                                    <span>密钥 / 密码（可选）</span>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 aria-label={`成品包 ${index + 1} 密钥`}
                                 type="password"
@@ -430,7 +443,7 @@ function DeliveryForm({
                                 onChange={event => setPackage(index, { key: event.target.value })}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
                             />
-                        </label>
+                        </AdminField>
                     </div>
                     <label className="block space-y-1">
                         <span>交付说明</span>

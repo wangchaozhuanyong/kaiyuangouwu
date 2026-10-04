@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { sensitiveActionContext } from '../../apollo';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ACTIVE_ADMINISTRATOR_PROFILE_QUERY,
@@ -453,8 +454,7 @@ function Field({
     icon?: typeof Mail;
 }) {
     return (
-        <label className="block text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-xs font-bold text-slate-600" label={label}>
             <span className="relative mt-1.5 block">
                 {Icon && <Icon className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />}
                 <AdminInput
@@ -466,7 +466,7 @@ function Field({
                     className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${Icon ? 'pl-9' : ''}`}
                 />
             </span>
-        </label>
+        </AdminField>
     );
 }
 

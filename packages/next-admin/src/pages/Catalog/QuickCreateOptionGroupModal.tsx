@@ -3,6 +3,7 @@ import { Sparkles, Tag, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CREATE_OPTION_GROUP } from '../../graphql/catalog-admin.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -158,10 +159,14 @@ export function QuickCreateOptionGroupModal({
                         </div>
                     </div>
 
-                    <div>
-                        <label className="mb-1 block text-xs font-bold text-slate-700">
-                            规格属性名称 <span className="text-rose-500">*</span>
-                        </label>
+                    <AdminField
+                        label={
+                            <span className="mb-1 block text-xs font-bold text-slate-700">
+                                规格属性名称
+                                <span className="text-rose-500">*</span>
+                            </span>
+                        }
+                    >
                         <AdminInput
                             type="text"
                             value={name}
@@ -170,7 +175,7 @@ export function QuickCreateOptionGroupModal({
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                             autoFocus
                         />
-                    </div>
+                    </AdminField>
 
                     <div>
                         <label className="mb-1 block text-xs font-bold text-slate-700">

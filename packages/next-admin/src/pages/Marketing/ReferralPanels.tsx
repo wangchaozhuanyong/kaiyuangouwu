@@ -34,7 +34,7 @@ import {
     posterLabel,
     programDraftError,
 } from './referral-ui';
-import { ProgramDraft, ReportKey, WithdrawalAction } from './referrals-types';
+import { ProgramDraft, WithdrawalAction } from './referrals-types';
 
 export function TodayOverview({ data }: { data: ReferralProgramResult['referralTodayMetrics'] }) {
     return (
@@ -161,8 +161,7 @@ export function PromotersPanel({
     data,
     loading,
     error,
-    search,
-    skips,
+    skip,
     changeSkip,
     onRetry,
 }: {
@@ -171,25 +170,13 @@ export function PromotersPanel({
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
-    search: string;
-    skips: Record<ReportKey, number>;
-    changeSkip: (key: ReportKey, value: number) => void;
+    skip: number;
+    changeSkip: (value: number) => void;
     onRetry: () => void;
 }) {
     if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
-    const q = search.trim().toLowerCase();
-    const summaries = (data?.referralInviterSummaries.items ?? []).filter(
-        item =>
-            !q || `${item.customerName} ${item.customerEmail} ${item.inviteCode}`.toLowerCase().includes(q),
-    );
-    const relationships = (data?.referralRelationships.items ?? []).filter(
-        item =>
-            !q ||
-            `${item.inviterName} ${item.inviterEmail} ${item.inviteeName} ${item.inviteeEmail} ${item.inviteCodeSnapshot}`
-                .toLowerCase()
-                .includes(q),
-    );
+    const summaries = data?.referralInviterSummaries.items ?? [];
     return (
         <div className="space-y-4">
             <TableCard title="推广员团队" description="按邀请码汇总邀请人数与成交人数">
@@ -244,11 +231,39 @@ export function PromotersPanel({
                     loading={loading}
                     pageSize={pageSize}
                     onPageSizeChange={onPageSizeChange}
-                    skip={skips.summaries}
+                    skip={skip}
                     total={data?.referralInviterSummaries.totalItems ?? 0}
-                    onChange={value => changeSkip('summaries', value)}
+                    onChange={changeSkip}
                 />
             </TableCard>
+        </div>
+    );
+}
+
+export function InviteRelationshipsPanel({
+    pageSize,
+    onPageSizeChange,
+    data,
+    loading,
+    error,
+    skip,
+    changeSkip,
+    onRetry,
+}: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
+    data?: ReferralReportsResult;
+    loading: boolean;
+    error?: string;
+    skip: number;
+    changeSkip: (value: number) => void;
+    onRetry: () => void;
+}) {
+    if (loading && !data) return <LoadingState />;
+    if (error) return <ErrorState message={error} onRetry={onRetry} />;
+    const relationships = data?.referralRelationships.items ?? [];
+    return (
+        <div className="space-y-4">
             <TableCard title="邀请关系明细" description="每条绑定关系与首次成交时间均可追溯">
                 <table className="w-full min-w-[1420px] border-collapse text-left text-xs">
                     <thead>
@@ -313,9 +328,9 @@ export function PromotersPanel({
                     loading={loading}
                     pageSize={pageSize}
                     onPageSizeChange={onPageSizeChange}
-                    skip={skips.relationships}
+                    skip={skip}
                     total={data?.referralRelationships.totalItems ?? 0}
-                    onChange={value => changeSkip('relationships', value)}
+                    onChange={changeSkip}
                 />
             </TableCard>
         </div>
@@ -328,7 +343,6 @@ export function RewardsPanel({
     data,
     loading,
     error,
-    search,
     skip,
     changeSkip,
     onRetry,
@@ -338,21 +352,13 @@ export function RewardsPanel({
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
-    search: string;
     skip: number;
     changeSkip: (value: number) => void;
     onRetry: () => void;
 }) {
     if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
-    const q = search.trim().toLowerCase();
-    const items = (data?.referralRewards.items ?? []).filter(
-        item =>
-            !q ||
-            `${item.orderCode} ${item.inviterName} ${item.inviterEmail} ${item.inviteeName}`
-                .toLowerCase()
-                .includes(q),
-    );
+    const items = data?.referralRewards.items ?? [];
     return (
         <TableCard
             title="返利订单与退款扣回"
@@ -449,7 +455,6 @@ export function LedgerPanel({
     data,
     loading,
     error,
-    search,
     skip,
     changeSkip,
     onRetry,
@@ -459,21 +464,13 @@ export function LedgerPanel({
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
-    search: string;
     skip: number;
     changeSkip: (value: number) => void;
     onRetry: () => void;
 }) {
     if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
-    const q = search.trim().toLowerCase();
-    const items = (data?.referralLedger.items ?? []).filter(
-        item =>
-            !q ||
-            `${item.customerName} ${item.customerEmail} ${item.eventType} ${item.orderId} ${item.withdrawalId}`
-                .toLowerCase()
-                .includes(q),
-    );
+    const items = data?.referralLedger.items ?? [];
     const mismatches =
         data?.referralBalanceAudit.items.filter(
             item => item.availableDifference || item.pendingDifference || item.reservedDifference,
@@ -586,7 +583,6 @@ export function WithdrawalsPanel({
     data,
     loading,
     error,
-    search,
     skip,
     changeSkip,
     onAction,
@@ -597,7 +593,6 @@ export function WithdrawalsPanel({
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
-    search: string;
     skip: number;
     changeSkip: (value: number) => void;
     onAction: (action: WithdrawalAction) => void;
@@ -607,14 +602,7 @@ export function WithdrawalsPanel({
     const canManage = hasAnyPermission(['ManageReferralWithdrawal']);
     if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
-    const q = search.trim().toLowerCase();
-    const items = (data?.referralWithdrawals.items ?? []).filter(
-        item =>
-            !q ||
-            `${item.code} ${item.customerName} ${item.customerEmail} ${item.externalReference}`
-                .toLowerCase()
-                .includes(q),
-    );
+    const items = data?.referralWithdrawals.items ?? [];
     return (
         <TableCard
             title="人工提款审批"

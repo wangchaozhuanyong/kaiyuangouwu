@@ -1,6 +1,7 @@
 import { ExternalLink, KeyRound, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { StorefrontAuthConfigurationRecord } from '../../graphql/storefront.graphql';
@@ -145,20 +146,20 @@ export function StorefrontAuthSettingsPanel({
                         onChange={checked => update('platformGoogleEnabled', checked)}
                     />
                 </div>
-                <label
+                <AdminField
                     className="mt-3 block text-xs font-bold text-slate-700"
                     htmlFor="platform-google-client-id"
+                    label="全平台 Google OAuth Web Client ID"
                 >
-                    全平台 Google OAuth Web Client ID
-                </label>
-                <AdminInput
-                    id="platform-google-client-id"
-                    value={draft.platformGoogleClientId ?? ''}
-                    disabled={!canEditPlatform || busy}
-                    onChange={event => update('platformGoogleClientId', event.target.value)}
-                    placeholder="1234567890-xxxx.apps.googleusercontent.com"
-                    className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-                />
+                    <AdminInput
+                        id="platform-google-client-id"
+                        value={draft.platformGoogleClientId ?? ''}
+                        disabled={!canEditPlatform || busy}
+                        onChange={event => update('platformGoogleClientId', event.target.value)}
+                        placeholder="1234567890-xxxx.apps.googleusercontent.com"
+                        className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                    />
+                </AdminField>
                 <AdminButton
                     type="button"
                     disabled={!canEditPlatform || busy}

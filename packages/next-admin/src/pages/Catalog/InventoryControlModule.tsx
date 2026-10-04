@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Scale, X } from 'lucide-react';
 import { useState } from 'react';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -281,8 +282,7 @@ export function InventoryControlModule() {
                             {draft.item.sku} · {draft.item.stockLocationName}，当前差异{' '}
                             {signed(draft.item.difference)}
                         </p>
-                        <label className="mt-4 block text-xs font-bold">
-                            处理方式
+                        <AdminField className="mt-4 block text-xs font-bold" label="处理方式">
                             <AdminSelect
                                 value={draft.mode}
                                 onChange={event =>
@@ -298,16 +298,15 @@ export function InventoryControlModule() {
                                     <option value="CREATE_BASELINE_LOT">以总库存为准，建立期初批次</option>
                                 )}
                             </AdminSelect>
-                        </label>
-                        <label className="mt-4 block text-xs font-bold">
-                            处理原因
+                        </AdminField>
+                        <AdminField className="mt-4 block text-xs font-bold" label="处理原因">
                             <AdminInput
                                 value={draft.reason}
                                 onChange={event => setDraft({ ...draft, reason: event.target.value })}
                                 className={inputClass}
                                 placeholder="必填：盘点单号或差异说明"
                             />
-                        </label>
+                        </AdminField>
                         {error && (
                             <div
                                 role="alert"

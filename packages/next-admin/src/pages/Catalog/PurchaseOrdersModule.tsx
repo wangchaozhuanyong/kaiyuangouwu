@@ -3,6 +3,7 @@ import type { DocumentNode } from 'graphql';
 import { AlertTriangle, ClipboardCheck, Plus, RefreshCw, X } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -1028,10 +1029,9 @@ function ModalFooter({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-xs font-bold text-slate-600" label={label}>
             <div className="mt-1 font-normal">{children}</div>
-        </label>
+        </AdminField>
     );
 }
 function SelectField({

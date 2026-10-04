@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useActiveInterval } from '../../hooks/use-page-activity';
 
@@ -698,9 +699,19 @@ function AccountList({
                     </span>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                    <label className="relative min-w-0 sm:w-72">
-                        <span className="sr-only">搜索项目名称</span>
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <AdminField
+                        className="relative min-w-0 sm:w-72"
+                        label={
+                            <>
+                                <span className="sr-only">搜索项目名称</span>
+                            </>
+                        }
+                        description={
+                            <>
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                            </>
+                        }
+                    >
                         <AdminInput
                             type="search"
                             value={search}
@@ -708,7 +719,7 @@ function AccountList({
                             placeholder="搜索项目名称"
                             className={`${inputClass} pl-9`}
                         />
-                    </label>
+                    </AdminField>
                     {accounts.length > 0 && (
                         <AdminButton
                             type="button"
@@ -1178,10 +1189,17 @@ function IconButton({
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
     return (
-        <label htmlFor={htmlFor} className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            htmlFor={htmlFor}
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 

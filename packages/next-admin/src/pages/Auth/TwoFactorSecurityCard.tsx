@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
@@ -337,8 +338,7 @@ export function TwoFactorSecurityCard() {
                             </p>
                         </div>
                     )}
-                    <label className="block text-xs font-semibold">
-                        当前登录密码
+                    <AdminField className="block text-xs font-semibold" label="当前登录密码">
                         <AdminInput
                             type="password"
                             autoComplete="current-password"
@@ -348,10 +348,12 @@ export function TwoFactorSecurityCard() {
                             disabled={busy}
                             className={inputClass}
                         />
-                    </label>
+                    </AdminField>
                     {(status?.enabled || setup) && (
-                        <label className="block text-xs font-semibold">
-                            {setup ? '新验证器的 6 位动态码' : '2FA 动态码或一次性恢复码'}
+                        <AdminField
+                            className="block text-xs font-semibold"
+                            label={setup ? '新验证器的 6 位动态码' : '2FA 动态码或一次性恢复码'}
+                        >
                             <AdminInput
                                 type="text"
                                 autoComplete="one-time-code"
@@ -365,7 +367,7 @@ export function TwoFactorSecurityCard() {
                                 spellCheck={false}
                                 className={inputClass}
                             />
-                        </label>
+                        </AdminField>
                     )}
                     {error && (
                         <p role="alert" className="text-sm text-red-700">

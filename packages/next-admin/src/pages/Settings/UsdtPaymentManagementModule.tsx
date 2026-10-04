@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
@@ -254,8 +255,7 @@ export function UsdtPaymentManagementModule() {
                                 detail="按网店和统一时间（UTC）日期筛选；受控模拟支付单列，不代表真实到账。"
                             />
                             <div className="mt-4 grid gap-3 md:grid-cols-3">
-                                <label className={labelClass}>
-                                    网店
+                                <AdminField className={labelClass} label="网店">
                                     <AdminSelect
                                         value={channelId}
                                         onChange={event => {
@@ -272,9 +272,8 @@ export function UsdtPaymentManagementModule() {
                                             </option>
                                         ))}
                                     </AdminSelect>
-                                </label>
-                                <label className={labelClass}>
-                                    开始日期
+                                </AdminField>
+                                <AdminField className={labelClass} label="开始日期">
                                     <AdminInput
                                         type="date"
                                         value={from}
@@ -286,9 +285,8 @@ export function UsdtPaymentManagementModule() {
                                         }}
                                         className={inputClass}
                                     />
-                                </label>
-                                <label className={labelClass}>
-                                    结束日期
+                                </AdminField>
+                                <AdminField className={labelClass} label="结束日期">
                                     <AdminInput
                                         type="date"
                                         value={to}
@@ -300,7 +298,7 @@ export function UsdtPaymentManagementModule() {
                                         }}
                                         className={inputClass}
                                     />
-                                </label>
+                                </AdminField>
                             </div>
                             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {(query.data?.storePaymentStats ?? []).map(item => (
@@ -779,8 +777,7 @@ function ReconciliationEditor({
                     </AdminButton>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <label className={`${labelClass} sm:col-span-2`}>
-                        处理方式
+                    <AdminField className={`${labelClass} sm:col-span-2`} label="处理方式">
                         <AdminSelect
                             value={draft.action}
                             onChange={event =>
@@ -794,7 +791,7 @@ function ReconciliationEditor({
                             {retryAllowed && <option value="RETRY_SETTLEMENT">重试订单入账</option>}
                             <option value="CONFIRM_EXTERNAL_REFUND">核验并关闭外部链上退款</option>
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                     {draft.action === 'CONFIRM_EXTERNAL_REFUND' && (
                         <>
                             <RefundField
@@ -938,8 +935,7 @@ function RefundField({
     type?: string;
 }) {
     return (
-        <label className={labelClass}>
-            {label}
+        <AdminField className={labelClass} label={label}>
             <AdminInput
                 type={type}
                 min={type === 'number' ? 0 : undefined}
@@ -948,7 +944,7 @@ function RefundField({
                 onChange={event => onChange(event.target.value)}
                 className={inputClass}
             />
-        </label>
+        </AdminField>
     );
 }
 function refundInput(payment: PaymentDetailRecord, draft: RefundDraft) {

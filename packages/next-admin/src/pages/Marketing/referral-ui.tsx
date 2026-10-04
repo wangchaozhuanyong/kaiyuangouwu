@@ -3,6 +3,7 @@ import React from 'react';
 import { missingDisplayLabel } from '../../../../common/src/display-localization';
 import { referralStatusDisplayLabel as statusLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
@@ -212,8 +213,17 @@ export function NumberField({
     detail?: string;
 }) {
     return (
-        <label className="block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField
+            className="block text-[11px] font-bold text-slate-600"
+            label={label}
+            description={
+                detail && (
+                    <small className="mt-1 block text-[10px] font-normal leading-4 text-slate-400">
+                        {detail}
+                    </small>
+                )
+            }
+        >
             <AdminInput
                 type="number"
                 value={value}
@@ -223,12 +233,7 @@ export function NumberField({
                 onChange={event => onChange(Number(event.target.value))}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-normal text-slate-900"
             />
-            {detail && (
-                <small className="mt-1 block text-[10px] font-normal leading-4 text-slate-400">
-                    {detail}
-                </small>
-            )}
-        </label>
+        </AdminField>
     );
 }
 export function TextField({
@@ -245,8 +250,7 @@ export function TextField({
     placeholder?: string;
 }) {
     return (
-        <label className="mt-3 block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField className="mt-3 block text-[11px] font-bold text-slate-600" label={label}>
             <AdminInput
                 type={type}
                 value={value}
@@ -254,7 +258,7 @@ export function TextField({
                 placeholder={placeholder}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
             />
-        </label>
+        </AdminField>
     );
 }
 export function FormSelect({
@@ -269,8 +273,7 @@ export function FormSelect({
     options: string[][];
 }) {
     return (
-        <label className="block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-[11px] font-bold text-slate-600" label={label}>
             <AdminSelect
                 value={value}
                 onChange={event => onChange(event.target.value)}
@@ -282,7 +285,7 @@ export function FormSelect({
                     </option>
                 ))}
             </AdminSelect>
-        </label>
+        </AdminField>
     );
 }
 export function ModalFooter({

@@ -1,5 +1,6 @@
 import { gql } from '@apollo/client';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminPageRefresh, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { StoreOfferDialog } from './StoreOfferDialog';
@@ -1303,8 +1304,10 @@ export function CatalogModule() {
                                 className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
                                 readOnly
                             />
-                            <label className="block text-xs font-bold text-slate-700">
-                                当前管理员密码 *
+                            <AdminField
+                                className="block text-xs font-bold text-slate-700"
+                                label="当前管理员密码 *"
+                            >
                                 <AdminInput
                                     type="password"
                                     name="current-password"
@@ -1314,7 +1317,7 @@ export function CatalogModule() {
                                     placeholder="输入密码确认本人操作"
                                     className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
                                 />
-                            </label>
+                            </AdminField>
 
                             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                                 <AdminButton

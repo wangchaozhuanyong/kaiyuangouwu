@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { Edit3, Plus, RefreshCw, Save, Settings2, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
@@ -656,8 +657,7 @@ function TextField({
     type?: string;
 }) {
     return (
-        <label className={labelClass}>
-            {label}
+        <AdminField className={labelClass} label={label}>
             <AdminInput
                 type={type}
                 min={type === 'number' ? 1 : undefined}
@@ -665,7 +665,7 @@ function TextField({
                 onChange={event => onChange(event.target.value)}
                 className={inputClass}
             />
-        </label>
+        </AdminField>
     );
 }
 function Toggle({

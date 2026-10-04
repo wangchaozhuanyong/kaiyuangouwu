@@ -1,6 +1,7 @@
 import { ShieldAlert, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminButton, AdminInput } from './AdminControls';
+import { AdminField } from './AdminField';
 
 import { isInputMethodKey } from '../utils/input-method';
 import { AccessibleDialogSurface } from './AccessibleDialogSurface';
@@ -73,8 +74,10 @@ export function SensitiveActionDialog({
                         className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
                         readOnly
                     />
-                    <label className="mt-5 block text-xs font-bold text-slate-700">
-                        当前管理员密码
+                    <AdminField
+                        className="mt-5 block text-xs font-bold text-slate-700"
+                        label="当前管理员密码"
+                    >
                         <AdminInput
                             type="password"
                             name="current-password"
@@ -87,7 +90,7 @@ export function SensitiveActionDialog({
                             }}
                             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
                         />
-                    </label>
+                    </AdminField>
                     {error && (
                         <p
                             className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"

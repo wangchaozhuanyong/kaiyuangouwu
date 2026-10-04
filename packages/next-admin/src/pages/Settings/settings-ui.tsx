@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, LoaderCircle, X } from 'lucide-react';
 import type React from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -159,7 +160,7 @@ function FieldHeader({
     htmlFor?: string;
 }) {
     return (
-        <span className="block min-h-9">
+        <span className="block">
             {htmlFor ? (
                 <label htmlFor={htmlFor} className="block text-xs font-bold leading-4 text-slate-700">
                     {label}
@@ -189,10 +190,14 @@ export function Field({
     children: React.ReactNode;
 }) {
     return (
-        <label data-settings-field="input" className={`flex min-w-0 flex-col gap-2 ${className}`}>
-            <FieldHeader label={label} description={description} />
+        <AdminField
+            data-settings-field="input"
+            label={label}
+            description={description}
+            className={`text-xs font-bold text-slate-700 ${className}`}
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 
@@ -211,9 +216,18 @@ export function FieldGroup({
     children: React.ReactNode;
 }) {
     return (
-        <div data-settings-field="group" className={`min-w-0 ${className}`}>
-            <FieldHeader label={label} description={description} htmlFor={htmlFor} />
-            <div className="mt-2 min-w-0">{children}</div>
+        <div data-settings-field="group" data-admin-field="auto" className={`admin-field ${className}`}>
+            <div className="admin-field-row">
+                <span className="admin-field-label">
+                    <FieldHeader label={label} htmlFor={htmlFor} />
+                </span>
+                <div className="admin-field-control">{children}</div>
+                {description && (
+                    <span className="admin-field-help text-[11px] font-normal leading-4 text-slate-400">
+                        {description}
+                    </span>
+                )}
+            </div>
         </div>
     );
 }

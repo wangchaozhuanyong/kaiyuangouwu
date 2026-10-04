@@ -87,7 +87,46 @@ export function auditAdminInteraction(root = defaultSourceRoot) {
             }
         }
         if (queryNames.size) coverage.managedQueryFiles++;
+        const jsxTag = node =>
+            ts.isJsxElement(node)
+                ? node.openingElement.tagName.getText(tree)
+                : ts.isJsxSelfClosingElement(node)
+                  ? node.tagName.getText(tree)
+                  : '';
+        const jsxAttribute = (node, name) => {
+            const attributes = ts.isJsxElement(node) ? node.openingElement.attributes : node.attributes;
+            return attributes?.properties.find(
+                attribute => ts.isJsxAttribute(attribute) && attribute.name.text === name,
+            )?.initializer;
+        };
+        const isShortControl = node =>
+            ['AdminInput', 'AdminSelect', 'SearchInput'].includes(jsxTag(node)) &&
+            !/(?:checkbox|radio|range|file|color|hidden)/.test(
+                jsxAttribute(node, 'type')?.getText(tree) ?? '',
+            );
         function visit(node) {
+            if (ts.isJsxElement(node) && jsxTag(node) === 'label') {
+                const children = node.children.filter(child => !ts.isJsxText(child) || child.text.trim());
+                const controlIndex = children.findIndex(isShortControl);
+                const hasCaption = children
+                    .slice(0, controlIndex)
+                    .some(
+                        child => ts.isJsxText(child) || ts.isJsxExpression(child) || jsxTag(child) === 'span',
+                    );
+                const classes = jsxAttribute(node, 'className')?.getText(tree) ?? '';
+                const isInline =
+                    /(?:^|[\s"'`])(?:inline-flex|flex)(?:[\s"'`]|$)/.test(classes) &&
+                    !/\bflex-col\b/.test(classes);
+                if (
+                    controlIndex > 0 &&
+                    hasCaption &&
+                    classes &&
+                    !isInline &&
+                    // A multi-line order/selection card is a compound label, not a short field caption.
+                    !/rounded.*border/.test(classes)
+                )
+                    fail(node, '短字段标题与控件须使用 AdminField 自适应横排，不能固定上下排列');
+            }
             if (
                 ts.isCallExpression(node) &&
                 ts.isIdentifier(node.expression) &&

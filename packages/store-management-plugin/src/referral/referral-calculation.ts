@@ -47,7 +47,8 @@ export function referralRewardStatusAfterClawback(input: {
     rewardAmount: number;
     clawedBackAmount: number;
     releasedAmount: number;
-}): 'PENDING' | 'PARTIALLY_REVERSED' | 'REVERSED' {
+}): 'PENDING' | 'AVAILABLE' | 'PARTIALLY_REVERSED' | 'REVERSED' {
     if (input.clawedBackAmount >= input.rewardAmount) return 'REVERSED';
+    if (input.clawedBackAmount === 0 && input.releasedAmount > 0) return 'AVAILABLE';
     return input.releasedAmount > 0 ? 'PARTIALLY_REVERSED' : 'PENDING';
 }

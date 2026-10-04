@@ -27,6 +27,7 @@ import { systemStatusDisplayLabel } from '../../../../common/src/system-display-
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -1914,8 +1915,16 @@ export function InventoryWarehouseModule() {
                                 </span>
                             </div>
                         </div>
-                        <div>
-                            <label className="mb-1 block font-bold text-slate-700">调整增量 *</label>
+                        <AdminField
+                            label={<span className="mb-1 block font-bold text-slate-700">调整增量 *</span>}
+                            description={
+                                <>
+                                    <p className="mt-1 text-[10px] text-slate-400">
+                                        保存后会记录调整前后数量、操作人、时间和原因。
+                                    </p>
+                                </>
+                            }
+                        >
                             <AdminInput
                                 type="number"
                                 value={adjustAmount}
@@ -1924,12 +1933,10 @@ export function InventoryWarehouseModule() {
                                 className="w-full rounded-lg border border-slate-300 p-2.5 font-mono font-bold outline-none focus:ring-1 focus:ring-blue-500"
                                 autoFocus
                             />
-                            <p className="mt-1 text-[10px] text-slate-400">
-                                保存后会记录调整前后数量、操作人、时间和原因。
-                            </p>
-                        </div>
-                        <div>
-                            <label className="mb-1 block font-bold text-slate-700">调整原因 *</label>
+                        </AdminField>
+                        <AdminField
+                            label={<span className="mb-1 block font-bold text-slate-700">调整原因 *</span>}
+                        >
                             <AdminInput
                                 type="text"
                                 value={adjustReason}
@@ -1937,7 +1944,7 @@ export function InventoryWarehouseModule() {
                                 placeholder="例如：月底盘点差异、破损报废"
                                 className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                        </div>
+                        </AdminField>
                         {actionError && (
                             <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
                         )}
@@ -1988,15 +1995,16 @@ export function InventoryWarehouseModule() {
                                 <X className="h-5 w-5" />
                             </AdminButton>
                         </div>
-                        <div>
-                            <label className="mb-1 block font-bold text-slate-700">库存点名称 *</label>
+                        <AdminField
+                            label={<span className="mb-1 block font-bold text-slate-700">库存点名称 *</span>}
+                        >
                             <AdminInput
                                 value={locationName}
                                 onChange={event => setLocationName(event.target.value)}
                                 className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
                                 autoFocus
                             />
-                        </div>
+                        </AdminField>
                         <div>
                             <label className="mb-1 block font-bold text-slate-700">说明</label>
                             <AdminTextArea
@@ -2010,10 +2018,13 @@ export function InventoryWarehouseModule() {
                         {editingLocation &&
                             stockList.some(stock => stock.locationId === editingLocation.id) &&
                             locations.length > 1 && (
-                                <div>
-                                    <label className="mb-1 block font-bold text-slate-700">
-                                        删除时库存迁移至
-                                    </label>
+                                <AdminField
+                                    label={
+                                        <span className="mb-1 block font-bold text-slate-700">
+                                            删除时库存迁移至
+                                        </span>
+                                    }
+                                >
                                     <AdminSelect
                                         value={transferToLocationId}
                                         onChange={event => setTransferToLocationId(event.target.value)}
@@ -2028,7 +2039,7 @@ export function InventoryWarehouseModule() {
                                                 </option>
                                             ))}
                                     </AdminSelect>
-                                </div>
+                                </AdminField>
                             )}
                         {actionError && (
                             <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
@@ -2792,8 +2803,7 @@ function InventoryLotTransferDialog({
                         <X className="h-5 w-5 text-slate-400" />
                     </AdminButton>
                 </div>
-                <label className="block font-bold text-slate-600">
-                    目标仓库 *
+                <AdminField className="block font-bold text-slate-600" label="目标仓库 *">
                     <AdminSelect
                         value={draft.targetStockLocationId}
                         onChange={event => onChange({ ...draft, targetStockLocationId: event.target.value })}
@@ -2807,7 +2817,7 @@ function InventoryLotTransferDialog({
                                 </option>
                             ))}
                     </AdminSelect>
-                </label>
+                </AdminField>
                 <InventoryLotField
                     label="转仓数量 *"
                     type="number"
@@ -2891,8 +2901,7 @@ export function InventoryLotDialog({
                     </AdminButton>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="font-bold text-slate-600">
-                        SKU *
+                    <AdminField className="font-bold text-slate-600" label="SKU *">
                         <AdminSelect
                             value={draft.productVariantId}
                             onChange={event => {
@@ -2913,9 +2922,8 @@ export function InventoryLotDialog({
                                 </option>
                             ))}
                         </AdminSelect>
-                    </label>
-                    <label className="font-bold text-slate-600">
-                        库存点 *
+                    </AdminField>
+                    <AdminField className="font-bold text-slate-600" label="库存点 *">
                         <AdminSelect
                             value={draft.stockLocationId}
                             onChange={event => update({ stockLocationId: event.target.value })}
@@ -2928,7 +2936,7 @@ export function InventoryLotDialog({
                                 </option>
                             ))}
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                     <InventoryLotField
                         label="批次号 *"
                         value={draft.lotCode}
@@ -3004,15 +3012,14 @@ function InventoryLotField({
     onChange: (value: string) => void;
 }) {
     return (
-        <label className="font-bold text-slate-600">
-            {label}
+        <AdminField className="font-bold text-slate-600" label={label}>
             <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:ring-1 focus:ring-blue-500"
             />
-        </label>
+        </AdminField>
     );
 }
 

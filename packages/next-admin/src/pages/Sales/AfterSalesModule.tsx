@@ -19,6 +19,7 @@ import { getSystemLabel } from '../../../../common/src/display-localization';
 import { ADMIN_API_URL } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
@@ -1071,8 +1072,10 @@ export function AfterSalesModule() {
                                                         <div className="sm:col-span-2 text-xs font-semibold text-slate-900">
                                                             {item.productName} · 退回 {item.quantity}
                                                         </div>
-                                                        <label className="text-[11px] text-slate-600">
-                                                            合格入库
+                                                        <AdminField
+                                                            className="text-[11px] text-slate-600"
+                                                            label="合格入库"
+                                                        >
                                                             <AdminInput
                                                                 type="number"
                                                                 min={0}
@@ -1091,9 +1094,11 @@ export function AfterSalesModule() {
                                                                 }
                                                                 className="mt-1 w-full rounded-md border border-slate-300 p-2"
                                                             />
-                                                        </label>
-                                                        <label className="text-[11px] text-slate-600">
-                                                            拒收/报损
+                                                        </AdminField>
+                                                        <AdminField
+                                                            className="text-[11px] text-slate-600"
+                                                            label="拒收/报损"
+                                                        >
                                                             <AdminInput
                                                                 type="number"
                                                                 min={0}
@@ -1112,11 +1117,13 @@ export function AfterSalesModule() {
                                                                 }
                                                                 className="mt-1 w-full rounded-md border border-slate-300 p-2"
                                                             />
-                                                        </label>
+                                                        </AdminField>
                                                         {(draft?.acceptedQuantity ?? 0) > 0 && (
                                                             <>
-                                                                <label className="text-[11px] text-slate-600">
-                                                                    入库仓库
+                                                                <AdminField
+                                                                    className="text-[11px] text-slate-600"
+                                                                    label="入库仓库"
+                                                                >
                                                                     <AdminSelect
                                                                         value={draft?.stockLocationId ?? ''}
                                                                         onChange={event =>
@@ -1144,9 +1151,11 @@ export function AfterSalesModule() {
                                                                             </option>
                                                                         ))}
                                                                     </AdminSelect>
-                                                                </label>
-                                                                <label className="text-[11px] text-slate-600">
-                                                                    退货批次号
+                                                                </AdminField>
+                                                                <AdminField
+                                                                    className="text-[11px] text-slate-600"
+                                                                    label="退货批次号"
+                                                                >
                                                                     <AdminInput
                                                                         value={draft?.lotCode ?? ''}
                                                                         onChange={event =>
@@ -1161,7 +1170,7 @@ export function AfterSalesModule() {
                                                                         }
                                                                         className="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono"
                                                                     />
-                                                                </label>
+                                                                </AdminField>
                                                             </>
                                                         )}
                                                     </div>
@@ -1222,15 +1231,17 @@ export function AfterSalesModule() {
                                                     </AdminButton>
                                                 )}
                                             </WorkflowTextArea>
-                                            <label className="block text-[11px] text-slate-600">
-                                                送达凭证引用
+                                            <AdminField
+                                                className="block text-[11px] text-slate-600"
+                                                label="送达凭证引用"
+                                            >
                                                 <AdminInput
                                                     value={workflowProof}
                                                     onChange={event => setWorkflowProof(event.target.value)}
                                                     placeholder="签收单、客服确认号或承运商凭证"
                                                     className="mt-1 w-full rounded-md border border-slate-300 p-2"
                                                 />
-                                            </label>
+                                            </AdminField>
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => void handleReplacement('DELIVERED')}
@@ -1492,22 +1503,20 @@ function ReplacementFields({
 }) {
     return (
         <div className="grid gap-2 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-2">
-            <label className="text-[11px] text-slate-600">
-                承运商
+            <AdminField className="text-[11px] text-slate-600" label="承运商">
                 <AdminInput
                     value={carrier}
                     onChange={event => onCarrierChange(event.target.value)}
                     className="mt-1 w-full rounded-md border border-slate-300 p-2"
                 />
-            </label>
-            <label className="text-[11px] text-slate-600">
-                运单号
+            </AdminField>
+            <AdminField className="text-[11px] text-slate-600" label="运单号">
                 <AdminInput
                     value={trackingCode}
                     onChange={event => onTrackingChange(event.target.value)}
                     className="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono"
                 />
-            </label>
+            </AdminField>
             <label className="text-[11px] text-slate-600 sm:col-span-2">
                 发货说明
                 <AdminTextArea

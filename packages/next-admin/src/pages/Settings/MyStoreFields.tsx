@@ -1,4 +1,5 @@
 import { AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { inputClass } from './settings-ui';
 export function FieldInput({
     label,
@@ -12,15 +13,21 @@ export function FieldInput({
     type?: string;
 }) {
     return (
-        <label className="text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className={inputClass}
             />
-        </label>
+        </AdminField>
     );
 }
 

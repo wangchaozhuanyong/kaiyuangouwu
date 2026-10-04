@@ -22,6 +22,7 @@ import { systemFieldDisplayLabel } from '../../../../common/src/system-display-l
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -843,14 +844,15 @@ export function AssetsModule() {
                                     <File className="h-16 w-16 text-slate-400" />
                                 )}
                             </div>
-                            <div>
-                                <label className="mb-1 block font-bold text-slate-700">素材名称</label>
+                            <AdminField
+                                label={<span className="mb-1 block font-bold text-slate-700">素材名称</span>}
+                            >
                                 <AdminInput
                                     value={editName}
                                     onChange={event => setEditName(event.target.value)}
                                     className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                            </div>
+                            </AdminField>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="mb-1 block font-bold text-slate-700">尺寸</label>

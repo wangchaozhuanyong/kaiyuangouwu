@@ -1,4 +1,5 @@
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import {
@@ -523,15 +524,21 @@ function DateField({
     onChange: (value: string) => void;
 }) {
     return (
-        <label className="space-y-1 text-[11px] font-bold text-slate-600">
-            <span>{label}</span>
+        <AdminField
+            className="space-y-1 text-[11px] font-bold text-slate-600"
+            label={
+                <>
+                    <span>{label}</span>
+                </>
+            }
+        >
             <AdminInput
                 type="date"
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="block h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
-        </label>
+        </AdminField>
     );
 }
 

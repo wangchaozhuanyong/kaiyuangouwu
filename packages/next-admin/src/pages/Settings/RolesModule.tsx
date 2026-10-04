@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { logoutAdministrator, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -1300,10 +1301,16 @@ function ModalActions({
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <AdminField
+            className="block text-xs font-bold text-slate-700"
+            label={
+                <>
+                    <span className="mb-1.5 block">{label}</span>
+                </>
+            }
+        >
             {children}
-        </label>
+        </AdminField>
     );
 }
 function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {

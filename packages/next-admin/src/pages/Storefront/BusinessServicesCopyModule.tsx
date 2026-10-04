@@ -4,6 +4,7 @@ import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { AssetPicker } from './storefront-asset-picker';
@@ -493,10 +494,9 @@ function getTranslation(block: StorefrontContentBlock, languageCode: Language) {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            {label}
+        <AdminField className="block text-xs font-bold text-slate-700" label={label}>
             <span className="mt-1.5 block">{children}</span>
-        </label>
+        </AdminField>
     );
 }
 

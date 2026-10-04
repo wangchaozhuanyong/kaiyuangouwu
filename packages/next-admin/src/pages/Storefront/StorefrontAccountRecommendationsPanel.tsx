@@ -6,6 +6,7 @@ import {
     type AccountRecommendationSettings,
 } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { errorText } from './storefront-content-utils';
 
@@ -72,8 +73,7 @@ export function StorefrontAccountRecommendationsPanel({
                     显示账户推荐
                 </label>
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-xs font-medium text-slate-700">
-                        中文推荐标题
+                    <AdminField className="text-xs font-medium text-slate-700" label="中文推荐标题">
                         <AdminInput
                             required
                             maxLength={80}
@@ -81,9 +81,8 @@ export function StorefrontAccountRecommendationsPanel({
                             value={draft.titleZh}
                             onChange={event => setDraft({ ...draft, titleZh: event.target.value })}
                         />
-                    </label>
-                    <label className="text-xs font-medium text-slate-700">
-                        英文推荐标题
+                    </AdminField>
+                    <AdminField className="text-xs font-medium text-slate-700" label="英文推荐标题">
                         <AdminInput
                             required
                             maxLength={80}
@@ -91,10 +90,9 @@ export function StorefrontAccountRecommendationsPanel({
                             value={draft.titleEn}
                             onChange={event => setDraft({ ...draft, titleEn: event.target.value })}
                         />
-                    </label>
+                    </AdminField>
                 </div>
-                <label className="block text-xs font-medium text-slate-700">
-                    推荐展示数量
+                <AdminField className="block text-xs font-medium text-slate-700" label="推荐展示数量">
                     <AdminInput
                         type="number"
                         required
@@ -105,7 +103,7 @@ export function StorefrontAccountRecommendationsPanel({
                         value={limit}
                         onChange={event => setLimit(event.target.value)}
                     />
-                </label>
+                </AdminField>
                 <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-slate-500">
                         {dirty ? '有未保存的更改' : '已与当前店铺设置同步'}

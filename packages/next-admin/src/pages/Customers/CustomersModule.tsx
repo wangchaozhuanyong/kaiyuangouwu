@@ -1,5 +1,6 @@
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
@@ -1741,8 +1742,7 @@ function CustomerOperationsPanel({
             {showCreate && (
                 <div className="mt-4 grid gap-2 rounded-lg border border-blue-200 bg-white p-3 sm:grid-cols-2">
                     <TextInput label="跟进标题" value={title} onChange={setTitle} />
-                    <label className="text-xs font-bold text-slate-700">
-                        优先级
+                    <AdminField className="text-xs font-bold text-slate-700" label="优先级">
                         <AdminSelect
                             value={priority}
                             onChange={event => setPriority(event.target.value)}
@@ -1752,16 +1752,15 @@ function CustomerOperationsPanel({
                             <option value="P2">P2 普通</option>
                             <option value="P3">P3 低优先</option>
                         </AdminSelect>
-                    </label>
-                    <label className="text-xs font-bold text-slate-700">
-                        跟进时间
+                    </AdminField>
+                    <AdminField className="text-xs font-bold text-slate-700" label="跟进时间">
                         <AdminInput
                             type="datetime-local"
                             value={dueAt}
                             onChange={event => setDueAt(event.target.value)}
                             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-xs font-normal"
                         />
-                    </label>
+                    </AdminField>
                     <label className="text-xs font-bold text-slate-700 sm:col-span-2">
                         跟进说明
                         <AdminTextArea
@@ -1871,8 +1870,10 @@ function CustomerOperationsPanel({
                         {actionDraft?.id === item.id && (
                             <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
                                 {actionDraft.action === 'COMPLETE' && (
-                                    <label className="text-[10px] font-bold text-slate-600">
-                                        跟进结果
+                                    <AdminField
+                                        className="text-[10px] font-bold text-slate-600"
+                                        label="跟进结果"
+                                    >
                                         <AdminSelect
                                             value={actionDraft.outcomeCode}
                                             onChange={event =>
@@ -1889,11 +1890,13 @@ function CustomerOperationsPanel({
                                             <option value="DO_NOT_CONTACT">客户要求停止联系</option>
                                             <option value="NOT_NEEDED">无需继续跟进</option>
                                         </AdminSelect>
-                                    </label>
+                                    </AdminField>
                                 )}
                                 {actionDraft.action === 'RESCHEDULE' && (
-                                    <label className="text-[10px] font-bold text-slate-600">
-                                        新的跟进时间
+                                    <AdminField
+                                        className="text-[10px] font-bold text-slate-600"
+                                        label="新的跟进时间"
+                                    >
                                         <AdminInput
                                             type="datetime-local"
                                             value={actionDraft.dueAt}
@@ -1902,7 +1905,7 @@ function CustomerOperationsPanel({
                                             }
                                             className="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-xs font-normal"
                                         />
-                                    </label>
+                                    </AdminField>
                                 )}
                                 <label className="text-[10px] font-bold text-slate-600 sm:col-span-2">
                                     操作说明
@@ -2051,8 +2054,7 @@ function CustomerAddressEditor({
                     value={form.company}
                     onChange={value => setForm({ ...form, company: value })}
                 />
-                <label className="text-xs font-bold text-slate-700">
-                    国家或地区 *
+                <AdminField className="text-xs font-bold text-slate-700" label="国家或地区 *">
                     <AdminSelect
                         value={form.countryCode}
                         onChange={event => setForm({ ...form, countryCode: event.target.value })}
@@ -2066,7 +2068,7 @@ function CustomerAddressEditor({
                             </option>
                         ))}
                     </AdminSelect>
-                </label>
+                </AdminField>
                 <div className="sm:col-span-2">
                     <TextInput
                         label="详细地址 *"
@@ -2389,8 +2391,7 @@ export function GroupManager({
                 {deleting && (
                     <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
                         <p>确认删除分组“{deleting.name}”？客户不会被删除。</p>
-                        <label className="mt-3 block font-bold">
-                            当前管理员密码 *
+                        <AdminField className="mt-3 block font-bold" label="当前管理员密码 *">
                             <AdminInput
                                 type="password"
                                 autoComplete="current-password"
@@ -2399,7 +2400,7 @@ export function GroupManager({
                                 placeholder="输入密码确认本人操作"
                                 className="mt-1.5 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 font-normal text-slate-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
                             />
-                        </label>
+                        </AdminField>
                         <div className="mt-2 flex justify-end gap-2">
                             <AdminButton
                                 type="button"
@@ -2447,15 +2448,14 @@ function TextInput({
     type?: string;
 }) {
     return (
-        <label className="block text-[11px] font-bold text-slate-600">
-            {label}
+        <AdminField className="block text-[11px] font-bold text-slate-600" label={label}>
             <AdminInput
                 type={type}
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-normal text-slate-900 outline-none focus:border-blue-500"
             />
-        </label>
+        </AdminField>
     );
 }
 function Field({ label, value }: { label: string; value: string }) {

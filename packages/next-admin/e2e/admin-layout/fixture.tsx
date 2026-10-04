@@ -39,11 +39,13 @@ import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessS
 import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
 import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
+import { FieldLayoutFixture } from './field-layout-fixture';
 
 // Synthetic local data only. No HTTP link; every mutation is rejected.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
 const viewLabels: Record<string, string> = {
+    fields: '字段横排验收',
     draft: '草稿订单',
     team: '员工与权限',
     allocation: '商品分配',
@@ -487,6 +489,8 @@ const data: Record<string, unknown> = {
     facets: empty,
     assets: empty,
     productOptionGroups: empty,
+    catalogTemplateLibrary: [],
+    collectionFilters: [],
     productVariants: empty,
     collections: { items: collections, totalItems: collections.length },
     selectedCollections: empty,
@@ -1053,6 +1057,7 @@ function StoreManagementFixture() {
 }
 
 const modules: Record<string, React.ReactNode> = {
+    fields: <FieldLayoutFixture />,
     draft: <DraftOrderEditor />,
     team: <RolesModule />,
     allocation: <StoreAllocationMatrixModule />,

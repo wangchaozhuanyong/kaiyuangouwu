@@ -82,4 +82,21 @@ describe('referral reward calculations', () => {
             }),
         ).toBe('REVERSED');
     });
+
+    it('preserves the available or pending state when a shipping refund claws back nothing', () => {
+        expect(
+            referralRewardStatusAfterClawback({
+                rewardAmount: 1_000,
+                clawedBackAmount: 0,
+                releasedAmount: 1_000,
+            }),
+        ).toBe('AVAILABLE');
+        expect(
+            referralRewardStatusAfterClawback({
+                rewardAmount: 1_000,
+                clawedBackAmount: 0,
+                releasedAmount: 0,
+            }),
+        ).toBe('PENDING');
+    });
 });

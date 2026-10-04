@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from './AdminControls';
+import { AdminField } from './AdminField';
 import { TechnicalDetails } from './TechnicalDetails';
 
 import {
@@ -38,11 +39,11 @@ export function ConfigurableOperationField({
     };
 
     return (
-        <label className="text-xs font-bold text-slate-600">
-            <span>
-                {label}
-                {definition.required ? ' *' : ''}
-            </span>
+        <AdminField
+            label={`${label}${definition.required ? ' *' : ''}`}
+            description={description && <small id={descriptionId}>{description}</small>}
+            className="text-xs font-bold text-slate-600"
+        >
             {type.includes('boolean') && !definition.list ? (
                 <AdminSelect
                     {...commonProps}
@@ -146,12 +147,7 @@ export function ConfigurableOperationField({
                     ))}
                 </div>
             )}
-            {description && (
-                <small id={descriptionId} className="mt-1 block font-normal leading-4 text-slate-400">
-                    {description}
-                </small>
-            )}
-        </label>
+        </AdminField>
     );
 }
 

@@ -25,6 +25,7 @@ import {
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -1141,8 +1142,7 @@ function CarouselInterval({
                 void onSave(Number(draft));
             }}
         >
-            <label className="flex-1 text-xs font-bold text-slate-700">
-                轮播间隔（秒）
+            <AdminField className="flex-1 text-xs font-bold text-slate-700" label="轮播间隔（秒）">
                 <AdminInput
                     type="number"
                     required
@@ -1154,7 +1154,7 @@ function CarouselInterval({
                     onChange={event => setDraft(event.target.value)}
                     className="mt-2 block w-full min-w-24 rounded-lg border border-slate-300 px-3 py-2 font-mono disabled:opacity-50"
                 />
-            </label>
+            </AdminField>
             <AdminButton
                 type="submit"
                 disabled={!canUpdate || pending || draft === String(value)}

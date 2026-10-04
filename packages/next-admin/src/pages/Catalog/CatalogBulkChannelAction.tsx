@@ -2,6 +2,7 @@ import { useMutation } from '@apollo/client/react';
 import { Layers3, Search, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -166,8 +167,7 @@ export function CatalogBulkChannelAction() {
                             {notice && <Notice tone="success" message={notice} />}
                             {error && <Notice tone="error" message={error} />}
                             <div className="grid gap-3 sm:grid-cols-3">
-                                <label className={labelClass}>
-                                    操作
+                                <AdminField className={labelClass} label="操作">
                                     <AdminSelect
                                         aria-label="操作"
                                         value={mode}
@@ -181,9 +181,8 @@ export function CatalogBulkChannelAction() {
                                         <option value="assign">分配到店铺</option>
                                         <option value="remove">从店铺移除</option>
                                     </AdminSelect>
-                                </label>
-                                <label className={labelClass}>
-                                    目标店铺
+                                </AdminField>
+                                <AdminField className={labelClass} label="目标店铺">
                                     <AdminSelect
                                         aria-label="目标店铺"
                                         value={channelId}
@@ -201,10 +200,9 @@ export function CatalogBulkChannelAction() {
                                             </option>
                                         ))}
                                     </AdminSelect>
-                                </label>
+                                </AdminField>
                                 {mode === 'assign' && (
-                                    <label className={labelClass}>
-                                        价格系数
+                                    <AdminField className={labelClass} label="价格系数">
                                         <AdminInput
                                             type="number"
                                             min="0.0001"
@@ -214,7 +212,7 @@ export function CatalogBulkChannelAction() {
                                             onChange={event => setPriceFactor(event.target.value)}
                                             className={inputClass}
                                         />
-                                    </label>
+                                    </AdminField>
                                 )}
                             </div>
                             <p className="text-xs text-slate-500">
