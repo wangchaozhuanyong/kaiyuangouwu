@@ -135,7 +135,7 @@ export function PlatformGovernanceCenter({
     );
     const pendingGovernance =
         query.data?.storeGovernanceChanges.filter(item => item.status === 'PENDING') ?? [];
-    const recentPermissionAudits = query.data?.administratorPermissionAudits.slice(0, 5) ?? [];
+    const permissionAudits = query.data?.administratorPermissionAudits ?? [];
     const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
     const canReadBusinessSettings = hasAnyPermission([
         'ReadSettings',
@@ -326,41 +326,6 @@ export function PlatformGovernanceCenter({
                         </div>
                     </section>
                 )}
-                {recentPermissionAudits.length > 0 && (
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="mb-3">
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                最近权限审计
-                                <FeatureHelpButton topic="settings.team" title="最近权限审计" />
-                            </h2>
-                            <p className="mt-1 text-xs text-slate-500">
-                                这里只显示脱敏摘要，密码、密钥和凭据不会写入记录。
-                            </p>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {recentPermissionAudits.map(entry => (
-                                <div
-                                    key={entry.id}
-                                    className="grid gap-1 py-2 text-xs sm:grid-cols-[180px_1fr_auto] sm:items-center"
-                                >
-                                    <span className="text-slate-500">
-                                        {new Date(entry.createdAt).toLocaleString('zh-CN')}
-                                    </span>
-                                    <span className="font-medium text-slate-800">
-                                        {permissionAuditLabel(entry.action)}
-                                    </span>
-                                    <span
-                                        className={
-                                            entry.result === 'SUCCESS' ? 'text-emerald-700' : 'text-rose-700'
-                                        }
-                                    >
-                                        {entry.result === 'SUCCESS' ? '成功' : '失败'}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                )}
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <StoreSettingsNavigation
                         tab={tab}
@@ -445,6 +410,49 @@ export function PlatformGovernanceCenter({
                         )}
                         {tab === 'CURRENCY' && canReadFinance && <CurrencyAndRatesPanel />}
                         {tab === 'USDT' && canReadFinance && <StoreUsdtPanel />}
+
+                        {tab === 'PERMISSION_AUDITS' && (
+                            <section className="rounded-xl border border-slate-200 bg-white p-4">
+                                <div className="mb-3">
+                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        权限审计记录
+                                        <FeatureHelpButton topic="settings.team" title="权限审计记录" />
+                                    </h2>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        按时间倒序显示近期权限变更及操作结果；密码、密钥和凭据不会写入记录。
+                                    </p>
+                                </div>
+                                <div className="divide-y divide-slate-100" aria-label="权限审计记录列表">
+                                    {permissionAudits.map(entry => (
+                                        <div
+                                            key={entry.id}
+                                            className="grid gap-1 py-2 text-xs sm:grid-cols-[180px_1fr_auto] sm:items-center"
+                                        >
+                                            <span className="text-slate-500">
+                                                {new Date(entry.createdAt).toLocaleString('zh-CN')}
+                                            </span>
+                                            <span className="font-medium text-slate-800">
+                                                {permissionAuditLabel(entry.action)}
+                                            </span>
+                                            <span
+                                                className={
+                                                    entry.result === 'SUCCESS'
+                                                        ? 'text-emerald-700'
+                                                        : 'text-rose-700'
+                                                }
+                                            >
+                                                {entry.result === 'SUCCESS' ? '成功' : '失败'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {permissionAudits.length === 0 && (
+                                        <p className="py-6 text-center text-xs text-slate-500">
+                                            暂无权限审计记录
+                                        </p>
+                                    )}
+                                </div>
+                            </section>
+                        )}
                     </>
                 )}
             </main>

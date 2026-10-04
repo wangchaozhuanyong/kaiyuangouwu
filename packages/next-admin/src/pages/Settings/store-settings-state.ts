@@ -5,7 +5,15 @@ import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-con
 import { STORE_MANAGEMENT_QUERY, type StoreManagementResult } from '../../graphql/management.graphql';
 
 export type StoreSettingsTab =
-    'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT' | 'SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
+    | 'STORES'
+    | 'DOMAINS'
+    | 'SELLERS'
+    | 'PAYMENT'
+    | 'SHIPPING'
+    | 'BUSINESS'
+    | 'CURRENCY'
+    | 'USDT'
+    | 'PERMISSION_AUDITS';
 
 export const STORE_SETTINGS_TABS = {
     stores: 'STORES',
@@ -18,6 +26,7 @@ export const STORE_SETTINGS_TABS = {
     business: 'BUSINESS',
     currency: 'CURRENCY',
     usdt: 'USDT',
+    'permission-audits': 'PERMISSION_AUDITS',
 } as const;
 
 export function useStoreManagementDocument() {
