@@ -140,7 +140,8 @@
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     align-self: start;
-    padding: var(--space-8) var(--space-card);
+    /* The group owns the outline; each button fills its complete grid cell. */
+    overflow: hidden;
     border: var(--skin-card-outline, 0);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
@@ -167,7 +168,7 @@
     gap: 12px;
     min-width: 0;
     min-height: 112px;
-    padding: 18px 0;
+    padding: 18px var(--space-card);
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -257,8 +258,6 @@
     .business-services-workspace .category-client-plugin-group.is-tools {
         grid-column: 1;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        column-gap: 32px;
-        padding-inline: var(--space-24);
     }
 
     .business-services-workspace .is-tools .category-client-plugin + .category-client-plugin {
@@ -287,7 +286,7 @@
         grid-template-columns: var(--services-tool-icon-size, 40px) minmax(0, 1fr) auto;
         gap: 20px;
         min-height: 126px;
-        padding: 24px 0;
+        padding: var(--space-24);
     }
 
     .is-business-services-main .category-client-plugin-icon {
