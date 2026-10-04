@@ -7,45 +7,32 @@ import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity'
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
 import { IcloudAccessCodeService } from '../services/icloud-access-code.service';
-import { IcloudImapSyncService } from '../services/icloud-imap-sync.service';
 import { updateIcloudRecord } from '../services/icloud-record-update';
-import { IcloudAccountStatus, IcloudRelayPluginOptions } from '../types';
+import { IcloudRelayPluginOptions } from '../types';
 
 /**
  * Background job handler for scheduled tasks:
- * 1. Periodic IMAP sync
  * 2. Query code auto-rotation
  * 3. Old email retention/cleanup
  */
 @Injectable()
 export class IcloudJobService implements OnModuleInit {
-    private syncTimer: ReturnType<typeof setInterval> | null = null;
     private codeRotationTimer: ReturnType<typeof setInterval> | null = null;
     private retentionTimer: ReturnType<typeof setInterval> | null = null;
-    private readonly syncIntervalMs: number;
     private readonly retentionDays: number;
 
     constructor(
         private readonly connection: TransactionalConnection,
-        private readonly imapSyncService: IcloudImapSyncService,
         private readonly codeService: IcloudAccessCodeService,
         @Optional()
         @Inject(ICLOUD_RELAY_PLUGIN_OPTIONS)
         private readonly options?: IcloudRelayPluginOptions,
     ) {
-        const syncSeconds = options?.syncIntervalSeconds ?? 120;
-        this.syncIntervalMs = syncSeconds > 0 ? syncSeconds * 1000 : 0;
         this.retentionDays = options?.retentionDays ?? 30;
     }
 
     onModuleInit() {
-        // 1. Start periodic IMAP sync
-        if (this.syncIntervalMs > 0) {
-            Logger.info(`iCloud IMAP 定时同步已启用, 周期: ${this.syncIntervalMs / 1000}s`, loggerCtx);
-            this.syncTimer = setInterval(() => {
-                void this.runImapSync();
-            }, this.syncIntervalMs);
-        }
+        // Mail synchronization is triggered by IMAP IDLE, never a fixed interval.
 
         // 2. Code rotation check every hour
         this.codeRotationTimer = setInterval(
@@ -67,40 +54,8 @@ export class IcloudJobService implements OnModuleInit {
     }
 
     onModuleDestroy() {
-        if (this.syncTimer) clearInterval(this.syncTimer);
         if (this.codeRotationTimer) clearInterval(this.codeRotationTimer);
         if (this.retentionTimer) clearInterval(this.retentionTimer);
-    }
-
-    // ==========================================
-    // Job 1: Periodic IMAP Sync
-    // ==========================================
-    private async runImapSync(): Promise<void> {
-        try {
-            const ctx = RequestContext.empty();
-            const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-            const activeAccounts = await repo.find({
-                where: { status: IcloudAccountStatus.ACTIVE },
-            });
-
-            Logger.verbose(`iCloud 定时同步: 发现 ${activeAccounts.length} 个活跃主邮箱`, loggerCtx);
-
-            for (const account of activeAccounts) {
-                try {
-                    const result = await this.imapSyncService.syncAccount(ctx, account);
-                    if (result.syncedCount > 0) {
-                        Logger.info(
-                            `iCloud 同步 ${account.email}: 新增 ${result.syncedCount} 封邮件`,
-                            loggerCtx,
-                        );
-                    }
-                } catch (err: any) {
-                    Logger.error(`iCloud 同步异常 ${account.email}: ${err.message}`, loggerCtx);
-                }
-            }
-        } catch (err: any) {
-            Logger.error(`iCloud 批量同步任务异常: ${err.message}`, loggerCtx);
-        }
     }
 
     // ==========================================

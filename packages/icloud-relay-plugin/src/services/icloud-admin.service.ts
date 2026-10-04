@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ID, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 
 import { validateIcloudInput } from '../client/admin-validation';
@@ -17,6 +17,7 @@ import {
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudCipherService } from './icloud-cipher.service';
+import { IcloudIdleService } from './icloud-idle.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
 import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
@@ -71,6 +72,7 @@ export class IcloudAdminService {
         private readonly imapSyncService: IcloudImapSyncService,
         private readonly mailHistory: IcloudMailHistoryService,
         private readonly otpExtractor: IcloudOtpExtractorService,
+        @Optional() private readonly idle?: IcloudIdleService,
     ) {}
 
     private validate(input: object): void {
@@ -140,6 +142,7 @@ export class IcloudAdminService {
         });
 
         const saved = await repo.save(account);
+        this.idle?.reconcile(String(saved.id));
         return this.toPrimaryView(await repo.findOneByOrFail({ id: saved.id }), 0);
     }
 
@@ -174,6 +177,8 @@ export class IcloudAdminService {
         if ('codeExpiresAt' in patch) guards.push('masterQueryCode');
         await updateIcloudRecord(repo, account, patch, guards);
         const saved = await repo.findOneByOrFail({ id: account.id });
+        if (['email', 'appPassword', 'status', 'imapHost', 'imapPort'].some(key => key in input))
+            this.idle?.reconcile(String(saved.id));
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const count = await virtualRepo.count({ where: { primaryAccountId: saved.id } });
         return this.toPrimaryView(saved, count);
@@ -182,6 +187,7 @@ export class IcloudAdminService {
     async deletePrimaryAccount(ctx: RequestContext, id: ID): Promise<boolean> {
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         await repo.delete({ id });
+        this.idle?.reconcile(String(id));
         return true;
     }
 
