@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { ExpandIcloudMailBodies1791120600000 } from '../../dev-server/migrations/1791120600000-expand-icloud-mail-bodies';
 import { StorefrontCatalogAccessInterceptor } from '../../store-management-plugin/src/storefront-catalog-access.interceptor';
 import {
     BatchCreateIcloudVirtualEmailsDocument,
@@ -141,6 +142,86 @@ describe('iCloud admin contract persistence', () => {
             syncedCount: 0,
         });
         expect(await outbox.count({ where: { primaryAccountId: String(eventAccount.id) } })).toBe(1);
+    });
+
+    it.skipIf(process.env.DB !== 'mysql')(
+        'widens existing MySQL mail bodies in place and is idempotent',
+        async () => {
+            const runner = server.app.get(TransactionalConnection).rawConnection.createQueryRunner();
+            try {
+                const before = await runner.query(
+                    'SELECT id, bodyHtml, bodyText FROM icloud_received_mail ORDER BY id',
+                );
+                expect(before.length).toBeGreaterThan(0);
+                // Only the isolated fixture database: recreate the legacy column capacity.
+                for (const name of ['bodyHtml', 'bodyText']) {
+                    await runner.query(
+                        `ALTER TABLE \`icloud_received_mail\` MODIFY COLUMN \`${name}\` TEXT NULL`,
+                    );
+                }
+                const oldTable = await runner.getTable('icloud_received_mail');
+                const migration = new ExpandIcloudMailBodies1791120600000();
+                await migration.up(runner);
+                await migration.up(runner);
+                const after = await runner.query(
+                    'SELECT id, bodyHtml, bodyText FROM icloud_received_mail ORDER BY id',
+                );
+                expect(after).toEqual(before);
+                const table = await runner.getTable('icloud_received_mail');
+                for (const name of ['bodyHtml', 'bodyText']) {
+                    expect(table?.findColumnByName(name)).toMatchObject({
+                        type: 'longtext',
+                        isNullable: true,
+                        collation: oldTable?.findColumnByName(name)?.collation,
+                    });
+                }
+            } finally {
+                await runner.release();
+            }
+        },
+    );
+
+    it('stores multi-byte mail bodies above the MySQL TEXT limit without blocking the cursor', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const ctx = RequestContext.empty();
+        const created = await server.app.get(IcloudAdminService).createPrimaryAccount(ctx, {
+            email: 'large-body-fixture@icloud.com',
+            appPassword: 'isolated-test-password',
+        });
+        const primary = connection.getRepository(ctx, IcloudPrimaryAccount);
+        const owner = await primary.findOneByOrFail({ id: created.id });
+        const text = '验'.repeat(23000);
+        const html = `<p>${text}</p>`;
+        expect(Buffer.byteLength(text)).toBeGreaterThan(65535);
+        const source = Buffer.from(
+            'Message-ID: <large-body-fixture@example.test>\r\nFrom: sender@example.test\r\n' +
+                'To: large-body-fixture@icloud.com\r\nSubject: Large body fixture\r\n' +
+                'MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary="body-fixture"\r\n\r\n' +
+                '--body-fixture\r\nContent-Type: text/plain; charset=utf-8\r\n' +
+                `Content-Transfer-Encoding: base64\r\n\r\n${Buffer.from(text).toString('base64')}\r\n` +
+                '--body-fixture\r\nContent-Type: text/html; charset=utf-8\r\n' +
+                `Content-Transfer-Encoding: base64\r\n\r\n${Buffer.from(html).toString('base64')}\r\n` +
+                '--body-fixture--\r\n',
+        );
+        const client = {
+            mailbox: { uidValidity: BigInt(1) },
+            getMailboxLock: () => Promise.resolve({ release: vi.fn() }),
+            async *fetch() {
+                yield await Promise.resolve({ uid: 21, source });
+            },
+        } as unknown as ImapFlow;
+        const sync = server.app.get(IcloudImapSyncService);
+        expect(await sync.syncAccount(ctx, owner, client)).toEqual({ success: true, syncedCount: 1 });
+        const saved = await connection
+            .getRepository(ctx, IcloudReceivedMail)
+            .findOneByOrFail({ primaryAccountId: owner.id });
+        expect(saved.bodyText).toBe(text);
+        expect(saved.bodyHtml).toBe(html);
+        expect((await primary.findOneByOrFail({ id: owner.id })).lastSyncedUid).toBe(21);
+        const events = connection.getRepository(ctx, IcloudMailOutbox);
+        expect(await events.count({ where: { primaryAccountId: String(owner.id) } })).toBe(1);
+        expect(await sync.syncAccount(ctx, owner, client)).toEqual({ success: true, syncedCount: 0 });
+        expect(await events.count({ where: { primaryAccountId: String(owner.id) } })).toBe(1);
     });
 
     async function publicQuery(code: string, headers: Record<string, string> = {}) {
