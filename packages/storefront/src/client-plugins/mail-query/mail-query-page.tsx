@@ -1,5 +1,7 @@
 /* eslint-disable import/order, max-len -- Bilingual copy and clean relative types are intentional. */
+import { ChevronDown, Clipboard, Clock3, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { SubHeader } from '../../storefront-ui/page-shell';
 
 import type { IcloudQueryResult, ShopApi } from '../../api';
 import type { RouteState } from '../../storefront-router';
@@ -89,14 +91,12 @@ export function MailQueryPage({
     api,
     marketCode,
     customerId,
-    brandingName,
     language = 'zh',
     onBack,
     onNavigate,
     initialCode,
 }: Readonly<MailQueryPageProps>) {
     const isZh = language === 'zh';
-    const storeName = brandingName?.trim() || '店铺';
     const storageKey = storageKeyForIdentity(marketCode, customerId);
 
     const [inputCode, setInputCode] = useState('');
@@ -164,6 +164,8 @@ export function MailQueryPage({
     const handleClear = useCallback(() => {
         setInputCode('');
         setToast(null);
+        if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+        setShakeInput(false);
         inputRef.current?.focus();
     }, []);
 
@@ -210,6 +212,8 @@ export function MailQueryPage({
             activeRequestRef.current = controller;
             setLoading(true);
             setToast(null);
+            if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+            setShakeInput(false);
             setRefreshError('');
             setInputCode(code);
 
@@ -484,590 +488,527 @@ export function MailQueryPage({
         : mails;
 
     return (
-        <div className="mail-query-page">
-            {/* Top Nav */}
-            <header className="top-nav">
-                <div className="top-nav-inner">
-                    <button
-                        type="button"
-                        className="nav-back-link"
-                        id="navBackLink"
-                        onClick={handleBackClick}
-                    >
-                        <span>←</span> {isZh ? '返回商城服务' : 'Back to Services'}
-                    </button>
-                    <div className="nav-status">
-                        <span className="status-dot"></span>
-                        <span>{isZh ? '邮件查询服务' : 'Mail Query Service'}</span>
-                    </div>
-                </div>
-            </header>
-
-            <main className="container">
-                {/* Hero Header */}
-                <section className="hero-section">
-                    <div className="hero-badge">
-                        ⚡ <span data-portal-store-name>{storeName}</span> ·{' '}
-                        {isZh ? '邮件中继服务' : 'Mail Relay'}
-                    </div>
-                    <h1 className="hero-title">{isZh ? '邮件验证码实时查询中心' : 'Mail Query Center'}</h1>
-                    <p className="hero-subtitle">
-                        {isZh
-                            ? '输入专属查询码，实时查收验证码'
-                            : 'Enter your exclusive query code to receive incoming verification codes'}
-                    </p>
-                </section>
-
-                {/* Query Form Card */}
-                {!result ? (
-                    <>
-                        <div className="query-card" id="queryCard">
-                            <div className="card-label">
-                                <span>🔑 {isZh ? '专属查询码' : 'Query Code'}</span>
-                                <span className="card-label-hint">
+        <main className="page subpage mail-query-page" aria-label={isZh ? '邮箱查询服务' : 'Email lookup'}>
+            <SubHeader
+                title={isZh ? '邮箱查询服务' : 'Email lookup'}
+                language={language}
+                onBack={handleBackClick}
+            />
+            <div className="subpage-body mail-query-layout">
+                <div className="mail-query-workspace">
+                    {/* Query Form Card */}
+                    {!result ? (
+                        <>
+                            <div className="query-card" id="queryCard">
+                                <label className="card-label" htmlFor="codeInput">
+                                    {isZh ? '专属查询码' : 'Query code'}
+                                </label>
+                                <p className="query-description" id="queryDescription">
                                     {isZh
-                                        ? '例: BUY-XXXX-XXXX 或 主查询码'
-                                        : 'e.g. BUY-XXXX-XXXX or Master Code'}
-                                </span>
-                            </div>
-                            <div
-                                className={`input-wrapper ${shakeInput ? 'has-error' : ''}`}
-                                id="inputWrapper"
-                            >
-                                <span className="input-icon">🔍</span>
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    id="codeInput"
-                                    className="code-input"
-                                    placeholder={isZh ? '输入查询码或点击右侧粘贴' : 'Enter code or paste'}
-                                    maxLength={25}
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={inputCode}
-                                    readOnly={loading}
-                                    onChange={e => {
-                                        setInputCode(cleanCode(e.target.value));
-                                        setToast(null);
-                                        setShakeInput(false);
-                                    }}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            void executeQuery(inputCode);
-                                        }
-                                    }}
-                                />
-                                <div className="input-actions">
-                                    {inputCode ? (
-                                        <button
-                                            type="button"
-                                            className="clear-btn"
-                                            id="clearBtn"
-                                            title={isZh ? '清空' : 'Clear'}
-                                            onClick={handleClear}
-                                        >
-                                            ✕
-                                        </button>
-                                    ) : null}
-                                    <button
-                                        type="button"
-                                        className="paste-btn"
-                                        id="pasteBtn"
-                                        title={isZh ? '从剪贴板粘贴' : 'Paste from clipboard'}
-                                        onClick={() => {
-                                            void handlePaste();
-                                        }}
+                                        ? '输入查询码，查看邮件和验证码。'
+                                        : 'Enter your query code to view emails and verification codes.'}
+                                </p>
+                                <div className="mail-query-controls">
+                                    <div
+                                        className={`input-wrapper ${shakeInput ? 'has-error' : ''}`}
+                                        id="inputWrapper"
                                     >
-                                        <span>📋</span> {isZh ? '粘贴' : 'Paste'}
-                                    </button>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                className="query-btn"
-                                id="queryBtn"
-                                disabled={loading}
-                                onClick={() => {
-                                    void executeQuery(inputCode);
-                                }}
-                            >
-                                {loading ? (
-                                    <>
-                                        <span className="btn-spinner"></span>
-                                        <span>{isZh ? '正在查询邮件...' : 'Querying mails...'}</span>
-                                    </>
-                                ) : (
-                                    <span>{isZh ? '查 询 邮 件' : 'Query Mails'}</span>
-                                )}
-                            </button>
-
-                            {/* Toast Message */}
-                            {toast ? (
-                                <div className={`toast-msg ${toast.type}`} id="msgBox">
-                                    <div className="msg-header">{toast.title}</div>
-                                    <div className="msg-body">{toast.message}</div>
-                                    {toast.action ? (
-                                        <div className="msg-actions">
-                                            {toast.action === 'paste' ? (
-                                                <button
-                                                    type="button"
-                                                    className="msg-action-btn btn-secondary"
-                                                    onClick={() => {
-                                                        void handlePaste();
-                                                    }}
-                                                >
-                                                    📋 {isZh ? '从剪贴板粘贴' : 'Paste from clipboard'}
-                                                </button>
-                                            ) : null}
-                                            {toast.action === 'clear' ? (
-                                                <button
-                                                    type="button"
-                                                    className="msg-action-btn btn-secondary"
-                                                    onClick={handleClear}
-                                                >
-                                                    {isZh ? '清空重输' : 'Clear'}
-                                                </button>
-                                            ) : null}
-                                            {toast.action === 'retry' ? (
-                                                <button
-                                                    type="button"
-                                                    className="msg-action-btn btn-secondary"
-                                                    onClick={() => {
-                                                        void executeQuery(inputCode);
-                                                    }}
-                                                >
-                                                    🔄 {isZh ? '立即重试' : 'Retry'}
-                                                </button>
-                                            ) : null}
+                                        <Search className="input-icon" aria-hidden="true" />
+                                        <input
+                                            ref={inputRef}
+                                            type="text"
+                                            id="codeInput"
+                                            className="code-input"
+                                            placeholder={isZh ? '输入或粘贴查询码' : 'Enter query code'}
+                                            aria-describedby="queryDescription"
+                                            aria-invalid={toast?.type === 'error' || undefined}
+                                            maxLength={25}
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            value={inputCode}
+                                            readOnly={loading}
+                                            onChange={e => {
+                                                setInputCode(cleanCode(e.target.value));
+                                                setToast(null);
+                                                setShakeInput(false);
+                                            }}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    void executeQuery(inputCode);
+                                                }
+                                            }}
+                                        />
+                                        <div className="input-actions">
+                                            <button
+                                                type="button"
+                                                className="paste-btn"
+                                                id="pasteBtn"
+                                                title={isZh ? '从剪贴板粘贴' : 'Paste from clipboard'}
+                                                onClick={() => {
+                                                    void handlePaste();
+                                                }}
+                                            >
+                                                <Clipboard aria-hidden="true" />
+                                                <span>{isZh ? '粘贴' : 'Paste'}</span>
+                                            </button>
                                         </div>
-                                    ) : null}
-                                </div>
-                            ) : null}
-                        </div>
-
-                        {/* Recent Queries Section */}
-                        {recentQueries.length > 0 ? (
-                            <section className="recent-section" id="recentSection">
-                                <div className="section-header">
-                                    <div className="section-title">
-                                        <span>🕒</span> {isZh ? '最近查询记录' : 'Recent Queries'}
                                     </div>
                                     <button
                                         type="button"
-                                        className="clear-all-link"
-                                        id="clearAllHistoryBtn"
-                                        onClick={handleClearAllHistory}
+                                        className="query-btn"
+                                        id="queryBtn"
+                                        disabled={loading}
+                                        onClick={() => {
+                                            void executeQuery(inputCode);
+                                        }}
                                     >
-                                        {isZh ? '清空记录' : 'Clear all'}
+                                        {loading ? (
+                                            <>
+                                                <span className="btn-spinner"></span>
+                                                <span>{isZh ? '正在查询邮件...' : 'Querying mails...'}</span>
+                                            </>
+                                        ) : (
+                                            <span>{isZh ? '查询邮件' : 'Look up emails'}</span>
+                                        )}
                                     </button>
                                 </div>
-                                <div className="recent-list" id="recentList">
-                                    {recentQueries.map(item => (
-                                        <div
-                                            key={item.code}
-                                            className="recent-item"
-                                            data-code={item.code}
-                                            onClick={() => {
-                                                setInputCode(item.code);
-                                                void executeQuery(item.code);
-                                            }}
-                                        >
-                                            <div className="recent-left">
-                                                <span className="recent-code">{item.code}</span>
-                                                {item.aliasEmail ? (
-                                                    <span className="recent-alias">{item.aliasEmail}</span>
+                                {/* Toast Message */}
+                                {toast ? (
+                                    <div className={`toast-msg ${toast.type}`} id="msgBox" role="status">
+                                        <div className="msg-header">{toast.title}</div>
+                                        <div className="msg-body">{toast.message}</div>
+                                        {toast.action ? (
+                                            <div className="msg-actions">
+                                                {toast.action === 'paste' ? (
+                                                    <button
+                                                        type="button"
+                                                        className="msg-action-btn btn-secondary"
+                                                        onClick={() => {
+                                                            void handlePaste();
+                                                        }}
+                                                    >
+                                                        📋 {isZh ? '从剪贴板粘贴' : 'Paste from clipboard'}
+                                                    </button>
+                                                ) : null}
+                                                {toast.action === 'clear' ? (
+                                                    <button
+                                                        type="button"
+                                                        className="msg-action-btn btn-secondary"
+                                                        onClick={handleClear}
+                                                    >
+                                                        {isZh ? '清空重输' : 'Clear'}
+                                                    </button>
+                                                ) : null}
+                                                {toast.action === 'retry' ? (
+                                                    <button
+                                                        type="button"
+                                                        className="msg-action-btn btn-secondary"
+                                                        onClick={() => {
+                                                            void executeQuery(inputCode);
+                                                        }}
+                                                    >
+                                                        🔄 {isZh ? '立即重试' : 'Retry'}
+                                                    </button>
                                                 ) : null}
                                             </div>
-                                            <div className="recent-right">
-                                                <span className="recent-time">
-                                                    {formatTime(item.updatedAt, isZh)}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    className="recent-del-btn"
-                                                    title={isZh ? '删除记录' : 'Delete'}
-                                                    onClick={e => handleDeleteRecent(e, item.code)}
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        ) : null}
-                    </>
-                ) : (
-                    /* Results View */
-                    <section className="result-section" id="resultSection">
-                        <div className="result-nav-bar">
-                            <button
-                                type="button"
-                                className="back-query-btn"
-                                id="backQueryBtn"
-                                onClick={handleBackToQueryForm}
-                            >
-                                <span>←</span> {isZh ? '重新查询' : 'New Query'}
-                            </button>
-                            <div className="auto-refresh-box">
-                                <span>{isZh ? '自动刷新' : 'Auto Refresh'}</span>
-                                <label className="switch-toggle">
-                                    <input
-                                        type="checkbox"
-                                        id="autoRefreshToggle"
-                                        checked={autoRefresh}
-                                        onChange={e => setAutoRefresh(e.target.checked)}
-                                    />
-                                    <span className="slider"></span>
-                                </label>
-                                <span
-                                    id="countdownText"
-                                    style={{
-                                        fontSize: 'var(--type-meta-size)',
-                                        lineHeight: 'var(--type-meta-leading)',
-                                        color: 'var(--primary)',
-                                        minWidth: 24,
-                                    }}
-                                >
-                                    {autoRefresh ? `${countdown}s` : ''}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Summary Card */}
-                        <div className="result-summary-card">
-                            <div className="summary-header">
-                                <div className="summary-email" id="summaryEmail">
-                                    <span>
-                                        {result.aliasEmail ||
-                                            result.primaryEmail ||
-                                            (isZh ? 'iCloud 邮箱' : 'iCloud Mail')}
-                                    </span>
-                                    {result.targetType === 'PRIMARY' ? (
-                                        <span className="code-type-pill pill-master">
-                                            {isZh ? '主管理码' : 'Master'}
-                                        </span>
-                                    ) : (
-                                        <span className="code-type-pill pill-buyer">
-                                            {isZh ? '买家专属' : 'Buyer'}
-                                        </span>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    className="refresh-now-btn"
-                                    id="refreshNowBtn"
-                                    disabled={refreshing}
-                                    onClick={() => {
-                                        void handleRefresh();
-                                    }}
-                                >
-                                    <span>🔄</span>{' '}
-                                    {refreshing
-                                        ? isZh
-                                            ? '正在刷新...'
-                                            : 'Refreshing...'
-                                        : isZh
-                                          ? '立即刷新'
-                                          : 'Refresh'}
-                                </button>
-                            </div>
-                            <div className="summary-stats">
-                                <div className="summary-stat-item">
-                                    <span>📧</span>
-                                    <span id="totalMailCount">
-                                        {result.targetType === 'PRIMARY'
-                                            ? isZh
-                                                ? `共 ${result.totalEmails || 0} 封邮件`
-                                                : `Total ${result.totalEmails || 0} mails`
-                                            : isZh
-                                              ? `最近 ${result.totalEmails || 0} 封邮件，最多显示 5 封`
-                                              : `Recent ${result.totalEmails || 0} mails (up to 5)`}
-                                    </span>
-                                </div>
-                                {result.remainingDays != null ? (
-                                    <div className="summary-stat-item" id="remainingDaysBox">
-                                        <span>⏳</span>
-                                        <span id="remainingDaysText">
-                                            {isZh
-                                                ? `有效期剩余 ${result.remainingDays} 天`
-                                                : `${result.remainingDays} days remaining`}
-                                        </span>
+                                        ) : null}
                                     </div>
                                 ) : null}
                             </div>
-                        </div>
 
-                        {/* Refresh Error Banner */}
-                        {refreshError ? (
-                            <div
-                                id="refreshStatus"
-                                className="toast-msg error"
-                                role="status"
-                                aria-live="polite"
-                                style={{ marginBottom: 16 }}
-                            >
-                                {refreshError}
-                            </div>
-                        ) : null}
-
-                        {/* Filter Bar (Master query mode) */}
-                        {virtualList.length > 0 ? (
-                            <div className="filter-wrapper" id="filterWrapper">
-                                <select
-                                    id="filterSelect"
-                                    className="filter-select"
-                                    value={filterVirtualId}
-                                    onChange={e => setFilterVirtualId(e.target.value)}
-                                >
-                                    <option value="">
-                                        {isZh
-                                            ? `全部虚拟邮箱 (${mails.length} 封邮件)`
-                                            : `All Virtual Mails (${mails.length})`}
-                                    </option>
-                                    {virtualList.map(v => (
-                                        <option key={v.id} value={String(v.id)}>
-                                            {v.aliasEmail} {v.note ? `(${v.note})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        ) : null}
-
-                        {/* Mail Cards List */}
-                        <div className="mail-list" id="mailList">
-                            {filteredMails.length === 0 ? (
-                                <div className="empty-mail-box">
-                                    <div className="empty-icon">📭</div>
-                                    <div className="empty-title">
-                                        {isZh ? '暂未查询到此邮箱的邮件' : 'No mails found for this address'}
-                                    </div>
-                                    <div className="empty-desc">
-                                        {isZh
-                                            ? '请稍后刷新；如确认邮箱已有邮件，请联系商家核对同步与邮件归属。'
-                                            : 'Please refresh shortly. If you are sure mails were sent, contact support.'}
-                                    </div>
-                                    <div
-                                        style={{
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            gap: 10,
-                                            marginTop: 16,
-                                            flexWrap: 'wrap',
-                                        }}
-                                    >
+                            {/* Recent Queries Section */}
+                            {recentQueries.length > 0 ? (
+                                <section className="recent-section" id="recentSection">
+                                    <div className="mail-query-section-header">
+                                        <div className="mail-query-section-title">
+                                            <Clock3 aria-hidden="true" />{' '}
+                                            {isZh ? '最近查询记录' : 'Recent Queries'}
+                                        </div>
                                         <button
                                             type="button"
-                                            className="refresh-now-btn"
-                                            id="emptyRefreshBtn"
-                                            style={{ margin: 0 }}
-                                            onClick={() => {
-                                                void handleRefresh();
+                                            className="clear-all-link"
+                                            id="clearAllHistoryBtn"
+                                            onClick={handleClearAllHistory}
+                                        >
+                                            {isZh ? '清空记录' : 'Clear all'}
+                                        </button>
+                                    </div>
+                                    <div className="recent-list" id="recentList">
+                                        {recentQueries.map(item => (
+                                            <div
+                                                key={item.code}
+                                                className="recent-item"
+                                                data-code={item.code}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    className="recent-open"
+                                                    disabled={loading}
+                                                    onClick={() => {
+                                                        setInputCode(item.code);
+                                                        void executeQuery(item.code);
+                                                    }}
+                                                >
+                                                    <span className="recent-code">{item.code}</span>
+                                                    <span className="recent-meta">
+                                                        {item.aliasEmail ? (
+                                                            <span className="recent-alias">
+                                                                {item.aliasEmail}
+                                                            </span>
+                                                        ) : null}
+                                                        <span className="recent-time">
+                                                            {formatTime(item.updatedAt, isZh)}
+                                                        </span>
+                                                    </span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="recent-del-btn"
+                                                    aria-label={isZh ? '删除记录' : 'Delete record'}
+                                                    onClick={e => handleDeleteRecent(e, item.code)}
+                                                >
+                                                    <X aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
+                        </>
+                    ) : (
+                        /* Results View */
+                        <section className="result-section" id="resultSection">
+                            <div className="result-nav-bar">
+                                <button
+                                    type="button"
+                                    className="back-query-btn"
+                                    id="backQueryBtn"
+                                    onClick={handleBackToQueryForm}
+                                >
+                                    <span>←</span> {isZh ? '重新查询' : 'New Query'}
+                                </button>
+                                <div className="auto-refresh-box">
+                                    <span>{isZh ? '自动刷新' : 'Auto Refresh'}</span>
+                                    <label className="switch-toggle">
+                                        <input
+                                            type="checkbox"
+                                            id="autoRefreshToggle"
+                                            checked={autoRefresh}
+                                            onChange={e => setAutoRefresh(e.target.checked)}
+                                        />
+                                        <span className="slider"></span>
+                                    </label>
+                                    <span
+                                        id="countdownText"
+                                        style={{
+                                            fontSize: 'var(--type-meta-size)',
+                                            lineHeight: 'var(--type-meta-leading)',
+                                            color: 'var(--primary)',
+                                            minWidth: 24,
+                                        }}
+                                    >
+                                        {autoRefresh ? `${countdown}s` : ''}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Summary Card */}
+                            <div className="result-summary-card">
+                                <div className="summary-header">
+                                    <div className="summary-email" id="summaryEmail">
+                                        <span>
+                                            {result.aliasEmail ||
+                                                result.primaryEmail ||
+                                                (isZh ? 'iCloud 邮箱' : 'iCloud Mail')}
+                                        </span>
+                                        {result.targetType === 'PRIMARY' ? (
+                                            <span className="code-type-pill pill-master">
+                                                {isZh ? '主管理码' : 'Master'}
+                                            </span>
+                                        ) : (
+                                            <span className="code-type-pill pill-buyer">
+                                                {isZh ? '买家专属' : 'Buyer'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="refresh-now-btn"
+                                        id="refreshNowBtn"
+                                        disabled={refreshing}
+                                        onClick={() => {
+                                            void handleRefresh();
+                                        }}
+                                    >
+                                        <span>🔄</span>{' '}
+                                        {refreshing
+                                            ? isZh
+                                                ? '正在刷新...'
+                                                : 'Refreshing...'
+                                            : isZh
+                                              ? '立即刷新'
+                                              : 'Refresh'}
+                                    </button>
+                                </div>
+                                <div className="summary-stats">
+                                    <div className="summary-stat-item">
+                                        <span>📧</span>
+                                        <span id="totalMailCount">
+                                            {result.targetType === 'PRIMARY'
+                                                ? isZh
+                                                    ? `共 ${result.totalEmails || 0} 封邮件`
+                                                    : `Total ${result.totalEmails || 0} mails`
+                                                : isZh
+                                                  ? `最近 ${result.totalEmails || 0} 封邮件，最多显示 5 封`
+                                                  : `Recent ${result.totalEmails || 0} mails (up to 5)`}
+                                        </span>
+                                    </div>
+                                    {result.remainingDays != null ? (
+                                        <div className="summary-stat-item" id="remainingDaysBox">
+                                            <span>⏳</span>
+                                            <span id="remainingDaysText">
+                                                {isZh
+                                                    ? `有效期剩余 ${result.remainingDays} 天`
+                                                    : `${result.remainingDays} days remaining`}
+                                            </span>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            {/* Refresh Error Banner */}
+                            {refreshError ? (
+                                <div
+                                    id="refreshStatus"
+                                    className="toast-msg error"
+                                    role="status"
+                                    aria-live="polite"
+                                    style={{ marginBottom: 16 }}
+                                >
+                                    {refreshError}
+                                </div>
+                            ) : null}
+
+                            {/* Filter Bar (Master query mode) */}
+                            {virtualList.length > 0 ? (
+                                <div className="filter-wrapper" id="filterWrapper">
+                                    <select
+                                        id="filterSelect"
+                                        className="filter-select"
+                                        value={filterVirtualId}
+                                        onChange={e => setFilterVirtualId(e.target.value)}
+                                    >
+                                        <option value="">
+                                            {isZh
+                                                ? `全部虚拟邮箱 (${mails.length} 封邮件)`
+                                                : `All Virtual Mails (${mails.length})`}
+                                        </option>
+                                        {virtualList.map(v => (
+                                            <option key={v.id} value={String(v.id)}>
+                                                {v.aliasEmail} {v.note ? `(${v.note})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : null}
+
+                            {/* Mail Cards List */}
+                            <div className="mail-list" id="mailList">
+                                {filteredMails.length === 0 ? (
+                                    <div className="empty-mail-box">
+                                        <div className="empty-icon">📭</div>
+                                        <div className="empty-title">
+                                            {isZh
+                                                ? '暂未查询到此邮箱的邮件'
+                                                : 'No mails found for this address'}
+                                        </div>
+                                        <div className="empty-desc">
+                                            {isZh
+                                                ? '请稍后刷新；如确认邮箱已有邮件，请联系商家核对同步与邮件归属。'
+                                                : 'Please refresh shortly. If you are sure mails were sent, contact support.'}
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                gap: 10,
+                                                marginTop: 16,
+                                                flexWrap: 'wrap',
                                             }}
                                         >
-                                            🔄 {isZh ? '检查新邮件' : 'Check New Mails'}
-                                        </button>
-                                        {!autoRefresh ? (
                                             <button
                                                 type="button"
-                                                className="empty-autorefresh-btn"
-                                                id="emptyAutoRefreshBtn"
-                                                onClick={() => setAutoRefresh(true)}
+                                                className="refresh-now-btn"
+                                                id="emptyRefreshBtn"
+                                                style={{ margin: 0 }}
+                                                onClick={() => {
+                                                    void handleRefresh();
+                                                }}
                                             >
-                                                ⚡ {isZh ? '开启自动刷新' : 'Enable Auto Refresh'}
+                                                🔄 {isZh ? '检查新邮件' : 'Check New Mails'}
                                             </button>
-                                        ) : null}
-                                    </div>
-                                </div>
-                            ) : (
-                                filteredMails.map((mail, idx) => {
-                                    const isExpanded = expandedMails.has(mail.id);
-                                    return (
-                                        <div
-                                            key={mail.id}
-                                            className={`mail-card ${isExpanded ? 'open' : ''}`}
-                                            id={`mailCard_${idx}`}
-                                        >
-                                            {mail.extractedCode ? (
-                                                <div className="otp-banner">
-                                                    <div className="otp-info">
-                                                        <span className="otp-title">
-                                                            🔑 {isZh ? '提取到的验证码' : 'Verification Code'}
-                                                        </span>
-                                                        <span className="otp-code-text">
-                                                            {mail.extractedCode}
-                                                        </span>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className={`otp-copy-btn ${copiedOtp === mail.extractedCode ? 'copied' : ''}`}
-                                                        onClick={() => {
-                                                            void handleCopyOtp(mail.extractedCode || '');
-                                                        }}
-                                                    >
-                                                        {copiedOtp === mail.extractedCode
-                                                            ? isZh
-                                                                ? '已复制 ✓'
-                                                                : 'Copied ✓'
-                                                            : isZh
-                                                              ? '一键复制'
-                                                              : 'Copy'}
-                                                    </button>
-                                                </div>
-                                            ) : null}
-
-                                            <div className="mail-meta-row">
-                                                <span className="mail-from">
-                                                    📤{' '}
-                                                    {mail.fromName ||
-                                                        mail.fromAddress ||
-                                                        (isZh ? '未知发件人' : 'Unknown Sender')}
-                                                </span>
-                                                <span>{formatTime(mail.receivedAt, isZh)}</span>
-                                            </div>
-                                            <div className="mail-subject">
-                                                {mail.subject || (isZh ? '(无主题)' : '(No subject)')}
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                className="toggle-body-btn"
-                                                onClick={() => toggleExpandMail(mail.id)}
-                                            >
-                                                <span>
-                                                    {isExpanded
-                                                        ? isZh
-                                                            ? '收起正文 ▲'
-                                                            : 'Hide content ▲'
-                                                        : isZh
-                                                          ? '查看邮件正文 ▼'
-                                                          : 'View mail content ▼'}
-                                                </span>
-                                            </button>
-
-                                            {isExpanded ? (
-                                                <div className="mail-body-content" id={`mailBody_${idx}`}>
-                                                    {mail.bodyHtml ? (
-                                                        <iframe
-                                                            title={`mail-body-${mail.id}-${reactId}`}
-                                                            className="mail-iframe"
-                                                            srcDoc={mail.bodyHtml}
-                                                            sandbox="allow-same-origin"
-                                                        />
-                                                    ) : (
-                                                        <pre>
-                                                            {mail.bodyText ||
-                                                                (isZh
-                                                                    ? '(此邮件无正文内容)'
-                                                                    : '(No content)')}
-                                                        </pre>
-                                                    )}
-                                                </div>
+                                            {!autoRefresh ? (
+                                                <button
+                                                    type="button"
+                                                    className="empty-autorefresh-btn"
+                                                    id="emptyAutoRefreshBtn"
+                                                    onClick={() => setAutoRefresh(true)}
+                                                >
+                                                    ⚡ {isZh ? '开启自动刷新' : 'Enable Auto Refresh'}
+                                                </button>
                                             ) : null}
                                         </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </section>
-                )}
+                                    </div>
+                                ) : (
+                                    filteredMails.map((mail, idx) => {
+                                        const isExpanded = expandedMails.has(mail.id);
+                                        return (
+                                            <div
+                                                key={mail.id}
+                                                className={`mail-card ${isExpanded ? 'open' : ''}`}
+                                                id={`mailCard_${idx}`}
+                                            >
+                                                {mail.extractedCode ? (
+                                                    <div className="otp-banner">
+                                                        <div className="otp-info">
+                                                            <span className="otp-title">
+                                                                🔑{' '}
+                                                                {isZh
+                                                                    ? '提取到的验证码'
+                                                                    : 'Verification Code'}
+                                                            </span>
+                                                            <span className="otp-code-text">
+                                                                {mail.extractedCode}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            className={`otp-copy-btn ${copiedOtp === mail.extractedCode ? 'copied' : ''}`}
+                                                            onClick={() => {
+                                                                void handleCopyOtp(mail.extractedCode || '');
+                                                            }}
+                                                        >
+                                                            {copiedOtp === mail.extractedCode
+                                                                ? isZh
+                                                                    ? '已复制 ✓'
+                                                                    : 'Copied ✓'
+                                                                : isZh
+                                                                  ? '一键复制'
+                                                                  : 'Copy'}
+                                                        </button>
+                                                    </div>
+                                                ) : null}
 
-                {/* FAQ Section */}
-                <section className="faq-section">
-                    <div className="section-header" style={{ marginBottom: 16 }}>
-                        <div className="section-title">
-                            <span>💡</span> {isZh ? '常见问题与使用指南' : 'FAQ & Guide'}
-                        </div>
-                    </div>
+                                                <div className="mail-meta-row">
+                                                    <span className="mail-from">
+                                                        📤{' '}
+                                                        {mail.fromName ||
+                                                            mail.fromAddress ||
+                                                            (isZh ? '未知发件人' : 'Unknown Sender')}
+                                                    </span>
+                                                    <span>{formatTime(mail.receivedAt, isZh)}</span>
+                                                </div>
+                                                <div className="mail-subject">
+                                                    {mail.subject || (isZh ? '(无主题)' : '(No subject)')}
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    className="toggle-body-btn"
+                                                    onClick={() => toggleExpandMail(mail.id)}
+                                                >
+                                                    <span>
+                                                        {isExpanded
+                                                            ? isZh
+                                                                ? '收起正文 ▲'
+                                                                : 'Hide content ▲'
+                                                            : isZh
+                                                              ? '查看邮件正文 ▼'
+                                                              : 'View mail content ▼'}
+                                                    </span>
+                                                </button>
+
+                                                {isExpanded ? (
+                                                    <div className="mail-body-content" id={`mailBody_${idx}`}>
+                                                        {mail.bodyHtml ? (
+                                                            <iframe
+                                                                title={`mail-body-${mail.id}-${reactId}`}
+                                                                className="mail-iframe"
+                                                                srcDoc={mail.bodyHtml}
+                                                                sandbox="allow-same-origin"
+                                                            />
+                                                        ) : (
+                                                            <pre>
+                                                                {mail.bodyText ||
+                                                                    (isZh
+                                                                        ? '(此邮件无正文内容)'
+                                                                        : '(No content)')}
+                                                            </pre>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </section>
+                    )}
+                </div>
+                <aside className="faq-section" aria-labelledby="mailQueryHelpTitle">
+                    <h2 className="mail-query-section-title" id="mailQueryHelpTitle">
+                        {isZh ? '查询帮助' : 'Lookup help'}
+                    </h2>
                     <div className="faq-list">
-                        <div className="faq-item">
-                            <div className="faq-q">
-                                {isZh ? '1. 查询码从哪里获取？' : '1. Where do I get my query code?'}
-                            </div>
-                            <div className="faq-a">
-                                {isZh ? (
-                                    <>
-                                        查询码通常在您购买商品的“发货卡密”、“订单详情”或商家发送的凭据中提供（一般格式为{' '}
-                                        <code>BUY-XXXX-XXXX</code>）。
-                                    </>
-                                ) : (
-                                    <>
-                                        The code is usually provided in your order fulfillment card or
-                                        delivery message (format: <code>BUY-XXXX-XXXX</code>).
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        <div className="faq-item">
-                            <div className="faq-q">
+                        <details className="faq-item">
+                            <summary className="faq-q">
+                                {isZh ? '查询码在哪里？' : 'Where is my query code?'}
+                                <ChevronDown aria-hidden="true" />
+                            </summary>
+                            <p className="faq-a">
                                 {isZh
-                                    ? '2. 验证码多久能收到？'
-                                    : '2. How quickly do verification codes arrive?'}
-                            </div>
-                            <div className="faq-a">
+                                    ? '可在订单详情、发货卡密或商家发送的凭据中找到，支持买家查询码和主查询码。'
+                                    : 'Find it in your order details or delivery message. Buyer and master query codes are supported.'}
+                            </p>
+                        </details>
+                        <details className="faq-item">
+                            <summary className="faq-q">
+                                {isZh ? '多久能收到邮件？' : 'When will emails arrive?'}
+                                <ChevronDown aria-hidden="true" />
+                            </summary>
+                            <p className="faq-a">
                                 {isZh
-                                    ? '系统定时同步 iCloud 收件箱，显示时间取决于邮件送达和同步进度。您可以开启“自动刷新”或点击“立即刷新”。'
-                                    : 'The system synchronizes iCloud inboxes periodically. You can toggle Auto Refresh or click Refresh Now.'}
-                            </div>
-                        </div>
-                        <div className="faq-item">
-                            <div className="faq-q">
-                                {isZh ? '3. 没收到邮件怎么办？' : '3. What if I have not received any email?'}
-                            </div>
-                            <div className="faq-a">
-                                {isZh ? (
-                                    <>
-                                        ① 确认第三方发送的目标邮箱是否与本查询码绑定的邮箱完全一致；
-                                        <br />
-                                        ② 第三方可能存在延迟，请等待 1~2 分钟后点击刷新；
-                                        <br />③ 若长时间未收到，可联系客服协助排查。
-                                    </>
-                                ) : (
-                                    <>
-                                        ① Ensure the sender entered the exact target email address;
-                                        <br />
-                                        ② Delivery may take 1-2 minutes; please click refresh;
-                                        <br />③ If still not received, contact customer support.
-                                    </>
-                                )}
-                            </div>
-                        </div>
+                                    ? '邮件到达并同步后即可查看。查询后可使用“立即刷新”或开启自动刷新。'
+                                    : 'Emails appear after delivery and synchronization. Refresh the results manually or turn on auto refresh.'}
+                            </p>
+                        </details>
+                        <details className="faq-item">
+                            <summary className="faq-q">
+                                {isZh ? '没有收到邮件怎么办？' : 'What if no email arrives?'}
+                                <ChevronDown aria-hidden="true" />
+                            </summary>
+                            <p className="faq-a">
+                                {isZh
+                                    ? '确认收件邮箱与查询码绑定的邮箱一致，等待 1–2 分钟后刷新。仍未收到时可联系客服。'
+                                    : 'Check that the recipient matches the email linked to your code, then wait 1–2 minutes and refresh. Contact support if needed.'}
+                            </p>
+                        </details>
                     </div>
-                </section>
-
-                {/* Footer */}
-                <footer className="portal-footer">
-                    <p>
-                        🛡️{' '}
-                        {isZh
-                            ? '数据经端到端加密与单向中继保护，仅凭对应查询码可读取邮件'
-                            : 'Protected by end-to-end encryption & relay isolation'}
-                    </p>
-                    <p>
-                        © <span data-portal-store-name>{storeName}</span> ·{' '}
-                        <a
-                            href="/services"
-                            onClick={e => {
+                    <a
+                        className="mail-query-support"
+                        href="/support"
+                        onClick={e => {
+                            if (onNavigate) {
                                 e.preventDefault();
-                                onNavigate?.({ name: 'services' });
-                            }}
-                        >
-                            {isZh ? '智能商业服务平台' : 'Business Services'}
-                        </a>{' '}
-                        ·{' '}
-                        <a
-                            href="/support"
-                            onClick={e => {
-                                e.preventDefault();
-                                onNavigate?.({ name: 'support' });
-                            }}
-                        >
-                            {isZh ? '联系客服' : 'Customer Support'}
-                        </a>
-                    </p>
-                </footer>
-            </main>
-        </div>
+                                onNavigate({ name: 'support' });
+                            }
+                        }}
+                    >
+                        {isZh ? '联系客服' : 'Contact support'}
+                    </a>
+                </aside>
+            </div>
+        </main>
     );
 }
