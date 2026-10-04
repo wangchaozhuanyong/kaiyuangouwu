@@ -125,7 +125,7 @@
     background: var(--service-card-action-hover, var(--interaction-hover));
 }
 
-/* Layout B directory. Compact category placements above retain their own palette and geometry. */
+/* Independent service cards. The group owns only placement and spacing. */
 .is-business-services-main.category-client-plugin-slot {
     display: contents;
     padding: 0;
@@ -140,12 +140,7 @@
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     align-self: start;
-    /* The group owns the outline; each button fills its complete grid cell. */
-    overflow: hidden;
-    border: var(--skin-card-outline, 0);
-    border-radius: var(--skin-card-radius);
-    background: var(--surface);
-    box-shadow: var(--skin-card-shadow);
+    gap: 12px;
 }
 
 .category-client-plugin-group.is-assistance {
@@ -160,6 +155,8 @@
     --service-card-description: var(--muted);
     --service-card-action: var(--control-surface);
     --service-card-action-hover: var(--control-surface-hover);
+
+    border: 1px solid var(--line);
 }
 
 .is-business-services-main .category-client-plugin {
@@ -168,17 +165,17 @@
     gap: 12px;
     min-width: 0;
     min-height: 112px;
-    padding: 18px var(--space-card);
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    padding: var(--space-card);
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
     transition: background-color 150ms ease;
 }
 
 .is-business-services-main .category-client-plugin:hover {
     transform: none;
     background: var(--control-surface);
-    box-shadow: none;
+    box-shadow: var(--skin-card-shadow);
 }
 
 .is-business-services-main .is-tools .category-client-plugin:hover .category-client-plugin-action {
@@ -188,10 +185,6 @@
 .is-business-services-main .category-client-plugin:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: -2px;
-}
-
-.is-tools .category-client-plugin + .category-client-plugin {
-    border-top: 1px solid var(--line-subtle);
 }
 
 .is-business-services-main .category-client-plugin-icon {
@@ -245,9 +238,6 @@
     grid-template-columns: 32px minmax(0, 1fr) auto;
     min-height: 96px;
     padding: 18px 20px;
-    border: var(--skin-card-outline, 0);
-    border-radius: var(--skin-card-radius);
-    box-shadow: var(--skin-card-shadow);
 }
 
 .business-services-page .is-assistance .category-client-plugin-copy strong {
@@ -258,14 +248,7 @@
     .business-services-workspace .category-client-plugin-group.is-tools {
         grid-column: 1;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .business-services-workspace .is-tools .category-client-plugin + .category-client-plugin {
-        border-top: 0;
-    }
-
-    .business-services-workspace .is-tools .category-client-plugin:nth-child(n + 3) {
-        border-top: 1px solid var(--line-subtle);
+        gap: 16px;
     }
 
     .business-services-workspace .is-tools > :last-child:nth-child(odd) {
@@ -337,6 +320,10 @@
 @media (max-width: 359px) {
     .is-business-services-main .category-client-plugin {
         column-gap: 8px;
+    }
+
+    .is-business-services-main .is-tools .category-client-plugin {
+        padding: 14px 12px;
     }
 
     .is-business-services-main .is-assistance .category-client-plugin {
