@@ -519,11 +519,7 @@ describe('storefront skin system', () => {
                 ) {
                     const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
                     for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-                        if (
-                            !selector.includes('.subpage-header') ||
-                            selector.includes('.product-detail-page')
-                        )
-                            continue;
+                        if (!selector.includes('.subpage-header')) continue;
                         const ownsHeader = /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*$/u.test(
                             selector,
                         );
@@ -551,6 +547,14 @@ describe('storefront skin system', () => {
         );
         expect(stylesheet('./styles/subpage-content.css')).toMatch(
             /\.desktop-store-layout \.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
+        );
+        expect(stylesheet('./pages/product-detail-page.tsx')).not.toContain('desktop-product-toolbar');
+        expect(stylesheet('./styles/subpage-content.css')).toMatch(
+            /\.subpage-body > \.content-section\s*\{[^}]*margin:\s*0;[^}]*padding:\s*0;/,
+        );
+        const sharedHeader = stylesheet('./styles/subpage-content.css');
+        expect(sharedHeader).toMatch(
+            /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*margin:\s*0;[^}]*padding:\s*var\(--space-8\) 0;/,
         );
         expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('[&>.subpage-header]');
         expect(stylesheet('./styles/home-showcase.css')).not.toMatch(

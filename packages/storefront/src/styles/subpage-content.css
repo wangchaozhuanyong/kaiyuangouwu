@@ -7,6 +7,12 @@
     padding: var(--space-section) var(--experience-page-gutter-mobile) 0;
 }
 
+/* A section placed in the shared body must not reserve a second outer inset. */
+.subpage-body > .content-section {
+    margin: 0;
+    padding: 0;
+}
+
 @media (min-width: 768px) and (max-width: 1023px) {
     .subpage-body {
         padding-inline: var(--experience-page-gutter-tablet);
@@ -19,9 +25,13 @@
     }
 }
 
-.subpage-header {
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
-    padding: 4px 6px;
+/* Shared compact navigation: 44px controls, centered title and symmetric insets. */
+.topbar.subpage-header {
+    min-height: calc(var(--experience-control-min) + 2 * var(--space-4));
+    height: auto;
+    grid-template-columns: var(--experience-control-min) minmax(0, 1fr) var(--experience-control-min);
+    padding: var(--space-4) var(--experience-page-gutter-mobile);
+    gap: var(--space-8);
 }
 
 .subpage-header > strong {
@@ -35,7 +45,7 @@
 }
 
 .subpage-header > span {
-    min-height: 42px;
+    min-height: var(--experience-control-min);
     display: grid;
     place-items: center;
 }
@@ -44,9 +54,7 @@
     display: none;
 }
 
-.product-detail-header,
-.topbar.product-detail-header,
-.product-detail-page > .subpage-header {
+.topbar.product-detail-header {
     padding-inline: var(--page-section-inset, 16px);
     margin-bottom: -52px;
     border-bottom: 0;
@@ -65,9 +73,7 @@
         -webkit-backdrop-filter 180ms ease;
 }
 
-.product-detail-header > strong,
-.topbar.product-detail-header > strong,
-.product-detail-page > .subpage-header > strong {
+.topbar.product-detail-header > strong {
     opacity: 0;
     transform: translateY(-3px);
     pointer-events: none;
@@ -76,9 +82,7 @@
         transform 180ms ease;
 }
 
-.product-detail-header button,
-.topbar.product-detail-header button,
-.product-detail-page > .subpage-header button {
+.topbar.product-detail-header button {
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -95,9 +99,7 @@
         box-shadow 180ms ease;
 }
 
-.product-detail-header.is-scrolled,
-.topbar.product-detail-header.is-scrolled,
-.product-detail-page > .subpage-header.is-scrolled {
+.topbar.product-detail-header.is-scrolled {
     background: color-mix(in srgb, var(--surface) 96%, transparent);
     color: var(--text);
     box-shadow: var(--skin-header-shadow);
@@ -105,17 +107,13 @@
     -webkit-backdrop-filter: blur(14px);
 }
 
-.product-detail-header.is-scrolled > strong,
-.topbar.product-detail-header.is-scrolled > strong,
-.product-detail-page > .subpage-header.is-scrolled > strong {
+.topbar.product-detail-header.is-scrolled > strong {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
 }
 
-.product-detail-header.is-scrolled button,
-.topbar.product-detail-header.is-scrolled button,
-.product-detail-page > .subpage-header.is-scrolled button {
+.topbar.product-detail-header.is-scrolled button {
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -468,9 +466,9 @@
         width: 100%;
         height: auto;
         min-height: var(--experience-control-min);
-        margin: 0 0 16px;
-        padding: 0;
-        gap: 14px;
+        margin: 0;
+        padding: var(--space-8) 0;
+        gap: var(--space-12);
         border: 0;
         background: transparent;
         box-shadow: none;
@@ -495,7 +493,8 @@
         min-width: var(--experience-control-min);
         min-height: var(--experience-control-min);
         height: auto;
-        padding: 6px;
+        padding: var(--space-8);
+        border-radius: var(--skin-control-radius);
         background: transparent;
         border: 0;
         color: var(--muted);
@@ -507,7 +506,7 @@
     .desktop-store-layout .subpage-header-actions {
         display: flex;
         min-height: 0;
-        gap: 8px;
+        gap: var(--space-8);
         flex: none;
     }
     .desktop-store-layout .subpage-header-actions > button {
@@ -517,9 +516,12 @@
         gap: 8px;
         width: auto;
         min-height: var(--experience-control-min);
-        padding: 0 14px;
+        padding: 0 var(--space-12);
+        font-size: var(--type-action-size);
+        line-height: var(--type-action-leading);
+        font-weight: var(--font-weight-medium);
         white-space: nowrap;
-        color: var(--accent);
+        color: var(--accent-ink);
         border: 0;
         background: var(--control-surface);
         border-radius: var(--skin-control-radius);

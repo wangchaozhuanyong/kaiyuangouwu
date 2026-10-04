@@ -1048,6 +1048,10 @@ try {
                             headerVisible: !!visible(header),
                             desktopActions: header?.hasAttribute('data-desktop-actions') ?? false,
                             headerHeight: visible(header) ? header.getBoundingClientRect().height : 0,
+                            headerPaddingTop: visible(header) ? getComputedStyle(header).paddingTop : null,
+                            headerPaddingBottom: visible(header)
+                                ? getComputedStyle(header).paddingBottom
+                                : null,
                             firstTop: first?.getBoundingClientRect().top ?? null,
                             railTop: rail?.getBoundingClientRect().top ?? null,
                         };
@@ -1056,7 +1060,8 @@ try {
                         expect(
                             pageEntrance.headerHeight,
                             `${preset}/${width}/${name} compact page header`,
-                        ).toBeLessThanOrEqual(56);
+                        ).toBeLessThanOrEqual(60);
+                        expect(pageEntrance.headerPaddingTop).toBe(pageEntrance.headerPaddingBottom);
                         if (pageEntrance.account && !pageEntrance.desktopActions) {
                             expect(
                                 pageEntrance.headerVisible,

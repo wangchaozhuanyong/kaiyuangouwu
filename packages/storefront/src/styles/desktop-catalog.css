@@ -566,26 +566,9 @@
     .has-desktop-catalog .account-topbar {
         height: 68px;
     }
-    .has-desktop-catalog .product-detail-page {
-        padding-top: 20px;
-    }
-    .has-desktop-catalog .product-detail-page > .subpage-header {
-        position: static;
-        margin: 0;
-        background: var(--paper);
-        color: var(--text);
-    }
     .has-desktop-catalog .product-detail-page > .detail-gallery-shell .detail-gallery {
         max-height: 540px;
         aspect-ratio: 1;
-    }
-    .has-desktop-catalog .product-detail-header > strong {
-        opacity: 1;
-        color: var(--text);
-    }
-    .has-desktop-catalog .product-detail-header button {
-        color: var(--text);
-        background: var(--control-surface);
     }
     .has-desktop-catalog :is(button, a, input, select, summary):focus-visible {
         outline: 2px solid var(--accent);
