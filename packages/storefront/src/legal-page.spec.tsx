@@ -65,7 +65,9 @@ describe('ManagedLegalPage', () => {
             />,
         );
 
-        expect(markup).toContain('<header class="legal-managed-intro"><p>后台隐私政策摘要</p></header>');
+        expect(markup).toContain(
+            '<header class="legal-managed-intro"><p class="content-text" data-content-format="plain">后台隐私政策摘要</p></header>',
+        );
         expect(markup).not.toContain('<h1');
     });
 

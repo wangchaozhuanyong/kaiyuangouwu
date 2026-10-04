@@ -1,5 +1,6 @@
 import { CircleAlert } from 'lucide-react';
 
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { interpolateLegalProfileTokens, resolveManagedLegalDocument } from '../legal-content';
 import { SubHeader } from '../storefront-ui/page-shell';
 import { StorefrontContentBlock, StorefrontLanguage, StorefrontLegalIdentity } from '../types';
@@ -115,7 +116,9 @@ export function ManagedLegalPage({
                 <article className="legal-managed-content" aria-label={title}>
                     {document?.subtitle && (
                         <header className="legal-managed-intro">
-                            <p>{interpolateLegalProfileTokens(document.subtitle, legalIdentity, language)}</p>
+                            <ContentText>
+                                {interpolateLegalProfileTokens(document.subtitle, legalIdentity, language)}
+                            </ContentText>
                         </header>
                     )}
                     {legalDetails.length > 0 ? (
@@ -140,9 +143,9 @@ export function ManagedLegalPage({
                         </dl>
                     ) : null}
                     {document ? (
-                        <div className="legal-managed-body">
+                        <ContentText as="div" className="legal-managed-body">
                             {interpolateLegalProfileTokens(document.body, legalIdentity, language)}
-                        </div>
+                        </ContentText>
                     ) : (
                         <div className="legal-managed-empty" role="status">
                             <CircleAlert aria-hidden="true" />
