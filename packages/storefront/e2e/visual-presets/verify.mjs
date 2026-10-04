@@ -1138,13 +1138,30 @@ try {
                     await expect(identity).toContainText('推广中心');
                     await expect(identity.locator('.account-identity-promotion')).toBeVisible();
                     await expect(identity.locator('.account-identity-details p')).toContainText('***@');
-                    await expect(identity.locator('.account-identity-card')).toHaveCSS(
-                        'background-image',
-                        'linear-gradient(120deg, rgb(23, 51, 73), rgb(40, 83, 105))',
+                    const featureColors = await identity.evaluate(element => {
+                        const surface = getComputedStyle(element);
+                        const promotion = getComputedStyle(
+                            element.querySelector('.account-identity-promotion'),
+                        );
+                        return {
+                            surface: surface.backgroundColor,
+                            text: surface.color,
+                            promotion:
+                                promotion.backgroundColor === 'rgba(0, 0, 0, 0)'
+                                    ? surface.backgroundColor
+                                    : promotion.backgroundColor,
+                            promotionText: promotion.color,
+                        };
+                    });
+                    expect(textContrast(featureColors.text, featureColors.surface)).toBeGreaterThanOrEqual(
+                        4.5,
                     );
+                    expect(
+                        textContrast(featureColors.promotionText, featureColors.promotion),
+                    ).toBeGreaterThanOrEqual(4.5);
                     await expect(identity.locator('.account-identity-promotion')).toHaveCSS(
-                        'background-color',
-                        'rgb(246, 237, 218)',
+                        'margin-top',
+                        '0px',
                     );
                     const box = await identity.boundingBox();
                     expect(box.x).toBeGreaterThanOrEqual(0);

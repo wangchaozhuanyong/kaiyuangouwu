@@ -412,12 +412,15 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // The approved account B design separates shortcuts using the current skin's divider.
+                        // The shared account surface uses foreground-derived shortcut and referral dividers.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
-                            selector.trim() === '.account-identity-assets > button + button' &&
-                            border[1] === 'left' &&
-                            border[2].trim() === '1px solid var(--line-subtle)'
+                            [
+                                '.account-identity-assets > button + button|left',
+                                '.account-identity-promotion|top',
+                            ].includes(`${selector.trim()}|${border[1]}`) &&
+                            border[2].trim() ===
+                                '1px solid color-mix(in srgb, var(--accent-foreground) 24%, transparent)'
                         ) {
                             continue;
                         }
