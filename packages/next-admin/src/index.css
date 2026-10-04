@@ -660,8 +660,14 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
-    width: fit-content;
+    width: 26rem;
     max-width: 100%;
+    flex: 0 0 auto;
+}
+.admin-report-date-range > .admin-field > .admin-field-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
 }
 .admin-report-date-range > label {
     display: flex;
@@ -678,6 +684,10 @@
 @media (max-width: 767px) {
     .admin-report-date-range {
         width: 100%;
+    }
+    .admin-report-date-range > .admin-field > .admin-field-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.25rem;
     }
     .admin-report-date-range > label {
         flex-direction: column;
