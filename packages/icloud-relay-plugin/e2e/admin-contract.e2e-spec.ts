@@ -6,9 +6,11 @@ import {
     TransactionalConnection,
     VendurePlugin,
 } from '@vendure/core';
-import { createTestEnvironment } from '@vendure/testing';
+import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { ImapFlow } from 'imapflow';
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -24,6 +26,7 @@ import {
     UpdateIcloudVirtualEmailDocument,
 } from '../src/client/admin.generated';
 import { RATE_LIMIT_LOCKOUT_MS, RATE_LIMIT_MAX_FAILED_ATTEMPTS } from '../src/constants';
+import { IcloudMailOutbox } from '../src/entities/icloud-mail-outbox.entity';
 import { IcloudPrimaryAccount } from '../src/entities/icloud-primary-account.entity';
 import { IcloudQueryAuditLog } from '../src/entities/icloud-query-audit-log.entity';
 import { IcloudReceivedMail } from '../src/entities/icloud-received-mail.entity';
@@ -32,6 +35,7 @@ import { IcloudRelayPlugin } from '../src/icloud-relay.plugin';
 import { IcloudJobService } from '../src/jobs/icloud-job.service';
 import { IcloudAdminService } from '../src/services/icloud-admin.service';
 import { IcloudImapSyncService } from '../src/services/icloud-imap-sync.service';
+import { IcloudMailEventsService } from '../src/services/icloud-mail-events.service';
 import { IcloudMailHistoryService } from '../src/services/icloud-mail-history.service';
 import { IcloudPublicQueryService } from '../src/services/icloud-public-query.service';
 import { updateIcloudRecord } from '../src/services/icloud-record-update';
@@ -56,7 +60,7 @@ describe('iCloud admin contract persistence', () => {
     const { server, adminClient, shopClient } = createTestEnvironment(
         mergeConfig(testConfig(), {
             apiOptions: { port },
-            plugins: [IcloudRelayPlugin.init({ syncIntervalSeconds: 0 }), MailQueryAccessTestPlugin],
+            plugins: [IcloudRelayPlugin.init({ realtimeEnabled: false }), MailQueryAccessTestPlugin],
         }),
     );
     let account: Awaited<ReturnType<typeof createAccount>>;
@@ -76,6 +80,10 @@ describe('iCloud admin contract persistence', () => {
         ).createIcloudPrimaryAccount;
     }
     beforeAll(async () => {
+        // Keep cached schemas from another source tree out of this persistence test.
+        const runtime = resolve(__dirname, '../../../.runtime/icloud-admin-contract');
+        mkdirSync(runtime, { recursive: true });
+        registerInitializer('sqljs', new SqljsInitializer(mkdtempSync(`${runtime}/run-`)));
         await server.init({ initialData });
         await adminClient.asSuperAdmin();
         account = await createAccount();
@@ -83,6 +91,56 @@ describe('iCloud admin contract persistence', () => {
     afterAll(async () => {
         await server.destroy();
         disableJobs.mockRestore();
+    });
+
+    it('commits new mail and outbox together, recovers a failed insert, and deduplicates a replay', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const ctx = RequestContext.empty();
+        const admin = server.app.get(IcloudAdminService);
+        const created = await admin.createPrimaryAccount(ctx, {
+            email: 'events-fixture@icloud.com',
+            appPassword: 'isolated-test-password',
+        });
+        const primary = connection.getRepository(ctx, IcloudPrimaryAccount);
+        await primary.update({ id: created.id }, { lastSyncedUid: 19, lastSyncedUidValidity: '1' });
+        const eventAccount = await primary.findOneByOrFail({ id: created.id });
+        const mailRepo = connection.getRepository(ctx, IcloudReceivedMail);
+        const outbox = connection.getRepository(ctx, IcloudMailOutbox);
+        const source = Buffer.from(
+            'Message-ID: <events-fixture@example.test>\r\nFrom: sender@example.test\r\n' +
+                'To: events-fixture@icloud.com\r\nSubject: Verification code\r\n\r\nYour verification code is 123456',
+        );
+        const client = {
+            mailbox: { uidValidity: BigInt(2) },
+            getMailboxLock: () => Promise.resolve({ release: vi.fn() }),
+            async *fetch() {
+                yield await Promise.resolve({ uid: 2, source });
+            },
+        } as unknown as ImapFlow;
+        const events = server.app.get(IcloudMailEventsService);
+        const failure = vi
+            .spyOn(events, 'record')
+            .mockRejectedValueOnce(new Error('fixture transaction failure'));
+        const sync = server.app.get(IcloudImapSyncService);
+        try {
+            expect((await sync.syncAccount(ctx, eventAccount, client)).success).toBe(false);
+            expect(await mailRepo.count({ where: { primaryAccountId: eventAccount.id } })).toBe(0);
+            expect(await outbox.count({ where: { primaryAccountId: String(eventAccount.id) } })).toBe(0);
+            expect((await primary.findOneByOrFail({ id: eventAccount.id })).lastSyncedUid).toBe(0);
+        } finally {
+            failure.mockRestore();
+        }
+        expect(await sync.syncAccount(ctx, eventAccount, client)).toMatchObject({
+            success: true,
+            syncedCount: 1,
+        });
+        expect(await mailRepo.count({ where: { primaryAccountId: eventAccount.id } })).toBe(1);
+        expect(await outbox.count({ where: { primaryAccountId: String(eventAccount.id) } })).toBe(1);
+        expect(await sync.syncAccount(ctx, eventAccount, client)).toMatchObject({
+            success: true,
+            syncedCount: 0,
+        });
+        expect(await outbox.count({ where: { primaryAccountId: String(eventAccount.id) } })).toBe(1);
     });
 
     async function publicQuery(code: string, headers: Record<string, string> = {}) {
@@ -494,11 +552,11 @@ describe('iCloud admin contract persistence', () => {
         const read = repo.findOne.bind(repo);
         let markRead!: () => void;
         let resume!: () => void;
-        const readFinished = new Promise<void>(resolve => {
-            markRead = resolve;
+        const readFinished = new Promise<void>(complete => {
+            markRead = complete;
         });
-        const waiting = new Promise<void>(resolve => {
-            resume = resolve;
+        const waiting = new Promise<void>(complete => {
+            resume = complete;
         });
         const spy = vi.spyOn(repo, 'findOne').mockImplementationOnce(async options => {
             const stale = await read(options);
@@ -706,7 +764,8 @@ describe('iCloud admin contract persistence', () => {
                 appPassword: 'isolated-test-password',
             });
             const stale = await repo.findOneByOrFail({ id: created.id });
-            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockImplementation(async () => {
+            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockImplementation(async function () {
+                this.mailbox = { path: 'INBOX', uidValidity: BigInt(1) } as never;
                 await admin.updatePrimaryAccount(ctx, {
                     id: created.id,
                     note: '同步期间编辑',
@@ -976,7 +1035,10 @@ describe('iCloud admin contract persistence', () => {
                     'Local fixture',
                 ].join('\r\n'),
             );
-            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockResolvedValue(undefined);
+            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockImplementation(async function () {
+                this.mailbox = { path: 'INBOX', uidValidity: BigInt(1) } as never;
+                await Promise.resolve();
+            });
             const imapLock = vi
                 .spyOn(ImapFlow.prototype, 'getMailboxLock')
                 .mockResolvedValue({ path: 'INBOX', release: vi.fn() });
@@ -1011,7 +1073,7 @@ describe('iCloud admin contract persistence', () => {
                 );
                 await blocker.commitTransaction();
                 const results = await Promise.all(operations);
-                expect(results[2]).toMatchObject({ success: true, syncedCount: 1 });
+                expect(results[2]).toEqual({ success: true, syncedCount: 1 });
                 const mailCount = await mails.count({ where: { primaryAccountId: owner.id } });
                 const stored = await connection.rawConnection
                     .getRepository(IcloudVirtualEmail)

@@ -4,7 +4,8 @@ import { adminApiExtensions, shopApiExtensions } from './api/api-extensions';
 import { IcloudAdminResolver } from './api/icloud-admin.resolver';
 import { IcloudPortalController } from './api/icloud-portal.controller';
 import { IcloudPublicResolver } from './api/icloud-public.resolver';
-import { manageIcloudRelayPermission } from './constants';
+import { ICLOUD_RELAY_PLUGIN_OPTIONS, manageIcloudRelayPermission } from './constants';
+import { IcloudMailOutbox } from './entities/icloud-mail-outbox.entity';
 import { IcloudPrimaryAccount } from './entities/icloud-primary-account.entity';
 import { IcloudQueryAuditLog } from './entities/icloud-query-audit-log.entity';
 import { IcloudReceivedMail } from './entities/icloud-received-mail.entity';
@@ -13,7 +14,9 @@ import { IcloudJobService } from './jobs/icloud-job.service';
 import { IcloudAccessCodeService } from './services/icloud-access-code.service';
 import { IcloudAdminService } from './services/icloud-admin.service';
 import { IcloudCipherService } from './services/icloud-cipher.service';
+import { IcloudIdleService } from './services/icloud-idle.service';
 import { IcloudImapSyncService } from './services/icloud-imap-sync.service';
+import { IcloudMailEventsService } from './services/icloud-mail-events.service';
 import { IcloudMailHistoryService } from './services/icloud-mail-history.service';
 import { IcloudMailSanitizerService } from './services/icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './services/icloud-otp-extractor.service';
@@ -40,7 +43,9 @@ import { IcloudRelayPluginOptions } from './types';
  *   plugins: [
  *     IcloudRelayPlugin.init({
  *       encryptionKey: process.env.ICLOUD_ENCRYPTION_KEY,
- *       syncIntervalSeconds: 120,
+ *       realtimeEnabled: true,
+ *       mailWebhookUrl: process.env.ICLOUD_MAIL_WEBHOOK_URL,
+ *       mailWebhookSecret: process.env.ICLOUD_MAIL_WEBHOOK_SECRET,
  *       retentionDays: 30,
  *     }),
  *   ],
@@ -49,9 +54,16 @@ import { IcloudRelayPluginOptions } from './types';
  */
 @VendurePlugin({
     imports: [PluginCommonModule],
-    entities: [IcloudPrimaryAccount, IcloudVirtualEmail, IcloudReceivedMail, IcloudQueryAuditLog],
+    entities: [
+        IcloudPrimaryAccount,
+        IcloudVirtualEmail,
+        IcloudReceivedMail,
+        IcloudQueryAuditLog,
+        IcloudMailOutbox,
+    ],
     controllers: [IcloudPortalController],
     providers: [
+        { provide: ICLOUD_RELAY_PLUGIN_OPTIONS, useFactory: () => IcloudRelayPlugin.options },
         IcloudCipherService,
         IcloudAccessCodeService,
         IcloudOtpExtractorService,
@@ -61,6 +73,8 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudAdminService,
         IcloudPublicQueryService,
         IcloudJobService,
+        IcloudMailEventsService,
+        IcloudIdleService,
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,

@@ -65,6 +65,15 @@ export class IcloudPrimaryAccount extends VendureEntity {
     @Column({ type: 'int', default: 0 })
     lastSyncedUid: number;
 
+    @Column({ type: 'varchar', length: 32, nullable: true })
+    lastSyncedUidValidity: string | null;
+
+    @Column({ type: 'varchar', length: 36, nullable: true })
+    mailWatchOwner: string | null;
+
+    @Column({ type: Date, nullable: true })
+    mailWatchLeaseUntil: Date | null;
+
     @Column({ type: 'text', nullable: true })
     lastSyncError: string | null;
 

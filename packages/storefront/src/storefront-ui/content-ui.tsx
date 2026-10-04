@@ -18,6 +18,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import { publishedContentItems } from '../../../storefront-content-plugin/src/content-publication';
 import { dualCardTemplateId } from '../../../storefront-content-plugin/src/dual-card-template-options';
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
@@ -203,7 +204,7 @@ export function HomepageCouponHub({
                                         </>
                                     )}
                                 </div>
-                                <p className="coupon-ticket-desc">{coupon.description}</p>
+                                <ContentText className="coupon-ticket-desc">{coupon.description}</ContentText>
                             </div>
 
                             <div className="coupon-ticket-action">{claimAction}</div>
@@ -628,7 +629,7 @@ export function HomeDualCategoryShowcase({
                         <div className="showcase-content">
                             {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}
                             <h3>{item.label}</h3>
-                            {item.description ? <p>{item.description}</p> : null}
+                            {item.description ? <ContentText>{item.description}</ContentText> : null}
                             {!disabled && ctaLabel ? (
                                 <span className="showcase-link">
                                     {ctaLabel} <ChevronRight aria-hidden="true" />
@@ -757,7 +758,7 @@ export function ManagedContentSection({
                         : undefined
                 }
             />
-            {block.body && <p className="managed-content-body">{block.body}</p>}
+            {block.body && <ContentText className="managed-content-body">{block.body}</ContentText>}
             {block.imageUrl && !block.items.length && !additionalSelectedProducts.length && (
                 <button
                     className="managed-content-banner"
@@ -955,7 +956,7 @@ export function ManagedContentItemButton({
             <span className="managed-content-copy">
                 <span>
                     <strong>{item.label}</strong>
-                    {item.description && <small>{item.description}</small>}
+                    {item.description && <ContentText as="small">{item.description}</ContentText>}
                 </span>
                 {!disabled && <ChevronRight aria-hidden="true" />}
             </span>

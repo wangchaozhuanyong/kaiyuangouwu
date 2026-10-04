@@ -31,6 +31,7 @@ import {
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -219,7 +220,7 @@ export function NoticeDetailSheet({
         >
             <div className="notice-detail-content">
                 {item.content.trim() ? (
-                    <p className="notice-detail-body">{item.content}</p>
+                    <ContentText className="notice-detail-body">{item.content}</ContentText>
                 ) : (
                     <p className="notice-detail-body notice-detail-empty">
                         {isZh ? '此公告暂无更多内容。' : 'There are no additional details for this notice.'}
@@ -379,7 +380,9 @@ function HomepageCouponHub({
                                             </>
                                         )}
                                     </div>
-                                    <p className="coupon-ticket-desc">{coupon.description}</p>
+                                    <ContentText className="coupon-ticket-desc">
+                                        {coupon.description}
+                                    </ContentText>
                                 </div>
 
                                 <div className="coupon-ticket-action">{claimAction}</div>
@@ -918,7 +921,9 @@ export function HomePage() {
             ) : null}
 
             {storefrontTagline && <p className="storefront-tagline">{storefrontTagline}</p>}
-            {storefrontDescription && <p className="storefront-description">{storefrontDescription}</p>}
+            {storefrontDescription && (
+                <ContentText className="storefront-description">{storefrontDescription}</ContentText>
+            )}
 
             {contentError && (
                 <div className="content-warning" role="status">
@@ -1590,7 +1595,7 @@ function ManagedContentSection({
                     blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
                 }
             />
-            {block.body && <p className="managed-content-body">{block.body}</p>}
+            {block.body && <ContentText className="managed-content-body">{block.body}</ContentText>}
             {block.imageUrl && !block.items.length && !additionalSelectedProducts.length && (
                 <button
                     className="managed-content-banner"
@@ -1810,8 +1815,12 @@ function FeaturedCollectionSection({
                     }}
                 >
                     <h2 id={`${block.id}-title`}>{block.title}</h2>
-                    {block.subtitle ? <p className="featured-collection-subtitle">{block.subtitle}</p> : null}
-                    {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
+                    {block.subtitle ? (
+                        <ContentText className="featured-collection-subtitle">{block.subtitle}</ContentText>
+                    ) : null}
+                    {block.body ? (
+                        <ContentText className="featured-collection-body">{block.body}</ContentText>
+                    ) : null}
                     {blockHasTarget ? (
                         <button
                             className="featured-collection-action"
@@ -1915,11 +1924,13 @@ function ContentStorySection({
                     )}
                 </button>
                 <div className="content-story-copy">
-                    <p className="content-story-kicker">
+                    <ContentText className="content-story-kicker">
                         {block.subtitle || (isZh ? '内容故事' : 'Editorial story')}
-                    </p>
+                    </ContentText>
                     <h2 id={`${block.id}-title`}>{block.title}</h2>
-                    {block.body ? <p className="content-story-body">{block.body}</p> : null}
+                    {block.body ? (
+                        <ContentText className="content-story-body">{block.body}</ContentText>
+                    ) : null}
                     {blockHasTarget ? (
                         <button
                             className="content-story-action"

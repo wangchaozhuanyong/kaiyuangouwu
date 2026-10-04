@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -11,6 +11,7 @@ import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
 import { IcloudAccountStatus } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
+import { IcloudMailEventsService } from './icloud-mail-events.service';
 import { extractMailRecipients, matchMailRecipient, RECIPIENT_HEADERS } from './icloud-mail-recipients';
 import { IcloudMailSanitizerService } from './icloud-mail-sanitizer.service';
 import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
@@ -47,6 +48,7 @@ export class IcloudImapSyncService {
         private readonly cipher: IcloudCipherService,
         private readonly otpExtractor: IcloudOtpExtractorService,
         private readonly sanitizer: IcloudMailSanitizerService,
+        @Optional() private readonly mailEvents?: IcloudMailEventsService,
     ) {}
 
     /**
@@ -90,32 +92,53 @@ export class IcloudImapSyncService {
     /**
      * Synchronize emails from iCloud IMAP for a primary account
      */
-    async syncAccount(ctx: RequestContext, account: IcloudPrimaryAccount): Promise<SyncAccountResult> {
+    async syncAccount(
+        ctx: RequestContext,
+        account: IcloudPrimaryAccount,
+        existingClient?: ImapFlow,
+    ): Promise<SyncAccountResult> {
         const plainPassword = this.cipher.decrypt(account.encryptedAppPassword);
         if (!plainPassword) {
             return { success: false, syncedCount: 0, error: '专用密码解密失败' };
         }
 
-        const client = new ImapFlow({
-            host: account.imapHost || 'imap.mail.me.com',
-            port: account.imapPort || 993,
-            secure: true,
-            auth: {
-                user: account.email,
-                pass: plainPassword,
-            },
-            logger: false,
-        });
+        const client =
+            existingClient ??
+            new ImapFlow({
+                host: account.imapHost || 'imap.mail.me.com',
+                port: account.imapPort || 993,
+                secure: true,
+                auth: {
+                    user: account.email,
+                    pass: plainPassword,
+                },
+                logger: false,
+            });
 
         const primaryAccountRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
 
         let syncedCount = 0;
 
         try {
-            await client.connect();
+            if (!existingClient) await client.connect();
             const lock = await client.getMailboxLock('INBOX');
 
             try {
+                const uidValidity = String(client.mailbox && client.mailbox.uidValidity);
+                if (!/^\d{1,32}$/.test(uidValidity)) throw new Error('imap_uidvalidity_missing');
+                await this.connection.withTransaction(ctx, async transactionCtx => {
+                    const current = await lockMailAccount(transactionCtx, this.connection, account.id);
+                    const changed = current.lastSyncedUidValidity !== uidValidity;
+                    account.lastSyncedUid = changed ? 0 : current.lastSyncedUid;
+                    account.lastSyncedUidValidity = uidValidity;
+                    if (changed)
+                        await this.connection
+                            .getRepository(transactionCtx, IcloudPrimaryAccount)
+                            .update(
+                                { id: account.id },
+                                { lastSyncedUid: 0, lastSyncedUidValidity: uidValidity },
+                            );
+                });
                 const range = account.lastSyncedUid > 0 ? `${account.lastSyncedUid + 1}:*` : '1:*';
 
                 const messagesToProcess: Array<{ uid: number; source: Buffer }> = [];
@@ -142,7 +165,7 @@ export class IcloudImapSyncService {
                     try {
                         const parsed = await simpleParser(item.source);
                         const messageId =
-                            parsed.messageId || `<icloud-${account.id}-${item.uid}-${Date.now()}@relay>`;
+                            parsed.messageId || `<icloud-${account.id}-${uidValidity}-${item.uid}@relay>`;
 
                         const recipientCandidates = extractMailRecipients(parsed);
                         // Subject & Body extraction
@@ -159,7 +182,13 @@ export class IcloudImapSyncService {
                         const fromName = parsed.from?.value?.[0]?.name || '';
 
                         const inserted = await this.connection.withTransaction(ctx, async transactionCtx => {
-                            await lockMailAccount(transactionCtx, this.connection, account.id);
+                            const current = await lockMailAccount(
+                                transactionCtx,
+                                this.connection,
+                                account.id,
+                            );
+                            if (current.lastSyncedUidValidity !== uidValidity)
+                                throw new Error('imap_uidvalidity_changed');
                             const mails = this.connection.getRepository(transactionCtx, IcloudReceivedMail);
                             if (await mails.findOne({ where: { primaryAccountId: account.id, messageId } }))
                                 return false;
@@ -191,22 +220,32 @@ export class IcloudImapSyncService {
                             });
 
                             await mails.save(newMail);
+                            await this.mailEvents?.record(
+                                transactionCtx,
+                                String(account.id),
+                                matchedVirtualEmail ? String(matchedVirtualEmail.id) : null,
+                            );
                             if (matchedVirtualEmail)
                                 await refreshMailCounts(transactionCtx, this.connection, account.id, [
                                     matchedVirtualEmail.id,
                                 ]);
                             return true;
                         });
-                        if (inserted) syncedCount++;
-                    } catch (parseErr: any) {
-                        Logger.error(`Failed to parse email UID ${item.uid}: ${parseErr.message}`, loggerCtx);
+                        if (inserted) {
+                            syncedCount++;
+                            this.mailEvents?.kick();
+                        }
+                    } catch {
+                        // Keep the cursor behind a failed insertion so reconnect can recover it.
+                        Logger.error(`Mail insertion failed for UID ${item.uid}`, loggerCtx);
+                        throw new Error('邮件保存失败，等待恢复同步');
                     }
                 }
 
                 // Update account sync state
                 // Sync owns only sync fields. Never restore stale credentials, notes or codes.
                 await primaryAccountRepo.update(
-                    { id: account.id, lastSyncedUid: LessThan(maxUid) },
+                    { id: account.id, lastSyncedUidValidity: uidValidity, lastSyncedUid: LessThan(maxUid) },
                     { lastSyncedUid: maxUid },
                 );
                 await primaryAccountRepo.update({ id: account.id }, { lastSyncedAt: new Date() });
@@ -225,7 +264,7 @@ export class IcloudImapSyncService {
                 return { success: true, syncedCount };
             } finally {
                 lock.release();
-                await client.logout();
+                if (!existingClient) await client.logout();
             }
         } catch (err: any) {
             Logger.error(`IMAP sync error for ${account.email}: ${err.message}`, loggerCtx);

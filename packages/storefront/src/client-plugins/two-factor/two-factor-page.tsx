@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ContentText } from '../../../../storefront-content-plugin/src/shared/content-text';
 import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 import type { BatchImportErrorCode } from './batch-parser';
 import './two-factor-page.css';
@@ -498,9 +499,12 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         />
                     </button>
                     {showQuickDescription ? (
-                        <p id="storefront-two-factor-query-description" className="two-factor-intro">
+                        <ContentText
+                            id="storefront-two-factor-query-description"
+                            className="two-factor-intro"
+                        >
                             {copy.description}
-                        </p>
+                        </ContentText>
                     ) : null}
                     <button
                         className="flex min-h-11 w-full items-center justify-between gap-3 rounded-[var(--skin-control-radius,10px)] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"

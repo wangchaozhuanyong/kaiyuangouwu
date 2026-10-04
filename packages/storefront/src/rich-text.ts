@@ -1,5 +1,7 @@
 import { filterXSS, IFilterXSSOptions, IWhiteList } from 'xss';
 
+import { type SanitizedContentHtml } from '../../storefront-content-plugin/src/shared/content-text';
+
 import { storefrontWebpUrl } from './responsive-image';
 
 const PRODUCT_DESCRIPTION_ALLOW_LIST: IWhiteList = {
@@ -8,9 +10,11 @@ const PRODUCT_DESCRIPTION_ALLOW_LIST: IWhiteList = {
     blockquote: [],
     br: [],
     code: [],
+    div: [],
     em: [],
     figcaption: [],
     figure: [],
+    h1: [],
     h2: [],
     h3: [],
     h4: [],
@@ -19,8 +23,8 @@ const PRODUCT_DESCRIPTION_ALLOW_LIST: IWhiteList = {
     hr: [],
     i: [],
     img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-    li: [],
-    ol: [],
+    li: ['value'],
+    ol: ['start', 'reversed'],
     p: [],
     pre: [],
     s: [],
@@ -62,20 +66,41 @@ const PLAIN_TEXT_OPTIONS: IFilterXSSOptions = {
 };
 
 const BLOCK_BOUNDARY_PATTERN =
-    /<(?:br\s*\/?>|\/(?:blockquote|figcaption|figure|h[1-6]|li|p|pre|t[dh]|tr))>/gi;
+    /<(?:br\s*\/?>|\/(?:blockquote|div|figcaption|figure|h[1-6]|li|p|pre|t[dh]|tr))>/gi;
 const IMAGE_TAG_PATTERN = /<img\b[^>]*>/gi;
 const IMAGE_SOURCE_PATTERN = /(\bsrc=)(["'])(.*?)\2/i;
+
+const CONTENT_HTML_PATTERN = new RegExp(
+    `<\\/?(?:${[...Object.keys(PRODUCT_DESCRIPTION_ALLOW_LIST), ...STRIP_UNSAFE_CONTENT_TAGS].join('|')})\\b[^>]*>`,
+    'i',
+);
 
 export function sanitizeProductDescription(
     value: string | null | undefined,
     { textOnly = false }: { textOnly?: boolean } = {},
-): string {
-    if (!value?.trim()) return '';
+): SanitizedContentHtml {
+    if (!value?.trim()) return '' as SanitizedContentHtml;
+    const normalized = value.trim().replace(/\r\n?/g, '\n');
+    if (!CONTENT_HTML_PATTERN.test(normalized)) {
+        return normalized
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>') as SanitizedContentHtml;
+    }
+    const contentSource = textOnly
+        ? normalized.replace(/<(p|figure)\b[^>]*>([\s\S]*?)<\/\1>/gi, (block, _tag, body: string) =>
+              /<(?:img|video|audio|picture)\b/i.test(body) &&
+              !filterXSS(body, PRODUCT_DESCRIPTION_TEXT_OPTIONS).trim()
+                  ? ''
+                  : block,
+          )
+        : normalized;
     const sanitized = filterXSS(
-        value.trim(),
+        contentSource,
         textOnly ? PRODUCT_DESCRIPTION_TEXT_OPTIONS : PRODUCT_DESCRIPTION_OPTIONS,
     );
-    if (textOnly) return sanitized.replace(/<(p|figure)>\s*<\/\1>/gi, '').trim();
+    if (textOnly) return sanitized.trim() as SanitizedContentHtml;
     return sanitized.replace(IMAGE_TAG_PATTERN, imageTag => {
         const sourceMatch = imageTag.match(IMAGE_SOURCE_PATTERN);
         if (!sourceMatch) return '';
@@ -87,7 +112,7 @@ export function sanitizeProductDescription(
             .replace(/&/g, '&amp;')
             .replace(quote === '"' ? /"/g : /'/g, quote === '"' ? '&quot;' : '&#39;');
         return imageTag.replace(IMAGE_SOURCE_PATTERN, `${prefix}${quote}${escapedSource}${quote}`);
-    });
+    }) as SanitizedContentHtml;
 }
 
 function safeRichTextImageUrl(source: string): string | null {

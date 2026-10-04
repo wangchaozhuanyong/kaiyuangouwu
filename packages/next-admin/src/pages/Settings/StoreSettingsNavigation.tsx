@@ -4,6 +4,7 @@ import {
     CreditCard,
     Globe2,
     ReceiptText,
+    ShieldCheck,
     Store,
     Truck,
     WalletCards,
@@ -87,6 +88,13 @@ export function StoreSettingsNavigation({
                     业务基础
                 </TabButton>
             )}
+            <TabButton
+                active={tab === 'PERMISSION_AUDITS'}
+                onClick={() => onTabChange('PERMISSION_AUDITS')}
+                icon={<ShieldCheck className="h-3.5 w-3.5" />}
+            >
+                权限审计记录
+            </TabButton>
         </div>
     );
 }

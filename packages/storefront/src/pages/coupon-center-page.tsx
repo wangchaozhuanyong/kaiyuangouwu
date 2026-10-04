@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
+import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import {
     CouponCenterTab,
@@ -680,7 +681,7 @@ function CouponTicket({
                             </>
                         )}
                     </div>
-                    <p className="coupon-ticket-desc">{card.description}</p>
+                    <ContentText className="coupon-ticket-desc">{card.description}</ContentText>
                     {meta ? <small className="coupon-center-ticket-meta">{meta}</small> : null}
                 </div>
                 <div className="coupon-ticket-action">{action}</div>
@@ -737,7 +738,7 @@ function ActivityCoupon({
                 <p>
                     <strong>{card.title}</strong>
                     <span aria-hidden="true"> · </span>
-                    <span>{card.description}</span>
+                    <ContentText as="span">{card.description}</ContentText>
                 </p>
             </div>
             <CampaignInstructions campaign={campaign} language={language} />

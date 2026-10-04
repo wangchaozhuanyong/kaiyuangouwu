@@ -1,5 +1,6 @@
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
+import { ContentText } from './content-text';
 import { type ImageTone, useImageTone } from './image-tone';
 import { readableStorefrontForeground, storefrontContrastRatio } from './storefront-semantic-palette';
 
@@ -230,7 +231,7 @@ export function AuthVisual({
                     </h2>
                 )}
                 {content.subtitle && (
-                    <p
+                    <ContentText
                         style={{
                             margin: 0,
                             color: 'inherit',
@@ -239,7 +240,7 @@ export function AuthVisual({
                         }}
                     >
                         {content.subtitle}
-                    </p>
+                    </ContentText>
                 )}
                 {items.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

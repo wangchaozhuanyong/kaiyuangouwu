@@ -152,7 +152,12 @@ describe('real client decoration preview', () => {
         block.type = 'FEATURED_COLLECTION';
         block.settings = { displayCount: 6, selectedProductIds: ['1', '2', '3', '4', '5', '6'] };
         block.translations[0].title = '未保存的新标题';
+        block.translations[0].body = '说明第一行\n\n说明第二段';
+        block.translations[0].subtitle = '副标题第一行\n第二行';
         await render();
+        const latestDraft = send.mock.calls.at(-1)?.[0];
+        expect(latestDraft.draft.block.body).toBe('说明第一行\n\n说明第二段');
+        expect(latestDraft.draft.block.subtitle).toBe('副标题第一行\n第二行');
         expect(send).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 draft: expect.objectContaining({
