@@ -100,6 +100,11 @@
     line-height: var(--type-meta-leading);
 }
 .order-detail-content .order-detail-products article > span:last-child {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px;
     min-width: 0;
     text-align: end;
     font-size: var(--type-helper-size);
@@ -275,6 +280,7 @@
     .order-detail-content .order-detail-products article > span:last-child {
         grid-column: 2;
         grid-row: 2;
+        justify-content: flex-start;
         text-align: start;
     }
 }

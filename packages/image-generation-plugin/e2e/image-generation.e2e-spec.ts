@@ -20,6 +20,7 @@ import {
     StoreManagementPlugin,
 } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
@@ -97,6 +98,7 @@ const config = mergeConfig(testConfig(), {
     plugins: [
         OperationsDashboardPlugin,
         StorefrontCartPlugin,
+        StorefrontContentPlugin,
         ContentTranslationPlugin.init({ provider: translationProvider }),
         StoreManagementPlugin.init({
             enabled: false,
@@ -227,7 +229,10 @@ const SAVE_CONFIG = gql`
 
 const REGISTER = gql`
     mutation RegisterImageCustomerE2E($input: RegisterCustomerInput!) {
-        registerCustomerAccount(input: $input) {
+        registerCustomerWithReferral(
+            input: $input
+            consent: { termsAccepted: true, privacyAcknowledged: true, locale: "zh" }
+        ) {
             __typename
             ... on Success {
                 success
@@ -578,6 +583,22 @@ describe('AI image generation full flow', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        const legalContext = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const legalBlocks = server.app
+            .get(TransactionalConnection)
+            .getRepository(legalContext, StorefrontContentBlock);
+        for (const code of ['terms', 'privacy']) {
+            await legalBlocks.save(
+                new StorefrontContentBlock({
+                    channelId: legalContext.channelId,
+                    code,
+                    type: 'LEGAL',
+                    enabled: true,
+                    translations: [],
+                    items: [],
+                }),
+            );
+        }
         adminClient.setRequestHeader(
             'x-vendure-sensitive-action-password',
             config.authOptions.superadminCredentials.password,
@@ -835,7 +856,7 @@ describe('AI image generation full flow', () => {
                 password: 'ImageE2EPass123!',
             },
         });
-        expect(registration.registerCustomerAccount.__typename).toBe('Success');
+        expect(registration.registerCustomerWithReferral.__typename).toBe('Success');
         const customers = await adminClient.query(FIND_CUSTOMER, { email: 'image-e2e@example.com' });
         const customerId = customers.customers.items[0].id;
         expect(
@@ -926,6 +947,16 @@ describe('AI image generation full flow', () => {
     });
 
     it('optimizes, recommends, generates, stores, settles, refunds, and releases on failure', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const costsBefore = (await adminClient.query(COST_SUMMARY)).imageGenerationCostSummary.items.find(
+            item => item.modelCode === 'OPENAI_HIGH_QUALITY',
+        );
+        const completedBefore = await connection.rawConnection
+            .getRepository(ImageGenerationDispatch)
+            .countBy({ state: 'COMPLETED' });
+        const costEventsBefore = await connection.rawConnection
+            .getRepository(ImageGenerationCostEvent)
+            .count();
         const studio = await shopClient.query(STUDIO_CONFIG);
         expect(studio.imageStudioConfig).toMatchObject({
             enabled: true,
@@ -1041,7 +1072,6 @@ describe('AI image generation full flow', () => {
         });
         expect(failed.imageStudioBalance).toBe(375);
 
-        const connection = server.app.get(TransactionalConnection);
         // Match the persisted MySQL datetime precision while retaining the stale interval.
         const staleAt = new Date(Math.floor(Date.now() / 1000) * 1000 - 16 * 60_000);
         const staleOutputId = Number(String(failedCreated.outputs[0].id).replace(/^T_/u, ''));
@@ -1255,11 +1285,11 @@ describe('AI image generation full flow', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     modelCode: 'OPENAI_HIGH_QUALITY',
-                    attempts: 6,
-                    successes: 4,
-                    failures: 2,
-                    missingCostCount: 6,
-                    grossRevenue: 375,
+                    attempts: (costsBefore?.attempts ?? 0) + 6,
+                    successes: (costsBefore?.successes ?? 0) + 4,
+                    failures: (costsBefore?.failures ?? 0) + 2,
+                    missingCostCount: (costsBefore?.missingCostCount ?? 0) + 6,
+                    grossRevenue: (costsBefore?.grossRevenue ?? 0) + 375,
                     actualCost: 0,
                     knownCost: null,
                     costCurrency: 'UNKNOWN',
@@ -1268,7 +1298,7 @@ describe('AI image generation full flow', () => {
         );
         await expect(
             connection.rawConnection.getRepository(ImageGenerationDispatch).countBy({ state: 'COMPLETED' }),
-        ).resolves.toBe(6);
+        ).resolves.toBe(completedBefore + 6);
 
         const usageRecords = (
             await adminClient.query(USAGE_RECORDS, {
@@ -1369,7 +1399,7 @@ describe('AI image generation full flow', () => {
             .findOneByOrFail({ id: Number(String(referenceCreated.id).replace(/^T_/u, '')) });
         expect(deletedJob.customerDeletedAt).toBeInstanceOf(Date);
         await expect(connection.rawConnection.getRepository(ImageGenerationCostEvent).count()).resolves.toBe(
-            6,
+            costEventsBefore + 6,
         );
     }, 30_000);
 
@@ -2431,33 +2461,52 @@ describe('AI image generation full flow', () => {
         20000,
     );
 
-    // Audit 03: a channel administrator cannot change platform-wide prompt rules.
-    it('denies global skill activation to a channel image administrator', async () => {
-        const role = (
-            await adminClient.query(gql`
+    // Image administration is owner-only under the current shared permission policy.
+    it('denies image administration and global skill activation to managed platform staff', async () => {
+        await expect(
+            adminClient.query(gql`
                 mutation {
-                    createRole(
+                    createManagedRole(
                         input: {
-                            code: "image-store-admin"
-                            description: "Image audit fixture"
+                            code: "image-owner-only-probe"
+                            description: "Image permission boundary"
+                            scope: PLATFORM
                             permissions: [ReadImageGeneration, UpdateImageGeneration]
                         }
                     ) {
                         id
                     }
                 }
+            `),
+        ).rejects.toThrow('仅平台所有者可用');
+        const role = (
+            await adminClient.query(gql`
+                mutation {
+                    createManagedRole(
+                        input: {
+                            code: "image-platform-staff"
+                            description: "Image audit fixture"
+                            scope: PLATFORM
+                            permissions: [ReadCatalog]
+                        }
+                    ) {
+                        id
+                    }
+                }
             `)
-        ).createRole;
+        ).createManagedRole;
         await adminClient.query(
             gql`
                 mutation Admin($role: ID!) {
-                    createAdministrator(
+                    createManagedAdministrator(
                         input: {
                             firstName: "Image"
                             lastName: "Audit"
                             emailAddress: "image-admin-e2e@example.com"
                             password: "ImageAdminFixture123!"
                             roleIds: [$role]
+                            scope: PLATFORM
+                            authority: STAFF
                         }
                     ) {
                         id
@@ -2494,23 +2543,31 @@ describe('AI image generation full flow', () => {
             termsEn: current.termsEn,
         };
         await adminClient.asUserWithCredentials('image-admin-e2e@example.com', 'ImageAdminFixture123!');
-        try {
-            await adminClient.query(SAVE_CONFIG, {
-                input: { ...configInput, termsVersion: 'e2e-store-admin-edit' },
-            });
-            expect((await configs.findOneByOrFail({ id: current.id })).termsVersion).toBe(
-                'e2e-store-admin-edit',
-            );
-            const visible = await adminClient.query(gql`
-                query {
-                    imagePromptSkillReleases {
-                        id
-                    }
+        await adminClient.query(gql`
+            mutation {
+                completeInitialPasswordChange(password: "ImageAdminFinal456!") {
+                    mustChangePassword
                 }
-            `);
-            expect(visible.imagePromptSkillReleases).toEqual(
-                expect.arrayContaining([expect.objectContaining({ id: releases[0].id })]),
+            }
+        `);
+        try {
+            await expect(
+                adminClient.query(SAVE_CONFIG, {
+                    input: { ...configInput, termsVersion: 'e2e-staff-edit' },
+                }),
+            ).rejects.toThrow();
+            expect((await configs.findOneByOrFail({ id: current.id })).termsVersion).toBe(
+                current.termsVersion,
             );
+            await expect(
+                adminClient.query(gql`
+                    query {
+                        imagePromptSkillReleases {
+                            id
+                        }
+                    }
+                `),
+            ).rejects.toThrow();
             await expect(
                 adminClient.query(
                     gql`
@@ -2525,7 +2582,6 @@ describe('AI image generation full flow', () => {
             ).rejects.toThrow();
         } finally {
             await adminClient.asSuperAdmin();
-            await adminClient.query(SAVE_CONFIG, { input: configInput });
         }
         const activated = await adminClient.query(
             gql`
@@ -3222,7 +3278,10 @@ describe('AI image generation full flow', () => {
                 backendOrigin: `http://127.0.0.1:${config.apiOptions.port}`,
                 credentials,
                 referencePath: referenceFixture,
-                outputDirectory: path.resolve(__dirname, '../../../reports/ai-image-studio-audit-20260913'),
+                outputDirectory: path.resolve(
+                    __dirname,
+                    '../../../reports/wip-reconciliation-20261004/remaining-completion/browser',
+                ),
             });
             const customer = await connection.rawConnection
                 .getRepository(Customer)

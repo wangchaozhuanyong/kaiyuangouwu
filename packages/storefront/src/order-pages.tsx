@@ -83,7 +83,6 @@ export function OrdersPage({
     storefrontName,
     initialTab,
     onBack,
-    onBuyAgain,
     onNotify,
     onOpenOrder,
 }: {
@@ -386,7 +385,6 @@ export function OrdersPage({
                             language={language}
                             storefrontName={storefrontName}
                             onOpen={() => openOrder(order.id)}
-                            onBuyAgain={() => void onBuyAgain(order)}
                         />
                     ))}
                     {listError && (
@@ -1821,7 +1819,6 @@ function OrderCard({
     language,
     storefrontName,
     onOpen,
-    onBuyAgain,
 }: {
     desktop?: boolean;
     order: OrderSummary;
@@ -1829,7 +1826,6 @@ function OrderCard({
     language: StorefrontLanguage;
     storefrontName: string;
     onOpen: () => void;
-    onBuyAgain: () => void;
 }) {
     const isZh = language === 'zh';
     const compactCopy = compactUiCopy[language];
@@ -1993,31 +1989,14 @@ function OrderCard({
                             {isZh ? '立即付款' : 'Pay now'}
                         </button>
                     ) : isShipped ? (
-                        <>
-                            <button
-                                type="button"
-                                className={orderPageClassName('order-btn secondary-btn')}
-                                onClick={onOpen}
-                            >
-                                {isZh ? '查看物流' : 'Track'}
-                            </button>
-                            <button
-                                type="button"
-                                className={orderPageClassName('order-btn secondary-btn')}
-                                onClick={onBuyAgain}
-                            >
-                                {isZh ? '再来一单' : 'Buy again'}
-                            </button>
-                        </>
-                    ) : (
                         <button
                             type="button"
                             className={orderPageClassName('order-btn secondary-btn')}
-                            onClick={onBuyAgain}
+                            onClick={onOpen}
                         >
-                            {isZh ? '再来一单' : 'Buy again'}
+                            {isZh ? '查看物流' : 'Track'}
                         </button>
-                    )}
+                    ) : null}
                 </div>
             </footer>
         </article>

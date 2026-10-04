@@ -146,17 +146,17 @@
         position: absolute;
         z-index: 2;
         color: #fff;
-        right: 6px;
+        right: auto;
         bottom: 12px;
-        left: 6px;
+        left: 50%;
+        transform: translateX(-50%);
         margin: 0;
         min-height: 0;
         font-size: var(--type-body-size);
         font-weight: var(--font-weight-semibold);
         line-height: var(--type-body-leading);
         text-align: center;
-        white-space: normal;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
         -webkit-line-clamp: unset;
         pointer-events: none;
     }

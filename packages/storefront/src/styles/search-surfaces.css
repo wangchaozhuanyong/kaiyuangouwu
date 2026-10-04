@@ -552,13 +552,6 @@
 .search-category-group > button {
     width: 100%;
 }
-.search-category-links .search-child-category {
-    min-height: 36px;
-    padding: 6px;
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-    color: var(--muted);
-}
 .search-page.is-embedded-search .search-category-links {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
@@ -568,9 +561,6 @@
     justify-content: flex-start;
     min-height: 44px;
     text-align: left;
-}
-.search-page.is-embedded-search .search-category-links .search-child-category {
-    padding-left: 36px;
 }
 
 .search-page.is-embedded-search .search-category-links span {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newAccountHeroBlock, newContentBlock } from './storefront-content-utils';
+import { newContentBlock } from './storefront-content-utils';
 import {
     applyDecorationDraft,
     decorationDraft,
@@ -8,22 +8,23 @@ import {
 } from './storefront-decoration-model';
 
 describe('decoration drafts follow the Shop publication contract', () => {
-    it('opens the actual account route with the configured asset and preserves neighbouring content', () => {
-        const block = newAccountHeroBlock(0);
+    it('opens the homepage with the configured asset and preserves neighbouring content', () => {
+        const block = newContentBlock('HERO', 0, '主视觉');
+        block.enabled = true;
         block.imageAsset = {
-            id: 'account-art',
-            name: 'account.png',
-            preview: '/assets/account.png',
-            source: '/assets/account.png',
+            id: 'homepage-art',
+            name: 'homepage.png',
+            preview: '/assets/homepage.png',
+            source: '/assets/homepage.png',
             width: 1200,
             height: 600,
         };
         const draft = decorationDraft(block, 'zh_Hans');
-        expect(draft.route).toBe('/account');
+        expect(draft.route).toBe('/');
         expect(draft.visible).toBe(true);
         expect(draft.block).toMatchObject({
-            code: 'account-hero-visual',
-            imageUrl: '/assets/account.png',
+            code: block.code,
+            imageUrl: '/assets/homepage.png',
             imageAsset: { width: 1200, height: 600 },
         });
         const neighbour = decorationDraft(newContentBlock('HERO', 1, '首页'), 'zh_Hans').block;

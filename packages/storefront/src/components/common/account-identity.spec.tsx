@@ -59,29 +59,17 @@ function button(host: HTMLDivElement, selector: string): HTMLButtonElement {
 }
 
 describe('account identity navigation and data', () => {
-    it('shows configured artwork above the current identity and promotion cards', async () => {
-        await withIdentity({ heroImageUrl: '/managed-account-art.png' }, host => {
-            expect(host.querySelector('.account-identity-artwork img')?.getAttribute('src')).toBe(
-                '/managed-account-art.png',
-            );
+    it('starts with the current identity card and retains promotion actions', async () => {
+        await withIdentity({}, host => {
             expect(
                 host
                     .querySelector('.account-identity')
-                    ?.firstElementChild?.classList.contains('account-identity-artwork'),
+                    ?.firstElementChild?.classList.contains('account-identity-card'),
             ).toBe(true);
             expect(host.querySelector('.account-identity-edit')).not.toBeNull();
             expect(host.querySelector('.account-identity-promotion-actions')).not.toBeNull();
         });
     });
-    it.each([undefined, null, '  '])(
-        'does not invent account artwork for empty configuration %s',
-        async heroImageUrl => {
-            await withIdentity({ heroImageUrl }, host => {
-                expect(host.querySelector('.account-identity-artwork')).toBeNull();
-                expect(host.querySelector('.account-identity-edit')).not.toBeNull();
-            });
-        },
-    );
     it('keeps all three shortcuts and opens their actual routes', async () => {
         await withIdentity({}, (host, navigate) => {
             const buttons = Array.from(

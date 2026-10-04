@@ -48,7 +48,14 @@
 }
 
 .business-services-heading:has(.business-services-hero-media) {
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+}
+
+.business-services-heading:has(.business-services-hero-media) .business-services-heading-copy {
+    padding: 24px 20px;
 }
 
 .business-services-heading-copy {
@@ -144,8 +151,9 @@
     display: block;
     width: 100%;
     aspect-ratio: 16 / 10;
-    border-radius: var(--skin-control-radius);
-    object-fit: contain;
+    border-radius: 0;
+    object-fit: cover;
+    object-position: center;
 }
 
 .business-services-empty {
@@ -186,8 +194,12 @@
         max-width: 75ch;
     }
 
-    .business-services-hero-media {
-        flex: 0 0 min(28%, 280px);
+    .business-services-heading:has(.business-services-hero-media) .business-services-heading-copy {
+        padding: 32px;
+    }
+
+    .business-services-hero-media :is(.safe-image-frame, img) {
+        aspect-ratio: 5 / 2;
     }
 
     .business-services-page {

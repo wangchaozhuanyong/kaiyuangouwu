@@ -1,10 +1,11 @@
 import { chromium, expect } from '@playwright/test';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 export async function verifyImageStudioApi({ backendOrigin, credentials, referencePath, outputDirectory }) {
+    await mkdir(outputDirectory, { recursive: true });
     const storefront = fileURLToPath(new URL('../..', import.meta.url));
     const vite = await createServer({
         root: storefront,

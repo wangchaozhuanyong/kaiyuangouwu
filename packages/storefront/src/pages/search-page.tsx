@@ -422,22 +422,6 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             )}
                             <span>{collection.name}</span>
                         </button>
-                        {(collection.children ?? []).map(child => (
-                            <button
-                                type="button"
-                                key={child.id}
-                                className="search-child-category"
-                                onClick={() =>
-                                    navigateTo({
-                                        name: 'category',
-                                        collectionId: collection.id,
-                                        childId: child.id,
-                                    })
-                                }
-                            >
-                                <span>{child.name}</span>
-                            </button>
-                        ))}
                     </div>
                 ))}
             </nav>

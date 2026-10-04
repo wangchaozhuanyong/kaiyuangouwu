@@ -70,7 +70,6 @@ import { IcloudRelayPluginOptions } from './types';
         schema: shopApiExtensions,
         resolvers: [IcloudPublicResolver],
     },
-    dashboard: './dashboard/index.tsx',
     configuration: config => {
         if (!config.authOptions.customPermissions.includes(manageIcloudRelayPermission)) {
             config.authOptions.customPermissions.push(manageIcloudRelayPermission);

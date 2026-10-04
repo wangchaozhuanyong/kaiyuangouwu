@@ -29,7 +29,7 @@ export const orderPageStyles: PageStyleMap = {
     'order-card-buttons':
         '[display:flex] [align-items:center] [justify-content:flex-end] [gap:8px] [flex-shrink:0]',
     'order-card-footer':
-        '[display:flex] [flex-wrap:wrap] [align-items:center] [justify-content:space-between] [gap:8px] [padding-top:10px] [border-top:0]',
+        '[display:grid] [grid-template-columns:minmax(0,_1fr)_auto] [align-items:center] [gap:8px] [padding-top:10px] [border-top:0]',
     'order-card-header':
         '[min-height:28px] [display:flex] [align-items:center] [justify-content:space-between] [gap:8px] [padding-bottom:10px] [border-bottom:0]',
     'order-card-product':

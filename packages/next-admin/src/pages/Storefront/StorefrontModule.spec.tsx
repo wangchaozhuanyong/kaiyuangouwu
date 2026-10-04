@@ -49,9 +49,6 @@ vi.mock('../../hooks/use-admin-permissions', () => ({
 }));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('./StorefrontVisualPresetPanel', () => ({ StorefrontVisualPresetPanel: () => null }));
-vi.mock('./AccountHeroImagePanel', () => ({
-    AccountHeroImagePanel: () => <button>个人中心背景图片设置</button>,
-}));
 vi.mock('./StorefrontAuthSettingsPanel', () => ({ StorefrontAuthSettingsPanel: () => null }));
 vi.mock('./StorefrontBlockEditor', () => ({
     StorefrontBlockEditor: ({
