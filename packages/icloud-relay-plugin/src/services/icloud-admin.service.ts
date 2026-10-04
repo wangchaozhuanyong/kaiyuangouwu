@@ -20,6 +20,7 @@ import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
 import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
+import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 import { updateIcloudRecord } from './icloud-record-update';
 
 export interface PrimaryAccountView {
@@ -69,6 +70,7 @@ export class IcloudAdminService {
         private readonly codeService: IcloudAccessCodeService,
         private readonly imapSyncService: IcloudImapSyncService,
         private readonly mailHistory: IcloudMailHistoryService,
+        private readonly otpExtractor: IcloudOtpExtractorService,
     ) {}
 
     private validate(input: object): void {
@@ -463,7 +465,15 @@ export class IcloudAdminService {
         }
 
         query.orderBy('mail.receivedAt', 'DESC').take(options.limit || 50);
-        return query.getMany();
+        const mails = await query.getMany();
+        // Admin consumers (including the recharge app) need the same corrected historical codes.
+        return mails.map(
+            mail =>
+                new IcloudReceivedMail({
+                    ...mail,
+                    extractedCode: this.otpExtractor.extractCode(mail.subject, mail.bodyText || ''),
+                }),
+        );
     }
 
     async reassignMail(ctx: RequestContext, mailId: ID, virtualEmailId: ID): Promise<IcloudReceivedMail> {

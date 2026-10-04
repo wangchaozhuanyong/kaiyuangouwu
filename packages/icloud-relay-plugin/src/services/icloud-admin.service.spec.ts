@@ -2,6 +2,7 @@ import { RequestContext, TransactionalConnection, UserInputError } from '@vendur
 import { describe, expect, it, vi } from 'vitest';
 
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
+import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudAccountStatus } from '../types';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
@@ -9,6 +10,7 @@ import { IcloudAdminService } from './icloud-admin.service';
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
+import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 describe('primary mailbox connection recovery', () => {
     it('clears a stale authentication error after a successful connection test', async () => {
@@ -37,6 +39,7 @@ describe('primary mailbox connection recovery', () => {
             new IcloudAccessCodeService(),
             imapSync,
             {} as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
         );
 
         await expect(service.testConnection({} as RequestContext, account.id)).resolves.toEqual({
@@ -83,6 +86,7 @@ describe('batch virtual mailbox import', () => {
             new IcloudAccessCodeService(),
             {} as IcloudImapSyncService,
             history as unknown as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
         );
         const result = await service.batchCreateVirtualEmails({} as RequestContext, {
             primaryAccountId: 'p1',
@@ -143,9 +147,60 @@ function mutationService(options: {
         new IcloudAccessCodeService(),
         {} as IcloudImapSyncService,
         {} as IcloudMailHistoryService,
+        new IcloudOtpExtractorService(),
     );
     return { execute, mailRepo, service, virtualRepo };
 }
+
+describe('admin received mail verification codes', () => {
+    it('returns corrected historical codes to recharge consumers without rewriting stored mail', async () => {
+        const subject = 'Your temporary ChatGPT verification code';
+        const mails = [
+            new IcloudReceivedMail({
+                id: 'mail-1',
+                primaryAccountId: 'primary-1',
+                virtualEmailId: 'alias-1',
+                subject,
+                bodyText: 'ChatGPT\nEnter this temporary verification code to continue:\n482913',
+                extractedCode: 'ChatGPT',
+            }),
+            new IcloudReceivedMail({ id: 'mail-2', subject, bodyText: 'ChatGPT', extractedCode: 'ChatGPT' }),
+        ];
+        const query = {
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            take: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue(mails),
+        };
+        const repo = { createQueryBuilder: vi.fn(() => query), save: vi.fn(), update: vi.fn() };
+        const service = new IcloudAdminService(
+            { getRepository: vi.fn(() => repo) } as unknown as TransactionalConnection,
+            {} as IcloudCipherService,
+            new IcloudAccessCodeService(),
+            {} as IcloudImapSyncService,
+            {} as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
+        );
+
+        const result = await service.findReceivedMails({} as RequestContext, {
+            virtualEmailId: 'alias-1',
+            limit: 5,
+        });
+
+        expect(result.map(mail => mail.extractedCode)).toEqual(['482913', null]);
+        expect(result[0]).toMatchObject({
+            id: 'mail-1',
+            primaryAccountId: 'primary-1',
+            virtualEmailId: 'alias-1',
+        });
+        expect(result[0]).not.toBe(mails[0]);
+        expect(mails.map(mail => mail.extractedCode)).toEqual(['ChatGPT', 'ChatGPT']);
+        expect(query.where).toHaveBeenCalledWith('mail.virtualEmailId = :vId', { vId: 'alias-1' });
+        expect(query.take).toHaveBeenCalledWith(5);
+        expect(repo.save).not.toHaveBeenCalled();
+        expect(repo.update).not.toHaveBeenCalled();
+    });
+});
 
 describe('received mail ownership integrity', () => {
     it('rejects assigning a mail to a virtual mailbox owned by another primary account', async () => {

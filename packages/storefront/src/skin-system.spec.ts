@@ -356,18 +356,6 @@ describe('storefront skin system', () => {
                             border[2].trim() === '1px solid var(--line-subtle)'
                         )
                             continue;
-                        // Layout B's shared tool directory separates adjacent actionable rows.
-                        if (
-                            file === path.join(__dirname, 'styles/service-entries.css') &&
-                            [
-                                '.is-tools .category-client-plugin + .category-client-plugin',
-                                '.business-services-workspace .is-tools .category-client-plugin:nth-child(n + 3)',
-                            ].includes(selector.trim()) &&
-                            border[1] === 'top' &&
-                            border[2].trim() === '1px solid var(--line-subtle)'
-                        ) {
-                            continue;
-                        }
                         // ACCOUNT_READING_SURFACES_20261002: approved recent-order reading separators.
                         if (
                             file === path.join(__dirname, 'styles/desktop-commerce.css') &&

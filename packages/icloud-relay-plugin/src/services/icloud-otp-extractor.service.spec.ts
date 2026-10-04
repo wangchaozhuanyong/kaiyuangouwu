@@ -17,6 +17,30 @@ describe('IcloudOtpExtractorService', () => {
         expect(extractor.extractCode('', 'OTP: 654321')).toBe('654321');
     });
 
+    it('extracts the numeric code instead of the ChatGPT heading', () => {
+        const subject = 'Your temporary ChatGPT verification code';
+        const body = `${subject}\n\nChatGPT\n\nEnter this temporary verification code to continue:\n\n482913`;
+        expect(extractor.extractCode(subject, body)).toBe('482913');
+    });
+
+    it.each(['ChatGPT', 'continue', 'expired'])('does not treat %s as a code', word => {
+        expect(extractor.extractCode('', `Your verification code: ${word}`)).toBeNull();
+    });
+
+    it('skips ordinary words and finds a later alphanumeric code', () => {
+        expect(
+            extractor.extractCode(
+                '',
+                'Your verification code is expired.\nYour verification code is: AB12CD',
+            ),
+        ).toBe('AB12CD');
+    });
+
+    it('does not truncate an overlong code into a valid candidate', () => {
+        expect(extractor.extractCode('Verification code: 123456789', '')).toBeNull();
+        expect(extractor.extractCode('', '验证码：AB123456789')).toBeNull();
+    });
+
     it('should extract bracketed codes', () => {
         expect(extractor.extractCode('', '【847291】')).toBe('847291');
         expect(extractor.extractCode('', 'Your code is [382749]')).toBe('382749');
