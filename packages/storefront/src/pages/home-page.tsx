@@ -1031,7 +1031,7 @@ export function HomePage() {
                                             <HeroScene
                                                 content={managedHero}
                                                 mediaOverlay={
-                                                    <>
+                                                    <div className="hero-overlay-controls">
                                                         {overlayTrustBar && (
                                                             <div className="hero-service-overlay">
                                                                 {trustBar}
@@ -1063,12 +1063,14 @@ export function HomePage() {
                                                                             selectHeroManually(index)
                                                                         }
                                                                     >
-                                                                        {index + 1}
+                                                                        <span className="hero-page-number">
+                                                                            {index + 1}
+                                                                        </span>
                                                                     </button>
                                                                 ))}
                                                             </div>
                                                         )}
-                                                    </>
+                                                    </div>
                                                 }
                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                                 onImageOpen={handleHeroImageOpen}
