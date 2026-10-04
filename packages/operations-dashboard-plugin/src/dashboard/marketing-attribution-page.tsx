@@ -29,6 +29,13 @@ import { BarChart3, Plus, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import {
+    marketingCampaignLabel,
+    marketingReturnMultiple,
+    marketingReturnPercent,
+    marketingSourceLabel,
+} from '../../../common/src/marketing-display-labels';
+
+import {
     MarketingAttributionResult,
     marketingAttributionQuery,
     recordMarketingCostMutation,
@@ -105,7 +112,7 @@ export const marketingAttributionRoute: DashboardRouteDefinition = {
 };
 
 function MarketingAttributionPage() {
-    const { t } = useLingui();
+    const { t, i18n } = useLingui();
     const initial = useMemo(() => defaultRange(), []);
     const [from, setFrom] = useState(initial.from);
     const [to, setTo] = useState(initial.to);
@@ -180,11 +187,11 @@ function MarketingAttributionPage() {
                         />
                         <Metric
                             label={t(messages.refundAdjustedRoas)}
-                            value={ratio(summary?.refundAdjustedRoas)}
+                            value={marketingReturnMultiple(summary?.refundAdjustedRoas, i18n.locale)}
                         />
                         <Metric
                             label={t(messages.refundAdjustedRoi)}
-                            value={percent(summary?.refundAdjustedRoi)}
+                            value={marketingReturnPercent(summary?.refundAdjustedRoi, i18n.locale)}
                         />
                     </div>
                 </PageBlock>
@@ -208,8 +215,8 @@ function MarketingAttributionPage() {
                                             t(messages.conversion),
                                             t(messages.netRevenue),
                                             t(messages.cost),
-                                            'ROAS',
-                                            'ROI',
+                                            t(messages.refundAdjustedRoas),
+                                            t(messages.refundAdjustedRoi),
                                         ].map(label => (
                                             <th key={label} className="whitespace-nowrap p-2">
                                                 {label}
@@ -221,15 +228,19 @@ function MarketingAttributionPage() {
                                     {(data?.items ?? []).map(item => (
                                         <tr key={`${item.source}:${item.medium}:${item.campaign}`}>
                                             <td className="p-2 font-medium">
-                                                {item.source} / {item.medium}
+                                                {marketingSourceLabel(item.source, item.medium, i18n.locale)}
                                             </td>
-                                            <td className="p-2">{item.campaign}</td>
+                                            <td className="p-2">
+                                                {marketingCampaignLabel(item.campaign, i18n.locale)}
+                                            </td>
                                             <td className="max-w-64 p-2">
                                                 {item.searchTerms.join(', ') || '—'}
                                             </td>
                                             <td className="p-2 tabular-nums">{item.visitorCount}</td>
                                             <td className="p-2 tabular-nums">
-                                                {item.productViewCount} / {item.checkoutViewCount}
+                                                {/^zh/iu.test(i18n.locale)
+                                                    ? `浏览 ${item.productViewCount} 次 · 结账 ${item.checkoutViewCount} 次`
+                                                    : `${item.productViewCount} views / ${item.checkoutViewCount} checkouts`}
                                             </td>
                                             <td className="p-2 tabular-nums">{item.orderCount}</td>
                                             <td className="p-2 tabular-nums">
@@ -242,10 +253,13 @@ function MarketingAttributionPage() {
                                                 {money(item.campaignCostMicrounits, currencyCode)}
                                             </td>
                                             <td className="p-2 tabular-nums">
-                                                {ratio(item.refundAdjustedRoas)}
+                                                {marketingReturnMultiple(
+                                                    item.refundAdjustedRoas,
+                                                    i18n.locale,
+                                                )}
                                             </td>
                                             <td className="p-2 tabular-nums">
-                                                {percent(item.refundAdjustedRoi)}
+                                                {marketingReturnPercent(item.refundAdjustedRoi, i18n.locale)}
                                             </td>
                                         </tr>
                                     ))}

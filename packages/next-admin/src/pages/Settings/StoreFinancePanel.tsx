@@ -1,10 +1,15 @@
 import { useMutation } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, WalletCards } from 'lucide-react';
 import { useState } from 'react';
-import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import {
+    systemFieldDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { selectQueryFields } from '../../utils/select-query-fields';
 
 import { sensitiveActionContext } from '../../apollo';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
@@ -49,7 +54,10 @@ interface CurrencyDraft {
 type ProtectedAction = 'save' | 'refresh-fiat' | 'refresh-usdt' | 'submit-wallet';
 
 export function CurrencyAndRatesPanel() {
-    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, {});
+    const query = useQuery<FinanceData>(
+        selectQueryFields(MY_STORE_FINANCE_QUERY, ['myStoreCurrencyConfiguration']),
+        {},
+    );
     const configuration = query.data?.myStoreCurrencyConfiguration;
     const serverDraft = useServerDraft<CurrencyDraft>(
         'currency-config',
@@ -311,7 +319,21 @@ export function CurrencyAndRatesPanel() {
 }
 
 export function StoreUsdtPanel() {
-    const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, {});
+    const standalonePage = useStandaloneAdminPage();
+    const view = standalonePage?.detail ?? 'settings';
+    const query = useQuery<FinanceData>(
+        selectQueryFields(MY_STORE_FINANCE_QUERY, [
+            'myStoreUsdtWallet',
+            ...(view === 'payments'
+                ? ['myStorePaymentStats', 'myStorePaymentDetails']
+                : view === 'refunds'
+                  ? ['myStoreUsdtManualRefunds']
+                  : view === 'intents'
+                    ? ['myStoreUsdtPaymentIntents', 'myStoreUsdtPaymentStats']
+                    : []),
+        ]),
+        {},
+    );
     const [address, setAddress] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [notice, setNotice] = useState('');
@@ -349,80 +371,146 @@ export function StoreUsdtPanel() {
         <div className="space-y-4">
             {notice && <Notice tone="success" message={notice} />}
             {error && !dialogOpen && <Notice tone="error" message={error} />}
-            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-                <PanelHeading
-                    icon={<WalletCards className="h-5 w-5 text-emerald-600" />}
-                    title="USDT TRC20 收款地址"
-                    description="收款地址由平台管理中心统一配置，本店只查看状态。"
-                />
-                <div className="grid gap-3 md:grid-cols-3">
-                    <Metric label="审核状态" value={storeUsdtWalletStatusLabel(wallet.reviewStatus)} />
-                    <Metric label="当前地址" value={wallet.activeReceivingAddressMasked ?? '未配置'} mono />
-                    <Metric label="地址校验码" value={wallet.activeReceivingAddressFingerprint ?? '—'} mono />
-                </div>
-                {wallet.rejectionReason && (
-                    <Notice tone="error" message={`驳回原因：${wallet.rejectionReason}`} />
-                )}
-                <p className="text-xs text-slate-500">平台统一收款，本店支付开关在店铺设置管理。</p>
-            </section>
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <PanelHeading
-                    title="收款概览"
-                    description="按支付方式对账；受控模拟支付单列，不代表真实到账。"
-                />
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Metric label="USDT 意向" value={String(stats?.totalCount ?? 0)} />
-                    <Metric label="已到账" value={String(stats?.settledCount ?? 0)} />
-                    <Metric label="待复核" value={String(stats?.manualReviewCount ?? 0)} />
-                    <Metric label="实收 USDT" value={(stats?.receivedUsdtTotal ?? 0).toFixed(6)} />
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {paymentStats.map(item => (
-                        <article
-                            key={`${item.paymentMethodCode}:${item.currencyCode}`}
-                            className="rounded-lg border border-slate-200 p-3 text-xs"
-                        >
-                            <strong>{storePaymentMethodLabel(item.paymentMethodCode)}</strong>
-                            <span className="ml-2 text-slate-500">{item.currencyCode}</span>
-                            <b className="mt-2 block text-lg">
-                                {formatMoney(item.netAmount, item.currencyCode)}
-                            </b>
-                            <small className="text-slate-500">
-                                {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
-                                {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
-                                {formatMoney(item.refundedAmount, item.currencyCode)}
-                            </small>
-                        </article>
-                    ))}
-                    {!paymentStats.length && <p className="text-xs text-slate-500">暂无已结算支付</p>}
-                </div>
-            </section>
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <PanelHeading title="USDT 最新收款意向" description="显示报价、到账、过期与人工复核结果。" />
-                <div className="mt-4 max-h-[34rem] space-y-2 overflow-auto">
-                    {intents.map(intent => (
-                        <article
-                            key={intent.id}
-                            className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
-                        >
-                            <span>
-                                <strong>订单 {intent.orderCode}</strong>
-                                <small className="ml-2 text-slate-500">
-                                    <span>{storeUsdtPaymentIntentStatusLabel(intent.status)}</span> ·{' '}
-                                    {formatDateTime(intent.createdAt)}
-                                </small>
-                                <span className="mt-1 block font-mono text-[10px] text-slate-500">
-                                    {intent.transactionId ?? '尚无交易号'}
-                                </span>
-                            </span>
-                            <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
-                        </article>
-                    ))}
-                    {!intents.length && (
-                        <p className="py-8 text-center text-xs text-slate-500">暂无 USDT 收款记录</p>
+            {view === 'settings' && (
+                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                    <PanelHeading
+                        icon={<WalletCards className="h-5 w-5 text-emerald-600" />}
+                        title="USDT TRC20 收款地址"
+                        description="收款地址由平台管理中心统一配置，本店只查看状态。"
+                    />
+                    <div className="grid gap-3 md:grid-cols-3">
+                        <Metric label="审核状态" value={storeUsdtWalletStatusLabel(wallet.reviewStatus)} />
+                        <Metric
+                            label="当前地址"
+                            value={wallet.activeReceivingAddressMasked ?? '未配置'}
+                            mono
+                        />
+                        <Metric
+                            label="地址校验码"
+                            value={wallet.activeReceivingAddressFingerprint ?? '—'}
+                            mono
+                        />
+                    </div>
+                    {wallet.rejectionReason && (
+                        <Notice tone="error" message={`驳回原因：${wallet.rejectionReason}`} />
                     )}
-                </div>
-            </section>
+                    <p className="text-xs text-slate-500">平台统一收款，本店支付开关在店铺设置管理。</p>
+                </section>
+            )}
+            {view === 'payments' && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                    <PanelHeading
+                        title="收款概览"
+                        description="按支付方式对账；受控模拟支付单列，不代表真实到账。"
+                    />
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <Metric label="USDT 意向" value={String(stats?.totalCount ?? 0)} />
+                        <Metric label="已到账" value={String(stats?.settledCount ?? 0)} />
+                        <Metric label="待复核" value={String(stats?.manualReviewCount ?? 0)} />
+                        <Metric label="实收 USDT" value={(stats?.receivedUsdtTotal ?? 0).toFixed(6)} />
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {paymentStats.map(item => (
+                            <article
+                                key={`${item.paymentMethodCode}:${item.currencyCode}`}
+                                className="rounded-lg border border-slate-200 p-3 text-xs"
+                            >
+                                <strong>{storePaymentMethodLabel(item.paymentMethodCode)}</strong>
+                                <span className="ml-2 text-slate-500">{item.currencyCode}</span>
+                                <b className="mt-2 block text-lg">
+                                    {formatMoney(item.netAmount, item.currencyCode)}
+                                </b>
+                                <small className="text-slate-500">
+                                    {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
+                                    {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
+                                    {formatMoney(item.refundedAmount, item.currencyCode)}
+                                </small>
+                            </article>
+                        ))}
+                        {!paymentStats.length && <p className="text-xs text-slate-500">暂无已结算支付</p>}
+                    </div>
+                </section>
+            )}
+            {view === 'intents' && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                    <PanelHeading
+                        title="USDT 最新收款意向"
+                        description="显示报价、到账、过期与人工复核结果。"
+                    />
+                    <div className="mt-4 max-h-[34rem] space-y-2 overflow-auto">
+                        {intents.map(intent => (
+                            <article
+                                key={intent.id}
+                                className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
+                            >
+                                <span>
+                                    <strong>订单 {intent.orderCode}</strong>
+                                    <small className="ml-2 text-slate-500">
+                                        <span>{storeUsdtPaymentIntentStatusLabel(intent.status)}</span> ·{' '}
+                                        {formatDateTime(intent.createdAt)}
+                                    </small>
+                                    <span className="mt-1 block font-mono text-[10px] text-slate-500">
+                                        {intent.transactionId ?? '尚无交易号'}
+                                    </span>
+                                </span>
+                                <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
+                            </article>
+                        ))}
+                        {!intents.length && (
+                            <p className="py-8 text-center text-xs text-slate-500">暂无 USDT 收款记录</p>
+                        )}
+                    </div>
+                </section>
+            )}
+            {view === 'payments' && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                    <PanelHeading title="支付流水" description="仅显示本店支付明细。" />
+                    <div className="mt-4 overflow-x-auto">
+                        <table className="min-w-full text-left text-xs">
+                            <thead>
+                                <tr>
+                                    {['订单', '支付方式', '状态', '金额', '创建时间'].map(label => (
+                                        <th key={label} className="p-2">
+                                            {label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(query.data?.myStorePaymentDetails?.items ?? []).map(item => (
+                                    <tr key={item.id}>
+                                        <td className="p-2">{item.orderCode}</td>
+                                        <td>{storePaymentMethodLabel(item.paymentMethodCode)}</td>
+                                        <td>{systemStatusDisplayLabel(item.paymentState)}</td>
+                                        <td>{formatMoney(item.amount, item.currencyCode)}</td>
+                                        <td>{formatDateTime(item.createdAt)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {!query.data?.myStorePaymentDetails?.items.length && (
+                            <p className="py-8 text-center text-xs text-slate-500">暂无支付记录</p>
+                        )}
+                    </div>
+                </section>
+            )}
+            {view === 'refunds' && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                    <PanelHeading title="人工退款审计" description="仅显示本店已登记的退款证据。" />
+                    <div className="mt-4 space-y-2">
+                        {(query.data?.myStoreUsdtManualRefunds?.items ?? []).map(item => (
+                            <article key={item.id} className="rounded-lg border border-slate-200 p-3 text-xs">
+                                订单 {item.orderCode} · {Number(item.usdtAmount).toFixed(6)} USDT ·{' '}
+                                {formatDateTime(item.createdAt)}
+                                <p>{item.transactionId}</p>
+                            </article>
+                        ))}
+                        {!query.data?.myStoreUsdtManualRefunds?.items.length && (
+                            <p className="py-8 text-center text-xs text-slate-500">暂无退款记录</p>
+                        )}
+                    </div>
+                </section>
+            )}
             <SensitiveActionDialog
                 open={dialogOpen}
                 title="确认提交 USDT 收款地址"
@@ -499,9 +587,8 @@ function PanelHeading({
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
-                <FeatureHelpButton topic="settings.finance" title={title} />
+                <FeatureHelpButton topic="settings.finance" title={title} description={description} />
             </h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
         </div>
     );
 }

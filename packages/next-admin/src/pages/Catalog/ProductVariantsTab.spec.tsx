@@ -72,7 +72,8 @@ describe('ProductVariantsTab store isolation', () => {
 
         expect(container.textContent).toContain('本商品仅属于 美宜佳');
         expect(container.textContent).toContain('单店独立');
-        expect(container.textContent).toContain('重新创建或导入独立副本');
+        expect(container.textContent).not.toContain('重新创建或导入独立副本');
+        expect(container.querySelector('button[aria-label="查看“店铺独立商品”功能说明"]')).not.toBeNull();
         expect(container.querySelector('input[type="checkbox"]')).toBeNull();
     });
 

@@ -255,31 +255,23 @@
     }
 
     .hero-page-picker {
-        position: absolute;
-        z-index: 3;
-        right: 20px;
-        bottom: 12px;
+        flex: 0 0 auto;
+        margin-left: auto;
         max-width: min(40%, 320px);
         display: flex;
-        align-items: center;
-        gap: var(--space-4);
-        padding: var(--space-4);
+        align-items: stretch;
+        min-height: calc(var(--type-meta-leading) + var(--space-16));
+        gap: 0;
+        padding: 0 var(--space-4);
         overflow-x: auto;
         scrollbar-width: none;
-        border: 1px solid var(--line-subtle);
-        border-radius: calc(var(--skin-control-radius) + var(--space-4));
-        background: color-mix(in srgb, var(--surface) 82%, transparent);
-        color: var(--text);
-        box-shadow: var(--shadow-md);
-        -webkit-backdrop-filter: blur(12px);
-        backdrop-filter: blur(12px);
         cursor: default;
     }
 
     .hero-page-picker button {
         flex: 0 0 36px;
         width: 36px;
-        height: 36px;
+        min-height: calc(var(--type-meta-leading) + var(--space-16));
         padding: 0;
         display: grid;
         place-items: center;
@@ -287,10 +279,10 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         color: inherit;
-        font-size: var(--type-action-size);
-        font-weight: var(--font-weight-semibold);
+        font-size: var(--type-meta-size);
+        font-weight: var(--font-weight-medium);
         font-variant-numeric: tabular-nums;
-        line-height: var(--type-action-leading);
+        line-height: var(--type-meta-leading);
         cursor: pointer;
         transition:
             background-color 150ms ease,
@@ -298,21 +290,21 @@
     }
 
     .hero-page-picker button:hover {
-        background: color-mix(in srgb, var(--text) 10%, transparent);
+        color: var(--accent-ink);
     }
 
     .hero-page-picker button[aria-current='true'] {
-        background: var(--text);
-        color: var(--surface);
+        font-weight: var(--font-weight-bold);
+    }
+
+    .hero-page-number {
+        /* Match the optical center of short Latin digits to the trust labels. */
+        transform: translateY(1px);
     }
 
     .hero-page-picker button:focus-visible {
         outline: var(--experience-focus-width) solid var(--focus);
         outline-offset: -2px;
-    }
-
-    .home-page .hero.has-page-picker .hero-service-overlay {
-        max-width: calc(60% - clamp(28px, 3vw, 44px) - 20px);
     }
 
     @media (prefers-reduced-motion: reduce) {

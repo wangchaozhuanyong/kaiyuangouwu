@@ -27,7 +27,9 @@ describe('decoration drafts follow the Shop publication contract', () => {
             imageUrl: '/assets/homepage.png',
             imageAsset: { width: 1200, height: 600 },
         });
-        const neighbour = decorationDraft(newContentBlock('HERO', 1, '首页'), 'zh_Hans').block;
+        const neighbouringBlock = newContentBlock('HERO', 1, '首页');
+        neighbouringBlock.enabled = true;
+        const neighbour = decorationDraft(neighbouringBlock, 'zh_Hans').block;
         if (!neighbour) throw new Error('Missing homepage fixture');
         expect(applyDecorationDraft([neighbour], draft)).toEqual([draft.block, neighbour]);
     });

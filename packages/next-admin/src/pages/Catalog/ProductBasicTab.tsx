@@ -65,9 +65,12 @@ export function ProductBasicTab() {
                     <div className="border-b border-slate-100 pb-3">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             商品描述
-                            <FeatureHelpButton topic="catalog.spu-core" title="SPU 核心属性" />
+                            <FeatureHelpButton
+                                topic="catalog.spu-core"
+                                title="SPU 核心属性"
+                                description={'编辑商城商品页中的主要文字说明'}
+                            />
                         </h3>
-                        <p className="mt-0.5 text-xs text-slate-400">编辑商城商品页中的主要文字说明</p>
                     </div>
                     <div>
                         <label
@@ -116,12 +119,14 @@ export function ProductBasicTab() {
                     <div className="border-b border-slate-100 pb-3">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             商品类型与交付政策
-                            <FeatureHelpButton topic="catalog.product-policy" title="商品类型与交付政策" />
+                            <FeatureHelpButton
+                                topic="catalog.product-policy"
+                                title="商品类型与交付政策"
+                                description={
+                                    '商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按 SKU 配置。'
+                                }
+                            />
                         </h3>
-                        <p className="mt-1 text-xs leading-5 text-slate-400">
-                            商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按 SKU
-                            配置。
-                        </p>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
@@ -245,11 +250,12 @@ export function ProductBasicTab() {
                     <div>
                         <h3 className="text-sm font-bold text-slate-900">
                             商品详情图
-                            <FeatureHelpButton topic="catalog.product-assets" title="商品详情图" />
+                            <FeatureHelpButton
+                                topic="catalog.product-assets"
+                                title="商品详情图"
+                                description={'可多选素材，用于展示商品细节、功能和使用说明'}
+                            />
                         </h3>
-                        <p className="mt-0.5 text-xs leading-5 text-slate-400">
-                            可多选素材，用于展示商品细节、功能和使用说明
-                        </p>
                     </div>
                     <div className="flex w-full shrink-0 flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
                         <ImageAssetUploadButton
@@ -331,11 +337,15 @@ export function ProductBasicTab() {
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             商品筛选属性与标签
-                            <FeatureHelpButton topic="catalog.facets" title="商品筛选属性与标签" />
+                            <FeatureHelpButton
+                                topic="catalog.facets"
+                                title="商品筛选属性与标签"
+                                description={
+                                    '品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。
-                        </p>
+
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-blue-700">
                             <AdminButton
                                 type="button"
@@ -359,11 +369,13 @@ export function ProductBasicTab() {
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             系统创建时间
-                            <FeatureHelpButton topic="catalog.product-dates" title="系统创建时间" />
+                            <FeatureHelpButton
+                                topic="catalog.product-dates"
+                                title="系统创建时间"
+                                description={'商品首次在本系统建档的时间，自动记录，无需填写。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            商品首次在本系统建档的时间，自动记录，无需填写。
-                        </p>
+
                         <p className="mt-3 text-sm text-slate-700">
                             {isCreateMode ? (
                                 '首次保存商品后自动记录'

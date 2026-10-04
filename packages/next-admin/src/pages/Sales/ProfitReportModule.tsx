@@ -66,36 +66,23 @@ export function ProfitReportModule() {
     return (
         <div className="min-h-full bg-slate-50">
             <header className="border-b border-slate-200 bg-white px-5 py-5 shadow-xs sm:px-8">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <div className="flex items-center gap-2">
                             <CircleDollarSign className="h-5 w-5 text-emerald-600" />
                             <h1 className="text-xl font-bold text-slate-900">
                                 利润统计
-                                <FeatureHelpButton topic="sales.profit" title="利润统计" />
+                                <FeatureHelpButton
+                                    topic="sales.profit"
+                                    title="利润统计"
+                                    description={
+                                        '按下单日期、当前店铺和已结算支付核算；折扣、税额、退款、商品成本、物流、渠道手续费和拒付分开列示。'
+                                    }
+                                />
                             </h1>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                            按下单日期、当前店铺和已结算支付核算；折扣、税额、退款、商品成本、物流、渠道手续费和拒付分开列示。
-                        </p>
                     </div>
                     <div className="flex flex-wrap items-end gap-2">
-                        <DateField
-                            label="开始日期"
-                            value={fromDate}
-                            onChange={value => {
-                                setFromDate(value);
-                                setPage(0);
-                            }}
-                        />
-                        <DateField
-                            label="结束日期"
-                            value={toDate}
-                            onChange={value => {
-                                setToDate(value);
-                                setPage(0);
-                            }}
-                        />
                         <AdminButton
                             refreshPage
                             type="button"
@@ -185,7 +172,7 @@ export function ProfitReportModule() {
                 </details>
 
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-                    <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                    <div className="space-y-3 border-b border-slate-200 px-5 py-4">
                         <div>
                             <h2 className="text-sm font-bold text-slate-900">
                                 订单利润明细
@@ -194,6 +181,24 @@ export function ProfitReportModule() {
                             <p className="mt-1 text-[11px] text-slate-500">
                                 共 {report?.totalItems ?? 0} 笔已结算订单
                             </p>
+                        </div>
+                        <div className="admin-report-date-range" role="group" aria-label="利润统计日期范围">
+                            <DateField
+                                label="开始日期"
+                                value={fromDate}
+                                onChange={value => {
+                                    setFromDate(value);
+                                    setPage(0);
+                                }}
+                            />
+                            <DateField
+                                label="结束日期"
+                                value={toDate}
+                                onChange={value => {
+                                    setToDate(value);
+                                    setPage(0);
+                                }}
+                            />
                         </div>
                     </div>
                     {query.loading && !report ? (

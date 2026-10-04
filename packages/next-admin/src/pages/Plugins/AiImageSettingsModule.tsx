@@ -44,7 +44,9 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney, moneyToMajorInput } from '../Sales/sales-utils';
@@ -79,6 +81,7 @@ const JOB_STATE_OPTIONS: Array<[JobStateFilter, string]> = [
 ];
 
 export function AiImageSettingsModule() {
+    const standalonePage = useStandaloneAdminPage();
     const { hasAnyPermission } = useAdminPermissions();
     const canActivateSkill = hasAnyPermission(['SuperAdmin']);
     const [tab, setTab] = useUrlTab<StudioTab>(AI_STUDIO_TABS, 'config');
@@ -89,23 +92,36 @@ export function AiImageSettingsModule() {
     const [jobPage, setJobPage] = useState(0);
     const [pageSize, setPageSize] = usePageSize(setJobPage);
     const [jobState, setJobState] = useState<JobStateFilter>('ALL');
-    const query = useQuery<ImageGenerationAdminResult>(IMAGE_GENERATION_ADMIN_QUERY, {
-        variables: {
-            skip: jobPage * pageSize,
-            take: pageSize,
-            state: jobState === 'ALL' ? null : jobState,
-        },
+    const query = useQuery<ImageGenerationAdminResult>(
+        standalonePage
+            ? selectQueryFields(IMAGE_GENERATION_ADMIN_QUERY, [
+                  'activeChannel',
+                  ...(tab === 'CONFIG'
+                      ? ['imageGenerationAdminConfig']
+                      : tab === 'JOBS'
+                        ? ['imageGenerationJobs']
+                        : ['imagePromptSkillReleases']),
+              ])
+            : IMAGE_GENERATION_ADMIN_QUERY,
+        {
+            skip: tab === 'USAGE',
+            variables: {
+                skip: jobPage * pageSize,
+                take: pageSize,
+                state: jobState === 'ALL' ? null : jobState,
+            },
 
-        notifyOnNetworkStatusChange: true,
-    });
+            notifyOnNetworkStatusChange: true,
+        },
+    );
     const [retryOutput, retryState] = useMutation(RETRY_IMAGE_OUTPUT_MUTATION);
     const [refundOutput, refundState] = useMutation<{
         refundImageOutput: Pick<ImageGenerationOutputRecord, 'refundedAt' | 'billingMode' | 'chargeAmount'>;
     }>(REFUND_IMAGE_OUTPUT_MUTATION);
     const [activateSkill, skillState] = useMutation(ACTIVATE_IMAGE_SKILL_MUTATION);
     const config = query.data?.imageGenerationAdminConfig;
-    const jobs = query.data?.imageGenerationJobs.items ?? [];
-    const jobTotal = query.data?.imageGenerationJobs.totalItems ?? 0;
+    const jobs = query.data?.imageGenerationJobs?.items ?? [];
+    const jobTotal = query.data?.imageGenerationJobs?.totalItems ?? 0;
     const jobTotalPages = Math.max(1, Math.ceil(jobTotal / pageSize));
     const unknownCount = jobs.flatMap(job => job.outputs).filter(output => output.state === 'UNKNOWN').length;
 
@@ -160,12 +176,13 @@ export function AiImageSettingsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-blue-600" />
-                            AI 图片工坊管理
-                            <FeatureHelpButton topic="plugins.ai-settings" title="AI 图片工坊管理" />
+                            {standalonePage?.title ?? 'AI 图片工坊管理'}
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="AI 图片工坊管理"
+                                description={'店铺配置、生图任务、供应商费用和提示词规则包'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            店铺配置、生图任务、供应商费用和提示词规则包
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -181,35 +198,37 @@ export function AiImageSettingsModule() {
                     </AdminButton>
                 </div>
             </header>
-            <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                <div className="mx-auto flex w-full max-w-none gap-6 overflow-x-auto text-xs font-bold">
-                    <Tab
-                        active={tab === 'CONFIG'}
-                        onClick={() => setTab('CONFIG')}
-                        icon={Cpu}
-                        label="运营配置"
-                    />
-                    <Tab
-                        active={tab === 'JOBS'}
-                        onClick={() => setTab('JOBS')}
-                        icon={ImageIcon}
-                        label={`任务与售后 ${query.data?.imageGenerationJobs.totalItems ?? 0}`}
-                        badge={unknownCount ? `${unknownCount} 本页待确认` : undefined}
-                    />
-                    <Tab
-                        active={tab === 'USAGE'}
-                        onClick={() => setTab('USAGE')}
-                        icon={CircleDollarSign}
-                        label="使用记录与费用"
-                    />
-                    <Tab
-                        active={tab === 'SKILLS'}
-                        onClick={() => setTab('SKILLS')}
-                        icon={ShieldCheck}
-                        label="提示词规则包"
-                    />
-                </div>
-            </nav>
+            {!standalonePage && (
+                <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
+                    <div className="mx-auto flex w-full max-w-none gap-6 overflow-x-auto text-xs font-bold">
+                        <Tab
+                            active={tab === 'CONFIG'}
+                            onClick={() => setTab('CONFIG')}
+                            icon={Cpu}
+                            label="运营配置"
+                        />
+                        <Tab
+                            active={tab === 'JOBS'}
+                            onClick={() => setTab('JOBS')}
+                            icon={ImageIcon}
+                            label={`任务与售后 ${query.data?.imageGenerationJobs?.totalItems ?? 0}`}
+                            badge={unknownCount ? `${unknownCount} 本页待确认` : undefined}
+                        />
+                        <Tab
+                            active={tab === 'USAGE'}
+                            onClick={() => setTab('USAGE')}
+                            icon={CircleDollarSign}
+                            label="使用记录与费用"
+                        />
+                        <Tab
+                            active={tab === 'SKILLS'}
+                            onClick={() => setTab('SKILLS')}
+                            icon={ShieldCheck}
+                            label="提示词规则包"
+                        />
+                    </div>
+                </nav>
+            )}
             <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
@@ -374,11 +393,12 @@ function ConfigPanel({
                     <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             基础设置
-                            <FeatureHelpButton topic="plugins.ai-settings" title="基础设置" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="基础设置"
+                                description={'先查看当前状态，需要调整时再从右侧打开设置。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            先查看当前状态，需要调整时再从右侧打开设置。
-                        </p>
                     </div>
                     <div className="grid gap-px bg-slate-100 xl:grid-cols-2">
                         <ConfigSettingRow
@@ -424,11 +444,12 @@ function ConfigPanel({
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 生图模型与单张定价
-                                <FeatureHelpButton topic="plugins.ai-settings" title="生图模型与单张定价" />
+                                <FeatureHelpButton
+                                    topic="plugins.ai-settings"
+                                    title="生图模型与单张定价"
+                                    description={'每个模型单独设置，价格按 Vendure 货币单位结算。'}
+                                />
                             </h2>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                                每个模型单独设置，价格按 Vendure 货币单位结算。
-                            </p>
                         </div>
                         <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
                             {value.models.length} 个模型
@@ -487,11 +508,13 @@ function ConfigPanel({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             服务状态
-                            <FeatureHelpButton topic="plugins.ai-settings" title="服务状态" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="服务状态"
+                                description={'只有凭据健康且至少一个模型可用时，买家端才会真正开放。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            只有凭据健康且至少一个模型可用时，买家端才会真正开放。
-                        </p>
+
                         <div className="mt-4 space-y-3">
                             <ToggleCard
                                 label="开放 AI 图片工坊"
@@ -510,11 +533,13 @@ function ConfigPanel({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             默认生图模型
-                            <FeatureHelpButton topic="plugins.ai-settings" title="默认生图模型" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="默认生图模型"
+                                description={'新任务会优先使用这里选择且已启用的模型。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            新任务会优先使用这里选择且已启用的模型。
-                        </p>
+
                         <div className="mt-4">
                             <Field label="默认模型">
                                 <AdminSelect
@@ -885,9 +910,15 @@ function ConfigSettingRow({
                 <div className="min-w-0">
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                         {title}
-                        {helpTitle && <FeatureHelpButton topic="plugins.ai-settings" title={helpTitle} />}
+                        {helpTitle && (
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title={helpTitle}
+                                description={description}
+                            />
+                        )}
                     </h3>
-                    <p className="mt-1 break-words text-[11px] leading-5 text-slate-500">{description}</p>
+
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">{children}</div>
                 </div>
             </div>
@@ -1467,11 +1498,12 @@ function SkillPanel({
             <div className="border-b border-slate-100 p-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     提示词编译规则发布
-                    <FeatureHelpButton topic="plugins.ai-settings" title="提示词编译规则发布" />
+                    <FeatureHelpButton
+                        topic="plugins.ai-settings"
+                        title="提示词编译规则发布"
+                        description={'规则包由后端构建发布，本页只允许激活已经过校验的版本'}
+                    />
                 </h2>
-                <p className="mt-1 text-[11px] text-slate-400">
-                    规则包由后端构建发布，本页只允许激活已经过校验的版本
-                </p>
             </div>
             <div className="divide-y divide-slate-100">
                 {releases.map(release => {

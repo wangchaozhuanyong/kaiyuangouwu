@@ -71,9 +71,12 @@ export function ProductEditorSidebar() {
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <Package className="h-4 w-4 text-blue-600" />
                             商品总览
-                            <FeatureHelpButton topic="catalog.product-editor" title="商品编辑器" />
+                            <FeatureHelpButton
+                                topic="catalog.product-editor"
+                                title="商品编辑器"
+                                description={'切换右侧步骤时保持不变'}
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] leading-4 text-slate-400">切换右侧步骤时保持不变</p>
                     </div>
                     <span
                         className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${

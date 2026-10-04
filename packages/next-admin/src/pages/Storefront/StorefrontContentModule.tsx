@@ -47,9 +47,11 @@ import {
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     blockTranslation,
@@ -73,6 +75,7 @@ type ContentTab = 'PAGES' | 'ANNOUNCEMENTS' | 'LANDING';
 const CONTENT_TABS = { pages: 'PAGES', announcements: 'ANNOUNCEMENTS', landing: 'LANDING' } as const;
 
 export function StorefrontContentModule() {
+    const standalonePage = useStandaloneAdminPage();
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -87,7 +90,12 @@ export function StorefrontContentModule() {
     const [deletingAnnouncement, setDeletingAnnouncement] = useState<SystemAnnouncementRecord | null>(null);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
+    const content = useQuery<StorefrontContentResult>(
+        standalonePage && tab !== 'PAGES'
+            ? selectQueryFields(STOREFRONT_CONTENT_QUERY, ['activeChannel'])
+            : STOREFRONT_CONTENT_QUERY,
+        {},
+    );
     const announcements = useQuery<{ systemAnnouncements: SystemAnnouncementRecord[] }>(
         SYSTEM_ANNOUNCEMENTS_QUERY,
         {
@@ -101,7 +109,7 @@ export function StorefrontContentModule() {
         },
     );
     const requestedAnnouncementId = searchParams.get('announcementId');
-    const requestedAnnouncement = announcements.data?.systemAnnouncements.find(
+    const requestedAnnouncement = announcements.data?.systemAnnouncements?.find(
         item => item.id === requestedAnnouncementId,
     );
     const activeAnnouncementEditor = editingAnnouncement ?? requestedAnnouncement ?? null;
@@ -272,12 +280,13 @@ export function StorefrontContentModule() {
                 <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                            店铺内容与页面
-                            <FeatureHelpButton topic="storefront.content" title="店铺内容与页面" />
+                            {standalonePage?.title ?? '店铺内容与页面'}
+                            <FeatureHelpButton
+                                topic="storefront.content"
+                                title="店铺内容与页面"
+                                description={'法律客服、登录视觉、导航、公告和推广落地页集中管理'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            法律客服、登录视觉、导航、公告和推广落地页集中管理
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -300,30 +309,32 @@ export function StorefrontContentModule() {
                     </AdminButton>
                 </div>
             </header>
-            <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
-                    <TabButton
-                        active={tab === 'PAGES'}
-                        onClick={() => setTab('PAGES')}
-                        icon={FileText}
-                        label="固定内容"
-                    />
-                    {canManageAnnouncements && (
+            {!standalonePage && (
+                <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
+                    <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
                         <TabButton
-                            active={tab === 'ANNOUNCEMENTS'}
-                            onClick={() => setTab('ANNOUNCEMENTS')}
-                            icon={Megaphone}
-                            label="首页公告"
+                            active={tab === 'PAGES'}
+                            onClick={() => setTab('PAGES')}
+                            icon={FileText}
+                            label="固定内容"
                         />
-                    )}
-                    <TabButton
-                        active={tab === 'LANDING'}
-                        onClick={() => setTab('LANDING')}
-                        icon={Code2}
-                        label="推广落地页"
-                    />
-                </div>
-            </nav>
+                        {canManageAnnouncements && (
+                            <TabButton
+                                active={tab === 'ANNOUNCEMENTS'}
+                                onClick={() => setTab('ANNOUNCEMENTS')}
+                                icon={Megaphone}
+                                label="首页公告"
+                            />
+                        )}
+                        <TabButton
+                            active={tab === 'LANDING'}
+                            onClick={() => setTab('LANDING')}
+                            icon={Code2}
+                            label="推广落地页"
+                        />
+                    </div>
+                </nav>
+            )}
 
             <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
@@ -477,11 +488,12 @@ function PageBlockList({
             <div className="mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     固定内容配置
-                    <FeatureHelpButton topic="storefront.fixed-content" title="固定内容配置" />
+                    <FeatureHelpButton
+                        topic="storefront.fixed-content"
+                        title="固定内容配置"
+                        description={'首页轮播与营销楼层已放到“商城首页装修”，这里不再重复。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                    首页轮播与营销楼层已放到“商城首页装修”，这里不再重复。
-                </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {contentModuleDescriptors.map(descriptor => {
@@ -580,12 +592,14 @@ function AnnouncementList({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         首页公告
-                        <FeatureHelpButton topic="storefront.announcements" title="首页公告" />
+                        <FeatureHelpButton
+                            topic="storefront.announcements"
+                            title="首页公告"
+                            description={
+                                '此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近 30 天内的有效公告，与手动公告合计最多 5 条。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近
-                        30 天内的有效公告，与手动公告合计最多 5 条。
-                    </p>
                 </div>
                 <AdminButton
                     type="button"
@@ -1245,9 +1259,12 @@ function PromotionPageEditor({
                 <div className="border-b border-slate-100 p-4">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         安全预览
-                        <FeatureHelpButton topic="storefront.safe-preview" title="安全预览" />
+                        <FeatureHelpButton
+                            topic="storefront.safe-preview"
+                            title="安全预览"
+                            description={'预览在沙箱中渲染，不执行页面脚本'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[10px] text-slate-400">预览在沙箱中渲染，不执行页面脚本</p>
                 </div>
                 {previewHtml ? (
                     <iframe

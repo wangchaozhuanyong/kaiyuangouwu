@@ -112,12 +112,12 @@ it('keeps a direct extension URL until its routes are registered', async () => {
 
     extensionState.routes.push({
         id: 'fixture-usdt-payments',
-        path: '/settings/usdt-payments',
+        path: '/settings/usdt-payments/wallets',
         component: () => null,
     });
     await act(async () => finishRegistration?.());
 
-    expect(window.location.pathname).toBe('/settings/usdt-payments');
+    expect(window.location.pathname).toBe('/settings/usdt-payments/wallets');
     expect(host.textContent).toContain('已进入管理界面');
 });
 

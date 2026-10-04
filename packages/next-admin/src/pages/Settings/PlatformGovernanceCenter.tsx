@@ -12,9 +12,12 @@ import {
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
+import { mergeQueryLists } from '../../utils/merge-query-lists';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { BusinessBasicsPanel } from './BusinessSettingsPanels';
 import { PaymentShippingManager } from './PaymentShippingManager';
@@ -23,7 +26,6 @@ import {
     Message,
     SettingsContentSkeleton,
     inputClass,
-    mergeById,
     primaryButton,
     secondaryButton,
 } from './settings-ui';
@@ -41,9 +43,11 @@ import {
     storeName,
 } from './StoreDialogs';
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
+import { StoreGovernanceHistory } from './StoreGovernanceHistory';
 import { governancePayloadRows, governanceRequestTypeLabel } from './StoreGovernanceLabels';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
 import { StoreSettingsNavigation } from './StoreSettingsNavigation';
+import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
 const directoryOptions = (skip: number) => ({ skip, take: 100, sort: dataTableSortPolicy.newestCreated });
 
 export function PlatformGovernanceCenter({
@@ -51,6 +55,7 @@ export function PlatformGovernanceCenter({
 }: {
     allowPermanentDeprovision: boolean;
 }) {
+    const standalonePage = useStandaloneAdminPage();
     const requestConfirmation = useConfirmDialog();
     const [reviewGovernance, reviewGovernanceState] = useMutation(REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION);
     const [updatePublicPreview, publicPreviewState] = useMutation(UPDATE_MY_STORE_PROFILE_MUTATION);
@@ -67,13 +72,45 @@ export function PlatformGovernanceCenter({
     const [actionError, setActionError] = useState('');
     const [initialSupplementSettled, setInitialSupplementSettled] = useState(false);
     const loadingAllStoreSettingsRef = useRef(false);
-    const query = useQuery<StoreManagementResult>(document, {
-        variables: {
-            sellerOptions: directoryOptions(0),
-            paymentMethodOptions: directoryOptions(0),
-            shippingMethodOptions: directoryOptions(0),
+    const query = useQuery<StoreManagementResult>(
+        standalonePage
+            ? selectQueryFields(document, [
+                  'activeAdministrator',
+                  'activeChannel',
+                  ...(standalonePage.key === 'stores'
+                      ? ['storeProfiles', 'storeProvisioningTemplates']
+                      : standalonePage.key === 'review' || standalonePage.key === 'payout'
+                        ? ['storeGovernanceChanges', 'storeProfiles']
+                        : standalonePage.key === 'audits'
+                          ? ['administratorPermissionAudits']
+                          : tab === 'DOMAINS'
+                            ? ['storeProfiles']
+                            : tab === 'SELLERS'
+                              ? ['sellers', 'storeProfiles']
+                              : tab === 'PAYMENT'
+                                ? [
+                                      'paymentMethods',
+                                      'paymentMethodEligibilityCheckers',
+                                      'paymentMethodHandlers',
+                                  ]
+                                : tab === 'SHIPPING'
+                                  ? [
+                                        'shippingMethods',
+                                        'shippingEligibilityCheckers',
+                                        'shippingCalculators',
+                                        'fulfillmentHandlers',
+                                    ]
+                                  : []),
+              ])
+            : document,
+        {
+            variables: {
+                sellerOptions: directoryOptions(0),
+                paymentMethodOptions: directoryOptions(0),
+                shippingMethodOptions: directoryOptions(0),
+            },
         },
-    });
+    );
     const {
         data: storeSettingsData,
         error: storeSettingsError,
@@ -89,13 +126,13 @@ export function PlatformGovernanceCenter({
     useEffect(() => {
         const data = storeSettingsData;
         if (!data || storeSettingsLoading || storeSettingsError || loadingAllStoreSettingsRef.current) return;
-        const sellerCount = data.sellers.items.length;
-        const paymentCount = data.paymentMethods.items.length;
-        const shippingCount = data.shippingMethods.items.length;
+        const sellerCount = data.sellers?.items.length ?? 0;
+        const paymentCount = data.paymentMethods?.items.length ?? 0;
+        const shippingCount = data.shippingMethods?.items.length ?? 0;
         if (
-            sellerCount >= data.sellers.totalItems &&
-            paymentCount >= data.paymentMethods.totalItems &&
-            shippingCount >= data.shippingMethods.totalItems
+            sellerCount >= (data.sellers?.totalItems ?? 0) &&
+            paymentCount >= (data.paymentMethods?.totalItems ?? 0) &&
+            shippingCount >= (data.shippingMethods?.totalItems ?? 0)
         )
             return;
         loadingAllStoreSettingsRef.current = true;
@@ -105,21 +142,8 @@ export function PlatformGovernanceCenter({
                 paymentMethodOptions: directoryOptions(paymentCount),
                 shippingMethodOptions: directoryOptions(shippingCount),
             },
-            updateQuery: (previous, { fetchMoreResult }) => ({
-                ...previous,
-                sellers: {
-                    ...fetchMoreResult.sellers,
-                    items: mergeById(previous.sellers.items, fetchMoreResult.sellers.items),
-                },
-                paymentMethods: {
-                    ...fetchMoreResult.paymentMethods,
-                    items: mergeById(previous.paymentMethods.items, fetchMoreResult.paymentMethods.items),
-                },
-                shippingMethods: {
-                    ...fetchMoreResult.shippingMethods,
-                    items: mergeById(previous.shippingMethods.items, fetchMoreResult.shippingMethods.items),
-                },
-            }),
+            updateQuery: (previous, { fetchMoreResult }) =>
+                mergeQueryLists(previous, fetchMoreResult, ['sellers', 'paymentMethods', 'shippingMethods']),
         })
             .catch(fetchError => {
                 setActionError(toUserFacingError(fetchError, '店铺基础数据未能全部加载'));
@@ -134,8 +158,15 @@ export function PlatformGovernanceCenter({
         [query.data?.storeProfiles],
     );
     const pendingGovernance =
-        query.data?.storeGovernanceChanges.filter(item => item.status === 'PENDING') ?? [];
-    const permissionAudits = query.data?.administratorPermissionAudits ?? [];
+        query.data?.storeGovernanceChanges?.filter(
+            item =>
+                item.status === 'PENDING' &&
+                (!standalonePage ||
+                    item.requestType ===
+                        (standalonePage.detail === 'payout' ? 'PAYOUT_ACCOUNT' : 'LEGAL_IDENTITY')),
+        ) ?? [];
+    const recentPermissionAudits =
+        query.data?.administratorPermissionAudits?.slice(0, standalonePage ? undefined : 5) ?? [];
     const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
     const canReadBusinessSettings = hasAnyPermission([
         'ReadSettings',
@@ -220,12 +251,13 @@ export function PlatformGovernanceCenter({
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Store className="h-5 w-5 text-blue-600" />
-                            平台治理中心
-                            <FeatureHelpButton topic="settings.store-profile" title="平台治理中心" />
+                            {standalonePage?.title ?? '平台治理中心'}
+                            <FeatureHelpButton
+                                topic="settings.store-profile"
+                                title="平台治理中心"
+                                description={'集中管理全部店铺、主体与支付审批、平台级配送和经营政策'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            集中管理全部店铺、主体与支付审批、平台级配送和经营政策
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -241,6 +273,7 @@ export function PlatformGovernanceCenter({
                             />
                         </AdminButton>
                         <AdminButton
+                            hidden={Boolean(standalonePage && standalonePage.key !== 'stores')}
                             type="button"
                             onClick={() => setProvisionOpen(true)}
                             className={primaryButton}
@@ -262,77 +295,132 @@ export function PlatformGovernanceCenter({
                         {actionError}
                     </Message>
                 )}
-                {pendingGovernance.length > 0 && (
-                    <section className="rounded-xl border border-amber-200 bg-white p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                            <div>
-                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                    待审批的店铺治理变更
-                                    <FeatureHelpButton
-                                        topic="settings.store-profile"
-                                        title="待审批的店铺治理变更"
-                                    />
-                                </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    店铺提交的主体、收款和支付配置在通过前不会覆盖线上值。
-                                </p>
+                {(pendingGovernance.length > 0 ||
+                    Boolean(standalonePage && ['review', 'payout'].includes(standalonePage.detail ?? ''))) &&
+                    (!standalonePage || ['review', 'payout'].includes(standalonePage.detail ?? '')) && (
+                        <section className="rounded-xl border border-amber-200 bg-white p-4">
+                            <div className="mb-3 flex items-center justify-between">
+                                <div>
+                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        待审批的店铺治理变更
+                                        <FeatureHelpButton
+                                            topic="settings.store-profile"
+                                            title="待审批的店铺治理变更"
+                                            description={
+                                                '店铺提交的主体、收款和支付配置在通过前不会覆盖线上值。'
+                                            }
+                                        />
+                                    </h2>
+                                </div>
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+                                    {pendingGovernance.length} 项
+                                </span>
                             </div>
-                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
-                                {pendingGovernance.length} 项
-                            </span>
+                            <div className="space-y-2">
+                                {pendingGovernance.length === 0 && (
+                                    <p className="text-xs text-slate-500">当前没有待审批申请。</p>
+                                )}
+                                {pendingGovernance.map(request => (
+                                    <div
+                                        key={request.id}
+                                        className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="text-xs">
+                                            <div className="font-bold text-slate-800">
+                                                {getChannelDisplayName(request.channel)} ·{' '}
+                                                {governanceRequestTypeLabel(request.requestType)}
+                                            </div>
+                                            <div className="mt-1 space-y-0.5 text-slate-500">
+                                                <div>版本 {request.version}</div>
+                                                {governancePayloadRows(
+                                                    request.reviewPayload ?? request.maskedSummary,
+                                                ).map(([label, value]) => (
+                                                    <div key={label}>
+                                                        {label}：{value}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <AdminButton
+                                                type="button"
+                                                disabled={reviewGovernanceState.loading}
+                                                onClick={() => void reviewRequest(request.id, 'REJECTED')}
+                                                className={secondaryButton}
+                                            >
+                                                驳回
+                                            </AdminButton>
+                                            <AdminButton
+                                                type="button"
+                                                disabled={reviewGovernanceState.loading}
+                                                onClick={() => void reviewRequest(request.id, 'APPROVED')}
+                                                className={primaryButton}
+                                            >
+                                                通过
+                                            </AdminButton>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                {standalonePage && ['review', 'payout'].includes(standalonePage.detail ?? '') && (
+                    <StoreGovernanceHistory
+                        records={(query.data?.storeGovernanceChanges ?? []).filter(
+                            item =>
+                                item.requestType ===
+                                (standalonePage.detail === 'payout' ? 'PAYOUT_ACCOUNT' : 'LEGAL_IDENTITY'),
+                        )}
+                    />
+                )}
+                {(standalonePage?.key === 'audits' || tab === 'PERMISSION_AUDITS') && (
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3">
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                最近权限审计
+                                <FeatureHelpButton
+                                    topic="settings.team"
+                                    title="最近权限审计"
+                                    description={'这里只显示脱敏摘要，密码、密钥和凭据不会写入记录。'}
+                                />
+                            </h2>
                         </div>
-                        <div className="space-y-2">
-                            {pendingGovernance.map(request => (
+                        <div className="divide-y divide-slate-100">
+                            {recentPermissionAudits.length === 0 && (
+                                <p className="text-xs text-slate-500">暂无权限变更记录。</p>
+                            )}
+                            {recentPermissionAudits.map(entry => (
                                 <div
-                                    key={request.id}
-                                    className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                                    key={entry.id}
+                                    className="grid gap-1 py-2 text-xs sm:grid-cols-[180px_1fr_auto] sm:items-center"
                                 >
-                                    <div className="text-xs">
-                                        <div className="font-bold text-slate-800">
-                                            {getChannelDisplayName(request.channel)} ·{' '}
-                                            {governanceRequestTypeLabel(request.requestType)}
-                                        </div>
-                                        <div className="mt-1 space-y-0.5 text-slate-500">
-                                            <div>版本 {request.version}</div>
-                                            {governancePayloadRows(
-                                                request.reviewPayload ?? request.maskedSummary,
-                                            ).map(([label, value]) => (
-                                                <div key={label}>
-                                                    {label}：{value}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <AdminButton
-                                            type="button"
-                                            disabled={reviewGovernanceState.loading}
-                                            onClick={() => void reviewRequest(request.id, 'REJECTED')}
-                                            className={secondaryButton}
-                                        >
-                                            驳回
-                                        </AdminButton>
-                                        <AdminButton
-                                            type="button"
-                                            disabled={reviewGovernanceState.loading}
-                                            onClick={() => void reviewRequest(request.id, 'APPROVED')}
-                                            className={primaryButton}
-                                        >
-                                            通过
-                                        </AdminButton>
-                                    </div>
+                                    <span className="text-slate-500">
+                                        {new Date(entry.createdAt).toLocaleString('zh-CN')}
+                                    </span>
+                                    <span className="font-medium text-slate-800">
+                                        {permissionAuditLabel(entry.action)}
+                                    </span>
+                                    <span
+                                        className={
+                                            entry.result === 'SUCCESS' ? 'text-emerald-700' : 'text-rose-700'
+                                        }
+                                    >
+                                        {entry.result === 'SUCCESS' ? '成功' : '失败'}
+                                    </span>
                                 </div>
                             ))}
                         </div>
                     </section>
                 )}
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <StoreSettingsNavigation
-                        tab={tab}
-                        onTabChange={setTab}
-                        canReadFinance={canReadFinance}
-                        canReadBusinessSettings={canReadBusinessSettings}
-                    />
+                    {!standalonePage && (
+                        <StoreSettingsNavigation
+                            tab={tab}
+                            onTabChange={setTab}
+                            canReadFinance={canReadFinance}
+                            canReadBusinessSettings={canReadBusinessSettings}
+                        />
+                    )}
                     {tab === 'DOMAINS' && profiles.length > 0 && (
                         <AdminSelect
                             value={selectedProfile?.id ?? ''}
@@ -365,16 +453,20 @@ export function PlatformGovernanceCenter({
                     <>
                         {tab === 'STORES' && (
                             <div className="space-y-4">
-                                <CommerceModePanel onChanged={completed} onError={setActionError} />
-                                <StoresPanel
-                                    profiles={profiles}
-                                    activeChannelId={query.data?.activeChannel.id ?? ''}
-                                    publicPreviewBusy={publicPreviewState.loading}
-                                    onTogglePublicPreview={togglePublicPreview}
-                                    onEdit={setStoreEditor}
-                                    onDeprovision={setDeprovisionProfile}
-                                    allowPermanentDeprovision={allowPermanentDeprovision}
-                                />
+                                {(!standalonePage || standalonePage.detail === 'commerce') && (
+                                    <CommerceModePanel onChanged={completed} onError={setActionError} />
+                                )}
+                                {(!standalonePage || standalonePage.key === 'stores') && (
+                                    <StoresPanel
+                                        profiles={profiles}
+                                        activeChannelId={query.data?.activeChannel.id ?? ''}
+                                        publicPreviewBusy={publicPreviewState.loading}
+                                        onTogglePublicPreview={togglePublicPreview}
+                                        onEdit={setStoreEditor}
+                                        onDeprovision={setDeprovisionProfile}
+                                        allowPermanentDeprovision={allowPermanentDeprovision}
+                                    />
+                                )}
                             </div>
                         )}
                         {tab === 'DOMAINS' && (
@@ -387,7 +479,7 @@ export function PlatformGovernanceCenter({
                         )}
                         {tab === 'SELLERS' && (
                             <SellersPanel
-                                sellers={query.data?.sellers.items ?? []}
+                                sellers={query.data?.sellers?.items ?? []}
                                 profiles={profiles}
                                 customFieldDefinitions={sellerCustomFields}
                                 onChanged={completed}
@@ -409,50 +501,13 @@ export function PlatformGovernanceCenter({
                             <BusinessBasicsPanel onChanged={completed} onError={setActionError} />
                         )}
                         {tab === 'CURRENCY' && canReadFinance && <CurrencyAndRatesPanel />}
-                        {tab === 'USDT' && canReadFinance && <StoreUsdtPanel />}
-
-                        {tab === 'PERMISSION_AUDITS' && (
-                            <section className="rounded-xl border border-slate-200 bg-white p-4">
-                                <div className="mb-3">
-                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                        权限审计记录
-                                        <FeatureHelpButton topic="settings.team" title="权限审计记录" />
-                                    </h2>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                        按时间倒序显示近期权限变更及操作结果；密码、密钥和凭据不会写入记录。
-                                    </p>
-                                </div>
-                                <div className="divide-y divide-slate-100" aria-label="权限审计记录列表">
-                                    {permissionAudits.map(entry => (
-                                        <div
-                                            key={entry.id}
-                                            className="grid gap-1 py-2 text-xs sm:grid-cols-[180px_1fr_auto] sm:items-center"
-                                        >
-                                            <span className="text-slate-500">
-                                                {new Date(entry.createdAt).toLocaleString('zh-CN')}
-                                            </span>
-                                            <span className="font-medium text-slate-800">
-                                                {permissionAuditLabel(entry.action)}
-                                            </span>
-                                            <span
-                                                className={
-                                                    entry.result === 'SUCCESS'
-                                                        ? 'text-emerald-700'
-                                                        : 'text-rose-700'
-                                                }
-                                            >
-                                                {entry.result === 'SUCCESS' ? '成功' : '失败'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                    {permissionAudits.length === 0 && (
-                                        <p className="py-6 text-center text-xs text-slate-500">
-                                            暂无权限审计记录
-                                        </p>
-                                    )}
-                                </div>
-                            </section>
-                        )}
+                        {tab === 'USDT' &&
+                            canReadFinance &&
+                            (standalonePage?.key === 'usdt' && hasAnyPermission(['SuperAdmin']) ? (
+                                <UsdtPaymentSetupPanel onChanged={completed} onError={setActionError} />
+                            ) : (
+                                <StoreUsdtPanel />
+                            ))}
                     </>
                 )}
             </main>
@@ -460,9 +515,9 @@ export function PlatformGovernanceCenter({
                 <StoreEditor
                     key={storeEditor.id}
                     profile={storeEditor}
-                    sellers={query.data?.sellers.items ?? []}
+                    sellers={query.data?.sellers?.items ?? []}
                     sellerOptionsReady={Boolean(
-                        query.data && query.data.sellers.items.length >= query.data.sellers.totalItems,
+                        query.data && query.data.sellers?.items.length >= query.data.sellers?.totalItems,
                     )}
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}

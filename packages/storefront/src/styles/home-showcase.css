@@ -92,26 +92,44 @@
     color: #2f6feb;
 }
 
-/* Trust content stays inside the uncropped media, independent of phone copy height. */
-.home-page .hero .hero-service-overlay {
+/* One row keeps the trust strip and pager aligned, including wrapped translations. */
+.home-page .hero .hero-overlay-controls {
     position: absolute;
     z-index: 2;
     bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
+    width: max-content;
     max-width: calc(100% - 40px);
     margin: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--space-16);
+}
+.home-page .hero .hero-service-overlay {
+    display: flex;
+    min-width: 0;
+    margin: 0;
+}
+.home-page .hero .hero-service-overlay .home-trust-bar,
+.home-page .hero .hero-page-picker {
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: color-mix(in srgb, var(--surface) 18%, transparent);
+    color: var(--text);
+    box-shadow: none;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 .home-page .hero .hero-service-overlay .home-trust-bar {
     display: flex;
     flex-wrap: wrap;
+    align-content: center;
     justify-content: center;
     gap: 8px 18px;
     margin: 0;
-    padding: 10px 14px;
-    border-radius: var(--skin-control-radius);
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    box-shadow: none;
+    padding: var(--space-8) var(--space-12);
 }
 .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy {
     display: grid;
@@ -145,15 +163,18 @@
     max-width: 220px;
 }
 @media (min-width: 1024px) {
-    .home-page .hero .hero-service-overlay {
+    .home-page .hero .hero-overlay-controls {
         left: clamp(28px, 3vw, 44px);
+        right: 20px;
         transform: none;
-        max-width: calc(100% - clamp(28px, 3vw, 44px) - 20px);
+        width: auto;
+        max-width: none;
+        justify-content: space-between;
         margin: 0;
     }
 }
 @media (max-width: 1023px) {
-    .home-page .hero .hero-service-overlay {
+    .home-page .hero .hero-overlay-controls {
         max-width: calc(100% - 40px);
         margin: 0;
     }

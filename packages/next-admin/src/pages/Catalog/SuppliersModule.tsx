@@ -97,11 +97,12 @@ export function SuppliersModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Truck className="h-5 w-5 text-blue-600" /> 供货商
-                            <FeatureHelpButton topic="catalog.suppliers" title="供货商" />
+                            <FeatureHelpButton
+                                topic="catalog.suppliers"
+                                title="供货商"
+                                description={'按当前店铺管理供应商资料；停用后继续保留历史 SKU 关联。'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            按当前店铺管理供应商资料；停用后继续保留历史 SKU 关联。
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton

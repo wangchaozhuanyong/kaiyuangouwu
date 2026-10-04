@@ -206,11 +206,12 @@ export function ProductAiImageDialog({
                         <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
                             <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" /> AI
                             生成商品主图
-                            <FeatureHelpButton topic="plugins.ai-usage" title="AI 生成商品主图" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-usage"
+                                title="AI 生成商品主图"
+                                description={'固定生成 1 张 1:1 / 1K 主图，使用后还需保存商品'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            固定生成 1 张 1:1 / 1K 主图，使用后还需保存商品
-                        </p>
                     </div>
                     <AdminButton
                         type="button"

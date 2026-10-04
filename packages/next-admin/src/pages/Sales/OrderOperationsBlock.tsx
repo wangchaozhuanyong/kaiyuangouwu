@@ -592,9 +592,8 @@ function Heading({ icon, title, detail }: { icon: React.ReactNode; title: string
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
-                <FeatureHelpButton topic="sales.payment" title={title} />
+                <FeatureHelpButton topic="sales.payment" title={title} description={detail} />
             </h2>
-            <p className="mt-1 text-xs text-slate-500">{detail}</p>
         </div>
     );
 }

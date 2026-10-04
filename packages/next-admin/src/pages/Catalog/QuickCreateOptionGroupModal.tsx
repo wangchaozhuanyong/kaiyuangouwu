@@ -101,11 +101,12 @@ export function QuickCreateOptionGroupModal({
                         <div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-sm font-bold text-slate-900">快速新建商品销售规格</h3>
-                                <FeatureHelpButton topic="catalog.variants" title="快速新建商品销售规格" />
+                                <FeatureHelpButton
+                                    topic="catalog.variants"
+                                    title="快速新建商品销售规格"
+                                    description={'在当前页面直接完成规格配置，无需跳转到分类设置'}
+                                />
                             </div>
-                            <p className="text-[11px] text-slate-500">
-                                在当前页面直接完成规格配置，无需跳转到分类设置
-                            </p>
                         </div>
                     </div>
                     <AdminButton

@@ -112,7 +112,7 @@ describe('MailQueryPage', () => {
         expect(container.textContent).not.toContain('BUY-AAAA-0001');
     });
 
-    it('renders full portal UI with zero text flickering and complete sections', () => {
+    it('renders the shared page header, labeled query controls and compact help', () => {
         const mockApi = {
             queryMails: vi.fn(),
         };
@@ -131,37 +131,22 @@ describe('MailQueryPage', () => {
             );
         });
 
-        // Top nav
-        expect(container.querySelector('.top-nav')).not.toBeNull();
-        expect(container.textContent).toContain('返回商城服务');
-        expect(container.textContent).toContain('邮件查询服务');
-
-        // Hero section
-        expect(container.querySelector('.hero-section')).not.toBeNull();
-        expect(container.textContent).toContain('大马通 · 邮件中继服务');
-        expect(container.textContent).toContain('邮件验证码实时查询中心');
-        expect(container.textContent).toContain('输入专属查询码，实时查收验证码');
-
-        // Query card
+        expect(container.querySelector('.subpage-header')?.textContent).toContain('邮箱查询服务');
+        expect(container.querySelector('.hero-section')).toBeNull();
+        expect(container.querySelector('.nav-status')).toBeNull();
+        expect(container.querySelector('.portal-footer')).toBeNull();
         expect(container.querySelector('.query-card')).not.toBeNull();
-        expect(container.querySelector('#codeInput')).not.toBeNull();
+        expect(container.querySelector('label[for="codeInput"]')?.textContent).toContain('专属查询码');
         expect(container.querySelector('#pasteBtn')).not.toBeNull();
-        expect(container.querySelector('#queryBtn')).not.toBeNull();
-
-        // FAQ section
-        expect(container.querySelector('.faq-section')).not.toBeNull();
-        expect(container.textContent).toContain('常见问题与使用指南');
-        expect(container.textContent).toContain('1. 查询码从哪里获取？');
-        expect(container.textContent).toContain('2. 验证码多久能收到？');
-        expect(container.textContent).toContain('3. 没收到邮件怎么办？');
-
-        // Footer
-        expect(container.querySelector('.portal-footer')).not.toBeNull();
-        expect(container.textContent).toContain('数据经端到端加密与单向中继保护');
-        expect(container.textContent).toContain('© 大马通 · 智能商业服务平台 · 联系客服');
+        expect(container.querySelector('#queryBtn')?.textContent).toBe('查询邮件');
+        expect(container.querySelectorAll('.faq-section details')).toHaveLength(3);
+        expect(container.querySelector('.faq-section details[open]')).toBeNull();
+        expect(container.querySelector('.mail-query-support')?.getAttribute('href')).toBe('/support');
 
         // Back button action
-        const backBtn = container.querySelector<HTMLButtonElement>('#navBackLink');
+        const backBtn = container.querySelector<HTMLButtonElement>(
+            '.subpage-header button[aria-label="返回"]',
+        );
         expect(backBtn).not.toBeNull();
         act(() => {
             backBtn?.click();
@@ -287,6 +272,26 @@ describe('MailQueryPage', () => {
         });
 
         expect(container.textContent).toContain('专属查询码无效或已过期');
+        act(() => {
+            vi.advanceTimersByTime(10);
+        });
+        expect(container.querySelector('.input-wrapper.has-error')).not.toBeNull();
+
+        mockQueryMails.mockResolvedValue({
+            success: true,
+            targetType: 'VIRTUAL',
+            aliasEmail: 'buyer@example.test',
+            totalEmails: 0,
+            items: [],
+            virtualEmailsList: [],
+        });
+        await act(async () => {
+            queryBtn?.click();
+            await Promise.resolve();
+        });
+        act(() => container.querySelector<HTMLButtonElement>('#backQueryBtn')?.click());
+        expect(container.querySelector('#codeInput')?.getAttribute('aria-invalid')).toBeNull();
+        expect(container.querySelector('.input-wrapper.has-error')).toBeNull();
     });
 
     it('refreshes new mail and keeps the last result when a later refresh fails', async () => {

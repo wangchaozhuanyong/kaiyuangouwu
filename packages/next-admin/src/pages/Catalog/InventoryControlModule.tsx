@@ -81,11 +81,12 @@ export function InventoryControlModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Scale className="h-5 w-5 text-blue-600" /> 库存控制台
-                            <FeatureHelpButton topic="catalog.inventory" title="库存控制台" />
+                            <FeatureHelpButton
+                                topic="catalog.inventory"
+                                title="库存控制台"
+                                description={'对齐批次总数与平台库存，查看手工盘点、转仓与差异处理证据。'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            对齐批次总数与平台库存，查看手工盘点、转仓与差异处理证据。
-                        </p>
                     </div>
                     <AdminButton
                         type="button"
@@ -104,11 +105,12 @@ export function InventoryControlModule() {
                     <div className="border-b border-slate-100 p-4">
                         <h2 className="flex items-center gap-2 text-sm font-bold">
                             批次与总库存对账
-                            <FeatureHelpButton topic="catalog.inventory" title="库存对账" />
+                            <FeatureHelpButton
+                                topic="catalog.inventory"
+                                title="库存对账"
+                                description={'处理前会再次校验差异，避免用旧数据覆盖新库存。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            处理前会再次校验差异，避免用旧数据覆盖新库存。
-                        </p>
                     </div>
                     {reconciliation.loading && !reconciliation.data ? (
                         <State label="正在对账…" />

@@ -52,8 +52,8 @@ export function getInitializedStoreSettings(
 ): StoreManagementResult | null {
     const hasIncompleteLists =
         data != null &&
-        (data.sellers.items.length < data.sellers.totalItems ||
-            data.paymentMethods.items.length < data.paymentMethods.totalItems ||
-            data.shippingMethods.items.length < data.shippingMethods.totalItems);
+        ((data.sellers?.items.length ?? 0) < (data.sellers?.totalItems ?? 0) ||
+            (data.paymentMethods?.items.length ?? 0) < (data.paymentMethods?.totalItems ?? 0) ||
+            (data.shippingMethods?.items.length ?? 0) < (data.shippingMethods?.totalItems ?? 0));
     return data && (errorPresent || !hasIncompleteLists || initialSupplementSettled) ? data : null;
 }

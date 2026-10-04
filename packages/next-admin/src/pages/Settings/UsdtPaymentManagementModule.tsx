@@ -8,6 +8,8 @@ import { AdminField } from '../../components/AdminField';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { selectQueryFields } from '../../utils/select-query-fields';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -55,7 +57,14 @@ interface ReconciliationDraft {
 }
 
 export function UsdtPaymentManagementModule() {
-    const [recordView, setRecordView] = useState<'payments' | 'refunds' | 'intents'>('payments');
+    const standalonePage = useStandaloneAdminPage();
+    const [recordView, setRecordView] = useState<'payments' | 'refunds' | 'intents'>(
+        standalonePage?.key === 'refunds'
+            ? 'refunds'
+            : standalonePage?.key === 'intents'
+              ? 'intents'
+              : 'payments',
+    );
     const [channelId, setChannelId] = useState('ALL');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
@@ -76,14 +85,32 @@ export function UsdtPaymentManagementModule() {
         }),
         [from, to],
     );
-    const query = useQuery<PlatformFinanceData>(PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY, {
-        variables: {
-            channelId: channelId === 'ALL' ? null : channelId,
-            statsOptions: dateOptions,
-            paymentOptions: { ...dateOptions, skip: paymentPage * paymentPageSize, take: paymentPageSize },
-            refundOptions: { ...dateOptions, skip: refundPage * refundPageSize, take: refundPageSize },
+    const query = useQuery<PlatformFinanceData>(
+        standalonePage
+            ? selectQueryFields(PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY, [
+                  'channels',
+                  ...(standalonePage.key === 'wallets'
+                      ? ['storeUsdtWallets']
+                      : standalonePage.key === 'payments'
+                        ? ['storePaymentStats', 'storePaymentDetails']
+                        : standalonePage.key === 'refunds'
+                          ? ['storeUsdtManualRefunds']
+                          : ['storeUsdtPaymentIntents', 'storeUsdtReconciliationActions']),
+              ])
+            : PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY,
+        {
+            variables: {
+                channelId: channelId === 'ALL' ? null : channelId,
+                statsOptions: dateOptions,
+                paymentOptions: {
+                    ...dateOptions,
+                    skip: paymentPage * paymentPageSize,
+                    take: paymentPageSize,
+                },
+                refundOptions: { ...dateOptions, skip: refundPage * refundPageSize, take: refundPageSize },
+            },
         },
-    });
+    );
     const [reviewWallet, reviewState] = useMutation<{ reviewStoreUsdtWallet: UsdtWalletRecord }>(
         REVIEW_STORE_USDT_WALLET_MUTATION,
     );
@@ -95,8 +122,8 @@ export function UsdtPaymentManagementModule() {
     }>(RESOLVE_STORE_USDT_PAYMENT_INTENT_MUTATION);
     const wallets = query.data?.storeUsdtWallets ?? [];
     const channelsById = useMemo(
-        () => new Map((query.data?.channels.items ?? []).map(channel => [channel.id, channel])),
-        [query.data?.channels.items],
+        () => new Map((query.data?.channels?.items ?? []).map(channel => [channel.id, channel])),
+        [query.data?.channels?.items],
     );
     const channelName = (targetChannelId: string, channelCode: string) =>
         getChannelDisplayName(channelsById.get(targetChannelId) ?? channelCode);
@@ -174,12 +201,13 @@ export function UsdtPaymentManagementModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <WalletCards className="h-5 w-5 text-emerald-600" />
-                            支付与 USDT 收款管理
-                            <FeatureHelpButton topic="settings.usdt" title="支付与 USDT 收款管理" />
+                            {standalonePage?.title ?? '支付与 USDT 收款管理'}
+                            <FeatureHelpButton
+                                topic="settings.usdt"
+                                title="支付与 USDT 收款管理"
+                                description={'平台级钱包审核、全部支付流水、链上意向和人工退款审计'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            平台级钱包审核、全部支付流水、链上意向和人工退款审计
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -204,431 +232,466 @@ export function UsdtPaymentManagementModule() {
                     <SettingsContentSkeleton label="正在读取平台支付数据" sections={4} />
                 ) : (
                     <>
-                        <details
-                            open={wallets.some(wallet => wallet.reviewStatus === 'PENDING')}
-                            className={sectionClass}
-                        >
-                            <summary className="cursor-pointer text-sm font-bold">
-                                收款地址审核 ·{' '}
-                                {wallets.filter(wallet => wallet.reviewStatus === 'PENDING').length} 个待审核
-                            </summary>
-                            <div className="mt-3">
-                                <Heading
-                                    title="网店 USDT 收款地址审核"
-                                    detail="仅待审地址可以通过或驳回；通过后只影响该网店新生成的付款意向。"
-                                />
-                                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                                    {wallets.map(wallet => (
-                                        <WalletReview
-                                            key={wallet.channelId}
-                                            wallet={wallet}
-                                            storeName={channelName(wallet.channelId, wallet.channelCode)}
-                                            reason={rejectionReasons[wallet.channelId] ?? ''}
-                                            onReason={reason =>
-                                                setRejectionReasons(current => ({
-                                                    ...current,
-                                                    [wallet.channelId]: reason,
-                                                }))
-                                            }
-                                            onApprove={() => setAction({ kind: 'approve', wallet })}
-                                            onReject={() => {
-                                                const reason =
-                                                    rejectionReasons[wallet.channelId]?.trim() ?? '';
-                                                if (!reason) {
-                                                    setError('驳回时必须填写原因');
-                                                    return;
-                                                }
-                                                setError('');
-                                                setAction({ kind: 'reject', wallet, reason });
-                                            }}
-                                        />
-                                    ))}
-                                    {!wallets.length && (
-                                        <p className="text-xs text-slate-500">暂无网店钱包</p>
-                                    )}
-                                </div>
-                            </div>
-                        </details>
-                        <section className={sectionClass}>
-                            <Heading
-                                title="支付与退款报表"
-                                detail="按网店和统一时间（UTC）日期筛选；受控模拟支付单列，不代表真实到账。"
-                            />
-                            <div className="mt-4 grid gap-3 md:grid-cols-3">
-                                <AdminField className={labelClass} label="网店">
-                                    <AdminSelect
-                                        value={channelId}
-                                        onChange={event => {
-                                            setChannelId(event.target.value);
-                                            setPaymentPage(0);
-                                            setRefundPage(0);
-                                        }}
-                                        className={inputClass}
-                                    >
-                                        <option value="ALL">全部网店</option>
+                        {(!standalonePage || standalonePage.key === 'wallets') && (
+                            <details
+                                open={
+                                    Boolean(standalonePage) ||
+                                    wallets.some(wallet => wallet.reviewStatus === 'PENDING')
+                                }
+                                className={sectionClass}
+                            >
+                                <summary className="cursor-pointer text-sm font-bold">
+                                    收款地址审核 ·{' '}
+                                    {wallets.filter(wallet => wallet.reviewStatus === 'PENDING').length}{' '}
+                                    个待审核
+                                </summary>
+                                <div className="mt-3">
+                                    <Heading
+                                        title="网店 USDT 收款地址审核"
+                                        detail="仅待审地址可以通过或驳回；通过后只影响该网店新生成的付款意向。"
+                                    />
+                                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
                                         {wallets.map(wallet => (
-                                            <option key={wallet.channelId} value={wallet.channelId}>
-                                                {channelName(wallet.channelId, wallet.channelCode)}
-                                            </option>
+                                            <WalletReview
+                                                key={wallet.channelId}
+                                                wallet={wallet}
+                                                storeName={channelName(wallet.channelId, wallet.channelCode)}
+                                                reason={rejectionReasons[wallet.channelId] ?? ''}
+                                                onReason={reason =>
+                                                    setRejectionReasons(current => ({
+                                                        ...current,
+                                                        [wallet.channelId]: reason,
+                                                    }))
+                                                }
+                                                onApprove={() => setAction({ kind: 'approve', wallet })}
+                                                onReject={() => {
+                                                    const reason =
+                                                        rejectionReasons[wallet.channelId]?.trim() ?? '';
+                                                    if (!reason) {
+                                                        setError('驳回时必须填写原因');
+                                                        return;
+                                                    }
+                                                    setError('');
+                                                    setAction({ kind: 'reject', wallet, reason });
+                                                }}
+                                            />
                                         ))}
-                                    </AdminSelect>
-                                </AdminField>
-                                <AdminField className={labelClass} label="开始日期">
-                                    <AdminInput
-                                        type="date"
-                                        value={from}
-                                        max={to || undefined}
-                                        onChange={event => {
-                                            setFrom(event.target.value);
-                                            setPaymentPage(0);
-                                            setRefundPage(0);
-                                        }}
-                                        className={inputClass}
-                                    />
-                                </AdminField>
-                                <AdminField className={labelClass} label="结束日期">
-                                    <AdminInput
-                                        type="date"
-                                        value={to}
-                                        min={from || undefined}
-                                        onChange={event => {
-                                            setTo(event.target.value);
-                                            setPaymentPage(0);
-                                            setRefundPage(0);
-                                        }}
-                                        className={inputClass}
-                                    />
-                                </AdminField>
-                            </div>
-                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {(query.data?.storePaymentStats ?? []).map(item => (
-                                    <article
-                                        key={`${item.channelId}:${item.paymentMethodCode}:${item.currencyCode}`}
-                                        className="rounded-lg border border-slate-200 p-4 text-xs"
-                                    >
-                                        <div>
-                                            <strong>{channelName(item.channelId, item.channelCode)}</strong>
-                                            <span className="ml-2 rounded bg-slate-100 px-2 py-0.5">
-                                                {storePaymentMethodLabel(item.paymentMethodCode)}
-                                            </span>
-                                        </div>
-                                        <b className="mt-3 block text-xl">
-                                            {formatMoney(item.netAmount, item.currencyCode)}
-                                        </b>
-                                        <small className="text-slate-500">
-                                            {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
-                                            {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
-                                            {formatMoney(item.refundedAmount, item.currencyCode)}
-                                        </small>
-                                    </article>
-                                ))}
-                            </div>
-                        </section>
-                        <div
-                            role="tablist"
-                            aria-label="收款记录"
-                            onKeyDown={event => {
-                                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-                                const tabs = Array.from(
-                                    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-                                );
-                                const current = tabs.indexOf(event.target as HTMLButtonElement);
-                                if (current < 0) return;
-                                event.preventDefault();
-                                const next =
-                                    event.key === 'Home'
-                                        ? 0
-                                        : event.key === 'End'
-                                          ? tabs.length - 1
-                                          : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
-                                            tabs.length;
-                                tabs[next]?.focus();
-                                tabs[next]?.click();
-                            }}
-                            className="flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1"
-                        >
-                            {(
-                                [
-                                    ['payments', '支付流水'],
-                                    ['refunds', '人工退款审计'],
-                                    ['intents', '链上收款意向'],
-                                ] as const
-                            ).map(([view, label]) => (
-                                <AdminButton
-                                    key={view}
-                                    id={`finance-${view}-tab`}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={recordView === view}
-                                    tabIndex={recordView === view ? 0 : -1}
-                                    aria-controls={`finance-${view}-panel`}
-                                    onClick={() => setRecordView(view)}
-                                    className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${recordView === view ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                                >
-                                    {label}
-                                    {view === 'intents' &&
-                                        query.data?.storeUsdtPaymentStats.some(
-                                            item => item.manualReviewCount > 0,
-                                        ) &&
-                                        ' · 有待复核'}
-                                </AdminButton>
-                            ))}
-                        </div>
-                        <section
-                            hidden={recordView !== 'payments'}
-                            id="finance-payments-panel"
-                            role="tabpanel"
-                            aria-labelledby="finance-payments-tab"
-                            className={sectionClass}
-                        >
-                            <Heading
-                                title="全部支付方式明细"
-                                detail="USDT 已结算支付可补录链上人工退款证据。"
-                            />
-                            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-                                <table className="min-w-[1060px] w-full text-left text-xs">
-                                    <thead className="bg-slate-50 text-slate-500">
-                                        <tr>
-                                            {[
-                                                '网店',
-                                                '订单',
-                                                '支付方式',
-                                                '状态',
-                                                '金额',
-                                                '已退',
-                                                '交易号',
-                                                '创建时间',
-                                                '操作',
-                                            ].map(label => (
-                                                <th key={label} className="px-3 py-2.5 font-bold">
-                                                    {label}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {(query.data?.storePaymentDetails.items ?? []).map(payment => (
-                                            <tr key={`${payment.channelId}:${payment.id}`}>
-                                                <td className="whitespace-nowrap px-3 py-3">
-                                                    <strong>
-                                                        {channelName(payment.channelId, payment.channelCode)}
-                                                    </strong>
-                                                </td>
-                                                <td className="whitespace-nowrap px-3 py-3 text-slate-500">
-                                                    {payment.orderCode}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    {storePaymentMethodLabel(payment.paymentMethodCode)}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    <span className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700">
-                                                        {getPaymentStateLabel(payment.paymentState)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    {formatMoney(payment.amount, payment.currencyCode)}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    {formatMoney(
-                                                        payment.refundedAmount,
-                                                        payment.currencyCode,
-                                                    )}
-                                                </td>
-                                                <td
-                                                    className="max-w-44 truncate px-3 py-3 font-mono"
-                                                    title={payment.transactionId ?? ''}
-                                                >
-                                                    {payment.transactionId ?? '—'}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    {formatDateTime(payment.createdAt)}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    {payment.paymentMethodCode === 'usdt-trc20' &&
-                                                        payment.paymentState === 'Settled' && (
-                                                            <AdminButton
-                                                                type="button"
-                                                                onClick={() => setRefundPayment(payment)}
-                                                                className="font-bold text-blue-600 hover:underline"
-                                                            >
-                                                                记录人工退款
-                                                            </AdminButton>
-                                                        )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <Pager
-                                page={paymentPage}
-                                pageSize={paymentPageSize}
-                                onPageSizeChange={setPaymentPageSize}
-                                loading={query.loading}
-                                total={query.data?.storePaymentDetails.totalItems ?? 0}
-                                onChange={setPaymentPage}
-                            />
-                        </section>
-                        <section
-                            hidden={recordView !== 'refunds'}
-                            id="finance-refunds-panel"
-                            role="tabpanel"
-                            aria-labelledby="finance-refunds-tab"
-                            className={sectionClass}
-                        >
-                            <Heading
-                                title="USDT 人工退款审计"
-                                detail="包含法币退款金额、实际 USDT、收款地址、交易号、区块和操作人。"
-                            />
-                            <div className="mt-4 max-h-[32rem] space-y-2 overflow-auto">
-                                {(query.data?.storeUsdtManualRefunds.items ?? []).map(refund => (
-                                    <article
-                                        key={refund.id}
-                                        className="rounded-lg border border-slate-200 p-3 text-xs"
-                                    >
-                                        <div className="flex flex-wrap justify-between gap-2">
-                                            <strong>
-                                                {channelName(refund.channelId, refund.channelCode)} · 订单{' '}
-                                                {refund.orderCode}
-                                            </strong>
-                                            <b>
-                                                {formatMoney(refund.amount, refund.currencyCode)} /{' '}
-                                                {refund.usdtAmount} USDT
-                                            </b>
-                                        </div>
-                                        <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
-                                            {refund.transactionId} · 区块 {refund.blockNumber}
-                                        </p>
-                                        <p className="mt-1 text-slate-500">
-                                            {refund.reason} · {formatDateTime(refund.createdAt)}
-                                        </p>
-                                    </article>
-                                ))}
-                                {!query.data?.storeUsdtManualRefunds.items.length && (
-                                    <p className="py-8 text-center text-xs text-slate-500">
-                                        暂无人工退款记录
-                                    </p>
-                                )}
-                            </div>
-                            <Pager
-                                page={refundPage}
-                                pageSize={refundPageSize}
-                                onPageSizeChange={setRefundPageSize}
-                                loading={query.loading}
-                                total={query.data?.storeUsdtManualRefunds.totalItems ?? 0}
-                                onChange={setRefundPage}
-                            />
-                        </section>
-                        <section
-                            hidden={recordView !== 'intents'}
-                            id="finance-intents-panel"
-                            role="tabpanel"
-                            aria-labelledby="finance-intents-tab"
-                            className={sectionClass}
-                        >
-                            <Heading
-                                title="USDT 链上收款意向"
-                                detail="最新报价、到账、人工复核和过期状态。"
-                            />
-                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {(query.data?.storeUsdtPaymentStats ?? []).map(item => (
-                                    <article
-                                        key={item.channelId}
-                                        className="rounded-lg border border-slate-200 p-4 text-xs"
-                                    >
-                                        <strong>{channelName(item.channelId, item.channelCode)}</strong>
-                                        <b className="mt-2 block text-xl">
-                                            {item.receivedUsdtTotal.toFixed(6)} USDT
-                                        </b>
-                                        <span className="text-slate-500">
-                                            到账 {item.settledCount} · 待复核 {item.manualReviewCount} · 过期{' '}
-                                            {item.expiredCount} · 已关闭 {item.resolvedCount}
-                                        </span>
-                                    </article>
-                                ))}
-                            </div>
-                            <div className="mt-4 max-h-[32rem] space-y-2 overflow-auto">
-                                {(query.data?.storeUsdtPaymentIntents ?? []).map(intent => (
-                                    <article
-                                        key={intent.id}
-                                        className="rounded-lg border border-slate-200 p-3 text-xs"
-                                    >
-                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                            <span>
-                                                <strong>
-                                                    {channelName(intent.channelId, intent.channelCode)} · 订单{' '}
-                                                    {intent.orderCode}
-                                                </strong>
-                                                <small className="ml-2 text-slate-500">
-                                                    {storeUsdtPaymentIntentStatusLabel(intent.status)}
-                                                </small>
-                                                <span className="mt-1 block font-mono text-[10px] text-slate-500">
-                                                    {intent.transactionId ?? '尚无交易号'}
-                                                </span>
-                                            </span>
-                                            <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
-                                        </div>
-                                        {intent.failureReason && (
-                                            <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-amber-800">
-                                                {serviceMessageDisplay(intent.failureReason, 'zh')}
-                                                {intent.manualReviewCode && (
-                                                    <span className="ml-1 font-mono text-[10px]">
-                                                        ({intent.manualReviewCode})
-                                                    </span>
-                                                )}
-                                            </p>
+                                        {!wallets.length && (
+                                            <p className="text-xs text-slate-500">暂无网店钱包</p>
                                         )}
-                                        {intent.status === 'MANUAL_REVIEW' && (
-                                            <div className="mt-2 flex justify-end">
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => setReviewIntent(intent)}
-                                                    className="font-bold text-blue-600 hover:underline"
-                                                >
-                                                    处理对账异常
-                                                </AdminButton>
-                                            </div>
-                                        )}
-                                    </article>
-                                ))}
-                            </div>
-                            <div className="mt-5 border-t border-slate-200 pt-4">
+                                    </div>
+                                </div>
+                            </details>
+                        )}
+                        {(!standalonePage || standalonePage.key !== 'wallets') && (
+                            <section className={sectionClass}>
                                 <Heading
-                                    title="对账处理证据"
-                                    detail="保留每次重试入账或外部链上退款的操作人、结果、原因和交易证据。"
+                                    title="支付与退款报表"
+                                    detail="按网店和统一时间（UTC）日期筛选；受控模拟支付单列，不代表真实到账。"
                                 />
-                                <div className="mt-3 space-y-2">
-                                    {(query.data?.storeUsdtReconciliationActions ?? []).map(item => (
+                                <div className="mt-4 flex flex-wrap items-end gap-3">
+                                    <AdminField className={labelClass} label="网店">
+                                        <AdminSelect
+                                            value={channelId}
+                                            onChange={event => {
+                                                setChannelId(event.target.value);
+                                                setPaymentPage(0);
+                                                setRefundPage(0);
+                                            }}
+                                            className={inputClass}
+                                        >
+                                            <option value="ALL">全部网店</option>
+                                            {(query.data?.channels?.items ?? []).map(channel => (
+                                                <option key={channel.id} value={channel.id}>
+                                                    {channelName(channel.id, channel.code)}
+                                                </option>
+                                            ))}
+                                        </AdminSelect>
+                                    </AdminField>
+                                    <div
+                                        className="admin-report-date-range"
+                                        role="group"
+                                        aria-label="支付退款报表日期范围"
+                                    >
+                                        <AdminField className={labelClass} label="开始日期">
+                                            <AdminInput
+                                                type="date"
+                                                value={from}
+                                                max={to || undefined}
+                                                onChange={event => {
+                                                    setFrom(event.target.value);
+                                                    setPaymentPage(0);
+                                                    setRefundPage(0);
+                                                }}
+                                                className={inputClass}
+                                            />
+                                        </AdminField>
+                                        <AdminField className={labelClass} label="结束日期">
+                                            <AdminInput
+                                                type="date"
+                                                value={to}
+                                                min={from || undefined}
+                                                onChange={event => {
+                                                    setTo(event.target.value);
+                                                    setPaymentPage(0);
+                                                    setRefundPage(0);
+                                                }}
+                                                className={inputClass}
+                                            />
+                                        </AdminField>
+                                    </div>
+                                </div>
+                                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {(query.data?.storePaymentStats ?? []).map(item => (
                                         <article
-                                            key={item.id}
+                                            key={`${item.channelId}:${item.paymentMethodCode}:${item.currencyCode}`}
+                                            className="rounded-lg border border-slate-200 p-4 text-xs"
+                                        >
+                                            <div>
+                                                <strong>
+                                                    {channelName(item.channelId, item.channelCode)}
+                                                </strong>
+                                                <span className="ml-2 rounded bg-slate-100 px-2 py-0.5">
+                                                    {storePaymentMethodLabel(item.paymentMethodCode)}
+                                                </span>
+                                            </div>
+                                            <b className="mt-3 block text-xl">
+                                                {formatMoney(item.netAmount, item.currencyCode)}
+                                            </b>
+                                            <small className="text-slate-500">
+                                                {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
+                                                {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
+                                                {formatMoney(item.refundedAmount, item.currencyCode)}
+                                            </small>
+                                        </article>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                        {!standalonePage && (
+                            <div
+                                role="tablist"
+                                aria-label="收款记录"
+                                onKeyDown={event => {
+                                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
+                                        return;
+                                    const tabs = Array.from(
+                                        event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                                            '[role="tab"]',
+                                        ),
+                                    );
+                                    const current = tabs.indexOf(event.target as HTMLButtonElement);
+                                    if (current < 0) return;
+                                    event.preventDefault();
+                                    const next =
+                                        event.key === 'Home'
+                                            ? 0
+                                            : event.key === 'End'
+                                              ? tabs.length - 1
+                                              : (current +
+                                                    (event.key === 'ArrowRight' ? 1 : -1) +
+                                                    tabs.length) %
+                                                tabs.length;
+                                    tabs[next]?.focus();
+                                    tabs[next]?.click();
+                                }}
+                                className="flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1"
+                            >
+                                {(
+                                    [
+                                        ['payments', '支付流水'],
+                                        ['refunds', '人工退款审计'],
+                                        ['intents', '链上收款意向'],
+                                    ] as const
+                                ).map(([view, label]) => (
+                                    <AdminButton
+                                        key={view}
+                                        id={`finance-${view}-tab`}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={recordView === view}
+                                        tabIndex={recordView === view ? 0 : -1}
+                                        aria-controls={`finance-${view}-panel`}
+                                        onClick={() => setRecordView(view)}
+                                        className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${recordView === view ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                                    >
+                                        {label}
+                                        {view === 'intents' &&
+                                            query.data?.storeUsdtPaymentStats?.some(
+                                                item => item.manualReviewCount > 0,
+                                            ) &&
+                                            ' · 有待复核'}
+                                    </AdminButton>
+                                ))}
+                            </div>
+                        )}
+                        {(!standalonePage || standalonePage.key === 'payments') && (
+                            <section
+                                hidden={recordView !== 'payments'}
+                                id="finance-payments-panel"
+                                role={standalonePage ? 'region' : 'tabpanel'}
+                                aria-labelledby={standalonePage ? undefined : 'finance-payments-tab'}
+                                aria-label={standalonePage ? '支付流水' : undefined}
+                                className={sectionClass}
+                            >
+                                <Heading
+                                    title="全部支付方式明细"
+                                    detail="USDT 已结算支付可补录链上人工退款证据。"
+                                />
+                                <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+                                    <table className="min-w-[1060px] w-full text-left text-xs">
+                                        <thead className="bg-slate-50 text-slate-500">
+                                            <tr>
+                                                {[
+                                                    '网店',
+                                                    '订单',
+                                                    '支付方式',
+                                                    '状态',
+                                                    '金额',
+                                                    '已退',
+                                                    '交易号',
+                                                    '创建时间',
+                                                    '操作',
+                                                ].map(label => (
+                                                    <th key={label} className="px-3 py-2.5 font-bold">
+                                                        {label}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {(query.data?.storePaymentDetails?.items ?? []).map(payment => (
+                                                <tr key={`${payment.channelId}:${payment.id}`}>
+                                                    <td className="whitespace-nowrap px-3 py-3">
+                                                        <strong>
+                                                            {channelName(
+                                                                payment.channelId,
+                                                                payment.channelCode,
+                                                            )}
+                                                        </strong>
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-3 py-3 text-slate-500">
+                                                        {payment.orderCode}
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        {storePaymentMethodLabel(payment.paymentMethodCode)}
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        <span className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700">
+                                                            {getPaymentStateLabel(payment.paymentState)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        {formatMoney(payment.amount, payment.currencyCode)}
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        {formatMoney(
+                                                            payment.refundedAmount,
+                                                            payment.currencyCode,
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        className="max-w-44 truncate px-3 py-3 font-mono"
+                                                        title={payment.transactionId ?? ''}
+                                                    >
+                                                        {payment.transactionId ?? '—'}
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        {formatDateTime(payment.createdAt)}
+                                                    </td>
+                                                    <td className="px-3 py-3">
+                                                        {payment.paymentMethodCode === 'usdt-trc20' &&
+                                                            payment.paymentState === 'Settled' && (
+                                                                <AdminButton
+                                                                    type="button"
+                                                                    onClick={() => setRefundPayment(payment)}
+                                                                    className="font-bold text-blue-600 hover:underline"
+                                                                >
+                                                                    记录人工退款
+                                                                </AdminButton>
+                                                            )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <Pager
+                                    page={paymentPage}
+                                    pageSize={paymentPageSize}
+                                    onPageSizeChange={setPaymentPageSize}
+                                    loading={query.loading}
+                                    total={query.data?.storePaymentDetails?.totalItems ?? 0}
+                                    onChange={setPaymentPage}
+                                />
+                            </section>
+                        )}
+                        {(!standalonePage || standalonePage.key === 'refunds') && (
+                            <section
+                                hidden={recordView !== 'refunds'}
+                                id="finance-refunds-panel"
+                                role={standalonePage ? 'region' : 'tabpanel'}
+                                aria-labelledby={standalonePage ? undefined : 'finance-refunds-tab'}
+                                aria-label={standalonePage ? '人工退款审计' : undefined}
+                                className={sectionClass}
+                            >
+                                <Heading
+                                    title="USDT 人工退款审计"
+                                    detail="包含法币退款金额、实际 USDT、收款地址、交易号、区块和操作人。"
+                                />
+                                <div className="mt-4 max-h-[32rem] space-y-2 overflow-auto">
+                                    {(query.data?.storeUsdtManualRefunds?.items ?? []).map(refund => (
+                                        <article
+                                            key={refund.id}
                                             className="rounded-lg border border-slate-200 p-3 text-xs"
                                         >
                                             <div className="flex flex-wrap justify-between gap-2">
                                                 <strong>
-                                                    {item.action === 'RETRY_SETTLEMENT'
-                                                        ? '重试入账'
-                                                        : '外部链上退款'}{' '}
-                                                    · {systemStatusDisplayLabel(item.outcome)}
+                                                    {channelName(refund.channelId, refund.channelCode)} · 订单{' '}
+                                                    {refund.orderCode}
                                                 </strong>
-                                                <span>{formatDateTime(item.createdAt)}</span>
+                                                <b>
+                                                    {formatMoney(refund.amount, refund.currencyCode)} /{' '}
+                                                    {refund.usdtAmount} USDT
+                                                </b>
                                             </div>
-                                            <p className="mt-1 text-slate-500">{item.reason}</p>
-                                            {item.transactionId && (
-                                                <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
-                                                    {item.transactionId} · {item.usdtAmount} USDT · 区块{' '}
-                                                    {item.blockNumber}
-                                                </p>
-                                            )}
+                                            <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                                                {refund.transactionId} · 区块 {refund.blockNumber}
+                                            </p>
+                                            <p className="mt-1 text-slate-500">
+                                                {refund.reason} · {formatDateTime(refund.createdAt)}
+                                            </p>
                                         </article>
                                     ))}
-                                    {!query.data?.storeUsdtReconciliationActions.length && (
-                                        <p className="py-5 text-center text-xs text-slate-500">
-                                            暂无对账处理记录
+                                    {!query.data?.storeUsdtManualRefunds?.items.length && (
+                                        <p className="py-8 text-center text-xs text-slate-500">
+                                            暂无人工退款记录
                                         </p>
                                     )}
                                 </div>
-                            </div>
-                        </section>
+                                <Pager
+                                    page={refundPage}
+                                    pageSize={refundPageSize}
+                                    onPageSizeChange={setRefundPageSize}
+                                    loading={query.loading}
+                                    total={query.data?.storeUsdtManualRefunds?.totalItems ?? 0}
+                                    onChange={setRefundPage}
+                                />
+                            </section>
+                        )}
+                        {(!standalonePage || standalonePage.key === 'intents') && (
+                            <section
+                                hidden={recordView !== 'intents'}
+                                id="finance-intents-panel"
+                                role={standalonePage ? 'region' : 'tabpanel'}
+                                aria-labelledby={standalonePage ? undefined : 'finance-intents-tab'}
+                                aria-label={standalonePage ? '链上收款意向' : undefined}
+                                className={sectionClass}
+                            >
+                                <Heading
+                                    title="USDT 链上收款意向"
+                                    detail="最新报价、到账、人工复核和过期状态。"
+                                />
+                                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {(query.data?.storeUsdtPaymentStats ?? []).map(item => (
+                                        <article
+                                            key={item.channelId}
+                                            className="rounded-lg border border-slate-200 p-4 text-xs"
+                                        >
+                                            <strong>{channelName(item.channelId, item.channelCode)}</strong>
+                                            <b className="mt-2 block text-xl">
+                                                {item.receivedUsdtTotal.toFixed(6)} USDT
+                                            </b>
+                                            <span className="text-slate-500">
+                                                到账 {item.settledCount} · 待复核 {item.manualReviewCount} ·
+                                                过期 {item.expiredCount} · 已关闭 {item.resolvedCount}
+                                            </span>
+                                        </article>
+                                    ))}
+                                </div>
+                                <div className="mt-4 max-h-[32rem] space-y-2 overflow-auto">
+                                    {(query.data?.storeUsdtPaymentIntents ?? []).map(intent => (
+                                        <article
+                                            key={intent.id}
+                                            className="rounded-lg border border-slate-200 p-3 text-xs"
+                                        >
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <span>
+                                                    <strong>
+                                                        {channelName(intent.channelId, intent.channelCode)} ·
+                                                        订单 {intent.orderCode}
+                                                    </strong>
+                                                    <small className="ml-2 text-slate-500">
+                                                        {storeUsdtPaymentIntentStatusLabel(intent.status)}
+                                                    </small>
+                                                    <span className="mt-1 block font-mono text-[10px] text-slate-500">
+                                                        {intent.transactionId ?? '尚无交易号'}
+                                                    </span>
+                                                </span>
+                                                <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
+                                            </div>
+                                            {intent.failureReason && (
+                                                <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-amber-800">
+                                                    {serviceMessageDisplay(intent.failureReason, 'zh')}
+                                                    {intent.manualReviewCode && (
+                                                        <span className="ml-1 font-mono text-[10px]">
+                                                            ({intent.manualReviewCode})
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            )}
+                                            {intent.status === 'MANUAL_REVIEW' && (
+                                                <div className="mt-2 flex justify-end">
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => setReviewIntent(intent)}
+                                                        className="font-bold text-blue-600 hover:underline"
+                                                    >
+                                                        处理对账异常
+                                                    </AdminButton>
+                                                </div>
+                                            )}
+                                        </article>
+                                    ))}
+                                </div>
+                                <div className="mt-5 border-t border-slate-200 pt-4">
+                                    <Heading
+                                        title="对账处理证据"
+                                        detail="保留每次重试入账或外部链上退款的操作人、结果、原因和交易证据。"
+                                    />
+                                    <div className="mt-3 space-y-2">
+                                        {(query.data?.storeUsdtReconciliationActions ?? []).map(item => (
+                                            <article
+                                                key={item.id}
+                                                className="rounded-lg border border-slate-200 p-3 text-xs"
+                                            >
+                                                <div className="flex flex-wrap justify-between gap-2">
+                                                    <strong>
+                                                        {item.action === 'RETRY_SETTLEMENT'
+                                                            ? '重试入账'
+                                                            : '外部链上退款'}{' '}
+                                                        · {systemStatusDisplayLabel(item.outcome)}
+                                                    </strong>
+                                                    <span>{formatDateTime(item.createdAt)}</span>
+                                                </div>
+                                                <p className="mt-1 text-slate-500">{item.reason}</p>
+                                                {item.transactionId && (
+                                                    <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                                                        {item.transactionId} · {item.usdtAmount} USDT · 区块{' '}
+                                                        {item.blockNumber}
+                                                    </p>
+                                                )}
+                                            </article>
+                                        ))}
+                                        {!query.data?.storeUsdtReconciliationActions.length && (
+                                            <p className="py-5 text-center text-xs text-slate-500">
+                                                暂无对账处理记录
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </section>
+                        )}
                     </>
                 )}
             </main>
@@ -1014,8 +1077,10 @@ function Pager({
 function Heading({ title, detail }: { title: string; detail: string }) {
     return (
         <div>
-            <h2 className="text-sm font-bold text-slate-900">{title}</h2>
-            <p className="mt-1 text-xs text-slate-500">{detail}</p>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                {title}
+                <FeatureHelpButton topic="settings.usdt" title={title} description={detail} />
+            </h2>
         </div>
     );
 }

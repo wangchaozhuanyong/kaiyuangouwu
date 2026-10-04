@@ -94,11 +94,14 @@ export function ManualDigitalDeliveryModule() {
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">
                             人工数字交付
-                            <FeatureHelpButton topic="sales.manual-digital-delivery" title="人工数字交付" />
+                            <FeatureHelpButton
+                                topic="sales.manual-digital-delivery"
+                                title="人工数字交付"
+                                description={
+                                    '付款后按订单生成交付任务；每件商品对应一个成品包，发布后发送到订单交付邮箱。'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            付款后按订单生成交付任务；每件商品对应一个成品包，发布后发送到订单交付邮箱。
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage

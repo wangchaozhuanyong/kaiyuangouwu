@@ -33,7 +33,9 @@ import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useAdminReadResource } from '../../hooks/use-admin-read-resource';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
+import { selectQueryFields } from '../../utils/select-query-fields';
 
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -95,6 +97,7 @@ const SYSTEM_OPS_TABS = {
 } as const;
 
 export function SystemOpsModule() {
+    const standalonePage = useStandaloneAdminPage();
     const { hasAnyPermission } = useAdminPermissions();
     const canGovern = hasAnyPermission(['SuperAdmin']);
     const apiKeyCustomFields = useCustomFieldDefinitions('ApiKey');
@@ -103,36 +106,54 @@ export function SystemOpsModule() {
         [apiKeyCustomFields],
     );
     const [tab, setTab] = useUrlTab<Tab>(SYSTEM_OPS_TABS, 'health');
-    const activeTab = tab === 'GOVERNANCE' && !canGovern ? 'HEALTH' : tab;
+    const selectedTab = standalonePage?.sourcePath === '/settings/governance-risk' ? 'GOVERNANCE' : tab;
+    const activeTab = selectedTab === 'GOVERNANCE' && !canGovern ? 'HEALTH' : selectedTab;
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [apiKeyPage, setApiKeyPage] = useState(0);
     const [pageSize, setPageSize] = usePageSize(setApiKeyPage);
-    const query = useQuery<SystemOperationsResult>(systemOperationsDocument, {
-        variables: {
-            jobOptions: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } },
-            apiKeyOptions: {
-                skip: apiKeyPage * pageSize,
-                take: pageSize,
-                sort: { createdAt: 'DESC', id: 'DESC' },
+    const query = useQuery<SystemOperationsResult>(
+        standalonePage && activeTab !== 'GOVERNANCE' && activeTab !== 'TELEGRAM'
+            ? selectQueryFields(
+                  systemOperationsDocument,
+                  activeTab === 'HEALTH'
+                      ? ['jobs', 'jobQueues', 'scheduledTasks', 'settingsStoreFieldDefinitions']
+                      : activeTab === 'JOBS'
+                        ? ['jobs', 'jobQueues']
+                        : activeTab === 'SCHEDULES'
+                          ? ['scheduledTasks']
+                          : activeTab === 'SETTINGS'
+                            ? ['settingsStoreFieldDefinitions']
+                            : ['apiKeys', 'activeAdministrator'],
+              )
+            : systemOperationsDocument,
+        {
+            skip: activeTab === 'GOVERNANCE' || activeTab === 'TELEGRAM',
+            variables: {
+                jobOptions: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } },
+                apiKeyOptions: {
+                    skip: apiKeyPage * pageSize,
+                    take: pageSize,
+                    sort: { createdAt: 'DESC', id: 'DESC' },
+                },
             },
-        },
 
-        notifyOnNetworkStatusChange: true,
-        pollInterval:
-            activeTab === 'HEALTH' || activeTab === 'JOBS' || activeTab === 'SCHEDULES' ? 10_000 : 0,
-    });
+            notifyOnNetworkStatusChange: true,
+            pollInterval:
+                activeTab === 'HEALTH' || activeTab === 'JOBS' || activeTab === 'SCHEDULES' ? 10_000 : 0,
+        },
+    );
     const completed = async (message: string) => {
         setNotice(message);
         setActionError('');
         const refreshed = await query.refetch();
-        const totalApiKeys = refreshed.data?.apiKeys.totalItems ?? 0;
+        const totalApiKeys = refreshed.data?.apiKeys?.totalItems ?? 0;
         if (apiKeyPage > 0 && apiKeyPage * pageSize >= totalApiKeys) {
             setApiKeyPage(current => Math.max(0, current - 1));
         }
     };
     const data = query.data;
-    const apiKeyTotalPages = Math.max(1, Math.ceil((data?.apiKeys.totalItems ?? 0) / pageSize));
+    const apiKeyTotalPages = Math.max(1, Math.ceil((data?.apiKeys?.totalItems ?? 0) / pageSize));
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -141,12 +162,15 @@ export function SystemOpsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Terminal className="h-5 w-5 text-blue-600" />
-                            系统运维
-                            <FeatureHelpButton topic="settings.system-ops" title="系统运维" />
+                            {standalonePage?.title ?? '系统运维'}
+                            <FeatureHelpButton
+                                topic="settings.system-ops"
+                                title="系统运维"
+                                description={
+                                    '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -173,59 +197,61 @@ export function SystemOpsModule() {
                         {actionError}
                     </Message>
                 )}
-                <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
-                    <TabButton
-                        active={activeTab === 'HEALTH'}
-                        onClick={() => setTab('HEALTH')}
-                        icon={<Activity className="h-3.5 w-3.5" />}
-                    >
-                        服务健康
-                    </TabButton>
-                    <TabButton
-                        active={activeTab === 'JOBS'}
-                        onClick={() => setTab('JOBS')}
-                        icon={<Terminal className="h-3.5 w-3.5" />}
-                    >
-                        任务队列 {data?.jobs.totalItems ?? 0}
-                    </TabButton>
-                    <TabButton
-                        active={activeTab === 'SCHEDULES'}
-                        onClick={() => setTab('SCHEDULES')}
-                        icon={<CalendarClock className="h-3.5 w-3.5" />}
-                    >
-                        定时任务 {data?.scheduledTasks.length ?? 0}
-                    </TabButton>
-                    <TabButton
-                        active={activeTab === 'TELEGRAM'}
-                        onClick={() => setTab('TELEGRAM')}
-                        icon={<Send className="h-3.5 w-3.5" />}
-                    >
-                        Telegram 通知
-                    </TabButton>
-                    {canGovern && (
+                {!standalonePage && (
+                    <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
                         <TabButton
-                            active={activeTab === 'GOVERNANCE'}
-                            onClick={() => setTab('GOVERNANCE')}
-                            icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                            active={activeTab === 'HEALTH'}
+                            onClick={() => setTab('HEALTH')}
+                            icon={<Activity className="h-3.5 w-3.5" />}
                         >
-                            治理与风控
+                            服务健康
                         </TabButton>
-                    )}
-                    <TabButton
-                        active={activeTab === 'SETTINGS'}
-                        onClick={() => setTab('SETTINGS')}
-                        icon={<Settings2 className="h-3.5 w-3.5" />}
-                    >
-                        配置仓库 {data?.settingsStoreFieldDefinitions.length ?? 0}
-                    </TabButton>
-                    <TabButton
-                        active={activeTab === 'API_KEYS'}
-                        onClick={() => setTab('API_KEYS')}
-                        icon={<KeyRound className="h-3.5 w-3.5" />}
-                    >
-                        API 密钥 {data?.apiKeys.totalItems ?? 0}
-                    </TabButton>
-                </div>
+                        <TabButton
+                            active={activeTab === 'JOBS'}
+                            onClick={() => setTab('JOBS')}
+                            icon={<Terminal className="h-3.5 w-3.5" />}
+                        >
+                            任务队列 {data?.jobs.totalItems ?? 0}
+                        </TabButton>
+                        <TabButton
+                            active={activeTab === 'SCHEDULES'}
+                            onClick={() => setTab('SCHEDULES')}
+                            icon={<CalendarClock className="h-3.5 w-3.5" />}
+                        >
+                            定时任务 {data?.scheduledTasks.length ?? 0}
+                        </TabButton>
+                        <TabButton
+                            active={activeTab === 'TELEGRAM'}
+                            onClick={() => setTab('TELEGRAM')}
+                            icon={<Send className="h-3.5 w-3.5" />}
+                        >
+                            Telegram 通知
+                        </TabButton>
+                        {canGovern && (
+                            <TabButton
+                                active={activeTab === 'GOVERNANCE'}
+                                onClick={() => setTab('GOVERNANCE')}
+                                icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                            >
+                                治理与风控
+                            </TabButton>
+                        )}
+                        <TabButton
+                            active={activeTab === 'SETTINGS'}
+                            onClick={() => setTab('SETTINGS')}
+                            icon={<Settings2 className="h-3.5 w-3.5" />}
+                        >
+                            配置仓库 {data?.settingsStoreFieldDefinitions.length ?? 0}
+                        </TabButton>
+                        <TabButton
+                            active={activeTab === 'API_KEYS'}
+                            onClick={() => setTab('API_KEYS')}
+                            icon={<KeyRound className="h-3.5 w-3.5" />}
+                        >
+                            API 密钥 {data?.apiKeys?.totalItems ?? 0}
+                        </TabButton>
+                    </div>
+                )}
                 {activeTab === 'GOVERNANCE' ? (
                     <GovernanceRiskPanel />
                 ) : activeTab === 'TELEGRAM' ? (
@@ -426,13 +452,14 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-amber-950">
                                 监控能力边界
-                                <FeatureHelpButton topic="settings.service-checks" title="监控能力边界" />
+                                <FeatureHelpButton
+                                    topic="settings.service-checks"
+                                    title="监控能力边界"
+                                    description={
+                                        '当前后端没有提供 CPU、内存、数据库连接池和请求吞吐量指标。本页不生成模拟数据；需要这些指标时，应先接入 Prometheus/OpenTelemetry 或增加受权限保护的监控接口。'
+                                    }
+                                />
                             </h2>
-                            <p className="mt-1 text-xs leading-5 text-amber-900">
-                                当前后端没有提供
-                                CPU、内存、数据库连接池和请求吞吐量指标。本页不生成模拟数据；需要这些指标时，应先接入
-                                Prometheus/OpenTelemetry 或增加受权限保护的监控接口。
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -537,11 +564,14 @@ function JobsPanel({
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             任务执行记录
-                            <FeatureHelpButton topic="settings.job-runs" title="任务执行记录" />
+                            <FeatureHelpButton
+                                topic="settings.job-runs"
+                                title="任务执行记录"
+                                description={
+                                    'Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-[10px] text-slate-400">
-                            Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务
-                        </p>
                     </div>
                     <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                         <div className="relative min-w-0">
@@ -760,9 +790,12 @@ function SchedulesPanel({
             <div className="border-b border-slate-100 p-5">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     定时任务调度
-                    <FeatureHelpButton topic="settings.schedules" title="定时任务调度" />
+                    <FeatureHelpButton
+                        topic="settings.schedules"
+                        title="定时任务调度"
+                        description={'启停和立即执行均直接调用服务端调度器'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">启停和立即执行均直接调用服务端调度器</p>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1720px] border-collapse text-left text-xs">
@@ -927,11 +960,12 @@ function SettingsStorePanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         动态配置仓库
-                        <FeatureHelpButton topic="settings.dynamic-config" title="动态配置仓库" />
+                        <FeatureHelpButton
+                            topic="settings.dynamic-config"
+                            title="动态配置仓库"
+                            description={'字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[10px] text-slate-400">
-                        字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型
-                    </p>
                 </div>
                 <div className="flex gap-2">
                     <div className="relative">
@@ -1191,9 +1225,12 @@ function ApiKeysPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         API 密钥
-                        <FeatureHelpButton topic="settings.api-keys" title="API 密钥" />
+                        <FeatureHelpButton
+                            topic="settings.api-keys"
+                            title="API 密钥"
+                            description={'密钥明文只在创建或轮转成功后显示一次'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">密钥明文只在创建或轮转成功后显示一次</p>
                 </div>
                 <AdminButton type="button" onClick={() => setCreateOpen(true)} className={primaryButton}>
                     <Plus className="h-3.5 w-3.5" />

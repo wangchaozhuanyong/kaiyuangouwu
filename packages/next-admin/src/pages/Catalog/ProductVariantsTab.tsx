@@ -94,7 +94,13 @@ export function ProductVariantsTab() {
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <FolderTree className="h-4 w-4 text-blue-600" />
                             店铺归属与定价
-                            <FeatureHelpButton topic="catalog.variant-channels" title="店铺独立商品" />
+                            <FeatureHelpButton
+                                topic="catalog.variant-channels"
+                                title="店铺独立商品"
+                                description={
+                                    '如果其他店铺也要销售同款商品，请切换到目标店铺后重新创建或导入独立副本。'
+                                }
+                            />
                         </h3>
                         <p className="mt-1 text-xs text-slate-500">
                             本商品仅属于{' '}
@@ -110,9 +116,6 @@ export function ProductVariantsTab() {
                         单店独立
                     </span>
                 </div>
-                <p className="mt-3 text-[10px] leading-4 text-slate-400">
-                    如果其他店铺也要销售同款商品，请切换到目标店铺后重新创建或导入独立副本。
-                </p>
             </section>
 
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
@@ -122,13 +125,16 @@ export function ProductVariantsTab() {
                             {effectiveFulfillmentType === 'digital'
                                 ? '销售规格、价格与发货'
                                 : '商品规格、销售价与库存'}
-                            <FeatureHelpButton topic="catalog.variants" title="SKU 规格变体与交付" />
+                            <FeatureHelpButton
+                                topic="catalog.variants"
+                                title="SKU 规格变体与交付"
+                                description={
+                                    effectiveFulfillmentType === 'digital'
+                                        ? '在同一页完成销售价、交付方式、卡密格式和库存导入'
+                                        : '普通单品维护一行即可；如有颜色、容量或多包装等区分，请展开下方【规格模板】生成多规格'
+                                }
+                            />
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                            {effectiveFulfillmentType === 'digital'
-                                ? '在同一页完成销售价、交付方式、卡密格式和库存导入'
-                                : '普通单品维护一行即可；如有颜色、容量或多包装等区分，请展开下方【规格模板】生成多规格'}
-                        </p>
                     </div>
                     <AdminButton
                         type="button"

@@ -3,7 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { copyAdminText } from '../utils/admin-clipboard';
 import { FeatureHelpButton, FeatureHelpProvider } from './FeatureHelp';
+
+vi.mock('../utils/admin-clipboard', () => ({ copyAdminText: vi.fn(async () => true) }));
 
 describe('FeatureHelp interactions', () => {
     let container: HTMLDivElement;
@@ -29,6 +32,7 @@ describe('FeatureHelp interactions', () => {
         container.remove();
         vi.useRealTimers();
         vi.unstubAllGlobals();
+        vi.clearAllMocks();
     });
 
     it('keeps the card open while the pointer moves from the trigger into selectable content', () => {
@@ -64,5 +68,41 @@ describe('FeatureHelp interactions', () => {
         act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
         expect(document.querySelector('[data-feature-help-card="true"]')).toBeNull();
         expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('shows and copies each heading description without leaking it to another trigger', async () => {
+        act(() => {
+            root.render(
+                <FeatureHelpProvider>
+                    <FeatureHelpButton topic="sales.profit" title="利润统计" description="按下单日期核算" />
+                    <FeatureHelpButton
+                        topic="sales.profit"
+                        title="订单明细"
+                        description="缺费用时不显示净利润"
+                    />
+                    <FeatureHelpButton topic="sales.profit" title="普通说明" />
+                </FeatureHelpProvider>,
+            );
+        });
+        expect(container.textContent).not.toContain('按下单日期核算');
+        const triggers = container.querySelectorAll<HTMLButtonElement>('button');
+        act(() => triggers[0].click());
+        expect(document.querySelector('[data-feature-help-card]')?.textContent).toContain('按下单日期核算');
+        act(() => triggers[1].click());
+        const card = document.querySelector<HTMLElement>('[data-feature-help-card]')!;
+        expect(card.textContent).toContain('页面说明');
+        expect(card.textContent).toContain('缺费用时不显示净利润');
+        expect(card.textContent).not.toContain('按下单日期核算');
+        await act(async () => {
+            Array.from(card.querySelectorAll('button'))
+                .find(button => button.textContent === '复制说明')!
+                .click();
+        });
+        const copied = vi.mocked(copyAdminText).mock.calls[0][0];
+        expect(copied).toContain('页面说明：缺费用时不显示净利润');
+        expect(copied).toContain('这个功能做什么');
+        expect(copied).not.toContain('按下单日期核算');
+        act(() => triggers[2].click());
+        expect(document.querySelector('[data-feature-help-card]')?.textContent).not.toContain('页面说明');
     });
 });

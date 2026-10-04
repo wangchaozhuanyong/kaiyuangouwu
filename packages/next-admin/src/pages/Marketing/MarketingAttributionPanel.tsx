@@ -1,9 +1,18 @@
 import { useMutation } from '@apollo/client/react';
 import { AlertTriangle, Plus, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import {
+    MARKETING_REPORT_COLUMNS,
+    marketingCampaignLabel,
+    marketingReturnMultiple,
+    marketingReturnPercent,
+    marketingSourceLabel,
+} from '../../../../common/src/marketing-display-labels';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { TechnicalDetails } from '../../components/TechnicalDetails';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { getAdminDisplayLanguage } from '../../utils/admin-language';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -15,6 +24,8 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 export function MarketingAttributionPanel({ currencyCode }: { currencyCode: string }) {
+    const language = getAdminDisplayLanguage();
+    const chinese = language !== 'en';
     const initial = useMemo(() => defaultRange(), []);
     const [from, setFrom] = useState(initial.from);
     const [to, setTo] = useState(initial.to);
@@ -34,19 +45,30 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
 
     return (
         <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        渠道归因与投放回报
-                        <FeatureHelpButton topic="marketing.attribution" title="渠道归因与投放回报" />
+                        {chinese ? '渠道效果报表' : 'Channel performance'}
+                        <FeatureHelpButton
+                            topic="marketing.attribution"
+                            title={chinese ? '渠道归因与投放回报' : 'Attribution and campaign returns'}
+                            description={
+                                chinese
+                                    ? '按 30 天内末次非直接访问计算来源；付款后固定订单来源。收入已扣除已结算退款；收入回报倍数＝退款后收入÷投放费用，投放回报率＝（退款后收入－投放费用）÷投放费用。尚未扣除商品、物流等其他成本，不等同于净利润。'
+                                    : 'Last non-direct touch within 30 days. Attribution is frozen after payment. ROAS = refund-adjusted revenue / campaign cost; ROI = (refund-adjusted revenue - campaign cost) / campaign cost. Product, shipping and other costs are not deducted.'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        30 天末次非直接归因；付款成功后固化订单来源，ROAS/ROI 已扣除已结算退款。
-                    </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
-                    <DateField label="开始日期" value={from} onChange={setFrom} />
-                    <DateField label="结束日期" value={to} onChange={setTo} />
+                    <div
+                        className="admin-report-date-range"
+                        role="group"
+                        aria-label={chinese ? '渠道归因日期范围' : 'Attribution date range'}
+                    >
+                        <DateField label={chinese ? '开始日期' : 'From'} value={from} onChange={setFrom} />
+                        <DateField label={chinese ? '结束日期' : 'To'} value={to} onChange={setTo} />
+                    </div>
                     <AdminButton
                         refreshPage
                         type="button"
@@ -57,7 +79,7 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                         <RefreshCw
                             className={`h-3.5 w-3.5 ${query.loading && !query.data ? 'animate-spin' : ''}`}
                         />
-                        刷新
+                        {chinese ? '刷新' : 'Refresh'}
                     </AdminButton>
                     {canRecordCost && (
                         <AdminButton
@@ -66,7 +88,7 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                             className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
                         >
                             <Plus className="h-3.5 w-3.5" />
-                            记录投放费用
+                            {chinese ? '记录投放费用' : 'Record campaign cost'}
                         </AdminButton>
                     )}
                 </div>
@@ -88,20 +110,38 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
             )}
 
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-8">
-                <Metric label="访客" value={summary ? String(summary.visitorCount) : '—'} />
-                <Metric label="商品浏览" value={summary ? String(summary.productViewCount) : '—'} />
-                <Metric label="到达结账" value={summary ? String(summary.checkoutViewCount) : '—'} />
-                <Metric label="成交订单" value={summary ? String(summary.orderCount) : '—'} />
                 <Metric
-                    label="净收入"
+                    label={chinese ? '访问人数' : 'Visitors'}
+                    value={summary ? String(summary.visitorCount) : '—'}
+                />
+                <Metric
+                    label={chinese ? '商品浏览' : 'Product views'}
+                    value={summary ? String(summary.productViewCount) : '—'}
+                />
+                <Metric
+                    label={chinese ? '到达结账' : 'Checkout views'}
+                    value={summary ? String(summary.checkoutViewCount) : '—'}
+                />
+                <Metric
+                    label={chinese ? '付款订单数' : 'Paid orders'}
+                    value={summary ? String(summary.orderCount) : '—'}
+                />
+                <Metric
+                    label={chinese ? '退款后收入' : 'Refund-adjusted revenue'}
                     value={summary ? money(summary.netRevenueMicrounits, currencyCode) : '—'}
                 />
                 <Metric
-                    label="投放费用"
+                    label={chinese ? '投放费用' : 'Campaign cost'}
                     value={summary ? money(summary.campaignCostMicrounits, currencyCode) : '—'}
                 />
-                <Metric label="退款后 ROAS" value={ratio(summary?.refundAdjustedRoas)} />
-                <Metric label="退款后 ROI" value={percent(summary?.refundAdjustedRoi)} />
+                <Metric
+                    label={chinese ? '收入回报倍数' : 'ROAS'}
+                    value={marketingReturnMultiple(summary?.refundAdjustedRoas, language)}
+                />
+                <Metric
+                    label={chinese ? '投放回报率' : 'ROI'}
+                    value={marketingReturnPercent(summary?.refundAdjustedRoi, language)}
+                />
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -109,19 +149,7 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                     <table className="min-w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
                             <tr>
-                                {[
-                                    '来源 / 媒介',
-                                    '活动',
-                                    '搜索词',
-                                    '访客',
-                                    '商品 / 结账',
-                                    '订单',
-                                    '转化率',
-                                    '净收入',
-                                    '费用',
-                                    'ROAS',
-                                    'ROI',
-                                ].map(label => (
+                                {MARKETING_REPORT_COLUMNS[language].map(label => (
                                     <th key={label} className="whitespace-nowrap px-3 py-2 font-bold">
                                         {label}
                                     </th>
@@ -132,15 +160,33 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                             {(report?.items ?? []).map(item => (
                                 <tr key={`${item.source}:${item.medium}:${item.campaign}`}>
                                     <td className="px-3 py-2 font-semibold text-slate-800">
-                                        {item.source} / {item.medium}
+                                        {marketingSourceLabel(item.source, item.medium, language)}
+                                        <TechnicalDetails
+                                            summaryLabel={chinese ? '查看原始标记' : 'View tracking details'}
+                                            entries={[
+                                                {
+                                                    label: 'Source / medium',
+                                                    value: item.source + ' / ' + item.medium,
+                                                },
+                                                { label: 'Campaign', value: item.campaign },
+                                            ]}
+                                        />
                                     </td>
-                                    <td className="px-3 py-2 text-slate-700">{item.campaign}</td>
+                                    <td className="px-3 py-2 text-slate-700">
+                                        {marketingCampaignLabel(item.campaign, language)}
+                                    </td>
                                     <td className="max-w-56 px-3 py-2 text-slate-600">
-                                        {item.searchTerms.length ? item.searchTerms.join('、') : '—'}
+                                        {item.searchTerms.length
+                                            ? item.searchTerms.join('、')
+                                            : chinese
+                                              ? '未记录搜索词'
+                                              : 'No search term recorded'}
                                     </td>
                                     <td className="px-3 py-2 tabular-nums">{item.visitorCount}</td>
                                     <td className="px-3 py-2 tabular-nums">
-                                        {item.productViewCount} / {item.checkoutViewCount}
+                                        {chinese
+                                            ? `浏览 ${item.productViewCount} 次 · 结账 ${item.checkoutViewCount} 次`
+                                            : `${item.productViewCount} views / ${item.checkoutViewCount} checkouts`}
                                     </td>
                                     <td className="px-3 py-2 tabular-nums">{item.orderCount}</td>
                                     <td className="px-3 py-2 tabular-nums">{percent(item.conversionRate)}</td>
@@ -151,17 +197,19 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
                                         {money(item.campaignCostMicrounits, currencyCode)}
                                     </td>
                                     <td className="px-3 py-2 tabular-nums">
-                                        {ratio(item.refundAdjustedRoas)}
+                                        {marketingReturnMultiple(item.refundAdjustedRoas, language)}
                                     </td>
                                     <td className="px-3 py-2 tabular-nums">
-                                        {percent(item.refundAdjustedRoi)}
+                                        {marketingReturnPercent(item.refundAdjustedRoi, language)}
                                     </td>
                                 </tr>
                             ))}
                             {!query.loading && !(report?.items.length ?? 0) && (
                                 <tr>
                                     <td colSpan={11} className="px-3 py-10 text-center text-slate-500">
-                                        当前日期范围暂无归因流量或投放费用。
+                                        {chinese
+                                            ? '当前日期范围暂无流量或投放费用。'
+                                            : 'No traffic or campaign costs in this date range.'}
                                     </td>
                                 </tr>
                             )}
@@ -233,11 +281,12 @@ function CampaignCostDialog({
                 <div>
                     <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
                         记录投放费用
-                        <FeatureHelpButton topic="marketing.attribution-cost" title="记录投放费用" />
+                        <FeatureHelpButton
+                            topic="marketing.attribution-cost"
+                            title="记录投放费用"
+                            description={'账本只追加不覆盖；需要修正时新增一笔负数冲正。金额支持 3 位小数。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                        账本只追加不覆盖；需要修正时新增一笔负数冲正。金额支持 3 位小数。
-                    </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="业务日期" value={date} onChange={setDate} type="date" />
@@ -367,8 +416,4 @@ function money(value: number, currencyCode: string) {
 
 function percent(value?: number | null) {
     return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
-}
-
-function ratio(value?: number | null) {
-    return value == null ? '—' : `${value.toFixed(2)}x`;
 }

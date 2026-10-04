@@ -46,7 +46,6 @@
 }
 
 .content-text[data-content-format='rich'] blockquote {
-    border-inline-start: 3px solid var(--line, #e2e8f0);
     padding-inline-start: 1em;
 }
 

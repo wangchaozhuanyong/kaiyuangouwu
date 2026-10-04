@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import type { CatalogExportRowRecord } from '@vendure/catalog-management-plugin/browser';
+import { visit } from 'graphql';
 import {
     AlertCircle,
     AlertTriangle,
@@ -51,8 +52,10 @@ import {
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { dateInputToUtcDateTime } from './catalog-date';
@@ -328,6 +331,7 @@ const formatDateTime = (value: string) => {
 };
 
 export function InventoryWarehouseModule() {
+    const standalonePage = useStandaloneAdminPage();
     const location = useLocation();
     const requestConfirmation = useConfirmDialog();
     const navigate = useNavigate();
@@ -366,7 +370,35 @@ export function InventoryWarehouseModule() {
     const [savingThresholdKey, setSavingThresholdKey] = useState<string | null>(null);
     const loadingAllLocationsRef = useRef(false);
 
-    const { data, loading, error, refetch } = useQuery<InventoryData>(GET_INVENTORY_OVERVIEW, {
+    const inventoryPageKey = standalonePage?.key;
+    const inventoryDocument = useMemo(() => {
+        if (!inventoryPageKey) return GET_INVENTORY_OVERVIEW;
+        const movements = inventoryPageKey === 'movements';
+        const document = visit(GET_INVENTORY_OVERVIEW, {
+            Field(node) {
+                if (!movements && node.name.value === 'stockMovements') return null;
+                if (
+                    movements &&
+                    [
+                        'stockLevels',
+                        'globalSettings',
+                        'price',
+                        'currencyCode',
+                        'trackInventory',
+                        'outOfStockThreshold',
+                        'useGlobalOutOfStockThreshold',
+                    ].includes(node.name.value)
+                )
+                    return null;
+            },
+        });
+        return selectQueryFields(
+            document,
+            movements ? ['productVariants'] : ['productVariants', 'globalSettings'],
+        );
+    }, [inventoryPageKey]);
+    const { data, loading, error, refetch } = useQuery<InventoryData>(inventoryDocument, {
+        skip: standalonePage?.key === 'warehouses' || standalonePage?.key === 'lots',
         variables: {
             variantOptions: {
                 skip: page * pageSize,
@@ -403,6 +435,7 @@ export function InventoryWarehouseModule() {
         notifyOnNetworkStatusChange: true,
     });
     const alertQuery = useQuery<InventoryAlertData>(CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY, {
+        skip: Boolean(standalonePage) && !['all', 'skus'].includes(standalonePage!.key),
         notifyOnNetworkStatusChange: true,
     });
 
@@ -452,9 +485,9 @@ export function InventoryWarehouseModule() {
     );
     const [updateInventoryThreshold] = useMutation(UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION);
 
-    const variants = data?.productVariants.items ?? EMPTY_VARIANTS;
+    const variants = data?.productVariants?.items ?? EMPTY_VARIANTS;
     const locations = locationData?.stockLocations.items ?? EMPTY_LOCATIONS;
-    const globalTrackInventory = data?.globalSettings.trackInventory ?? true;
+    const globalTrackInventory = data?.globalSettings?.trackInventory ?? true;
     const alertOverview = alertQuery.data?.catalogInventoryAlertOverview;
     const defaultReplenishmentThreshold = alertOverview?.defaultReplenishmentThreshold ?? 5;
     const alertLocationByKey = useMemo(
@@ -468,12 +501,14 @@ export function InventoryWarehouseModule() {
             ),
         [alertOverview?.items],
     );
-    const totalVariants = data?.productVariants.totalItems ?? 0;
+    const totalVariants = data?.productVariants?.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalVariants / pageSize));
     const refetchAll = async () => {
         await Promise.all([
-            refetch(),
-            alertQuery.refetch(),
+            ...(!standalonePage || !['warehouses', 'lots'].includes(standalonePage.key) ? [refetch()] : []),
+            ...(!standalonePage || ['all', 'skus'].includes(standalonePage.key)
+                ? [alertQuery.refetch()]
+                : []),
             locationQuery.refetch(),
             ...(activeTab === 'LOTS' ? [lotQuery.refetch()] : []),
         ]);
@@ -489,7 +524,7 @@ export function InventoryWarehouseModule() {
     const stockList = useMemo<StockRow[]>(
         () =>
             variants.flatMap(variant => {
-                return variant.stockLevels.map(level => {
+                return (variant.stockLevels ?? []).map(level => {
                     const alertLocation = alertLocationByKey.get(`${variant.id}:${level.stockLocationId}`);
                     const threshold = alertLocation?.replenishmentThreshold ?? defaultReplenishmentThreshold;
                     const available = level.stockOnHand - level.stockAllocated;
@@ -522,7 +557,7 @@ export function InventoryWarehouseModule() {
         () =>
             variants
                 .flatMap(variant =>
-                    variant.stockMovements.items.map(movement => ({
+                    (variant.stockMovements?.items ?? []).map(movement => ({
                         ...movement,
                         variantId: variant.id,
                         productName: variant.product.name,
@@ -532,7 +567,7 @@ export function InventoryWarehouseModule() {
                 .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)),
         [variants],
     );
-    const lotVariants = lotQuery.data?.catalogExportRows.items ?? EMPTY_CATALOG_EXPORT_ROWS;
+    const lotVariants = lotQuery.data?.catalogExportRows?.items ?? EMPTY_CATALOG_EXPORT_ROWS;
     const lotRows = useMemo<InventoryLotRow[]>(
         () =>
             lotVariants.flatMap(variant =>
@@ -546,7 +581,7 @@ export function InventoryWarehouseModule() {
             ),
         [lotVariants],
     );
-    const lotTotalVariants = lotQuery.data?.catalogExportRows.totalItems ?? 0;
+    const lotTotalVariants = lotQuery.data?.catalogExportRows?.totalItems ?? 0;
     const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / pageSize));
 
     const stockSkuSummaries = useMemo(
@@ -1030,12 +1065,15 @@ export function InventoryWarehouseModule() {
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                        库存与多仓管理
-                        <FeatureHelpButton topic="catalog.inventory" title="库存与多仓管理" />
+                        {standalonePage?.title ?? '库存与多仓管理'}
+                        <FeatureHelpButton
+                            topic="catalog.inventory"
+                            title="库存与多仓管理"
+                            description={
+                                '读取 Vendure 多库存点数据，统一处理在手、锁定、可售库存与真实变动流水'
+                            }
+                        />
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
-                        读取 Vendure 多库存点数据，统一处理在手、锁定、可售库存与真实变动流水
-                    </p>
                 </div>
                 {activeTab === 'WAREHOUSES' ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -1113,28 +1151,34 @@ export function InventoryWarehouseModule() {
                 )}
             </div>
 
-            <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
-                {tabs.map(([key, Icon, label]) => (
-                    <AdminButton
-                        type="button"
-                        key={key}
-                        onClick={() => {
-                            setActiveTab(key);
-                            setPage(0);
-                            setSelectedVariantIds([]);
-                        }}
-                        className={
-                            'flex shrink-0 items-center gap-1.5 border-b-2 py-3.5 ' +
-                            (activeTab === key
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-800')
-                        }
-                    >
-                        <Icon className="h-3.5 w-3.5" />
-                        {label}
-                    </AdminButton>
-                ))}
-            </div>
+            {(!standalonePage || standalonePage.key === 'all') && (
+                <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
+                    {tabs
+                        .filter(
+                            ([key]) => !standalonePage || ['ALL', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(key),
+                        )
+                        .map(([key, Icon, label]) => (
+                            <AdminButton
+                                type="button"
+                                key={key}
+                                onClick={() => {
+                                    setActiveTab(key);
+                                    setPage(0);
+                                    setSelectedVariantIds([]);
+                                }}
+                                className={
+                                    'flex shrink-0 items-center gap-1.5 border-b-2 py-3.5 ' +
+                                    (activeTab === key
+                                        ? 'border-blue-600 text-blue-600'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800')
+                                }
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                {label}
+                            </AdminButton>
+                        ))}
+                </div>
+            )}
 
             <div className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {notification && (

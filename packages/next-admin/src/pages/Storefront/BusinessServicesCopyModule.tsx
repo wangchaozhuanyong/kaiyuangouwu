@@ -191,10 +191,14 @@ export function BusinessServicesCopyModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-violet-600" />
                             商业服务页文案
-                            <FeatureHelpButton topic="storefront.business-copy" title="商业服务页文案" />
+                            <FeatureHelpButton
+                                topic="storefront.business-copy"
+                                title="商业服务页文案"
+                                description="编辑商业服务页顶部卡片的文案、配图与跳转链接"
+                            />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            编辑商业服务页顶部卡片的文案、配图与跳转链接 · 当前店铺{' '}
+                            当前店铺：
                             {query.data ? getChannelDisplayName(query.data.activeChannel) : '读取中'}
                         </p>
                     </div>
@@ -242,11 +246,11 @@ export function BusinessServicesCopyModule() {
                                         <FeatureHelpButton
                                             topic="storefront.business-copy"
                                             title="页面顶部文案"
+                                            description={
+                                                '保留同一配置块中的客户端插件与排序，可更新页面文案、电脑端配图与跳转链接。'
+                                            }
                                         />
                                     </h2>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                        保留同一配置块中的客户端插件与排序，可更新页面文案、电脑端配图与跳转链接。
-                                    </p>
                                 </div>
                                 {canEdit && (
                                     <AdminButton

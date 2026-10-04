@@ -447,11 +447,13 @@ export function FlashEditor({
                 <div className="mt-4">
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         可选：单独设置 SKU 秒杀价
-                        <FeatureHelpButton topic="marketing.sku-sale-prices" title="单独设置 SKU 秒杀价" />
+                        <FeatureHelpButton
+                            topic="marketing.sku-sale-prices"
+                            title="单独设置 SKU 秒杀价"
+                            description={'留空则按统一降价比例计算；填写价格必须低于原价。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-[10px] text-slate-400">
-                        留空则按统一降价比例计算；填写价格必须低于原价。
-                    </p>
+
                     <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
                         {selectedProducts.flatMap(product =>
                             product.variants.map(variant => (

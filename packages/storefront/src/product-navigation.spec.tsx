@@ -597,20 +597,15 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(/\.topbar\s*\{[^}]*background:\s*var\(--surface\);/);
     });
 
-    it('uses a compact borderless desktop product toolbar instead of a tall mobile-style title band', () => {
+    it('uses the shared subpage rhythm instead of a second desktop product toolbar', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
-        const toolbarRule = stylesheetRule(
+        const pageRule = stylesheetRule(
             stylesheet,
-            String.raw`\.desktop-store-layout\s+\.desktop-product-toolbar`,
+            String.raw`\.desktop-store-layout\s+\.product-detail-page`,
         );
-        const shareRule = stylesheetRule(
-            stylesheet,
-            String.raw`\.desktop-store-layout\s+\.desktop-product-toolbar-share`,
-        );
-
-        expect(toolbarRule).toMatch(/min-height:\s*var\(--experience-control-min\);/);
-        expect(toolbarRule).toMatch(/justify-content:\s*space-between;/);
-        expect(shareRule).toMatch(/background:\s*var\(--accent-soft\);/);
+        expect(stylesheet).not.toContain('.desktop-product-toolbar');
+        expect(pageRule).not.toMatch(/padding-top:|gap:/);
+        expect(stylesheet).toContain('.product-detail-page > .subpage-body > .detail-block');
     });
 
     it('keeps desktop product buying surfaces on the shared skin geometry contract', () => {

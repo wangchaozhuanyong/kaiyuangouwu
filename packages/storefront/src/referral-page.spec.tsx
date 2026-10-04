@@ -114,6 +114,17 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('退款会按比例扣回');
     });
 
+    it('separates the displayed code from the explicitly labelled invitation link and copy action', () => {
+        const markup = renderReferralPage();
+        expect(markup).toContain('我的邀请码');
+        expect(markup).toContain('INVITE88');
+        expect(markup).toMatch(/<label[^>]*>.*邀请链接<\/label>/);
+        expect(markup).toMatch(/<input[^>]*value="https:\/\/storefront.example.com\/register\?ref=INVITE88/);
+        expect(markup).toContain('readOnly=""');
+        expect(markup).toContain('复制邀请链接');
+        expect(markup).not.toContain('复制邀请码');
+    });
+
     it('groups four metrics in one panel and moves reward guidance into an accessible info control', () => {
         const markup = renderReferralPage();
 
@@ -141,14 +152,14 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
     });
 
-    it('marks the approved independent campaign theme without clipping reward totals', () => {
+    it('uses the shared skin without clipping reward totals', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('class="referral-overview"');
         expect(markup).not.toContain('bg-white');
         expect(markup).not.toContain('text-slate-900');
         expect(markup).not.toContain('w-full truncate');
         expect(markup).toMatch(/class="[^"]*\bdesktop-referral-content\b[^"]*"/);
-        expect(markup).toContain('data-referral-theme="celebration"');
+        expect(markup).not.toContain('data-referral-theme');
     });
 
     it('paginates invitees list with previous and next buttons', () => {

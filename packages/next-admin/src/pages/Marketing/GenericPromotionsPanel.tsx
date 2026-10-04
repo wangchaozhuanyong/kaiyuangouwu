@@ -108,11 +108,11 @@ export function GenericPromotionsPanel() {
                             <FeatureHelpButton
                                 topic="marketing.generic-promotions"
                                 title="Vendure 通用促销"
+                                description={
+                                    '管理当前服务端支持的全部促销条件与优惠动作，不限制为优惠券或秒杀模板。'
+                                }
                             />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            管理当前服务端支持的全部促销条件与优惠动作，不限制为优惠券或秒杀模板。
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton

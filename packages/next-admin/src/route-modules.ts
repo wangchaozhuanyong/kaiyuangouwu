@@ -1,3 +1,5 @@
+import { getStandaloneAdminPage } from './navigation/admin-navigation';
+
 export const routeModuleLoaders = {
     profile: () => import('./pages/Auth/ProfileModule'),
     dashboard: () => import('./pages/Dashboard/DashboardModule'),
@@ -52,6 +54,8 @@ export function allowsBackgroundRoutePreload(connection?: AdminConnectionHints):
 
 export function getRouteModuleKey(target: string): RouteModuleKey | null {
     const pathname = target.split(/[?#]/, 1)[0] || '/';
+    const standalone = getStandaloneAdminPage(pathname);
+    if (standalone) return standalone.module;
 
     if (pathname === '/dashboard' || pathname === '/') return 'dashboard';
     if (pathname === '/profile') return 'profile';

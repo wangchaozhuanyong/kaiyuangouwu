@@ -43,29 +43,32 @@ export function CouponReport({
     const validationError = validReportFilter(filter) ? '' : '请选择不超过366天的有效日期区间';
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         优惠券经营报表
-                        <FeatureHelpButton topic="marketing.coupon-report" title="优惠券经营报表" />
+                        <FeatureHelpButton
+                            topic="marketing.coupon-report"
+                            title="优惠券经营报表"
+                            description={'统计领取、核销、退款、优惠成本和带动成交'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                        统计领取、核销、退款、优惠成本和带动成交
-                    </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
-                    <DateInput
-                        label="开始日期"
-                        value={filter.from}
-                        onChange={value => setFilter({ ...filter, from: value })}
-                        type="date"
-                    />
-                    <DateInput
-                        label="结束日期"
-                        value={filter.to}
-                        onChange={value => setFilter({ ...filter, to: value })}
-                        type="date"
-                    />
+                    <div className="admin-report-date-range" role="group" aria-label="优惠券报表日期范围">
+                        <DateInput
+                            label="开始日期"
+                            value={filter.from}
+                            onChange={value => setFilter({ ...filter, from: value })}
+                            type="date"
+                        />
+                        <DateInput
+                            label="结束日期"
+                            value={filter.to}
+                            onChange={value => setFilter({ ...filter, to: value })}
+                            type="date"
+                        />
+                    </div>
                     <AdminField className="text-[10px] font-bold text-slate-500" label="优惠券">
                         <AdminSelect
                             value={filter.campaignId}
@@ -84,7 +87,7 @@ export function CouponReport({
                         type="button"
                         onClick={() => exportReport(metrics, currencyCode)}
                         disabled={!metrics.length}
-                        className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40"
+                        className="ml-auto flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40"
                     >
                         <Download className="h-3.5 w-3.5" />
                         导出 CSV
@@ -227,11 +230,12 @@ export function CouponLedger({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         优惠券全生命周期流水
-                        <FeatureHelpButton topic="marketing.coupon-ledger" title="优惠券全生命周期流水" />
+                        <FeatureHelpButton
+                            topic="marketing.coupon-ledger"
+                            title="优惠券全生命周期流水"
+                            description={'每次领取、锁定、核销、退款和作废均可追溯'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                        每次领取、锁定、核销、退款和作废均可追溯
-                    </p>
                 </div>
                 <div className="flex gap-2">
                     <AdminSelect

@@ -36,7 +36,10 @@ import {
 } from '../../graphql/management.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { mergeQueryLists } from '../../utils/merge-query-lists';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { runVerifiedMutation } from '../../utils/verified-mutation';
 import { MultiValueChoiceField } from './BusinessSettingsChoices';
@@ -57,7 +60,6 @@ import {
     SettingsFormGrid,
     errorText,
     inputClass,
-    mergeById,
     primaryButton,
     secondaryButton,
 } from './settings-ui';
@@ -135,10 +137,13 @@ function assertChannelSettingsPersisted(
 export function BusinessBasicsPanel({
     onChanged,
     onError,
+    storeScoped = false,
 }: {
+    storeScoped?: boolean;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const standalonePage = useStandaloneAdminPage();
     const loadingAllBusinessSettingsRef = useRef(false);
     const channelCustomFieldDefinitions = useCustomFieldDefinitions('Channel');
     const businessSettingsDocument = useMemo(
@@ -148,14 +153,28 @@ export function BusinessBasicsPanel({
             ]),
         [channelCustomFieldDefinitions],
     );
-    const query = useQuery<BusinessSettingsResult>(businessSettingsDocument, {
-        variables: {
-            zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
-            countryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
-            taxCategoryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
-            taxRateOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+    const query = useQuery<BusinessSettingsResult>(
+        standalonePage
+            ? selectQueryFields(
+                  businessSettingsDocument,
+                  standalonePage.detail === 'global'
+                      ? ['globalSettings', 'activeChannel']
+                      : standalonePage.detail === 'language'
+                        ? ['activeChannel', 'channels', 'globalSettings', 'zones']
+                        : standalonePage.detail === 'taxes'
+                          ? ['taxCategories', 'taxRates', 'zones', 'activeChannel']
+                          : ['countries', 'zones', 'channels', 'activeChannel', 'taxRates'],
+              )
+            : businessSettingsDocument,
+        {
+            variables: {
+                zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                countryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                taxCategoryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                taxRateOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+            },
         },
-    });
+    );
     const {
         data: businessSettingsData,
         error: businessSettingsError,
@@ -171,15 +190,15 @@ export function BusinessBasicsPanel({
             loadingAllBusinessSettingsRef.current
         )
             return;
-        const zoneCount = data.zones.items.length;
-        const countryCount = data.countries.items.length;
-        const categoryCount = data.taxCategories.items.length;
-        const rateCount = data.taxRates.items.length;
+        const zoneCount = data.zones?.items.length ?? 0;
+        const countryCount = data.countries?.items.length ?? 0;
+        const categoryCount = data.taxCategories?.items.length ?? 0;
+        const rateCount = data.taxRates?.items.length ?? 0;
         if (
-            zoneCount >= data.zones.totalItems &&
-            countryCount >= data.countries.totalItems &&
-            categoryCount >= data.taxCategories.totalItems &&
-            rateCount >= data.taxRates.totalItems
+            zoneCount >= (data.zones?.totalItems ?? 0) &&
+            countryCount >= (data.countries?.totalItems ?? 0) &&
+            categoryCount >= (data.taxCategories?.totalItems ?? 0) &&
+            rateCount >= (data.taxRates?.totalItems ?? 0)
         )
             return;
         loadingAllBusinessSettingsRef.current = true;
@@ -190,25 +209,13 @@ export function BusinessBasicsPanel({
                 taxCategoryOptions: { skip: categoryCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
                 taxRateOptions: { skip: rateCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
             },
-            updateQuery: (previous, { fetchMoreResult }) => ({
-                ...previous,
-                zones: {
-                    ...fetchMoreResult.zones,
-                    items: mergeById(previous.zones.items, fetchMoreResult.zones.items),
-                },
-                countries: {
-                    ...fetchMoreResult.countries,
-                    items: mergeById(previous.countries.items, fetchMoreResult.countries.items),
-                },
-                taxCategories: {
-                    ...fetchMoreResult.taxCategories,
-                    items: mergeById(previous.taxCategories.items, fetchMoreResult.taxCategories.items),
-                },
-                taxRates: {
-                    ...fetchMoreResult.taxRates,
-                    items: mergeById(previous.taxRates.items, fetchMoreResult.taxRates.items),
-                },
-            }),
+            updateQuery: (previous, { fetchMoreResult }) =>
+                mergeQueryLists(previous, fetchMoreResult, [
+                    'zones',
+                    'countries',
+                    'taxCategories',
+                    'taxRates',
+                ]),
         })
             .catch(fetchError => {
                 onError(toUserFacingError(fetchError, '区域、国家或税率数据未能全部加载'));
@@ -260,36 +267,48 @@ export function BusinessBasicsPanel({
                     区域”设置税率。只有自定义项目才需要手工命名。
                 </span>
             </div>
-            <GlobalBusinessSettings
-                settings={query.data.globalSettings}
-                onChanged={verifyGlobalRefresh}
-                onError={onError}
-            />
-            <ChannelBusinessSettings
-                channel={query.data.activeChannel}
-                zones={query.data.zones.items}
-                platformLanguages={query.data.globalSettings.availableLanguages}
-                customFieldDefinitions={channelCustomFieldDefinitions}
-                onChanged={verifyChannelRefresh}
-                onError={onError}
-            />
-            <div className="grid gap-4 xl:grid-cols-2">
-                <TaxBusinessSettings
-                    categories={query.data.taxCategories.items}
-                    rates={query.data.taxRates.items}
-                    zones={query.data.zones.items}
-                    onChanged={refresh}
+            {!storeScoped &&
+                (!standalonePage || ['global', 'language'].includes(standalonePage.detail ?? '')) && (
+                    <GlobalBusinessSettings
+                        settings={query.data.globalSettings}
+                        onChanged={verifyGlobalRefresh}
+                        onError={onError}
+                    />
+                )}
+            {
+                <ChannelBusinessSettings
+                    channel={query.data.activeChannel}
+                    zones={query.data.zones?.items ?? []}
+                    platformLanguages={
+                        query.data.globalSettings?.availableLanguages ??
+                        query.data.activeChannel.availableLanguageCodes
+                    }
+                    customFieldDefinitions={channelCustomFieldDefinitions}
+                    onChanged={verifyChannelRefresh}
                     onError={onError}
                 />
-                <ZoneBusinessSettings
-                    zones={query.data.zones.items}
-                    countries={query.data.countries.items}
-                    channels={query.data.channels.items}
-                    taxRates={query.data.taxRates.items}
-                    languageCode={query.data.activeChannel.defaultLanguageCode}
-                    onChanged={refresh}
-                    onError={onError}
-                />
+            }
+            <div className="space-y-4">
+                {(!standalonePage || standalonePage.detail === 'taxes') && (
+                    <TaxBusinessSettings
+                        categories={query.data.taxCategories?.items ?? []}
+                        rates={query.data.taxRates?.items ?? []}
+                        zones={query.data.zones?.items}
+                        onChanged={refresh}
+                        onError={onError}
+                    />
+                )}
+                {(!standalonePage || standalonePage.detail === 'regions') && (
+                    <ZoneBusinessSettings
+                        zones={query.data.zones?.items}
+                        countries={query.data.countries?.items ?? []}
+                        channels={query.data.channels.items}
+                        taxRates={query.data.taxRates?.items ?? []}
+                        languageCode={query.data.activeChannel.defaultLanguageCode}
+                        onChanged={refresh}
+                        onError={onError}
+                    />
+                )}
             </div>
         </div>
     );
@@ -304,6 +323,8 @@ function GlobalBusinessSettings({
     onChanged: (message: string, expected: GlobalSettingsExpectation) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const page = useStandaloneAdminPage();
+    const languagePage = page?.detail === 'language';
     const source = {
         languages: [...settings.availableLanguages],
         trackInventory: settings.trackInventory,
@@ -342,7 +363,11 @@ function GlobalBusinessSettings({
                 mutate: () =>
                     update({
                         variables: {
-                            input: expected,
+                            input: !page
+                                ? expected
+                                : languagePage
+                                  ? { availableLanguages }
+                                  : { trackInventory, outOfStockThreshold: threshold },
                         },
                         context: { adminFeedback: false },
                     }),
@@ -367,9 +392,12 @@ function GlobalBusinessSettings({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         平台全局设置
-                        <FeatureHelpButton topic="settings.store-profile" title="平台全局设置" />
+                        <FeatureHelpButton
+                            topic="settings.store-profile"
+                            title="平台全局设置"
+                            description={'影响所有 Channel 可选语言和库存默认行为'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">影响所有 Channel 可选语言和库存默认行为</p>
                 </div>
                 <AdminButton
                     type="button"
@@ -381,32 +409,38 @@ function GlobalBusinessSettings({
                 </AdminButton>
             </div>
             <SettingsFormGrid columns={3} className="mt-4">
-                <MultiValueChoiceField
-                    label="平台可用语言"
-                    description="从列表添加后台允许店铺使用的内容语言。"
-                    values={languages}
-                    choices={BUSINESS_LANGUAGE_CHOICES}
-                    addLabel="选择要添加的语言"
-                    onChange={setLanguages}
-                    disabled={state.loading || draftOwner.sourceChanged}
-                />
-                <Field label="全局缺货阈值" description="为使用全局规则的 SKU 设置库存可售边界。">
-                    <AdminInput
-                        type="number"
-                        min="0"
-                        value={outOfStockThreshold}
-                        onChange={event => setOutOfStockThreshold(event.target.value)}
-                        className={inputClass}
+                {(!page || languagePage) && (
+                    <MultiValueChoiceField
+                        label="平台可用语言"
+                        description="从列表添加后台允许店铺使用的内容语言。"
+                        values={languages}
+                        choices={BUSINESS_LANGUAGE_CHOICES}
+                        addLabel="选择要添加的语言"
+                        onChange={setLanguages}
+                        disabled={state.loading || draftOwner.sourceChanged}
                     />
-                </Field>
-                <CheckboxField
-                    label="库存跟踪"
-                    description="作为新建 SKU 的平台默认库存行为。"
-                    checkboxLabel="默认跟踪库存"
-                    checked={trackInventory}
-                    onChange={event => setTrackInventory(event.target.checked)}
-                    disabled={state.loading || draftOwner.sourceChanged}
-                />
+                )}
+                {!languagePage && (
+                    <Field label="全局缺货阈值" description="为使用全局规则的 SKU 设置库存可售边界。">
+                        <AdminInput
+                            type="number"
+                            min="0"
+                            value={outOfStockThreshold}
+                            onChange={event => setOutOfStockThreshold(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                )}
+                {!languagePage && (
+                    <CheckboxField
+                        label="库存跟踪"
+                        description="作为新建 SKU 的平台默认库存行为。"
+                        checkboxLabel="默认跟踪库存"
+                        checked={trackInventory}
+                        onChange={event => setTrackInventory(event.target.checked)}
+                        disabled={state.loading || draftOwner.sourceChanged}
+                    />
+                )}
             </SettingsFormGrid>
         </section>
     );
@@ -427,6 +461,8 @@ function ChannelBusinessSettings({
     onChanged: (message: string, expected: ChannelSettingsExpectation) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const page = useStandaloneAdminPage();
+    const view = page?.detail;
     const source = {
         languages: [...channel.availableLanguageCodes],
         currencies: [...channel.availableCurrencyCodes],
@@ -505,11 +541,25 @@ function ChannelBusinessSettings({
                         variables: {
                             input: {
                                 id: channel.id,
-                                ...expected,
-                                customFields: customFieldInputFromValues(
-                                    customFieldDefinitions,
-                                    customFieldValues,
-                                ),
+                                ...(!view
+                                    ? expected
+                                    : view === 'language'
+                                      ? { availableLanguageCodes, defaultLanguageCode: defaultLanguage }
+                                      : view === 'currency'
+                                        ? { availableCurrencyCodes, defaultCurrencyCode: defaultCurrency }
+                                        : view === 'taxes'
+                                          ? { defaultTaxZoneId: taxZoneId || null }
+                                          : view === 'regions'
+                                            ? { defaultShippingZoneId: shippingZoneId || null }
+                                            : {
+                                                  pricesIncludeTax,
+                                                  trackInventory,
+                                                  outOfStockThreshold: threshold,
+                                                  customFields: customFieldInputFromValues(
+                                                      customFieldDefinitions,
+                                                      customFieldValues,
+                                                  ),
+                                              }),
                             },
                         },
                         context: { adminFeedback: false },
@@ -535,7 +585,7 @@ function ChannelBusinessSettings({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Languages className="h-4 w-4 text-blue-600" />
-                        当前店铺语言与币种
+                        {page?.title ?? '当前店铺语言与币种'}
                         <FeatureHelpButton topic="settings.store-profile" title="当前店铺语言与币种" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-400">
@@ -552,124 +602,142 @@ function ChannelBusinessSettings({
                 </AdminButton>
             </div>
             <SettingsFormGrid columns={4} className="mt-4">
-                <MultiValueChoiceField
-                    label="店铺内容语言"
-                    description="顾客在前台可切换的语言。"
-                    values={languages}
-                    choices={BUSINESS_LANGUAGE_CHOICES.filter(
-                        choice =>
-                            platformLanguages.includes(choice.value) || languages.includes(choice.value),
-                    )}
-                    addLabel="选择要添加的语言"
-                    onChange={nextLanguages => {
-                        setLanguages(nextLanguages);
-                        if (!nextLanguages.includes(defaultLanguage))
-                            setDefaultLanguage(nextLanguages[0] ?? '');
-                    }}
-                    disabled={state.loading || draftOwner.sourceChanged}
-                />
-                <Field label="默认语言" description="新内容优先采用的语言。">
-                    <AdminSelect
-                        value={defaultLanguage}
-                        onChange={event => setDefaultLanguage(event.target.value)}
-                        className={inputClass}
-                    >
-                        {languages.map(language => (
-                            <option key={language} value={language}>
-                                {businessChoiceLabel(language, BUSINESS_LANGUAGE_CHOICES)}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </Field>
-                <MultiValueChoiceField
-                    label="店铺结算币种"
-                    description="选择商品定价和顾客结算可使用的币种。"
-                    values={currencies}
-                    choices={BUSINESS_CURRENCY_CHOICES}
-                    addLabel="选择要添加的币种"
-                    onChange={nextCurrencies => {
-                        setCurrencies(nextCurrencies);
-                        if (!nextCurrencies.includes(defaultCurrency))
-                            setDefaultCurrency(nextCurrencies[0] ?? '');
-                    }}
-                    disabled={state.loading || draftOwner.sourceChanged}
-                />
-                <Field label="默认币种" description="商品定价和订单结算的默认币种。">
-                    <AdminSelect
-                        value={defaultCurrency}
-                        onChange={event => setDefaultCurrency(event.target.value)}
-                        className={inputClass}
-                    >
-                        {currencies.map(currency => (
-                            <option key={currency} value={currency}>
-                                {businessChoiceLabel(currency, BUSINESS_CURRENCY_CHOICES)}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </Field>
-                <Field label="默认计税区域" description="没有单独指定时使用的税务区域。">
-                    <AdminSelect
-                        value={taxZoneId}
-                        onChange={event => setTaxZoneId(event.target.value)}
-                        className={inputClass}
-                    >
-                        <option value="">未设置</option>
-                        {zones.map(zone => (
-                            <option key={zone.id} value={zone.id}>
-                                {zone.name}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </Field>
-                <Field label="默认配送区域" description="没有单独指定时使用的配送区域。">
-                    <AdminSelect
-                        value={shippingZoneId}
-                        onChange={event => setShippingZoneId(event.target.value)}
-                        className={inputClass}
-                    >
-                        <option value="">未设置</option>
-                        {zones.map(zone => (
-                            <option key={zone.id} value={zone.id}>
-                                {zone.name}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </Field>
-                <Field label="缺货阈值" description="当前店铺用于判断可售库存的安全边界。">
-                    <AdminInput
-                        type="number"
-                        min="0"
-                        value={outOfStockThreshold}
-                        onChange={event => setOutOfStockThreshold(event.target.value)}
-                        className={inputClass}
+                {(!view || view === 'language') && (
+                    <MultiValueChoiceField
+                        label="店铺内容语言"
+                        description="顾客在前台可切换的语言。"
+                        values={languages}
+                        choices={BUSINESS_LANGUAGE_CHOICES.filter(
+                            choice =>
+                                platformLanguages.includes(choice.value) || languages.includes(choice.value),
+                        )}
+                        addLabel="选择要添加的语言"
+                        onChange={nextLanguages => {
+                            setLanguages(nextLanguages);
+                            if (!nextLanguages.includes(defaultLanguage))
+                                setDefaultLanguage(nextLanguages[0] ?? '');
+                        }}
+                        disabled={state.loading || draftOwner.sourceChanged}
                     />
-                </Field>
-                <FieldGroup label="业务规则" description="控制当前店铺的计价和库存默认行为。">
-                    <div className="grid gap-2">
-                        <CheckboxControl
-                            label="商品价格已含税"
-                            checked={pricesIncludeTax}
-                            onChange={event => setPricesIncludeTax(event.target.checked)}
-                            disabled={state.loading || draftOwner.sourceChanged}
+                )}
+                {(!view || view === 'language') && (
+                    <Field label="默认语言" description="新内容优先采用的语言。">
+                        <AdminSelect
+                            value={defaultLanguage}
+                            onChange={event => setDefaultLanguage(event.target.value)}
+                            className={inputClass}
+                        >
+                            {languages.map(language => (
+                                <option key={language} value={language}>
+                                    {businessChoiceLabel(language, BUSINESS_LANGUAGE_CHOICES)}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </Field>
+                )}
+                {(!view || view === 'currency') && (
+                    <MultiValueChoiceField
+                        label="店铺结算币种"
+                        description="选择商品定价和顾客结算可使用的币种。"
+                        values={currencies}
+                        choices={BUSINESS_CURRENCY_CHOICES}
+                        addLabel="选择要添加的币种"
+                        onChange={nextCurrencies => {
+                            setCurrencies(nextCurrencies);
+                            if (!nextCurrencies.includes(defaultCurrency))
+                                setDefaultCurrency(nextCurrencies[0] ?? '');
+                        }}
+                        disabled={state.loading || draftOwner.sourceChanged}
+                    />
+                )}
+                {(!view || view === 'currency') && (
+                    <Field label="默认币种" description="商品定价和订单结算的默认币种。">
+                        <AdminSelect
+                            value={defaultCurrency}
+                            onChange={event => setDefaultCurrency(event.target.value)}
+                            className={inputClass}
+                        >
+                            {currencies.map(currency => (
+                                <option key={currency} value={currency}>
+                                    {businessChoiceLabel(currency, BUSINESS_CURRENCY_CHOICES)}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </Field>
+                )}
+                {(!view || view === 'taxes') && (
+                    <Field label="默认计税区域" description="没有单独指定时使用的税务区域。">
+                        <AdminSelect
+                            value={taxZoneId}
+                            onChange={event => setTaxZoneId(event.target.value)}
+                            className={inputClass}
+                        >
+                            <option value="">未设置</option>
+                            {zones.map(zone => (
+                                <option key={zone.id} value={zone.id}>
+                                    {zone.name}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </Field>
+                )}
+                {(!view || view === 'regions') && (
+                    <Field label="默认配送区域" description="没有单独指定时使用的配送区域。">
+                        <AdminSelect
+                            value={shippingZoneId}
+                            onChange={event => setShippingZoneId(event.target.value)}
+                            className={inputClass}
+                        >
+                            <option value="">未设置</option>
+                            {zones.map(zone => (
+                                <option key={zone.id} value={zone.id}>
+                                    {zone.name}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </Field>
+                )}
+                {(!view || view === 'global') && (
+                    <Field label="缺货阈值" description="当前店铺用于判断可售库存的安全边界。">
+                        <AdminInput
+                            type="number"
+                            min="0"
+                            value={outOfStockThreshold}
+                            onChange={event => setOutOfStockThreshold(event.target.value)}
+                            className={inputClass}
                         />
-                        <CheckboxControl
-                            label="默认跟踪库存"
-                            checked={trackInventory}
-                            onChange={event => setTrackInventory(event.target.checked)}
-                            disabled={state.loading || draftOwner.sourceChanged}
-                        />
-                    </div>
-                </FieldGroup>
+                    </Field>
+                )}
+                {(!view || view === 'global') && (
+                    <FieldGroup label="业务规则" description="控制当前店铺的计价和库存默认行为。">
+                        <div className="grid gap-2">
+                            <CheckboxControl
+                                label="商品价格已含税"
+                                checked={pricesIncludeTax}
+                                onChange={event => setPricesIncludeTax(event.target.checked)}
+                                disabled={state.loading || draftOwner.sourceChanged}
+                            />
+                            <CheckboxControl
+                                label="默认跟踪库存"
+                                checked={trackInventory}
+                                onChange={event => setTrackInventory(event.target.checked)}
+                                disabled={state.loading || draftOwner.sourceChanged}
+                            />
+                        </div>
+                    </FieldGroup>
+                )}
             </SettingsFormGrid>
             <div className="mt-4">
-                <DynamicCustomFieldsForm
-                    helpTopic="settings.store-profile"
-                    fields={customFieldDefinitions}
-                    values={customFieldValues}
-                    onChange={setCustomFieldValues}
-                    disabled={state.loading || draftOwner.sourceChanged}
-                    title="当前店铺扩展参数"
-                />
+                {(!view || view === 'global') && (
+                    <DynamicCustomFieldsForm
+                        helpTopic="settings.store-profile"
+                        fields={customFieldDefinitions}
+                        values={customFieldValues}
+                        onChange={setCustomFieldValues}
+                        disabled={state.loading || draftOwner.sourceChanged}
+                        title="当前店铺扩展参数"
+                    />
+                )}
             </div>
         </section>
     );
@@ -833,9 +901,12 @@ function TaxBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <ReceiptText className="h-4 w-4 text-blue-600" />
                     税类与税率
-                    <FeatureHelpButton topic="settings.finance" title="税类与税率" />
+                    <FeatureHelpButton
+                        topic="settings.finance"
+                        title="税类与税率"
+                        description={'税率按“税类 + 区域”匹配订单'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">税率按“税类 + 区域”匹配订单</p>
             </div>
             <div className="space-y-4 p-5">
                 <SettingsFormGrid columns={2}>
@@ -1273,11 +1344,12 @@ function ZoneBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <MapPin className="h-4 w-4 text-blue-600" />
                     国家与业务区域
-                    <FeatureHelpButton topic="settings.store-profile" title="国家与业务区域" />
+                    <FeatureHelpButton
+                        topic="settings.store-profile"
+                        title="国家与业务区域"
+                        description={'业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">
-                    业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。
-                </p>
             </div>
             <div className="space-y-3 p-5">
                 {!editingZoneId && (
@@ -1422,11 +1494,12 @@ function ZoneBusinessSettings({
                 <div>
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         添加国家/地区
-                        <FeatureHelpButton topic="settings.store-profile" title="添加国家/地区" />
+                        <FeatureHelpButton
+                            topic="settings.store-profile"
+                            title="添加国家/地区"
+                            description={'常用国家直接选择，代码和名称会自动填写。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        常用国家直接选择，代码和名称会自动填写。
-                    </p>
                 </div>
                 <Field label={editingCountryId ? '正在编辑' : '选择国家/地区'}>
                     <AdminSelect

@@ -13,6 +13,7 @@ import {
 import { useMemo, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -33,6 +34,9 @@ import {
 } from '../../graphql/store-usdt.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { isDefaultChannelCode } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -64,11 +68,7 @@ export function UsdtPaymentSetupPanel({
     const canRead = hasAnyPermission(['ReadStoreProfile']);
     const canUpdate = hasAnyPermission(['UpdateStoreProfile']);
     const isSuperAdmin = hasAnyPermission(['SuperAdmin']);
-    const [draftOverride, setDraftOverride] = useState<{
-        channelId: string;
-        updatedAt: string;
-        value: StoreUsdtConfigurationDraft;
-    } | null>(null);
+    const standalonePage = useStandaloneAdminPage();
     const [walletAddress, setWalletAddress] = useState('');
     const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
 
@@ -82,7 +82,7 @@ export function UsdtPaymentSetupPanel({
     );
     const canManagePlatformWallet = isSuperAdmin && isPlatformContext;
     const platformWalletsQuery = useQuery<PlatformUsdtWalletsResult>(PLATFORM_USDT_WALLETS_QUERY, {
-        skip: !canManagePlatformWallet,
+        skip: !canManagePlatformWallet || Boolean(standalonePage),
 
         notifyOnNetworkStatusChange: true,
     });
@@ -101,12 +101,13 @@ export function UsdtPaymentSetupPanel({
 
     const configuration = setupQuery.data?.myStoreCurrencyConfiguration;
     const wallet = setupQuery.data?.myStoreUsdtWallet;
-    const draft = configuration
-        ? draftOverride?.channelId === configuration.channelId &&
-          draftOverride.updatedAt === configuration.updatedAt
-            ? draftOverride.value
-            : toStoreUsdtConfigurationDraft(configuration)
-        : null;
+    const owner = useServerDraft(
+        configuration?.channelId ?? '',
+        configuration?.updatedAt ?? '',
+        configuration ? toStoreUsdtConfigurationDraft(configuration) : null,
+    );
+    const draft = owner.draft;
+    useUnsavedChangesWarning(Boolean(walletAddress) && !owner.dirty, '收款地址尚未提交，确定放弃吗？');
     const pendingWallets = useMemo(
         () =>
             (platformWalletsQuery.data?.storeUsdtWallets ?? []).filter(
@@ -121,21 +122,17 @@ export function UsdtPaymentSetupPanel({
 
     const updateDraft = (update: (current: StoreUsdtConfigurationDraft) => StoreUsdtConfigurationDraft) => {
         if (!configuration || !draft) return;
-        setDraftOverride({
-            channelId: configuration.channelId,
-            updatedAt: configuration.updatedAt,
-            value: update(draft),
-        });
+        owner.setDraft(update(draft));
     };
 
     const refreshPanels = async (message: string) => {
         await setupQuery.refetch();
-        if (canManagePlatformWallet) await platformWalletsQuery.refetch();
+        if (canManagePlatformWallet && !standalonePage) await platformWalletsQuery.refetch();
         await onChanged(message);
     };
 
     const saveConfiguration = async () => {
-        if (!configuration || !draft || updateState.loading) return;
+        if (!configuration || !draft || updateState.loading || owner.sourceChanged) return;
         const validationMessage = validateStoreUsdtConfigurationDraft(draft);
         if (validationMessage) return onError(validationMessage);
         try {
@@ -145,7 +142,10 @@ export function UsdtPaymentSetupPanel({
             if (!response.data?.updateMyStoreCurrencyConfiguration) {
                 throw new Error('后端未返回更新后的 USDT 配置');
             }
-            setDraftOverride(null);
+            owner.accept(
+                toStoreUsdtConfigurationDraft(response.data.updateMyStoreCurrencyConfiguration),
+                response.data.updateMyStoreCurrencyConfiguration.updatedAt,
+            );
             await refreshPanels('USDT 报价配置已保存');
         } catch (error) {
             onError(toUserFacingError(error, 'USDT 报价配置保存失败，请刷新后重试'));
@@ -157,7 +157,10 @@ export function UsdtPaymentSetupPanel({
         try {
             const response = await refreshRate();
             if (!response.data?.refreshMyStoreUsdtRate) throw new Error('后端未返回更新后的 USDT 汇率');
-            setDraftOverride(null);
+            owner.accept(
+                toStoreUsdtConfigurationDraft(response.data.refreshMyStoreUsdtRate),
+                response.data.refreshMyStoreUsdtRate.updatedAt,
+            );
             await refreshPanels('USDT 汇率已刷新');
         } catch (error) {
             onError(toUserFacingError(error, 'USDT 汇率刷新失败，请稍后重试'));
@@ -231,11 +234,14 @@ export function UsdtPaymentSetupPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <WalletCards className="h-4 w-4 text-emerald-600" /> USDT-TRC20 收款
-                        <FeatureHelpButton topic="settings.usdt" title="USDT-TRC20 收款" />
+                        <FeatureHelpButton
+                            topic="settings.usdt"
+                            title="USDT-TRC20 收款"
+                            description={
+                                '收款地址由超级管理员在平台管理中心统一设置；审核通过后，经营店铺在本店支付选项中独立启用。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                        收款地址由超级管理员在平台管理中心统一设置；审核通过后，经营店铺在本店支付选项中独立启用。
-                    </p>
                 </div>
                 {wallet && <WalletStatusBadge status={wallet.reviewStatus} />}
             </div>
@@ -260,6 +266,7 @@ export function UsdtPaymentSetupPanel({
                 </div>
             ) : configuration && wallet && draft ? (
                 <div className="space-y-6 p-5">
+                    {owner.sourceChanged && <DraftUpdateNotice onReload={owner.reload} />}
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <Metric label="当前店铺" value={configuration.channelCode} />
                         <Metric
@@ -280,11 +287,14 @@ export function UsdtPaymentSetupPanel({
                                 <div>
                                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                         报价与汇率
-                                        <FeatureHelpButton topic="settings.usdt" title="USDT 报价与汇率" />
+                                        <FeatureHelpButton
+                                            topic="settings.usdt"
+                                            title="USDT 报价与汇率"
+                                            description={
+                                                '开启后，客户可按锁定汇率生成 10 分钟有效的 USDT 付款报价。'
+                                            }
+                                        />
                                     </h3>
-                                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                        开启后，客户可按锁定汇率生成 10 分钟有效的 USDT 付款报价。
-                                    </p>
                                 </div>
                                 <label className="flex shrink-0 items-center gap-2 text-[10px] font-bold text-slate-600">
                                     <AdminInput
@@ -409,7 +419,7 @@ export function UsdtPaymentSetupPanel({
                                     <AdminButton
                                         type="button"
                                         className={primaryButton}
-                                        disabled={busy || !dirty}
+                                        disabled={busy || !dirty || owner.sourceChanged}
                                         onClick={() => void saveConfiguration()}
                                     >
                                         <Save className="h-3.5 w-3.5" /> 保存报价配置
@@ -422,11 +432,14 @@ export function UsdtPaymentSetupPanel({
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     平台统一收款钱包
-                                    <FeatureHelpButton topic="settings.usdt" title="平台统一收款钱包" />
+                                    <FeatureHelpButton
+                                        topic="settings.usdt"
+                                        title="平台统一收款钱包"
+                                        description={
+                                            '只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。'
+                                        }
+                                    />
                                 </h3>
-                                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                    只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。
-                                </p>
                             </div>
 
                             <div className="grid gap-3 text-[10px] sm:grid-cols-2">
@@ -498,16 +511,19 @@ export function UsdtPaymentSetupPanel({
                         </section>
                     </div>
 
-                    {canManagePlatformWallet && (
+                    {canManagePlatformWallet && !standalonePage && (
                         <section className="space-y-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     <ShieldCheck className="h-4 w-4 text-blue-600" /> 平台待审核收款地址
-                                    <FeatureHelpButton topic="settings.usdt" title="平台待审核收款地址" />
+                                    <FeatureHelpButton
+                                        topic="settings.usdt"
+                                        title="平台待审核收款地址"
+                                        description={
+                                            '应由未参与地址提交的第二名 SuperAdmin 对照钱包 App 完整地址和指纹复核。'
+                                        }
+                                    />
                                 </h3>
-                                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                    应由未参与地址提交的第二名 SuperAdmin 对照钱包 App 完整地址和指纹复核。
-                                </p>
                             </div>
 
                             {platformWalletsQuery.loading && !platformWalletsQuery.data ? (

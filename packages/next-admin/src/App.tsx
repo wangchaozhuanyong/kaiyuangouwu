@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { getStandaloneAdminRedirect, resolveAdminRedirectTarget } from './navigation/admin-navigation';
 
 import {
     clearAuthSession,
@@ -284,6 +285,14 @@ function AppRoutes() {
             </div>
         );
     }
+
+    const legacyTarget = getNextAdminExtensionLegacyRoutes().find(
+        route => route.path === location.pathname,
+    )?.target;
+    const standaloneRedirect = legacyTarget
+        ? resolveAdminRedirectTarget(legacyTarget, location.search)
+        : getStandaloneAdminRedirect(location.pathname, location.search);
+    if (standaloneRedirect) return <Navigate to={standaloneRedirect + location.hash} replace />;
 
     return (
         <Routes>

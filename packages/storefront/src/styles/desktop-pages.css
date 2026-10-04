@@ -198,71 +198,7 @@
     .desktop-store-layout .product-detail-page {
         --page-bottom-fixed-height: 0px;
         --page-bottom-fixed-offset: 0px;
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-section);
-        padding-top: var(--space-section);
         padding-bottom: 40px;
-    }
-    /* Desktop product pages use a compact utility row instead of stretching the
-       phone overlay header into a large, mostly empty title band. */
-    .desktop-store-layout .desktop-product-toolbar {
-        min-height: var(--experience-control-min);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-        color: var(--muted);
-        font-size: var(--type-body-size);
-        line-height: var(--type-body-leading);
-    }
-    .desktop-store-layout .desktop-product-toolbar-path,
-    .desktop-store-layout :is(.desktop-product-toolbar-back, .desktop-product-toolbar-share) {
-        display: flex;
-        align-items: center;
-    }
-    .desktop-store-layout .desktop-product-toolbar-path {
-        min-width: 0;
-        gap: 12px;
-    }
-    .desktop-store-layout :is(.desktop-product-toolbar-back, .desktop-product-toolbar-share) {
-        min-height: var(--experience-control-min);
-        gap: 8px;
-        padding: 8px 10px;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        color: inherit;
-        background: transparent;
-        font: inherit;
-    }
-    .desktop-store-layout .desktop-product-toolbar-back {
-        margin-left: -10px;
-    }
-    .desktop-store-layout .desktop-product-toolbar-share {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
-    }
-    .desktop-store-layout :is(.desktop-product-toolbar-back, .desktop-product-toolbar-share):hover {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
-    }
-    .desktop-store-layout :is(.desktop-product-toolbar-back, .desktop-product-toolbar-share):focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-    }
-    .desktop-store-layout .desktop-product-toolbar svg {
-        width: 17px;
-        height: 17px;
-    }
-    .desktop-store-layout .desktop-product-toolbar-divider {
-        display: none;
-    }
-    .desktop-store-layout .desktop-product-toolbar-current {
-        overflow: hidden;
-        color: var(--text);
-        font-weight: var(--font-weight-semibold);
-        white-space: nowrap;
-        text-overflow: ellipsis;
     }
     .desktop-product-purchase {
         display: grid;
@@ -437,18 +373,13 @@
         align-items: center;
         gap: 5px;
     }
-    .desktop-store-layout .product-detail-page > .detail-block {
+    .desktop-store-layout .product-detail-page > .subpage-body > .detail-block {
         padding: var(--space-card);
         margin: 0;
         background: var(--surface, var(--paper));
         border: var(--skin-card-outline, 0);
         border-radius: var(--skin-card-radius);
         box-shadow: var(--skin-card-shadow);
-    }
-    /* The page gap owns section spacing; do not add the generic merchandising inset. */
-    .desktop-store-layout .product-detail-page > .product-section {
-        margin: 0;
-        padding: 0;
     }
     .desktop-store-layout .detail-params dl {
         display: grid;

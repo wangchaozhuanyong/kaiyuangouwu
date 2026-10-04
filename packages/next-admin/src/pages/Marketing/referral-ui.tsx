@@ -1,4 +1,13 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    CircleDollarSign,
+    Gift,
+    Settings2,
+    UserPlus,
+    Users,
+    WalletCards,
+} from 'lucide-react';
 import React from 'react';
 import { missingDisplayLabel } from '../../../../common/src/display-localization';
 import { referralStatusDisplayLabel as statusLabel } from '../../../../common/src/system-display-labels';
@@ -6,10 +15,15 @@ import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminCont
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
+import {
+    ReferralPosterRecord,
+    ReferralProgramRecord,
+    ReferralReportsResult,
+} from '../../graphql/marketing.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
-import { PosterDraft, ProgramDraft, WithdrawalAction } from './referrals-types';
+import { TabButton } from '../Settings/settings-ui';
+import { PosterDraft, ProgramDraft, ReferralTab } from './referrals-types';
 export { statusLabel };
 
 export function TableCard({
@@ -26,9 +40,8 @@ export function TableCard({
             <div className="border-b border-slate-200 p-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     {title}
-                    <FeatureHelpButton topic="marketing.referrals" title={title} />
+                    <FeatureHelpButton topic="marketing.referrals" title={title} description={description} />
                 </h2>
-                <p className="mt-1 text-[11px] text-slate-500">{description}</p>
             </div>
             <div className="overflow-x-auto">{children}</div>
         </section>
@@ -446,38 +459,58 @@ export function posterLabel(value: string, program?: ReferralProgramRecord) {
         )?.name ?? missingDisplayLabel('template')
     );
 }
-export function withdrawalActionLabel(status: WithdrawalAction['status']) {
-    return (
-        { APPROVED: '批准申请', PAID: '登记已打款', REJECTED: '驳回申请', CANCELLED: '取消申请' } as Record<
-            string,
-            string
-        >
-    )[status];
-}
-export function withdrawalSuccess(status: WithdrawalAction['status']) {
-    return (
-        {
-            APPROVED: '提款申请已批准，等待线下打款',
-            PAID: '外部打款已登记，冻结余额已扣除',
-            REJECTED: '提款申请已驳回，冻结金额已退回可用余额',
-            CANCELLED: '提款申请已取消，冻结金额已退回可用余额',
-        } as Record<string, string>
-    )[status];
-}
 export function errorText(error: unknown) {
     return toUserFacingError(error, '操作失败，请稍后重试');
 }
 
-export function ReferralHeading() {
+export function ReferralHeading({ title = '分销与返利' }: { title?: string } = {}) {
     return (
         <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                分销与返利
-                <FeatureHelpButton topic="marketing.referrals" title="分销与返利" />
+                {title}
+                <FeatureHelpButton
+                    topic="marketing.referrals"
+                    title="分销与返利"
+                    description={'一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理'}
+                />
             </h1>
-            <p className="mt-1 text-xs text-slate-500">
-                一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理
-            </p>
         </div>
+    );
+}
+
+export function ReferralTabs({
+    activeTab,
+    reports,
+    onChange,
+}: {
+    activeTab: ReferralTab;
+    reports?: ReferralReportsResult;
+    onChange: (tab: ReferralTab) => void;
+}) {
+    const tabs = [
+        ['SETTINGS', '功能设置', Settings2],
+        ['PROMOTERS', `推广员团队 ${reports?.referralInviterSummaries.totalItems ?? 0}`, Users],
+        ['RELATIONSHIPS', `邀请关系明细 ${reports?.referralRelationships.totalItems ?? 0}`, UserPlus],
+        ['REWARDS', `返利订单 ${reports?.referralRewards.totalItems ?? 0}`, Gift],
+        ['LEDGER', '钱包流水', WalletCards],
+        ['WITHDRAWALS', `提款 ${reports?.referralWithdrawals.totalItems ?? 0}`, CircleDollarSign],
+    ] as const;
+
+    return (
+        <nav
+            aria-label="分销与返利子导航"
+            className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
+        >
+            {tabs.map(([tab, label, Icon]) => (
+                <TabButton
+                    key={tab}
+                    active={activeTab === tab}
+                    onClick={() => onChange(tab)}
+                    icon={<Icon className="h-3.5 w-3.5" />}
+                >
+                    {label}
+                </TabButton>
+            ))}
+        </nav>
     );
 }

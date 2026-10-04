@@ -65,6 +65,7 @@ import type {
     OperationValue,
 } from '../../graphql/generic-promotions.graphql';
 import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import {
     configurableArgumentLabel,
@@ -72,6 +73,8 @@ import {
     serializeConfigurableListValue,
 } from '../../utils/configurable-operation-localization';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
+import { mergeQueryLists } from '../../utils/merge-query-lists';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CatalogTemplateLibraryPanel } from './CatalogTemplateLibraryPanel';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
@@ -179,6 +182,7 @@ const deletionSucceeded = (response?: { result?: string; message?: string }) => 
 };
 
 export function CategoriesModule() {
+    const standalonePage = useStandaloneAdminPage();
     const requestConfirmation = useConfirmDialog();
     const collectionCustomFields = useCustomFieldDefinitions('Collection');
     const taxonomyDocument = useMemo(
@@ -209,40 +213,49 @@ export function CategoriesModule() {
     const [optionGroupPage, setOptionGroupPage] = useState(0);
     const [usageGroup, setUsageGroup] = useState<OptionGroupItem | null>(null);
 
-    const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(taxonomyDocument, {
-        variables: {
-            collectionOptions: {
-                topLevelOnly: false,
-                skip: 0,
-                take: 100,
-                sort: { position: 'ASC', id: 'ASC' },
+    const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(
+        standalonePage
+            ? selectQueryFields(taxonomyDocument, [
+                  'activeChannel',
+                  ...(activeTab === 'CATEGORIES'
+                      ? ['collections', 'collectionFilters']
+                      : activeTab === 'OPTION_TEMPLATES'
+                        ? ['productOptionGroups']
+                        : ['facets']),
+              ])
+            : taxonomyDocument,
+        {
+            variables: {
+                collectionOptions: {
+                    topLevelOnly: false,
+                    skip: 0,
+                    take: 100,
+                    sort: { position: 'ASC', id: 'ASC' },
+                },
+                optionGroupOptions: {
+                    skip: 0,
+                    take: 100,
+                    sort: { updatedAt: 'DESC', id: 'DESC' },
+                    filter: { code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } },
+                },
+                facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
             },
-            optionGroupOptions: {
-                skip: 0,
-                take: 100,
-                sort: { updatedAt: 'DESC', id: 'DESC' },
-                filter: { code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } },
-            },
-            facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
-        },
 
-        notifyOnNetworkStatusChange: true,
-    });
+            notifyOnNetworkStatusChange: true,
+        },
+    );
 
     useEffect(() => {
         if (!data || loading || error) return;
-        const collectionCount = data.collections.items.length;
-        const optionGroupCount = data.productOptionGroups.items.length;
-        const facetCount = data.facets.items.length;
+        const collectionCount = data.collections?.items.length ?? 0;
+        const optionGroupCount = data.productOptionGroups?.items.length ?? 0;
+        const facetCount = data.facets?.items.length ?? 0;
         if (
-            collectionCount >= data.collections.totalItems &&
-            optionGroupCount >= data.productOptionGroups.totalItems &&
-            facetCount >= data.facets.totalItems
+            collectionCount >= (data.collections?.totalItems ?? 0) &&
+            optionGroupCount >= (data.productOptionGroups?.totalItems ?? 0) &&
+            facetCount >= (data.facets?.totalItems ?? 0)
         )
             return;
-        const mergeById = <T extends { id: string }>(current: T[], next: T[]) => [
-            ...new Map([...current, ...next].map(item => [item.id, item])).values(),
-        ];
         void fetchMore({
             variables: {
                 collectionOptions: {
@@ -259,24 +272,8 @@ export function CategoriesModule() {
                 },
                 facetOptions: { skip: facetCount, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
             },
-            updateQuery: (previous, { fetchMoreResult }) => ({
-                ...previous,
-                collections: {
-                    ...fetchMoreResult.collections,
-                    items: mergeById(previous.collections.items, fetchMoreResult.collections.items),
-                },
-                productOptionGroups: {
-                    ...fetchMoreResult.productOptionGroups,
-                    items: mergeById(
-                        previous.productOptionGroups.items,
-                        fetchMoreResult.productOptionGroups.items,
-                    ),
-                },
-                facets: {
-                    ...fetchMoreResult.facets,
-                    items: mergeById(previous.facets.items, fetchMoreResult.facets.items),
-                },
-            }),
+            updateQuery: (previous, { fetchMoreResult }) =>
+                mergeQueryLists(previous, fetchMoreResult, ['collections', 'productOptionGroups', 'facets']),
         }).catch(fetchError => {
             setActionError(toUserFacingError(fetchError, '分类与属性数据未能全部加载，请点击刷新重试'));
         });
@@ -318,10 +315,10 @@ export function CategoriesModule() {
     const dragSourceRef = useRef<{ id: string; parentId: string | null } | null>(null);
     const keyboardHandleRef = useRef<HTMLButtonElement | null>(null);
 
-    const serverCollections = data?.collections.items ?? EMPTY_COLLECTIONS;
+    const serverCollections = data?.collections?.items ?? EMPTY_COLLECTIONS;
     const collections = optimisticCollections ?? serverCollections;
-    const optionGroups = data?.productOptionGroups.items ?? EMPTY_OPTION_GROUPS;
-    const facets = data?.facets.items ?? EMPTY_FACETS;
+    const optionGroups = data?.productOptionGroups?.items ?? EMPTY_OPTION_GROUPS;
+    const facets = data?.facets?.items ?? EMPTY_FACETS;
 
     useEffect(() => {
         if (isReordering || !keyboardHandleRef.current) return;
@@ -1059,12 +1056,13 @@ export function CategoriesModule() {
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                        分类与属性
-                        <FeatureHelpButton topic="catalog.categories" title="分类与属性" />
+                        {standalonePage?.title ?? '分类与属性'}
+                        <FeatureHelpButton
+                            topic="catalog.categories"
+                            title="分类与属性"
+                            description={'集中管理 Vendure 商品分类、通用规格模板与前台筛选属性'}
+                        />
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
-                        集中管理 Vendure 商品分类、通用规格模板与前台筛选属性
-                    </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <AdminButton
@@ -1093,32 +1091,34 @@ export function CategoriesModule() {
 
             <CatalogTemplateLibraryPanel key={data?.activeChannel.id} onClaimed={() => void refetch()} />
 
-            <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
-                {(
-                    [
+            {!standalonePage && (
+                <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
+                    {(
                         [
-                            'CATEGORIES',
-                            FolderTree,
-                            `商品分类树 (${data?.collections.totalItems ?? collections.length})`,
-                        ],
-                        [
-                            'OPTION_TEMPLATES',
-                            Sliders,
-                            `规格选项模板 (${data?.productOptionGroups.totalItems ?? optionGroups.length})`,
-                        ],
-                        ['FACETS', Tag, `筛选属性与标签 (${data?.facets.totalItems ?? facets.length})`],
-                    ] as const
-                ).map(([key, Icon, label]) => (
-                    <AdminButton
-                        type="button"
-                        key={key}
-                        onClick={() => setActiveTab(key)}
-                        className={`flex items-center gap-1.5 border-b-2 py-3.5 transition-colors ${activeTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                    >
-                        <Icon className="h-3.5 w-3.5" /> {label}
-                    </AdminButton>
-                ))}
-            </div>
+                            [
+                                'CATEGORIES',
+                                FolderTree,
+                                `商品分类树 (${data?.collections?.totalItems ?? collections.length})`,
+                            ],
+                            [
+                                'OPTION_TEMPLATES',
+                                Sliders,
+                                `规格选项模板 (${data?.productOptionGroups?.totalItems ?? optionGroups.length})`,
+                            ],
+                            ['FACETS', Tag, `筛选属性与标签 (${data?.facets?.totalItems ?? facets.length})`],
+                        ] as const
+                    ).map(([key, Icon, label]) => (
+                        <AdminButton
+                            type="button"
+                            key={key}
+                            onClick={() => setActiveTab(key)}
+                            className={`flex items-center gap-1.5 border-b-2 py-3.5 transition-colors ${activeTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <Icon className="h-3.5 w-3.5" /> {label}
+                        </AdminButton>
+                    ))}
+                </div>
+            )}
 
             <div className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {notification && (
@@ -1220,7 +1220,7 @@ export function CategoriesModule() {
                         <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <div className="text-xs font-bold text-slate-800">
-                                    规格模板共 {data?.productOptionGroups.totalItems ?? optionGroups.length}{' '}
+                                    规格模板共 {data?.productOptionGroups?.totalItems ?? optionGroups.length}{' '}
                                     个
                                 </div>
                                 <div className="mt-0.5 text-[11px] text-slate-400">
@@ -1670,11 +1670,12 @@ function CollectionFiltersEditor({
                 <div>
                     <h4 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         集合筛选规则
-                        <FeatureHelpButton topic="catalog.collection-rules" title="集合筛选规则" />
+                        <FeatureHelpButton
+                            topic="catalog.collection-rules"
+                            title="集合筛选规则"
+                            description={'使用当前店铺支持的商品筛选规则，可在保存前预览命中的 SKU。'}
+                        />
                     </h4>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        使用当前店铺支持的商品筛选规则，可在保存前预览命中的 SKU。
-                    </p>
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-700">
                     <AdminInput

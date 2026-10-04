@@ -46,11 +46,14 @@ export function AiImageAccessModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
                             AI 服务商接入
-                            <FeatureHelpButton topic="plugins.ai-access" title="AI 服务商接入" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-access"
+                                title="AI 服务商接入"
+                                description={
+                                    '平台超管配置 OpenAI / Gemini 网关、密钥和提示词优化模型；密钥不会回显'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            平台超管配置 OpenAI / Gemini 网关、密钥和提示词优化模型；密钥不会回显
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -100,11 +103,12 @@ export function AiImageAccessModule() {
                                 <div>
                                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                         服务商设置
-                                        <FeatureHelpButton topic="plugins.ai-access" title="服务商设置" />
+                                        <FeatureHelpButton
+                                            topic="plugins.ai-access"
+                                            title="服务商设置"
+                                            description={'查看接入状态，需要调整时再打开对应服务商设置。'}
+                                        />
                                     </h2>
-                                    <p className="mt-1 text-[11px] text-slate-500">
-                                        查看接入状态，需要调整时再打开对应服务商设置。
-                                    </p>
                                 </div>
                                 <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
                                     {providers.length} 个服务商
@@ -361,11 +365,13 @@ function ProviderDrawer({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             网关与模型
-                            <FeatureHelpButton topic="plugins.ai-access" title="网关与模型" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-access"
+                                title="网关与模型"
+                                description={'Base URL 和模型 ID 必须与当前服务商网关实际支持的配置一致。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            Base URL 和模型 ID 必须与当前服务商网关实际支持的配置一致。
-                        </p>
+
                         <div className="mt-4 space-y-4">
                             <Field label="接口基础地址 *">
                                 <AdminInput
@@ -395,11 +401,13 @@ function ProviderDrawer({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             加密凭据
-                            <FeatureHelpButton topic="plugins.ai-access" title="加密凭据" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-access"
+                                title="加密凭据"
+                                description={'后端不会回显完整密钥；只有输入新值并保存时才会轮换。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            后端不会回显完整密钥；只有输入新值并保存时才会轮换。
-                        </p>
+
                         <div className="mt-4 space-y-4">
                             <Field
                                 label={'API Key ' + (value.credentialConfigured ? '（留空保留原密钥）' : '*')}

@@ -148,11 +148,14 @@ export function CatalogBulkChannelAction() {
                             <div>
                                 <h2 className="flex items-center gap-2 text-base font-bold">
                                     商品批量店铺操作
-                                    <FeatureHelpButton topic="catalog.products" title="商品批量店铺操作" />
+                                    <FeatureHelpButton
+                                        topic="catalog.products"
+                                        title="商品批量店铺操作"
+                                        description={
+                                            '同一商品可分配到多个店铺。先查看现有分配，再选择需要新增或移除的商品。'
+                                        }
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    同一商品可分配到多个店铺。先查看现有分配，再选择需要新增或移除的商品。
-                                </p>
                             </div>
                             <AdminButton
                                 type="button"

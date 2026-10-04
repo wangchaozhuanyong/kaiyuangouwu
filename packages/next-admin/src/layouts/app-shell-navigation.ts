@@ -1,3 +1,4 @@
+import { getStandaloneAdminPage } from '../navigation/admin-navigation';
 const BUILT_IN_MENU_ROUTES = [
     ['/catalog', 'catalog'],
     ['/sales', 'sales'],
@@ -58,6 +59,14 @@ export function filterAccessibleAdminChannels<T extends ChannelIdentity>(
 export function resolveAppShellOpenMenu(pathname: string, extensionSectionId?: string) {
     const extensionMenu = extensionSectionId?.trim();
     if (extensionMenu) return extensionMenu;
+    const page = getStandaloneAdminPage(pathname);
+    if (page) return page.section;
+    if (
+        ['/sales/after-sales', '/sales/reviews', '/sales/customer-service-feedback'].some(
+            path => pathname === path || pathname.startsWith(path + '/'),
+        )
+    )
+        return 'after-sales';
     if (pathname === '/dashboard' || pathname.startsWith('/customers')) return null;
     return BUILT_IN_MENU_ROUTES.find(([prefix]) => pathname.startsWith(prefix))?.[1];
 }

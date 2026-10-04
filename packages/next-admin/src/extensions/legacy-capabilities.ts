@@ -111,7 +111,7 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
     {
         id: 'store-commerce-settings',
         legacyPath: '/store-commerce-settings',
-        target: '/settings/store-profile?tab=stores',
+        target: '/settings/store-profile/commerce',
         status: 'MIGRATED',
     },
     {
@@ -123,7 +123,7 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
     {
         id: 'store-currency-settings',
         legacyPath: '/store-currency-settings',
-        target: '/settings/store-profile?tab=payment',
+        target: '/settings/store-profile?tab=currency',
         status: 'MIGRATED',
     },
     {

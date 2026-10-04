@@ -40,8 +40,10 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, getOrderStateLabel } from './sales-utils';
 
@@ -50,6 +52,7 @@ const CARD_POOL_TABS = { pool: 'POOL', deliveries: 'DELIVERIES' } as const;
 const VARIANT_LOOKUP_SIZE = 50;
 
 export function CardPoolModule() {
+    const standalonePage = useStandaloneAdminPage();
     const [selectedVariantId, setSelectedVariantId] = useState('');
     const [tab, setTab] = useUrlTab<Tab>(CARD_POOL_TABS, 'pool');
     const [poolState, setPoolState] = useState('ALL');
@@ -88,24 +91,32 @@ export function CardPoolModule() {
     });
     const variants = variantsQuery.data?.productVariants.items ?? [];
     const selectedVariant = variants.find(item => item.id === selectedVariantId) ?? variants[0] ?? null;
-    const workspaceQuery = useQuery<AutoCardWorkspaceResult>(AUTO_CARD_WORKSPACE_QUERY, {
-        variables: {
-            productVariantId: selectedVariant?.id ?? '',
-            poolOptions: {
-                skip: poolPage * poolPageSize,
-                take: poolPageSize,
-                state: poolState === 'ALL' ? null : poolState,
-            },
-            deliveryOptions: {
+    const workspaceQuery = useQuery<AutoCardWorkspaceResult>(
+        standalonePage
+            ? selectQueryFields(
+                  AUTO_CARD_WORKSPACE_QUERY,
+                  tab === 'POOL' ? ['autoCardConfig', 'autoCardPoolItems'] : ['autoCardDeliveries'],
+              )
+            : AUTO_CARD_WORKSPACE_QUERY,
+        {
+            variables: {
                 productVariantId: selectedVariant?.id ?? '',
-                skip: deliveryPage * deliveryPageSize,
-                take: deliveryPageSize,
+                poolOptions: {
+                    skip: poolPage * poolPageSize,
+                    take: poolPageSize,
+                    state: poolState === 'ALL' ? null : poolState,
+                },
+                deliveryOptions: {
+                    productVariantId: selectedVariant?.id ?? '',
+                    skip: deliveryPage * deliveryPageSize,
+                    take: deliveryPageSize,
+                },
             },
-        },
-        skip: !selectedVariant,
+            skip: !selectedVariant,
 
-        pollInterval: 15_000,
-    });
+            pollInterval: 15_000,
+        },
+    );
     const supplyQuery = useQuery<{
         myAutoCardSupplySummary: Array<{
             grantId: string;
@@ -142,12 +153,13 @@ export function CardPoolModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
-                            发卡记录与异常
-                            <FeatureHelpButton topic="sales.card-pool" title="发卡记录与异常" />
+                            {standalonePage?.title ?? '发卡记录与异常'}
+                            <FeatureHelpButton
+                                topic="sales.card-pool"
+                                title="发卡记录与异常"
+                                description={'跨商品查看卡密库存、交付结果和需要人工处理的问题'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            跨商品查看卡密库存、交付结果和需要人工处理的问题
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -307,11 +319,13 @@ export function CardPoolModule() {
                             <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
                                 <h2 className="flex items-center gap-2 font-bold">
                                     本店供货记录
-                                    <FeatureHelpButton topic="sales.card-supply" title="本店供货记录" />
+                                    <FeatureHelpButton
+                                        topic="sales.card-supply"
+                                        title="本店供货记录"
+                                        description={'仅显示本卡池对授权销售店的供货数量。'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    仅显示本卡池对授权销售店的供货数量。
-                                </p>
+
                                 {supplyQuery.error && !supplyQuery.data ? (
                                     <p>供货记录未获取，请刷新重试。</p>
                                 ) : supplyQuery.loading && !supplyQuery.data ? (
@@ -331,14 +345,19 @@ export function CardPoolModule() {
                             </section>
                         )}
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
-                                <TabButton active={tab === 'POOL'} onClick={() => setTab('POOL')}>
-                                    库存明细 {workspaceQuery.data?.autoCardPoolItems.totalItems ?? 0}
-                                </TabButton>
-                                <TabButton active={tab === 'DELIVERIES'} onClick={() => setTab('DELIVERIES')}>
-                                    交付记录 {workspaceQuery.data?.autoCardDeliveries.totalItems ?? 0}
-                                </TabButton>
-                            </div>
+                            {!standalonePage && (
+                                <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
+                                    <TabButton active={tab === 'POOL'} onClick={() => setTab('POOL')}>
+                                        库存明细 {workspaceQuery.data?.autoCardPoolItems?.totalItems ?? 0}
+                                    </TabButton>
+                                    <TabButton
+                                        active={tab === 'DELIVERIES'}
+                                        onClick={() => setTab('DELIVERIES')}
+                                    >
+                                        交付记录 {workspaceQuery.data?.autoCardDeliveries?.totalItems ?? 0}
+                                    </TabButton>
+                                </div>
+                            )}
                             {tab === 'POOL' && (
                                 <div className="flex gap-2">
                                     <div className="relative">
@@ -376,7 +395,7 @@ export function CardPoolModule() {
                         ) : tab === 'POOL' ? (
                             <div className="space-y-3">
                                 <PoolTable
-                                    items={workspaceQuery.data?.autoCardPoolItems.items ?? []}
+                                    items={workspaceQuery.data?.autoCardPoolItems?.items ?? []}
                                     search={search}
                                     onChanged={completed}
                                     onError={setActionError}
@@ -385,7 +404,7 @@ export function CardPoolModule() {
                                     page={poolPage}
                                     pageSize={poolPageSize}
                                     onPageSizeChange={setPoolPageSize}
-                                    totalItems={workspaceQuery.data?.autoCardPoolItems.totalItems ?? 0}
+                                    totalItems={workspaceQuery.data?.autoCardPoolItems?.totalItems ?? 0}
                                     loading={workspaceQuery.loading}
                                     onPageChange={setPoolPage}
                                 />
@@ -393,7 +412,7 @@ export function CardPoolModule() {
                         ) : (
                             <div className="space-y-3">
                                 <DeliveriesTable
-                                    items={workspaceQuery.data?.autoCardDeliveries.items ?? []}
+                                    items={workspaceQuery.data?.autoCardDeliveries?.items ?? []}
                                     onChanged={completed}
                                     onError={setActionError}
                                 />
@@ -401,7 +420,7 @@ export function CardPoolModule() {
                                     page={deliveryPage}
                                     pageSize={deliveryPageSize}
                                     onPageSizeChange={setDeliveryPageSize}
-                                    totalItems={workspaceQuery.data?.autoCardDeliveries.totalItems ?? 0}
+                                    totalItems={workspaceQuery.data?.autoCardDeliveries?.totalItems ?? 0}
                                     loading={workspaceQuery.loading}
                                     onPageChange={setDeliveryPage}
                                 />

@@ -171,11 +171,12 @@ export function CatalogExportAction() {
                             <div>
                                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                                     <FileSpreadsheet className="h-5 w-5 text-blue-600" /> 导出可回导商品表
-                                    <FeatureHelpButton topic="catalog.products" title="导出可回导商品表" />
+                                    <FeatureHelpButton
+                                        topic="catalog.products"
+                                        title="导出可回导商品表"
+                                        description={'文件在当前浏览器生成；服务器只返回结构化商品数据。'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    文件在当前浏览器生成；服务器只返回结构化商品数据。
-                                </p>
                             </div>
                             <AdminButton
                                 type="button"

@@ -112,8 +112,9 @@ describe('compact editors retain drafts', () => {
             },
         ];
         await act(async () => root.render(<ClientPluginsModule />));
-        const library = host.querySelector('details')!;
-        expect(library.open).toBe(false);
+        const library = host.querySelector('.admin-plugin-library')!;
+        expect(library.textContent).toContain('可用官方插件库');
+        expect(library.querySelector('details')).toBeNull();
         const firstRow = host.querySelector('article')!;
         const firstName = firstRow.querySelector('h3')!.textContent;
         await select(firstRow.querySelectorAll('select')[1], 'SELECTED');

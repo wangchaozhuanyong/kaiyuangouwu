@@ -84,7 +84,12 @@ describe('ProductAiImageDialog', () => {
                         value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
                     >
                         <FeatureHelpProvider>
-                            <ProductAiImageDialog open productName="测试商品" onClose={vi.fn()} onUse={vi.fn()} />
+                            <ProductAiImageDialog
+                                open
+                                productName="测试商品"
+                                onClose={vi.fn()}
+                                onUse={vi.fn()}
+                            />
                         </FeatureHelpProvider>
                     </AdminPermissionsContext.Provider>
                 </MockedProvider>,
@@ -99,7 +104,15 @@ describe('ProductAiImageDialog', () => {
         );
         await waitFor(() => (container.textContent?.includes('结果核对中') ? true : null));
         expect(container.textContent).toContain('结果核对中，请勿重复提交');
-        expect(container.textContent).toContain('使用后还需保存商品');
+        expect(container.textContent).not.toContain('使用后还需保存商品');
+        act(() =>
+            container
+                .querySelector<HTMLButtonElement>('button[aria-label="查看“AI 生成商品主图”功能说明"]')!
+                .click(),
+        );
+        expect(document.querySelector('[data-feature-help-card]')?.textContent).toContain(
+            '使用后还需保存商品',
+        );
         act(() => root.unmount());
         container.remove();
     });

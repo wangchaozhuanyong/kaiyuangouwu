@@ -357,11 +357,12 @@ export function TelegramNotificationsPanel() {
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 Telegram 连接与策略
-                                <FeatureHelpButton topic="settings.telegram" title="Telegram 连接与策略" />
+                                <FeatureHelpButton
+                                    topic="settings.telegram"
+                                    title="Telegram 连接与策略"
+                                    description={'机器人凭证仅由服务器安全配置；所有店铺共用现有接收群。'}
+                                />
                             </h2>
-                            <p className="mt-1 text-xs leading-5 text-slate-500">
-                                机器人凭证仅由服务器安全配置；所有店铺共用现有接收群。
-                            </p>
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -625,11 +626,14 @@ export function TelegramNotificationsPanel() {
                 <div className="border-b border-slate-100 p-5">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         配置变更审计
-                        <FeatureHelpButton topic="settings.telegram" title="Telegram 配置变更审计" />
+                        <FeatureHelpButton
+                            topic="settings.telegram"
+                            title="Telegram 配置变更审计"
+                            description={
+                                '保留最近 10 次后台修改；接收群编号 在审计记录中脱敏，机器人凭证 始终不入库。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        保留最近 10 次后台修改；接收群编号 在审计记录中脱敏，机器人凭证 始终不入库。
-                    </p>
                 </div>
                 <div className="divide-y divide-slate-100">
                     {audits.map(audit => (
@@ -655,12 +659,14 @@ export function TelegramNotificationsPanel() {
                 <div className="border-b border-slate-100 p-5">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         部门责任路由
-                        <FeatureHelpButton topic="settings.telegram" title="部门责任路由" />
+                        <FeatureHelpButton
+                            topic="settings.telegram"
+                            title="部门责任路由"
+                            description={
+                                '危急告警立即升级至总经办；重要告警按配置时限升级。提及对象只用于 危急和重要告警。修改后需点击上方“保存配置”。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        危急告警立即升级至总经办；重要告警按配置时限升级。提及对象只用于
-                        危急和重要告警。修改后需点击上方“保存配置”。
-                    </p>
                 </div>
                 <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                     {routing.departments.map(department => (
@@ -859,12 +865,14 @@ export function TelegramNotificationsPanel() {
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 事故响应与闭环
-                                <FeatureHelpButton topic="settings.telegram" title="事故响应与闭环" />
+                                <FeatureHelpButton
+                                    topic="settings.telegram"
+                                    title="事故响应与闭环"
+                                    description={
+                                        '即使 Telegram 停用，事故仍会留存。P0/P1 需经负责人确认、恢复验证、复盘和整改后才能闭环。'
+                                    }
+                                />
                             </h2>
-                            <p className="mt-1 text-xs text-slate-500">
-                                即使 Telegram 停用，事故仍会留存。P0/P1
-                                需经负责人确认、恢复验证、复盘和整改后才能闭环。
-                            </p>
                         </div>
                     </div>
                     <span className={badgeBlue}>共 {incidents.totalItems} 起</span>

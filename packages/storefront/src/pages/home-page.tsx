@@ -62,6 +62,7 @@ import {
     SectionHeader,
     Sheet,
     Subpage,
+    SubpageBody,
 } from '../storefront-ui/page-shell';
 import {
     contentNumberSetting,
@@ -1031,7 +1032,7 @@ export function HomePage() {
                                             <HeroScene
                                                 content={managedHero}
                                                 mediaOverlay={
-                                                    <>
+                                                    <div className="hero-overlay-controls">
                                                         {overlayTrustBar && (
                                                             <div className="hero-service-overlay">
                                                                 {trustBar}
@@ -1063,12 +1064,14 @@ export function HomePage() {
                                                                             selectHeroManually(index)
                                                                         }
                                                                     >
-                                                                        {index + 1}
+                                                                        <span className="hero-page-number">
+                                                                            {index + 1}
+                                                                        </span>
                                                                     </button>
                                                                 ))}
                                                             </div>
                                                         )}
-                                                    </>
+                                                    </div>
                                                 }
                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                                 onImageOpen={handleHeroImageOpen}
@@ -1424,32 +1427,34 @@ function RecommendationPage({
             language={language}
             onBack={onBack}
         >
-            {products.length ? (
-                <ProductSection
-                    subtitle={resolveManagedContentCopy(
-                        block,
-                        'subtitle',
-                        isZh
-                            ? '结合你的购买品类和浏览记录推荐'
-                            : 'Based on your purchase categories and browsing history',
-                    )}
-                    products={products}
-                    market={market}
-                    locale={locale}
-                    language={language}
-                    onProduct={onProduct}
-                />
-            ) : (
-                <EmptyState
-                    icon={<Sparkles />}
-                    title={isZh ? '暂无推荐商品' : 'No recommendations yet'}
-                    detail={
-                        isZh
-                            ? '浏览或购买商品后，这里会显示更符合你喜好的内容'
-                            : 'Browse or purchase products to improve these recommendations'
-                    }
-                />
-            )}
+            <SubpageBody>
+                {products.length ? (
+                    <ProductSection
+                        subtitle={resolveManagedContentCopy(
+                            block,
+                            'subtitle',
+                            isZh
+                                ? '结合你的购买品类和浏览记录推荐'
+                                : 'Based on your purchase categories and browsing history',
+                        )}
+                        products={products}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        onProduct={onProduct}
+                    />
+                ) : (
+                    <EmptyState
+                        icon={<Sparkles />}
+                        title={isZh ? '暂无推荐商品' : 'No recommendations yet'}
+                        detail={
+                            isZh
+                                ? '浏览或购买商品后，这里会显示更符合你喜好的内容'
+                                : 'Browse or purchase products to improve these recommendations'
+                        }
+                    />
+                )}
+            </SubpageBody>
         </Subpage>
     );
 }

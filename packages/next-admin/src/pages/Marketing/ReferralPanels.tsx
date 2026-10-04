@@ -90,11 +90,14 @@ export function ProgramSettings({
             <div className="mb-5 border-b border-slate-100 pb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     邀请返利规则
-                    <FeatureHelpButton topic="marketing.referral-rules" title="邀请返利规则" />
+                    <FeatureHelpButton
+                        topic="marketing.referral-rules"
+                        title="邀请返利规则"
+                        description={
+                            '当前后端是一级邀请返利，不存在二级团队分佣；规则调整只影响后续订单，不篡改已有流水。'
+                        }
+                    />
                 </h2>
-                <p className="mt-1 text-[11px] text-slate-500">
-                    当前后端是一级邀请返利，不存在二级团队分佣；规则调整只影响后续订单，不篡改已有流水。
-                </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <ToggleField
@@ -860,12 +863,11 @@ export function PostersPanel({
                             <FeatureHelpButton
                                 topic="marketing.poster-templates"
                                 title="店铺自定义海报模板"
+                                description={
+                                    '上传您自己设计的专属背景图（建议尺寸 1080×1920 竖版）。开启开关后，买家在前台即可选用该海报。'
+                                }
                             />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            上传您自己设计的专属背景图（建议尺寸 1080×1920
-                            竖版）。开启开关后，买家在前台即可选用该海报。
-                        </p>
                     </div>
                     <AdminButton
                         type="button"
@@ -1011,11 +1013,14 @@ export function PostersPanel({
                     <div className="border-b border-slate-100 pb-4">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             系统预置海报模板
-                            <FeatureHelpButton topic="marketing.poster-templates" title="系统预置海报模板" />
+                            <FeatureHelpButton
+                                topic="marketing.poster-templates"
+                                title="系统预置海报模板"
+                                description={
+                                    '全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
-                        </p>
                     </div>
                     <div className="mt-4 grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                         {program.systemPosterTemplateConfigs.map(sys => {

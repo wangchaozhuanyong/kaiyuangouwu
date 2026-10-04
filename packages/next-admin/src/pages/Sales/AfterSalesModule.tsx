@@ -500,11 +500,12 @@ export function AfterSalesModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
                             售后与退款工单
-                            <FeatureHelpButton topic="sales.after-sales" title="售后与退款工单" />
+                            <FeatureHelpButton
+                                topic="sales.after-sales"
+                                title="售后与退款工单"
+                                description={'审核买家售后申请，核对真实退款记录后完成归档'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            审核买家售后申请，核对真实退款记录后完成归档
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage

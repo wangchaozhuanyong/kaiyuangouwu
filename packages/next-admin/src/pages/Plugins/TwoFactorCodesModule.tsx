@@ -357,11 +357,14 @@ export function TwoFactorCodesModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" aria-hidden="true" />
                             2FA 动态码
-                            <FeatureHelpButton topic="plugins.two-factor" title="2FA 动态码" />
+                            <FeatureHelpButton
+                                topic="plugins.two-factor"
+                                title="2FA 动态码"
+                                description={
+                                    '保存第三方服务的 TOTP 密钥并生成动态验证码，不用于管理账号登录验证'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            保存第三方服务的 TOTP 密钥并生成动态验证码，不用于管理账号登录验证
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -536,11 +539,14 @@ function QuickQueryCard({
                         className="flex items-center gap-2 text-sm font-bold text-slate-900"
                     >
                         单独查询验证码
-                        <FeatureHelpButton topic="plugins.two-factor" title="单独查询验证码" />
+                        <FeatureHelpButton
+                            topic="plugins.two-factor"
+                            title="单独查询验证码"
+                            description={
+                                '输入一次性 Base32 密钥即可本机生成验证码；只有点击“保存账号”才会写入数据库。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                        输入一次性 Base32 密钥即可本机生成验证码；只有点击“保存账号”才会写入数据库。
-                    </p>
                 </div>
                 <span className="self-start rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
                     每 30 秒刷新
@@ -690,9 +696,12 @@ function AccountList({
                             className="flex items-center gap-2 text-sm font-bold text-slate-900"
                         >
                             2FA 账号列表
-                            <FeatureHelpButton topic="plugins.two-factor" title="2FA 账号列表" />
+                            <FeatureHelpButton
+                                topic="plugins.two-factor"
+                                title="2FA 账号列表"
+                                description={'每个管理员最多保存 100 个账号'}
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-400">每个管理员最多保存 100 个账号</p>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
                         {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
@@ -1049,11 +1058,14 @@ function BatchImportDialog({
                     <div>
                         <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                             批量导入 2FA 账号
-                            <FeatureHelpButton topic="plugins.two-factor" title="批量导入 2FA 账号" />
+                            <FeatureHelpButton
+                                topic="plugins.two-factor"
+                                title="批量导入 2FA 账号"
+                                description={
+                                    '格式为“项目名称 | 2FA 密钥”；也可以一行只放一个密钥，系统会自动命名。'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            格式为“项目名称 | 2FA 密钥”；也可以一行只放一个密钥，系统会自动命名。
-                        </p>
                     </div>
                     <CloseButton onClick={onClose} />
                 </div>

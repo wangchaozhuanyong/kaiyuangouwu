@@ -432,9 +432,12 @@ export function StorefrontModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             商城装修
-                            <FeatureHelpButton topic="storefront.decoration" title="商城装修" />
+                            <FeatureHelpButton
+                                topic="storefront.decoration"
+                                title="商城装修"
+                                description={'管理当前店铺的皮肤、首页楼层与双语内容'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">管理当前店铺的皮肤、首页楼层与双语内容</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -507,11 +510,9 @@ export function StorefrontModule() {
                                     <FeatureHelpButton
                                         topic="storefront.floor-order"
                                         title="楼层顺序与状态"
+                                        description={'拖动左侧手柄调整顺序，松开后自动保存；首页轮播整组移动'}
                                     />
                                 </h2>
-                                <p className="mt-1 text-[11px] text-slate-400">
-                                    拖动左侧手柄调整顺序，松开后自动保存；首页轮播整组移动
-                                </p>
                             </div>
                         </div>
                         {query.loading && !query.data ? (
@@ -587,9 +588,13 @@ export function StorefrontModule() {
                     <section className="rounded-xl border border-slate-200 bg-white p-4">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             可用首页模块
-                            <FeatureHelpButton topic="storefront.available-blocks" title="可用首页模块" />
+                            <FeatureHelpButton
+                                topic="storefront.available-blocks"
+                                title="可用首页模块"
+                                description={'未配置的模块不会在客户端显示'}
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-400">未配置的模块不会在客户端显示</p>
+
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                             {homepageModuleDescriptors
                                 .filter(descriptor => descriptor.type !== 'HERO')
@@ -886,9 +891,13 @@ function StorefrontSettingsDrawer({
                     <div>
                         <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                             装修设置
-                            <FeatureHelpButton topic="storefront.decoration" title="装修设置" />
+                            <FeatureHelpButton
+                                topic="storefront.decoration"
+                                title="装修设置"
+                                description="管理店铺皮肤与装修选项"
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">{channelName} · 管理店铺皮肤与装修选项</p>
+                        <p className="mt-1 text-xs text-slate-500">当前店铺：{channelName}</p>
                     </div>
                     <AdminButton
                         type="button"
@@ -1016,11 +1025,13 @@ function CarouselManager({
                 <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
                     <div>
                         <h2 className="text-base font-bold text-slate-900">
-                            首页轮播图 <FeatureHelpButton topic="storefront.carousel" title="首页轮播图" />
+                            首页轮播图{' '}
+                            <FeatureHelpButton
+                                topic="storefront.carousel"
+                                title="首页轮播图"
+                                description={'统一管理图片、文案、跳转链接、播放顺序和轮播间隔。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            统一管理图片、文案、跳转链接、播放顺序和轮播间隔。
-                        </p>
                     </div>
                     <AdminButton
                         type="button"
@@ -1068,11 +1079,14 @@ function CarouselManager({
                                     <div>
                                         <h3 className="text-sm font-bold text-slate-900">
                                             轮播图片 · {blocks.length} 张{' '}
-                                            <FeatureHelpButton topic="storefront.carousel" title="轮播图片" />
+                                            <FeatureHelpButton
+                                                topic="storefront.carousel"
+                                                title="轮播图片"
+                                                description={
+                                                    '按从上到下的顺序播放；编辑可设置图片、文案、链接和排期。'
+                                                }
+                                            />
                                         </h3>
-                                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                                            按从上到下的顺序播放；编辑可设置图片、文案、链接和排期。
-                                        </p>
                                     </div>
                                     <AdminButton
                                         type="button"

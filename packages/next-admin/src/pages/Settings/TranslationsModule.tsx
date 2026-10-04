@@ -106,11 +106,12 @@ export function TranslationsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Languages className="h-5 w-5 text-blue-600" />
                             客户可见内容翻译
-                            <FeatureHelpButton topic="settings.translations" title="客户可见内容翻译" />
+                            <FeatureHelpButton
+                                topic="settings.translations"
+                                title="客户可见内容翻译"
+                                description={'审计中英文同步状态，补齐历史内容；静态界面词典不属于该后端插件'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            审计中英文同步状态，补齐历史内容；静态界面词典不属于该后端插件
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -211,11 +212,12 @@ export function TranslationsModule() {
                                             <FeatureHelpButton
                                                 topic="settings.translations"
                                                 title="字段翻译审计"
+                                                description={
+                                                    '每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示'
+                                                }
                                             />
                                         </h2>
-                                        <p className="mt-1 text-[11px] text-slate-400">
-                                            每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示
-                                        </p>
+
                                         <p className="mt-1 text-xs text-slate-500" role="status">
                                             当前店铺及全局内容共 {audit.total} 条，筛选匹配{' '}
                                             {audit.filteredTotal} 条；搜索与分页覆盖全部历史记录。

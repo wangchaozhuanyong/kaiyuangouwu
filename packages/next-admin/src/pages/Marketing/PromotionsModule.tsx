@@ -34,8 +34,10 @@ import {
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useActiveInterval } from '../../hooks/use-page-activity';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
+import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { GenericPromotionsPanel } from './GenericPromotionsPanel';
@@ -73,6 +75,7 @@ const PROMOTION_TABS = {
 } as const;
 
 export function PromotionsModule() {
+    const standalonePage = useStandaloneAdminPage();
     const [activeTab, setActiveTab] = useUrlTab<PromotionTab>(PROMOTION_TABS, 'coupons');
     const [searchTerm, setSearchTerm] = useState('');
     const [couponEditorOpen, setCouponEditorOpen] = useState(false);
@@ -95,7 +98,19 @@ export function PromotionsModule() {
 
     useActiveInterval(() => setStatusClock(Date.now()), 60_000);
 
-    const overview = useQuery<MarketingOverviewResult>(MARKETING_OVERVIEW_QUERY, {});
+    const overview = useQuery<MarketingOverviewResult>(
+        standalonePage
+            ? selectQueryFields(MARKETING_OVERVIEW_QUERY, [
+                  'activeChannel',
+                  ...(activeTab === 'FLASH_SALES'
+                      ? ['storeFlashSales']
+                      : activeTab === 'ATTRIBUTION' || activeTab === 'GENERIC'
+                        ? []
+                        : ['storeCouponCampaigns']),
+              ])
+            : MARKETING_OVERVIEW_QUERY,
+        {},
+    );
     const coupons = overview.data?.storeCouponCampaigns ?? [];
     const flashSales = overview.data?.storeFlashSales ?? [];
     const currencyCode = overview.data?.activeChannel.defaultCurrencyCode ?? 'CNY';
@@ -176,7 +191,11 @@ export function PromotionsModule() {
 
     const refreshAll = async () => {
         setActionError('');
-        await Promise.all([overview.refetch(), ledger.refetch(), report.refetch()]);
+        await Promise.all([
+            overview.refetch(),
+            ...(activeTab === 'LEDGER' ? [ledger.refetch()] : []),
+            ...(activeTab === 'REPORT' ? [report.refetch()] : []),
+        ]);
     };
 
     const openSensitiveAction = (action: SensitiveAction) => {
@@ -267,12 +286,13 @@ export function PromotionsModule() {
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                            优惠与促销
-                            <FeatureHelpButton topic="marketing.promotions" title="优惠与促销" />
+                            {standalonePage?.title ?? '优惠与促销'}
+                            <FeatureHelpButton
+                                topic="marketing.promotions"
+                                title="优惠与促销"
+                                description={'优惠券、限时秒杀、经营报表和客户使用流水统一管理'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            优惠券、限时秒杀、经营报表和客户使用流水统一管理
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -321,66 +341,70 @@ export function PromotionsModule() {
                         {actionError}
                     </Message>
                 )}
-                <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-4">
-                    <OverviewMetric
-                        label="优惠券活动"
-                        value={`${currentCoupons.length} 个`}
-                        detail={`${currentCoupons.filter(couponIsActive).length} 个正在发放·${archivedCouponCount} 个已归档`}
-                    />
-                    <OverviewMetric
-                        label="累计领取"
-                        value={`${sum(coupons, 'claimedCount')} 张`}
-                        detail={`${sum(coupons, 'availableCount')} 张当前可用`}
-                    />
-                    <OverviewMetric
-                        label="优惠券使用率"
-                        value={formatRate(sum(coupons, 'usedCount'), sum(coupons, 'claimedCount'))}
-                        detail={`${sum(coupons, 'usedCount')} 张已核销`}
-                    />
-                    <OverviewMetric
-                        label="优惠券带动成交"
-                        value={formatMoney(sum(coupons, 'assistedRevenueTotal'), currencyCode)}
-                        detail={`优惠金额 ${formatMoney(sum(coupons, 'discountAmountTotal'), currencyCode)}`}
-                    />
-                </section>
-                <nav className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs">
-                    <TabButton
-                        active={activeTab === 'ATTRIBUTION'}
-                        onClick={() => setActiveTab('ATTRIBUTION')}
-                        icon={BarChart3}
-                        label="渠道归因"
-                    />
-                    <TabButton
-                        active={activeTab === 'COUPONS'}
-                        onClick={() => setActiveTab('COUPONS')}
-                        icon={BadgePercent}
-                        label={`优惠券 ${coupons.length}`}
-                    />
-                    <TabButton
-                        active={activeTab === 'FLASH_SALES'}
-                        onClick={() => setActiveTab('FLASH_SALES')}
-                        icon={Flame}
-                        label={`限时秒杀 ${flashSales.length}`}
-                    />
-                    <TabButton
-                        active={activeTab === 'REPORT'}
-                        onClick={() => setActiveTab('REPORT')}
-                        icon={TrendingUp}
-                        label="经营报表"
-                    />
-                    <TabButton
-                        active={activeTab === 'LEDGER'}
-                        onClick={() => setActiveTab('LEDGER')}
-                        icon={ShieldAlert}
-                        label="使用流水"
-                    />
-                    <TabButton
-                        active={activeTab === 'GENERIC'}
-                        onClick={() => setActiveTab('GENERIC')}
-                        icon={Settings2}
-                        label="通用促销"
-                    />
-                </nav>
+                {!standalonePage && (
+                    <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-4">
+                        <OverviewMetric
+                            label="优惠券活动"
+                            value={`${currentCoupons.length} 个`}
+                            detail={`${currentCoupons.filter(couponIsActive).length} 个正在发放·${archivedCouponCount} 个已归档`}
+                        />
+                        <OverviewMetric
+                            label="累计领取"
+                            value={`${sum(coupons, 'claimedCount')} 张`}
+                            detail={`${sum(coupons, 'availableCount')} 张当前可用`}
+                        />
+                        <OverviewMetric
+                            label="优惠券使用率"
+                            value={formatRate(sum(coupons, 'usedCount'), sum(coupons, 'claimedCount'))}
+                            detail={`${sum(coupons, 'usedCount')} 张已核销`}
+                        />
+                        <OverviewMetric
+                            label="优惠券带动成交"
+                            value={formatMoney(sum(coupons, 'assistedRevenueTotal'), currencyCode)}
+                            detail={`优惠金额 ${formatMoney(sum(coupons, 'discountAmountTotal'), currencyCode)}`}
+                        />
+                    </section>
+                )}
+                {!standalonePage && (
+                    <nav className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs">
+                        <TabButton
+                            active={activeTab === 'ATTRIBUTION'}
+                            onClick={() => setActiveTab('ATTRIBUTION')}
+                            icon={BarChart3}
+                            label="渠道归因"
+                        />
+                        <TabButton
+                            active={activeTab === 'COUPONS'}
+                            onClick={() => setActiveTab('COUPONS')}
+                            icon={BadgePercent}
+                            label={`优惠券 ${coupons.length}`}
+                        />
+                        <TabButton
+                            active={activeTab === 'FLASH_SALES'}
+                            onClick={() => setActiveTab('FLASH_SALES')}
+                            icon={Flame}
+                            label={`限时秒杀 ${flashSales.length}`}
+                        />
+                        <TabButton
+                            active={activeTab === 'REPORT'}
+                            onClick={() => setActiveTab('REPORT')}
+                            icon={TrendingUp}
+                            label="经营报表"
+                        />
+                        <TabButton
+                            active={activeTab === 'LEDGER'}
+                            onClick={() => setActiveTab('LEDGER')}
+                            icon={ShieldAlert}
+                            label="使用流水"
+                        />
+                        <TabButton
+                            active={activeTab === 'GENERIC'}
+                            onClick={() => setActiveTab('GENERIC')}
+                            icon={Settings2}
+                            label="通用促销"
+                        />
+                    </nav>
+                )}
                 {(activeTab === 'COUPONS' || activeTab === 'FLASH_SALES') && (
                     <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
                         <div className="relative flex-1">

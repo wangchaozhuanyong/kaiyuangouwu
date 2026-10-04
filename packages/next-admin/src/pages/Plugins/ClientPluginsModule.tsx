@@ -205,11 +205,12 @@ export function ClientPluginsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             客户端插件中心
-                            <FeatureHelpButton topic="plugins.client-center" title="客户端插件中心" />
+                            <FeatureHelpButton
+                                topic="plugins.client-center"
+                                title="客户端插件中心"
+                                description={'只能装配平台代码中已发布的官方插件，商家不能上传第三方代码'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            只能装配平台代码中已发布的官方插件，商家不能上传第三方代码
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -299,9 +300,9 @@ export function ClientPluginsModule() {
                     />
                 ) : (
                     draft && (
-                        <div className="space-y-3">
+                        <div className="admin-plugin-workspace">
                             {/* Left column: Installed Plugins */}
-                            <section className="rounded-xl border border-slate-200 bg-white">
+                            <section className="admin-installed-plugins rounded-xl border border-slate-200 bg-white">
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -312,12 +313,12 @@ export function ClientPluginsModule() {
                                             <FeatureHelpButton
                                                 topic="plugins.installed"
                                                 title="已添加到客户端"
+                                                description={
+                                                    '分类页同一位置按下方顺序展示；商业服务页先显示工具，再显示客服与优惠券，组内按下方顺序。选择“指定分类”时必须勾选至少一项。'
+                                                }
                                             />
                                         </h2>
                                     </div>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        分类页同一位置按下方顺序展示；商业服务页先显示工具，再显示客服与优惠券，组内按下方顺序。选择“指定分类”时必须勾选至少一项。
-                                    </p>
                                 </div>
                                 {draft.items.length ? (
                                     <div className="divide-y px-4">
@@ -372,17 +373,14 @@ export function ClientPluginsModule() {
                                             还没有装配客户端插件
                                         </h3>
                                         <p className="mt-1 text-xs text-slate-400">
-                                            展开下方“添加插件”，选择需要的插件，再保存配置。
+                                            从官方插件库选择需要的插件，再保存配置。
                                         </p>
                                     </div>
                                 )}
                             </section>
 
                             {/* Right column: Available Plugin Catalog */}
-                            <details className="rounded-xl border border-slate-200 bg-white">
-                                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">
-                                    添加插件 · 官方插件库（{catalog.length}）
-                                </summary>
+                            <section className="admin-plugin-library rounded-xl border border-slate-200 bg-white">
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -390,14 +388,15 @@ export function ClientPluginsModule() {
                                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                                                 {catalog.length} 个可用
                                             </span>
-                                            <FeatureHelpButton topic="plugins.platform" title="平台插件" />
+                                            <FeatureHelpButton
+                                                topic="plugins.platform"
+                                                title="平台插件"
+                                                description={'平台已发布的开箱即用插件，可按需添加到当前店铺'}
+                                            />
                                         </h2>
                                     </div>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        平台已发布的开箱即用插件，可按需添加到当前店铺
-                                    </p>
                                 </div>
-                                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-2">
+                                <div className="admin-plugin-library-grid">
                                     {catalog.map(definition => (
                                         <PluginCard
                                             key={definition.code}
@@ -415,7 +414,7 @@ export function ClientPluginsModule() {
                                         />
                                     ))}
                                 </div>
-                            </details>
+                            </section>
                         </div>
                     )
                 )}
@@ -516,7 +515,7 @@ function InstalledEditor({
     const patchSettings = (patch: Record<string, unknown>) =>
         onChange({ ...item, settings: { ...(item.settings ?? {}), ...patch } });
     return (
-        <article className="grid items-start gap-3 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <article className="admin-installed-plugin-editor">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -545,7 +544,7 @@ function InstalledEditor({
                     <IconButton label="移除" disabled={false} onClick={onRemove} icon={Trash2} danger />
                 </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${placement !== 'BUSINESS_SERVICES_MAIN' ? 'sm:grid-cols-2' : ''}`}>
                 <Field label="展示位置">
                     <AdminSelect
                         value={placement ?? ''}
@@ -590,7 +589,7 @@ function InstalledEditor({
                 )}
             </div>
             {placement !== 'BUSINESS_SERVICES_MAIN' && scope === 'SELECTED' && (
-                <div className="rounded-lg border border-slate-200 bg-white p-3 lg:col-span-2">
+                <div className="rounded-lg border border-slate-200 bg-white p-3 col-span-full">
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                         <AdminInput

@@ -24,6 +24,7 @@ import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { LoadingState, Modal } from '../Settings/settings-ui';
+import { withdrawalActionLabel, withdrawalSuccess } from './referral-display';
 import {
     FormSelect,
     ModalFooter,
@@ -36,8 +37,6 @@ import {
     posterDraft,
     posterDraftError,
     signedMoney,
-    withdrawalActionLabel,
-    withdrawalSuccess,
 } from './referral-ui';
 import { ReferralPosterPreview } from './ReferralPosterPreview';
 import { PosterAssetChoice, PosterAssetLookupResult, PosterDraft, WithdrawalAction } from './referrals-types';

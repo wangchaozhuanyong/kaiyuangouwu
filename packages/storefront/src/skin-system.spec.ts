@@ -160,34 +160,17 @@ describe('storefront skin system', () => {
         for (const page of ['notifications', 'referral']) {
             const css = stylesheet(`./styles/${page}.css`);
             expect(css).not.toMatch(/!important|data-storefront-preset/iu);
-            // REFERRAL_CELEBRATION_20261002: only the approved local theme may own fixed colors.
-            postcss.parse(css).walkDecls(declaration => {
-                if (!/#[\da-f]{3,8}\b/iu.test(declaration.value)) return;
-                expect(page).toBe('referral');
-                expect(declaration.prop).toMatch(/^--/u);
-                expect((declaration.parent as postcss.Rule).selector).toBe(
-                    ".desktop-referral-content[data-referral-theme='celebration']",
-                );
-            });
+            expect(css).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgb|hsl)a?\(/iu);
             expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
         }
     });
 
-    it('preserves the approved referral campaign palette independently of storefront skins', () => {
+    it('keeps the referral page on the active skin without local palette overrides', () => {
         const css = postcss.parse(stylesheet('./styles/referral.css'));
-        const tokens = new Map<string, string>();
-        css.walkRules(".desktop-referral-content[data-referral-theme='celebration']", rule => {
-            rule.walkDecls(declaration => {
-                tokens.set(declaration.prop, declaration.value);
-            });
+        css.walkDecls(declaration => {
+            expect(declaration.prop).not.toMatch(/^--/u);
         });
-        // These approved campaign roles must not be replaced with store/skin-derived values.
-        expect(tokens.get('--accent')).toBe('#b92f32');
-        expect(tokens.get('--surface')).toBe('#fffdf9');
-        expect(tokens.get('--referral-gold')).toBe('#ffe0a0');
-        expect(tokens.get('--skin-card-radius')).toBe('22px');
-        expect([...tokens.values()].join(' ')).not.toContain('var(');
-        expect(stylesheet('./pages/referral-page.tsx')).toContain('data-referral-theme="celebration"');
+        expect(stylesheet('./pages/referral-page.tsx')).not.toContain('data-referral-theme');
     });
 
     it('preserves directory B without overriding the active storefront skin', () => {
@@ -288,6 +271,8 @@ describe('storefront skin system', () => {
                                 ' + :is(.security-item-btn, .security-item-static)::before',
                             'styles/address-surfaces.css|.address-card + .address-card::before',
                             'styles/checkout-payment-surfaces.css|.price-summary .summary-total',
+                            // User requested flat help entries separated only by a subtle line.
+                            'styles/desktop-commerce.css|.desktop-account-help > button + button',
                             'styles/logistics.css|.delivery-table tr + tr',
                             'styles/notifications.css|.notification-list > button + button::before',
                             'styles/order-aftercare.css|.order-detail-products article + article::before',
@@ -301,11 +286,11 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // User-approved centered referral totals have one campaign-colored divider.
+                        // Centered referral totals use one subtle reading divider from the active skin.
                         if (
                             functionalKey === 'styles/referral.css|.referral-reward-totals::before' &&
                             border[1] === 'inline' &&
-                            border[2].trim() === '1px solid var(--line)'
+                            border[2].trim() === '1px solid var(--skin-divider)'
                         ) {
                             continue;
                         }
@@ -410,12 +395,15 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // The approved account B design separates shortcuts using the current skin's divider.
+                        // The shared account surface uses foreground-derived shortcut and referral dividers.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
-                            selector.trim() === '.account-identity-assets > button + button' &&
-                            border[1] === 'left' &&
-                            border[2].trim() === '1px solid var(--line-subtle)'
+                            [
+                                '.account-identity-assets > button + button|left',
+                                '.account-identity-promotion|top',
+                            ].includes(`${selector.trim()}|${border[1]}`) &&
+                            border[2].trim() ===
+                                '1px solid color-mix(in srgb, var(--accent-foreground) 24%, transparent)'
                         ) {
                             continue;
                         }
@@ -531,11 +519,7 @@ describe('storefront skin system', () => {
                 ) {
                     const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
                     for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-                        if (
-                            !selector.includes('.subpage-header') ||
-                            selector.includes('.product-detail-page')
-                        )
-                            continue;
+                        if (!selector.includes('.subpage-header')) continue;
                         const ownsHeader = /\.subpage-header(?:\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?)*\s*$/u.test(
                             selector,
                         );
@@ -563,6 +547,14 @@ describe('storefront skin system', () => {
         );
         expect(stylesheet('./styles/subpage-content.css')).toMatch(
             /\.desktop-store-layout \.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
+        );
+        expect(stylesheet('./pages/product-detail-page.tsx')).not.toContain('desktop-product-toolbar');
+        expect(stylesheet('./styles/subpage-content.css')).toMatch(
+            /\.subpage-body > \.content-section\s*\{[^}]*margin:\s*0;[^}]*padding:\s*0;/,
+        );
+        const sharedHeader = stylesheet('./styles/subpage-content.css');
+        expect(sharedHeader).toMatch(
+            /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*margin:\s*0;[^}]*padding:\s*var\(--space-8\) 0;/,
         );
         expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('[&>.subpage-header]');
         expect(stylesheet('./styles/home-showcase.css')).not.toMatch(
@@ -694,8 +686,7 @@ describe('storefront skin system', () => {
         const source = stylesheet('./styles/visual-presets.css');
         const lineOwners = new Set([
             'styles/experience-foundations.css',
-            // User-approved local campaign and service themes retain their boundaries.
-            'styles/referral.css',
+            // Existing service boundaries remain separately owned.
             'pages/business-services-page.css',
         ]);
         const visitLineOwners = (directory: string) => {

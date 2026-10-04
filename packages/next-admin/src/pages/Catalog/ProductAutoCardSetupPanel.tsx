@@ -99,11 +99,14 @@ export function ProductAutoCardSetupPanel({
                             className="text-lg font-semibold tracking-tight text-slate-950"
                         >
                             自动发卡
-                            <FeatureHelpButton topic="catalog.auto-card" title="自动发卡" />
+                            <FeatureHelpButton
+                                topic="catalog.auto-card"
+                                title="自动发卡"
+                                description={
+                                    '在当前商品页完成交付方式、卡密格式、库存导入和就绪检查，无需切换到其他设置页。'
+                                }
+                            />
                         </h3>
-                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
-                            在当前商品页完成交付方式、卡密格式、库存导入和就绪检查，无需切换到其他设置页。
-                        </p>
                     </div>
                     {needsProductSave && (
                         <AdminButton
@@ -697,9 +700,12 @@ function AutoCardSetupEditor({
                         <div>
                             <h4 className="text-xs font-semibold text-slate-900">
                                 3. 最近发卡结果
-                                <FeatureHelpButton topic="sales.card-pool" title="3. 最近发卡结果" />
+                                <FeatureHelpButton
+                                    topic="sales.card-pool"
+                                    title="3. 最近发卡结果"
+                                    description={'当前 SKU 最近 5 条交付记录。'}
+                                />
                             </h4>
-                            <p className="mt-1 text-[11px] text-slate-500">当前 SKU 最近 5 条交付记录。</p>
                         </div>
                         <Link
                             to="/catalog/card-pool?tab=deliveries"

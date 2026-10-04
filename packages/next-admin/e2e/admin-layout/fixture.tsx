@@ -1,9 +1,9 @@
 import { ApolloClient, ApolloLink, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
-import { Kind, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
-import React, { useState } from 'react';
+import { Kind, print, type FragmentDefinitionNode, type SelectionSetNode } from 'graphql';
+import React, { Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { AdminButton, PAGE_REFRESH_EVENT } from '../../src/components/AdminControls';
@@ -11,9 +11,15 @@ import { AdminPageWorkspace } from '../../src/components/AdminPageWorkspace';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
+import {
+    getNextAdminExtensionLegacyRoutes,
+    getNextAdminExtensionRoutes,
+} from '../../src/extensions/extension-api';
+import '../../src/extensions/installed-extensions';
 import type { StoreManagementResult, StoreProfileRecord } from '../../src/graphql/management.graphql';
 import '../../src/index.css';
 import { AppShell } from '../../src/layouts/AppShell';
+import { STANDALONE_ADMIN_PAGES, getStandaloneAdminRedirect } from '../../src/navigation/admin-navigation';
 import { AssetsModule } from '../../src/pages/Catalog/AssetsModule';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
@@ -21,7 +27,11 @@ import { ProductEditor } from '../../src/pages/Catalog/ProductEditor';
 import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModule';
 import { StoreAllocationMatrixModule } from '../../src/pages/Catalog/StoreAllocationMatrixModule';
 import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
+import { CustomersModule } from '../../src/pages/Customers/CustomersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
+import { MarketingAttributionPanel } from '../../src/pages/Marketing/MarketingAttributionPanel';
+import { defaultReportFilter } from '../../src/pages/Marketing/promotion-model';
+import { CouponReport } from '../../src/pages/Marketing/promotion-reports';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { AfterSalesModule } from '../../src/pages/Sales/AfterSalesModule';
 import { CardPoolModule } from '../../src/pages/Sales/CardPoolModule';
@@ -41,7 +51,7 @@ import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 import { FieldLayoutFixture } from './field-layout-fixture';
 
-// Synthetic local data only. No HTTP link; every mutation is rejected.
+// Synthetic local data only. No HTTP link. Mutations are blocked unless an explicit mockWrites flag enables the small local-only whitelist below.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
 const viewLabels: Record<string, string> = {
@@ -60,6 +70,8 @@ const viewLabels: Record<string, string> = {
     paymentSettings: '支付设置',
     product: '商品编辑',
     profit: '利润统计',
+    couponReport: '优惠券经营报表',
+    attribution: '渠道归因与投放回报',
     translations: '多语言翻译',
     jobs: '系统任务',
     health: '服务健康',
@@ -72,11 +84,42 @@ const viewLabels: Record<string, string> = {
 };
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
+const mutationReceipts: Array<{ field: string }> = [];
+const fixturePermissions = params.has('restricted')
+    ? ['ReadOrder']
+    : params.get('role') === 'store-admin'
+      ? [
+            'ReadStoreProfile',
+            'UpdateStoreProfile',
+            'ReadChannel',
+            'ReadSettings',
+            'ReadCatalog',
+            'ReadProduct',
+            'ReadCollection',
+            'ReadFacet',
+            'ReadOrder',
+            'ReadCustomer',
+            'ReadPromotion',
+            'ReadReferral',
+            'ReadStorefrontContent',
+            'UpdateStorefrontContent',
+            'ReadAdministrator',
+            'ReadSeller',
+            'ReadShippingMethod',
+            'ReadTaxCategory',
+            'ReadTaxRate',
+            'ReadCountry',
+            'ReadZone',
+            'ReadStockLocation',
+        ]
+      : params.has('restricted')
+        ? ['ReadOrder']
+        : ['SuperAdmin'];
 const channel = {
     id: 'layout-channel',
-    code: '布局验收店铺',
+    code: params.has('platform') ? '__default_channel__' : '布局验收店铺',
     customFields: { storefrontNameZh: '布局验收店铺', storefrontNameEn: 'Layout demo' },
-    token: '',
+    token: 'synthetic-layout-channel',
     defaultLanguageCode: 'zh_Hans',
     availableLanguageCodes: ['zh_Hans', 'en'],
     currencyCode: 'MYR',
@@ -219,7 +262,7 @@ const payment = {
     channelCode: channel.code,
     orderId: 'order-demo',
     orderCode: 'LAYOUT-ORDER-001',
-    paymentMethodCode: 'store-usdt',
+    paymentMethodCode: 'usdt-trc20',
     paymentState: 'Settled',
     currencyCode: 'MYR',
     amount: 5000,
@@ -312,6 +355,232 @@ const fixtureOrder = {
     payments: [],
 };
 const data: Record<string, unknown> = {
+    ...unconfiguredSetup,
+    telegramNotificationConfig: {
+        id: 'layout-telegram',
+        enabled: false,
+        tokenConfigured: false,
+        chatId: '',
+        chatIdSource: 'DATABASE',
+        adminBaseUrl: '',
+        timezone: 'Asia/Kuala_Lumpur',
+        minSeverity: 'P3',
+        sendResolved: true,
+        p2Silent: true,
+        p3Silent: true,
+        notifyOrderEvents: true,
+        notifyPaymentEvents: true,
+        notifyFulfillmentEvents: true,
+        notifyRefundEvents: true,
+        notifyInventoryEvents: true,
+        notifyOnlineReports: true,
+        notifyServiceReviews: true,
+        notifyPromotionExpiry: true,
+        notifyAiCredentials: true,
+        notifySecurityEvents: true,
+        inventoryLowThreshold: 2,
+        p1EscalationMinutes: 60,
+        p0RepeatMinutes: 30,
+        p1RepeatMinutes: 120,
+        departmentMentions: {},
+        routeOverrides: [],
+        botUsername: null,
+        lastConnectionAt: null,
+        lastConnectionError: null,
+    },
+    telegramNotificationStatus: {
+        running: false,
+        processed: 0,
+        failures: 0,
+        pending: 0,
+        retrying: 0,
+        dead: 0,
+        oldestLagSeconds: 0,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        lastError: null,
+    },
+    telegramNotificationConfigAudits: [],
+    telegramNotificationDeliveries: empty,
+    adminIncidents: empty,
+    telegramDepartmentRouting: { departments: [], routes: [] },
+    dataRetentionRecords: [],
+    dataSubjectRequests: [],
+    dataConsentRecords: [],
+    governanceApprovals: [],
+    fraudRiskCases: empty,
+    governanceAuditEntries: empty,
+    governanceAuditIntegrity: { valid: true, checkedCount: 0, brokenEntryId: null },
+    governanceReports: [],
+    governedConfigVersions: [],
+    marketingAttributionReport: {
+        summary: {
+            visitorCount: 2,
+            productViewCount: 3,
+            checkoutViewCount: 1,
+            orderCount: 1,
+            netRevenueMicrounits: 300000,
+            campaignCostMicrounits: 100000,
+            refundAdjustedRoas: 3,
+            refundAdjustedRoi: 2,
+        },
+        items: [
+            {
+                source: 'direct',
+                medium: '(none)',
+                campaign: '(not set)',
+                searchTerms: [],
+                visitorCount: 2,
+                productViewCount: 3,
+                checkoutViewCount: 1,
+                orderCount: 1,
+                conversionRate: 0.5,
+                netRevenueMicrounits: 300000,
+                campaignCostMicrounits: 100000,
+                refundAdjustedRoas: 3,
+                refundAdjustedRoi: 2,
+            },
+        ],
+    },
+    myStorePaymentOptions: [],
+    myStoreGovernanceChanges: [],
+    myStorePaymentStats: [],
+    myStorePaymentDetails: { items: [payment], totalItems: 1 },
+    myStoreUsdtManualRefunds: empty,
+    myStoreUsdtPaymentIntents: [],
+    myStoreUsdtPaymentStats: { totalCount: 0, settledCount: 0, manualReviewCount: 0, receivedUsdtTotal: 0 },
+    myStoreProfile: {
+        id: 'layout-profile',
+        channelId: channel.id,
+        updatedAt: now,
+        status: 'ACTIVE',
+        brandName: '模拟店铺',
+        primaryDomain: null,
+        domains: [],
+        channel: { ...channel, seller: null },
+        logoAsset: null,
+    },
+    myStoreCommerceConfiguration: {
+        updatedAt: now,
+        pricesIncludeTax: false,
+        countryCode: 'MY',
+        taxRate: 0,
+        currencyCode: 'MYR',
+        shippingMethodNameZh: '标准配送',
+        shippingMethodNameEn: 'Standard',
+        shippingDescriptionZh: '',
+        shippingDescriptionEn: '',
+        baseRate: 0,
+        freeShippingThreshold: 0,
+        shippingTaxRate: 0,
+        shippingPriceIncludesTax: false,
+        estimateMinDays: 1,
+        estimateMaxDays: 3,
+        blockedPostalPrefixes: '',
+    },
+    storeProfiles: [],
+    storeProvisioningTemplates: [],
+    storeGovernanceChanges: params.has('mockWrites')
+        ? [
+              {
+                  id: 'synthetic-governance-request',
+                  createdAt: now,
+                  updatedAt: now,
+                  status: 'PENDING',
+                  requestType: 'LEGAL_IDENTITY',
+                  version: 1,
+                  channel,
+                  maskedSummary: { legalEntityName: '本地模拟主体' },
+                  reviewPayload: { legalEntityName: '本地模拟主体' },
+                  reviewReason: null,
+              },
+          ]
+        : [],
+    administratorPermissionAudits: [],
+    sellers: empty,
+    paymentMethods: empty,
+    shippingMethods: empty,
+    paymentMethodEligibilityCheckers: [],
+    paymentMethodHandlers: [],
+    shippingEligibilityCheckers: [],
+    shippingCalculators: [],
+    fulfillmentHandlers: [],
+    globalSettings: {
+        availableLanguages: ['zh_Hans', 'en'],
+        serverConfig: { entityCustomFields: [] },
+        trackInventory: true,
+        outOfStockThreshold: 0,
+    },
+    zones: empty,
+    countries: empty,
+    taxCategories: empty,
+    taxRates: empty,
+    catalogExportRows: empty,
+    promotions: empty,
+    promotionConditions: [],
+    promotionActions: [],
+    imageAiUsageRecords: empty,
+    systemAnnouncements: [],
+    mailboxIntegrationAccess: { valid: true, message: null },
+    storefrontPromotionPage: {
+        id: 'layout-landing',
+        contentType: 'text/html',
+        draftSource: '<h1>模拟落地页</h1>',
+        publishedSource: '',
+        isCustomized: false,
+        defaultTemplateVersion: 1,
+        publishedVersion: 0,
+        publishedAt: null,
+        publicUrl: '/promotions',
+    },
+    collectionFilters: [],
+    referralProgram: {
+        enabled: false,
+        rewardRate: 0,
+        releaseDelayDays: 7,
+        minimumOrderAmount: 0,
+        maxRewardPerOrder: null,
+        allowBalanceSpend: true,
+        attributionWindowDays: 30,
+        defaultPosterTemplate: 'default',
+        posterTemplates: [],
+        posterTemplateConfigs: [],
+        siteIntroZh: '',
+        siteIntroEn: '',
+        siteTitleZh: '',
+        siteTitleEn: '',
+        updatedAt: now,
+    },
+    referralLedger: empty,
+    referralRelationships: empty,
+    referralInviterSummaries: empty,
+    referralRewards: empty,
+    referralWalletLedger: empty,
+    referralBalanceAudit: { items: [], totalItems: 0, checkedCount: 0, mismatchCount: 0 },
+    referralWithdrawals: empty,
+    storefrontContentSettings: { updatedAt: now },
+    imageGenerationAdminConfig: {
+        id: 'layout-image-config',
+        enabled: false,
+        promptOptimizationEnabled: false,
+        promptRateLimitPerMinute: 3,
+        promptDailyFreeLimit: 20,
+        promptDailyFreeUnlimited: false,
+        paidPromptOptimizationEnabled: false,
+        paidPromptOptimizationPrice: 0,
+        paidPromptOptimizationCurrencyCode: 'MYR',
+        defaultModelCode: '',
+        termsVersion: '2026-10',
+        termsZh: '模拟条款',
+        termsEn: 'Demo terms',
+        credentialEnabled: false,
+        activeSkillHash: null,
+        models: [],
+    },
+    imageGenerationJobs: empty,
+    imagePromptSkillReleases: [],
+
+    catalogTemplateLibrary: [],
     order: {
         ...fixtureOrder,
         id: 'layout-order',
@@ -325,8 +594,8 @@ const data: Record<string, unknown> = {
     },
     myAdministratorAccess: {
         id: 'local-access',
-        scope: 'STORE',
-        authority: 'ADMIN',
+        scope: params.has('platform') ? 'PLATFORM' : 'STORE',
+        authority: params.has('platform') ? 'OWNER' : 'ADMIN',
         status: 'ACTIVE',
         channel,
     },
@@ -443,6 +712,8 @@ const data: Record<string, unknown> = {
     fulfillmentDeliveryExceptions: empty,
     storefrontReviewSettings: { enabled: true },
     customers: empty,
+    customerGroups: empty,
+    customerFollowUps: empty,
     eligibleShippingMethodsForDraftOrder: [],
     afterSalesRequests: { totalItems: 2, items: [] },
     storefrontReviews: {
@@ -489,8 +760,6 @@ const data: Record<string, unknown> = {
     facets: empty,
     assets: empty,
     productOptionGroups: empty,
-    catalogTemplateLibrary: [],
-    collectionFilters: [],
     productVariants: empty,
     collections: { items: collections, totalItems: collections.length },
     selectedCollections: empty,
@@ -620,7 +889,7 @@ const data: Record<string, unknown> = {
     apiKeys: empty,
     activeAdministrator: null,
     storefrontContentBlocks:
-        view === 'plugins' && !params.has('empty')
+        (view === 'plugins' || view === 'split') && !params.has('empty')
             ? [
                   {
                       id: 'local-plugins',
@@ -718,6 +987,8 @@ function project(
     }
     return result;
 }
+const layoutQueries: { name: string; variables: unknown }[] = [];
+Object.assign(window, { layoutQueries, mutationReceipts });
 const client = new ApolloClient({
     cache: createAdminCache(),
     link: new ApolloLink(
@@ -730,11 +1001,101 @@ const client = new ApolloClient({
                 if (
                     !definition ||
                     definition.kind !== Kind.OPERATION_DEFINITION ||
-                    definition.operation !== 'query'
+                    !['query', 'mutation'].includes(definition.operation)
                 ) {
                     observer.error(new Error('本地布局验收禁止写入'));
                     return;
                 }
+                if (definition.operation === 'mutation') {
+                    const field = definition.selectionSet.selections.find(f => f.kind === Kind.FIELD);
+                    if (!params.has('mockWrites') || !field || field.kind !== Kind.FIELD) {
+                        observer.error(new Error('本地验收禁止写入'));
+                        return;
+                    }
+                    const input = operation.variables.input ?? {};
+                    let result: unknown;
+                    if (field.name.value === 'updateStorefrontContentBlock') {
+                        const blocks = data.storefrontContentBlocks as Array<Record<string, unknown>>;
+                        const block = blocks.find(b => b.id === input.id);
+                        if (!block || input.expectedUpdatedAt !== block.updatedAt) {
+                            observer.error(new Error('模拟版本冲突'));
+                            return;
+                        }
+                        Object.assign(block, input, { updatedAt: '2026-09-09T11:00:00Z' });
+                        result = block;
+                    } else if (field.name.value === 'reviewStoreGovernanceChange') {
+                        const requests = data.storeGovernanceChanges as Array<Record<string, unknown>>;
+                        const request = requests.find(r => r.id === input.id);
+                        if (!request) {
+                            observer.error(new Error('模拟申请不存在'));
+                            return;
+                        }
+                        request.status = input.decision;
+                        result = request;
+                    } else if (field.name.value === 'reviewGovernanceApproval') {
+                        data.governanceApprovals = [];
+                        result = {
+                            id: input.id,
+                            status: input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+                        };
+                    } else if (field.name.value === 'recordStoreUsdtManualRefund') {
+                        result = {
+                            ...input,
+                            id: 'synthetic-refund',
+                            orderCode: payment.orderCode,
+                            channelId: channel.id,
+                            channelCode: channel.code,
+                            currencyCode: payment.currencyCode,
+                            createdAt: now,
+                            state: 'Settled',
+                            network: 'TRC20',
+                            refundId: 'synthetic-refund',
+                            operatorUserId: 'synthetic-admin',
+                        };
+                        data.storeUsdtManualRefunds = { items: [result], totalItems: 1 };
+                        payment.refundedAmount = input.amount;
+                        payment.netAmount = payment.amount - input.amount;
+                    } else {
+                        observer.error(new Error('未列入本地模拟写入白名单'));
+                        return;
+                    }
+                    mutationReceipts.push({ field: field.name.value });
+                    const fragments = Object.fromEntries(
+                        operation.query.definitions
+                            .filter(d => d.kind === Kind.FRAGMENT_DEFINITION)
+                            .map(d => [d.name.value, d]),
+                    );
+                    observer.next({
+                        data: project(
+                            { [field.name.value]: result },
+                            definition.selectionSet,
+                            fragments,
+                        ) as Record<string, unknown>,
+                    });
+                    observer.complete();
+                    return;
+                }
+                const failingField =
+                    (window as unknown as { failNextField?: string }).failNextField ??
+                    params.get('failField');
+                if (
+                    failingField &&
+                    definition.selectionSet.selections.some(
+                        f => f.kind === Kind.FIELD && f.name.value === failingField,
+                    )
+                ) {
+                    delete (window as unknown as { failNextField?: string }).failNextField;
+                    observer.error(new Error('本地模拟读取失败'));
+                    return;
+                }
+                layoutQueries.push({
+                    name: operation.operationName,
+                    variables: operation.variables,
+                    selection: print(operation.query),
+                    fields: definition.selectionSet.selections
+                        .filter(f => f.kind === Kind.FIELD)
+                        .map(f => f.name.value),
+                } as never);
                 const fragments = Object.fromEntries(
                     operation.query.definitions
                         .filter(d => d.kind === Kind.FRAGMENT_DEFINITION)
@@ -777,7 +1138,7 @@ const client = new ApolloClient({
                         },
                     };
                 }
-                if (view === 'tabs') {
+                if (view === 'tabs' || view === 'split') {
                     const productId = String(
                         operation.variables.id ?? operation.variables.productId ?? product.id,
                     );
@@ -814,13 +1175,15 @@ const client = new ApolloClient({
                             variants: [],
                         },
                         globalSettings: {
+                            trackInventory: true,
+                            outOfStockThreshold: 0,
                             availableLanguages: ['zh_Hans', 'en'],
                             serverConfig: { entityCustomFields: [] },
                         },
                         me: {
                             id: 'tabs-admin',
                             identifier: 'local@example.invalid',
-                            channels: [{ ...channel, permissions: ['SuperAdmin'] }],
+                            channels: [{ ...channel, permissions: fixturePermissions }],
                         },
                         activeAdministrator: {
                             id: 'tabs-admin',
@@ -838,7 +1201,9 @@ const client = new ApolloClient({
                                 roles: [
                                     {
                                         id: 'local-role',
-                                        code: '__super_admin_role__',
+                                        code: fixturePermissions.includes('SuperAdmin')
+                                            ? '__super_admin_role__'
+                                            : 'synthetic-limited-role',
                                         description: '',
                                         channels: [channel],
                                     },
@@ -907,7 +1272,7 @@ const tabOperations: Array<{
     variables: Record<string, unknown>;
     completed?: boolean;
 }> = [];
-if (view === 'tabs') Object.assign(window, { tabOperations });
+if (view === 'tabs' || view === 'split') Object.assign(window, { tabOperations });
 class FixtureBoundary extends React.Component<React.PropsWithChildren, { error: string }> {
     state = { error: '' };
     static getDerivedStateFromError(error: Error) {
@@ -1056,6 +1421,22 @@ function StoreManagementFixture() {
     );
 }
 
+function CouponReportFixture() {
+    const [filter, setFilter] = React.useState(defaultReportFilter);
+    return (
+        <div className="p-4">
+            <CouponReport
+                coupons={[]}
+                currencyCode="MYR"
+                filter={filter}
+                setFilter={setFilter}
+                metrics={[]}
+                loading={false}
+            />
+        </div>
+    );
+}
+
 const modules: Record<string, React.ReactNode> = {
     fields: <FieldLayoutFixture />,
     draft: <DraftOrderEditor />,
@@ -1083,6 +1464,12 @@ const modules: Record<string, React.ReactNode> = {
     ),
     product: <ProductEditor />,
     profit: <ProfitReportModule />,
+    couponReport: <CouponReportFixture />,
+    attribution: (
+        <div className="p-4">
+            <MarketingAttributionPanel currencyCode="MYR" />
+        </div>
+    ),
     translations: <TranslationsModule />,
     jobs: <SystemOpsModule />,
     health: <SystemOpsModule />,
@@ -1093,18 +1480,25 @@ const modules: Record<string, React.ReactNode> = {
     purchases: <PurchaseOrdersModule />,
     stores: <StoreManagementFixture />,
 };
-if (view === 'tabs') {
+if (view === 'tabs' || view === 'split') {
     createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
             <ApolloProvider client={client}>
-                <ConfirmDialogContext.Provider value={async () => false}>
+                <ConfirmDialogContext.Provider
+                    value={async () =>
+                        params.has('mockWrites') ? { currentPassword: 'synthetic-local-proof' } : false
+                    }
+                >
                     <FeatureHelpProvider>
-                        <MemoryRouter initialEntries={['/catalog/list']}>
+                        <MemoryRouter initialEntries={[params.get('path') ?? '/catalog/list']}>
+                            <FixtureLocation />
                             <nav
                                 aria-label="本地测试导航"
                                 className="fixed bottom-0 right-0 z-50 flex gap-3 bg-amber-100 p-2 text-xs"
                             >
-                                本地模拟数据 · 写入已阻止
+                                {params.has('mockWrites')
+                                    ? '本地模拟操作 · 无网络写入'
+                                    : '本地模拟数据 · 写入已阻止'}
                                 <Link to="/catalog/list">测试商品列表</Link>
                                 <Link to="/catalog/products/layout-product">测试商品一</Link>
                                 <Link to="/catalog/products/layout-product-2">测试商品二</Link>
@@ -1127,7 +1521,48 @@ if (view === 'tabs') {
                             </nav>
                             <Routes>
                                 <Route element={<AppShell />}>
+                                    {getNextAdminExtensionLegacyRoutes().map(route => (
+                                        <Route
+                                            key={route.path}
+                                            path={route.path.slice(1)}
+                                            element={<LegacyFixture target={route.target} />}
+                                        />
+                                    ))}
+                                    {getNextAdminExtensionRoutes().map(route => {
+                                        const Component = route.component;
+                                        return (
+                                            <Route
+                                                key={route.path}
+                                                path={route.path.slice(1)}
+                                                element={
+                                                    <Suspense fallback={<p>加载中</p>}>
+                                                        <FixtureBusinessRoute Component={Component} />
+                                                    </Suspense>
+                                                }
+                                            />
+                                        );
+                                    })}
+                                    {Array.from(new Set(STANDALONE_ADMIN_PAGES.map(p => p.sourcePath)))
+                                        .filter(
+                                            path => !getNextAdminExtensionRoutes().some(r => r.path === path),
+                                        )
+                                        .map(path => (
+                                            <Route
+                                                key={path}
+                                                path={path.slice(1)}
+                                                element={<LegacyFixture />}
+                                            />
+                                        ))}
+                                    <Route path="*" element={<LegacyFixture />} />
                                     <Route path="dashboard" element={<DashboardModule />} />
+                                    <Route path="catalog/assets" element={<AssetsModule />} />
+                                    <Route path="sales/orders" element={<SalesModule />} />
+                                    <Route path="sales/profit" element={<ProfitReportModule />} />
+                                    <Route path="customers/list" element={<CustomersModule />} />
+                                    <Route
+                                        path="platform/catalog"
+                                        element={<StoreAllocationMatrixModule />}
+                                    />
                                     <Route path="catalog/list" element={<CatalogModule />} />
                                     <Route path="catalog/products/:id" element={<ProductEditor />} />
                                 </Route>
@@ -1237,4 +1672,22 @@ if (view === 'tabs') {
             </AdminPermissionsProvider>
         </ApolloProvider>,
     );
+}
+
+function FixtureLocation() {
+    const loc = useLocation();
+    const navigate = useNavigate();
+    Object.assign(window, { fixtureLocation: loc.pathname + loc.search, fixtureNavigate: navigate });
+    return null;
+}
+function LegacyFixture({ target: legacyTarget }: { target?: string } = {}) {
+    const loc = useLocation();
+    const target = getStandaloneAdminRedirect(loc.pathname, loc.search) ?? legacyTarget;
+    return target ? <Navigate to={target} replace /> : null;
+}
+
+function FixtureBusinessRoute({ Component }: { Component: React.ComponentType }) {
+    const loc = useLocation();
+    const target = getStandaloneAdminRedirect(loc.pathname, loc.search);
+    return target ? <Navigate to={target} replace /> : <Component />;
 }
