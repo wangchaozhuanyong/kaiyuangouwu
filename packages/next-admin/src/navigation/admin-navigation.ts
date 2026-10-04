@@ -75,6 +75,7 @@ export const STANDALONE_ADMIN_PAGES: StandaloneAdminPage[] = [
     ...pages('/marketing/referrals', 'referrals', [
         ['settings', '分销设置', 'marketing'],
         ['promoters', '推广员管理', 'marketing'],
+        ['relationships', '邀请关系明细', 'marketing'],
         ['rewards', '返利订单', 'marketing'],
         ['ledger', '佣金钱包流水', 'payments'],
         ['withdrawals', '提现审核', 'payments'],
@@ -195,6 +196,7 @@ export function getStandaloneAdminRedirect(path: string, search = ''): string | 
 }
 
 const englishNavigationTitles: Record<string, string> = {
+    邀请关系明细: 'Invitation relationships',
     网站总览: 'Website overview',
     商品管理: 'Product management',
     订单管理: 'Order management',

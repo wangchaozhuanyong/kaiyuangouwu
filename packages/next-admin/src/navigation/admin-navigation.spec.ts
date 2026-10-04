@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { REFERRAL_REPORT_FIELDS, REFERRAL_TABS } from '../pages/Marketing/referrals-types';
 import { getRouteModuleKey } from '../route-modules';
 import {
     ADMIN_NAV_SECTIONS,
@@ -40,6 +41,16 @@ describe('standalone administration navigation', () => {
     ])('keeps valid filters from old %s links', (path, search, target) =>
         expect(getStandaloneAdminRedirect(path, search)).toBe(target),
     );
+    it('preserves every released referral report as a standalone page', () => {
+        for (const [key, tab] of Object.entries(REFERRAL_TABS)) {
+            expect(getStandaloneAdminPage(`/marketing/referrals/${key}`)?.tabKey).toBe(key);
+            expect(getStandaloneAdminRedirect('/marketing/referrals', `?tab=${key}&search=shop`)).toBe(
+                `/marketing/referrals/${key}?search=shop`,
+            );
+            if (tab === 'RELATIONSHIPS')
+                expect(REFERRAL_REPORT_FIELDS[tab]).toEqual(['referralRelationships']);
+        }
+    });
     it('keeps existing independent URLs and child URL queries intact', () => {
         expect(getStandaloneAdminRedirect('/sales/orders', '?state=Settled')).toBeNull();
         expect(getStandaloneAdminRedirect('/settings/data-management/exports', '?page=2')).toBeNull();

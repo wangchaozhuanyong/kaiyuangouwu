@@ -840,8 +840,7 @@ function ReconciliationEditor({
                     </AdminButton>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <label className={`${labelClass} sm:col-span-2`}>
-                        处理方式
+                    <AdminField className={`${labelClass} sm:col-span-2`} label="处理方式">
                         <AdminSelect
                             value={draft.action}
                             onChange={event =>
@@ -855,7 +854,7 @@ function ReconciliationEditor({
                             {retryAllowed && <option value="RETRY_SETTLEMENT">重试订单入账</option>}
                             <option value="CONFIRM_EXTERNAL_REFUND">核验并关闭外部链上退款</option>
                         </AdminSelect>
-                    </label>
+                    </AdminField>
                     {draft.action === 'CONFIRM_EXTERNAL_REFUND' && (
                         <>
                             <RefundField
@@ -999,8 +998,7 @@ function RefundField({
     type?: string;
 }) {
     return (
-        <label className={labelClass}>
-            {label}
+        <AdminField className={labelClass} label={label}>
             <AdminInput
                 type={type}
                 min={type === 'number' ? 0 : undefined}
@@ -1009,7 +1007,7 @@ function RefundField({
                 onChange={event => onChange(event.target.value)}
                 className={inputClass}
             />
-        </label>
+        </AdminField>
     );
 }
 function refundInput(payment: PaymentDetailRecord, draft: RefundDraft) {

@@ -15,7 +15,7 @@ export function StoreGovernanceHistory({
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 已审核记录
                 <FeatureHelpButton
-                    topic="settings.stores"
+                    topic="settings.store-profile"
                     title="已审核记录"
                     description="查看已批准或已驳回的店铺治理申请及审核意见，敏感资料仅显示脱敏摘要。"
                 />
