@@ -82,15 +82,17 @@ export function StoreOfferDialog({
                 <div className="flex justify-between gap-4">
                     <h2 className="flex items-center gap-2 text-lg font-bold">
                         本店商品经营设置
-                        <FeatureHelpButton topic="catalog.store-offer" title="本店商品经营设置" />
+                        <FeatureHelpButton
+                            topic="catalog.store-offer"
+                            title="本店商品经营设置"
+                            description={'修改本店售价与销售状态。维护店铺管理商品资料、规格及来源交付资源。'}
+                        />
                     </h2>
                     <AdminButton onClick={onClose} aria-label="关闭经营设置">
                         关闭
                     </AdminButton>
                 </div>
-                <p className="my-3 text-sm text-slate-500">
-                    修改本店售价与销售状态。维护店铺管理商品资料、规格及来源交付资源。
-                </p>
+
                 {query.loading && !query.data && <p role="status">读取本店授权中…</p>}
                 {(query.error || error) && (
                     <p role="alert" className="text-red-600 dark:text-red-400 text-sm">

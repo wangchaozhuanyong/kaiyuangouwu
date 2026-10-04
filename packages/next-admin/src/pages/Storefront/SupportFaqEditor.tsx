@@ -31,9 +31,13 @@ export function SupportFaqEditor({
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-bold text-slate-900">
-                        常见问题 <FeatureHelpButton topic="storefront.support-faq" title="常见问题" />
+                        常见问题{' '}
+                        <FeatureHelpButton
+                            topic="storefront.support-faq"
+                            title="常见问题"
+                            description={'仅展示已启用且中英文均填写完整的问题。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-xs text-slate-500">仅展示已启用且中英文均填写完整的问题。</p>
                 </div>
                 <AdminButton
                     type="button"

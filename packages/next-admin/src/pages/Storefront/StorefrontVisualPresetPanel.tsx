@@ -149,7 +149,13 @@ export function StorefrontVisualPresetPanel() {
             <div className="flex items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                     店铺皮肤
-                    <FeatureHelpButton topic="storefront.decoration" title="店铺皮肤" />
+                    <FeatureHelpButton
+                        topic="storefront.decoration"
+                        title="店铺皮肤"
+                        description={
+                            '一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。 经典皮肤保留品牌身份色，并自动派生可读的界面强调色。'
+                        }
+                    />
                 </h2>
                 <AdminButton
                     type="button"
@@ -160,10 +166,7 @@ export function StorefrontVisualPresetPanel() {
                     重新读取
                 </AdminButton>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-                一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。
-                经典皮肤保留品牌身份色，并自动派生可读的界面强调色。
-            </p>
+
             {query.loading && !query.data && (
                 <p role="status" className="mt-3 text-sm">
                     正在读取当前店铺配置…
@@ -274,11 +277,9 @@ export function StorefrontVisualPresetPanel() {
                                     <FeatureHelpButton
                                         topic="storefront.visual-preset"
                                         title="皮肤效果预览"
+                                        description={'当前店铺客户端组件与样式 · 草稿不会发布'}
                                     />
                                 </h3>
-                                <p className="text-xs text-slate-500">
-                                    当前店铺客户端组件与样式 · 草稿不会发布
-                                </p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <AdminButton

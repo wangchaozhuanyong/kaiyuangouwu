@@ -194,11 +194,12 @@ export function ReviewsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
                             买家评价
-                            <FeatureHelpButton topic="storefront.reviews" title="买家评价" />
+                            <FeatureHelpButton
+                                topic="storefront.reviews"
+                                title="买家评价"
+                                description={'审核订单关联评价，并维护商家公开回复'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            审核订单关联评价，并维护商家公开回复
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -220,11 +221,14 @@ export function ReviewsModule() {
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                             客户端评价功能
-                            <FeatureHelpButton topic="storefront.reviews" title="客户端评价功能" />
+                            <FeatureHelpButton
+                                topic="storefront.reviews"
+                                title="客户端评价功能"
+                                description={
+                                    '关闭后隐藏客户端评价入口与内容，并停止新评价提交；后台历史评价仍可管理。'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            关闭后隐藏客户端评价入口与内容，并停止新评价提交；后台历史评价仍可管理。
-                        </p>
                     </div>
                     <AdminButton
                         type="button"

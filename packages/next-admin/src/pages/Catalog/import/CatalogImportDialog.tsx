@@ -541,11 +541,12 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                         <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                             <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                             商品安全导入中心
-                            <FeatureHelpButton topic="catalog.products" title="商品安全导入中心" />
+                            <FeatureHelpButton
+                                topic="catalog.products"
+                                title="商品安全导入中心"
+                                description={'先本地解析和预览差异，只有点击“确认执行”后才会写入数据库。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            先本地解析和预览差异，只有点击“确认执行”后才会写入数据库。
-                        </p>
                     </div>
                     <AdminButton
                         type="button"
@@ -1088,11 +1089,12 @@ function FieldMappingEditor({
                 <div>
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         字段映射
-                        <FeatureHelpButton topic="catalog.products" title="商品导入字段映射" />
+                        <FeatureHelpButton
+                            topic="catalog.products"
+                            title="商品导入字段映射"
+                            description={'可修正自动识别结果；同一系统字段只能映射一次。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                        可修正自动识别结果；同一系统字段只能映射一次。
-                    </p>
                 </div>
                 {dirty && (
                     <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700">

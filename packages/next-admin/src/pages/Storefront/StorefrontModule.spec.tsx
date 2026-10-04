@@ -47,7 +47,11 @@ vi.mock('../../hooks/use-admin-permissions', () => ({
             !permissions.includes('UpdateStorefrontContent') || mocks.canUpdate,
     }),
 }));
-vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
+vi.mock('../../components/FeatureHelp', () => ({
+    FeatureHelpButton: ({ title, description }: { title: string; description?: string }) => (
+        <span data-help-title={title} data-help-description={description} />
+    ),
+}));
 vi.mock('./StorefrontVisualPresetPanel', () => ({ StorefrontVisualPresetPanel: () => null }));
 vi.mock('./StorefrontAuthSettingsPanel', () => ({ StorefrontAuthSettingsPanel: () => null }));
 vi.mock('./StorefrontBlockEditor', () => ({
@@ -244,7 +248,9 @@ describe('store scoped verified content writes', () => {
         await act(async () => settings!.click());
         expect(host.textContent).not.toContain('个人中心背景图片设置');
         expect(host.textContent).not.toContain('个人中心头图');
-        expect(host.textContent).toContain('首页楼层');
+        expect(
+            host.querySelector('[data-help-title="商城装修"]')?.getAttribute('data-help-description'),
+        ).toContain('首页楼层');
     });
     it('does not report enabled when the mutation returns no saved record', async () => {
         mocks.update.mockResolvedValue({ data: null });
@@ -506,7 +512,12 @@ describe('account recommendation settings', () => {
         });
         await openSettings();
         expect(form().querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('8');
-        expect(form().textContent).toContain('今日净销量');
+        expect(form().textContent).not.toContain('今日净销量');
+        expect(
+            form()
+                .querySelector('[data-help-title="账户 · 专属推荐"]')
+                ?.getAttribute('data-help-description'),
+        ).toContain('今日净销量');
         await setLimit('6');
         await save();
         expect(mocks.other).toHaveBeenLastCalledWith({

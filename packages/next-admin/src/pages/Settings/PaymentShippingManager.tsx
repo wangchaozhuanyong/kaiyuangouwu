@@ -210,11 +210,12 @@ export function PaymentShippingManager({
                             <div>
                                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     <CreditCard className="h-4 w-4 text-blue-600" /> 支付方式
-                                    <FeatureHelpButton topic="settings.payment-shipping" title="支付方式" />
+                                    <FeatureHelpButton
+                                        topic="settings.payment-shipping"
+                                        title="支付方式"
+                                        description={'平台统一配置支付系统；经营店铺独立选择开启或关闭'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-400">
-                                    平台统一配置支付系统；经营店铺独立选择开启或关闭
-                                </p>
                             </div>
                             {canCreatePayment && (
                                 <AdminButton
@@ -351,11 +352,12 @@ export function PaymentShippingManager({
                             <div>
                                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     <Truck className="h-4 w-4 text-blue-600" /> 配送方式
-                                    <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
+                                    <FeatureHelpButton
+                                        topic="settings.payment-shipping"
+                                        title="配送方式"
+                                        description={'管理资格检查器、运费计算器和履约处理器'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-400">
-                                    管理资格检查器、运费计算器和履约处理器
-                                </p>
                             </div>
                             {canCreateShipping && (
                                 <AdminButton
@@ -464,11 +466,12 @@ export function PaymentShippingManager({
                         <div className="border-b border-slate-100 p-5">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 <Truck className="h-4 w-4 text-blue-600" /> 配送方式
-                                <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
+                                <FeatureHelpButton
+                                    topic="settings.payment-shipping"
+                                    title="配送方式"
+                                    description={'管理资格检查器、运费计算器和履约处理器'}
+                                />
                             </h2>
-                            <p className="mt-1 text-xs text-slate-400">
-                                管理资格检查器、运费计算器和履约处理器
-                            </p>
                         </div>
                         <div className="p-10 text-center text-xs text-slate-400">
                             当前为纯数字商品模式，无需配置配送方式
@@ -557,11 +560,15 @@ function StorePaymentSwitches({
         <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="flex items-center gap-2 text-sm font-bold">
                 本店支付方式
-                <FeatureHelpButton topic="settings.payment-shipping" title="本店支付方式" />
+                <FeatureHelpButton
+                    topic="settings.payment-shipping"
+                    title="本店支付方式"
+                    description={
+                        '支付系统由平台管理中心统一配置。本店开关只影响本店新订单，交易、退款和余额仍归本店。'
+                    }
+                />
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
-                支付系统由平台管理中心统一配置。本店开关只影响本店新订单，交易、退款和余额仍归本店。
-            </p>
+
             {query.loading && !query.data && <p className="mt-4 text-xs">正在读取平台支付方式…</p>}
             {query.error && (
                 <p role="alert" className="mt-4 text-xs text-rose-600">
@@ -1172,11 +1179,14 @@ function ShippingMethodTester({
                 <div>
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         配送方式试算
-                        <FeatureHelpButton topic="settings.payment-shipping" title="配送方式试算" />
+                        <FeatureHelpButton
+                            topic="settings.payment-shipping"
+                            title="配送方式试算"
+                            description={
+                                '使用当前未保存的检查器和计算器参数，只执行 Vendure 试算查询，不创建订单。'
+                            }
+                        />
                     </h3>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        使用当前未保存的检查器和计算器参数，只执行 Vendure 试算查询，不创建订单。
-                    </p>
                 </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">

@@ -26,9 +26,8 @@ export function TableCard({
             <div className="border-b border-slate-200 p-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     {title}
-                    <FeatureHelpButton topic="marketing.referrals" title={title} />
+                    <FeatureHelpButton topic="marketing.referrals" title={title} description={description} />
                 </h2>
-                <p className="mt-1 text-[11px] text-slate-500">{description}</p>
             </div>
             <div className="overflow-x-auto">{children}</div>
         </section>
@@ -473,11 +472,12 @@ export function ReferralHeading() {
         <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                 分销与返利
-                <FeatureHelpButton topic="marketing.referrals" title="分销与返利" />
+                <FeatureHelpButton
+                    topic="marketing.referrals"
+                    title="分销与返利"
+                    description={'一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理'}
+                />
             </h1>
-            <p className="mt-1 text-xs text-slate-500">
-                一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理
-            </p>
         </div>
     );
 }

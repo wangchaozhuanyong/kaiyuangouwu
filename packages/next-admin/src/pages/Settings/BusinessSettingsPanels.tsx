@@ -367,9 +367,12 @@ function GlobalBusinessSettings({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         平台全局设置
-                        <FeatureHelpButton topic="settings.store-profile" title="平台全局设置" />
+                        <FeatureHelpButton
+                            topic="settings.store-profile"
+                            title="平台全局设置"
+                            description={'影响所有 Channel 可选语言和库存默认行为'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">影响所有 Channel 可选语言和库存默认行为</p>
                 </div>
                 <AdminButton
                     type="button"
@@ -833,9 +836,12 @@ function TaxBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <ReceiptText className="h-4 w-4 text-blue-600" />
                     税类与税率
-                    <FeatureHelpButton topic="settings.finance" title="税类与税率" />
+                    <FeatureHelpButton
+                        topic="settings.finance"
+                        title="税类与税率"
+                        description={'税率按“税类 + 区域”匹配订单'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">税率按“税类 + 区域”匹配订单</p>
             </div>
             <div className="space-y-4 p-5">
                 <SettingsFormGrid columns={2}>
@@ -1273,11 +1279,12 @@ function ZoneBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <MapPin className="h-4 w-4 text-blue-600" />
                     国家与业务区域
-                    <FeatureHelpButton topic="settings.store-profile" title="国家与业务区域" />
+                    <FeatureHelpButton
+                        topic="settings.store-profile"
+                        title="国家与业务区域"
+                        description={'业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">
-                    业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。
-                </p>
             </div>
             <div className="space-y-3 p-5">
                 {!editingZoneId && (
@@ -1422,11 +1429,12 @@ function ZoneBusinessSettings({
                 <div>
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         添加国家/地区
-                        <FeatureHelpButton topic="settings.store-profile" title="添加国家/地区" />
+                        <FeatureHelpButton
+                            topic="settings.store-profile"
+                            title="添加国家/地区"
+                            description={'常用国家直接选择，代码和名称会自动填写。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        常用国家直接选择，代码和名称会自动填写。
-                    </p>
                 </div>
                 <Field label={editingCountryId ? '正在编辑' : '选择国家/地区'}>
                     <AdminSelect

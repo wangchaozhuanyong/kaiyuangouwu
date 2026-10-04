@@ -50,11 +50,12 @@ export function MyStoreSettingsModule() {
                 <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                     <Store className="h-5 w-5 text-blue-600" />
                     我的店铺设置
-                    <FeatureHelpButton topic="settings.store-profile" title="我的店铺设置" />
+                    <FeatureHelpButton
+                        topic="settings.store-profile"
+                        title="我的店铺设置"
+                        description={'此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。'}
+                    />
                 </h1>
-                <p className="mt-1 text-xs text-slate-500">
-                    此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。
-                </p>
             </header>
             <main className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (

@@ -123,9 +123,9 @@ export function AssetPicker({
                                     <FeatureHelpButton
                                         topic="storefront.block-visuals"
                                         title="选择图片素材"
+                                        description={'读取商品管理中的真实素材库'}
                                     />
                                 </h3>
-                                <p className="mt-1 text-xs text-slate-400">读取商品管理中的真实素材库</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <ImageAssetUploadButton

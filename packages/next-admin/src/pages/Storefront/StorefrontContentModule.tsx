@@ -273,11 +273,12 @@ export function StorefrontContentModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             店铺内容与页面
-                            <FeatureHelpButton topic="storefront.content" title="店铺内容与页面" />
+                            <FeatureHelpButton
+                                topic="storefront.content"
+                                title="店铺内容与页面"
+                                description={'法律客服、登录视觉、导航、公告和推广落地页集中管理'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            法律客服、登录视觉、导航、公告和推广落地页集中管理
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -477,11 +478,12 @@ function PageBlockList({
             <div className="mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     固定内容配置
-                    <FeatureHelpButton topic="storefront.fixed-content" title="固定内容配置" />
+                    <FeatureHelpButton
+                        topic="storefront.fixed-content"
+                        title="固定内容配置"
+                        description={'首页轮播与营销楼层已放到“商城首页装修”，这里不再重复。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                    首页轮播与营销楼层已放到“商城首页装修”，这里不再重复。
-                </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {contentModuleDescriptors.map(descriptor => {
@@ -580,12 +582,14 @@ function AnnouncementList({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         首页公告
-                        <FeatureHelpButton topic="storefront.announcements" title="首页公告" />
+                        <FeatureHelpButton
+                            topic="storefront.announcements"
+                            title="首页公告"
+                            description={
+                                '此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近 30 天内的有效公告，与手动公告合计最多 5 条。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近
-                        30 天内的有效公告，与手动公告合计最多 5 条。
-                    </p>
                 </div>
                 <AdminButton
                     type="button"
@@ -1245,9 +1249,12 @@ function PromotionPageEditor({
                 <div className="border-b border-slate-100 p-4">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         安全预览
-                        <FeatureHelpButton topic="storefront.safe-preview" title="安全预览" />
+                        <FeatureHelpButton
+                            topic="storefront.safe-preview"
+                            title="安全预览"
+                            description={'预览在沙箱中渲染，不执行页面脚本'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[10px] text-slate-400">预览在沙箱中渲染，不执行页面脚本</p>
                 </div>
                 {previewHtml ? (
                     <iframe

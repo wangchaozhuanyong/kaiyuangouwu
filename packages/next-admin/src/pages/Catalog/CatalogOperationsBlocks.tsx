@@ -204,11 +204,14 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Boxes className="h-4 w-4 text-blue-600" /> SKU 供应链与供货商扩展（可选）
-                        <FeatureHelpButton topic="catalog.inventory" title="SKU 供应链与供货商扩展" />
+                        <FeatureHelpButton
+                            topic="catalog.inventory"
+                            title="SKU 供应链与供货商扩展"
+                            description={
+                                '采购成本可在上方主表格直接填写并统一保存；供货商、批次和保质期可按需在此维护。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        采购成本可在上方主表格直接填写并统一保存；供货商、批次和保质期可按需在此维护。
-                    </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                     <AdminField className="text-xs font-bold text-slate-600" label="当前仓库">
@@ -425,13 +428,16 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                     <div className="flex items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <CalendarClock className="h-4 w-4 text-amber-600" /> 库存批次与效期（可选）
-                            <FeatureHelpButton topic="catalog.inventory" title="库存批次与效期" />
+                            <FeatureHelpButton
+                                topic="catalog.inventory"
+                                title="库存批次与效期"
+                                description={
+                                    '真正的到期时间记录在每一批库存上；系统按到期日期优先出库，并识别过期库存。'
+                                }
+                            />
                         </h3>
                         <span className="text-xs text-slate-500">已记录 {visibleLots.length} 个批次</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                        真正的到期时间记录在每一批库存上；系统按到期日期优先出库，并识别过期库存。
-                    </p>
                 </summary>
                 {!visibleLots.length ? (
                     <p className="mt-3 text-xs text-slate-500">
@@ -619,11 +625,12 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <PackageOpen className="h-4 w-4 text-violet-600" /> 包装换算与自动拆包
-                        <FeatureHelpButton topic="catalog.inventory" title="包装换算与自动拆包" />
+                        <FeatureHelpButton
+                            topic="catalog.inventory"
+                            title="包装换算与自动拆包"
+                            description={'散件库存不足时，可在支付确认阶段自动拆整包补充库存。'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        散件库存不足时，可在支付确认阶段自动拆整包补充库存。
-                    </p>
                 </div>
                 <AdminButton
                     type="button"
@@ -823,11 +830,12 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <CircleDollarSign className="h-4 w-4 text-emerald-600" /> 其他币种价格（可选）
-                        <FeatureHelpButton topic="catalog.variant-channels" title="其他币种价格" />
+                        <FeatureHelpButton
+                            topic="catalog.variant-channels"
+                            title="其他币种价格"
+                            description={'只有当前店铺同时收取多种币种时才需要设置；不会覆盖其他店铺。'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        只有当前店铺同时收取多种币种时才需要设置；不会覆盖其他店铺。
-                    </p>
                 </div>
                 <AdminButton
                     type="button"
@@ -1023,11 +1031,12 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                                 商品：{productName}
                             </span>
                         )}
-                        <FeatureHelpButton topic="catalog.sku-custom-fields" title="其他 SKU 资料" />
+                        <FeatureHelpButton
+                            topic="catalog.sku-custom-fields"
+                            title="其他 SKU 资料"
+                            description={'包含商品条码、单位、规格等经营资料，按 SKU 分别保存。'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        包含商品条码、单位、规格等经营资料，按 SKU 分别保存。
-                    </p>
                 </div>
                 <div className="flex gap-2">
                     <AdminSelect

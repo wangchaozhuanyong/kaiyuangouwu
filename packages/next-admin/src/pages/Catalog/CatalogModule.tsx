@@ -440,9 +440,12 @@ export function CatalogModule() {
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                         商品管理
-                        <FeatureHelpButton topic="catalog.products" title="商品管理" />
+                        <FeatureHelpButton
+                            topic="catalog.products"
+                            title="商品管理"
+                            description={'管理商品状态、规格、库存量和销售价'}
+                        />
                     </h1>
-                    <p className="text-xs text-slate-500 mt-1">管理商品状态、规格、库存量和销售价</p>
                 </div>
 
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">

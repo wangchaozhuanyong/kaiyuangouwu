@@ -238,11 +238,13 @@ function ProfileContent({
                                 <div className="flex items-center gap-2">
                                     <User className="h-4 w-4 text-blue-600" />
                                     <h2 className="text-sm font-bold text-slate-900">基本资料</h2>
-                                    <FeatureHelpButton topic="profile.basic" title="基本资料" />
+                                    <FeatureHelpButton
+                                        topic="profile.basic"
+                                        title="基本资料"
+                                        description={'姓名和邮箱会用于后台账号识别与登录。'}
+                                    />
                                 </div>
-                                <p className="mt-1 text-[11px] text-slate-500">
-                                    姓名和邮箱会用于后台账号识别与登录。
-                                </p>
+
                                 {profileError && <InlineError message={profileError} />}
                                 <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <Field
@@ -294,11 +296,13 @@ function ProfileContent({
                                 <div className="flex items-center gap-2">
                                     <LockKeyhole className="h-4 w-4 text-violet-600" />
                                     <h2 className="text-sm font-bold text-slate-900">修改登录密码</h2>
-                                    <FeatureHelpButton topic="profile.password" title="修改登录密码" />
+                                    <FeatureHelpButton
+                                        topic="profile.password"
+                                        title="修改登录密码"
+                                        description={'为保护账号安全，修改密码前需要验证当前登录密码。'}
+                                    />
                                 </div>
-                                <p className="mt-1 text-[11px] text-slate-500">
-                                    为保护账号安全，修改密码前需要验证当前登录密码。
-                                </p>
+
                                 {passwordError && <InlineError message={passwordError} />}
                                 <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="sm:col-span-2">

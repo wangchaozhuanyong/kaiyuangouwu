@@ -28,6 +28,7 @@ const FALLBACK_POPOVER_HEIGHT = 360;
 interface FeatureHelpState {
     topic: FeatureHelpTopic;
     title: string;
+    description?: string;
     trigger: HTMLButtonElement;
     instanceId: string;
     popoverId: string;
@@ -45,6 +46,7 @@ interface FeatureHelpContextValue {
         instanceId: string,
         popoverId: string,
         immediate?: boolean,
+        description?: string,
     ) => void;
     scheduleClose: () => void;
     toggle: (
@@ -53,6 +55,7 @@ interface FeatureHelpContextValue {
         trigger: HTMLButtonElement,
         instanceId: string,
         popoverId: string,
+        description?: string,
     ) => void;
 }
 
@@ -83,13 +86,15 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
             instanceId: string,
             popoverId: string,
             immediate = false,
+            description?: string,
         ) => {
             clearTimer(openTimerRef);
             cancelClose();
 
             if (active?.instanceId === instanceId) return;
 
-            const show = () => setActive({ topic, title, trigger, instanceId, popoverId, pinned: false });
+            const show = () =>
+                setActive({ topic, title, description, trigger, instanceId, popoverId, pinned: false });
             if (immediate) show();
             else openTimerRef.current = setTimeout(show, OPEN_DELAY_MS);
         },
@@ -110,6 +115,7 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
             trigger: HTMLButtonElement,
             instanceId: string,
             popoverId: string,
+            description?: string,
         ) => {
             clearTimer(openTimerRef);
             cancelClose();
@@ -117,7 +123,7 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
                 if (current?.instanceId === instanceId) {
                     return current.pinned ? null : { ...current, pinned: true };
                 }
-                return { topic, title, trigger, instanceId, popoverId, pinned: true };
+                return { topic, title, description, trigger, instanceId, popoverId, pinned: true };
             });
         },
         [cancelClose, clearTimer],
@@ -144,7 +150,15 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
     );
 }
 
-export function FeatureHelpButton({ topic, title }: { topic: FeatureHelpTopic; title: string }) {
+export function FeatureHelpButton({
+    topic,
+    title,
+    description,
+}: {
+    topic: FeatureHelpTopic;
+    title: string;
+    description?: string;
+}) {
     const context = useContext(FeatureHelpContext);
     const instanceId = useId();
     const popoverId = useId();
@@ -162,11 +176,17 @@ export function FeatureHelpButton({ topic, title }: { topic: FeatureHelpTopic; t
             aria-expanded={isActive}
             aria-controls={isActive ? popoverId : undefined}
             data-feature-help-trigger="true"
-            onMouseEnter={event => context.open(topic, title, event.currentTarget, instanceId, popoverId)}
+            onMouseEnter={event =>
+                context.open(topic, title, event.currentTarget, instanceId, popoverId, false, description)
+            }
             onMouseLeave={context.scheduleClose}
-            onFocus={event => context.open(topic, title, event.currentTarget, instanceId, popoverId, true)}
+            onFocus={event =>
+                context.open(topic, title, event.currentTarget, instanceId, popoverId, true, description)
+            }
             onBlur={context.scheduleClose}
-            onClick={event => context.toggle(topic, title, event.currentTarget, instanceId, popoverId)}
+            onClick={event =>
+                context.toggle(topic, title, event.currentTarget, instanceId, popoverId, description)
+            }
             onKeyDown={event => {
                 if (event.key === 'Escape') {
                     event.stopPropagation();
@@ -241,7 +261,13 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
     }, [context, state.trigger]);
 
     const copy = async () => {
-        const copied = await copyAdminText(featureHelpCopyText(state.title, content), '功能说明');
+        const text = [
+            state.description && `页面说明：${state.description}`,
+            featureHelpCopyText(state.title, content),
+        ]
+            .filter(Boolean)
+            .join('\n\n');
+        const copied = await copyAdminText(text, '功能说明');
         setCopyState(copied ? 'copied' : 'failed');
         if (copied) window.setTimeout(() => setCopyState('idle'), 1600);
     };
@@ -284,6 +310,7 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
             </div>
 
             <div className="max-h-[min(28rem,calc(100vh-7rem))] space-y-3 overflow-y-auto py-3 pr-1 text-xs leading-5 text-slate-600">
+                {state.description && <HelpSection label="页面说明">{state.description}</HelpSection>}
                 <HelpSection label="这个功能做什么">{content.purpose}</HelpSection>
                 <HelpSection label="使用要求">
                     <ul className="list-disc space-y-1 pl-4">

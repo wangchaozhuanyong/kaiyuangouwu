@@ -142,11 +142,14 @@ export function SystemOpsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Terminal className="h-5 w-5 text-blue-600" />
                             系统运维
-                            <FeatureHelpButton topic="settings.system-ops" title="系统运维" />
+                            <FeatureHelpButton
+                                topic="settings.system-ops"
+                                title="系统运维"
+                                description={
+                                    '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -426,13 +429,14 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-amber-950">
                                 监控能力边界
-                                <FeatureHelpButton topic="settings.service-checks" title="监控能力边界" />
+                                <FeatureHelpButton
+                                    topic="settings.service-checks"
+                                    title="监控能力边界"
+                                    description={
+                                        '当前后端没有提供 CPU、内存、数据库连接池和请求吞吐量指标。本页不生成模拟数据；需要这些指标时，应先接入 Prometheus/OpenTelemetry 或增加受权限保护的监控接口。'
+                                    }
+                                />
                             </h2>
-                            <p className="mt-1 text-xs leading-5 text-amber-900">
-                                当前后端没有提供
-                                CPU、内存、数据库连接池和请求吞吐量指标。本页不生成模拟数据；需要这些指标时，应先接入
-                                Prometheus/OpenTelemetry 或增加受权限保护的监控接口。
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -537,11 +541,14 @@ function JobsPanel({
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             任务执行记录
-                            <FeatureHelpButton topic="settings.job-runs" title="任务执行记录" />
+                            <FeatureHelpButton
+                                topic="settings.job-runs"
+                                title="任务执行记录"
+                                description={
+                                    'Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-[10px] text-slate-400">
-                            Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务
-                        </p>
                     </div>
                     <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                         <div className="relative min-w-0">
@@ -760,9 +767,12 @@ function SchedulesPanel({
             <div className="border-b border-slate-100 p-5">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     定时任务调度
-                    <FeatureHelpButton topic="settings.schedules" title="定时任务调度" />
+                    <FeatureHelpButton
+                        topic="settings.schedules"
+                        title="定时任务调度"
+                        description={'启停和立即执行均直接调用服务端调度器'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">启停和立即执行均直接调用服务端调度器</p>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1720px] border-collapse text-left text-xs">
@@ -927,11 +937,12 @@ function SettingsStorePanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         动态配置仓库
-                        <FeatureHelpButton topic="settings.dynamic-config" title="动态配置仓库" />
+                        <FeatureHelpButton
+                            topic="settings.dynamic-config"
+                            title="动态配置仓库"
+                            description={'字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型'}
+                        />
                     </h2>
-                    <p className="mt-1 text-[10px] text-slate-400">
-                        字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型
-                    </p>
                 </div>
                 <div className="flex gap-2">
                     <div className="relative">
@@ -1191,9 +1202,12 @@ function ApiKeysPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         API 密钥
-                        <FeatureHelpButton topic="settings.api-keys" title="API 密钥" />
+                        <FeatureHelpButton
+                            topic="settings.api-keys"
+                            title="API 密钥"
+                            description={'密钥明文只在创建或轮转成功后显示一次'}
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">密钥明文只在创建或轮转成功后显示一次</p>
                 </div>
                 <AdminButton type="button" onClick={() => setCreateOpen(true)} className={primaryButton}>
                     <Plus className="h-3.5 w-3.5" />

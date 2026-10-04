@@ -157,11 +157,14 @@ export function StoreAllocationMatrixModule() {
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                         平台商品分配中心
-                        <FeatureHelpButton topic="catalog.platform-distribution" title="平台商品分配中心" />
+                        <FeatureHelpButton
+                            topic="catalog.platform-distribution"
+                            title="平台商品分配中心"
+                            description={
+                                '统筹商品维护归属、销售授权和各经营店覆盖情况；整类分配为一次性操作。'
+                            }
+                        />
                     </h1>
-                    <p className="mt-1 text-sm text-slate-500">
-                        统筹商品维护归属、销售授权和各经营店覆盖情况；整类分配为一次性操作。
-                    </p>
                 </div>
                 <AdminButton
                     refreshPage
@@ -358,11 +361,12 @@ export function StoreAllocationMatrixModule() {
                         <FeatureHelpButton
                             topic="catalog.platform-distribution"
                             title="2. 目标店铺与处理方式"
+                            description={
+                                '同币种首次授权复制来源售价，已有目标售价保持不变。跨币种缺价格时进入待配置，完成价格与交付设置后才能销售。'
+                            }
                         />
                     </h2>
-                    <p className="text-sm text-slate-500">
-                        同币种首次授权复制来源售价，已有目标售价保持不变。跨币种缺价格时进入待配置，完成价格与交付设置后才能销售。
-                    </p>
+
                     {data?.channels.map(store => (
                         <div className="flex flex-wrap items-center gap-4" key={store.id}>
                             <label className="flex items-center gap-2">

@@ -212,11 +212,9 @@ export function StorefrontBlockEditor({
                                             <FeatureHelpButton
                                                 topic="storefront.block-basic"
                                                 title="楼层基础设置"
+                                                description={'编码用于客户端稳定识别，创建后建议不修改'}
                                             />
                                         </h3>
-                                        <p className="mt-1 text-[11px] text-slate-400">
-                                            编码用于客户端稳定识别，创建后建议不修改
-                                        </p>
                                     </div>
                                     <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                                         <AdminInput
@@ -290,11 +288,9 @@ export function StorefrontBlockEditor({
                                             <FeatureHelpButton
                                                 topic="storefront.block-copy"
                                                 title="前台文案"
+                                                description={'同一个区块的中英文在此集中维护'}
                                             />
                                         </h3>
-                                        <p className="mt-1 text-[11px] text-slate-400">
-                                            同一个区块的中英文在此集中维护
-                                        </p>
                                     </div>
                                     <LanguageSwitch value={language} onChange={setLanguage} />
                                 </div>
@@ -945,15 +941,15 @@ export function StorefrontBlockEditor({
                                                 <FeatureHelpButton
                                                     topic="storefront.block-copy"
                                                     title="模块子项内容"
+                                                    description={
+                                                        isSupport
+                                                            ? '启用需要展示的联系方式；微信客服需上传二维码'
+                                                            : draft.type === 'CORE_CATEGORIES'
+                                                              ? '客户端按顺序展示前两张已启用卡片；停用的卡片不占展示名额'
+                                                              : '用于轮播、入口、保障项、法律页或导航项'
+                                                    }
                                                 />
                                             </h3>
-                                            <p className="mt-1 text-[11px] text-slate-400">
-                                                {isSupport
-                                                    ? '启用需要展示的联系方式；微信客服需上传二维码'
-                                                    : draft.type === 'CORE_CATEGORIES'
-                                                      ? '客户端按顺序展示前两张已启用卡片；停用的卡片不占展示名额'
-                                                      : '用于轮播、入口、保障项、法律页或导航项'}
-                                            </p>
                                         </div>
                                         <AdminButton
                                             type="button"

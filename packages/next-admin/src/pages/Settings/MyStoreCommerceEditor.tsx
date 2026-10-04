@@ -59,11 +59,12 @@ export function MyStoreCommerceEditor({
             <div className="mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     本店税务与配送
-                    <FeatureHelpButton topic="settings.payment-shipping" title="本店税务与配送" />
+                    <FeatureHelpButton
+                        topic="settings.payment-shipping"
+                        title="本店税务与配送"
+                        description={'只修改当前店铺的经营规则；承运商凭据仍由平台维护。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                    只修改当前店铺的经营规则；承运商凭据仍由平台维护。
-                </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <FieldInput

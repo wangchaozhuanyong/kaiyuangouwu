@@ -1060,11 +1060,12 @@ export function CategoriesModule() {
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                         分类与属性
-                        <FeatureHelpButton topic="catalog.categories" title="分类与属性" />
+                        <FeatureHelpButton
+                            topic="catalog.categories"
+                            title="分类与属性"
+                            description={'集中管理 Vendure 商品分类、通用规格模板与前台筛选属性'}
+                        />
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
-                        集中管理 Vendure 商品分类、通用规格模板与前台筛选属性
-                    </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <AdminButton
@@ -1670,11 +1671,12 @@ function CollectionFiltersEditor({
                 <div>
                     <h4 className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         集合筛选规则
-                        <FeatureHelpButton topic="catalog.collection-rules" title="集合筛选规则" />
+                        <FeatureHelpButton
+                            topic="catalog.collection-rules"
+                            title="集合筛选规则"
+                            description={'使用当前店铺支持的商品筛选规则，可在保存前预览命中的 SKU。'}
+                        />
                     </h4>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        使用当前店铺支持的商品筛选规则，可在保存前预览命中的 SKU。
-                    </p>
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-700">
                     <AdminInput

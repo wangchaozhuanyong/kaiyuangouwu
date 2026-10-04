@@ -161,11 +161,12 @@ export function AiImageSettingsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-blue-600" />
                             AI 图片工坊管理
-                            <FeatureHelpButton topic="plugins.ai-settings" title="AI 图片工坊管理" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="AI 图片工坊管理"
+                                description={'店铺配置、生图任务、供应商费用和提示词规则包'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            店铺配置、生图任务、供应商费用和提示词规则包
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -374,11 +375,12 @@ function ConfigPanel({
                     <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             基础设置
-                            <FeatureHelpButton topic="plugins.ai-settings" title="基础设置" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="基础设置"
+                                description={'先查看当前状态，需要调整时再从右侧打开设置。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            先查看当前状态，需要调整时再从右侧打开设置。
-                        </p>
                     </div>
                     <div className="grid gap-px bg-slate-100 xl:grid-cols-2">
                         <ConfigSettingRow
@@ -424,11 +426,12 @@ function ConfigPanel({
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 生图模型与单张定价
-                                <FeatureHelpButton topic="plugins.ai-settings" title="生图模型与单张定价" />
+                                <FeatureHelpButton
+                                    topic="plugins.ai-settings"
+                                    title="生图模型与单张定价"
+                                    description={'每个模型单独设置，价格按 Vendure 货币单位结算。'}
+                                />
                             </h2>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                                每个模型单独设置，价格按 Vendure 货币单位结算。
-                            </p>
                         </div>
                         <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
                             {value.models.length} 个模型
@@ -487,11 +490,13 @@ function ConfigPanel({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             服务状态
-                            <FeatureHelpButton topic="plugins.ai-settings" title="服务状态" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="服务状态"
+                                description={'只有凭据健康且至少一个模型可用时，买家端才会真正开放。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            只有凭据健康且至少一个模型可用时，买家端才会真正开放。
-                        </p>
+
                         <div className="mt-4 space-y-3">
                             <ToggleCard
                                 label="开放 AI 图片工坊"
@@ -510,11 +515,13 @@ function ConfigPanel({
                     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             默认生图模型
-                            <FeatureHelpButton topic="plugins.ai-settings" title="默认生图模型" />
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title="默认生图模型"
+                                description={'新任务会优先使用这里选择且已启用的模型。'}
+                            />
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            新任务会优先使用这里选择且已启用的模型。
-                        </p>
+
                         <div className="mt-4">
                             <Field label="默认模型">
                                 <AdminSelect
@@ -885,9 +892,15 @@ function ConfigSettingRow({
                 <div className="min-w-0">
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                         {title}
-                        {helpTitle && <FeatureHelpButton topic="plugins.ai-settings" title={helpTitle} />}
+                        {helpTitle && (
+                            <FeatureHelpButton
+                                topic="plugins.ai-settings"
+                                title={helpTitle}
+                                description={description}
+                            />
+                        )}
                     </h3>
-                    <p className="mt-1 break-words text-[11px] leading-5 text-slate-500">{description}</p>
+
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">{children}</div>
                 </div>
             </div>
@@ -1467,11 +1480,12 @@ function SkillPanel({
             <div className="border-b border-slate-100 p-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     提示词编译规则发布
-                    <FeatureHelpButton topic="plugins.ai-settings" title="提示词编译规则发布" />
+                    <FeatureHelpButton
+                        topic="plugins.ai-settings"
+                        title="提示词编译规则发布"
+                        description={'规则包由后端构建发布，本页只允许激活已经过校验的版本'}
+                    />
                 </h2>
-                <p className="mt-1 text-[11px] text-slate-400">
-                    规则包由后端构建发布，本页只允许激活已经过校验的版本
-                </p>
             </div>
             <div className="divide-y divide-slate-100">
                 {releases.map(release => {

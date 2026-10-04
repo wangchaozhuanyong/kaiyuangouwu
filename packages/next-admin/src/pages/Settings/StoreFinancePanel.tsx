@@ -499,9 +499,8 @@ function PanelHeading({
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
-                <FeatureHelpButton topic="settings.finance" title={title} />
+                <FeatureHelpButton topic="settings.finance" title={title} description={description} />
             </h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
         </div>
     );
 }

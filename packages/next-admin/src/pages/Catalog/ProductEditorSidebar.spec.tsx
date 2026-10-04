@@ -9,7 +9,9 @@ vi.mock('./ProductEditorContext', () => ({
 }));
 
 vi.mock('../../components/FeatureHelp', () => ({
-    FeatureHelpButton: () => null,
+    FeatureHelpButton: ({ description }: { description?: string }) => (
+        <span data-help-description={description} />
+    ),
 }));
 
 vi.mock('../../hooks/use-admin-permissions', () => ({
@@ -46,7 +48,7 @@ describe('ProductEditorSidebar', () => {
         const html = renderToStaticMarkup(<ProductEditorSidebar />);
 
         expect(html).toContain('aria-label="商品固定信息"');
-        expect(html).toContain('切换右侧步骤时保持不变');
+        expect(html).toContain('data-help-description="切换右侧步骤时保持不变"');
         expect(html).toContain('value="测试商品"');
         expect(html).toContain('value="test-product"');
         expect(html).toContain('素材编号 #asset-1');

@@ -43,12 +43,15 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
         <section className="rounded-xl bg-white p-5 space-y-4">
             <h2 className="flex items-center gap-2 font-bold">
                 资源归属与公共模板
-                <FeatureHelpButton topic="catalog.platform-resources" title="资源归属与公共模板" />
+                <FeatureHelpButton
+                    topic="catalog.platform-resources"
+                    title="资源归属与公共模板"
+                    description={
+                        '归属待核对的资源须按 ID、渠道关系及引用证据整理。公共模板发布为平台副本，经营店领取后独立维护。'
+                    }
+                />
             </h2>
-            <p className="text-sm text-slate-500">
-                归属待核对的资源须按
-                ID、渠道关系及引用证据整理。公共模板发布为平台副本，经营店领取后独立维护。
-            </p>
+
             <AdminSelect
                 aria-label="资源类型"
                 className="rounded-lg border border-slate-200 p-2 text-sm"

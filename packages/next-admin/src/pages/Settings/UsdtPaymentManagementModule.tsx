@@ -175,11 +175,12 @@ export function UsdtPaymentManagementModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <WalletCards className="h-5 w-5 text-emerald-600" />
                             支付与 USDT 收款管理
-                            <FeatureHelpButton topic="settings.usdt" title="支付与 USDT 收款管理" />
+                            <FeatureHelpButton
+                                topic="settings.usdt"
+                                title="支付与 USDT 收款管理"
+                                description={'平台级钱包审核、全部支付流水、链上意向和人工退款审计'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            平台级钱包审核、全部支付流水、链上意向和人工退款审计
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -254,7 +255,7 @@ export function UsdtPaymentManagementModule() {
                                 title="支付与退款报表"
                                 detail="按网店和统一时间（UTC）日期筛选；受控模拟支付单列，不代表真实到账。"
                             />
-                            <div className="mt-4 grid gap-3 md:grid-cols-3">
+                            <div className="mt-4 flex flex-wrap items-end gap-3">
                                 <AdminField className={labelClass} label="网店">
                                     <AdminSelect
                                         value={channelId}
@@ -273,32 +274,38 @@ export function UsdtPaymentManagementModule() {
                                         ))}
                                     </AdminSelect>
                                 </AdminField>
-                                <AdminField className={labelClass} label="开始日期">
-                                    <AdminInput
-                                        type="date"
-                                        value={from}
-                                        max={to || undefined}
-                                        onChange={event => {
-                                            setFrom(event.target.value);
-                                            setPaymentPage(0);
-                                            setRefundPage(0);
-                                        }}
-                                        className={inputClass}
-                                    />
-                                </AdminField>
-                                <AdminField className={labelClass} label="结束日期">
-                                    <AdminInput
-                                        type="date"
-                                        value={to}
-                                        min={from || undefined}
-                                        onChange={event => {
-                                            setTo(event.target.value);
-                                            setPaymentPage(0);
-                                            setRefundPage(0);
-                                        }}
-                                        className={inputClass}
-                                    />
-                                </AdminField>
+                                <div
+                                    className="admin-report-date-range"
+                                    role="group"
+                                    aria-label="支付退款报表日期范围"
+                                >
+                                    <AdminField className={labelClass} label="开始日期">
+                                        <AdminInput
+                                            type="date"
+                                            value={from}
+                                            max={to || undefined}
+                                            onChange={event => {
+                                                setFrom(event.target.value);
+                                                setPaymentPage(0);
+                                                setRefundPage(0);
+                                            }}
+                                            className={inputClass}
+                                        />
+                                    </AdminField>
+                                    <AdminField className={labelClass} label="结束日期">
+                                        <AdminInput
+                                            type="date"
+                                            value={to}
+                                            min={from || undefined}
+                                            onChange={event => {
+                                                setTo(event.target.value);
+                                                setPaymentPage(0);
+                                                setRefundPage(0);
+                                            }}
+                                            className={inputClass}
+                                        />
+                                    </AdminField>
+                                </div>
                             </div>
                             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {(query.data?.storePaymentStats ?? []).map(item => (
@@ -1014,8 +1021,10 @@ function Pager({
 function Heading({ title, detail }: { title: string; detail: string }) {
     return (
         <div>
-            <h2 className="text-sm font-bold text-slate-900">{title}</h2>
-            <p className="mt-1 text-xs text-slate-500">{detail}</p>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                {title}
+                <FeatureHelpButton topic="settings.usdt" title={title} description={detail} />
+            </h2>
         </div>
     );
 }

@@ -268,11 +268,12 @@ export function PromotionsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             优惠与促销
-                            <FeatureHelpButton topic="marketing.promotions" title="优惠与促销" />
+                            <FeatureHelpButton
+                                topic="marketing.promotions"
+                                title="优惠与促销"
+                                description={'优惠券、限时秒杀、经营报表和客户使用流水统一管理'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            优惠券、限时秒杀、经营报表和客户使用流水统一管理
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton

@@ -34,19 +34,24 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
 
     return (
         <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         渠道归因与投放回报
-                        <FeatureHelpButton topic="marketing.attribution" title="渠道归因与投放回报" />
+                        <FeatureHelpButton
+                            topic="marketing.attribution"
+                            title="渠道归因与投放回报"
+                            description={
+                                '30 天末次非直接归因；付款成功后固化订单来源，ROAS/ROI 已扣除已结算退款。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        30 天末次非直接归因；付款成功后固化订单来源，ROAS/ROI 已扣除已结算退款。
-                    </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
-                    <DateField label="开始日期" value={from} onChange={setFrom} />
-                    <DateField label="结束日期" value={to} onChange={setTo} />
+                    <div className="admin-report-date-range" role="group" aria-label="渠道归因日期范围">
+                        <DateField label="开始日期" value={from} onChange={setFrom} />
+                        <DateField label="结束日期" value={to} onChange={setTo} />
+                    </div>
                     <AdminButton
                         refreshPage
                         type="button"
@@ -233,11 +238,12 @@ function CampaignCostDialog({
                 <div>
                     <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
                         记录投放费用
-                        <FeatureHelpButton topic="marketing.attribution-cost" title="记录投放费用" />
+                        <FeatureHelpButton
+                            topic="marketing.attribution-cost"
+                            title="记录投放费用"
+                            description={'账本只追加不覆盖；需要修正时新增一笔负数冲正。金额支持 3 位小数。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                        账本只追加不覆盖；需要修正时新增一笔负数冲正。金额支持 3 位小数。
-                    </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="业务日期" value={date} onChange={setDate} type="date" />

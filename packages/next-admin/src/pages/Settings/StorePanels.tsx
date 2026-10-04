@@ -126,11 +126,14 @@ export function CommerceModePanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         当前店铺经营模式
-                        <FeatureHelpButton topic="settings.commerce-mode" title="当前店铺经营模式" />
+                        <FeatureHelpButton
+                            topic="settings.commerce-mode"
+                            title="当前店铺经营模式"
+                            description={
+                                '控制可创建的商品类型、结账收货信息，以及后台显示的库存仓库或数字交付模块。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
-                        控制可创建的商品类型、结账收货信息，以及后台显示的库存仓库或数字交付模块。
-                    </p>
                 </div>
                 <AdminButton
                     type="button"

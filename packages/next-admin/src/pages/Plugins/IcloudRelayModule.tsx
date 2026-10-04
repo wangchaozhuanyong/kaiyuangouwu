@@ -534,13 +534,15 @@ export function IcloudRelayModule() {
                             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                                 <Mail className="h-5 w-5 text-blue-600" aria-hidden="true" />
                                 邮件验证码查询设置
-                                <FeatureHelpButton topic="plugins.icloud-relay" title="邮件验证码中继管理" />
+                                <FeatureHelpButton
+                                    topic="plugins.icloud-relay"
+                                    title="邮件验证码中继管理"
+                                    description={
+                                        '管理 iCloud 主邮箱与虚拟邮箱中继，分配买家专属查询码，实时自动提取验证码供买家自主查收'
+                                    }
+                                />
                             </h1>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                            管理 iCloud
-                            主邮箱与虚拟邮箱中继，分配买家专属查询码，实时自动提取验证码供买家自主查收
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton

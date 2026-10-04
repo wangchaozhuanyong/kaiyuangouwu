@@ -267,11 +267,15 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                 <section aria-label="历史费用审定" className="space-y-3">
                                     <h3 className="flex items-center gap-2 font-semibold">
                                         历史费用审定
-                                        <FeatureHelpButton topic="plugins.ai-usage" title="历史费用审定" />
+                                        <FeatureHelpButton
+                                            topic="plugins.ai-usage"
+                                            title="历史费用审定"
+                                            description={
+                                                '以下金额来自已审核的供应商账单交叉匹配，不代表请求编号直接匹配。更正记录按时间倒序保留。'
+                                            }
+                                        />
                                     </h3>
-                                    <p className="text-xs text-slate-500">
-                                        以下金额来自已审核的供应商账单交叉匹配，不代表请求编号直接匹配。更正记录按时间倒序保留。
-                                    </p>
+
                                     {detail.costAdjustments.map(review => (
                                         <details
                                             key={review.id}

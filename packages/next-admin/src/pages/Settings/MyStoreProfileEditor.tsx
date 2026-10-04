@@ -128,11 +128,12 @@ export function MyStoreProfileEditor({
             <div className="mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     本店公开资料
-                    <FeatureHelpButton topic="settings.store-profile" title="本店公开资料" />
+                    <FeatureHelpButton
+                        topic="settings.store-profile"
+                        title="本店公开资料"
+                        description={'品牌与联系信息直接保存；法律主体单独提交平台审批。'}
+                    />
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                    品牌与联系信息直接保存；法律主体单独提交平台审批。
-                </p>
             </div>
             {profile.status === 'DRAFT' && (
                 <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -140,11 +141,15 @@ export function MyStoreProfileEditor({
                         <div>
                             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 公开预览
-                                <FeatureHelpButton topic="settings.store-profile" title="公开预览" />
+                                <FeatureHelpButton
+                                    topic="settings.store-profile"
+                                    title="公开预览"
+                                    description={
+                                        '开放后所有访客均可浏览；模拟下单需单独启用测试支付。正式营业上线检查保持独立。'
+                                    }
+                                />
                             </h3>
-                            <p className="mt-1 text-xs leading-5 text-slate-700">
-                                开放后所有访客均可浏览；模拟下单需单独启用测试支付。正式营业上线检查保持独立。
-                            </p>
+
                             {!profile.primaryDomain && (
                                 <p className="mt-1 text-xs text-rose-700">请先验证并设置主域名。</p>
                             )}

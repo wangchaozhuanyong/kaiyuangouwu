@@ -231,11 +231,14 @@ export function UsdtPaymentSetupPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <WalletCards className="h-4 w-4 text-emerald-600" /> USDT-TRC20 收款
-                        <FeatureHelpButton topic="settings.usdt" title="USDT-TRC20 收款" />
+                        <FeatureHelpButton
+                            topic="settings.usdt"
+                            title="USDT-TRC20 收款"
+                            description={
+                                '收款地址由超级管理员在平台管理中心统一设置；审核通过后，经营店铺在本店支付选项中独立启用。'
+                            }
+                        />
                     </h2>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                        收款地址由超级管理员在平台管理中心统一设置；审核通过后，经营店铺在本店支付选项中独立启用。
-                    </p>
                 </div>
                 {wallet && <WalletStatusBadge status={wallet.reviewStatus} />}
             </div>
@@ -280,11 +283,14 @@ export function UsdtPaymentSetupPanel({
                                 <div>
                                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                         报价与汇率
-                                        <FeatureHelpButton topic="settings.usdt" title="USDT 报价与汇率" />
+                                        <FeatureHelpButton
+                                            topic="settings.usdt"
+                                            title="USDT 报价与汇率"
+                                            description={
+                                                '开启后，客户可按锁定汇率生成 10 分钟有效的 USDT 付款报价。'
+                                            }
+                                        />
                                     </h3>
-                                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                        开启后，客户可按锁定汇率生成 10 分钟有效的 USDT 付款报价。
-                                    </p>
                                 </div>
                                 <label className="flex shrink-0 items-center gap-2 text-[10px] font-bold text-slate-600">
                                     <AdminInput
@@ -422,11 +428,14 @@ export function UsdtPaymentSetupPanel({
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     平台统一收款钱包
-                                    <FeatureHelpButton topic="settings.usdt" title="平台统一收款钱包" />
+                                    <FeatureHelpButton
+                                        topic="settings.usdt"
+                                        title="平台统一收款钱包"
+                                        description={
+                                            '只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。'
+                                        }
+                                    />
                                 </h3>
-                                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                    只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。
-                                </p>
                             </div>
 
                             <div className="grid gap-3 text-[10px] sm:grid-cols-2">
@@ -503,11 +512,14 @@ export function UsdtPaymentSetupPanel({
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     <ShieldCheck className="h-4 w-4 text-blue-600" /> 平台待审核收款地址
-                                    <FeatureHelpButton topic="settings.usdt" title="平台待审核收款地址" />
+                                    <FeatureHelpButton
+                                        topic="settings.usdt"
+                                        title="平台待审核收款地址"
+                                        description={
+                                            '应由未参与地址提交的第二名 SuperAdmin 对照钱包 App 完整地址和指纹复核。'
+                                        }
+                                    />
                                 </h3>
-                                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                                    应由未参与地址提交的第二名 SuperAdmin 对照钱包 App 完整地址和指纹复核。
-                                </p>
                             </div>
 
                             {platformWalletsQuery.loading && !platformWalletsQuery.data ? (

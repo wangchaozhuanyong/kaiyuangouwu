@@ -66,11 +66,12 @@ export function ProductFacetsCollectionsTab() {
                 <div className="border-b border-slate-100 pb-3">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         Facet 属性标签关联
-                        <FeatureHelpButton topic="catalog.facets" title="Facet 属性标签关联" />
+                        <FeatureHelpButton
+                            topic="catalog.facets"
+                            title="Facet 属性标签关联"
+                            description={'勾选商品所属的 Facet 标签，将直接保存至后端并用于前台筛选检索'}
+                        />
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                        勾选商品所属的 Facet 标签，将直接保存至后端并用于前台筛选检索
-                    </p>
                 </div>
                 <div className="relative max-w-md">
                     <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
@@ -150,11 +151,14 @@ export function ProductFacetsCollectionsTab() {
                 <div className="border-b border-slate-100 pb-3">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         所属商品分类 (Collections)
-                        <FeatureHelpButton topic="catalog.collections" title="所属商品分类" />
+                        <FeatureHelpButton
+                            topic="catalog.collections"
+                            title="所属商品分类"
+                            description={
+                                '勾选后直接加入分类；已有 Facet 自动分类规则会完整保留，不会被人工归类覆盖'
+                            }
+                        />
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                        勾选后直接加入分类；已有 Facet 自动分类规则会完整保留，不会被人工归类覆盖
-                    </p>
                 </div>
                 <div className="relative max-w-md">
                     <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />

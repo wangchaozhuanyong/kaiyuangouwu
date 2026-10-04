@@ -56,13 +56,15 @@ export function StorefrontAccountRecommendationsPanel({
         >
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 账户 · 专属推荐
-                <FeatureHelpButton topic="storefront.account-recommendations" title="账户 · 专属推荐" />
+                <FeatureHelpButton
+                    topic="storefront.account-recommendations"
+                    title="账户 · 专属推荐"
+                    description={
+                        '电脑和手机的账户页共用以下设置，标题居中显示在商品上方。 按当前店铺今日净销量排序，销量不足时随机补齐；没有销量时随机推荐，同一天保持稳定。 默认展示 8 件，可推荐商品不足时按实际数量展示。搜索框仍展示 10 件。'
+                    }
+                />
             </h3>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-                电脑和手机的账户页共用以下设置，标题居中显示在商品上方。
-                按当前店铺今日净销量排序，销量不足时随机补齐；没有销量时随机推荐，同一天保持稳定。 默认展示 8
-                件，可推荐商品不足时按实际数量展示。搜索框仍展示 10 件。
-            </p>
+
             <fieldset disabled={disabled || saving} className="mt-4 space-y-4 disabled:opacity-60">
                 <label className="flex items-center gap-2 text-sm text-slate-800">
                     <AdminInput

@@ -433,11 +433,12 @@ export function SalesModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
                             订单与履约
-                            <FeatureHelpButton topic="sales.orders" title="订单与履约" />
+                            <FeatureHelpButton
+                                topic="sales.orders"
+                                title="订单与履约"
+                                description={'集中处理支付状态、实物发货、虚拟交付与交易查询'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            集中处理支付状态、实物发货、虚拟交付与交易查询
-                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         {canCreateOrder && (
@@ -1024,11 +1025,9 @@ export function SalesModule() {
                                     <FeatureHelpButton
                                         topic="sales.fulfillment"
                                         title="批量填写运单并创建履约"
+                                        description={'每笔订单必须填写真实运单号，不自动生成虚假物流信息。'}
                                     />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    每笔订单必须填写真实运单号，不自动生成虚假物流信息。
-                                </p>
                             </div>
                             <AdminButton
                                 type="button"

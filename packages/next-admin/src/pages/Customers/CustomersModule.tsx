@@ -413,11 +413,12 @@ export function CustomersModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             客户管理
-                            <FeatureHelpButton topic="customers.management" title="客户管理" />
+                            <FeatureHelpButton
+                                topic="customers.management"
+                                title="客户管理"
+                                description={'客户 360、RFM 分层、流失预警与跟进结果集中处理'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            客户 360、RFM 分层、流失预警与跟进结果集中处理
-                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         {canCreateCustomer && (
@@ -1645,11 +1646,12 @@ function CustomerOperationsPanel({
                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
                         <UserCheck className="h-4 w-4 text-blue-600" />
                         客户 360 与复购跟进
-                        <FeatureHelpButton topic="customers.management" title="客户 360 与复购跟进" />
+                        <FeatureHelpButton
+                            topic="customers.management"
+                            title="客户 360 与复购跟进"
+                            description={'仅统计已结算订单；LTV 按币种独立核算，退款从对应币种扣除。'}
+                        />
                     </h3>
-                    <p className="mt-1 text-[10px] text-blue-700">
-                        仅统计已结算订单；LTV 按币种独立核算，退款从对应币种扣除。
-                    </p>
                 </div>
                 <div className="flex gap-2">
                     {canUpdate && (

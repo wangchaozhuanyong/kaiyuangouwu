@@ -120,12 +120,14 @@ export function StorefrontAuthSettingsPanel({
                 <div>
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         账号与登录
-                        <FeatureHelpButton topic="storefront.auth" title="账号与登录" />
+                        <FeatureHelpButton
+                            topic="storefront.auth"
+                            title="账号与登录"
+                            description={
+                                '邮箱功能按店铺设置；Google 默认由全平台统一管理，新店铺会自动继承。 Client ID 是公开标识，不要填写 Client Secret。'
+                            }
+                        />
                     </h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                        邮箱功能按店铺设置；Google 默认由全平台统一管理，新店铺会自动继承。 Client ID
-                        是公开标识，不要填写 Client Secret。
-                    </p>
                 </div>
             </div>
 

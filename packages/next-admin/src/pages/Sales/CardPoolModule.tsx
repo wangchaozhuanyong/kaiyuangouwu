@@ -143,11 +143,12 @@ export function CardPoolModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
                             发卡记录与异常
-                            <FeatureHelpButton topic="sales.card-pool" title="发卡记录与异常" />
+                            <FeatureHelpButton
+                                topic="sales.card-pool"
+                                title="发卡记录与异常"
+                                description={'跨商品查看卡密库存、交付结果和需要人工处理的问题'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            跨商品查看卡密库存、交付结果和需要人工处理的问题
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -307,11 +308,13 @@ export function CardPoolModule() {
                             <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
                                 <h2 className="flex items-center gap-2 font-bold">
                                     本店供货记录
-                                    <FeatureHelpButton topic="sales.card-supply" title="本店供货记录" />
+                                    <FeatureHelpButton
+                                        topic="sales.card-supply"
+                                        title="本店供货记录"
+                                        description={'仅显示本卡池对授权销售店的供货数量。'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    仅显示本卡池对授权销售店的供货数量。
-                                </p>
+
                                 {supplyQuery.error && !supplyQuery.data ? (
                                     <p>供货记录未获取，请刷新重试。</p>
                                 ) : supplyQuery.loading && !supplyQuery.data ? (

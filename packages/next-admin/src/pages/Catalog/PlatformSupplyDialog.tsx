@@ -78,13 +78,17 @@ export function PlatformSupplyDialog({
                 <div className="flex justify-between">
                     <h2 className="flex items-center gap-2 font-bold text-lg">
                         卡密供货授权
-                        <FeatureHelpButton topic="sales.card-supply" title="卡密供货授权" />
+                        <FeatureHelpButton
+                            topic="sales.card-supply"
+                            title="卡密供货授权"
+                            description={
+                                '维护店铺提供原始卡池，目标店铺定价并履约。此处不展示卡密内容；撤销后已进入付款的订单按快照继续处理。'
+                            }
+                        />
                     </h2>
                     <AdminButton onClick={onClose}>关闭</AdminButton>
                 </div>
-                <p className="text-sm text-slate-500">
-                    维护店铺提供原始卡池，目标店铺定价并履约。此处不展示卡密内容；撤销后已进入付款的订单按快照继续处理。
-                </p>
+
                 {query.loading && !query.data && <p role="status">读取供货配置中…</p>}
                 {query.error && <p role="alert">{toUserFacingError(query.error, '供货配置读取失败')}</p>}
                 {!query.loading &&

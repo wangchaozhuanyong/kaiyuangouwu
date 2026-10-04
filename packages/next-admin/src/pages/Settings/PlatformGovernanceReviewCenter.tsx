@@ -65,11 +65,14 @@ export function PlatformGovernanceReviewCenter() {
                 <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                     <Store className="h-5 w-5 text-blue-600" />
                     店铺治理审批
-                    <FeatureHelpButton topic="settings.store-profile" title="店铺治理审批" />
+                    <FeatureHelpButton
+                        topic="settings.store-profile"
+                        title="店铺治理审批"
+                        description={
+                            '此岗位只能审核店铺提交的主体与支付治理申请，不会读取平台密钥或其他设置。'
+                        }
+                    />
                 </h1>
-                <p className="mt-1 text-xs text-slate-500">
-                    此岗位只能审核店铺提交的主体与支付治理申请，不会读取平台密钥或其他设置。
-                </p>
             </header>
             <main className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (

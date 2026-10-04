@@ -25,7 +25,11 @@ vi.mock('./StorefrontDecorationPreview', () => ({
         <div data-real-client-preview data-preset={props.presetId} data-viewport={props.fixedViewport} />
     ),
 }));
-vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
+vi.mock('../../components/FeatureHelp', () => ({
+    FeatureHelpButton: ({ title, description }: { title: string; description?: string }) => (
+        <span data-help-title={title} data-help-description={description} />
+    ),
+}));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
@@ -134,7 +138,10 @@ describe('fixed desktop layout skin settings', () => {
         act(() => root.render(<StorefrontVisualPresetPanel />));
         expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(storefrontVisualPresets.length);
         expect(host.querySelectorAll('input[name="desktopLayout"]')).toHaveLength(0);
-        expect(host.textContent).toContain('电脑端共用布局');
+        expect(host.textContent).not.toContain('电脑端共用布局');
+        expect(
+            host.querySelector('[data-help-title="店铺皮肤"]')?.getAttribute('data-help-description'),
+        ).toContain('电脑端共用布局');
         expect(saveButton().disabled).toBe(true);
     });
 

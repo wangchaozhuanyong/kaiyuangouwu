@@ -74,11 +74,15 @@ function SharingSettings({
                 <div className="flex items-center justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">
-                            分享设置 <FeatureHelpButton topic="marketing.poster-templates" title="分享设置" />
+                            分享设置
+                            <FeatureHelpButton
+                                topic="marketing.poster-templates"
+                                title="分享设置"
+                                description="管理客户端分享海报的默认模板、启停、背景与中英文文案"
+                            />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            {getChannelDisplayName(data.activeChannel)} ·
-                            管理客户端分享海报的默认模板、启停、背景与中英文文案
+                            当前店铺：{getChannelDisplayName(data.activeChannel)}
                         </p>
                     </div>
                     <AdminButton

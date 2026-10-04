@@ -205,11 +205,12 @@ export function ClientPluginsModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             客户端插件中心
-                            <FeatureHelpButton topic="plugins.client-center" title="客户端插件中心" />
+                            <FeatureHelpButton
+                                topic="plugins.client-center"
+                                title="客户端插件中心"
+                                description={'只能装配平台代码中已发布的官方插件，商家不能上传第三方代码'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            只能装配平台代码中已发布的官方插件，商家不能上传第三方代码
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -312,12 +313,12 @@ export function ClientPluginsModule() {
                                             <FeatureHelpButton
                                                 topic="plugins.installed"
                                                 title="已添加到客户端"
+                                                description={
+                                                    '分类页同一位置按下方顺序展示；商业服务页先显示工具，再显示客服与优惠券，组内按下方顺序。选择“指定分类”时必须勾选至少一项。'
+                                                }
                                             />
                                         </h2>
                                     </div>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        分类页同一位置按下方顺序展示；商业服务页先显示工具，再显示客服与优惠券，组内按下方顺序。选择“指定分类”时必须勾选至少一项。
-                                    </p>
                                 </div>
                                 {draft.items.length ? (
                                     <div className="divide-y px-4">
@@ -390,12 +391,13 @@ export function ClientPluginsModule() {
                                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                                                 {catalog.length} 个可用
                                             </span>
-                                            <FeatureHelpButton topic="plugins.platform" title="平台插件" />
+                                            <FeatureHelpButton
+                                                topic="plugins.platform"
+                                                title="平台插件"
+                                                description={'平台已发布的开箱即用插件，可按需添加到当前店铺'}
+                                            />
                                         </h2>
                                     </div>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        平台已发布的开箱即用插件，可按需添加到当前店铺
-                                    </p>
                                 </div>
                                 <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-2">
                                     {catalog.map(definition => (

@@ -28,11 +28,13 @@ export function StoreBrandAssets({
         <section className="mt-4" aria-label="店铺品牌图片">
             <h3 className="text-xs font-bold text-slate-800">
                 品牌图片
-                <FeatureHelpButton topic="settings.store-profile" title="品牌图片" />
+                <FeatureHelpButton
+                    topic="settings.store-profile"
+                    title="品牌图片"
+                    description={'可直接上传或从素材库选择图片，保存店铺档案后同步到店铺前台。'}
+                />
             </h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-                可直接上传或从素材库选择图片，保存店铺档案后同步到店铺前台。
-            </p>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {BRAND_ASSET_SLOTS.map(({ field, label, description }) => (
                     <div key={field} className="min-w-0 rounded-xl border border-slate-200 p-3">

@@ -293,11 +293,14 @@ export function DataManagementModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Database className="h-5 w-5 text-blue-600" />
                             数据管理中心
-                            <FeatureHelpButton topic="settings.data-management" title="数据管理中心" />
+                            <FeatureHelpButton
+                                topic="settings.data-management"
+                                title="数据管理中心"
+                                description={
+                                    '查看数据恢复区、到期清理、同意证据、个人数据导出、账户注销、失败重试和法律保留记录'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            查看数据恢复区、到期清理、同意证据、个人数据导出、账户注销、失败重试和法律保留记录
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -338,11 +341,12 @@ export function DataManagementModule() {
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 保留与清理记录
-                                <FeatureHelpButton topic="settings.data-management" title="保留与清理记录" />
+                                <FeatureHelpButton
+                                    topic="settings.data-management"
+                                    title="保留与清理记录"
+                                    description={'最新 100 条；已删除的资源仍保留审计记录'}
+                                />
                             </h2>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                                最新 100 条；已删除的资源仍保留审计记录
-                            </p>
                         </div>
                         <AdminSelect
                             value={filter}
@@ -487,11 +491,11 @@ export function DataManagementModule() {
                             <FeatureHelpButton
                                 topic="settings.data-management"
                                 title="个人数据与账户注销请求"
+                                description={
+                                    '导出仅保留摘要和校验值，不保存文件正文；注销有 7 天冷静期和业务阻断检查'
+                                }
                             />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            导出仅保留摘要和校验值，不保存文件正文；注销有 7 天冷静期和业务阻断检查
-                        </p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
@@ -566,11 +570,14 @@ export function DataManagementModule() {
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <ShieldCheck className="h-4 w-4 text-emerald-600" />
                             同意与撤回证据
-                            <FeatureHelpButton topic="settings.data-management" title="同意与撤回证据" />
+                            <FeatureHelpButton
+                                topic="settings.data-management"
+                                title="同意与撤回证据"
+                                description={
+                                    '保存条款版本、内容校验值、来源与时间；IP 和浏览器信息仅以密钥哈希保存'
+                                }
+                            />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            保存条款版本、内容校验值、来源与时间；IP 和浏览器信息仅以密钥哈希保存
-                        </p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[980px] border-collapse text-left text-xs">
@@ -650,11 +657,11 @@ export function DataManagementModule() {
                                     <FeatureHelpButton
                                         topic="settings.data-management"
                                         title="设置法律保留"
+                                        description={
+                                            '保留期间定时任务不会删除该资源，必须记录业务或法律原因。'
+                                        }
                                     />
                                 </h2>
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    保留期间定时任务不会删除该资源，必须记录业务或法律原因。
-                                </p>
                             </div>
                             <AdminButton type="button" onClick={() => setHoldTarget(null)} aria-label="关闭">
                                 <X className="h-4 w-4" />

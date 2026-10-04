@@ -119,11 +119,12 @@ export function GovernanceRiskPanel() {
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <Gavel className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                             受控配置与双人审批
-                            <FeatureHelpButton topic="settings.governance-risk" title="治理与风险控制" />
+                            <FeatureHelpButton
+                                topic="settings.governance-risk"
+                                title="治理与风险控制"
+                                description={'提交人不能自审；批准后生成不可覆盖的新版本。'}
+                            />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            提交人不能自审；批准后生成不可覆盖的新版本。
-                        </p>
                     </div>
                     <AdminButton
                         refreshPage

@@ -221,11 +221,12 @@ export function PlatformGovernanceCenter({
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Store className="h-5 w-5 text-blue-600" />
                             平台治理中心
-                            <FeatureHelpButton topic="settings.store-profile" title="平台治理中心" />
+                            <FeatureHelpButton
+                                topic="settings.store-profile"
+                                title="平台治理中心"
+                                description={'集中管理全部店铺、主体与支付审批、平台级配送和经营政策'}
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            集中管理全部店铺、主体与支付审批、平台级配送和经营政策
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -271,11 +272,9 @@ export function PlatformGovernanceCenter({
                                     <FeatureHelpButton
                                         topic="settings.store-profile"
                                         title="待审批的店铺治理变更"
+                                        description={'店铺提交的主体、收款和支付配置在通过前不会覆盖线上值。'}
                                     />
                                 </h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    店铺提交的主体、收款和支付配置在通过前不会覆盖线上值。
-                                </p>
                             </div>
                             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
                                 {pendingGovernance.length} 项

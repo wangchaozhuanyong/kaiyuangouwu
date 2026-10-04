@@ -22,6 +22,9 @@ import { PurchaseOrdersModule } from '../../src/pages/Catalog/PurchaseOrdersModu
 import { StoreAllocationMatrixModule } from '../../src/pages/Catalog/StoreAllocationMatrixModule';
 import { SuppliersModule } from '../../src/pages/Catalog/SuppliersModule';
 import { DashboardModule } from '../../src/pages/Dashboard/DashboardModule';
+import { MarketingAttributionPanel } from '../../src/pages/Marketing/MarketingAttributionPanel';
+import { defaultReportFilter } from '../../src/pages/Marketing/promotion-model';
+import { CouponReport } from '../../src/pages/Marketing/promotion-reports';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { AfterSalesModule } from '../../src/pages/Sales/AfterSalesModule';
 import { CardPoolModule } from '../../src/pages/Sales/CardPoolModule';
@@ -60,6 +63,8 @@ const viewLabels: Record<string, string> = {
     paymentSettings: '支付设置',
     product: '商品编辑',
     profit: '利润统计',
+    couponReport: '优惠券经营报表',
+    attribution: '渠道归因与投放回报',
     translations: '多语言翻译',
     jobs: '系统任务',
     health: '服务健康',
@@ -718,6 +723,8 @@ function project(
     }
     return result;
 }
+const layoutQueries: { name: string; variables: unknown }[] = [];
+Object.assign(window, { layoutQueries });
 const client = new ApolloClient({
     cache: createAdminCache(),
     link: new ApolloLink(
@@ -735,6 +742,7 @@ const client = new ApolloClient({
                     observer.error(new Error('本地布局验收禁止写入'));
                     return;
                 }
+                layoutQueries.push({ name: operation.operationName, variables: operation.variables });
                 const fragments = Object.fromEntries(
                     operation.query.definitions
                         .filter(d => d.kind === Kind.FRAGMENT_DEFINITION)
@@ -1056,6 +1064,22 @@ function StoreManagementFixture() {
     );
 }
 
+function CouponReportFixture() {
+    const [filter, setFilter] = React.useState(defaultReportFilter);
+    return (
+        <div className="p-4">
+            <CouponReport
+                coupons={[]}
+                currencyCode="MYR"
+                filter={filter}
+                setFilter={setFilter}
+                metrics={[]}
+                loading={false}
+            />
+        </div>
+    );
+}
+
 const modules: Record<string, React.ReactNode> = {
     fields: <FieldLayoutFixture />,
     draft: <DraftOrderEditor />,
@@ -1083,6 +1107,12 @@ const modules: Record<string, React.ReactNode> = {
     ),
     product: <ProductEditor />,
     profit: <ProfitReportModule />,
+    couponReport: <CouponReportFixture />,
+    attribution: (
+        <div className="p-4">
+            <MarketingAttributionPanel currencyCode="MYR" />
+        </div>
+    ),
     translations: <TranslationsModule />,
     jobs: <SystemOpsModule />,
     health: <SystemOpsModule />,

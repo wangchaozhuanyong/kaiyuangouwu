@@ -1031,11 +1031,14 @@ export function InventoryWarehouseModule() {
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                         库存与多仓管理
-                        <FeatureHelpButton topic="catalog.inventory" title="库存与多仓管理" />
+                        <FeatureHelpButton
+                            topic="catalog.inventory"
+                            title="库存与多仓管理"
+                            description={
+                                '读取 Vendure 多库存点数据，统一处理在手、锁定、可售库存与真实变动流水'
+                            }
+                        />
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
-                        读取 Vendure 多库存点数据，统一处理在手、锁定、可售库存与真实变动流水
-                    </p>
                 </div>
                 {activeTab === 'WAREHOUSES' ? (
                     <div className="flex flex-wrap items-center gap-2">

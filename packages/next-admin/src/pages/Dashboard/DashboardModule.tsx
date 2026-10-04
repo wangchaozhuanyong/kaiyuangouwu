@@ -334,11 +334,14 @@ export function DashboardModule() {
                     <div className="mx-auto w-full max-w-5xl">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             平台管理中心
-                            <FeatureHelpButton topic="plugins.platform" title="平台管理中心" />
+                            <FeatureHelpButton
+                                topic="plugins.platform"
+                                title="平台管理中心"
+                                description={
+                                    '默认 Channel 只用于平台管理，不承载商品、订单、库存、分类或素材等经营数据。'
+                                }
+                            />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            默认 Channel 只用于平台管理，不承载商品、订单、库存、分类或素材等经营数据。
-                        </p>
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
@@ -346,20 +349,27 @@ export function DashboardModule() {
                         <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-blue-950">
                                 管理某个店铺
-                                <FeatureHelpButton topic="dashboard.overview" title="管理某个店铺" />
+                                <FeatureHelpButton
+                                    topic="dashboard.overview"
+                                    title="管理某个店铺"
+                                    description={
+                                        '请使用右上角“当前店铺”选择要管理的店铺。切换后才会显示该店自己的经营数据。'
+                                    }
+                                />
                             </h2>
-                            <p className="mt-2 text-xs leading-5 text-blue-800">
-                                请使用右上角“当前店铺”选择要管理的店铺。切换后才会显示该店自己的经营数据。
-                            </p>
                         </section>
                         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 平台级管理
-                                <FeatureHelpButton topic="settings.team" title="平台级管理" />
+                                <FeatureHelpButton
+                                    topic="settings.team"
+                                    title="平台级管理"
+                                    description={
+                                        '在这里管理员工、角色、权限与系统运维，不会将业务数据写入平台 Channel。'
+                                    }
+                                />
                             </h2>
-                            <p className="mt-2 text-xs leading-5 text-slate-600">
-                                在这里管理员工、角色、权限与系统运维，不会将业务数据写入平台 Channel。
-                            </p>
+
                             <div className="mt-4 flex flex-wrap gap-2">
                                 <AdminButton
                                     type="button"
@@ -391,7 +401,11 @@ export function DashboardModule() {
                         <div className="flex flex-wrap items-center gap-2">
                             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                                 经营概览
-                                <FeatureHelpButton topic="dashboard.overview" title="经营概览" />
+                                <FeatureHelpButton
+                                    topic="dashboard.overview"
+                                    title="经营概览"
+                                    description={'订单、履约与售后数据每分钟自动更新'}
+                                />
                             </h1>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                                 当前店铺：
@@ -400,7 +414,6 @@ export function DashboardModule() {
                                     : '读取中'}
                             </span>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">订单、履约与售后数据每分钟自动更新</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="flex rounded-lg bg-slate-100 p-1" aria-label="经营指标统计周期">
@@ -505,11 +518,9 @@ export function DashboardModule() {
                                                 <FeatureHelpButton
                                                     topic="dashboard.overview"
                                                     title="核心经营指标"
+                                                    description={'按已结算支付金额统计，退款会从成交额中扣除'}
                                                 />
                                             </h2>
-                                            <p className="mt-0.5 text-[11px] text-slate-500">
-                                                按已结算支付金额统计，退款会从成交额中扣除
-                                            </p>
                                         </div>
                                         {metrics.error && !metrics.data ? (
                                             <ErrorPanel
@@ -800,11 +811,13 @@ export function DashboardModule() {
                                             className="flex items-center gap-2 text-sm font-bold text-slate-900"
                                         >
                                             快捷操作
-                                            <FeatureHelpButton topic="dashboard.overview" title="快捷操作" />
+                                            <FeatureHelpButton
+                                                topic="dashboard.overview"
+                                                title="快捷操作"
+                                                description={'常用经营入口集中在这里'}
+                                            />
                                         </h2>
-                                        <p className="mt-1 text-[11px] text-slate-500">
-                                            常用经营入口集中在这里
-                                        </p>
+
                                         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                                             {canCreateProducts && (
                                                 <QuickAction
@@ -921,11 +934,12 @@ export function DashboardModule() {
                                     className="flex items-center gap-2 text-base font-bold text-slate-900"
                                 >
                                     调整工作台
-                                    <FeatureHelpButton topic="dashboard.customizer" title="调整工作台" />
+                                    <FeatureHelpButton
+                                        topic="dashboard.customizer"
+                                        title="调整工作台"
+                                        description={'选择预设、显示组件；回到工作台可拖动排序'}
+                                    />
                                 </h2>
-                                <p className="mt-1 text-[11px] text-slate-500">
-                                    选择预设、显示组件；回到工作台可拖动排序
-                                </p>
                             </div>
                             <AdminButton
                                 type="button"
