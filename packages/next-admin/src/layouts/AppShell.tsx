@@ -742,9 +742,9 @@ export function AppShell() {
                 inert={!isDesktop && !isSidebarOpen ? true : undefined}
                 className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out xl:relative xl:z-20 ${isSidebarOpen ? 'translate-x-0 xl:w-64' : '-translate-x-full xl:w-16 xl:translate-x-0'}`}
             >
-                <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
-                    <div className="flex items-center gap-2">
-                        <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+                <div className="flex h-auto min-h-14 shrink-0 items-center justify-center border-b border-white/10 px-3 py-3 xl:h-14 xl:px-0 xl:py-0">
+                    <div className="flex min-w-0 max-w-full items-center gap-2">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
                             {!isPlatformContext && <span aria-hidden="true">{adminBrandName.charAt(0)}</span>}
                             <img
                                 key={storeLogoUrl ?? 'platform-admin'}
@@ -757,7 +757,7 @@ export function AppShell() {
                             />
                         </div>
                         {isSidebarOpen && (
-                            <span className="font-bold text-white text-base tracking-wide">
+                            <span className="min-w-0 break-words font-bold text-white text-base tracking-wide">
                                 {adminBrandName}
                             </span>
                         )}

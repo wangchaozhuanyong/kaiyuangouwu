@@ -3,14 +3,15 @@
     try {
         // An embedded Admin preview owns its skin; never inherit a client cache.
         if (new URLSearchParams(location.search).get('storefrontPreviewEmbedded') === '1') return;
-        var key = '__storefront_theme_v1__';
+        // v1 themes may contain merchant-derived colors from before skin unification.
+        var key = '__storefront_theme_v2__';
         var payload;
         for (var i = 0; i < 2 && !payload; i++) {
             try {
                 var candidate = JSON.parse(window[i ? 'localStorage' : 'sessionStorage'].getItem(key));
                 if (
                     candidate &&
-                    candidate.version === 1 &&
+                    candidate.version === 2 &&
                     candidate.origin === location.origin &&
                     typeof candidate.channelCode === 'string' &&
                     candidate.channelCode &&

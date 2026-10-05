@@ -51,7 +51,7 @@ describe('storefront visual preset lifecycle', () => {
                 const properties: Record<string, string> = {};
                 const origin = 'https://store.example.test';
                 const payload = JSON.stringify({
-                    version: 1,
+                    version: 2,
                     origin,
                     channelCode: 'skin-test-store',
                     savedAt: Date.now(),
