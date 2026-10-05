@@ -89,7 +89,7 @@ function provider(test: Awaited<ReturnType<typeof fixture>>, state: string, meta
 }
 describe('additional payment completion', () => {
     describe.each(['manual', 'gateway'] as const)('initial placed-order %s collection', source => {
-        it.each(['none', 'Cancelled', 'Declined', 'Error'] as const)(
+        it.each(['none', 'Cancelled', 'Declined'] as const)(
             'collects the full price when prior attempts are %s without claiming funds already exist',
             async previous => {
                 const test = await fixture();
@@ -119,6 +119,13 @@ describe('additional payment completion', () => {
         it.each([
             { name: 'pending custom validation', state: 'Validating', amount: 1500 },
             { name: 'unknown provider outcome', state: 'Created', amount: 1500 },
+            { name: 'provider error without a receipt', state: 'Error', amount: 1500 },
+            {
+                name: 'failed authorization cancellation',
+                state: 'Error',
+                amount: 1500,
+                transactionId: 'synthetic-authorization-not-revoked',
+            },
             {
                 name: 'controlled test',
                 state: 'Settled',
@@ -147,6 +154,7 @@ describe('additional payment completion', () => {
                 method: 'method' in previous ? previous.method : 'receipt',
                 amount: previous.amount,
                 state: previous.state as Payment['state'],
+                transactionId: 'transactionId' in previous ? previous.transactionId : undefined,
             });
             priorPayment.metadata = 'metadata' in previous ? (previous.metadata ?? {}) : {};
             test.order.payments = [priorPayment];
@@ -234,17 +242,37 @@ describe('additional payment completion', () => {
             expect(test.service.transitionToState).not.toHaveBeenCalled();
         },
     );
-    it('rejects a second external collection while the prior top-up outcome is unknown', async () => {
-        const test = await fixture();
-        test.order.payments.push(
-            new Payment({ id: 'unknown', method: 'receipt', state: 'Created', amount: 500 }),
+    describe.each(['manual', 'gateway'] as const)('uncertain existing %s top-up', source => {
+        it.each(['Created', 'Error', 'Validating'] as const)(
+            'rejects another collection while the prior %s attempt remains unresolved',
+            async state => {
+                const test = await fixture();
+                test.order.payments.push(
+                    new Payment({
+                        id: 'unknown',
+                        method: 'receipt',
+                        state: state as Payment['state'],
+                        amount: 500,
+                        transactionId: 'synthetic-unresolved-authorization',
+                    }),
+                );
+                const collect = vi.fn();
+                test.service.paymentService = { createManualPayment: collect, createPayment: collect };
+                const operation =
+                    source === 'manual'
+                        ? test.service.addManualPaymentToOrder(
+                              {},
+                              {
+                                  orderId: 'order',
+                                  method: 'receipt',
+                                  transactionId: 'synthetic-repeated-receipt',
+                              },
+                          )
+                        : test.service.addPaymentToOrder({}, 'order', { method: 'receipt', metadata: {} });
+                await expect(operation).rejects.toThrow('不能重复收取补款');
+                expect(collect).not.toHaveBeenCalled();
+            },
         );
-        const gateway = vi.fn();
-        test.service.paymentService = { createPayment: gateway };
-        await expect(
-            test.service.addPaymentToOrder({}, 'order', { method: 'receipt', metadata: {} }),
-        ).rejects.toThrow('不能重复收取补款');
-        expect(gateway).not.toHaveBeenCalled();
     });
     it('keeps a direct creation hook pending until outstanding modifications have been associated', async () => {
         const test = await fixture();

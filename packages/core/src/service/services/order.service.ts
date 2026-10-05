@@ -1845,16 +1845,19 @@ export class OrderService {
         if (
             placed &&
             order.payments.some(
-                payment => payment.state === 'Created' || payment.metadata?.manualReview?.required,
+                payment =>
+                    !['Authorized', 'Settled', 'Cancelled', 'Declined'].includes(payment.state) ||
+                    payment.metadata?.manualReview?.required,
             )
         )
             throw new UserInputError('订单有待确认的付款，请先核对原付款结果，不能重复收取补款');
         // Placed seller orders and custom order processes can collect their first
-        // payment after placement. No attempts, or only terminal unsuccessful
-        // attempts, mean zero collected funds rather than a malformed receipt.
-        // Keep unknown, test and invalid receipts in the strict coverage path.
+        // payment after placement. No attempts, or only confirmed cancellation /
+        // decline, mean zero collected funds rather than a malformed receipt.
+        // Error can retain an authorization after failed capture/cancellation;
+        // keep it, unknown, test and invalid receipts in the strict path.
         const nothingCollected = order.payments.every(payment =>
-            ['Cancelled', 'Declined', 'Error'].includes(payment.state),
+            ['Cancelled', 'Declined'].includes(payment.state),
         );
         const covered = placed
             ? nothingCollected
