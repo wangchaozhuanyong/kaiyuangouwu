@@ -49,9 +49,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { ClientRequest, request as httpRequest } from 'node:http';
 import { createConnection as connectTcp } from 'node:net';
+import { join } from 'node:path';
 import { Duplex } from 'node:stream';
-// @ts-ignore Project-owned fixture lab verifies the Docker endpoint and container.
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -66,7 +65,6 @@ import { AutoCardConfig } from '../../commerce-fulfillment-plugin/src/entities/a
 import { AutoCardDelivery } from '../../commerce-fulfillment-plugin/src/entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from '../../commerce-fulfillment-plugin/src/entities/auto-card-pool-item.entity';
 import { StoreCatalogStatusService } from '../../commerce-fulfillment-plugin/src/store-catalog-status.service';
-// @ts-ignore Fixed CI fixture connection is validated before any database is created.
 import { createCiGovernanceDatabase } from '../../dev-server/scripts/platform-governance-ci-fixture.mjs';
 import { collectPlatformPaymentDataPlan } from '../../dev-server/scripts/platform-payment-data-plan.mjs';
 import {
@@ -88,6 +86,7 @@ import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 import { registerCardConcurrencyAcceptance } from './card-concurrency-acceptance';
 import { registerPaymentCustomerAcceptance } from './payment-customer-acceptance';
+const artifactsDirectory = join(__dirname, '../../../artifacts/platform-governance');
 const serverConfig = mergeConfig(testConfig, {
     apiOptions: { port: 3477 },
     entityOptions: { entityIdStrategy: new AutoIncrementIdStrategy() },
@@ -128,7 +127,7 @@ let variantIds: string[];
 let categoryId: string;
 describe('platform governance real database and API boundaries', () => {
     beforeAll(async () => {
-        await mkdir(new URL('../../../artifacts/platform-governance/', import.meta.url), { recursive: true });
+        await mkdir(artifactsDirectory, { recursive: true });
         if (process.env.PLATFORM_GOVERNANCE_MYSQL === '1') {
             mysqlLab = await createLab({ subnet: 'synthetic-auto' });
             const caseFile = await createCase(mysqlLab);
@@ -173,12 +172,7 @@ describe('platform governance real database and API boundaries', () => {
                 destroy: () => Promise.resolve(),
             });
             await writeFile(
-                fileURLToPath(
-                    new URL(
-                        '../../../artifacts/platform-governance/mysql-service-rehearsal.json',
-                        import.meta.url,
-                    ),
-                ),
+                join(artifactsDirectory, 'mysql-service-rehearsal.json'),
                 JSON.stringify({ lab: mysqlLab, database, productionReady: false }, null, 2),
                 { mode: 0o600 },
             );
@@ -197,14 +191,7 @@ describe('platform governance real database and API boundaries', () => {
         } else {
             registerInitializer(
                 'sqljs',
-                new SqljsInitializer(
-                    fileURLToPath(
-                        new URL(
-                            `../../../artifacts/platform-governance/sqljs-${randomUUID()}/`,
-                            import.meta.url,
-                        ),
-                    ),
-                ),
+                new SqljsInitializer(join(artifactsDirectory, `sqljs-${randomUUID()}/`)),
             );
         }
         await server.init({
@@ -513,12 +500,7 @@ describe('platform governance real database and API boundaries', () => {
         const preview = await catalog.preview(platform, input);
         if (mysqlLab)
             await writeFile(
-                fileURLToPath(
-                    new URL(
-                        '../../../artifacts/platform-governance/mysql-preview-debug.json',
-                        import.meta.url,
-                    ),
-                ),
+                join(artifactsDirectory, 'mysql-preview-debug.json'),
                 JSON.stringify(preview, null, 2),
             );
         expect(preview.items).toHaveLength(1);
@@ -1021,34 +1003,26 @@ describe('platform governance real database and API boundaries', () => {
             expect(paymentPlan.mutatesData).toBe(false);
             expect(
                 paymentPlan.entries.some(
-                    (m: any) =>
+                    m =>
                         m.code === 'controlled-test-payment-platform' && m.scope === 'PLATFORM_CONFIGURATION',
                 ),
             ).toBe(true);
             await writeFile(
-                fileURLToPath(
-                    new URL(
-                        `../../../artifacts/platform-governance/payment-data-plan-${connection.rawConnection.options.type === 'mysql' ? 'mysql' : 'sqljs'}.json`,
-                        import.meta.url,
-                    ),
+                join(
+                    artifactsDirectory,
+                    `payment-data-plan-${connection.rawConnection.options.type === 'mysql' ? 'mysql' : 'sqljs'}.json`,
                 ),
                 JSON.stringify(paymentPlan, null, 2),
                 { mode: 0o600 },
             );
             expect(
-                plan.resources.find(
-                    (r: any) => r.resourceType === 'Product' && r.resourceId === String(productId),
-                )?.status,
+                plan.resources.find(r => r.resourceType === 'Product' && r.resourceId === String(productId))
+                    ?.status,
             ).toBe('REGISTERED_AUTHORIZED_SALES');
             expect(plan.productionApply).toBe(false);
             expect(JSON.stringify(plan)).not.toContain('SYNTHETIC-CARD-');
             await writeFile(
-                fileURLToPath(
-                    new URL(
-                        `../../../artifacts/platform-governance/local-data-plan-${randomUUID()}.json`,
-                        import.meta.url,
-                    ),
-                ),
+                join(artifactsDirectory, `local-data-plan-${randomUUID()}.json`),
                 JSON.stringify(plan, null, 2),
                 { flag: 'wx', mode: 0o600 },
             );
