@@ -253,6 +253,9 @@ export function MyStoreProfileEditor({
                             />
                         ))}
                     </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                        同一种皮肤统一按钮、选中态等控件配色；品牌颜色作为店铺资料保留，图片、Logo和品牌文案保持各店设置。
+                    </p>
                     <div className="mt-4 flex justify-end">
                         <AdminButton
                             type="button"

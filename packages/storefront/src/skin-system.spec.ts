@@ -3,7 +3,11 @@ import path from 'node:path';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
-import { resolveStorefrontSkinTreatment } from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import {
+    resolveStorefrontSemanticPalette,
+    resolveStorefrontSkinTreatment,
+    semanticPaletteCssVariables,
+} from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
 
 function stylesheet(relativePath: string): string {
@@ -690,6 +694,29 @@ describe('storefront skin system', () => {
         expect(stylesheet('./styles/desktop-pages.css')).not.toContain('.logistics-card');
         expect(stylesheet('./styles/visual-presets.css')).not.toContain('.logistics-card');
         expect(stylesheet('./tailwind/order-page-styles.ts')).not.toContain("'logistics-card':");
+    });
+
+    it('matches initial classic control colors to the runtime preset before branding arrives', () => {
+        const css = postcss.parse(stylesheet('./styles/experience-foundations.css'));
+        const initial = new Map<string, string>();
+        css.walkRules(':root', rule => {
+            rule.walkDecls(declaration => initial.set(declaration.prop, declaration.value));
+        });
+        const runtime = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic'));
+        for (const token of [
+            '--accent',
+            '--accent-hover',
+            '--accent-ink',
+            '--accent-soft',
+            '--accent-foreground',
+            '--focus',
+            '--brand-background',
+            '--brand-primary',
+            '--brand-accent',
+            '--brand-highlight',
+        ]) {
+            expect(initial.get(token), token).toBe(runtime[token]);
+        }
     });
 
     it('keeps color ownership in the shared semantic palette instead of preset CSS copies', () => {

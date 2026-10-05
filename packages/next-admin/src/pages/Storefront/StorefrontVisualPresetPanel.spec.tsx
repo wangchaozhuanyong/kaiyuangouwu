@@ -70,6 +70,30 @@ afterEach(() => {
 });
 
 describe('fixed desktop layout skin settings', () => {
+    it.each(['classic', 'neo-minimalist'] as const)(
+        'keeps the %s admin preview controls consistent across merchant brand colors',
+        presetId => {
+            const brands = [
+                Object.freeze({ primaryColor: '#8f7029', accentColor: '#8f7029', highlightColor: '#795e20' }),
+                Object.freeze({ primaryColor: '#b91c1c', accentColor: '#b91c1c', highlightColor: '#991b1b' }),
+                Object.freeze({ primaryColor: '#635bff', accentColor: '#22d3ee', highlightColor: '#8b5cf6' }),
+            ];
+            const previews = brands.map((brand, index) => {
+                const markup = storefrontVisualPreviewDocument(presetId, `店铺 ${index + 1} & 品牌`, brand);
+                const preview = new DOMParser().parseFromString(markup, 'text/html');
+                expect(preview.querySelector('.preview-brand b')?.textContent).toBe(
+                    `店铺 ${index + 1} & 品牌`,
+                );
+                const styles = preview.querySelector('head > style:last-of-type')?.textContent;
+                const rootVariables = styles?.match(/:root\{([^}]+)\}/)?.[1];
+                expect(rootVariables).toBeTruthy();
+                return rootVariables;
+            });
+            expect(new Set(previews).size).toBe(1);
+            if (presetId === 'classic') expect(previews[0]).toContain('--accent:#2563eb');
+        },
+    );
+
     it('renders the same skin surface tokens in the offline admin sample', () => {
         const document = storefrontVisualPreviewDocument('neo-minimalist', '测试店铺');
         expect(document).toContain('--skin-divider:#2a3548');
@@ -142,6 +166,9 @@ describe('fixed desktop layout skin settings', () => {
         expect(
             host.querySelector('[data-help-title="店铺皮肤"]')?.getAttribute('data-help-description'),
         ).toContain('电脑端共用布局');
+        expect(
+            host.querySelector('[data-help-title="店铺皮肤"]')?.getAttribute('data-help-description'),
+        ).toContain('同一种皮肤统一按钮、选中态等控件配色');
         expect(saveButton().disabled).toBe(true);
     });
 

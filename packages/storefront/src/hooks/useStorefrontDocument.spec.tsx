@@ -60,7 +60,7 @@ afterEach(() => {
     sessionStorage.clear();
 });
 describe('runtime channel branding', () => {
-    it('uses the selected skin palette and restores branding when switching back to classic', () => {
+    it('uses the selected skin palette across late branding responses and skin switches', () => {
         document.head.innerHTML = [
             '<style>:root { --bg: #f3f6fb; }</style>',
             '<meta name="theme-color" content="#f1f5f9">',
@@ -72,7 +72,7 @@ describe('runtime channel branding', () => {
         try {
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" />));
             expect(color('--bg')).toBe('#f1f5f9');
-            expect(color('--accent')).toBe('#234567');
+            expect(color('--accent')).toBe('#2563eb');
             expect(color('--skin-tool-security-foreground')).toBe('#1d4ed8');
 
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" presetId="neo-minimalist" />));
@@ -103,10 +103,10 @@ describe('runtime channel branding', () => {
 
             act(() => root.render(<Fixture logo={null} background="#070B14" />));
             expect(color('--bg')).toBe('#f1f5f9');
-            expect(color('--accent')).toBe('#234567');
+            expect(color('--accent')).toBe('#2563eb');
             expect(color('--skin-tool-security-foreground')).toBe('#1d4ed8');
-            expect(color('--accent-hover')).toBe('#a9621c');
-            expect(color('--store-primary')).toBe('#234567');
+            expect(color('--accent-hover')).toBe('#2055ca');
+            expect(color('--store-primary')).toBe('#2563eb');
             expect(color('--auth-store-background')).toBe('#f1f5f9');
 
             act(() => root.render(<Fixture logo={null} presetId="neo-minimalist" />));
@@ -119,7 +119,7 @@ describe('runtime channel branding', () => {
 
             act(() => root.render(<Fixture logo={null} />));
             expect(html.style.getPropertyValue('--bg')).toBe('#f1f5f9');
-            expect(html.style.getPropertyValue('--accent')).toBe('#d33c30');
+            expect(html.style.getPropertyValue('--accent')).toBe('#2563eb');
             expect(html.style.getPropertyValue('--brand-background')).toBe('#f1f5f9');
         } finally {
             act(() => root.unmount());
@@ -128,7 +128,7 @@ describe('runtime channel branding', () => {
         expect(html.style.getPropertyValue('--store-background')).toBe('');
     });
 
-    it('replaces every image and clears the prior store colors when switching to a blank store', () => {
+    it('updates merchant images while keeping classic controls identical across stores', () => {
         document.head.innerHTML = [
             '<meta property="og:image" content="/moyao.jpg">',
             '<meta name="twitter:image" content="/moyao.jpg">',
@@ -138,9 +138,9 @@ describe('runtime channel branding', () => {
         const root = createRoot(host);
         act(() => root.render(<Fixture logo="/store-a.png" background="#abcdef" primary="#123456" />));
         expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
-        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#123456');
+        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#2563eb');
         act(() => root.render(<Fixture logo="/store-b.png" background="#fedcba" primary="#654321" />));
-        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#654321');
+        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#2563eb');
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/store-b.png',
         );

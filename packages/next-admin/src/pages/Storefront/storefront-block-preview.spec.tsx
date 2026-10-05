@@ -3,6 +3,8 @@ import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { StorefrontVisualPresetId } from '../../../../storefront-content-plugin/src/visual-presets';
+import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
 import { BlockPreview } from './storefront-block-preview';
 import { newContentBlock } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
@@ -57,7 +59,7 @@ afterEach(async () => {
     state.domainError = null;
 });
 
-async function renderPreview(development = false) {
+async function renderPreview(development = false, presetId?: StorefrontVisualPresetId) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');
     document.body.append(host);
@@ -85,20 +87,118 @@ async function renderPreview(development = false) {
                     '<html><head><link rel="stylesheet" href="/dashboard/assets/client.css"></head><body><div id="root"></div><script type="module" src="/dashboard/assets/storefrontPreview-fixture.js"></script></body></html>',
             ),
         );
+    let selectedPreset = presetId;
     const render = async () => {
         await act(async () => {
             root.render(
                 <FeatureHelpProvider>
-                    <BlockPreview block={{ ...block }} language="zh_Hans" />
+                    {selectedPreset ? (
+                        <StorefrontDecorationPreview
+                            presetId={selectedPreset}
+                            fixedViewport="mobile"
+                            language="zh_Hans"
+                        />
+                    ) : (
+                        <BlockPreview block={{ ...block }} language="zh_Hans" />
+                    )}
                 </FeatureHelpProvider>,
             );
         });
     };
     await render();
-    return { host, block, render, fetchMock };
+    const renderSkin = async (preset: StorefrontVisualPresetId) => {
+        selectedPreset = preset;
+        await render();
+    };
+    return { host, block, render, renderSkin, fetchMock };
 }
 
 describe('real client decoration preview', () => {
+    it('previews another skin without replacing the merchant logo, images, copy or saved brand data', async () => {
+        const { host, renderSkin, fetchMock } = await renderPreview(false, 'classic');
+        const frame = host.querySelector('iframe')!;
+        const session = new DOMParser().parseFromString(frame.srcdoc, 'text/html').documentElement.dataset
+            .decorationSession;
+        const send = vi.spyOn(frame.contentWindow!, 'postMessage');
+        const payload = {
+            data: {
+                activeChannel: { id: 'store', code: 'shop', customFields: { storefrontNameZh: '家具品牌' } },
+                storefrontBranding: {
+                    tagline: '甄选舒适好物',
+                    logoUrl: '/assets/brand-logo.png',
+                    logoOnLightUrl: '/assets/brand-logo-light.png',
+                    logoOnDarkUrl: '/assets/brand-logo-dark.png',
+                    primaryColor: '#8f7029',
+                    accentColor: '#8f7029',
+                    highlightColor: '#795e20',
+                },
+                storefrontContent: [
+                    { id: 'hero', type: 'HERO', title: '为马来西亚的家', imageUrl: '/assets/hero.png' },
+                ],
+            },
+        };
+        const original = structuredClone(payload);
+        await act(async () =>
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    origin: window.location.origin,
+                    source: frame.contentWindow,
+                    data: { type: 'decoration-ready', session },
+                }),
+            ),
+        );
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                type: 'decoration-draft',
+                draft: { block: null, visible: false, route: '/', language: 'zh', presetId: 'classic' },
+            }),
+            window.location.origin,
+        );
+        await renderSkin('neo-minimalist');
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                type: 'decoration-draft',
+                draft: {
+                    block: null,
+                    visible: false,
+                    route: '/',
+                    language: 'zh',
+                    presetId: 'neo-minimalist',
+                },
+            }),
+            window.location.origin,
+        );
+        fetchMock.mockClear().mockResolvedValue(new Response(JSON.stringify(payload)));
+        await act(async () =>
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    origin: window.location.origin,
+                    source: frame.contentWindow,
+                    data: {
+                        type: 'decoration-query',
+                        id: 'merchant-content',
+                        session,
+                        query: `query StorefrontConfig {
+                            activeChannel { id code customFields { storefrontNameZh } }
+                            storefrontBranding { tagline logoUrl logoOnLightUrl logoOnDarkUrl primaryColor accentColor highlightColor }
+                            storefrontContent { id type title imageUrl }
+                        }`,
+                    },
+                }),
+            ),
+        );
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                type: 'decoration-response',
+                id: 'merchant-content',
+                payload: original,
+            }),
+            window.location.origin,
+        );
+        expect(payload).toEqual(original);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('loads the isolated built client entry, preserves the CSS and uses an actual viewport', async () => {
         const { host, fetchMock } = await renderPreview();
         const frame = host.querySelector('iframe')!;

@@ -298,6 +298,9 @@ export function StoreEditor({
             />
             <div className="mt-4">
                 <p className="mb-2 text-xs font-bold text-slate-700">品牌颜色</p>
+                <p className="mb-3 text-xs text-slate-500">
+                    同一种皮肤统一按钮、选中态等控件配色；品牌颜色作为店铺资料保留，图片、Logo和品牌文案保持各店设置。
+                </p>
                 <div className="grid gap-3 sm:grid-cols-4">
                     {[
                         ['背景色', brandBackgroundColor, setBrandBackgroundColor, '#070B14'],

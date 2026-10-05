@@ -43,64 +43,51 @@ describe('storefront semantic palette', () => {
         },
     );
 
-    it.each(['#000000', '#ffffff', '#777777', '#8b5cf6', '#070b14'])(
-        'keeps classic light and derives safe brand accents from %s',
-        color => {
-            const palette = resolveStorefrontSemanticPalette('classic', {
-                backgroundColor: color,
-                primaryColor: color,
-                accentColor: color,
-                highlightColor: color,
-            });
-            expect(palette.page).toBe('#f1f5f9');
-            expect(palette.surface).toBe('#ffffff');
-            expect(palette.text).toBe('#0f172a');
-            expect(palette.brand).toBe(color);
-            expect(palette.onAccent).toBe('#ffffff');
-            expect(storefrontContrastRatio(palette.text, palette.surface)).toBeGreaterThanOrEqual(4.5);
-            expect(storefrontContrastRatio(palette.onAccent, palette.accent)).toBeGreaterThanOrEqual(4.5);
-            expect(storefrontContrastRatio('#ffffff', palette.accentHover)).toBeGreaterThanOrEqual(4.5);
-            expect(auditStorefrontSemanticPalette(palette).passes).toBe(true);
+    it.each(['classic', 'neo-minimalist'] as const)(
+        'keeps every %s UI color identical across merchant branding',
+        presetId => {
+            const standard = resolveStorefrontSemanticPalette(presetId);
+            const standardVariables = semanticPaletteCssVariables(standard);
+            for (const color of [
+                '#8f6c24',
+                '#b91c1c',
+                '#8b5cf6',
+                '#000000',
+                '#ffffff',
+                '#777777',
+                'purple',
+                '',
+            ]) {
+                const branding = {
+                    backgroundColor: color,
+                    primaryColor: color,
+                    accentColor: color,
+                    highlightColor: '#991b1b',
+                };
+                const before = { ...branding };
+                const palette = resolveStorefrontSemanticPalette(presetId, branding);
+                expect(palette).toEqual(standard);
+                expect(semanticPaletteCssVariables(palette)).toEqual(standardVariables);
+                expect(auditStorefrontSemanticPalette(palette).passes).toBe(true);
+                expect(branding).toEqual(before);
+            }
         },
     );
 
-    it.each(['#000000', '#ffffff', '#777777', '#070b14'])(
-        'separates neutral %s brand identity from the classic action color',
-        color => {
-            const palette = resolveStorefrontSemanticPalette('classic', {
-                primaryColor: color,
-                accentColor: color,
-                highlightColor: color,
-            });
-            expect(palette.brand).toBe(color);
-            expect(palette.accent).toBe('#2563eb');
-            expect(palette.accentHover).not.toBe(color);
-            expect(storefrontContrastRatio(palette.accentInk, palette.surface)).toBeGreaterThanOrEqual(4.5);
-        },
-    );
-
-    it('preserves a chromatic merchant action color', () => {
-        const palette = resolveStorefrontSemanticPalette('classic', {
-            primaryColor: '#111111',
-            accentColor: '#b91c1c',
-            highlightColor: '#991b1b',
-        });
-        expect(palette.brand).toBe('#111111');
-        expect(palette.accent).toBe('#b91c1c');
-        expect(palette.accentHover).toBe('#991b1b');
+    it('uses the existing classic blue action color for primary, hover and focus roles', () => {
+        const palette = resolveStorefrontSemanticPalette('classic');
+        expect(palette.brand).toBe('#2563eb');
+        expect(palette.accent).toBe('#2563eb');
+        expect(palette.onAccent).toBe('#ffffff');
+        expect(palette.accentHover).not.toBe(palette.accent);
+        expect(storefrontContrastRatio(palette.onAccent, palette.accentHover)).toBeGreaterThanOrEqual(4.5);
+        expect(storefrontContrastRatio(palette.focus, palette.surface)).toBeGreaterThanOrEqual(3);
     });
 
-    it('uses a saved background only as identity when no primary color exists', () => {
-        const palette = resolveStorefrontSemanticPalette('classic', { backgroundColor: '#070b14' });
-        expect(palette.brand).toBe('#070b14');
-        expect(palette.page).toBe('#f1f5f9');
-    });
-
-    it('falls back for empty and invalid brand colors', () => {
+    it('normalizes content colors without making them preset controls', () => {
         expect(normalizeStorefrontColor('')).toBeNull();
         expect(normalizeStorefrontColor('purple')).toBeNull();
         expect(normalizeStorefrontColor('#AbC')).toBe('#aabbcc');
-        expect(resolveStorefrontSemanticPalette('classic', { primaryColor: 'purple' }).brand).toBe('#d33c30');
     });
 
     it('emits the complete CSS variable contract', () => {

@@ -97,25 +97,8 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         settings.accentSecondaryColor,
         `var(--store-highlight, var(--skin-hero-secondary, ${defaultAccentSecondary}))`,
     );
-    const configuredButtonText = normalizedColor(settings.buttonTextColor, '');
-    const explicitAccent = HEX_COLOR_PATTERN.test(accentColor);
-    const explicitAccentSecondary = HEX_COLOR_PATTERN.test(accentSecondary);
-    const gradientColors = explicitAccentSecondary ? [accentColor, accentSecondary] : [accentColor];
-    const sharedButtonForeground = explicitAccent
-        ? [configuredButtonText, '#ffffff', '#000000'].find(
-              candidate =>
-                  HEX_COLOR_PATTERN.test(candidate) &&
-                  gradientColors.every(color => storefrontContrastRatio(candidate, color) >= 4.5),
-          )
-        : undefined;
-    const buttonBackground = explicitAccent
-        ? explicitAccentSecondary && sharedButtonForeground
-            ? `linear-gradient(135deg, ${accentColor}, ${accentSecondary})`
-            : accentColor
-        : 'var(--accent)';
-    const buttonForeground = explicitAccent
-        ? (sharedButtonForeground ?? readableStorefrontForeground(accentColor))
-        : 'var(--accent-foreground)';
+    // The photograph's copy colors remain managed content. The CTA is a shared
+    // interface control and therefore always follows the active skin.
 
     // Explicit or adaptive title color
     const defaultTitleColor = isLightTone
@@ -152,11 +135,9 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-body-color': defaultBodyColor,
         '--hero-accent-color': accentColor,
         '--hero-accent-readable': readableAccent,
-        '--hero-button-background': buttonBackground,
-        '--hero-button-hover-background': explicitAccent
-            ? buttonBackground
-            : 'var(--accent-hover, var(--accent))',
-        '--hero-button-foreground': buttonForeground,
+        '--hero-button-background': 'var(--accent)',
+        '--hero-button-hover-background': 'var(--accent-hover, var(--accent))',
+        '--hero-button-foreground': 'var(--accent-foreground)',
         '--hero-accent-soft': isLightTone ? 'rgba(255, 255, 255, 0.88)' : colorWithAlpha(accentColor, 0.18),
         '--hero-accent-border': isLightTone
             ? colorWithAlpha(accentColor, 0.65)
@@ -166,7 +147,7 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-accent-shadow': colorWithAlpha(accentColor, 0.42),
         '--hero-accent-text-shadow': colorWithAlpha(accentColor, 0.52),
         '--hero-accent-secondary-color': accentSecondary,
-        '--hero-button-text-color': normalizedColor(settings.buttonTextColor, '#ffffff'),
+        '--hero-button-text-color': 'var(--accent-foreground)',
         '--hero-title-shadow':
             isLightTone || !titleIsLight
                 ? '0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 8px rgba(0, 0, 0, 0.04)'

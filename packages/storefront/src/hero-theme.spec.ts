@@ -49,14 +49,33 @@ describe('hero theme', () => {
         expect(style['--hero-body-color']).toBe('#E0F2FE');
         expect(style['--hero-accent-color']).toBe('#22D3EE');
         expect(style['--hero-accent-secondary-color']).toBe('#7C3AED');
-        expect(style['--hero-button-text-color']).toBe('#F8FAFC');
-        expect(style['--hero-button-background']).toBe('#22D3EE');
-        expect(style['--hero-button-foreground']).toBe('#000000');
+        expect(style['--hero-button-text-color']).toBe('var(--accent-foreground)');
+        expect(style['--hero-button-background']).toBe('var(--accent)');
+        expect(style['--hero-button-foreground']).toBe('var(--accent-foreground)');
         expect(style['--hero-image-overlay-start']).toBeUndefined();
         expect(style['--hero-image-text-shadow']).toBe('none');
         expect(style['--hero-image-copy-foreground']).toBe('#FFFFFF');
         expect(style['--hero-image-body-foreground']).toBe('#E0F2FE');
     });
+
+    it.each(['#8f6c24', '#b91c1c', '#8b5cf6'])(
+        'keeps the hero CTA on skin colors while preserving %s managed image copy',
+        color => {
+            const block = hero({
+                imageUrl: '/merchant/artwork.jpg',
+                textColor: color,
+                settings: { accentColor: color, accentSecondaryColor: '#991b1b', buttonTextColor: color },
+            });
+            const original = structuredClone(block);
+            const style = heroThemeStyle(block, 'light');
+            expect(style['--hero-button-background']).toBe('var(--accent)');
+            expect(style['--hero-button-hover-background']).toBe('var(--accent-hover, var(--accent))');
+            expect(style['--hero-button-foreground']).toBe('var(--accent-foreground)');
+            expect(style['--hero-image-copy-foreground']).toBe(color);
+            expect(style['--hero-image-text-shadow']).toBe('none');
+            expect(block).toEqual(original);
+        },
+    );
 
     it('ignores invalid managed colors and preserves readable defaults', () => {
         const style = heroThemeStyle(
