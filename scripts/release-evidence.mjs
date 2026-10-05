@@ -216,12 +216,20 @@ export async function findInputCoverage({
     let anchor;
     // Other Actions workflows can fill the repository-wide first page, or leave it stale.
     // Read only workflows that can produce trusted CI evidence.
+    // Some cached workflow indexes omit newly completed runs. A rolling created
+    // filter obtains the recent index; retain the historical index for older proof.
+    const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .replace(/\.\d{3}Z$/u, 'Z');
+    const recentFilter = encodeURIComponent(`>=${recentSince}`);
     let runs = ['build_and_test.yml', 'production_release.yml', 'deploy_storefront_fast_lane.yml']
-        .flatMap(
-            workflow =>
-                api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=100`)
-                    .workflow_runs,
-        )
+        .flatMap(workflow => [
+            ...api(
+                `repos/${repository}/actions/workflows/${workflow}/runs?status=completed&created=${recentFilter}&per_page=100`,
+            ).workflow_runs,
+            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=100`)
+                .workflow_runs,
+        ])
         .sort((left, right) => right.id - left.id);
     if (includeRunId) runs = [api(`repos/${repository}/actions/runs/${includeRunId}`), ...runs];
     const seen = new Set();
