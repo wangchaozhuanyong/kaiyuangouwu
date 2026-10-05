@@ -673,7 +673,7 @@ export function IcloudRelayModule() {
 
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[800px] text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[800px] text-left text-xs">
                                     <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                         <tr>
                                             <th className="p-3.5">主邮箱地址</th>
@@ -703,21 +703,24 @@ export function IcloudRelayModule() {
                                                     key={account.id}
                                                     className="hover:bg-slate-50/80 transition-colors"
                                                 >
-                                                    <td className="p-3.5 font-bold text-slate-900">
+                                                    <td
+                                                        data-label="主邮箱地址"
+                                                        className="p-3.5 font-bold text-slate-900"
+                                                    >
                                                         <div className="flex items-center gap-2">
                                                             <Mail className="h-4 w-4 text-blue-600 shrink-0" />
                                                             <span>{account.email}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">
+                                                    <td data-label="备注" className="p-3.5 text-slate-500">
                                                         {account.note || '—'}
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="虚拟邮箱" className="p-3.5">
                                                         <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                                                             {account.virtualEmailCount} 个
                                                         </span>
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="状态" className="p-3.5">
                                                         {account.status === 'ACTIVE' &&
                                                         !account.lastSyncError ? (
                                                             <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -755,7 +758,7 @@ export function IcloudRelayModule() {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="主查询码" className="p-3.5">
                                                         {account.masterQueryCode ? (
                                                             <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit">
                                                                 <span>{account.masterQueryCode}</span>
@@ -781,12 +784,15 @@ export function IcloudRelayModule() {
                                                             '—'
                                                         )}
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">
+                                                    <td data-label="有效期" className="p-3.5 text-slate-500">
                                                         {account.remainingDays != null
                                                             ? `剩 ${account.remainingDays} 天`
                                                             : '—'}
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">
+                                                    <td
+                                                        data-label="最近同步"
+                                                        className="p-3.5 text-slate-500"
+                                                    >
                                                         {account.lastSyncedAt
                                                             ? new Date(account.lastSyncedAt).toLocaleString(
                                                                   'zh-CN',
@@ -799,7 +805,7 @@ export function IcloudRelayModule() {
                                                               )
                                                             : '未同步'}
                                                     </td>
-                                                    <td className="p-3.5 text-right">
+                                                    <td data-label="操作" className="p-3.5 text-right">
                                                         <div className="inline-flex items-center gap-1">
                                                             <AdminButton
                                                                 type="button"
@@ -918,7 +924,7 @@ export function IcloudRelayModule() {
                                     ))}
                                 </AdminSelect>
                                 <div className="relative">
-                                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                                     <AdminInput
                                         type="text"
                                         value={virtualSearch}
@@ -968,7 +974,7 @@ export function IcloudRelayModule() {
 
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[850px] text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[850px] text-left text-xs">
                                     <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                         <tr>
                                             <th className="p-3.5">虚拟邮箱地址</th>
@@ -999,14 +1005,25 @@ export function IcloudRelayModule() {
                                                     key={v.id}
                                                     className="hover:bg-slate-50/80 transition-colors"
                                                 >
-                                                    <td className="p-3.5 font-bold text-slate-900">
+                                                    <td
+                                                        data-label="虚拟邮箱地址"
+                                                        className="p-3.5 font-bold text-slate-900"
+                                                    >
                                                         {v.aliasEmail}
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">
+                                                    <td
+                                                        data-label="所属主邮箱"
+                                                        className="p-3.5 text-slate-500"
+                                                    >
                                                         {v.primaryAccountEmail || '—'}
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">{v.note || '—'}</td>
-                                                    <td className="p-3.5">
+                                                    <td
+                                                        data-label="备注说明"
+                                                        className="p-3.5 text-slate-500"
+                                                    >
+                                                        {v.note || '—'}
+                                                    </td>
+                                                    <td data-label="买家专属查询码" className="p-3.5">
                                                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 w-fit">
                                                             <span>{v.buyerQueryCode}</span>
                                                             <AdminButton
@@ -1028,12 +1045,15 @@ export function IcloudRelayModule() {
                                                             </AdminButton>
                                                         </div>
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="已收信" className="p-3.5">
                                                         <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
                                                             {v.mailCount} 封
                                                         </span>
                                                     </td>
-                                                    <td className="p-3.5 text-slate-500">
+                                                    <td
+                                                        data-label="最近收信"
+                                                        className="p-3.5 text-slate-500"
+                                                    >
                                                         {v.lastMailReceivedAt
                                                             ? new Date(v.lastMailReceivedAt).toLocaleString(
                                                                   'zh-CN',
@@ -1046,7 +1066,7 @@ export function IcloudRelayModule() {
                                                               )
                                                             : '暂无'}
                                                     </td>
-                                                    <td className="p-3.5 text-right">
+                                                    <td data-label="操作" className="p-3.5 text-right">
                                                         <div className="inline-flex items-center gap-1">
                                                             <AdminButton
                                                                 type="button"
@@ -1105,7 +1125,7 @@ export function IcloudRelayModule() {
                                 显示最近收到的 100 封邮件，系统已自动提取短信/邮件验证码。
                             </p>
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                                 <AdminInput
                                     type="text"
                                     value={mailSearch}
@@ -1118,7 +1138,7 @@ export function IcloudRelayModule() {
 
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[850px] text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[850px] text-left text-xs">
                                     <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                         <tr>
                                             <th className="p-3.5">收信时间</th>
@@ -1147,7 +1167,10 @@ export function IcloudRelayModule() {
                                                     key={mail.id}
                                                     className="hover:bg-slate-50/80 transition-colors"
                                                 >
-                                                    <td className="p-3.5 text-slate-500 whitespace-nowrap">
+                                                    <td
+                                                        data-label="收信时间"
+                                                        className="p-3.5 text-slate-500 whitespace-nowrap"
+                                                    >
                                                         {new Date(mail.receivedAt).toLocaleString('zh-CN', {
                                                             month: '2-digit',
                                                             day: '2-digit',
@@ -1156,7 +1179,7 @@ export function IcloudRelayModule() {
                                                             second: '2-digit',
                                                         })}
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="发件人" className="p-3.5">
                                                         <div className="font-bold text-slate-900">
                                                             {mail.fromName || mail.fromAddress}
                                                         </div>
@@ -1164,10 +1187,13 @@ export function IcloudRelayModule() {
                                                             {mail.fromAddress}
                                                         </div>
                                                     </td>
-                                                    <td className="p-3.5 max-w-xs truncate text-slate-800">
+                                                    <td
+                                                        data-label="邮件主题"
+                                                        className="p-3.5 max-w-xs truncate text-slate-800"
+                                                    >
                                                         {mail.subject || '（无主题）'}
                                                     </td>
-                                                    <td className="p-3.5">
+                                                    <td data-label="提取到的验证码" className="p-3.5">
                                                         {mail.extractedCode ? (
                                                             <div className="flex items-center gap-1.5 font-mono text-sm font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit">
                                                                 <span>{mail.extractedCode}</span>
@@ -1193,7 +1219,7 @@ export function IcloudRelayModule() {
                                                             <span className="text-slate-400">未提取</span>
                                                         )}
                                                     </td>
-                                                    <td className="p-3.5 text-right">
+                                                    <td data-label="操作" className="p-3.5 text-right">
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() => setMailDetailDialog(mail)}

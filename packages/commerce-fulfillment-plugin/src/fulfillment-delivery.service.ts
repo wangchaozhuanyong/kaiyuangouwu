@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import type { ID } from '@vendure/common/lib/shared-types';
 import {
     CustomerService,
+    effectiveRefundLines,
     EntityNotFoundError,
     EventBus,
     Fulfillment,
     FulfillmentService,
     Order,
+    OrderService,
     RequestContext,
     RequestContextService,
     TransactionalConnection,
@@ -15,11 +18,14 @@ import {
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { LessThanOrEqual } from 'typeorm';
 
+import { guardDigitalFulfillment } from './digital-fulfillment.guard';
+import { DigitalReceiptService } from './digital-receipt.service';
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
 import {
     FulfillmentDeliveryRecord,
     type FulfillmentDeliveryStatus,
 } from './entities/fulfillment-delivery-record.entity';
+import { OrderProcessingChangedEvent } from './order-processing-changed.event';
 import {
     ConfirmFulfillmentDeliveryInput,
     FulfillmentDeliveryListOptions,
@@ -34,6 +40,11 @@ const FULFILLABLE_ORDER_STATES = new Set([
     'PartiallyShipped',
     'PartiallyDelivered',
 ]);
+const DIGITAL_FULFILLMENT_HANDLERS = new Set([
+    'digital-fulfillment',
+    'manual-service-fulfillment',
+    'auto-card-fulfillment',
+]);
 
 @Injectable()
 export class FulfillmentDeliveryService {
@@ -43,6 +54,8 @@ export class FulfillmentDeliveryService {
         private readonly customerService: CustomerService,
         private readonly requestContextService: RequestContextService,
         private readonly eventBus: EventBus,
+        private readonly orderService: OrderService,
+        private readonly receipts: DigitalReceiptService,
     ) {}
 
     async recordShippedTransition(
@@ -100,24 +113,181 @@ export class FulfillmentDeliveryService {
         }
     }
 
-    guardPhysicalFulfillmentPayment(fulfillment: Fulfillment, orders: Order[]): string | void {
-        if (!fulfillment.lines?.length) return '实物履约记录缺少订单归属';
-        for (const fulfillmentLine of fulfillment.lines) {
-            const owners = orders.flatMap(order =>
+    async guardPhysicalFulfillmentPayment(
+        ctx: RequestContext,
+        fulfillment: Fulfillment,
+        orders: Order[],
+        toState: 'Pending' | 'Shipped',
+    ): Promise<string | void> {
+        const locked = await this.lockedFulfillment(ctx, fulfillment, orders);
+        if (typeof locked === 'string') return locked;
+        const { current, owners } = locked;
+        if (current.state !== fulfillment.state || !['Created', 'Pending'].includes(current.state))
+            return '包裹状态已变化，请刷新后重试';
+        const included = current.lines.map(fulfillmentLine => {
+            const matches = owners.flatMap(order =>
                 (order.lines ?? [])
                     .filter(line => String(line.id) === String(fulfillmentLine.orderLineId))
                     .map(line => ({ order, line })),
             );
-            if (owners.length !== 1) return '实物履约记录缺少订单归属';
-            const { order: ownerOrder, line: ownedLine } = owners[0];
-            const fulfillmentType =
-                ownedLine.customFields?.fulfillmentTypeSnapshot ??
-                ownedLine.productVariant?.customFields?.fulfillmentType ??
-                'physical';
-            if (fulfillmentType === 'physical' && !FULFILLABLE_ORDER_STATES.has(ownerOrder.state)) {
-                return '订单未付款或未授权，不能创建实物发货';
+            return { fulfillmentLine, matches };
+        });
+        if (included.some(item => item.matches.length !== 1)) return '实物履约记录缺少订单归属';
+        const types = included.map(
+            item =>
+                item.matches[0].line.customFields?.fulfillmentTypeSnapshot ??
+                item.matches[0].line.productVariant?.customFields?.fulfillmentType,
+        );
+        if (types.some(type => !['physical', 'digital'].includes(type ?? '')))
+            return '历史订单缺少商品交付类型，请核对后再发货';
+        if (types.includes('digital')) {
+            if (toState === 'Pending' && types.every(type => type === 'digital') && owners.length === 1) {
+                const statuses = await this.receipts.statuses(ctx, owners[0]);
+                return guardDigitalFulfillment(owners[0], current, statuses, 'Pending');
+            }
+            return '数字明细必须通过数字交付流程，不能使用实物发货';
+        }
+        if (DIGITAL_FULFILLMENT_HANDLERS.has(current.handlerCode)) return '实物商品不能使用数字交付处理器';
+        for (const owner of owners) {
+            if (owner.active || !owner.orderPlacedAt || !FULFILLABLE_ORDER_STATES.has(owner.state))
+                return owner.state === 'Cancelled'
+                    ? '订单已取消，停止实物发货'
+                    : owner.state === 'Modifying'
+                      ? '请先结束订单修改，再处理实物发货'
+                      : '订单未付款或未授权，不能创建实物发货';
+            const payments = owner.payments ?? [];
+            const funding = payments.filter(
+                payment =>
+                    ['Settled', 'Authorized'].includes(payment.state) &&
+                    !isControlledTestPaymentMethod(payment.method) &&
+                    payment.metadata?.public?.testPayment !== true,
+            );
+            if (
+                !Number.isSafeInteger(owner.totalWithTax) ||
+                owner.totalWithTax < 0 ||
+                !funding.length ||
+                funding.some(payment => !Number.isSafeInteger(payment.amount) || payment.amount < 0) ||
+                funding.reduce((sum, payment) => sum + payment.amount, 0) < owner.totalWithTax
+            )
+                return '订单收款或有效支付授权金额不足，请先处理补款';
+        }
+        const requested = new Map<string, number>();
+        for (const { fulfillmentLine } of included) {
+            if (!Number.isSafeInteger(fulfillmentLine.quantity) || fulfillmentLine.quantity <= 0)
+                return '实物包裹的发货份数无效';
+            const key = String(fulfillmentLine.orderLineId);
+            requested.set(key, (requested.get(key) ?? 0) + fulfillmentLine.quantity);
+        }
+        for (const [lineId, quantity] of requested) {
+            const includedLine = included.find(item => String(item.fulfillmentLine.orderLineId) === lineId);
+            if (!includedLine?.matches[0]) return '包裹明细未加载完整，请刷新后重试';
+            const { order: owner, line } = includedLine.matches[0];
+            if (
+                !Number.isSafeInteger(line.quantity) ||
+                line.quantity < 0 ||
+                !Number.isSafeInteger(line.orderPlacedQuantity) ||
+                line.orderPlacedQuantity < 0
+            )
+                return '历史订单缺少有效商品数量，请核对后再发货';
+            const refundLines = effectiveRefundLines(
+                (owner.payments ?? []).flatMap(payment => payment.refunds ?? []),
+            ).filter(item => String(item.orderLineId) === lineId);
+            if (refundLines.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 0))
+                return '退款份数记录异常，请核对后再发货';
+            const refunded = refundLines.reduce((sum, item) => sum + item.quantity, 0);
+            const valid = Math.max(
+                0,
+                Math.min(line.quantity, (line.orderPlacedQuantity || line.quantity) - refunded),
+            );
+            const dispatchedLines = (owner.fulfillments ?? [])
+                .filter(
+                    item =>
+                        String(item.id) !== String(current.id) &&
+                        ['Shipped', 'Delivered'].includes(item.state),
+                )
+                .flatMap(item => item.lines ?? [])
+                .filter(item => String(item.orderLineId) === lineId);
+            if (dispatchedLines.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 0))
+                return '已发货份数记录异常，请核对后再发货';
+            const dispatched = dispatchedLines.reduce((sum, item) => sum + item.quantity, 0);
+            if (quantity > Math.max(0, valid - dispatched)) {
+                return '包裹份数超过当前可发数量，请核对退款和已发货记录';
             }
         }
+        if (
+            toState === 'Shipped' &&
+            (!current.method?.trim() ||
+                current.method.trim().length > 120 ||
+                !current.trackingCode?.trim() ||
+                current.trackingCode.trim().length > 160)
+        )
+            return '请先填写有效的物流公司和运单号，再发出包裹';
+        // The core transition loaded this object before waiting for the order lock. Preserve the
+        // current logistics values rather than overwriting a concurrently prepared package.
+        fulfillment.method = current.method;
+        fulfillment.trackingCode = current.trackingCode;
+        fulfillment.lines = current.lines;
+    }
+
+    private async lockedFulfillment(
+        ctx: RequestContext,
+        fulfillment: Fulfillment,
+        orders: Order[],
+    ): Promise<{ current: Fulfillment; owners: Order[] } | string> {
+        if (!fulfillment.id || !orders.length) return '实物履约记录缺少订单归属';
+        const orderIds = [...new Set(orders.map(order => String(order.id)))].sort();
+        // The surrounding Fulfillment transition transaction retains these write locks until the
+        // state is saved. Refunds and competing packages therefore share the same quantity boundary.
+        for (const orderId of orderIds) await this.orderService.lockOrderForRefund(ctx, orderId);
+        const fulfillmentQuery = this.connection
+            .getRepository(ctx, Fulfillment)
+            .createQueryBuilder('fulfillment')
+            .leftJoinAndSelect('fulfillment.lines', 'fulfillmentLine')
+            .leftJoinAndSelect('fulfillment.orders', 'owner')
+            .where('fulfillment.id = :fulfillmentId', { fulfillmentId: fulfillment.id });
+        const orderQuery = this.connection
+            .getRepository(ctx, Order)
+            .createQueryBuilder('order')
+            .leftJoinAndSelect('order.lines', 'line')
+            .leftJoinAndSelect('line.productVariant', 'variant')
+            .leftJoinAndSelect('order.payments', 'payment')
+            .leftJoinAndSelect('payment.refunds', 'refund')
+            .leftJoinAndSelect('refund.lines', 'refundLine')
+            .leftJoinAndSelect('order.fulfillments', 'package')
+            .leftJoinAndSelect('package.lines', 'packageLine')
+            .where('order.id IN (:...orderIds)', { orderIds });
+        const databaseType = this.connection.rawConnection.options.type;
+        if (['mysql', 'mariadb', 'postgres'].includes(databaseType)) {
+            // A normal SELECT may retain the pre-lock snapshot under MySQL REPEATABLE READ.
+            // Locking reads fetch current rows; PostgreSQL locks only the non-null root table.
+            fulfillmentQuery.setLock(
+                'pessimistic_write',
+                undefined,
+                databaseType === 'postgres' ? ['fulfillment'] : undefined,
+            );
+            orderQuery.setLock(
+                'pessimistic_write',
+                undefined,
+                databaseType === 'postgres' ? ['order'] : undefined,
+            );
+        }
+        const current = await fulfillmentQuery.getOne();
+        const owners = await orderQuery.getMany();
+        if (
+            !current?.lines?.length ||
+            owners.length !== orderIds.length ||
+            current.orders.length !== orderIds.length ||
+            current.orders.some(order => !orderIds.includes(String(order.id)))
+        )
+            return '实物履约记录缺少订单归属';
+        if (
+            owners.some(
+                order =>
+                    order.salesChannelId == null || String(order.salesChannelId) !== String(ctx.channelId),
+            )
+        )
+            return '包裹不属于当前经营店铺';
+        return { current, owners };
     }
 
     async guardDeliveredTransition(
@@ -125,7 +295,29 @@ export class FulfillmentDeliveryService {
         fulfillment: Fulfillment,
         orders: Order[],
     ): Promise<string | void> {
-        if (!isPhysicalFulfillment(fulfillment, orders)) return;
+        const locked = await this.lockedFulfillment(ctx, fulfillment, orders);
+        if (typeof locked === 'string') return locked;
+        const { current, owners } = locked;
+        if (current.state !== fulfillment.state) return '包裹状态已变化，请刷新后重试';
+        const included = current.lines.map(item =>
+            owners.flatMap(order =>
+                order.lines
+                    .filter(line => String(line.id) === String(item.orderLineId))
+                    .map(line => ({ order, line })),
+            ),
+        );
+        if (included.some(matches => matches.length !== 1)) return '履约记录缺少订单归属';
+        const types = included.map(
+            matches =>
+                matches[0].line.customFields?.fulfillmentTypeSnapshot ??
+                matches[0].line.productVariant?.customFields?.fulfillmentType,
+        );
+        if (types.every(type => type === 'digital') && owners.length === 1) {
+            const statuses = await this.receipts.statuses(ctx, owners[0]);
+            return guardDigitalFulfillment(owners[0], current, statuses, 'Delivered');
+        }
+        if (types.some(type => type !== 'physical') || DIGITAL_FULFILLMENT_HANDLERS.has(current.handlerCode))
+            return '请通过商品对应的交付流程处理，不能使用通用履约绕过交付校验';
         const record = await this.recordRepository(ctx).findOne({
             where: { fulfillmentId: fulfillment.id, channelId: ctx.channelId },
         });
@@ -315,6 +507,7 @@ export class FulfillmentDeliveryService {
                 throw new UserInputError(transition.transitionError);
             }
         }
+        await this.eventBus.publish(new OrderProcessingChangedEvent(ctx, String(record.orderId)));
         return (await this.findForFulfillment(ctx, fulfillment.id)) ?? this.normalize(record);
     }
 

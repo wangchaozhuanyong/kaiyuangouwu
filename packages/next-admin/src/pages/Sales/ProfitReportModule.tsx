@@ -141,8 +141,10 @@ export function ProfitReportModule() {
                 {summary && hasMissingExpenses && (
                     <Message tone="warning" icon={<AlertTriangle className="h-4 w-4" />}>
                         {summary.missingCarrierShippingCostOrderCount} 笔订单缺实际物流成本，
-                        {summary.missingPaymentFeeOrderCount}{' '}
-                        笔订单缺支付手续费。缺任一费用的订单不计算净利润；没有费用也要明确填 0。
+                        {summary.missingPaymentFeeOrderCount} 笔订单缺支付手续费。另有{' '}
+                        {summary.missingChargebackOrderCount}{' '}
+                        笔订单缺拒付损失核算。缺任一适用费用的订单不计算净利润；数字订单物流成本不适用，其他适用费用为零时明确填
+                        0。
                         {canImportExpenses && (
                             <AdminButton
                                 type="button"
@@ -166,7 +168,7 @@ export function ProfitReportModule() {
                         商品成本；净利润 = 可核算毛利润 − 承运商实际物流成本 − 支付手续费 −
                         拒付损失。订单上的买家物流费已包含在支付金额中，这里只单独列出，不会再加一次；退款暂时无法拆分到商品或物流费。
                         <span className="block font-bold">
-                            商品成本或任一实际费用未核算时，系统不会显示该订单及报表合计的净利润。
+                            数字订单物流成本不适用，混合订单只核算实物部分物流。商品成本或任一适用费用未核算时，不显示该订单及合计净利润。
                         </span>
                     </div>
                 </details>
@@ -208,158 +210,169 @@ export function ProfitReportModule() {
                             ))}
                         </div>
                     ) : report && report.items.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[2100px] border-collapse text-left text-xs">
-                                <thead className="bg-slate-50 text-slate-500">
-                                    <tr className="border-b border-slate-200">
-                                        <Header>订单</Header>
-                                        <Header>下单时间</Header>
-                                        <Header>商品数量</Header>
-                                        <Header>折扣前销售额</Header>
-                                        <Header>折扣</Header>
-                                        <Header>税额</Header>
-                                        <Header>已结算</Header>
-                                        <Header>已退款</Header>
-                                        <Header>净实收</Header>
-                                        <Header>买家支付物流费</Header>
-                                        <Header>商品成本</Header>
-                                        <Header>可核算毛利润</Header>
-                                        <Header>毛利率</Header>
-                                        <Header>实际物流成本</Header>
-                                        <Header>支付手续费</Header>
-                                        <Header>拒付损失</Header>
-                                        <Header>净利润</Header>
-                                        <Header>净利率</Header>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 text-slate-700">
-                                    {report.items.map(item => (
-                                        <tr key={item.id} className="hover:bg-slate-50/70">
-                                            <Cell>
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() =>
+                        <div>
+                            <p className="admin-comparison-hint px-3 py-2 text-xs text-slate-500">
+                                左右滑动查看全部金额和明细列
+                            </p>
+                            <div
+                                className="admin-comparison-scroll overflow-x-auto"
+                                role="region"
+                                aria-label="利润明细对比"
+                                tabIndex={0}
+                            >
+                                <table className="w-full min-w-[2100px] border-collapse text-left text-xs">
+                                    <thead className="bg-slate-50 text-slate-500">
+                                        <tr className="border-b border-slate-200">
+                                            <Header>订单</Header>
+                                            <Header>下单时间</Header>
+                                            <Header>商品数量</Header>
+                                            <Header>折扣前销售额</Header>
+                                            <Header>折扣</Header>
+                                            <Header>税额</Header>
+                                            <Header>已结算</Header>
+                                            <Header>已退款</Header>
+                                            <Header>净实收</Header>
+                                            <Header>买家支付物流费</Header>
+                                            <Header>商品成本</Header>
+                                            <Header>可核算毛利润</Header>
+                                            <Header>毛利率</Header>
+                                            <Header>实际物流成本</Header>
+                                            <Header>支付手续费</Header>
+                                            <Header>拒付损失</Header>
+                                            <Header>净利润</Header>
+                                            <Header>净利率</Header>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                                        {report.items.map(item => (
+                                            <tr key={item.id} className="hover:bg-slate-50/70">
+                                                <Cell>
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() =>
+                                                            navigate(`/sales/orders/${item.id}`, {
+                                                                state: {
+                                                                    returnTo: `${location.pathname}${location.search}`,
+                                                                },
+                                                            })
+                                                        }
+                                                        className="font-bold text-blue-700 hover:underline"
+                                                    >
+                                                        {item.code}
+                                                    </AdminButton>
+                                                </Cell>
+                                                <Cell>{formatDateTime(item.orderPlacedAt)}</Cell>
+                                                <Cell>{item.quantity}</Cell>
+                                                <MoneyCell
+                                                    value={item.grossSalesMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <MoneyCell
+                                                    value={item.discountMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <MoneyCell
+                                                    value={item.taxMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <MoneyCell
+                                                    value={item.settledRevenueMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <MoneyCell
+                                                    value={item.refundedRevenueMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <MoneyCell
+                                                    value={item.netRevenueMicrounits}
+                                                    currency={item.currencyCode}
+                                                    strong
+                                                />
+                                                <MoneyCell
+                                                    value={item.shippingRevenueMicrounits}
+                                                    currency={item.currencyCode}
+                                                />
+                                                <Cell>
+                                                    {item.productCostMicrounits == null ? (
+                                                        <span className="font-bold text-rose-600">
+                                                            缺 {item.missingCostLineCount} 条成本
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-mono font-bold">
+                                                            {formatMicrounits(
+                                                                item.productCostMicrounits,
+                                                                item.currencyCode,
+                                                            )}
+                                                            {item.estimatedCostLineCount > 0 && (
+                                                                <span className="ml-1 text-[10px] text-amber-700">
+                                                                    含估算
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </Cell>
+                                                <MoneyCell
+                                                    value={item.grossProfitMicrounits}
+                                                    currency={item.currencyCode}
+                                                    strong
+                                                />
+                                                <Cell>
+                                                    {item.grossMargin == null
+                                                        ? '—'
+                                                        : `${(item.grossMargin * 100).toFixed(1)}%`}
+                                                </Cell>
+                                                <ExpenseCell
+                                                    value={item.carrierShippingCostMicrounits}
+                                                    currency={item.currencyCode}
+                                                    label="物流成本"
+                                                    applicable={item.carrierShippingCostApplicable}
+                                                    onEdit={() =>
                                                         navigate(`/sales/orders/${item.id}`, {
                                                             state: {
                                                                 returnTo: `${location.pathname}${location.search}`,
                                                             },
                                                         })
                                                     }
-                                                    className="font-bold text-blue-700 hover:underline"
-                                                >
-                                                    {item.code}
-                                                </AdminButton>
-                                            </Cell>
-                                            <Cell>{formatDateTime(item.orderPlacedAt)}</Cell>
-                                            <Cell>{item.quantity}</Cell>
-                                            <MoneyCell
-                                                value={item.grossSalesMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <MoneyCell
-                                                value={item.discountMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <MoneyCell
-                                                value={item.taxMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <MoneyCell
-                                                value={item.settledRevenueMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <MoneyCell
-                                                value={item.refundedRevenueMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <MoneyCell
-                                                value={item.netRevenueMicrounits}
-                                                currency={item.currencyCode}
-                                                strong
-                                            />
-                                            <MoneyCell
-                                                value={item.shippingRevenueMicrounits}
-                                                currency={item.currencyCode}
-                                            />
-                                            <Cell>
-                                                {item.productCostMicrounits == null ? (
-                                                    <span className="font-bold text-rose-600">
-                                                        缺 {item.missingCostLineCount} 条成本
-                                                    </span>
-                                                ) : (
-                                                    <span className="font-mono font-bold">
-                                                        {formatMicrounits(
-                                                            item.productCostMicrounits,
-                                                            item.currencyCode,
-                                                        )}
-                                                        {item.estimatedCostLineCount > 0 && (
-                                                            <span className="ml-1 text-[10px] text-amber-700">
-                                                                含估算
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </Cell>
-                                            <MoneyCell
-                                                value={item.grossProfitMicrounits}
-                                                currency={item.currencyCode}
-                                                strong
-                                            />
-                                            <Cell>
-                                                {item.grossMargin == null
-                                                    ? '—'
-                                                    : `${(item.grossMargin * 100).toFixed(1)}%`}
-                                            </Cell>
-                                            <ExpenseCell
-                                                value={item.carrierShippingCostMicrounits}
-                                                currency={item.currencyCode}
-                                                label="物流成本"
-                                                onEdit={() =>
-                                                    navigate(`/sales/orders/${item.id}`, {
-                                                        state: {
-                                                            returnTo: `${location.pathname}${location.search}`,
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                            <ExpenseCell
-                                                value={item.paymentFeeMicrounits}
-                                                currency={item.currencyCode}
-                                                label="手续费"
-                                                onEdit={() =>
-                                                    navigate(`/sales/orders/${item.id}`, {
-                                                        state: {
-                                                            returnTo: `${location.pathname}${location.search}`,
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                            <ExpenseCell
-                                                value={item.chargebackMicrounits}
-                                                currency={item.currencyCode}
-                                                label="拒付损失"
-                                                onEdit={() =>
-                                                    navigate(`/sales/orders/${item.id}`, {
-                                                        state: {
-                                                            returnTo: `${location.pathname}${location.search}`,
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                            <MoneyCell
-                                                value={item.netProfitMicrounits}
-                                                currency={item.currencyCode}
-                                                strong
-                                            />
-                                            <Cell>
-                                                {item.netMargin == null
-                                                    ? '—'
-                                                    : `${(item.netMargin * 100).toFixed(1)}%`}
-                                            </Cell>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                />
+                                                <ExpenseCell
+                                                    value={item.paymentFeeMicrounits}
+                                                    currency={item.currencyCode}
+                                                    label="手续费"
+                                                    onEdit={() =>
+                                                        navigate(`/sales/orders/${item.id}`, {
+                                                            state: {
+                                                                returnTo: `${location.pathname}${location.search}`,
+                                                            },
+                                                        })
+                                                    }
+                                                />
+                                                <ExpenseCell
+                                                    value={item.chargebackMicrounits}
+                                                    currency={item.currencyCode}
+                                                    label="拒付损失"
+                                                    onEdit={() =>
+                                                        navigate(`/sales/orders/${item.id}`, {
+                                                            state: {
+                                                                returnTo: `${location.pathname}${location.search}`,
+                                                            },
+                                                        })
+                                                    }
+                                                />
+                                                <MoneyCell
+                                                    value={item.netProfitMicrounits}
+                                                    currency={item.currencyCode}
+                                                    strong
+                                                />
+                                                <Cell>
+                                                    {item.netMargin == null
+                                                        ? '—'
+                                                        : `${(item.netMargin * 100).toFixed(1)}%`}
+                                                </Cell>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 p-14 text-center">
@@ -369,7 +382,7 @@ export function ProfitReportModule() {
                         </div>
                     )}
                     {(report?.totalItems ?? 0) > 0 && (
-                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
+                        <div className="flex flex-wrap items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
                             <span>
                                 第 {page + 1} / {totalPages} 页
                             </span>
@@ -449,12 +462,16 @@ function SummaryCards({ summary, loading }: { summary?: CatalogProfitReportSumma
         ],
         [
             '实际物流成本',
-            summary?.carrierShippingCostMicrounits == null
-                ? summary
-                    ? '待补齐'
-                    : '—'
-                : formatMicrounits(summary.carrierShippingCostMicrounits, currency),
-            summary?.carrierShippingCostMicrounits == null && summary ? 'text-rose-600' : 'text-slate-900',
+            summary && !summary.carrierShippingCostApplicable
+                ? '不适用'
+                : summary?.carrierShippingCostMicrounits == null
+                  ? summary
+                      ? '待补齐'
+                      : '—'
+                  : formatMicrounits(summary.carrierShippingCostMicrounits, currency),
+            summary?.carrierShippingCostApplicable && summary.carrierShippingCostMicrounits == null
+                ? 'text-rose-600'
+                : 'text-slate-900',
         ],
         [
             '支付手续费',
@@ -597,12 +614,20 @@ function ExpenseCell({
     currency,
     label,
     onEdit,
+    applicable = true,
 }: {
     value?: number | null;
     currency: string;
     label: string;
     onEdit: () => void;
+    applicable?: boolean;
 }) {
+    if (!applicable)
+        return (
+            <Cell>
+                <span className="text-slate-500">不适用</span>
+            </Cell>
+        );
     if (value != null) return <MoneyCell value={value} currency={currency} />;
     return (
         <Cell>

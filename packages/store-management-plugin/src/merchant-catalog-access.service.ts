@@ -192,7 +192,6 @@ const platformPaymentConfigurationMutations = new Set([
 ]);
 
 const platformOrderMutations = new Set([
-    'modifyOrder',
     'setOrderCustomFields',
     'setOrderCustomer',
     'updateOrderNote',
@@ -205,6 +204,8 @@ const sensitiveStoreOrderMutations = new Set([
     'refundOrder',
     'settlePayment',
     'settleRefund',
+    'recordManualRefund',
+    'retryRefund',
     'transitionPaymentToState',
 ]);
 
@@ -245,6 +246,7 @@ interface CatalogMutationInput {
     lines?: Array<{ orderLineId: ID }> | null;
     orderId?: ID;
     paymentId?: ID;
+    refundId?: ID;
     productId?: ID;
     productOptionGroupId?: ID;
     stockLevels?: Array<{ stockLocationId: ID }> | null;
@@ -387,7 +389,11 @@ export class MerchantCatalogAccessService {
         if (managedPromotionMutations.has(fieldName)) {
             throw new ForbiddenError();
         }
-        if (sensitiveStoreOrderMutations.has(fieldName)) {
+        const modifiesWithRefund =
+            fieldName === 'modifyOrder' &&
+            Array.isArray((args.input as { refunds?: unknown } | undefined)?.refunds) &&
+            (args.input as { refunds: unknown[] }).refunds.length > 0;
+        if (sensitiveStoreOrderMutations.has(fieldName) || modifiesWithRefund) {
             if (!ctx.userHasPermissions([sensitiveStoreFinancePermission.Permission])) {
                 throw new UserInputError('当前岗位未获得敏感店铺财务权限');
             }
@@ -430,6 +436,12 @@ export class MerchantCatalogAccessService {
         inputs: CatalogMutationInput[],
     ): Promise<void> {
         switch (fieldName) {
+            case 'modifyOrder':
+                return this.assertEntitiesBelongToActiveChannel(
+                    ctx,
+                    Order,
+                    inputs.flatMap(input => (input.orderId == null ? [] : [input.orderId])),
+                );
             case 'cancelOrder':
                 return this.assertEntitiesBelongToActiveChannel(
                     ctx,
@@ -460,6 +472,13 @@ export class MerchantCatalogAccessService {
         args: Record<string, unknown>,
     ): Promise<void> {
         const input = this.getInputs(args)[0];
+        if (fieldName === 'modifyOrder') {
+            return this.assertEntitiesBelongToActiveChannel(
+                ctx,
+                Order,
+                input?.orderId == null ? [] : [input.orderId],
+            );
+        }
         if (fieldName === 'addManualPaymentToOrder') {
             return this.assertEntitiesBelongToActiveChannel(
                 ctx,
@@ -475,6 +494,12 @@ export class MerchantCatalogAccessService {
         }
         if (fieldName === 'settleRefund') {
             return this.assertRefundsBelongToActiveChannel(ctx, input?.id == null ? [] : [input.id]);
+        }
+        if (fieldName === 'recordManualRefund' || fieldName === 'retryRefund') {
+            return this.assertRefundsBelongToActiveChannel(
+                ctx,
+                input?.refundId == null ? [] : [input.refundId],
+            );
         }
         return this.assertPaymentsBelongToActiveChannel(ctx, this.namedIds(args, 'id'));
     }

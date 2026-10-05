@@ -225,7 +225,7 @@ export function TranslationsModule() {
                                     </div>
                                     <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                                         <div className="relative min-w-0">
-                                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                                             <SearchInput
                                                 value={search}
                                                 onValueChange={value => {
@@ -278,7 +278,7 @@ export function TranslationsModule() {
                                     role="region"
                                     aria-label="翻译审计记录"
                                 >
-                                    <table className="w-full min-w-[1660px] border-collapse text-left text-xs">
+                                    <table className="admin-mobile-record-table w-full min-w-[1660px] border-collapse text-left text-xs">
                                         <thead className="sticky top-0 z-30 bg-slate-50">
                                             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-500">
                                                 <th
@@ -398,41 +398,53 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
     const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION);
     return (
         <tr className="group h-[52px] hover:bg-slate-50">
-            <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-800 group-hover:bg-slate-50">
+            <td
+                data-label="内容类型"
+                className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-800 group-hover:bg-slate-50"
+            >
                 <span className="block truncate" title={entityLabel(item.entityType)}>
                     {entityLabel(item.entityType)}
                 </span>
             </td>
-            <td className="h-[52px] max-w-56 px-3 py-0">
+            <td data-label="内容 ID" className="h-[52px] max-w-56 px-3 py-0">
                 <span className="block truncate font-mono text-[9px] text-slate-400" title={item.entityId}>
                     {item.entityId}
                 </span>
             </td>
-            <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-600">
+            <td
+                data-label="字段"
+                className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-600"
+            >
                 <span className="block truncate" title={item.fieldPath}>
                     {item.fieldPath}
                 </span>
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+            <td
+                data-label="源语言"
+                className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+            >
                 {item.sourceLanguageCode}
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+            <td
+                data-label="目标语言"
+                className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+            >
                 {item.targetLanguageCode}
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0">
+            <td data-label="状态" className="h-[52px] whitespace-nowrap px-3 py-0">
                 <StatusBadge status={item.status} />
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+            <td data-label="来源" className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
                 {originLabel(item.origin)}
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0">
+            <td data-label="人工锁定" className="h-[52px] whitespace-nowrap px-3 py-0">
                 {item.locked ? (
                     <span className="font-bold text-amber-700">已锁定</span>
                 ) : (
                     <span className="text-slate-400">未锁定</span>
                 )}
             </td>
-            <td className="h-[52px] max-w-72 px-3 py-0">
+            <td data-label="错误" data-mobile-wide className="h-[52px] max-w-72 px-3 py-0">
                 {item.error ? (
                     <span className="block truncate text-[10px] text-rose-600" title={item.error}>
                         {item.error}
@@ -441,12 +453,18 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
                     <span className="text-[10px] text-slate-400">无</span>
                 )}
             </td>
-            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400">
+            <td
+                data-label="更新时间"
+                className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400"
+            >
                 {formatDateTime(item.updatedAt)}
                 <div title={item.lastErrorCode ?? undefined}>重试 {item.attempts} 次</div>
                 {item.nextAttemptAt && <div>下次：{formatDateTime(item.nextAttemptAt)}</div>}
             </td>
-            <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+            <td
+                data-label="操作"
+                className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+            >
                 {!item.locked && ['PENDING', 'FAILED', 'NOTIFY_PENDING'].includes(item.status) && (
                     <AdminButton
                         type="button"

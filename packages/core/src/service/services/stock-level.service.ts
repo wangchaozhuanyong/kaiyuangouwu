@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
+import { UserInputError } from '../../common/error/errors';
 import { Instrument } from '../../common/instrument-decorator';
 import { AvailableStock } from '../../config/catalog/stock-location-strategy';
 import { ConfigService } from '../../config/config.service';
@@ -34,6 +35,7 @@ export class StockLevelService {
      * Returns the StockLevel for the given {@link ProductVariant} and {@link StockLocation}.
      */
     async getStockLevel(ctx: RequestContext, productVariantId: ID, stockLocationId: ID): Promise<StockLevel> {
+        await this.assertStockLocations(ctx, productVariantId);
         const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
             where: {
                 productVariantId,
@@ -43,6 +45,7 @@ export class StockLevelService {
         if (stockLevel) {
             return stockLevel;
         }
+        await this.assertStockLocations(ctx, productVariantId, 'create');
         return this.connection.getRepository(ctx, StockLevel).save(
             new StockLevel({
                 productVariantId,
@@ -51,6 +54,17 @@ export class StockLevelService {
                 stockAllocated: 0,
             }),
         );
+    }
+
+    private async assertStockLocations(
+        ctx: RequestContext,
+        productVariantId: ID,
+        operation: 'flow' | 'create' = 'flow',
+    ): Promise<void> {
+        const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, productVariantId);
+        if (!(await this.stockLocationService.supportsStockLocations(ctx, variant, operation))) {
+            throw new UserInputError('该商品不使用仓库库存，请在数字交付中管理可售份数');
+        }
     }
 
     async getStockLevelsForVariant(ctx: RequestContext, productVariantId: ID): Promise<StockLevel[]> {
@@ -89,6 +103,7 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
+        await this.assertStockLocations(ctx, productVariantId);
         const repository = this.connection.getRepository(ctx, StockLevel);
         const result = await repository.increment(
             { productVariantId, stockLocationId },
@@ -96,6 +111,7 @@ export class StockLevelService {
             change,
         );
         if (!result.affected) {
+            await this.assertStockLocations(ctx, productVariantId, 'create');
             await repository.save(
                 new StockLevel({
                     productVariantId,
@@ -117,6 +133,7 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
+        await this.assertStockLocations(ctx, productVariantId);
         await this.connection
             .getRepository(ctx, StockLevel)
             .increment({ productVariantId, stockLocationId }, 'stockAllocated', change);

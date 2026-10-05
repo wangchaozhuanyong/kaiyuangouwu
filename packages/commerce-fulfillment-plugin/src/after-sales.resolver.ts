@@ -2,6 +2,7 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { AfterSalesService } from './after-sales.service';
+import { PhysicalReturnService, ReceivePhysicalReturnInput } from './physical-return.service';
 import {
     AfterSalesRequestListOptions,
     ConfirmAfterSalesReplacementInput,
@@ -66,7 +67,22 @@ export class AfterSalesShopResolver {
 
 @Resolver()
 export class AfterSalesAdminResolver {
-    constructor(private readonly afterSalesService: AfterSalesService) {}
+    constructor(
+        private readonly afterSalesService: AfterSalesService,
+        private readonly returns: PhysicalReturnService,
+    ) {}
+
+    @Query()
+    @Allow(Permission.ReadOrder)
+    physicalReturnReceipts(@Ctx() ctx: RequestContext, @Args('requestId') id: ID) {
+        return this.returns.receipts(ctx, id);
+    }
+    @Mutation()
+    @Transaction()
+    @Allow(Permission.UpdateOrder)
+    receivePhysicalReturn(@Ctx() ctx: RequestContext, @Args('input') input: ReceivePhysicalReturnInput) {
+        return this.returns.receive(ctx, input);
+    }
 
     @Query()
     @Allow(Permission.ReadOrder)

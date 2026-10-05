@@ -270,6 +270,7 @@ export interface CatalogProductSummaryFilterInput {
 export type CatalogProductListOptions = ProductListOptions;
 
 export interface SaveInventoryLotInput {
+    reconcileExistingStock?: boolean;
     id?: ID | null;
     productVariantId: ID;
     stockLocationId: ID;
@@ -344,6 +345,9 @@ export interface NormalizedCatalogRow {
     primaryUnit: string;
     purchaseUnit: string;
     packageQuantity: number | null;
+    digitalAvailableQuantity?: number | null;
+    digitalDeliveryMode?: 'auto_card' | 'manual_service' | 'file_download';
+    digitalStockPolicy?: 'limited' | 'unlimited' | 'pool_derived';
     stockOnHand: number | null;
     purchaseCost: number | null;
     sellingPrice: number | null;

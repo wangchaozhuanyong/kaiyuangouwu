@@ -57,6 +57,7 @@ import {
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
 import { StorefrontFloorList } from './StorefrontFloorList';
+import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './StorefrontMobileViewSwitch';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
 import {
     blockTranslation,
@@ -91,6 +92,7 @@ export function StorefrontModule() {
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
     const canEditPlatformGoogle = hasAnyPermission(['SuperAdmin']);
+    const [mobileView, setMobileView] = useState<StorefrontMobileView>('edit');
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [carouselOpen, setCarouselOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -472,8 +474,9 @@ export function StorefrontModule() {
                 </div>
             </header>
 
-            <main className="mx-auto grid w-full max-w-[1600px] flex-1 items-start gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
-                <div className="space-y-4">
+            <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start items-start gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
+                <StorefrontMobileViewSwitch value={mobileView} onChange={setMobileView} />
+                <div className={`min-w-0 space-y-4 ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}>
                     {notice && !carouselOpen && (
                         <Message kind="success" onClose={() => setNotice('')}>
                             {notice}
@@ -696,7 +699,9 @@ export function StorefrontModule() {
                     </section>
                 </div>
 
-                <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
+                <aside
+                    className={`min-w-0 xl:sticky xl:top-0 xl:self-start ${mobileView === 'preview' ? '' : 'hidden xl:block'}`}
+                >
                     <label className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-600">
                         预览语言
                         <AdminSelect

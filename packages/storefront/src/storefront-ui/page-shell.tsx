@@ -22,6 +22,7 @@ import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useEffect, useId, u
 import { createPortal } from 'react-dom';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { PageBackButton } from '../components/common/page-back-button';
 import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
@@ -193,9 +194,7 @@ export function SubHeader({
             data-action-visibility={actionVisibility}
             data-desktop-actions={Boolean(action) && actionVisibility === 'all' ? true : undefined}
         >
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
+            <PageBackButton onClick={onBack} label={language === 'zh' ? '返回' : 'Back'} />
             <strong>{title}</strong>
             <span className="subpage-header-actions">{action}</span>
         </header>

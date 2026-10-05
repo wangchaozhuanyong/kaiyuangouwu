@@ -7,7 +7,13 @@ it('uses the card pool only for automatic digital cards and leaves other invento
     const carts = { registerStockResolver: vi.fn() };
     const cards = { availableStockForVariant: vi.fn().mockResolvedValue(0) };
     const commands = { register: vi.fn() };
-    new CartDeliveryCommandAdapter(commands as any, {} as any, carts as any, cards as any).onModuleInit();
+    new CartDeliveryCommandAdapter(
+        commands as any,
+        {} as any,
+        carts as any,
+        cards as any,
+        { available: vi.fn().mockResolvedValue(undefined) } as any,
+    ).onModuleInit();
     const resolve = carts.registerStockResolver.mock.calls[0][0];
     expect(
         await resolve({}, { id: 'physical', customFields: { fulfillmentType: 'physical' } }),

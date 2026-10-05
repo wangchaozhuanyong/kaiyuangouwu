@@ -9,6 +9,7 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { In } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
+import { UserInputError } from '../../common/error/errors';
 import { Instrument } from '../../common/instrument-decorator';
 import { idsAreEqual } from '../../common/utils';
 import { ShippingCalculator } from '../../config/shipping-method/shipping-calculator';
@@ -88,6 +89,10 @@ export class StockMovementService {
         productVariantId: ID,
         stockOnHandNumberOrInput: number | StockLevelInput[],
     ): Promise<StockAdjustment[]> {
+        const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, productVariantId);
+        if (!(await this.stockLocationService.supportsStockLocations(ctx, variant, 'adjust'))) {
+            throw new UserInputError('该商品不使用仓库库存，请在数字交付中管理可售份数');
+        }
         let stockOnHandInputs: StockLevelInput[];
         if (typeof stockOnHandNumberOrInput === 'number') {
             const defaultStockLocation = await this.stockLocationService.defaultStockLocation(ctx);
@@ -367,3 +372,4 @@ export class StockMovementService {
         );
     }
 }
+// organize-imports-ignore -- Preserve ESLint ordering of parent and hyphenated entity paths.

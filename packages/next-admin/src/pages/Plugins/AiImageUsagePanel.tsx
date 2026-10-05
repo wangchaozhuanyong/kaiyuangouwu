@@ -122,7 +122,7 @@ export function AiImageUsagePanel() {
                 <p className="rounded-xl bg-white p-6 text-sm text-slate-500">当前条件下暂无使用记录</p>
             ) : (
                 <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                    <table className="w-full min-w-[780px] text-left text-sm">
+                    <table className="admin-mobile-record-table w-full min-w-[780px] text-left text-sm">
                         <thead className="bg-slate-50 text-xs text-slate-500">
                             <tr>
                                 {['记录 / 时间', '方案 / 状态', '客户收费', '供应商费用', '操作'].map(
@@ -140,7 +140,7 @@ export function AiImageUsagePanel() {
                                     key={`${record.recordType}:${record.id}`}
                                     className="border-t border-slate-100 align-top"
                                 >
-                                    <td className="p-3">
+                                    <td data-label="记录 / 时间" className="p-3">
                                         <div>
                                             {record.recordType === 'IMAGE_GENERATION' ? '生图' : '描述优化'} #
                                             {record.id}
@@ -149,7 +149,7 @@ export function AiImageUsagePanel() {
                                             {formatDateTime(record.createdAt)}
                                         </div>
                                     </td>
-                                    <td className="p-3">
+                                    <td data-label="方案 / 状态" className="p-3">
                                         <div>
                                             {record.recordType === 'PROMPT_OPTIMIZATION' ? '推荐方案：' : ''}
                                             {record.modelCode || '未记录'}
@@ -158,7 +158,7 @@ export function AiImageUsagePanel() {
                                             {getSystemLabel(record.state, outcomeLabels, 'zh', 'status')}
                                         </div>
                                     </td>
-                                    <td className="p-3">
+                                    <td data-label="客户收费" className="p-3">
                                         <div>{formatMoney(record.chargedAmount, record.currencyCode)}</div>
                                         {record.refundedAmount > 0 && (
                                             <div className="text-xs">
@@ -166,10 +166,10 @@ export function AiImageUsagePanel() {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="p-3">
+                                    <td data-label="供应商费用" className="p-3">
                                         <ImageUsageCost record={record} />
                                     </td>
-                                    <td className="p-3">
+                                    <td data-label="操作" className="p-3">
                                         <AdminButton
                                             type="button"
                                             className={buttonClass}

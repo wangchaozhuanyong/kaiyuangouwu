@@ -86,49 +86,37 @@ async function renderTemplate(
 
 describe('localized email templates', () => {
     it.each([
-        ['zh_Hans', true, '虚拟商品发货通知', '商品使用说明', '不支持自助退款'],
-        [
-            'en',
-            false,
-            'Digital credential delivery',
-            'Product instructions',
-            'not eligible for self-service refunds',
-        ],
+        ['auto-card-delivery', 'zh_Hans', '您的数字商品可以领取了', '打开订单领取'],
+        ['auto-card-delivery', 'en', 'Your digital item is ready', 'Open order to claim'],
+        ['manual-digital-delivery', 'zh_Hans', '您的数字商品可以领取了', '打开订单领取'],
+        ['manual-digital-delivery', 'en', 'Your digital item is ready', 'Open order to claim'],
     ])(
-        'renders structured automatic credential delivery in %s',
-        async (languageCode, isChinese, heading, instructionsHeading, refundCopy) => {
-            const template = await fs.readFile(
-                path.join(templatePath, 'auto-card-delivery', 'body.hbs'),
-                'utf8',
-            );
-            const result = await generator.generate('store@example.com', 'Subject', template, {
+        'renders only a safe receipt notification for %s in %s',
+        async (type, languageCode, heading, action) => {
+            const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
+            const result = await generator.generate('store@example.invalid', 'Subject', template, {
                 ...emailLanguageVariables(languageCode, {
                     storefrontNameZh: '测试店铺',
                     storefrontNameEn: 'Test Store',
                 }),
-                isChinese,
-                orderCode: 'ORDER-2002',
-                productName: 'Google account',
-                sku: 'GOOGLE-001',
-                instructions: '首次登录后请修改密码',
-                credentials: [
+                orderCode: 'SYNTHETIC-2002',
+                productName: 'Synthetic digital product',
+                receiptUrl:
+                    'https://shop.example.invalid/order-confirmation?id=SYNTHETIC-2002&token=dummy-proof',
+                // A stale queue might still contain these. Rendering must never include them.
+                credentials: [{ rawPayload: 'dummy-private-content' }],
+                packages: [
                     {
-                        number: 1,
-                        rawPayload: 'buyer@example.com----example-secret',
-                        fields: [
-                            { key: 'account', label: '账号', value: 'buyer@example.com', secret: false },
-                            { key: 'password', label: '密码', value: 'example-secret', secret: true },
-                        ],
+                        note: 'dummy-private-note',
+                        fields: [{ label: 'dummy', value: 'dummy-private-value' }],
                     },
                 ],
+                attachments: [{ filename: 'dummy-private-file.txt' }],
             });
-
             expect(result.body).toContain(heading);
-            expect(result.body).toContain(instructionsHeading);
-            expect(result.body).toContain(refundCopy);
-            expect(result.body).toContain('buyer@example.com');
-            expect(result.body).toContain('example-secret');
-            expect(result.body).toContain('首次登录后请修改密码');
+            expect(result.body).toContain(action);
+            expect(result.body).toContain('/order-confirmation?id&#x3D;SYNTHETIC-2002');
+            expect(result.body).not.toContain('dummy-private');
         },
     );
 

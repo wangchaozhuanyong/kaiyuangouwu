@@ -83,6 +83,7 @@ describe.each(databases)('order expense persistence with $name', ({ options }) =
             } as unknown as RequestContext;
             const orderQuery = {
                 innerJoin: vi.fn().mockReturnThis(),
+                leftJoinAndSelect: vi.fn().mockReturnThis(),
                 where: vi.fn().mockReturnThis(),
                 andWhere: vi.fn().mockReturnThis(),
                 getOne: vi.fn().mockResolvedValue({ id: 8, currencyCode: CurrencyCode.MYR }),

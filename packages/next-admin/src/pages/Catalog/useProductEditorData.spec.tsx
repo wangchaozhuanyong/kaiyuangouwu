@@ -75,6 +75,7 @@ describe('product editor pagination across the extracted data hook', () => {
         expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toContain('16');
         expect(queries.mock.calls.find(([query]) => query === GET_PRODUCT_DETAIL)?.[1].variables).toEqual({
             id: '27',
+            assignmentId: '27',
         });
     });
 });

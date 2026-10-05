@@ -1,5 +1,5 @@
 import { useMutation } from '@apollo/client/react';
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -67,6 +67,20 @@ export function useProductEditorForm() {
     const [slug, setSlug] = useState('');
     const [enabled, setEnabled] = useState(true);
     const [description, setDescription] = useState('');
+    const [initialVariant] = useState<ProductVariantState>(() => ({
+        sku: `P-${Date.now().toString(36)}`,
+        name: '',
+        price: '',
+        costPrice: '',
+        stockOnHand: 0,
+        stockAllocated: 0,
+        enabled: true,
+        digitalDeliveryMode: 'manual_service',
+        digitalStockPolicy: 'unlimited',
+        digitalAvailableQuantity: 0,
+        optionIds: [],
+        isNew: true,
+    }));
     const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('digital');
     const [refundPolicy, setRefundPolicy] = useState<RefundPolicy>('MERCHANT_REVIEW');
     const [manualDeliverySlaMinutes, setManualDeliverySlaMinutes] = useState(1440);
@@ -108,8 +122,6 @@ export function useProductEditorForm() {
     const [notification, setNotification] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [saving, setSaving] = useState(false);
-    const [hydratedBaseline, setHydratedBaseline] = useState<ProductEditorSaveDraft | null>(null);
-    const hydration = useRef({ initialized: false, dirty: false, allowReadback: false });
 
     const deferredAssetSearch = useDeferredValue(assetSearch.trim());
     const deferredFacetSearch = useDeferredValue(facetSearch.trim());
@@ -172,11 +184,6 @@ export function useProductEditorForm() {
     // 绑定从后端查询到的真实商品数据；查询结果到达后需要初始化可编辑表单。
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
-        if (
-            saving ||
-            (hydration.current.initialized && hydration.current.dirty && !hydration.current.allowReadback)
-        )
-            return;
         if (productData?.product) {
             const p = productData.product;
             const draft = productEditorDraft(
@@ -202,10 +209,6 @@ export function useProductEditorForm() {
             }
             setVariants(draft.variants);
             setDynamicCustomFieldValues(draft.dynamicCustomFields ?? {});
-            setSelectedChannelIds(draft.selectedChannelIds);
-            setHydratedBaseline(draft);
-            hydration.current.initialized = true;
-            hydration.current.allowReadback = false;
             setFeaturedAssetPreview(p.featuredAsset?.preview ?? null);
             setKnownAssets(
                 Object.fromEntries(
@@ -214,7 +217,6 @@ export function useProductEditorForm() {
             );
             setKnownOptionGroups(Object.fromEntries(p.optionGroups.map(group => [group.id, group])));
         } else if (isCreateMode) {
-            hydration.current.initialized = true;
             setProductName('');
             setSlug('');
             setEnabled(true);
@@ -231,17 +233,23 @@ export function useProductEditorForm() {
             setSelectedCollectionIds([]);
             setSelectedOptionGroupIds([]);
             setKnownOptionGroups({});
-            setVariants([]);
+            setVariants([{ ...initialVariant }]);
             setIsOptionTemplatesOpen(false);
         }
-    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields, workspaceVariants, saving]);
+    }, [
+        fixedFulfillmentType,
+        productData,
+        isCreateMode,
+        productExtensionFields,
+        workspaceVariants,
+        initialVariant,
+    ]);
 
     useEffect(() => {
         if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
     }, [fixedFulfillmentType]);
 
     useEffect(() => {
-        if (hydration.current.initialized && hydration.current.dirty) return;
         if (productData?.product) {
             setSelectedChannelIds(productData.product.channels.map(channel => channel.id));
         } else if (isCreateMode && catalogChannelsData?.activeChannel.id) {
@@ -308,26 +316,33 @@ export function useProductEditorForm() {
                 selectedCollectionIds: [],
                 selectedChannelIds: activeChannelId ? [activeChannelId] : [],
                 selectedOptionGroupIds: [],
-                variants: [],
+                variants: [{ ...initialVariant }],
                 dynamicCustomFields: {},
             };
         }
-        return hydratedBaseline;
-    }, [catalogChannelsData?.activeChannel.id, fixedFulfillmentType, isCreateMode, hydratedBaseline]);
+        const product = productData?.product;
+        if (!product) return null;
+        return productEditorDraft(product, fixedFulfillmentType, productExtensionFields, workspaceVariants);
+    }, [
+        catalogChannelsData?.activeChannel.id,
+        initialVariant,
+        fixedFulfillmentType,
+        isCreateMode,
+        productData,
+        workspaceVariants,
+        productExtensionFields,
+    ]);
     const baselineEditorSnapshot = useMemo(
         () => (baselineEditorDraft ? serializeProductEditor(baselineEditorDraft) : null),
         [baselineEditorDraft],
     );
     const hasUnsavedChanges =
-        baselineEditorSnapshot !== null && currentEditorSnapshot !== baselineEditorSnapshot;
-    useLayoutEffect(() => {
-        hydration.current.dirty = hasUnsavedChanges;
-    }, [hasUnsavedChanges]);
+        !productLoading &&
+        baselineEditorSnapshot !== null &&
+        currentEditorSnapshot !== baselineEditorSnapshot;
     const confirmLeave = useUnsavedChangesWarning(
-        hasUnsavedChanges || saving,
-        saving
-            ? '商品正在保存，离开可能无法核对结果。确定继续吗？'
-            : '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
+        hasUnsavedChanges && !saving,
+        '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
     );
     const { returnToList } = useAdminReturn('/catalog/list');
     const leaveToProductList = () => {
@@ -416,7 +431,7 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'limited',
+                digitalStockPolicy: 'unlimited',
                 optionIds: [],
                 isNew: true,
             },
@@ -503,7 +518,7 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'limited',
+                digitalStockPolicy: 'unlimited',
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -534,7 +549,7 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'limited',
+                digitalStockPolicy: 'unlimited',
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -587,6 +602,7 @@ export function useProductEditorForm() {
         activeCurrencyCode,
         data: {
             productData,
+            catalogChannelsData,
             refetchCollections,
             refetchProduct,
             defaultStockLocationId,
@@ -603,9 +619,6 @@ export function useProductEditorForm() {
             setSaving,
             showError,
             showNotice,
-            onReadbackComplete: () => {
-                hydration.current.allowReadback = true;
-            },
         },
     });
 
@@ -705,6 +718,7 @@ export function useProductEditorForm() {
         productLoading,
         productError,
         refetchProduct,
+        refetchWorkspace,
         facetsData,
         facetsLoading,
         facetsError,

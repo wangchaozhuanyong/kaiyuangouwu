@@ -120,7 +120,7 @@ export function InventoryControlModule() {
                         <State label="当前批次数量与平台库存一致" />
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[760px] text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[760px] text-left text-xs">
                                 <thead className="bg-slate-50">
                                     <tr>
                                         {['SKU', '仓库', '批次合计', '总库存', '差异', '操作'].map(label => (
@@ -133,17 +133,26 @@ export function InventoryControlModule() {
                                 <tbody className="divide-y">
                                     {differences.map(item => (
                                         <tr key={item.id}>
-                                            <td className="px-4 py-3">
+                                            <td data-label="SKU" className="px-4 py-3">
                                                 <strong>{item.variantName}</strong>
                                                 <small className="ml-2 font-mono">{item.sku}</small>
                                             </td>
-                                            <td className="px-4 py-3">{item.stockLocationName}</td>
-                                            <td className="px-4 py-3">{item.lotQuantity}</td>
-                                            <td className="px-4 py-3">{item.stockOnHand}</td>
-                                            <td className="px-4 py-3 font-bold text-rose-700">
+                                            <td data-label="仓库" className="px-4 py-3">
+                                                {item.stockLocationName}
+                                            </td>
+                                            <td data-label="批次合计" className="px-4 py-3">
+                                                {item.lotQuantity}
+                                            </td>
+                                            <td data-label="总库存" className="px-4 py-3">
+                                                {item.stockOnHand}
+                                            </td>
+                                            <td
+                                                data-label="差异"
+                                                className="px-4 py-3 font-bold text-rose-700"
+                                            >
                                                 {signed(item.difference)}
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="操作" className="px-4 py-3">
                                                 <AdminButton
                                                     type="button"
                                                     onClick={() => {
@@ -183,7 +192,7 @@ export function InventoryControlModule() {
                         <State label="暂无手工库存操作流水" />
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[980px] text-left text-xs">
                                 <thead className="bg-slate-50">
                                     <tr>
                                         {['流水', '类型', 'SKU / 仓库', '数量变化', '原因', '时间'].map(
@@ -199,12 +208,13 @@ export function InventoryControlModule() {
                                     {ledger.map(operation => (
                                         <tr key={operation.id}>
                                             <td
+                                                data-label="流水"
                                                 data-business-reference="inventory-operation"
                                                 className="px-4 py-3 font-mono"
                                             >
                                                 {operation.code}
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="类型" className="px-4 py-3">
                                                 {getSystemLabel(
                                                     operation.type,
                                                     operationLabels,
@@ -212,7 +222,7 @@ export function InventoryControlModule() {
                                                     'type',
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="SKU / 仓库" className="px-4 py-3">
                                                 {operation.lines.map(line => (
                                                     <div key={line.id}>
                                                         {line.variant.sku} · {line.stockLocation.name}
@@ -222,13 +232,15 @@ export function InventoryControlModule() {
                                                     </div>
                                                 ))}
                                             </td>
-                                            <td className="px-4 py-3 font-mono">
+                                            <td data-label="数量变化" className="px-4 py-3 font-mono">
                                                 {operation.lines.map(line => (
                                                     <div key={line.id}>{signed(line.quantityDelta)}</div>
                                                 ))}
                                             </td>
-                                            <td className="max-w-sm px-4 py-3">{operation.reason}</td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="原因" className="max-w-sm px-4 py-3">
+                                                {operation.reason}
+                                            </td>
+                                            <td data-label="时间" className="px-4 py-3">
                                                 {new Date(operation.postedAt).toLocaleString('zh-CN')}
                                             </td>
                                         </tr>

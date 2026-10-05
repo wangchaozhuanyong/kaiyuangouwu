@@ -9,7 +9,12 @@ import { languageCodeFor } from './i18n';
 import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { DeliveryDetails, deliveryStatus } from './storefront-ui/delivery-details';
-import { orderNotification, orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
+import {
+    customerOrderStateLabel,
+    orderNotification,
+    orderStateLabel,
+    orderStatesForTab,
+} from './storefront-ui/order-ui';
 import { orderPageStyles } from './tailwind/order-page-styles';
 import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
 
@@ -149,7 +154,7 @@ describe('OrdersPage route query', () => {
             expect(markup).not.toContain('立即付款');
             expect(markup).not.toContain('实付');
         }
-        expect(orderStatesForTab('pending')).toEqual(['ArrangingPayment']);
+        expect(orderStatesForTab('pending')).toEqual(['ArrangingPayment', 'ArrangingAdditionalPayment']);
         expect(orderStateLabel('ArrangingPayment', 'zh')).toBe('待付款');
         expect(orderNotification(cartOrder, 'zh').title).toBe('商品仍在购物车');
     });
@@ -319,26 +324,26 @@ describe('LogisticsPage delivery overview', () => {
     });
 });
 
-describe('OrderDetailPage fulfillment actions', () => {
-    function renderDetail(detailOrder: Order) {
-        return renderToStaticMarkup(
-            createElement(OrderDetailPage, {
-                order: detailOrder,
-                market,
-                locale: market.locale,
-                language: 'zh' as const,
-                storefrontName: '测试商城',
-                onBack: vi.fn(),
-                onBuyAgain: vi.fn(),
-                onReopen: vi.fn(),
-                onCancelOrder: vi.fn(),
-                onCreateAfterSales: vi.fn(),
-                onConfirmDelivery: vi.fn(),
-                onUnavailable: vi.fn(),
-            }),
-        );
-    }
+function renderDetail(detailOrder: Order) {
+    return renderToStaticMarkup(
+        createElement(OrderDetailPage, {
+            order: detailOrder,
+            market,
+            locale: market.locale,
+            language: 'zh' as const,
+            storefrontName: '测试商城',
+            onBack: vi.fn(),
+            onBuyAgain: vi.fn(),
+            onReopen: vi.fn(),
+            onCancelOrder: vi.fn(),
+            onCreateAfterSales: vi.fn(),
+            onConfirmDelivery: vi.fn(),
+            onUnavailable: vi.fn(),
+        }),
+    );
+}
 
+describe('OrderDetailPage fulfillment actions', () => {
     it('uses the order currency for historic lines even when the variant currency changed', () => {
         const markup = renderDetail({
             ...order,
@@ -474,7 +479,45 @@ describe('OrderDetailPage fulfillment actions', () => {
             ],
         });
 
-        expect(markup).toContain('邮箱自动发卡');
+        expect(markup).toContain('自动卡密交付');
         expect(markup).not.toContain('auto-card-email');
+    });
+});
+
+describe('digital order customer state labels', () => {
+    it('makes modification and additional payment visible without claiming the adjusted total was paid', () => {
+        const additional = { ...order, state: 'ArrangingAdditionalPayment' };
+        expect(customerOrderStateLabel(additional, 'zh')).toBe('待补款');
+        expect(customerOrderStateLabel(additional, 'en')).toBe('Additional payment needed');
+        expect(customerOrderStateLabel({ ...order, state: 'Modifying' }, 'zh')).toBe('商家调整中');
+        expect(orderNotification(additional, 'zh').tone).toBe('pending');
+        expect(orderNotification(additional, 'zh').title).toBe('订单等待补款');
+        expect(orderNotification({ ...order, state: 'Modifying' }, 'en').title).toContain('updating');
+        for (const desktop of [false, true]) {
+            const markup = renderOrders([additional], 'zh', desktop);
+            expect(markup).toContain('待补款');
+            expect(markup).toContain('核对补款');
+            expect(markup).toContain('订单金额');
+            expect(markup).not.toContain('实付');
+            expect(markup).not.toContain('未知状态');
+        }
+        expect(renderDetail(additional)).toContain('请在下方核对并完成补款');
+        expect(renderDetail(additional)).not.toContain('返回修改订单');
+    });
+    it('keeps shipping for physical/mixed and uses delivery labels for purely digital orders', () => {
+        const digital = {
+            ...order,
+            lines: order.lines.map(line => ({
+                ...line,
+                customFields: { ...line.customFields, fulfillmentTypeSnapshot: 'digital' as const },
+            })),
+        };
+        expect(customerOrderStateLabel(digital, 'zh')).toBe('待交付');
+        expect(customerOrderStateLabel(digital, 'en')).toBe('Preparing digital delivery');
+        expect(customerOrderStateLabel(order, 'zh')).toBe(orderStateLabel(order.state, 'zh'));
+        expect(customerOrderStateLabel({ ...digital, lines: [...digital.lines, ...order.lines] }, 'zh')).toBe(
+            orderStateLabel(order.state, 'zh'),
+        );
+        expect(customerOrderStateLabel({ ...digital, state: 'Delivered' }, 'zh')).toBe('已交付');
     });
 });

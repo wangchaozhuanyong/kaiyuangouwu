@@ -52,7 +52,13 @@ export function CampaignDetailDialog({
                     <DetailValue label="商品规格" value={`${sale.items.length} 个`} />
                 </DetailGrid>
                 <DetailSection title="秒杀商品与价格">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div
+                        tabIndex={0}
+                        role="region"
+                        aria-label="促销商品价格对比"
+                        className="admin-comparison-scroll overflow-x-auto rounded-xl border border-slate-200"
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整促销商品价格对比</p>
                         <table className="w-full min-w-[680px] text-left text-xs">
                             <thead className="bg-slate-50 text-slate-500">
                                 <tr>

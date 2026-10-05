@@ -1,6 +1,13 @@
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import {
+    AdminMobileField,
+    AdminMobileList,
+    AdminMobileRecord,
+    AdminMobileSort,
+} from '../../components/AdminMobileList';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
@@ -30,7 +37,8 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -118,6 +126,12 @@ const emptyCustomerForm: CustomerForm = {
 
 const CUSTOMER_SORT_FIELDS = ['createdAt', 'lastName', 'emailAddress', 'phoneNumber'] as const;
 type CustomerSortField = (typeof CUSTOMER_SORT_FIELDS)[number];
+const CUSTOMER_SORT_OPTIONS: Array<{ value: CustomerSortField; label: string }> = [
+    { value: 'createdAt', label: '注册时间' },
+    { value: 'lastName', label: '姓名' },
+    { value: 'emailAddress', label: '邮箱' },
+    { value: 'phoneNumber', label: '手机' },
+];
 
 interface CustomerAddressForm {
     fullName: string;
@@ -195,6 +209,7 @@ export function CustomersModule() {
     const canDeleteCustomer = canManageIdentity && hasAnyPermission(['DeleteCustomer']);
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
     const location = useLocation();
+    const [, setSearchParams] = useSearchParams();
     const {
         isFiltered,
         page,
@@ -219,6 +234,14 @@ export function CustomersModule() {
     const [groupManagerOpen, setGroupManagerOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [createDraft, setCreateDraft] = useState<CustomerForm>(emptyCustomerForm);
+    const [createError, setCreateError] = useState('');
+    const [mobileFilterDraft, setMobileFilterDraft] = useState<{
+        group: string;
+        field: CustomerSortField;
+        direction: SortDirection;
+        clearSearch: boolean;
+    } | null>(null);
+    const [mobileBatchMode, setMobileBatchMode] = useState(false);
     const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
     const [bulkGroupId, setBulkGroupId] = useState('');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -309,14 +332,15 @@ export function CustomersModule() {
     };
 
     const saveNewCustomer = async () => {
+        setCreateError('');
         const validationError = validateCustomerEmail(createDraft.emailAddress);
         if (validationError) {
-            setActionError(validationError);
+            setCreateError(validationError);
             return;
         }
         const phoneValidationError = validateCustomerPhoneNumber(createDraft.phoneNumber);
         if (phoneValidationError) {
-            setActionError(phoneValidationError);
+            setCreateError(phoneValidationError);
             return;
         }
         try {
@@ -339,10 +363,10 @@ export function CustomersModule() {
             setCreateOpen(false);
             setCreateDraft(emptyCustomerForm);
             setNotice('客户已创建');
-            await refresh();
+            await refreshAfterAdminWrite(refresh, setActionError);
             setSelectedCustomerId(payload.id);
         } catch (cause) {
-            setActionError(errorText(cause));
+            setCreateError(errorText(cause));
         }
     };
     const changeSelectedGroup = async (kind: 'add' | 'remove') => {
@@ -406,6 +430,31 @@ export function CustomersModule() {
         setSelectedCustomerIds([]);
     };
 
+    const applyMobileFilters = () => {
+        if (!mobileFilterDraft) return;
+        // One URL update applies group and sort together without sequential setter collisions.
+        setSearchParams(
+            current => {
+                const next = new URLSearchParams(mobileFilterDraft.clearSearch ? undefined : current);
+                if (mobileFilterDraft.group === 'ALL') next.delete('group');
+                else next.set('group', mobileFilterDraft.group);
+                if (mobileFilterDraft.field === 'createdAt' && mobileFilterDraft.direction === 'DESC') {
+                    next.delete('sort');
+                    next.delete('direction');
+                } else {
+                    next.set('sort', mobileFilterDraft.field);
+                    next.set('direction', mobileFilterDraft.direction);
+                }
+                if (mobileFilterDraft.clearSearch) next.delete('search');
+                next.delete('page');
+                return next;
+            },
+            { replace: true },
+        );
+        setSelectedCustomerIds([]);
+        setMobileFilterDraft(null);
+    };
+
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
@@ -424,7 +473,10 @@ export function CustomersModule() {
                         {canCreateCustomer && (
                             <AdminButton
                                 type="button"
-                                onClick={() => setCreateOpen(true)}
+                                onClick={() => {
+                                    setCreateError('');
+                                    setCreateOpen(true);
+                                }}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
                             >
                                 <Plus className="h-3.5 w-3.5" />
@@ -470,7 +522,22 @@ export function CustomersModule() {
                     </StatusMessage>
                 )}
 
-                <section className="grid gap-3 sm:grid-cols-2">
+                <details className="rounded-lg bg-white px-3 text-sm text-slate-600 md:hidden">
+                    <summary className="min-h-11 cursor-pointer py-3">客户跟进概览</summary>
+                    <dl className="grid grid-cols-2 gap-3 pb-3">
+                        <div>
+                            <dt>待跟进客户</dt>
+                            <dd className="font-semibold">{followUpCounts.data?.open.totalItems ?? 0} 项</dd>
+                        </div>
+                        <div>
+                            <dt>已逾期跟进</dt>
+                            <dd className="font-semibold">
+                                {followUpCounts.data?.overdue.totalItems ?? 0} 项
+                            </dd>
+                        </div>
+                    </dl>
+                </details>
+                <section className="hidden gap-3 md:grid sm:grid-cols-2">
                     <Metric
                         label="待跟进客户"
                         value={`${followUpCounts.data?.open.totalItems ?? 0} 项`}
@@ -485,8 +552,8 @@ export function CustomersModule() {
 
                 <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="flex flex-1 items-center gap-2 lg:max-w-xl">
-                            <div className="relative min-w-0 flex-1">
+                        <div className="flex flex-1 flex-wrap items-center gap-2 lg:max-w-xl">
+                            <div className="relative w-full min-w-0 flex-auto md:flex-1">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <SearchInput
                                     type="search"
@@ -496,7 +563,7 @@ export function CustomersModule() {
                                     onValueChange={setSearchTerm}
                                     aria-label="搜索客户"
                                     placeholder="搜索姓名、手机号或邮箱"
-                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
                                     <AdminButton
@@ -504,7 +571,7 @@ export function CustomersModule() {
                                         onClick={() => {
                                             setSearchTerm('');
                                         }}
-                                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
+                                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-slate-700"
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
@@ -515,7 +582,7 @@ export function CustomersModule() {
                                 <AdminButton
                                     type="button"
                                     onClick={resetFilters}
-                                    className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                                    className="hidden shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs md:flex font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
                                     title="清空搜索与筛选条件"
                                 >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
@@ -523,7 +590,7 @@ export function CustomersModule() {
                                 </AdminButton>
                             )}
                         </div>
-                        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-xs">
+                        <div className="hidden max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-xs md:flex">
                             <GroupFilterButton
                                 active={selectedGroupId === 'ALL'}
                                 onClick={() => {
@@ -543,12 +610,70 @@ export function CustomersModule() {
                             ))}
                         </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+                    <div className="mt-3 space-y-3 md:hidden">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <AdminButton
+                                type="button"
+                                onClick={() =>
+                                    setMobileFilterDraft({
+                                        group: selectedGroupId,
+                                        field: sortField,
+                                        direction: sortDirection,
+                                        clearSearch: false,
+                                    })
+                                }
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
+                                筛选与排序
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                aria-expanded={mobileBatchMode}
+                                onClick={() => {
+                                    setMobileBatchMode(value => !value);
+                                    setSelectedCustomerIds([]);
+                                }}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
+                                {mobileBatchMode ? '退出批量管理' : '批量管理'}
+                            </AdminButton>
+                            {mobileBatchMode && (
+                                <label className="flex min-h-11 items-center gap-2 text-sm">
+                                    <AdminInput
+                                        type="checkbox"
+                                        checked={
+                                            Boolean(list?.items.length) &&
+                                            list!.items.every(item => selectedCustomerIds.includes(item.id))
+                                        }
+                                        disabled={!list?.items.length}
+                                        onChange={event => {
+                                            const ids = list?.items.map(item => item.id) ?? [];
+                                            setSelectedCustomerIds(current =>
+                                                event.target.checked
+                                                    ? [...new Set([...current, ...ids])]
+                                                    : current.filter(id => !ids.includes(id)),
+                                            );
+                                        }}
+                                    />
+                                    本页全选
+                                </label>
+                            )}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            {selectedGroupId === 'ALL'
+                                ? '全部客户'
+                                : (groups.find(group => group.id === selectedGroupId)?.name ??
+                                  '所选分组')}{' '}
+                            · {CUSTOMER_SORT_OPTIONS.find(option => option.value === sortField)?.label}
+                            {sortDirection === 'ASC' ? '升序' : '降序'}
+                        </p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
                         <span>
                             当前条件共 <strong className="font-mono text-slate-900">{totalItems}</strong>{' '}
                             位客户
                         </span>
-                        <span>列表只展示后端可核实字段，不推算虚假消费画像</span>
+                        <span className="hidden md:inline">列表只展示后端可核实字段，不推算虚假消费画像</span>
                     </div>
                     {selectedCustomerIds.length > 0 && (
                         <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center">
@@ -618,7 +743,69 @@ export function CustomersModule() {
                     <EmptyState icon={Users} title="没有匹配的客户" detail="请调整关键词或客户分组后重试。" />
                 ) : (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-                        <div className="overflow-x-auto">
+                        <AdminMobileList ariaLabel="客户摘要列表">
+                            {list.items.map(customer => {
+                                const latestOrder = customer.orders.items[0];
+                                return (
+                                    <AdminMobileRecord
+                                        key={customer.id}
+                                        title={customerName(customer)}
+                                        status={
+                                            <StatusPill positive={Boolean(customer.user?.verified)}>
+                                                {customer.user?.verified ? '已验证' : '未验证'}
+                                            </StatusPill>
+                                        }
+                                        selection={
+                                            mobileBatchMode ? (
+                                                <AdminInput
+                                                    type="checkbox"
+                                                    aria-label={`选择 ${customerName(customer)}`}
+                                                    checked={selectedCustomerIds.includes(customer.id)}
+                                                    onChange={event =>
+                                                        setSelectedCustomerIds(current =>
+                                                            event.target.checked
+                                                                ? [...current, customer.id]
+                                                                : current.filter(id => id !== customer.id),
+                                                        )
+                                                    }
+                                                />
+                                            ) : undefined
+                                        }
+                                        actions={
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => setSelectedCustomerId(customer.id)}
+                                                className="rounded-lg bg-blue-50 px-3 py-2 font-semibold text-blue-700"
+                                            >
+                                                查看客户
+                                            </AdminButton>
+                                        }
+                                    >
+                                        <AdminMobileField label="邮箱" fullWidth>
+                                            {customer.emailAddress || '未填写'}
+                                        </AdminMobileField>
+                                        <AdminMobileField label="手机">
+                                            {customer.phoneNumber || '未填写'}
+                                        </AdminMobileField>
+                                        <AdminMobileField label="历史订单">
+                                            {customer.orders.totalItems} 笔
+                                        </AdminMobileField>
+                                        <AdminMobileField label="客户分组" fullWidth>
+                                            {customer.groups.map(group => group.name).join('、') || '未分组'}
+                                        </AdminMobileField>
+                                        <AdminMobileField label="最近订单" fullWidth>
+                                            {latestOrder
+                                                ? `${latestOrder.code} · ${formatDateTime(latestOrder.orderPlacedAt)}`
+                                                : '尚未下单'}
+                                        </AdminMobileField>
+                                        <AdminMobileField label="注册时间" fullWidth>
+                                            {formatDateTime(customer.createdAt)}
+                                        </AdminMobileField>
+                                    </AdminMobileRecord>
+                                );
+                            })}
+                        </AdminMobileList>
+                        <div className="admin-desktop-table overflow-x-auto">
                             <table className="w-full min-w-[1640px] border-collapse text-left text-xs">
                                 <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                     <tr>
@@ -828,6 +1015,84 @@ export function CustomersModule() {
                 )}
             </main>
 
+            {mobileFilterDraft && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 sm:items-center">
+                    <AccessibleDialogSurface
+                        accessibleName="客户筛选与排序"
+                        onRequestClose={() => setMobileFilterDraft(null)}
+                        mobilePresentation="sheet"
+                        className="w-full max-w-lg rounded-xl bg-white p-4 shadow-xl"
+                    >
+                        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                            客户筛选与排序
+                            <FeatureHelpButton topic="customers.management" title="客户筛选与排序" />
+                        </h2>
+                        <div className="space-y-4">
+                            <AdminField label="客户分组">
+                                <AdminSelect
+                                    value={mobileFilterDraft.group}
+                                    onChange={event =>
+                                        setMobileFilterDraft({
+                                            ...mobileFilterDraft,
+                                            group: event.target.value,
+                                        })
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                                >
+                                    <option value="ALL">全部客户</option>
+                                    {groups.map(group => (
+                                        <option key={group.id} value={group.id}>
+                                            {group.name} {group.customers.totalItems}
+                                        </option>
+                                    ))}
+                                </AdminSelect>
+                            </AdminField>
+                            <AdminMobileSort
+                                fields={CUSTOMER_SORT_OPTIONS}
+                                sortField={mobileFilterDraft.field}
+                                sortDirection={mobileFilterDraft.direction}
+                                onSort={(field, direction) =>
+                                    setMobileFilterDraft({ ...mobileFilterDraft, field, direction })
+                                }
+                            />
+                            {mobileFilterDraft.clearSearch && (
+                                <p className="text-xs text-slate-500">应用后清空搜索并恢复默认条件。</p>
+                            )}
+                        </div>
+                        <footer className="mt-5 flex flex-wrap justify-end gap-2">
+                            <AdminButton
+                                type="button"
+                                onClick={() =>
+                                    setMobileFilterDraft({
+                                        group: 'ALL',
+                                        field: 'createdAt',
+                                        direction: 'DESC',
+                                        clearSearch: true,
+                                    })
+                                }
+                                className="mr-auto rounded-lg border border-slate-300 px-3 py-2"
+                            >
+                                重置
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                onClick={() => setMobileFilterDraft(null)}
+                                className="rounded-lg border border-slate-300 px-3 py-2"
+                            >
+                                取消
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                onClick={applyMobileFilters}
+                                className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white"
+                            >
+                                应用
+                            </AdminButton>
+                        </footer>
+                    </AccessibleDialogSurface>
+                </div>
+            )}
+
             <CustomerDrawer
                 key={selectedCustomerId ?? 'closed'}
                 customerId={selectedCustomerId}
@@ -865,6 +1130,7 @@ export function CustomersModule() {
                         form={createDraft}
                         setForm={setCreateDraft}
                         pending={createState.loading}
+                        error={createError}
                         onCancel={() => setCreateOpen(false)}
                         onSave={() => void saveNewCustomer()}
                     />
@@ -1194,7 +1460,7 @@ function CustomerDrawer({
                                 {customerDraft.sourceChanged && (
                                     <DraftUpdateNotice onReload={customerDraft.reload} />
                                 )}
-                                <div className="mb-3 flex items-center justify-between">
+                                <div className="mb-3 flex flex-wrap items-center justify-between">
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <CircleUserRound className="h-4 w-4 text-blue-600" />
                                         基础资料
@@ -1312,7 +1578,7 @@ function CustomerDrawer({
                                 )}
                             </section>
                             <section className="rounded-xl border border-slate-200 p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <MapPin className="h-4 w-4 text-emerald-600" />
                                         客户地址
@@ -1461,7 +1727,7 @@ function CustomerDrawer({
                                 </div>
                             </section>
                             <section className="rounded-xl border border-slate-200 p-4">
-                                <div className="mb-3 flex items-center justify-between">
+                                <div className="mb-3 flex flex-wrap items-center justify-between">
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <ShoppingBag className="h-4 w-4 text-violet-600" />
                                         最近订单
@@ -1514,7 +1780,7 @@ function CustomerDrawer({
                         </div>
                     )}
                 </div>
-                <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-[11px] text-slate-500">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 text-[11px] text-slate-500">
                     <span>{actionPending ? '正在保存变更…' : '所有操作直接写入真实客户数据'}</span>
                     <AdminButton
                         type="button"
@@ -1678,7 +1944,7 @@ function CustomerOperationsPanel({
             {loading && !profile ? (
                 <p className="mt-4 text-xs text-blue-700">正在计算客户画像…</p>
             ) : error && !data ? (
-                <div className="mt-4 flex items-center justify-between rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                <div className="mt-4 flex flex-wrap items-center justify-between rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
                     <span>客户画像读取失败</span>
                     <AdminButton type="button" onClick={() => void refetch()} className="font-bold underline">
                         重试
@@ -1707,7 +1973,7 @@ function CustomerOperationsPanel({
                                     key={metric.currencyCode}
                                     className="rounded-lg border border-blue-100 bg-white p-3"
                                 >
-                                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                                    <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-500">
                                         <span>{metric.currencyCode} 净 LTV</span>
                                         <span>{metric.orderCount} 笔已结算订单</span>
                                     </div>
@@ -1787,7 +2053,7 @@ function CustomerOperationsPanel({
             )}
 
             <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-bold text-blue-900">
+                <div className="flex flex-wrap items-center justify-between text-[11px] font-bold text-blue-900">
                     <span>待处理跟进</span>
                     <span>{data?.openFollowUps.totalItems ?? 0} 项</span>
                 </div>
@@ -2144,12 +2410,14 @@ export function CustomerEditForm({
     form,
     setForm,
     pending,
+    error,
     onCancel,
     onSave,
 }: {
     form: CustomerForm;
     setForm: (form: CustomerForm) => void;
     pending: boolean;
+    error?: string;
     onCancel: () => void;
     onSave: () => void;
 }) {
@@ -2200,6 +2468,14 @@ export function CustomerEditForm({
                     )}
                 </div>
             </div>
+            {error && (
+                <p
+                    role="alert"
+                    className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200"
+                >
+                    保存失败：{error}
+                </p>
+            )}
             <div className="flex justify-end gap-2">
                 <AdminButton
                     type="button"
@@ -2624,7 +2900,7 @@ function Modal({
     children: React.ReactNode;
 }) {
     const { dialogRef, titleId } = useAccessibleDialog(onClose);
-    return (
+    return createPortal(
         <div
             className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-2xs"
             onMouseDown={event => {
@@ -2637,7 +2913,7 @@ function Modal({
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`w-full ${width} max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none`}
+                className={`admin-dialog-surface w-full ${width} max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none`}
             >
                 <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
                     <div>
@@ -2657,6 +2933,7 @@ function Modal({
                 </div>
                 <div className="p-5">{children}</div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

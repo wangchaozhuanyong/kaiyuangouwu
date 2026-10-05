@@ -132,12 +132,15 @@ export type AdministratorPaymentInput = {
 };
 
 export type AdministratorRefundInput = {
+  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /**
    * The amount to be refunded to this particular Payment. This was introduced in
    * v2.2.0 as the preferred way to specify the refund amount. The `lines`, `shipping` and `adjustment`
    * fields will be removed in a future version.
    */
   amount?: InputMaybe<Scalars['Money']['input']>;
+  /** Keep the same key when retrying this order modification. */
+  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
   paymentId: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
 };
@@ -3172,6 +3175,10 @@ export type Mutation = {
   setSettingsStoreValues: Array<SetSettingsStoreValueResult>;
   settlePayment: SettlePaymentResult;
   settleRefund: SettleRefundResult;
+  /** Confirms a manual-channel refund from an actual external receipt; it does not send money. */
+  recordManualRefund: SettleRefundResult;
+  /** Retries the original failed refund using one stable identifier per reviewed attempt. */
+  retryRefund: RefundOrderResult;
   transitionFulfillmentToState: TransitionFulfillmentToStateResult;
   transitionOrderToState?: Maybe<TransitionOrderToStateResult>;
   transitionPaymentToState: TransitionPaymentToStateResult;
@@ -3969,6 +3976,14 @@ export type MutationSettlePaymentArgs = {
 
 export type MutationSettleRefundArgs = {
   input: SettleRefundInput;
+};
+
+export type MutationRecordManualRefundArgs = {
+  input: RecordManualRefundInput;
+};
+
+export type MutationRetryRefundArgs = {
+  input: RetryRefundInput;
 };
 
 
@@ -5935,6 +5950,7 @@ export type RefundLine = {
 };
 
 export type RefundOrderInput = {
+  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /** @deprecated Use the `amount` field instead */
   adjustment?: InputMaybe<Scalars['Money']['input']>;
   /**
@@ -5942,13 +5958,22 @@ export type RefundOrderInput = {
    * Can be as much as the total amount of the payment minus the sum of all previous refunds.
    */
   amount?: InputMaybe<Scalars['Money']['input']>;
+  /** Stable request identifier. Replays return the original Pending, Settled or Failed refund. */
+  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
   /** @deprecated Use the `amount` field instead */
   lines?: InputMaybe<Array<OrderLineInput>>;
   paymentId: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
+  reasonType?: InputMaybe<RefundReasonType>;
   /** @deprecated Use the `amount` field instead */
   shipping?: InputMaybe<Scalars['Money']['input']>;
 };
+
+export enum RefundReasonType {
+  Items = 'ITEMS',
+  Shipping = 'SHIPPING',
+  Compensation = 'COMPENSATION'
+}
 
 export type RefundOrderResult = AlreadyRefundedError | MultipleOrderError | NothingToRefundError | OrderStateTransitionError | PaymentOrderMismatchError | QuantityTooGreatError | Refund | RefundAmountError | RefundOrderStateError | RefundStateTransitionError;
 
@@ -6355,6 +6380,19 @@ export type SettlePaymentResult = OrderStateTransitionError | Payment | PaymentS
 export type SettleRefundInput = {
   id: Scalars['ID']['input'];
   transactionId: Scalars['String']['input'];
+};
+
+export type RecordManualRefundInput = {
+  refundId: Scalars['ID']['input'];
+  transactionId: Scalars['String']['input'];
+  evidenceReference: Scalars['String']['input'];
+  note: Scalars['String']['input'];
+};
+
+export type RetryRefundInput = {
+  refundId: Scalars['ID']['input'];
+  /** Use a new key for a new reviewed attempt, and reuse it when retrying the same submission. */
+  idempotencyKey: Scalars['String']['input'];
 };
 
 export type SettleRefundResult = Refund | RefundStateTransitionError;

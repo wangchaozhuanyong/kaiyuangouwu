@@ -116,20 +116,34 @@ describe('referral balance refund receipts', () => {
         expect(entries.size).toBe(1);
     });
 
-    it('refunds the remainder on cancellation and ignores later refund events', async () => {
+    it('keeps captured funds outstanding after cancellation and credits each settled refund only once', async () => {
         const { service, use, wallet, entries, useRepository } = fixture();
         wallet.availableBalance = -1000;
         await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-a');
         await service.handleCancelledOrder({ channelId: 'store' }, 'order');
-        expect(wallet.availableBalance).toBe(0);
-        expect(use).toMatchObject({ refundedAmount: 1000, status: 'RELEASED' });
+        expect(wallet.availableBalance).toBe(-700);
+        expect(use).toMatchObject({ refundedAmount: 300, status: 'PARTIALLY_REFUNDED' });
         await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-b');
         await service.handleCancelledOrder({ channelId: 'store' }, 'order');
+        await service.restoreBalanceUseForRefund({ channelId: 'store' }, 'order', 'refund-b');
         expect(wallet.availableBalance).toBe(0);
+        expect(use).toMatchObject({ refundedAmount: 1000, status: 'REFUNDED' });
         expect(entries.size).toBe(2);
         expect(
             useRepository.findOne.mock.calls.every(([options]) => (options as { lock?: unknown }).lock),
         ).toBe(true);
+    });
+
+    it('releases an uncaptured reservation on cancellation without creating a refund receipt', async () => {
+        const { service, use, wallet, entries } = fixture();
+        use.status = 'RESERVED';
+        wallet.reservedBalance = 1000;
+        await service.handleCancelledOrder({ channelId: 'store' }, 'order');
+        await service.handleCancelledOrder({ channelId: 'store' }, 'order');
+        expect(wallet.availableBalance).toBe(1000);
+        expect(wallet.reservedBalance).toBe(0);
+        expect(use).toMatchObject({ refundedAmount: 1000, status: 'RELEASED' });
+        expect(entries.size).toBe(1);
     });
 
     it('does not reimburse again after cancellation released the entire balance use', async () => {

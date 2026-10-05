@@ -27,11 +27,17 @@ export interface ProductVariantState {
     name: string;
     price: string;
     costPrice?: string;
+    supplierId?: string | null;
     stockOnHand: number | '';
     stockAllocated: number;
     enabled: boolean;
     digitalDeliveryMode: DigitalDeliveryMode;
     digitalStockPolicy: DigitalStockPolicy;
+    physicalSettings?: { packageQuantity?: number; shelfLifeDays?: number | null };
+    digitalAvailableQuantity?: number;
+    digitalFileVersionId?: string | null;
+    digitalFileName?: string;
+    digitalMigrationRequired?: boolean;
     autoCardAvailableStock?: number | null;
     optionIds: string[];
     isNew?: boolean;
@@ -165,6 +171,11 @@ export const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
             sku: variant.sku,
             name: variant.name,
             price: variant.price,
+            physicalSettings: variant.physicalSettings,
+            costPrice: variant.costPrice,
+            supplierId: variant.supplierId,
+            digitalAvailableQuantity: variant.digitalAvailableQuantity,
+            digitalFileVersionId: variant.digitalFileVersionId,
             stockOnHand: variant.stockOnHand,
             stockAllocated: variant.stockAllocated,
             enabled: variant.enabled,
@@ -188,11 +199,7 @@ export const createSlugFromName = (value: string) => {
 export const variantFulfillmentInput = (variant: ProductVariantState, fulfillmentType: FulfillmentType) => {
     if (fulfillmentType === 'physical') {
         return {
-            stockOnHand: variant.stockOnHand === '' ? 0 : Number(variant.stockOnHand),
             trackInventory: 'INHERIT' as const,
-            customFields: {
-                digitalStockPolicy: 'limited' as const,
-            },
         };
     }
     const digitalStockPolicy = stockPolicyForDeliveryMode(
@@ -200,17 +207,7 @@ export const variantFulfillmentInput = (variant: ProductVariantState, fulfillmen
         variant.digitalStockPolicy,
     );
     return {
-        stockOnHand:
-            variant.digitalDeliveryMode === 'auto_card' || digitalStockPolicy === 'unlimited'
-                ? 0
-                : variant.stockOnHand === ''
-                  ? 0
-                  : Number(variant.stockOnHand),
         trackInventory: trackInventoryForDigitalVariant(variant.digitalDeliveryMode, digitalStockPolicy),
-        customFields: {
-            digitalDeliveryMode: variant.digitalDeliveryMode,
-            digitalStockPolicy,
-        },
     };
 };
 

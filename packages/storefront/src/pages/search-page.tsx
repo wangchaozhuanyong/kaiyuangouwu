@@ -2,16 +2,7 @@
 import type { RouteState } from '../storefront-router';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import {
-    ArrowLeft,
-    ArrowUpRight,
-    CircleAlert,
-    LayoutGrid,
-    Search,
-    SlidersHorizontal,
-    Trash2,
-    X,
-} from 'lucide-react';
+import { ArrowUpRight, CircleAlert, LayoutGrid, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import {
     type KeyboardEvent as ReactKeyboardEvent,
     type RefObject,
@@ -32,6 +23,7 @@ import {
     type CatalogRouteState,
 } from '../catalog-route-query';
 import { CatalogFilterSheet, type CatalogFilterValues } from '../components/common/catalog-filter-sheet';
+import { PageBackButton } from '../components/common/page-back-button';
 import { ProductRow } from '../components/common/product-row';
 import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
@@ -437,9 +429,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
             {!embedded && (
                 <header className="search-header">
-                    <button type="button" onClick={closeSearch} aria-label={isZh ? '返回' : 'Back'}>
-                        <ArrowLeft />
-                    </button>
+                    <PageBackButton onClick={closeSearch} label={isZh ? '返回' : 'Back'} />
                     <div className="search-input-field">
                         <Search aria-hidden="true" />
                         <input

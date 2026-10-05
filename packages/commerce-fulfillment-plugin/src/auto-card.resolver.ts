@@ -15,6 +15,7 @@ import { managePlatformCatalogPermission } from '@vendure/store-management-plugi
 import { AutoCardSupplyService } from './auto-card-supply.service';
 import { manageAutoCardSecretsPermission, readSoldAutoCardsPermission } from './auto-card.constants';
 import { AutoCardService } from './auto-card.service';
+import { DigitalProductService } from './digital-product.service';
 import { StoreCatalogStatusService } from './store-catalog-status.service';
 import {
     AutoCardDeliveryListOptions,
@@ -165,11 +166,14 @@ export class AutoCardShopProductVariantResolver {
     constructor(
         private readonly autoCardService: AutoCardService,
         private readonly productVariantService: ProductVariantService,
+        private readonly digitalProducts: DigitalProductService,
     ) {}
 
     @ResolveField()
     @Allow(Permission.Public)
     async saleableStockLevel(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
+        const digital = await this.digitalProducts.available(ctx, variant);
+        if (digital !== undefined) return digital;
         const isAutoCard =
             variant.customFields.fulfillmentType === 'digital' &&
             variant.customFields.digitalDeliveryMode === 'auto_card';
@@ -182,15 +186,40 @@ export class AutoCardShopProductVariantResolver {
     }
 }
 
+@Resolver('ProductVariant')
+export class DigitalProductVariantMetadataResolver {
+    constructor(private readonly digitalProducts: DigitalProductService) {}
+
+    @ResolveField()
+    async customFields(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
+        const config =
+            variant.customFields.fulfillmentType === 'digital'
+                ? await this.digitalProducts.config(ctx, variant.id)
+                : null;
+        return config
+            ? {
+                  ...variant.customFields,
+                  digitalDeliveryMode: config.deliveryMode,
+                  digitalStockPolicy: config.stockPolicy,
+              }
+            : variant.customFields;
+    }
+}
+
 export function normalizePublicSaleableStockLevel(stockLevel: number): number | null {
     if (stockLevel === Number.MAX_SAFE_INTEGER) return null;
     if (!Number.isFinite(stockLevel)) return null;
     return Math.max(0, Math.floor(stockLevel));
 }
 
-export const autoCardAdminResolvers = [AutoCardAdminResolver, AutoCardProductVariantResolver];
+export const autoCardAdminResolvers = [
+    AutoCardAdminResolver,
+    AutoCardProductVariantResolver,
+    DigitalProductVariantMetadataResolver,
+];
 export const autoCardShopResolvers = [
     AutoCardOrderResolver,
     AutoCardProductVariantResolver,
     AutoCardShopProductVariantResolver,
+    DigitalProductVariantMetadataResolver,
 ];

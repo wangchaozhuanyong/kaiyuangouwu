@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ARCHIVE_COUPON_CAMPAIGN_MUTATION,
@@ -366,49 +367,66 @@ export function PromotionsModule() {
                     </section>
                 )}
                 {!standalonePage && (
-                    <nav className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs">
-                        <TabButton
-                            active={activeTab === 'ATTRIBUTION'}
-                            onClick={() => setActiveTab('ATTRIBUTION')}
-                            icon={BarChart3}
-                            label="渠道归因"
-                        />
-                        <TabButton
-                            active={activeTab === 'COUPONS'}
-                            onClick={() => setActiveTab('COUPONS')}
-                            icon={BadgePercent}
-                            label={`优惠券 ${coupons.length}`}
-                        />
-                        <TabButton
-                            active={activeTab === 'FLASH_SALES'}
-                            onClick={() => setActiveTab('FLASH_SALES')}
-                            icon={Flame}
-                            label={`限时秒杀 ${flashSales.length}`}
-                        />
-                        <TabButton
-                            active={activeTab === 'REPORT'}
-                            onClick={() => setActiveTab('REPORT')}
-                            icon={TrendingUp}
-                            label="经营报表"
-                        />
-                        <TabButton
-                            active={activeTab === 'LEDGER'}
-                            onClick={() => setActiveTab('LEDGER')}
-                            icon={ShieldAlert}
-                            label="使用流水"
-                        />
-                        <TabButton
-                            active={activeTab === 'GENERIC'}
-                            onClick={() => setActiveTab('GENERIC')}
-                            icon={Settings2}
-                            label="通用促销"
-                        />
-                    </nav>
+                    <>
+                        <AdminField label="营销分类" className="admin-mobile-section-select">
+                            <AdminSelect
+                                aria-label="营销分类"
+                                value={activeTab}
+                                onChange={event => setActiveTab(event.target.value as typeof activeTab)}
+                                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
+                                <option value="ATTRIBUTION">渠道归因</option>
+                                <option value="COUPONS">优惠券 {coupons.length}</option>
+                                <option value="FLASH_SALES">限时秒杀 {flashSales.length}</option>
+                                <option value="REPORT">经营报表</option>
+                                <option value="LEDGER">使用流水</option>
+                                <option value="GENERIC">通用促销</option>
+                            </AdminSelect>
+                        </AdminField>
+                        <nav className="hidden max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs md:flex">
+                            <TabButton
+                                active={activeTab === 'ATTRIBUTION'}
+                                onClick={() => setActiveTab('ATTRIBUTION')}
+                                icon={BarChart3}
+                                label="渠道归因"
+                            />
+                            <TabButton
+                                active={activeTab === 'COUPONS'}
+                                onClick={() => setActiveTab('COUPONS')}
+                                icon={BadgePercent}
+                                label={`优惠券 ${coupons.length}`}
+                            />
+                            <TabButton
+                                active={activeTab === 'FLASH_SALES'}
+                                onClick={() => setActiveTab('FLASH_SALES')}
+                                icon={Flame}
+                                label={`限时秒杀 ${flashSales.length}`}
+                            />
+                            <TabButton
+                                active={activeTab === 'REPORT'}
+                                onClick={() => setActiveTab('REPORT')}
+                                icon={TrendingUp}
+                                label="经营报表"
+                            />
+                            <TabButton
+                                active={activeTab === 'LEDGER'}
+                                onClick={() => setActiveTab('LEDGER')}
+                                icon={ShieldAlert}
+                                label="使用流水"
+                            />
+                            <TabButton
+                                active={activeTab === 'GENERIC'}
+                                onClick={() => setActiveTab('GENERIC')}
+                                icon={Settings2}
+                                label="通用促销"
+                            />
+                        </nav>
+                    </>
                 )}
                 {(activeTab === 'COUPONS' || activeTab === 'FLASH_SALES') && (
                     <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
                         <div className="relative flex-1">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                             <AdminInput
                                 type="search"
                                 name="promotion-search"
@@ -417,13 +435,13 @@ export function PromotionsModule() {
                                 onChange={event => setSearchTerm(event.target.value)}
                                 aria-label="搜索营销活动"
                                 placeholder="搜索活动名称或券码"
-                                className="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
+                                className="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none focus:border-blue-500"
                             />
                             {searchTerm && (
                                 <AdminButton
                                     type="button"
                                     onClick={() => setSearchTerm('')}
-                                    className="absolute right-2.5 top-2 text-slate-400"
+                                    className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400"
                                     aria-label="清空搜索"
                                 >
                                     <X className="h-4 w-4" />

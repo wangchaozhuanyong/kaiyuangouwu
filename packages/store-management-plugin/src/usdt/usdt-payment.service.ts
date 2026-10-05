@@ -873,6 +873,8 @@ export class UsdtPaymentService {
         if (receiptStatus) return receiptStatus;
         try {
             return await this.orderService.withOrderMutationTransaction(channelContext, async ctx => {
+                // Keep the same order -> intent lock order as supplemental quote creation.
+                await this.orderService.lockOrderForRefund(ctx, intent.orderId);
                 const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
                 const locked = await this.findLockedIntent(ctx, intent.id);
                 const allowedStatuses: Array<StorefrontUsdtPaymentIntent['status']> = allowManualReviewRetry

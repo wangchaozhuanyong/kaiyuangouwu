@@ -39,11 +39,11 @@ import { ConfigService } from '../../../config/config.service';
 import { CustomFieldConfig } from '../../../config/custom-field/custom-field-types';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { VendureEntity } from '../../../entity/base/base.entity';
+import { Order } from '../../../entity/order/order.entity';
+import { OrderLine } from '../../../entity/order-line/order-line.entity';
 import { FulfillmentLine } from '../../../entity/order-line-reference/fulfillment-line.entity';
 import { OrderModificationLine } from '../../../entity/order-line-reference/order-modification-line.entity';
-import { OrderLine } from '../../../entity/order-line/order-line.entity';
 import { OrderModification } from '../../../entity/order-modification/order-modification.entity';
-import { Order } from '../../../entity/order/order.entity';
 import { Payment } from '../../../entity/payment/payment.entity';
 import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { ShippingLine } from '../../../entity/shipping-line/shipping-line.entity';
@@ -68,6 +68,9 @@ import { TranslatorService } from '../translator/translator.service';
 import { couponCodesMatch } from '../utils/coupon-codes-match';
 import { getOrdersFromLines, orderLinesAreAllCancelled } from '../utils/order-utils';
 import { patchEntity } from '../utils/patch-entity';
+
+import { orderPlacedQuantityAfterModification } from './modification-quantities';
+import { buildModificationRefunds, prepareModificationRefunds } from './modification-refunds';
 
 /**
  * @description
@@ -404,14 +407,15 @@ export class OrderModifier {
             : input.refund
               ? [input.refund]
               : [];
-        const refundInputs: RefundOrderInput[] = refundInputArray.map(refund => ({
-            lines: [],
-            adjustment: 0,
-            shipping: 0,
-            paymentId: refund.paymentId,
-            amount: refund.amount,
-            reason: refund.reason || input.note,
-        }));
+        const refundInputs = prepareModificationRefunds(
+            refundInputArray,
+            {
+                id: String(order.id),
+                updatedAt: order.updatedAt,
+                totalWithTax: initialTotalWithTax,
+            },
+            input.note,
+        );
 
         for (const row of input.addItems ?? []) {
             const { productVariantId, quantity } = row;
@@ -436,11 +440,17 @@ export class OrderModifier {
             }
             updatedOrderLineIds.push(orderLine.id);
             const initialQuantity = orderLine.quantity;
+            if (!dryRun)
+                orderLine.orderPlacedQuantity = orderPlacedQuantityAfterModification(
+                    orderLine.orderPlacedQuantity,
+                    initialQuantity,
+                    initialQuantity + correctedQuantity,
+                );
             await this.updateOrderLineQuantity(ctx, orderLine, initialQuantity + correctedQuantity, order);
 
             const orderModificationLine = await this.connection
                 .getRepository(ctx, OrderModificationLine)
-                .save(new OrderModificationLine({ orderLine, quantity: quantity - initialQuantity }));
+                .save(new OrderModificationLine({ orderLine, quantity: correctedQuantity }));
             modification.lines.push(orderModificationLine);
         }
 
@@ -467,7 +477,7 @@ export class OrderModifier {
             if (orderItemsLimit < resultingOrderTotalQuantity) {
                 return new OrderLimitError({ maxItems: orderItemsLimit });
             } else {
-                currentItemsCount += correctedQuantity;
+                currentItemsCount = resultingOrderTotalQuantity;
             }
             if (correctedQuantity < quantity) {
                 return new InsufficientStockError({ quantityAvailable: correctedQuantity, order });
@@ -486,6 +496,12 @@ export class OrderModifier {
                     await this.cancelOrderByOrderLines(ctx, { orderId: order.id }, cancelLinesInput);
                     orderLine.quantity = quantity;
                 } else {
+                    if (!dryRun)
+                        orderLine.orderPlacedQuantity = orderPlacedQuantityAfterModification(
+                            orderLine.orderPlacedQuantity,
+                            initialLineQuantity,
+                            quantity,
+                        );
                     await this.updateOrderLineQuantity(ctx, orderLine, quantity, order);
                 }
                 const orderModificationLine = await this.connection
@@ -583,9 +599,7 @@ export class OrderModifier {
                 );
                 if (isGraphQlErrorResult(validationResult)) {
                     return validationResult as
-                        | CouponCodeExpiredError
-                        | CouponCodeInvalidError
-                        | CouponCodeLimitError;
+                        CouponCodeExpiredError | CouponCodeInvalidError | CouponCodeLimitError;
                 }
                 const canonicalCode = validationResult.couponCode;
                 if (!canonicalCouponCodes.some(cc => couponCodesMatch(cc, canonicalCode))) {
@@ -663,34 +677,24 @@ export class OrderModifier {
             if (refundInputs.length === 0) {
                 return new RefundPaymentIdMissingError();
             }
-            // If there are multiple refunds, we select the largest one as the
-            // "primary" refund to associate with the OrderModification.
-            const primaryRefund = refundInputs.slice().sort((a, b) => (b.amount || 0) - (a.amount || 0))[0];
-
-            // TODO: the following code can be removed once we remove the deprecated
-            // support for "shipping" and "adjustment" input fields for refunds
             const shippingDelta = order.shippingWithTax - initialShippingWithTax;
-            if (shippingDelta < 0) {
-                primaryRefund.shipping = shippingDelta * -1;
-            }
-            if (primaryRefund.adjustment != null) {
-                primaryRefund.adjustment += await this.calculateRefundAdjustment(ctx, delta, primaryRefund);
-            }
-            // end
-
-            for (const refundInput of refundInputs) {
-                const existingPayments = await this.getOrderPayments(ctx, order.id);
-                const payment = existingPayments.find(p => idsAreEqual(p.id, refundInput.paymentId));
-                if (payment) {
-                    const refund = await this.paymentService.createRefund(ctx, refundInput, order, payment);
-                    if (!isGraphQlErrorResult(refund)) {
-                        if (idsAreEqual(payment.id, primaryRefund.paymentId)) {
-                            modification.refund = refund;
-                        }
-                    } else {
-                        throw new InternalServerError(refund.message);
-                    }
-                }
+            const requests = buildModificationRefunds(refundInputs, -delta, -shippingDelta);
+            const existingPayments = await this.getOrderPayments(ctx, order.id);
+            const prepared = await this.paymentService.validateRefundBatch(
+                ctx,
+                requests,
+                order,
+                existingPayments,
+            );
+            // Validate every source, purpose, quantity and combined budget before
+            // the first external transfer. A later input error must not create an
+            // earlier refund whose provider transfer cannot be rolled back.
+            for (const { input: refundInput, payment } of prepared.sort(
+                (a, b) => (b.input.amount ?? 0) - (a.input.amount ?? 0),
+            )) {
+                const refund = await this.paymentService.createRefund(ctx, refundInput, order, payment);
+                if (isGraphQlErrorResult(refund)) throw new InternalServerError(refund.message);
+                if (!modification.refund) modification.refund = refund;
             }
         }
 
@@ -925,3 +929,4 @@ export class OrderModifier {
         }
     }
 }
+// organize-imports-ignore -- Preserve ESLint ordering of parent and hyphenated entity paths.

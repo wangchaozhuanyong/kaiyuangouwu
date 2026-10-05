@@ -438,7 +438,13 @@ export function UsdtPaymentManagementModule() {
                                     title="全部支付方式明细"
                                     detail="USDT 已结算支付可补录链上人工退款证据。"
                                 />
-                                <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+                                <div
+                                    tabIndex={0}
+                                    role="region"
+                                    aria-label="支付流水明细"
+                                    className="admin-comparison-scroll mt-4 overflow-x-auto rounded-lg border border-slate-200"
+                                >
+                                    <p className="admin-mobile-table-hint">左右滑动查看完整支付流水明细</p>
                                     <table className="min-w-[1060px] w-full text-left text-xs">
                                         <thead className="bg-slate-50 text-slate-500">
                                             <tr>

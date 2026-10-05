@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultAccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
 
@@ -288,6 +288,7 @@ describe('ShopApi session response ordering', () => {
         const api = new ShopApi(market);
         await api.login('fixture@example.test', 'mock-only');
         const upload = run(api, new File(['fixture'], 'fixture.png', { type: 'image/png' }));
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
         await api.logout();
         earlier.resolve(response({ [field]: { id: '1' } }, 'old-session'));
         await upload;
@@ -2738,5 +2739,108 @@ describe('account recommendation settings API', () => {
         vi.stubGlobal('fetch', fetchMock);
         await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('Permission denied');
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('modified order payment API safety', () => {
+    it('cancels a guest payment quote when its order view is abandoned', async () => {
+        const controller = new AbortController();
+        let requestSignal: AbortSignal | undefined;
+        const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+            requestSignal = init?.signal ?? undefined;
+            return new Promise<Response>((_resolve, reject) => {
+                requestSignal?.addEventListener('abort', () =>
+                    reject(new DOMException('Aborted', 'AbortError')),
+                );
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const pending = new ShopApi(market).orderAdditionalPaymentQuote(
+            'modified-order',
+            'synthetic-confirmation',
+            controller.signal,
+        );
+        const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        controller.abort();
+        await rejected;
+        expect(requestSignal?.aborted).toBe(true);
+        expect(JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])).variables).toEqual({
+            orderId: 'modified-order',
+            confirmationToken: 'synthetic-confirmation',
+        });
+    });
+
+    it('rejects a declined supplemental charge while retaining its checked amount and order identity', async () => {
+        const fetchMock = mockGraphQlResponse({
+            addPaymentToModifiedOrder: {
+                __typename: 'PaymentDeclinedError',
+                errorCode: 'PAYMENT_DECLINED_ERROR',
+                message: 'Declined',
+            },
+        });
+        await expect(
+            new ShopApi(market).addPaymentToModifiedOrder(
+                'modified-order',
+                'sandbox-method',
+                1750,
+                'synthetic-confirmation',
+            ),
+        ).rejects.toMatchObject({ name: 'ShopApiError', errorCode: 'PAYMENT_DECLINED_ERROR' });
+        expect(JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])).variables).toEqual({
+            input: {
+                orderId: 'modified-order',
+                confirmationToken: 'synthetic-confirmation',
+                expectedAmount: 1750,
+                payment: { method: 'sandbox-method', metadata: {} },
+            },
+        });
+    });
+});
+
+describe('ShopApi mailbox stream delegation', () => {
+    beforeEach(() => {
+        vi.stubGlobal('window', { location: new URL('http://127.0.0.1/'), setTimeout, clearTimeout });
+    });
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('keeps a detached mailbox watcher bound and sends its capability only in the request body', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 403 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const { watchMailEvents } = new ShopApi(market);
+        const onChange = vi.fn();
+        const onStatus = vi.fn();
+        await watchMailEvents(
+            'SYNTHETIC-MAIL-CAPABILITY',
+            { onChange, onStatus },
+            new AbortController().signal,
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, options] = fetchMock.mock.calls[0];
+        expect(url).toContain('/mail-events');
+        expect(url).not.toContain('SYNTHETIC-MAIL-CAPABILITY');
+        expect(options).toMatchObject({ method: 'POST', cache: 'no-store' });
+        expect(JSON.parse(options.body)).toEqual({ queryCode: 'SYNTHETIC-MAIL-CAPABILITY', cursor: '0' });
+        expect(onStatus).toHaveBeenLastCalledWith('denied');
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('does not start a stale mailbox request after cancellation during lazy loading', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new AbortController();
+        const api = new ShopApi(market);
+        const onStatus = vi.fn();
+        const watching = api.watchMailEvents(
+            'SYNTHETIC-CANCELLED',
+            { onChange: vi.fn(), onStatus },
+            controller.signal,
+        );
+        controller.abort();
+        await watching;
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(onStatus).not.toHaveBeenCalled();
     });
 });

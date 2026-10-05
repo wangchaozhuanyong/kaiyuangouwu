@@ -566,12 +566,18 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
     assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);
     const realtimeLocations = [
-        ...config.matchAll(/location = \/storefront-realtime\/events \{(?<body>[\s\S]*?)\n    \}/gu),
+        ...config.matchAll(
+            /location ~ \^\/storefront-realtime\/\(events\|mail-events\)\$ \{(?<body>[\s\S]*?)\n    \}/gu,
+        ),
     ];
     assert.equal(realtimeLocations.length, 1);
     for (const location of realtimeLocations) {
+        assert.match(location.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
+        assert.match(location.groups.body, /limit_req zone=vendure_shop_api burst=10 nodelay;/u);
+        assert.match(location.groups.body, /proxy_cache off;/u);
         assert.match(location.groups.body, /proxy_buffering off;/u);
         assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
+        assert.match(location.groups.body, /proxy_send_timeout 1h;/u);
         assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
         assert.match(location.groups.body, /proxy_set_header vendure-token "";/u);
         assert.match(

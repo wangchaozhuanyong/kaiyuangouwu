@@ -1,5 +1,6 @@
 import { customFieldValuesFromEntity } from '../../custom-fields/custom-field-utils';
 import { type FulfillmentType } from '../../graphql/commerce.graphql';
+import type { DigitalWorkspaceVariant } from '../../graphql/product-domains.graphql';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import {
@@ -12,7 +13,16 @@ export function productEditorDraft(
     product: ProductDetailRecord,
     fixedFulfillmentType: FulfillmentType | null,
     productExtensionFields: Parameters<typeof customFieldValuesFromEntity>[0],
-    workspaceVariants?: Array<{ id: string; purchaseCostMicrounits?: number | null }>,
+    workspaceVariants?: Array<
+        | {
+              id: string;
+              purchaseCostMicrounits?: number | null;
+              packageQuantity?: number;
+              shelfLifeDays?: number | null;
+              supplier?: { id: string; name: string } | null;
+          }
+        | DigitalWorkspaceVariant
+    >,
 ): Parameters<typeof serializeProductEditor>[0] {
     const sourceTranslation = getLocalizedEntityTranslation(product.translations, SOURCE_LANGUAGE_CODE);
     return {
@@ -55,6 +65,14 @@ export function productEditorDraft(
                     '',
                 price: (variant.price / 100).toFixed(2),
                 costPrice,
+                supplierId: wsVariant?.supplier?.id ?? null,
+                physicalSettings:
+                    wsVariant && 'packageQuantity' in wsVariant
+                        ? {
+                              packageQuantity: wsVariant.packageQuantity,
+                              shelfLifeDays: wsVariant.shelfLifeDays,
+                          }
+                        : undefined,
                 stockOnHand: variant.stockOnHand,
                 stockAllocated: variant.stockAllocated,
                 enabled: variant.enabled,
@@ -68,6 +86,16 @@ export function productEditorDraft(
                     variant.customFields?.digitalStockPolicy === 'unlimited'
                         ? variant.customFields.digitalStockPolicy
                         : 'limited',
+                ...(wsVariant && 'deliveryMode' in wsVariant
+                    ? {
+                          digitalDeliveryMode: wsVariant.deliveryMode,
+                          digitalStockPolicy: wsVariant.stockPolicy,
+                          digitalAvailableQuantity: wsVariant.availableQuantity ?? 0,
+                          digitalMigrationRequired: wsVariant.migrationRequired,
+                          digitalFileVersionId: wsVariant.fileVersion?.id ?? null,
+                          digitalFileName: wsVariant.fileVersion?.fileName,
+                      }
+                    : {}),
                 autoCardAvailableStock: variant.autoCardAvailableStock,
                 optionIds: variant.options.map(option => option.id),
                 isNew: false,

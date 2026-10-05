@@ -2,6 +2,7 @@
 
 import { ErrorCode } from '@vendure/common/lib/generated-types';
 import {
+    ConfigService,
     defaultOrderProcess,
     LanguageCode,
     mergeConfig,
@@ -17,7 +18,6 @@ import {
 import { createErrorResultGuard, createTestEnvironment, type ErrorResultGuard } from '@vendure/testing';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { FragmentOf as ShopFragmentOf } from './graphql/graphql-shop';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
@@ -42,6 +42,7 @@ const transitionStartSpy = vi.fn();
 const transitionEndSpy = vi.fn();
 const transitionErrorSpy = vi.fn();
 const settlePaymentSpy = vi.fn();
+const cancelPaymentSpy = vi.fn();
 
 describe('Payment process', () => {
     let orderId: string;
@@ -106,6 +107,10 @@ describe('Payment process', () => {
                 success: true,
             };
         },
+        cancelPayment: (ctx, order, payment) => {
+            cancelPaymentSpy(payment.id);
+            return { success: true };
+        },
     });
 
     class TestOrderPlacedStrategy implements OrderPlacedStrategy {
@@ -125,7 +130,7 @@ describe('Payment process', () => {
     );
 
     // Guard for addPaymentDocument (uses TestOrderWithPayments fragment)
-    const shopOrderGuard: ErrorResultGuard<ShopFragmentOf<typeof testOrderWithPaymentsFragment>> =
+    const shopOrderGuard: ErrorResultGuard<FragmentOf<typeof testOrderWithPaymentsFragment>> =
         createErrorResultGuard(input => !!input.total);
 
     // Guard for addManualPaymentDocument (returns inline Order with payments)
@@ -205,7 +210,7 @@ describe('Payment process', () => {
         payment1Id = addPaymentToOrder.payments![0].id;
     });
 
-    it('calls transition hooks', async () => {
+    it('calls transition hooks', () => {
         expect(transitionStartSpy.mock.calls[0].slice(0, 2)).toEqual(['Created', 'Validating']);
         expect(transitionEndSpy.mock.calls[0].slice(0, 2)).toEqual(['Created', 'Validating']);
         expect(transitionErrorSpy).not.toHaveBeenCalled();
@@ -306,6 +311,10 @@ describe('Payment process', () => {
 
             paymentGuard.assertSuccess(transitionPaymentToState);
             expect(transitionPaymentToState.state).toBe('Cancelled');
+            expect(cancelPaymentSpy).toHaveBeenCalledOnce();
+            expect(cancelPaymentSpy).toHaveBeenCalledWith(
+                server.app.get(ConfigService).entityOptions.entityIdStrategy?.decodeId(payment2Id),
+            );
 
             const { order } = await adminClient.query(getOrderDocument, {
                 id: order2Id,
@@ -325,30 +334,24 @@ describe('Payment process', () => {
                 input: {
                     orderId: order2Id,
                     metadata: {},
-                    method: 'manual payment',
+                    method: testPaymentHandler.code,
                     transactionId: '12345',
                 },
             });
 
             orderWithLinesGuard.assertSuccess(addManualPaymentToOrder);
-            expect(addManualPaymentToOrder.state).toBe('ArrangingAdditionalPayment');
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
+            expect(addManualPaymentToOrder.payments![0].state).toBe('Cancelled');
+            expect(addManualPaymentToOrder.payments![1].nextStates).toEqual([]);
             expect(addManualPaymentToOrder.payments![1].state).toBe('Settled');
             expect(addManualPaymentToOrder.payments![1].amount).toBe(addManualPaymentToOrder.totalWithTax);
         });
 
-        it('transitions Order to PaymentSettled', async () => {
-            const { transitionOrderToState } = await adminClient.query(adminTransitionToStateDocument, {
-                id: order2Id,
-                state: 'PaymentSettled',
-            });
-
-            const transitionedOrder = transitionOrderToState as FragmentOf<typeof orderFragment>;
-            orderGuard.assertSuccess(transitionedOrder);
-            expect(transitionedOrder.state).toBe('PaymentSettled');
-
+        it('persists the automatically restored PaymentSettled order', async () => {
             const { order } = await adminClient.query(getOrderDocument, {
                 id: order2Id,
             });
+            expect(order?.state).toBe('PaymentSettled');
             const settledPaymentAmount = order?.payments
                 ?.filter(p => p.state === 'Settled')
                 .reduce((sum, p) => sum + p.amount, 0);

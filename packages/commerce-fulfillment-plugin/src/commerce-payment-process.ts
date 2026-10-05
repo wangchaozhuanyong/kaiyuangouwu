@@ -5,9 +5,11 @@ import {
     orderItemsArePartiallyDelivered,
     OrderService,
     PaymentProcess,
+    totalCoveredByActualPayments,
     TransactionalConnection,
 } from '@vendure/core';
 
+import { fulfillDigitalOrder } from './commerce-order-process';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import { summarizeOrderFulfillment } from './fulfillment-classification';
 
@@ -27,12 +29,21 @@ export const commercePaymentProcess: PaymentProcess<string> = {
     },
 
     async onTransitionEnd(_fromState, toState, { ctx, order }) {
-        if (toState !== 'Authorized' && toState !== 'Settled') {
+        if (toState !== 'Settled') {
             return;
         }
 
         let currentOrder = await findOrderWithFulfillments(ctx, order.id);
-        if (currentOrder.state !== 'PaymentAuthorized' && currentOrder.state !== 'PaymentSettled') {
+        if (
+            !['PaymentSettled', 'PartiallyShipped', 'Shipped', 'PartiallyDelivered', 'Delivered'].includes(
+                currentOrder.state,
+            ) ||
+            currentOrder.active ||
+            !currentOrder.orderPlacedAt ||
+            !Number.isSafeInteger(currentOrder.totalWithTax) ||
+            currentOrder.totalWithTax < 0 ||
+            !(totalCoveredByActualPayments(currentOrder, ['Settled']) >= currentOrder.totalWithTax)
+        ) {
             return;
         }
 
@@ -41,23 +52,27 @@ export const commercePaymentProcess: PaymentProcess<string> = {
             return;
         }
 
+        await fulfillDigitalOrder(ctx, order.id);
+        currentOrder = await findOrderWithFulfillments(ctx, order.id);
+
         const pendingDigitalFulfillments = currentOrder.fulfillments.filter(
             fulfillment =>
                 fulfillment.handlerCode === digitalFulfillmentHandler.code && fulfillment.state === 'Pending',
         );
         for (const fulfillment of pendingDigitalFulfillments) {
-            const result = await orderService.transitionFulfillmentToState(ctx, fulfillment.id, 'Delivered');
-            if (isGraphQlErrorResult(result)) {
-                throw new Error(result.message);
+            const fulfillmentResult = await orderService.transitionFulfillmentToState(
+                ctx,
+                fulfillment.id,
+                'Delivered',
+            );
+            if (isGraphQlErrorResult(fulfillmentResult)) {
+                throw new Error(fulfillmentResult.message);
             }
         }
 
         // A previously-authorized payment may settle after its digital
         // fulfillment was already delivered. No Fulfillment transition occurs
         // in that request, so explicitly reconcile the paid Order state.
-        if (toState !== 'Settled') {
-            return;
-        }
         currentOrder = await findOrderWithFulfillments(ctx, order.id);
         if (currentOrder.state !== 'PaymentSettled') {
             return;
@@ -92,6 +107,9 @@ function findOrderWithFulfillments(
             'fulfillments',
             'fulfillments.lines',
             'fulfillments.lines.fulfillment',
+            'payments',
+            'payments.refunds',
+            'payments.refunds.lines',
         ],
     });
 }

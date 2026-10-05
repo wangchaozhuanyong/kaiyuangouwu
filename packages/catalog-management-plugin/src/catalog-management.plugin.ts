@@ -90,7 +90,7 @@ import './types';
         CatalogVariantMatrixService,
         PurchaseOrderService,
     ],
-    exports: [InventoryControlService],
+    exports: [InventoryControlService, CatalogOperationsService],
     configuration: config => {
         config.authOptions.customPermissions.push(
             manageCatalogImportPermission,
@@ -203,7 +203,6 @@ import './types';
                 name: 'packageQuantity',
                 type: 'float',
                 nullable: true,
-                defaultValue: 1,
                 min: 0.001,
                 public: true,
                 label: [

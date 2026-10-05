@@ -34,6 +34,7 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { PhysicalReturnPanel } from './PhysicalReturnPanel';
 import {
     formatDateTime,
     formatMoney,
@@ -522,7 +523,7 @@ export function AfterSalesModule() {
 
             <nav
                 aria-label="售后状态筛选"
-                className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"
+                className="scrollbar-hidden hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 md:block sm:px-8"
             >
                 <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
@@ -545,6 +546,25 @@ export function AfterSalesModule() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
                 <div className="w-full max-w-none space-y-4">
+                    <div className="md:hidden">
+                        <AdminField label="售后状态">
+                            <AdminSelect
+                                value={activeTab}
+                                onChange={event => {
+                                    setActiveTab(event.target.value as typeof activeTab);
+                                    setPage(0);
+                                    setSelectedRequest(null);
+                                }}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
+                                {tabs.map(tab => (
+                                    <option key={tab.id} value={tab.id}>
+                                        {tab.label}
+                                    </option>
+                                ))}
+                            </AdminSelect>
+                        </AdminField>
+                    </div>
                     {notification && (
                         <div
                             role="status"
@@ -574,7 +594,7 @@ export function AfterSalesModule() {
                     )}
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
-                            <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
+                            <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <AdminInput
                                     value={searchTerm}
@@ -584,7 +604,7 @@ export function AfterSalesModule() {
                                     }}
                                     aria-label="搜索售后工单"
                                     placeholder="搜索工单号、订单号、买家或邮箱"
-                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
                                     <AdminButton
@@ -593,7 +613,7 @@ export function AfterSalesModule() {
                                             setSearchTerm('');
                                             setPage(0);
                                         }}
-                                        className="absolute right-2.5 top-2 text-slate-400"
+                                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400"
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
@@ -624,7 +644,7 @@ export function AfterSalesModule() {
                         ) : (
                             visibleRequests.length > 0 && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1540px] border-collapse text-left text-xs">
+                                    <table className="admin-mobile-record-table w-full min-w-[1540px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                                 <th
@@ -671,7 +691,10 @@ export function AfterSalesModule() {
                                                     key={request.id}
                                                     className="group h-[52px] hover:bg-slate-50/80"
                                                 >
-                                                    <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="工单号"
+                                                        className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                                    >
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() => openRequest(request)}
@@ -681,7 +704,10 @@ export function AfterSalesModule() {
                                                             {request.code}
                                                         </AdminButton>
                                                     </td>
-                                                    <td className="h-[52px] max-w-44 px-3 py-0">
+                                                    <td
+                                                        data-label="订单号"
+                                                        className="h-[52px] max-w-44 px-3 py-0"
+                                                    >
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() =>
@@ -700,7 +726,10 @@ export function AfterSalesModule() {
                                                             {request.order.code}
                                                         </AdminButton>
                                                     </td>
-                                                    <td className="h-[52px] max-w-36 px-3 py-0">
+                                                    <td
+                                                        data-label="买家"
+                                                        className="h-[52px] max-w-36 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate font-semibold text-slate-900"
                                                             title={request.customerName}
@@ -708,7 +737,11 @@ export function AfterSalesModule() {
                                                             {request.customerName}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-56 px-3 py-0">
+                                                    <td
+                                                        data-label="邮箱"
+                                                        data-mobile-wide
+                                                        className="h-[52px] max-w-56 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate text-slate-500"
                                                             title={request.customerEmail}
@@ -716,10 +749,17 @@ export function AfterSalesModule() {
                                                             {request.customerEmail}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-semibold text-slate-800">
+                                                    <td
+                                                        data-label="售后类型"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-semibold text-slate-800"
+                                                    >
                                                         {typeLabels[request.type]}
                                                     </td>
-                                                    <td className="h-[52px] max-w-52 px-3 py-0">
+                                                    <td
+                                                        data-label="原因"
+                                                        data-mobile-wide
+                                                        className="h-[52px] max-w-52 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate text-slate-500"
                                                             title={getSystemLabel(
@@ -737,23 +777,35 @@ export function AfterSalesModule() {
                                                             )}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
+                                                    <td
+                                                        data-label="申请金额"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950"
+                                                    >
                                                         {formatMoney(
                                                             request.requestedAmount,
                                                             request.currencyCode,
                                                         )}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                    <td
+                                                        data-label="状态"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0"
+                                                    >
                                                         <span
                                                             className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${stateClasses[request.state]}`}
                                                         >
                                                             {stateLabels[request.state]}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <td
+                                                        data-label="申请时间"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                    >
                                                         {formatDateTime(request.createdAt)}
                                                     </td>
-                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="操作"
+                                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50"
+                                                    >
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() => openRequest(request)}
@@ -846,6 +898,14 @@ export function AfterSalesModule() {
                             </AdminButton>
                         </header>
                         <div className="flex-1 space-y-5 overflow-y-auto p-6">
+                            {selectedRequest.type === 'RETURN_AND_REFUND' &&
+                                ['APPROVED', 'COMPLETED'].includes(selectedRequest.state) && (
+                                    <PhysicalReturnPanel
+                                        key={selectedRequest.id}
+                                        requestId={selectedRequest.id}
+                                        items={selectedRequest.items}
+                                    />
+                                )}
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div className="text-[10px] font-semibold text-slate-400">关联订单</div>
@@ -897,7 +957,7 @@ export function AfterSalesModule() {
                                 </div>
                                 {!!selectedRequest.evidence?.length && (
                                     <div className="mt-4 space-y-2">
-                                        <div className="flex items-center justify-between gap-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
                                             <h4 className="text-xs font-semibold text-slate-900">
                                                 买家图片凭证
                                                 <FeatureHelpButton
@@ -926,7 +986,7 @@ export function AfterSalesModule() {
                                                 刷新图片
                                             </AdminButton>
                                         </div>
-                                        <div className="grid max-w-md grid-cols-3 gap-3">
+                                        <div className="grid max-w-md grid-cols-1 gap-3 sm:grid-cols-3">
                                             {selectedRequest.evidence.map((image, index) => {
                                                 const url =
                                                     image.available &&
@@ -974,7 +1034,7 @@ export function AfterSalesModule() {
                                     {selectedRequest.items.map(item => (
                                         <div
                                             key={item.id}
-                                            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 text-xs"
+                                            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 text-xs"
                                         >
                                             <div>
                                                 <div className="font-semibold text-slate-900">

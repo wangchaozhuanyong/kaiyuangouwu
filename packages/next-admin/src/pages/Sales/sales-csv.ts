@@ -1,5 +1,13 @@
 /** Quote delimiters and neutralize spreadsheet formulas in untrusted text. */
 export function csvCell(value: string): string {
-    const text = /^[\s\u0000-\u001f\u007f]*[=+\-@]|^[\t\r\n]/u.test(value) ? `'${value}` : value;
+    let offset = 0;
+    while (offset < value.length) {
+        const code = value.charCodeAt(offset);
+        if (code > 31 && code !== 127 && !/\s/u.test(value[offset])) break;
+        offset++;
+    }
+    const firstCode = value.charCodeAt(0);
+    const unsafe = [9, 10, 13].includes(firstCode) || /^[=+\-@]/u.test(value.slice(offset));
+    const text = unsafe ? `'${value}` : value;
     return `"${text.replace(/"/gu, '""')}"`;
 }

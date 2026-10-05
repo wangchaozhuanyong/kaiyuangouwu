@@ -54,6 +54,11 @@ import { FieldLayoutFixture } from './field-layout-fixture';
 // Synthetic local data only. No HTTP link. Mutations are blocked unless an explicit mockWrites flag enables the small local-only whitelist below.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
+// Platform-only routes use the real shell scope guard; opt in with &platform.
+const platformFixture = params.has('platform');
+const alternateScopeParams = new URLSearchParams(params);
+if (platformFixture) alternateScopeParams.delete('platform');
+else alternateScopeParams.set('platform', '');
 const viewLabels: Record<string, string> = {
     fields: '字段横排验收',
     draft: '草稿订单',
@@ -64,6 +69,7 @@ const viewLabels: Record<string, string> = {
     aftersales: '售后',
     dashboard: '工作台',
     sales: '订单列表',
+    customers: '客户列表',
     reviews: '买家评价',
     catalog: '商品列表',
     suppliers: '供货商',
@@ -117,8 +123,11 @@ const fixturePermissions = params.has('restricted')
         : ['SuperAdmin'];
 const channel = {
     id: 'layout-channel',
-    code: params.has('platform') ? '__default_channel__' : '布局验收店铺',
-    customFields: { storefrontNameZh: '布局验收店铺', storefrontNameEn: 'Layout demo' },
+    code: platformFixture ? '__default_channel__' : '布局验收店铺',
+    customFields: {
+        storefrontNameZh: platformFixture ? '布局验收平台' : '布局验收店铺',
+        storefrontNameEn: platformFixture ? 'Layout platform' : 'Layout demo',
+    },
     token: 'synthetic-layout-channel',
     defaultLanguageCode: 'zh_Hans',
     availableLanguageCodes: ['zh_Hans', 'en'],
@@ -294,8 +303,10 @@ const collections = Array.from({ length: 8 }, (_, i) => ({
 }));
 const unconfiguredSetup = {
     myStoreCurrencyConfiguration: {
-        channelId: '1',
-        channelCode: 'default-channel',
+        // Keep the typename stable between direct and fragment-based selections.
+        __typename: 'StoreCurrencyConfiguration',
+        channelId: channel.id,
+        channelCode: channel.code,
         updatedAt: '2026-09-01T00:00:00.000Z',
         defaultCurrencyCode: 'CNY',
         availableCurrencyCodes: ['CNY', 'MYR'],
@@ -304,6 +315,8 @@ const unconfiguredSetup = {
         cnyToMyrRate: 0.61,
         markupPercent: 1,
         roundingMode: 'CENT',
+        rateSource: 'SYNTHETIC',
+        rateUpdatedAt: now,
         usdtDisplayEnabled: false,
         usdtMarkupPercent: 0.5,
         usdtRateScheduleMode: 'INTERVAL',
@@ -323,8 +336,9 @@ const unconfiguredSetup = {
         usdtWalletReviewStatus: 'UNCONFIGURED',
     },
     myStoreUsdtWallet: {
-        channelId: '1',
-        channelCode: 'default-channel',
+        __typename: 'StoreUsdtWallet',
+        channelId: channel.id,
+        channelCode: channel.code,
         reviewStatus: 'UNCONFIGURED',
         configured: false,
         network: 'TRC20',
@@ -353,6 +367,28 @@ const fixtureOrder = {
     lines: [],
     fulfillments: [],
     payments: [],
+};
+const fixtureCustomer = {
+    __typename: 'Customer',
+    id: 'layout-customer',
+    createdAt: now,
+    updatedAt: now,
+    title: null,
+    firstName: '用于移动端长姓名换行验收的模拟客户',
+    lastName: '示例',
+    emailAddress: 'synthetic.customer.mobile.layout.acceptance@example.invalid',
+    phoneNumber: null,
+    groups: [],
+    user: {
+        id: 'layout-customer-user',
+        identifier: 'synthetic.customer.mobile.layout.acceptance@example.invalid',
+        verified: true,
+        lastLogin: now,
+    },
+    addresses: [],
+    orders: { items: [fixtureOrder], totalItems: 1 },
+    history: empty,
+    customFields: {},
 };
 const data: Record<string, unknown> = {
     ...unconfiguredSetup,
@@ -450,6 +486,7 @@ const data: Record<string, unknown> = {
     myStoreUsdtPaymentIntents: [],
     myStoreUsdtPaymentStats: { totalCount: 0, settledCount: 0, manualReviewCount: 0, receivedUsdtTotal: 0 },
     myStoreProfile: {
+        __typename: 'StoreProfile',
         id: 'layout-profile',
         channelId: channel.id,
         updatedAt: now,
@@ -480,6 +517,26 @@ const data: Record<string, unknown> = {
     },
     storeProfiles: [],
     storeProvisioningTemplates: [],
+    storeDomains: params.has('empty')
+        ? []
+        : [
+              {
+                  id: 'layout-domain',
+                  updatedAt: now,
+                  domain: 'store-layout.example.invalid',
+                  channel,
+                  isPrimary: true,
+                  status: 'PENDING',
+                  verificationRecordName: '_vendure.store-layout.example.invalid',
+                  verificationRecordValue: 'synthetic-layout-verification',
+                  verifiedAt: null,
+                  lastVerificationError: null,
+              },
+          ],
+    storeDomainConfiguration: {
+        cnameTarget: 'routing.example.invalid',
+        routingMode: 'prefer-domain',
+    },
     storeGovernanceChanges: params.has('mockWrites')
         ? [
               {
@@ -535,6 +592,8 @@ const data: Record<string, unknown> = {
     },
     collectionFilters: [],
     referralProgram: {
+        __typename: 'ReferralProgram',
+        channelId: channel.id,
         enabled: false,
         rewardRate: 0,
         releaseDelayDays: 7,
@@ -545,6 +604,7 @@ const data: Record<string, unknown> = {
         defaultPosterTemplate: 'default',
         posterTemplates: [],
         posterTemplateConfigs: [],
+        systemPosterTemplateConfigs: [],
         siteIntroZh: '',
         siteIntroEn: '',
         siteTitleZh: '',
@@ -594,8 +654,8 @@ const data: Record<string, unknown> = {
     },
     myAdministratorAccess: {
         id: 'local-access',
-        scope: params.has('platform') ? 'PLATFORM' : 'STORE',
-        authority: params.has('platform') ? 'OWNER' : 'ADMIN',
+        scope: platformFixture ? 'PLATFORM' : 'STORE',
+        authority: platformFixture ? 'OWNER' : 'ADMIN',
         status: 'ACTIVE',
         channel,
     },
@@ -711,7 +771,8 @@ const data: Record<string, unknown> = {
     physicalFulfillmentTodoCount: 3,
     fulfillmentDeliveryExceptions: empty,
     storefrontReviewSettings: { enabled: true },
-    customers: empty,
+    customers: params.has('empty') ? empty : { items: [fixtureCustomer], totalItems: 1 },
+    customer: fixtureCustomer,
     customerGroups: empty,
     customerFollowUps: empty,
     eligibleShippingMethodsForDraftOrder: [],
@@ -739,6 +800,8 @@ const data: Record<string, unknown> = {
     },
     autoCardTodoSummary: { lowStockSkuCount: 1, waitingStockDeliveryCount: 0, manualReviewCount: 0 },
     orders: { items: [fixtureOrder], totalItems: 1 },
+    processingOrders: { items: [fixtureOrder], totalItems: 1 },
+    orderProcessingCounts: { pending: 1, digital: 0, physical: 3, exceptions: 0, afterSales: 0 },
     dashboardMetricSummary: [
         { type: 'OrderCount', title: '订单', entries: [{ label: '当前', value: 1 }] },
         { type: 'OrderTotal', title: '销售额', entries: [{ label: '当前', value: 5000 }] },
@@ -757,6 +820,21 @@ const data: Record<string, unknown> = {
     channels: { items: [channel], totalItems: 1 },
     myStoreCommerceMode: { mode: 'HYBRID', conflicts: [] },
     product,
+    productTypeChangeAllowed: !params.has('locked'),
+    digitalProductWorkspace: {
+        productId: product.id,
+        variants: variants.map(variant => ({
+            id: variant.id,
+            sku: variant.sku,
+            deliveryMode: 'manual_service',
+            stockPolicy: 'unlimited',
+            availableQuantity: null,
+            migrationRequired: params.has('migration'),
+            purchaseCostMicrounits: 25000,
+            supplier: null,
+            fileVersion: null,
+        })),
+    },
     facets: empty,
     assets: empty,
     productOptionGroups: empty,
@@ -794,6 +872,7 @@ const data: Record<string, unknown> = {
             saleUnit: '件',
             purchaseUnit: '件',
             packageQuantity: 1,
+            shelfLifeDays: 365,
             sellingPrice: 5000,
             purchaseCostMicrounits: 25000,
             grossProfitMicrounits: 25000,
@@ -1009,7 +1088,11 @@ const client = new ApolloClient({
                 if (definition.operation === 'mutation') {
                     const field = definition.selectionSet.selections.find(f => f.kind === Kind.FIELD);
                     if (!params.has('mockWrites') || !field || field.kind !== Kind.FIELD) {
-                        observer.error(new Error('本地验收禁止写入'));
+                        observer.error(
+                            new Error(
+                                '只读预览禁止保存，不会写入后台。处理方法：继续检查输入和键盘，无需重试保存；填写内容仍保留。',
+                            ),
+                        );
                         return;
                     }
                     const input = operation.variables.input ?? {};
@@ -1447,6 +1530,7 @@ const modules: Record<string, React.ReactNode> = {
     aftersales: <AfterSalesModule />,
     dashboard: <DashboardModule />,
     sales: <SalesModule />,
+    customers: <CustomersModule />,
     reviews: <ReviewsModule />,
     catalog: <CatalogModule />,
     suppliers: <SuppliersModule />,
@@ -1494,11 +1578,15 @@ if (view === 'tabs' || view === 'split') {
                             <FixtureLocation />
                             <nav
                                 aria-label="本地测试导航"
+                                hidden={params.has('presentation')}
                                 className="fixed bottom-0 right-0 z-50 flex gap-3 bg-amber-100 p-2 text-xs"
                             >
                                 {params.has('mockWrites')
                                     ? '本地模拟操作 · 无网络写入'
                                     : '本地模拟数据 · 写入已阻止'}
+                                <a href={`?${alternateScopeParams.toString()}`}>
+                                    切换为{platformFixture ? '店铺' : '平台'}验收
+                                </a>
                                 <Link to="/catalog/list">测试商品列表</Link>
                                 <Link to="/catalog/products/layout-product">测试商品一</Link>
                                 <Link to="/catalog/products/layout-product-2">测试商品二</Link>

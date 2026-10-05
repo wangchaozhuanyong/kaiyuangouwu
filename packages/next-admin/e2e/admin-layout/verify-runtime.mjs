@@ -75,6 +75,14 @@ try {
             );
             await expect(page.locator('[data-admin-page]')).toBeVisible();
             await expect(page.locator('[data-layout-fixture-error]')).toHaveCount(0);
+            await expect(
+                page.getByRole('heading', { name: '当前页面暂时无法显示', exact: true }),
+            ).toHaveCount(0);
+            if (view === 'sales') {
+                await expect(page.getByRole('heading', { name: /^订单处理台/ })).toBeVisible();
+                if (mode.touch)
+                    await expect(page.getByRole('button', { name: '筛选与排序', exact: true })).toBeVisible();
+            }
             await expect
                 .poll(() =>
                     page.locator('[data-admin-page] .admin-button,[data-admin-page] .admin-control').count(),

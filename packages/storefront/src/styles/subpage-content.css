@@ -4,7 +4,7 @@
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: var(--space-section);
-    padding: var(--space-section) var(--experience-page-gutter-mobile) 0;
+    padding: var(--space-section) var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
 }
 
 /* A section placed in the shared body must not reserve a second outer inset. */
@@ -14,8 +14,8 @@
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-    .subpage-body {
-        padding-inline: var(--experience-page-gutter-tablet);
+    .page.subpage {
+        --page-section-inset: var(--experience-page-gutter-tablet);
     }
 }
 
@@ -30,7 +30,7 @@
     min-height: calc(var(--experience-control-min) + 2 * var(--space-4));
     height: auto;
     grid-template-columns: var(--experience-control-min) minmax(0, 1fr) var(--experience-control-min);
-    padding: var(--space-4) var(--experience-page-gutter-mobile);
+    padding: var(--space-4) var(--page-section-inset, var(--experience-page-gutter-mobile));
     gap: var(--space-8);
 }
 
@@ -218,13 +218,13 @@
 .legal-draft-content {
     width: min(100%, 780px);
     margin: 0 auto;
-    padding: 28px 22px 64px;
+    padding: 28px var(--page-section-inset, var(--experience-page-gutter-mobile)) 64px;
 }
 
 .legal-managed-content {
     width: min(100%, 780px);
     margin: 0 auto;
-    padding: 20px 20px 40px;
+    padding: 20px var(--page-section-inset, var(--experience-page-gutter-mobile)) 40px;
 }
 
 .legal-document-layout {
@@ -234,7 +234,7 @@
 .legal-document-navigation {
     width: min(100%, 780px);
     margin: 0 auto;
-    padding: 12px 20px 0;
+    padding: 12px var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
 }
 
 .legal-document-navigation h2 {
@@ -437,6 +437,10 @@
 @media (max-width: 1023px) {
     .page.legal-page {
         background: var(--surface);
+    }
+    .legal-page > .subpage-header {
+        width: min(100%, 780px);
+        margin-inline: auto;
     }
 
     .legal-identity-card div {

@@ -3,15 +3,18 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     CatalogResourceOwnership,
     ConfigService,
+    FulfillmentLine,
     GlobalSettingsService,
     isGraphQlErrorResult,
     Order,
+    OrderLine,
     OrderProcess,
     OrderService,
     ProductSalesAuthorization,
     ProductVariant,
     ProductVariantPrice,
     ProductVariantService,
+    RequestContext,
     StockLevel,
     StockMovementService,
     TransactionalConnection,
@@ -19,9 +22,13 @@ import {
 import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
+import { CheckoutResourcesService } from './checkout-resources.service';
 import { CommerceModeService } from './commerce-mode.service';
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
+import { DigitalFileService } from './digital-file.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
+import { digitalDeliverableQuantity } from './digital-order-entitlement';
+import { DigitalProductService } from './digital-product.service';
 import {
     getOrderLineFulfillmentType,
     hasCompleteShippingAddress,
@@ -42,8 +49,12 @@ let autoCardService: AutoCardService;
 let productPackagingService: ProductPackagingService;
 let commerceModeService: CommerceModeService;
 let manualDigitalDeliveryService: ManualDigitalDeliveryService;
+let digitalProducts: DigitalProductService;
+let checkoutResources: CheckoutResourcesService;
+let digitalFiles: DigitalFileService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
+    transitions: { Delivered: { to: ['Modifying'], mergeStrategy: 'merge' } },
     init(injector) {
         digitalTokens = injector.get(DigitalDeliveryTokenService);
         orderService = injector.get(OrderService);
@@ -56,9 +67,19 @@ export const commerceOrderProcess: OrderProcess<string> = {
         productPackagingService = injector.get(ProductPackagingService);
         commerceModeService = injector.get(CommerceModeService);
         manualDigitalDeliveryService = injector.get(ManualDigitalDeliveryService);
+        digitalProducts = injector.get(DigitalProductService);
+        checkoutResources = injector.get(CheckoutResourcesService);
+        digitalFiles = injector.get(DigitalFileService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
+        if (toState === 'Cancelled') {
+            try {
+                await checkoutResources.assertCancellationAllowed(ctx, order.id);
+            } catch (error) {
+                return error instanceof Error ? error.message : '付款结果尚待核验';
+            }
+        }
         const entersPayment = toState === 'ArrangingPayment';
         if (entersPayment && ctx.channel?.code === DEFAULT_CHANNEL_CODE) {
             return '平台管理中心不经营，请到经营店铺购买';
@@ -114,14 +135,26 @@ export const commerceOrderProcess: OrderProcess<string> = {
                     },
                 });
                 if (!price) return '本店售价未配置，请刷新购物车';
-                if (
-                    isFileDownloadOrderLine(line) &&
-                    !digitalTokens.resourceForSku(String(ctx.channelId), variant.sku)
-                )
-                    return '本店下载文件未配置，请联系店铺';
+                if (isFileDownloadOrderLine(line)) {
+                    const reservation = await digitalProducts.reservation(ctx, line.id);
+                    const config = await digitalProducts.config(ctx, variant.id);
+                    const versionId = reservation?.fileVersionId ?? config?.fileVersionId;
+                    const resource = versionId
+                        ? await digitalFiles.resource(ctx.channelId, versionId)
+                        : digitalTokens.resourceForSku(String(ctx.channelId), variant.sku);
+                    if (!resource) return '本店下载文件未配置，请联系店铺';
+                }
             }
         }
 
+        if (confirmsPayment && (await checkoutResources.hold(ctx, order.id))?.state === 'RELEASED') {
+            await checkoutResources.markReview(
+                ctx,
+                order,
+                '付款已记录，但占用已过期释放；请补货后重试交付或退款',
+            );
+            return;
+        }
         const summary = summarizeOrderFulfillment(order);
         const commerceMode = await commerceModeService.activeMode(ctx);
         for (const line of order.lines) {
@@ -147,16 +180,16 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         const physicalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
-        const stockManagedLines = order.lines.filter(line => requiresStockAllocation(line));
+        const stockManagedLines = await stockLines(ctx, order.lines);
         let lockedStockLevels: StockLevel[] | undefined;
         const packagingRules =
-            confirmsPayment && physicalLines.length
+            (entersPayment || confirmsPayment) && physicalLines.length
                 ? await productPackagingService.rulesForVariantIds(
                       ctx,
                       physicalLines.map(line => line.productVariantId),
                   )
                 : [];
-        if (confirmsPayment && stockManagedLines.length) {
+        if ((entersPayment || confirmsPayment) && stockManagedLines.length) {
             await productPackagingService.ensureStockLevelPairs(ctx, packagingRules);
             const variantIds = productPackagingService.variantIdsForLock(
                 stockManagedLines.map(line => line.productVariantId),
@@ -172,21 +205,32 @@ export const commerceOrderProcess: OrderProcess<string> = {
                     .orderBy('stock.productVariantId', 'ASC')
                     .addOrderBy('stock.stockLocationId', 'ASC');
             try {
-                lockedStockLevels = await stockQuery().setLock('pessimistic_write').getMany();
+                const driver = connection.getRepository(ctx, StockLevel).manager.connection.options.type;
+                lockedStockLevels = await (
+                    ['sqljs', 'sqlite', 'better-sqlite3'].includes(driver)
+                        ? stockQuery()
+                        : stockQuery().setLock('pessimistic_write')
+                ).getMany();
             } catch (error) {
                 if (!(error instanceof LockNotSupportedOnGivenDriverError)) {
                     throw error;
                 }
                 lockedStockLevels = await stockQuery().getMany();
             }
-            const unpackError = await productPackagingService.autoUnpackForOrder(
-                ctx,
-                order,
-                physicalLines,
-                packagingRules,
-                lockedStockLevels,
-            );
+            const unpackError = entersPayment
+                ? await productPackagingService.autoUnpackForOrder(
+                      ctx,
+                      order,
+                      physicalLines,
+                      packagingRules,
+                      lockedStockLevels,
+                  )
+                : undefined;
             if (unpackError) {
+                if (confirmsPayment) {
+                    await checkoutResources.markReview(ctx, order, unpackError);
+                    return;
+                }
                 return unpackError;
             }
         }
@@ -198,10 +242,19 @@ export const commerceOrderProcess: OrderProcess<string> = {
             const availableStock = lockedStockLevels
                 ? await saleableStockFromLockedRows(ctx, line.productVariant, lockedStockLevels)
                 : await productVariantService.getSaleableStockLevel(ctx, line.productVariant);
-            if (line.productVariant.trackInventory !== GlobalFlag.FALSE && line.quantity > availableStock) {
-                return ctx.translate('message.commerce-physical-product-insufficient-stock', {
+            const ownAllocation = await checkoutResources.outstandingAllocation(ctx, line.id);
+            if (
+                line.productVariant.trackInventory !== GlobalFlag.FALSE &&
+                line.quantity > availableStock + ownAllocation
+            ) {
+                const message = ctx.translate('message.commerce-physical-product-insufficient-stock', {
                     productVariantName: line.productVariant.name,
                 });
+                if (confirmsPayment) {
+                    await checkoutResources.markReview(ctx, order, message);
+                    return;
+                }
+                return message;
             }
         }
     },
@@ -209,13 +262,17 @@ export const commerceOrderProcess: OrderProcess<string> = {
     async onTransitionEnd(fromState, toState, { ctx, order }) {
         if (toState === 'Cancelled') {
             await manualDigitalDeliveryService.cancelOrder(ctx, order.id);
+            await checkoutResources.release(ctx, order);
         }
+        if (toState === 'ArrangingPayment')
+            await checkoutResources.reserve(ctx, order, await stockLines(ctx, order.lines));
         if (
             fromState === 'ArrangingPayment' &&
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled')
         ) {
-            const stockManagedLines = order.lines.filter(line => requiresStockAllocation(line));
-            if (stockManagedLines.length) {
+            await checkoutResources.confirm(ctx, order);
+            const stockManagedLines = await stockLines(ctx, order.lines);
+            if (stockManagedLines.length && !(await checkoutResources.hold(ctx, order.id))) {
                 await stockMovementService.createAllocationsForOrderLines(
                     ctx,
                     stockManagedLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
@@ -223,31 +280,125 @@ export const commerceOrderProcess: OrderProcess<string> = {
             }
         }
 
-        if (toState !== 'PaymentSettled') {
-            return;
-        }
-
-        const settledOrder = await connection.getEntityOrThrow(ctx, Order, order.id, {
-            relations: ['customer', 'lines', 'lines.productVariant'],
-        });
-        await autoCardService.allocateSettledOrder(ctx, settledOrder);
-        await manualDigitalDeliveryService.createSettledOrderTasks(ctx, settledOrder);
-
-        const fileDownloadLines = settledOrder.lines.filter(line => isFileDownloadOrderLine(line));
-        if (fileDownloadLines.length) {
-            const fulfillment = await orderService.createFulfillment(ctx, {
-                lines: fileDownloadLines.map(line => ({
-                    orderLineId: line.id,
-                    quantity: line.quantity,
-                })),
-                handler: { code: digitalFulfillmentHandler.code, arguments: [] },
+        // Payment-process completion runs after the core has persisted the
+        // placed order. Delivering here observes the pre-placement order and
+        // its final save can overwrite the resulting fulfillment state.
+        if (
+            ['Modifying', 'ArrangingAdditionalPayment'].includes(fromState) &&
+            ['PaymentSettled', 'PartiallyDelivered', 'PartiallyShipped', 'Shipped'].includes(toState)
+        ) {
+            const current = await connection.getEntityOrThrow(ctx, Order, order.id, {
+                relations: ['payments', 'lines'],
             });
-            if (isGraphQlErrorResult(fulfillment)) {
-                throw new Error(fulfillment.message);
+            const paid = current.payments
+                .filter(
+                    payment =>
+                        payment.state === 'Settled' &&
+                        !payment.metadata?.public?.testPayment &&
+                        !payment.method.startsWith('controlled-test-payment'),
+                )
+                .reduce((sum, payment) => sum + payment.amount, 0);
+            if (paid >= current.totalWithTax) {
+                for (const line of current.lines)
+                    await connection.getRepository(ctx, OrderLine).update(line.id, {
+                        orderPlacedQuantity: Math.max(line.orderPlacedQuantity, line.quantity),
+                    });
+                await fulfillDigitalOrder(ctx, order.id);
+                order.state = (await connection.getEntityOrThrow(ctx, Order, order.id)).state;
             }
         }
     },
 };
+
+export async function fulfillDigitalOrder(ctx: RequestContext, orderId: Order['id']) {
+    const settledOrder = await connection.getEntityOrThrow(ctx, Order, orderId, {
+        relations: [
+            'customer',
+            'lines',
+            'lines.productVariant',
+            'payments',
+            'payments.refunds',
+            'payments.refunds.lines',
+        ],
+    });
+    if (!(await checkoutResources.canDeliver(ctx, orderId))) return;
+    const linesToReserve: Order['lines'] = [];
+    for (const line of settledOrder.lines) {
+        if (getOrderLineFulfillmentType(line) !== 'digital') continue;
+        const reservation = await digitalProducts.reservation(ctx, line.id);
+        const history = await connection
+            .getRepository(ctx, FulfillmentLine)
+            .find({ where: { orderLineId: line.id }, relations: ['fulfillment'] });
+        const delivered = history
+            .filter(item => item.fulfillment.state === 'Delivered')
+            .reduce((sum, item) => sum + item.quantity, 0);
+        if (reservation || delivered < digitalDeliverableQuantity(settledOrder, line))
+            linesToReserve.push(line);
+    }
+    try {
+        const originalLines = settledOrder.lines;
+        try {
+            settledOrder.lines = linesToReserve;
+            await digitalProducts.reserveOrder(ctx, settledOrder);
+        } finally {
+            settledOrder.lines = originalLines;
+        }
+    } catch (error) {
+        await checkoutResources.markReview(
+            ctx,
+            settledOrder,
+            error instanceof Error ? error.message : '交付资源不足',
+        );
+        return;
+    }
+    await autoCardService.allocateSettledOrder(ctx, settledOrder);
+    await manualDigitalDeliveryService.createSettledOrderTasks(ctx, settledOrder);
+
+    await autoCardService.completeAvailableDeliveries(ctx, orderId);
+    const fileDownloadLines = settledOrder.lines.filter(line => isFileDownloadOrderLine(line));
+    if (fileDownloadLines.length) {
+        const pending = [] as Array<{ orderLineId: Order['lines'][number]['id']; quantity: number }>;
+        for (const line of fileDownloadLines) {
+            const previous = await connection
+                .getRepository(ctx, FulfillmentLine)
+                .find({ where: { orderLineId: line.id }, relations: ['fulfillment'] });
+            const quantity = Math.max(
+                0,
+                digitalDeliverableQuantity(settledOrder, line) -
+                    previous
+                        .filter(item => item.fulfillment.state !== 'Cancelled')
+                        .reduce((sum, item) => sum + item.quantity, 0),
+            );
+            if (quantity) {
+                await digitalProducts.consumeLine(ctx, line.id, quantity);
+                pending.push({ orderLineId: line.id, quantity });
+            }
+        }
+        if (!pending.length) return;
+        const fulfillment = await orderService.createFulfillment(ctx, {
+            lines: pending,
+            handler: { code: digitalFulfillmentHandler.code, arguments: [] },
+        });
+        if (isGraphQlErrorResult(fulfillment)) throw new Error(fulfillment.message);
+        const delivered = await orderService.transitionFulfillmentToState(ctx, fulfillment.id, 'Delivered');
+        if (isGraphQlErrorResult(delivered)) throw new Error(delivered.message);
+    }
+    await autoCardService.completeAvailableDeliveries(ctx, orderId);
+}
+
+async function stockLines(ctx: Parameters<DigitalProductService['config']>[0], lines: Order['lines']) {
+    const matches = await Promise.all(
+        lines.map(
+            async line =>
+                requiresStockAllocation(line) &&
+                !(
+                    getOrderLineFulfillmentType(line) === 'digital' &&
+                    (await digitalProducts.config(ctx, line.productVariantId))
+                ),
+        ),
+    );
+    return lines.filter((_line, index) => matches[index]);
+}
 
 function requiresStockAllocation(line: Order['lines'][number]): boolean {
     if (getOrderLineFulfillmentType(line) === 'physical') {

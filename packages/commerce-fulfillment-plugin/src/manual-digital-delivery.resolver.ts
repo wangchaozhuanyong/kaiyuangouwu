@@ -1,6 +1,7 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, Order, Permission, RequestContext, Transaction } from '@vendure/core';
 
+import { readSoldAutoCardsPermission } from './auto-card.constants';
 import { ManualDigitalDeliveryService, SaveManualDeliveryInput } from './manual-digital-delivery.service';
 
 @Resolver()
@@ -20,6 +21,20 @@ export class ManualDigitalDeliveryAdminResolver {
     @Allow(Permission.ReadOrder)
     manualDigitalDelivery(@Ctx() ctx: RequestContext, @Args('id') id: string) {
         return this.service.one(ctx, id);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(readSoldAutoCardsPermission.Permission, Permission.SuperAdmin)
+    revealMyManualDigitalDelivery(@Ctx() ctx: RequestContext, @Args('id') id: string) {
+        return this.service.reveal(ctx, id);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdateOrder)
+    appendManualDigitalDelivery(@Ctx() ctx: RequestContext, @Args('input') input: SaveManualDeliveryInput) {
+        return this.service.append(ctx, input);
     }
 
     @Transaction()

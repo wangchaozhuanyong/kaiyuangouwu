@@ -1,6 +1,5 @@
 import type { DocumentNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalog-operations.graphql';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     CREATE_PRODUCT,
@@ -8,6 +7,7 @@ import {
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
+import { UPDATE_VARIANT_COST, UPDATE_VARIANT_SUPPLIER } from '../../graphql/product-domains.graphql';
 import type { ProductDetailRecord } from './product-editor-types';
 import { useProductEditorSave } from './useProductEditorSave';
 
@@ -134,6 +134,7 @@ function fixture(): SaveInput {
         },
         data: {
             productData: { product },
+            catalogChannelsData: undefined,
             refetchProduct: vi.fn().mockResolvedValue({ data: { product } }),
             refetchCollections: vi.fn().mockResolvedValue({}),
             defaultStockLocationId: 'stock-loc-1',
@@ -345,7 +346,7 @@ describe('product save orchestration', () => {
         const { handleSave } = useProductEditorSave(input);
         mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mockRejectedValueOnce(new Error('SKU write failed'));
         await handleSave();
-        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重新读取失败'));
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重新加载失败'));
         expect(input.controls.showError).not.toHaveBeenCalledWith(
             expect.stringContaining('页面已按后端当前数据重新加载'),
         );
@@ -462,6 +463,12 @@ describe('product save orchestration', () => {
 
     it('allows saving a single product with 1 new variant and no templates selected', async () => {
         const input = fixture();
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi.fn().mockResolvedValue({
+                data: { createProductVariants: [{ id: 'new-single', sku: 'SINGLE-1' }] },
+            }),
+        );
         input.draft.selectedOptionGroupIds = [];
         input.draft.variants = [
             {
@@ -486,6 +493,12 @@ describe('product save orchestration', () => {
 
     it('allows saving a single product with 1 variant even if option templates are selected without matrix', async () => {
         const input = fixture();
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi.fn().mockResolvedValue({
+                data: { createProductVariants: [{ id: 'new-single', sku: 'SINGLE-1' }] },
+            }),
+        );
         input.draft.selectedOptionGroupIds = ['group-1']; // user clicked template but didn't generate matrix
         input.draft.variants = [
             {
@@ -520,14 +533,11 @@ describe('product save orchestration', () => {
         expect(input.controls.showError).not.toHaveBeenCalled();
         expect(mocks.mutate).toHaveBeenCalledWith(
             expect.objectContaining({
-                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                mutation: UPDATE_VARIANT_COST,
                 variables: {
-                    input: expect.objectContaining({
-                        productVariantId: 'variant-1',
-                        stockLocationId: 'stock-loc-1',
-                        currencyCode: 'MYR',
-                        purchaseCostMicrounits: 25500,
-                    }),
+                    productVariantId: 'variant-1',
+                    currencyCode: 'MYR',
+                    costMicrounits: 25500,
                 },
             }),
         );
@@ -572,17 +582,37 @@ describe('product save orchestration', () => {
 
         expect(mocks.mutate).toHaveBeenCalledWith(
             expect.objectContaining({
-                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                mutation: UPDATE_VARIANT_COST,
                 variables: {
-                    input: expect.objectContaining({
-                        productVariantId: 'created-var-1',
-                        stockLocationId: 'stock-loc-1',
-                        currencyCode: 'MYR',
-                        purchaseCostMicrounits: 45000,
-                    }),
+                    productVariantId: 'created-var-1',
+                    currencyCode: 'MYR',
+                    costMicrounits: 45000,
                 },
             }),
         );
+    });
+    it('saves digital supply associations independently without a warehouse payload', async () => {
+        const input = fixture();
+        input.draft.variants[0].supplierId = 'supplier-1';
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_VARIANT_SUPPLIER,
+                variables: { productVariantId: 'variant-1', supplierId: 'supplier-1' },
+            }),
+        );
+        for (const [, handler] of mocks.mutations) {
+            for (const call of handler.mock.calls) {
+                const variants = call[0]?.variables?.input;
+                if (Array.isArray(variants)) {
+                    for (const variant of variants) {
+                        expect(variant).not.toHaveProperty('stockLevels');
+                        expect(variant).not.toHaveProperty('stockOnHand');
+                    }
+                }
+            }
+        }
     });
 });
 

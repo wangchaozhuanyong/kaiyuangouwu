@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
+import { ManualDigitalDeliveryReadyEvent } from './manual-digital-delivery.event';
 import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 
 function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
@@ -70,6 +71,9 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         eventBus as any,
         orderService as any,
         {} as any,
+        { consumeLine: vi.fn(), lock: vi.fn() } as any,
+        { createForDigitalReceipt: vi.fn(() => ({ token: 'synthetic-receipt-proof' })) } as any,
+        { appendAudit: vi.fn().mockResolvedValue(undefined) } as any,
     );
     const ctx = { channelId: 'channel-1', activeUserId: 'admin-1' } as any;
     const packages = [
@@ -80,22 +84,32 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
 }
 
 describe('ManualDigitalDeliveryService invariants', () => {
+    it('shows the current order email used by notification without exposing content', async () => {
+        const test = createHarness();
+        test.delivery.order.customFields = { deliveryEmail: ' updated@example.invalid ' };
+        const viewed = await test.service.one(test.ctx, test.delivery.id);
+        expect(viewed.recipientEmail).toBe('updated@example.invalid');
+        expect(viewed.packages).toEqual([]);
+        expect(test.connection.getRepository).toHaveBeenCalled();
+    });
     it.each(['Pending', 'Settled'])(
         'blocks publishing, retry and queued email after a full %s refund',
         async refundState => {
             const test = createHarness();
             await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
-            (test.delivery.order.payments[0] as any).refunds = [{ state: refundState, total: 1000 }];
+            (test.delivery.order.payments[0] as any).refunds = [
+                { state: refundState, total: 1000, lines: [{ orderLineId: 'line-1', quantity: 2 }] },
+            ];
             test.eventBus.publish.mockClear();
             test.delivery.state = 'DRAFT';
             await expect(
                 test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages }),
-            ).rejects.toThrow('全额退款');
+            ).rejects.toThrow('正在退款');
             test.delivery.state = 'EMAIL_FAILED';
-            await expect(test.service.retry(test.ctx, test.delivery.id)).rejects.toThrow('全额退款');
+            await expect(test.service.retry(test.ctx, test.delivery.id)).rejects.toThrow('正在退款');
             test.delivery.state = 'SENDING';
             await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
-                '全额退款',
+                '领取资格已暂停',
             );
             expect(test.eventBus.publish).not.toHaveBeenCalled();
         },
@@ -154,36 +168,27 @@ describe('ManualDigitalDeliveryService invariants', () => {
         },
     );
 
-    it('rejects foreign or deleted attachments before draft persistence', async () => {
+    it('rejects public product assets as delivery attachments before draft persistence', async () => {
         const test = createHarness();
         await expect(
             test.service.saveDraft(test.ctx, {
                 id: test.delivery.id,
                 packages: [{ note: 'test', attachmentAssetIds: ['foreign'] }],
             }),
-        ).rejects.toThrow('不属于当前店铺');
+        ).rejects.toThrow('私有交付文件');
         expect(test.delivery.encryptedPackages).toBeNull();
-        expect(test.connection.findByIdsInChannel).toHaveBeenCalledWith(
-            test.ctx,
-            expect.any(Function),
-            ['foreign'],
-            'channel-1',
-            {},
-        );
+        expect(test.connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 
-    it('rechecks attachment assignment when preparing an existing delivery for email', async () => {
+    it('checks private attachment ownership before persistence', async () => {
         const test = createHarness();
-        test.connection.findByIdsInChannel.mockResolvedValue([
-            { id: 'shared', name: 'test.txt', source: 'test.txt' },
-        ] as any);
-        await test.service.publish(test.ctx, {
-            id: test.delivery.id,
-            packages: test.packages.map(item => ({ ...item, attachmentAssetIds: ['shared'] })),
-        });
-        expect((await test.service.emailPayload(test.ctx, test.delivery.id)).attachments).toHaveLength(1);
-        test.connection.findByIdsInChannel.mockResolvedValue([]);
-        await expect(test.service.emailPayload(test.ctx, test.delivery.id)).rejects.toThrow('不属于当前店铺');
+        await expect(
+            test.service.saveDraft(test.ctx, {
+                id: test.delivery.id,
+                packages: [{ note: 'test', attachmentFileVersionIds: ['foreign'] }],
+            }),
+        ).rejects.toThrow('不属于当前店铺');
+        expect(test.delivery.encryptedPackages).toBeNull();
     });
     it('does not require a delivery email for a physical-only settled order', async () => {
         const test = createHarness();
@@ -208,7 +213,7 @@ describe('ManualDigitalDeliveryService invariants', () => {
 
         await expect(
             test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages.slice(0, 1) }),
-        ).rejects.toThrow('必须录入并发布 2 个成品包');
+        ).rejects.toThrow('当前需交付 2 份');
         expect(test.eventBus.publish).not.toHaveBeenCalled();
     });
 
@@ -218,14 +223,22 @@ describe('ManualDigitalDeliveryService invariants', () => {
         await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
         const originalEncryptedPackages = test.delivery.encryptedPackages;
         expect(test.events.at(-1)).toMatchObject({ type: 'PUBLISHED', actorType: 'ADMIN' });
-        expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
+        expect(
+            test.eventBus.publish.mock.calls.filter(
+                ([event]) => event instanceof ManualDigitalDeliveryReadyEvent,
+            ),
+        ).toHaveLength(1);
 
         test.delivery.state = 'EMAIL_FAILED';
         await test.service.retry(test.ctx, test.delivery.id);
 
         expect(test.delivery.encryptedPackages).toBe(originalEncryptedPackages);
         expect(test.events.at(-1)).toMatchObject({ type: 'MANUAL_RETRY', actorType: 'ADMIN' });
-        expect(test.eventBus.publish).toHaveBeenCalledTimes(2);
+        expect(
+            test.eventBus.publish.mock.calls.filter(
+                ([event]) => event instanceof ManualDigitalDeliveryReadyEvent,
+            ),
+        ).toHaveLength(2);
     });
 
     it('does not allow failed or sent deliveries to overwrite the original packages', async () => {

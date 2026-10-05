@@ -299,6 +299,12 @@ export function variantDisplayName(row: NormalizedCatalogRow): string {
 }
 
 export function variantCustomFields(row: NormalizedCatalogRow): Record<string, unknown> {
+    if (row.fulfillmentType === 'digital')
+        return {
+            specification: row.specification || null,
+            digitalDeliveryMode: row.digitalDeliveryMode ?? 'manual_service',
+            digitalStockPolicy: row.digitalStockPolicy ?? 'unlimited',
+        };
     return {
         barcode: row.barcode || null,
         specification: row.specification || null,
@@ -313,6 +319,8 @@ export function variantCustomFieldUpdates(
     row: NormalizedCatalogRow,
     clearBlankFields: boolean,
 ): Record<string, unknown> {
+    if (row.fulfillmentType === 'digital')
+        return row.specification ? { specification: row.specification } : {};
     const updates: Record<string, unknown> = {};
     optionalUpdate(updates, 'barcode', row.barcode, shouldClear(row, 'barcode', clearBlankFields));
     optionalUpdate(

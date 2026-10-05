@@ -43,6 +43,36 @@
     cursor: grabbing;
 }
 
+.hero-carousel-stage,
+.hero-carousel-slide {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: inherit;
+}
+
+.hero-carousel-stage {
+    overflow: hidden;
+    transition: height 220ms cubic-bezier(0.22, 0.68, 0, 1);
+}
+
+.hero-carousel-slide.is-neighbor {
+    position: absolute;
+    inset: 0;
+}
+
+.hero-carousel-stage.is-settling > .hero-carousel-slide {
+    transition: transform 520ms cubic-bezier(0.22, 0.68, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-carousel-stage,
+    .hero-carousel-stage.is-settling > .hero-carousel-slide {
+        transition: none;
+    }
+}
+
 .hero-rich-image-link {
     width: 100%;
     height: auto;
@@ -355,17 +385,8 @@
 }
 
 .hero.hero-image-overlay .hero-rich-image-link::after {
-    content: '';
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-    pointer-events: none;
-    background: linear-gradient(
-        90deg,
-        var(--hero-image-overlay-start, rgba(16, 33, 47, 0.86)) 0%,
-        var(--hero-image-overlay-middle, rgba(16, 33, 47, 0.42)) 38%,
-        transparent 76%
-    );
+    /* Preserve the uploaded photograph; contrast belongs to managed copy colors. */
+    content: none;
 }
 
 .hero.hero-image-overlay .hero-rich-image-link,
@@ -415,7 +436,7 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: var(--hero-image-copy-foreground, #fff);
+    color: var(--hero-image-copy-foreground, var(--text));
     box-shadow: none;
 }
 
@@ -425,8 +446,8 @@
 }
 
 .hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
-    color: var(--hero-image-copy-foreground, #fff);
-    text-shadow: var(--hero-image-text-shadow, 0 1px 5px rgba(5, 16, 27, 0.48));
+    color: var(--hero-image-copy-foreground, var(--text));
+    text-shadow: none;
 }
 
 .hero.hero-image-overlay .hero-rich-title {
@@ -449,8 +470,8 @@
 }
 
 .hero.hero-image-overlay :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
-    color: var(--hero-image-body-foreground, #fff);
-    text-shadow: var(--hero-image-text-shadow, 0 1px 5px rgba(5, 16, 27, 0.48));
+    color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
+    text-shadow: none;
 }
 
 .hero.hero-image-overlay .hero-rich-pill {

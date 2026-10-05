@@ -1,3 +1,4 @@
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 // @vitest-environment jsdom
 
 import { act } from 'react';
@@ -39,14 +40,16 @@ function mountDialog(saving = false) {
     });
     act(() => {
         root.render(
-            <InventoryLotDialog
-                draft={validDraft}
-                variants={[]}
-                saving={saving}
-                onChange={vi.fn()}
-                onClose={onClose}
-                onSave={onSave}
-            />,
+            <FeatureHelpProvider>
+                <InventoryLotDialog
+                    draft={validDraft}
+                    variants={[]}
+                    saving={saving}
+                    onChange={vi.fn()}
+                    onClose={onClose}
+                    onSave={onSave}
+                />
+            </FeatureHelpProvider>,
         );
     });
     return { container, onClose, onSave };
@@ -135,24 +138,26 @@ describe('inventory batch dialog validation', () => {
         'shows the error inside the active modal: %s',
         error => {
             const html = renderToStaticMarkup(
-                <InventoryLotDialog
-                    draft={{
-                        productVariantId: '27',
-                        stockLocationId: '7',
-                        lotCode: '',
-                        manufacturedAt: '',
-                        expiresAt: '',
-                        quantityOnHand: '0',
-                        purchaseCost: '',
-                        reason: '月底盘点',
-                    }}
-                    variants={[]}
-                    saving={false}
-                    error={error}
-                    onChange={vi.fn()}
-                    onClose={vi.fn()}
-                    onSave={vi.fn()}
-                />,
+                <FeatureHelpProvider>
+                    <InventoryLotDialog
+                        draft={{
+                            productVariantId: '27',
+                            stockLocationId: '7',
+                            lotCode: '',
+                            manufacturedAt: '',
+                            expiresAt: '',
+                            quantityOnHand: '0',
+                            purchaseCost: '',
+                            reason: '月底盘点',
+                        }}
+                        variants={[]}
+                        saving={false}
+                        error={error}
+                        onChange={vi.fn()}
+                        onClose={vi.fn()}
+                        onSave={vi.fn()}
+                    />
+                </FeatureHelpProvider>,
             );
             expect(html).toContain('role="dialog"');
             expect(html).toContain(`role="alert"`);

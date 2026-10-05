@@ -12,6 +12,114 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
+    it('samples cached and newly loaded artwork without letting overlay icons or old images set copy colors', async () => {
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockImplementation(function (
+            this: HTMLImageElement,
+        ) {
+            return this.dataset.ready === 'true';
+        });
+        vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockImplementation(function (
+            this: HTMLImageElement,
+        ) {
+            return this.dataset.ready === 'true' ? 1200 : 0;
+        });
+        let sampledImage: HTMLImageElement;
+        const drawImage = vi.fn((image: HTMLImageElement) => {
+            sampledImage = image;
+        });
+        const getImageData = vi.fn(() => {
+            if (sampledImage.src.includes('cross-origin')) {
+                throw new DOMException('Canvas is tainted', 'SecurityError');
+            }
+            const value = sampledImage.src.includes('dark') ? 0 : 255;
+            return { data: new Uint8ClampedArray([value, value, value, 255]) };
+        });
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+            drawImage,
+            getImageData,
+        } as unknown as CanvasRenderingContext2D);
+        const content: HeroSceneData = {
+            title: 'Configured title',
+            subtitle: '',
+            body: 'Configured body',
+            ctaLabel: '',
+            targetType: 'NONE',
+            imageUrl: '/cached-light.jpg',
+            items: [],
+        };
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const render = async (ready: boolean) => {
+            await act(async () => {
+                root.render(
+                    <HeroScene
+                        content={{ ...content }}
+                        image={
+                            <>
+                                <img src={content.imageUrl ?? undefined} alt="Artwork" data-ready={ready} />
+                                <img src="/dark-preview.jpg" alt="" aria-hidden="true" data-ready="true" />
+                            </>
+                        }
+                        imageLabel="Open artwork"
+                        mediaOverlay={<img src="/dark-service-icon.jpg" alt="" data-ready="true" />}
+                    />,
+                );
+                await Promise.resolve();
+            });
+        };
+        const color = (property = '--hero-image-copy-foreground') =>
+            (host.firstElementChild as HTMLElement).style.getPropertyValue(property);
+        const load = async (image: HTMLImageElement) => {
+            await act(() => image.dispatchEvent(new Event('load', { bubbles: false })));
+        };
+        try {
+            await render(true);
+            expect(color()).toBe('#0f172a');
+            expect(drawImage).toHaveBeenCalledOnce();
+            for (const image of host.querySelectorAll<HTMLImageElement>('img')) await load(image);
+            expect(drawImage).toHaveBeenCalledOnce();
+            expect(color()).toBe('#0f172a');
+
+            content.imageUrl = '/new-dark.jpg';
+            await render(false);
+            expect(color()).toBe('var(--text)');
+            const artwork = host.querySelector<HTMLImageElement>('.hero-rich-image-link img');
+            if (!artwork) throw new Error('Missing current artwork');
+            artwork.dataset.ready = 'true';
+            await load(artwork);
+            expect(color()).toBe('#ffffff');
+            expect(drawImage).toHaveBeenCalledTimes(2);
+
+            content.textColor = '#604823';
+            content.settings = { secondaryTextColor: '#334155' };
+            await render(true);
+            expect(color()).toBe('#604823');
+            expect(color('--hero-image-body-foreground')).toBe('#334155');
+            expect(drawImage).toHaveBeenCalledTimes(2);
+
+            content.imageUrl = '/cross-origin.jpg';
+            content.textColor = null;
+            content.settings = null;
+            await expect(render(true)).resolves.toBeUndefined();
+            expect(color()).toBe('#ffffff');
+            expect(drawImage).toHaveBeenCalledTimes(3);
+        } finally {
+            await act(async () => {
+                root.unmount();
+                await Promise.resolve();
+            });
+            host.remove();
+        }
+    });
+
     it('keeps configured copy over the image and measures media overlays without losing content', () => {
         let imageHeight = 300;
         let overlayHeight = 40;

@@ -2,6 +2,7 @@ import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-p
 import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
 import { AutoCardService } from './auto-card.service';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
@@ -41,7 +42,16 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
     delivery.channelId ??= 'channel-1';
     delivery.orderId ??= 'order-1';
     delivery.order ??= { id: delivery.orderId };
+    delivery.order.active ??= false;
+    delivery.order.state ??= 'PaymentSettled';
+    delivery.order.totalWithTax ??= 1000;
+    delivery.order.payments ??= [{ state: 'Settled', amount: 1000, refunds: [] }];
+    delivery.orderLine ??= autoCardLine(delivery.quantity);
     delivery.order.salesChannelId ??= delivery.channelId;
+    delivery.order.state ??= 'PaymentSettled';
+    delivery.order.payments ??= [{ state: 'Settled', amount: 1000, refunds: [] }];
+    delivery.orderLine ??= autoCardLine(delivery.quantity);
+    delivery.orderLineId ??= delivery.orderLine.id;
     delivery.config ??= { id: delivery.configId };
     delivery.config.channelId ??= delivery.channelId;
     const candidates = input.candidates ?? [
@@ -114,6 +124,8 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         { forPaidLine: vi.fn().mockResolvedValue({ config: delivery.config }) } as any,
         { assertOwned: vi.fn() } as any,
         { appendAudit: vi.fn() } as any,
+        { reservation: vi.fn().mockResolvedValue(null), consumeLine: vi.fn(), lock: vi.fn() } as any,
+        { createForDigitalReceipt: vi.fn(() => ({ token: 'synthetic-receipt-proof' })) } as any,
     );
     const ctx = {
         copy: () => ctx,
@@ -300,13 +312,17 @@ describe('AutoCardService allocation invariants', () => {
         await test.service.retryDelivery(test.ctx, allocated.id);
 
         expect(test.deliveryLockBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
-        expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
+        expect(
+            test.eventBus.publish.mock.calls.filter(([event]) => event instanceof AutoCardDeliveryReadyEvent),
+        ).toHaveLength(1);
         expect(test.events.map(event => event.type)).toEqual(['MANUAL_RETRY', 'EMAIL_QUEUED']);
 
         await expect(test.service.retryDelivery(test.ctx, allocated.id)).rejects.toThrow(
             '重发请求已进入邮件队列，请勿重复提交',
         );
-        expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
+        expect(
+            test.eventBus.publish.mock.calls.filter(([event]) => event instanceof AutoCardDeliveryReadyEvent),
+        ).toHaveLength(1);
         expect(test.events.map(event => event.type)).toEqual(['MANUAL_RETRY', 'EMAIL_QUEUED']);
     });
 

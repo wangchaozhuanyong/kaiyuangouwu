@@ -18,15 +18,17 @@ describe('commerce mode rules', () => {
     it('hides incompatible catalog modules', () => {
         expect(commerceModeAllowsPath('DIGITAL_ONLY', '/catalog/inventory')).toBe(false);
         expect(commerceModeAllowsPath('PHYSICAL_ONLY', '/catalog/card-pool')).toBe(false);
+        expect(commerceModeAllowsPath('PHYSICAL_ONLY', '/operations/manual-digital-delivery')).toBe(false);
+        expect(commerceModeAllowsPath('HYBRID', '/operations/manual-digital-delivery')).toBe(true);
         expect(commerceModeAllowsPath('HYBRID', '/catalog/inventory')).toBe(true);
     });
 
     it('derives digital stock semantics from the delivery mode', () => {
         expect(stockPolicyForDeliveryMode('auto_card')).toBe('pool_derived');
-        expect(stockPolicyForDeliveryMode('manual_service', 'unlimited')).toBe('limited');
+        expect(stockPolicyForDeliveryMode('manual_service', 'unlimited')).toBe('unlimited');
         expect(stockPolicyForDeliveryMode('file_download', 'unlimited')).toBe('unlimited');
         expect(trackInventoryForDigitalVariant('auto_card', 'pool_derived')).toBe('FALSE');
-        expect(trackInventoryForDigitalVariant('file_download', 'limited')).toBe('TRUE');
+        expect(trackInventoryForDigitalVariant('file_download', 'limited')).toBe('FALSE');
     });
 
     it('formats the category ownership summary', () => {

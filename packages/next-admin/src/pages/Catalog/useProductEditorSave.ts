@@ -7,18 +7,26 @@ import {
     localizedCustomFieldInputFromValues,
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
-import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalog-operations.graphql';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     APPLY_CATALOG_VARIANT_MATRIX,
+    ASSIGN_PRODUCTS_TO_CHANNEL,
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     GET_COLLECTION_ASSIGNMENT_DETAIL,
+    GET_PRODUCTS,
     REMOVE_OPTION_GROUP_FROM_PRODUCT,
+    REMOVE_PRODUCTS_FROM_CHANNEL,
     UPDATE_COLLECTION_ASSIGNMENT,
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
+import {
+    UPDATE_DIGITAL_VARIANT,
+    UPDATE_PHYSICAL_VARIANT,
+    UPDATE_VARIANT_COST,
+    UPDATE_VARIANT_SUPPLIER,
+} from '../../graphql/product-domains.graphql';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -41,6 +49,7 @@ interface ProductEditorSaveInput {
     data: Pick<
         ReturnType<typeof useProductEditorData>,
         | 'productData'
+        | 'catalogChannelsData'
         | 'refetchCollections'
         | 'refetchProduct'
         | 'defaultStockLocationId'
@@ -57,7 +66,6 @@ interface ProductEditorSaveInput {
         setSaving: (saving: boolean) => void;
         showError: (message: string) => void;
         showNotice: (message: string) => void;
-        onReadbackComplete?: () => void;
     };
 }
 
@@ -81,6 +89,10 @@ const comparableVariant = (variant: ProductEditorSaveDraft['variants'][number]) 
     name: variant.name,
     price: variant.price,
     costPrice: variant.costPrice ?? '',
+    supplierId: variant.supplierId ?? null,
+    physicalSettings: variant.physicalSettings,
+    digitalAvailableQuantity: variant.digitalAvailableQuantity,
+    digitalFileVersionId: variant.digitalFileVersionId,
     stockOnHand: variant.stockOnHand,
     enabled: variant.enabled,
     digitalDeliveryMode: variant.digitalDeliveryMode,
@@ -106,7 +118,7 @@ export function productEditorChanges(
             assets: true,
             facets: true,
             collections: true,
-            channels: false,
+            channels: true,
             optionGroups: true,
             variants: true,
         };
@@ -139,7 +151,7 @@ export function productEditorChanges(
             sortedIds(draft.selectedCollectionIds),
             sortedIds(baseline.selectedCollectionIds),
         ),
-        channels: false,
+        channels: !sameValue(sortedIds(draft.selectedChannelIds), sortedIds(baseline.selectedChannelIds)),
         optionGroups: !sameValue(
             sortedIds(draft.selectedOptionGroupIds),
             sortedIds(baseline.selectedOptionGroupIds),
@@ -170,15 +182,12 @@ export function useProductEditorSave({
         selectedAssetIds,
         selectedFacetValueIds,
         selectedCollectionIds,
+        selectedChannelIds,
         selectedOptionGroupIds,
         variants,
         dynamicCustomFields: dynamicCustomFieldValues,
     } = draft;
-    const quoteOnly = dynamicCustomFieldValues.pricingMode === 'QUOTE_ONLY';
-    const switchingToQuoteOnly = quoteOnly && baselineDraft?.dynamicCustomFields.pricingMode !== 'QUOTE_ONLY';
-    const switchingFromQuoteOnly =
-        !quoteOnly && baselineDraft?.dynamicCustomFields.pricingMode === 'QUOTE_ONLY';
-    const { productData, refetchCollections, refetchProduct } = data;
+    const { productData, catalogChannelsData, refetchCollections, refetchProduct } = data;
     const {
         requestConfirmation,
         navigate,
@@ -209,6 +218,82 @@ export function useProductEditorSave({
     }>(REMOVE_OPTION_GROUP_FROM_PRODUCT);
 
     const [updateCollectionAssignment] = useMutation(UPDATE_COLLECTION_ASSIGNMENT);
+
+    const [assignProductsToChannel] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
+
+    const [removeProductsFromChannel] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
+
+    const saveDomainConfiguration = async (savedVariants: Array<{ id: string; sku: string }>) => {
+        for (const variant of variants) {
+            const id = variant.id ?? savedVariants.find(item => item.sku === variant.sku.trim())?.id;
+            if (!id) throw new Error(`规格 ${variant.sku} 未返回保存结果`);
+            const original = baselineDraft?.variants.find(item => item.id === id);
+            if (
+                effectiveFulfillmentType === 'digital' &&
+                (!original ||
+                    variant.digitalDeliveryMode !== original.digitalDeliveryMode ||
+                    variant.digitalStockPolicy !== original.digitalStockPolicy ||
+                    variant.digitalAvailableQuantity !== original.digitalAvailableQuantity ||
+                    variant.digitalFileVersionId !== original.digitalFileVersionId)
+            ) {
+                if (variant.digitalMigrationRequired) throw new Error('请先核对并迁移该规格的旧数字库存');
+                await client.mutate({
+                    mutation: UPDATE_DIGITAL_VARIANT,
+                    variables: {
+                        input: {
+                            productVariantId: id,
+                            deliveryMode: variant.digitalDeliveryMode,
+                            stockPolicy: variant.digitalStockPolicy,
+                            ...(variant.digitalStockPolicy === 'limited' &&
+                            (!original ||
+                                variant.digitalAvailableQuantity !== original.digitalAvailableQuantity)
+                                ? {
+                                      availableQuantity: variant.digitalAvailableQuantity ?? 0,
+                                      expectedAvailableQuantity: original?.digitalAvailableQuantity ?? 0,
+                                  }
+                                : {}),
+                            ...(!original || variant.digitalFileVersionId !== original.digitalFileVersionId
+                                ? { fileVersionId: variant.digitalFileVersionId ?? null }
+                                : {}),
+                        },
+                    },
+                });
+            }
+            if (
+                effectiveFulfillmentType === 'physical' &&
+                variant.physicalSettings &&
+                !sameValue(variant.physicalSettings, original?.physicalSettings)
+            ) {
+                await client.mutate({
+                    mutation: UPDATE_PHYSICAL_VARIANT,
+                    variables: {
+                        input: {
+                            productVariantId: id,
+                            stockLocationId: data.defaultStockLocationId,
+                            currencyCode: activeCurrencyCode,
+                            ...variant.physicalSettings,
+                        },
+                    },
+                });
+            }
+            if (variant.supplierId !== original?.supplierId && variant.supplierId !== undefined) {
+                await client.mutate({
+                    mutation: UPDATE_VARIANT_SUPPLIER,
+                    variables: { productVariantId: id, supplierId: variant.supplierId || null },
+                });
+            }
+            if (variant.costPrice !== original?.costPrice && variant.costPrice?.trim()) {
+                await client.mutate({
+                    mutation: UPDATE_VARIANT_COST,
+                    variables: {
+                        productVariantId: id,
+                        currencyCode: activeCurrencyCode,
+                        costMicrounits: Math.round(Number(variant.costPrice) * 1_000),
+                    },
+                });
+            }
+        }
+    };
 
     const syncProductOptionGroups = async (targetProductId: string, originalGroupIds: string[]) => {
         const isSingleProductWithoutOptions =
@@ -275,6 +360,33 @@ export function useProductEditorSave({
         if (changes.length > 0) await refetchCollections();
     };
 
+    const syncProductChannels = async (targetProductId: string, originalChannelIds: string[]) => {
+        const activeChannelId = catalogChannelsData?.activeChannel.id;
+        const nextChannelIds =
+            activeChannelId && !selectedChannelIds.includes(activeChannelId)
+                ? [...selectedChannelIds, activeChannelId]
+                : selectedChannelIds;
+        const originalIdSet = new Set(originalChannelIds);
+        const nextIdSet = new Set(nextChannelIds);
+        const addedChannelIds = nextChannelIds.filter(channelId => !originalIdSet.has(channelId));
+        const removedChannelIds = originalChannelIds.filter(
+            channelId => channelId !== activeChannelId && !nextIdSet.has(channelId),
+        );
+
+        await Promise.all([
+            ...addedChannelIds.map(channelId =>
+                assignProductsToChannel({
+                    variables: { input: { productIds: [targetProductId], channelId, priceFactor: 1 } },
+                }),
+            ),
+            ...removedChannelIds.map(channelId =>
+                removeProductsFromChannel({
+                    variables: { input: { productIds: [targetProductId], channelId } },
+                }),
+            ),
+        ]);
+    };
+
     const changes = productEditorChanges(draft, baselineDraft);
     const hasChanges = Object.values(changes).some(Boolean);
 
@@ -300,7 +412,7 @@ export function useProductEditorSave({
             return false;
         }
 
-        if (isCreateMode || changes.variants || switchingFromQuoteOnly) {
+        if (isCreateMode || changes.variants) {
             const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
             const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
                 const sku = variant.sku.trim().toLowerCase();
@@ -314,14 +426,10 @@ export function useProductEditorSave({
                 } else if (skuCounts[v.sku.trim().toLowerCase()] > 1) {
                     rowErr.sku = '同一商品内的 SKU 编码不能重复';
                 }
-                if (!quoteOnly && (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0)) {
+                if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
                     rowErr.price = `请输入有效的 ${activeCurrencyCode} 非负金额`;
-                } else if (switchingFromQuoteOnly && parseFloat(v.price) <= 0) {
-                    rowErr.price = `改为标价销售时，请填写大于 0 的 ${activeCurrencyCode} 售价`;
                 }
-                const requiresManualStock =
-                    effectiveFulfillmentType === 'physical' ||
-                    (v.digitalDeliveryMode !== 'auto_card' && v.digitalStockPolicy === 'limited');
+                const requiresManualStock = effectiveFulfillmentType === 'physical';
                 if (
                     requiresManualStock &&
                     v.stockOnHand !== '' &&
@@ -329,6 +437,13 @@ export function useProductEditorSave({
                 ) {
                     rowErr.stock = '库存必须为非负整数';
                 }
+                if (
+                    effectiveFulfillmentType === 'digital' &&
+                    v.digitalStockPolicy === 'limited' &&
+                    (!Number.isInteger(v.digitalAvailableQuantity ?? 0) ||
+                        (v.digitalAvailableQuantity ?? 0) < 0)
+                )
+                    rowErr.stock = '可售份数必须为非负整数';
                 if (Object.keys(rowErr).length > 0) {
                     variantErrors[index] = rowErr;
                 }
@@ -531,6 +646,7 @@ export function useProductEditorSave({
                                 ],
                             },
                         },
+                        refetchQueries: [{ query: GET_PRODUCTS }],
                     });
 
                     newProductId = createRes?.data?.createProduct?.id || '';
@@ -558,7 +674,7 @@ export function useProductEditorSave({
                             productId: newProductId,
                             sku: v.sku.trim(),
                             enabled: v.enabled,
-                            price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
+                            price: Math.round(parseFloat(v.price) * 100),
                             ...variantFulfillmentInput(v, effectiveFulfillmentType),
                             optionIds: v.optionIds,
                             translations: [
@@ -580,41 +696,7 @@ export function useProductEditorSave({
                                 }
                             )?.createProductVariants ?? [];
 
-                        if (data.defaultStockLocationId && createdList.length > 0) {
-                            const costUpdates = variants
-                                .map(v => {
-                                    const created = createdList.find(c => c.sku === v.sku.trim());
-                                    return {
-                                        id: created?.id,
-                                        costPrice: v.costPrice?.trim(),
-                                    };
-                                })
-                                .filter((item): item is { id: string; costPrice: string } =>
-                                    Boolean(item.id && item.costPrice),
-                                );
-
-                            if (costUpdates.length > 0) {
-                                await Promise.all(
-                                    costUpdates.map(item =>
-                                        client.mutate({
-                                            mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
-                                            variables: {
-                                                input: {
-                                                    productVariantId: item.id,
-                                                    stockLocationId: data.defaultStockLocationId,
-                                                    currencyCode: activeCurrencyCode,
-                                                    purchaseCostMicrounits: Math.round(
-                                                        parseFloat(item.costPrice) * 1_000,
-                                                    ),
-                                                },
-                                            },
-                                        }),
-                                    ),
-                                ).catch(() => {
-                                    // 采购成本为非阻塞扩展写入
-                                });
-                            }
-                        }
+                        await saveDomainConfiguration(createdList);
                     } catch (err: unknown) {
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
                         navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
@@ -626,30 +708,30 @@ export function useProductEditorSave({
                     }
                 }
 
-                // 阶段 4: 保存当前店铺的人工商品分类
+                // 阶段 4: 保存销售店铺范围与人工商品分类
                 try {
+                    const activeChannelId = catalogChannelsData?.activeChannel.id;
+                    await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
                     navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
-                        `[阶段 4：商品与 SKU 已保存，但分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
                     setSaving(false);
                     return;
                 }
 
-                showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已全部发布入库！`);
+                showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已保存！`);
                 navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
-                const changedExistingVariants = existingVariants.filter(
-                    variant =>
-                        switchingToQuoteOnly ||
-                        productVariantChanged(
-                            variant,
-                            baselineDraft?.variants.find(original => original.id === variant.id),
-                        ),
+                const changedExistingVariants = existingVariants.filter(variant =>
+                    productVariantChanged(
+                        variant,
+                        baselineDraft?.variants.find(original => original.id === variant.id),
+                    ),
                 );
                 const changesVariantEnabledState = changedExistingVariants.some(
                     variant =>
@@ -716,27 +798,12 @@ export function useProductEditorSave({
 
                 const updateVariantInputs = changedExistingVariants.map(v => {
                     const original = productData?.product?.variants.find(item => item.id === v.id);
-                    const baselineVariant = baselineDraft?.variants.find(item => item.id === v.id);
-                    const { stockOnHand, ...fulfillmentInput } = variantFulfillmentInput(
-                        v,
-                        effectiveFulfillmentType,
-                    );
-                    const stockChanged =
-                        !baselineVariant ||
-                        v.stockOnHand !== baselineVariant.stockOnHand ||
-                        effectiveFulfillmentType !== baselineDraft?.fulfillmentType ||
-                        (effectiveFulfillmentType === 'digital' &&
-                            (v.digitalDeliveryMode !== baselineVariant.digitalDeliveryMode ||
-                                v.digitalStockPolicy !== baselineVariant.digitalStockPolicy));
                     return {
                         id: v.id,
                         sku: v.sku.trim(),
                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
-                        price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
-                        ...fulfillmentInput,
-                        // Stock is an aggregate in this editor; unchanged stock must not be
-                        // copied into the channel's default location during a price/mode edit.
-                        ...(stockChanged ? { stockOnHand } : {}),
+                        price: Math.round(parseFloat(v.price) * 100),
+                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
                         ...(!original ||
                         !sameValue(
                             sortedIds(v.optionIds),
@@ -756,7 +823,7 @@ export function useProductEditorSave({
                     productId,
                     sku: v.sku.trim(),
                     enabled: v.enabled,
-                    price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
+                    price: Math.round(parseFloat(v.price) * 100),
                     ...variantFulfillmentInput(v, effectiveFulfillmentType),
                     optionIds: v.optionIds,
                     translations: [
@@ -843,60 +910,38 @@ export function useProductEditorSave({
                     }
                 }
 
-                if (data.defaultStockLocationId) {
-                    const existingCostUpdates = changedExistingVariants
-                        .filter(v => {
-                            const original = baselineDraft?.variants.find(o => o.id === v.id);
-                            return (v.costPrice ?? '') !== (original?.costPrice ?? '');
-                        })
-                        .map(v => ({ id: v.id!, costPrice: v.costPrice?.trim() || null }));
-                    const newCostUpdates = newVariants
-                        .map(v => ({
-                            id: createdVariantList.find(created => created.sku === v.sku.trim())?.id,
-                            costPrice: v.costPrice?.trim(),
-                        }))
-                        .filter((item): item is { id: string; costPrice: string } =>
-                            Boolean(item.id && item.costPrice),
-                        );
-                    await Promise.all(
-                        [...existingCostUpdates, ...newCostUpdates].map(item =>
-                            client.mutate({
-                                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
-                                variables: {
-                                    input: {
-                                        productVariantId: item.id,
-                                        stockLocationId: data.defaultStockLocationId,
-                                        currencyCode: activeCurrencyCode,
-                                        purchaseCostMicrounits: item.costPrice
-                                            ? Math.round(parseFloat(item.costPrice) * 1_000)
-                                            : null,
-                                    },
-                                },
-                            }),
-                        ),
-                    ).catch(() => {
-                        // 采购成本为非阻塞扩展写入
-                    });
+                if (changes.variants && variants.length) {
+                    await saveDomainConfiguration(createdVariantList);
+                    completedStages.push('业务配置与成本');
                 }
 
-                if (changes.collections) {
+                if (changes.channels || changes.collections) {
                     try {
-                        await syncProductCollections(productId);
-                        completedStages.push('商品分类');
+                        if (changes.channels) {
+                            await syncProductChannels(
+                                productId,
+                                productData?.product?.channels.map(channel => channel.id) ?? [],
+                            );
+                        }
+                        if (changes.collections) await syncProductCollections(productId);
+                        completedStages.push(
+                            [changes.channels ? '销售店铺' : '', changes.collections ? '商品分类' : '']
+                                .filter(Boolean)
+                                .join('、'),
+                        );
                     } catch (err: unknown) {
-                        throw new Error(`[商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                        throw new Error(
+                            `[销售店铺或商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        );
                     }
                 }
 
-                const readback = await Promise.allSettled([refetchProduct(), data.refetchWorkspace?.()]);
-                const readbackFailed = readback.some(result => result.status === 'rejected');
-                if (!readbackFailed) controls.onReadbackComplete?.();
+                await refetchProduct();
+                await data.refetchWorkspace?.();
                 showNotice(
-                    readbackFailed
-                        ? `商品《${productName}》已保存，但最新数据读取失败。草稿已保留，请重试读取核对结果，勿重复保存。`
-                        : completedStages.length > 0
-                          ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
-                          : '商品数据已同步至最新状态',
+                    completedStages.length > 0
+                        ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
+                        : '商品数据已同步至最新状态',
                 );
             }
         } catch (err: unknown) {
@@ -906,7 +951,7 @@ export function useProductEditorSave({
                     () => false,
                 );
                 showError(
-                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '已读取后端当前数据，未保存的草稿仍保留。' : '重新读取失败，请重试读取核对已保存内容后再操作。'}`,
+                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '页面已按后端当前数据重新加载。' : '重新加载失败，请刷新页面核对已保存内容后再操作。'}`,
                 );
             } else {
                 showError(toUserFacingError(err, '商品保存失败，请稍后重试'));

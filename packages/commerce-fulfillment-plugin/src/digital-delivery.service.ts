@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
     assertOrderSalesChannel,
     Order,
@@ -7,12 +7,18 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 
+import { AutoCardCipherService } from './auto-card-cipher.service';
 import {
     DigitalDeliveryResource,
     DigitalDeliveryTokenPayload,
     DigitalDeliveryTokenService,
     normalizeDigitalDeliveryHost,
 } from './digital-delivery-token.service';
+import { DigitalFileService } from './digital-file.service';
+import { digitalDeliverableQuantity } from './digital-order-entitlement';
+import { DigitalProductService } from './digital-product.service';
+import { DigitalOrderReservation } from './entities/digital-product.entity';
+import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { isFileDownloadOrderLine } from './fulfillment-classification';
 
 export type DigitalDeliveryStatus = 'READY' | 'PAYMENT_REQUIRED' | 'NOT_CONFIGURED' | 'FILE_MISSING';
@@ -36,9 +42,16 @@ export class DigitalDeliveryService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly tokens: DigitalDeliveryTokenService,
+        @Optional() private readonly digitalProducts?: DigitalProductService,
+        @Optional() private readonly files?: DigitalFileService,
+        @Optional() private readonly cipher?: AutoCardCipherService,
     ) {}
 
-    async deliveriesForOrder(ctx: RequestContext, orderId: string): Promise<DigitalDeliveryItem[]> {
+    async deliveriesForOrder(
+        ctx: RequestContext,
+        orderId: string,
+        options: { metadataOnly?: boolean } = {},
+    ): Promise<DigitalDeliveryItem[]> {
         const order = await this.connection.getEntityOrThrow(ctx, Order, orderId, {
             relations: [
                 'lines',
@@ -50,9 +63,11 @@ export class DigitalDeliveryService {
             ],
         });
         assertOrderSalesChannel(ctx, order);
-        return order.lines
-            .filter(line => isFileDownloadOrderLine(line))
-            .map(line => this.deliveryForLine(ctx, order, line));
+        return Promise.all(
+            order.lines
+                .filter(line => isFileDownloadOrderLine(line))
+                .map(line => this.deliveryForLine(ctx, order, line, options.metadataOnly === true)),
+        );
     }
 
     async authorizeDownload(
@@ -77,19 +92,66 @@ export class DigitalDeliveryService {
             return;
         }
         const line = order.lines.find(item => String(item.id) === payload.orderLineId);
+        if (!line) return;
+        if (payload.manualDeliveryId) {
+            const fileVersionId = payload.fileVersionId;
+            if (
+                !fileVersionId ||
+                !this.cipher ||
+                !this.hasDownloadEntitlement(order, line) ||
+                line.customFields.digitalDeliveryModeSnapshot !== 'manual_service'
+            )
+                return;
+            const manual = await this.connection.rawConnection.getRepository(ManualDigitalDelivery).findOne({
+                where: {
+                    id: payload.manualDeliveryId,
+                    channelId: payload.channelId,
+                    orderLineId: line.id,
+                },
+            });
+            if (
+                !manual?.encryptedPackages ||
+                !['SENDING', 'SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(manual.state)
+            )
+                return;
+            const packages = JSON.parse(
+                this.cipher.decrypt(manual.encryptedPackages).payload ?? '[]',
+            ) as Array<{ attachmentFileVersionIds?: string[] }>;
+            if (
+                !packages
+                    .slice(0, digitalDeliverableQuantity(order, line))
+                    .some(item => item.attachmentFileVersionIds?.includes(fileVersionId))
+            )
+                return;
+            const attachmentResource = await this.files?.resource(payload.channelId, fileVersionId);
+            return attachmentResource ? { resource: attachmentResource, payload } : undefined;
+        }
         if (
             !line ||
             !this.hasDownloadEntitlement(order, line) ||
             !isFileDownloadOrderLine(line) ||
-            line.productVariant.sku !== payload.sku
+            (!payload.fileVersionId && line.productVariant.sku !== payload.sku)
         ) {
             return;
         }
-        const resource = this.tokens.resourceForSku(payload.channelId, payload.sku);
+        const reservation = this.digitalProducts
+            ? await this.connection.rawConnection
+                  .getRepository(DigitalOrderReservation)
+                  .findOne({ where: { orderLineId: line.id, channelId: payload.channelId } })
+            : null;
+        if (payload.fileVersionId && String(reservation?.fileVersionId) !== payload.fileVersionId) return;
+        const resource = payload.fileVersionId
+            ? await this.files?.resource(payload.channelId, payload.fileVersionId)
+            : this.tokens.resourceForSku(payload.channelId, payload.sku);
         return resource ? { resource, payload } : undefined;
     }
 
-    private deliveryForLine(ctx: RequestContext, order: Order, line: OrderLine): DigitalDeliveryItem {
+    private async deliveryForLine(
+        ctx: RequestContext,
+        order: Order,
+        line: OrderLine,
+        metadataOnly = false,
+    ): Promise<DigitalDeliveryItem> {
         const base = {
             orderLineId: String(line.id),
             sku: line.productVariant.sku,
@@ -102,21 +164,27 @@ export class DigitalDeliveryService {
             return { ...base, status: 'NOT_CONFIGURED' };
         }
         const channelId = String(ctx.channelId);
+        const reservation = await this.digitalProducts?.reservation(ctx, line.id);
+        const resource = reservation?.fileVersionId
+            ? await this.files?.resource(channelId, reservation.fileVersionId)
+            : this.tokens.resourceForSku(channelId, line.productVariant.sku);
+        if (!resource) {
+            return { ...base, status: 'FILE_MISSING' };
+        }
+        // Background reminders and fulfillment guards inspect the same file readiness without
+        // an HTTP host, token creation, or customer access side effects.
+        if (metadataOnly) return { ...base, status: 'READY' };
         const host = normalizeDigitalDeliveryHost(
             ctx.req?.headers?.['x-forwarded-host'] ?? ctx.req?.headers?.host,
         );
-        if (!host) {
-            return { ...base, status: 'NOT_CONFIGURED' };
-        }
-        if (!this.tokens.resourceForSku(channelId, line.productVariant.sku)) {
-            return { ...base, status: 'FILE_MISSING' };
-        }
+        if (!host) return { ...base, status: 'NOT_CONFIGURED' };
         const signed = this.tokens.createToken({
             orderId: String(order.id),
             orderLineId: String(line.id),
             channelId,
             host,
             sku: line.productVariant.sku,
+            ...(reservation?.fileVersionId ? { fileVersionId: String(reservation.fileVersionId) } : {}),
         });
         return {
             ...base,
@@ -127,26 +195,7 @@ export class DigitalDeliveryService {
     }
 
     private hasDownloadEntitlement(order: Order, line: OrderLine): boolean {
-        if (order.active || order.state === 'Cancelled' || line.quantity <= 0) return false;
-        const payments = (order.payments ?? []).filter(payment =>
-            ['Authorized', 'Settled'].includes(payment.state),
-        );
-        if (!payments.length) return false;
-        // Pending refunds reserve the entitlement too; a failed refund releases it again.
-        const refunds = (order.payments ?? [])
-            .flatMap(payment => payment.refunds ?? [])
-            .filter(refund => refund.state !== 'Failed');
-        const net =
-            payments.reduce((sum, payment) => sum + payment.amount, 0) -
-            refunds.reduce((sum, refund) => sum + refund.total, 0);
-        if (!(net > 0 || (net === 0 && order.totalWithTax === 0 && refunds.length === 0))) return false;
-        const refundedQuantity = refunds
-            .flatMap(refund => refund.lines ?? [])
-            .filter(refundLine => String(refundLine.orderLineId) === String(line.id))
-            .reduce((sum, refundLine) => sum + refundLine.quantity, 0);
-        // Cancellation already reduces quantity. Do not subtract the same units twice.
-        const placedQuantity = line.orderPlacedQuantity > 0 ? line.orderPlacedQuantity : line.quantity;
-        return Math.min(line.quantity, placedQuantity - refundedQuantity) > 0;
+        return digitalDeliverableQuantity(order, line) > 0;
     }
 }
 

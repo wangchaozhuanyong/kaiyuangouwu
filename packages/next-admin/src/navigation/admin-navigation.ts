@@ -4,6 +4,8 @@ import { getAdminDisplayLanguage } from '../utils/admin-language';
 export const ADMIN_NAV_SECTIONS = [
     ['dashboard', '网站总览', 'LayoutDashboard'],
     ['catalog', '商品管理', 'Boxes'],
+    ['digital-delivery', '数字交付', 'Boxes'],
+    ['physical-inventory', '实物库存', 'Boxes'],
     ['sales', '订单管理', 'ShoppingBag'],
     ['after-sales', '售后管理', 'RotateCcw'],
     ['customers', '客户管理', 'Users'],
@@ -54,15 +56,15 @@ export const STANDALONE_ADMIN_PAGES: StandaloneAdminPage[] = [
         ['facets', '筛选属性', 'catalog'],
     ]),
     ...pages('/catalog/inventory', 'inventory', [
-        ['all', '库存总览', 'catalog'],
-        ['skus', '商品库存操作', 'catalog'],
-        ['movements', '库存流水', 'catalog'],
-        ['lots', '库存批次', 'catalog'],
-        ['warehouses', '仓库管理', 'catalog'],
+        ['all', '库存总览', 'physical-inventory'],
+        ['skus', '商品库存操作', 'physical-inventory'],
+        ['movements', '库存流水', 'physical-inventory'],
+        ['lots', '库存批次', 'physical-inventory'],
+        ['warehouses', '仓库管理', 'physical-inventory'],
     ]),
     ...pages('/catalog/card-pool', 'cardPool', [
-        ['pool', '卡密库存', 'catalog'],
-        ['deliveries', '自动交付记录', 'sales'],
+        ['pool', '卡密库存', 'digital-delivery'],
+        ['deliveries', '自动交付记录', 'digital-delivery'],
     ]),
     ...pages('/marketing/promotions', 'promotions', [
         ['coupons', '优惠券管理', 'marketing'],
@@ -196,6 +198,8 @@ export function getStandaloneAdminRedirect(path: string, search = ''): string | 
 }
 
 const englishNavigationTitles: Record<string, string> = {
+    数字交付: 'Digital delivery',
+    实物库存: 'Physical inventory',
     邀请关系明细: 'Invitation relationships',
     网站总览: 'Website overview',
     商品管理: 'Product management',

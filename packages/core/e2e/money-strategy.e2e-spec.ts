@@ -72,6 +72,8 @@ describe('Custom MoneyStrategy', () => {
             customerCount: 1,
         });
         await adminClient.asSuperAdmin();
+        // Seeding also hydrates money columns; count only the price query below.
+        CustomMoneyStrategy.transformerFromSpy.mockClear();
     }, TEST_SETUP_TIMEOUT_MS);
 
     afterAll(async () => {

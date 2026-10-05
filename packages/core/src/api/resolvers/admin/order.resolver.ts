@@ -10,7 +10,9 @@ import {
     MutationCancelPaymentArgs,
     MutationDeleteOrderNoteArgs,
     MutationModifyOrderArgs,
+    MutationRecordManualRefundArgs,
     MutationRefundOrderArgs,
+    MutationRetryRefundArgs,
     MutationSetOrderCustomerArgs,
     MutationSetOrderCustomFieldsArgs,
     MutationSettlePaymentArgs,
@@ -129,6 +131,20 @@ export class OrderResolver {
         return this.orderService.settleRefund(ctx, args.input);
     }
 
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.UpdateOrder)
+    async recordManualRefund(@Ctx() ctx: RequestContext, @Args() args: MutationRecordManualRefundArgs) {
+        return this.orderService.recordManualRefund(ctx, args.input);
+    }
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.UpdateOrder)
+    async retryRefund(@Ctx() ctx: RequestContext, @Args() args: MutationRetryRefundArgs) {
+        return this.orderService.retryRefund(ctx, args.input);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(Permission.UpdateOrder)
@@ -198,7 +214,12 @@ export class OrderResolver {
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async modifyOrder(@Ctx() ctx: RequestContext, @Args() args: MutationModifyOrderArgs) {
-        await this.connection.startTransaction(ctx);
+        await this.connection.startTransaction(
+            ctx,
+            ['mysql', 'mariadb', 'postgres'].includes(this.connection.rawConnection.options.type)
+                ? 'READ COMMITTED'
+                : undefined,
+        );
         const result = await this.orderService.modifyOrder(ctx, args.input);
 
         if (args.input.dryRun || isGraphQlErrorResult(result)) {

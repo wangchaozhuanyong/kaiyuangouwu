@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { SubHeader } from '../../storefront-ui/page-shell';
 
 import type { IcloudQueryResult, ShopApi } from '../../api';
+import type { MailStreamStatus } from '../../api/mail-events';
 import type { RouteState } from '../../storefront-router';
 import type { StorefrontLanguage } from '../../types';
 
@@ -111,15 +112,22 @@ export function MailQueryPage({
     const [result, setResult] = useState<IcloudQueryResult | null>(null);
     const [currentQueryCode, setCurrentQueryCode] = useState('');
     const [refreshError, setRefreshError] = useState('');
-    const [autoRefresh, setAutoRefresh] = useState(false);
-    const [countdown, setCountdown] = useState(10);
+    const [liveEnabled, setLiveEnabled] = useState(false);
+    const [streamStatus, setStreamStatus] = useState<MailStreamStatus>('paused');
     const [filterVirtualId, setFilterVirtualId] = useState('');
     const [copiedOtp, setCopiedOtp] = useState<string | null>(null);
     const [expandedMails, setExpandedMails] = useState<Set<string>>(new Set());
 
     const inputRef = useRef<HTMLInputElement>(null);
     const activeRequestRef = useRef<AbortController | null>(null);
-    const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const streamRef = useRef<AbortController | null>(null);
+    const refreshPromiseRef = useRef<Promise<void> | null>(null);
+    const refreshPendingRef = useRef(false);
+    const generationRef = useRef(0);
+    const initialQueryRef = useRef('');
+    const identityRef = useRef(storageKey);
+    const isZhRef = useRef(isZh);
+    isZhRef.current = isZh;
     const shakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,7 +144,8 @@ export function MailQueryPage({
             if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
             if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
             if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
-            if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+            generationRef.current++;
+            streamRef.current?.abort();
             if (activeRequestRef.current) activeRequestRef.current.abort();
         };
     }, []);
@@ -198,12 +207,12 @@ export function MailQueryPage({
                 return;
             }
 
-            // Stop auto-refresh and abort pending requests
-            if (countdownTimerRef.current) {
-                clearInterval(countdownTimerRef.current);
-                countdownTimerRef.current = null;
-            }
-            setAutoRefresh(false);
+            generationRef.current++;
+            streamRef.current?.abort();
+            refreshPendingRef.current = false;
+            refreshPromiseRef.current = null;
+            setLiveEnabled(false);
+            setRefreshing(false);
             if (activeRequestRef.current) {
                 activeRequestRef.current.abort();
             }
@@ -235,6 +244,8 @@ export function MailQueryPage({
                 setCurrentQueryCode(code);
                 setResult(data);
                 setFilterVirtualId('');
+                setExpandedMails(new Set());
+                setLiveEnabled(true);
 
                 // Update recent queries
                 const newRecord: RecentQueryRecord = {
@@ -268,44 +279,69 @@ export function MailQueryPage({
         [api, isZh, showToast, storageKey],
     );
 
-    const handleRefresh = useCallback(async () => {
-        if (!currentQueryCode || activeRequestRef.current || refreshing) return;
-
-        const controller = new AbortController();
-        activeRequestRef.current = controller;
-        setRefreshing(true);
-        setRefreshError('');
-
-        try {
-            const data = await api.queryMails(currentQueryCode, controller.signal);
-            if (controller.signal.aborted) return;
-
-            if (data.success) {
-                setResult(data);
-                setRefreshError('');
-            } else {
-                setAutoRefresh(false);
-                setRefreshError(data.message || (isZh ? '邮件查询未成功，请稍后重试。' : 'Refresh failed'));
+    // Manual and event reads share one request. Events arriving during a read cause
+    // one follow-up read; they never reset the user's filters or expanded messages.
+    const handleRefresh = useCallback(
+        (fromEvent = false): Promise<void> => {
+            if (!currentQueryCode) return Promise.resolve();
+            if (refreshPromiseRef.current) {
+                if (fromEvent) refreshPendingRef.current = true;
+                return refreshPromiseRef.current;
             }
-        } catch (err: unknown) {
-            if (controller.signal.aborted) return;
-            setAutoRefresh(false);
-            const errMessage =
-                err instanceof Error
-                    ? err.message
-                    : isZh
-                      ? '网络连接失败，请检查网络后重试。'
-                      : 'Network error';
-            setRefreshError(
-                `${errMessage} ${isZh ? '当前保留上次查询结果。' : 'Retaining previous results.'}`,
-            );
-        } finally {
-            if (activeRequestRef.current === controller) {
-                activeRequestRef.current = null;
-                setRefreshing(false);
-            }
-        }
-    }, [api, currentQueryCode, isZh, refreshing]);
+            if (activeRequestRef.current) return Promise.resolve();
+            const generation = generationRef.current;
+            const controller = new AbortController();
+            activeRequestRef.current = controller;
+            setRefreshing(true);
+            setRefreshError('');
+            const work = (async () => {
+                try {
+                    do {
+                        refreshPendingRef.current = false;
+                        const data = await api.queryMails(currentQueryCode, controller.signal);
+                        if (controller.signal.aborted || generation !== generationRef.current) return;
+                        if (!data.success) {
+                            setLiveEnabled(false);
+                            setStreamStatus('denied');
+                            setResult(null);
+                            setCurrentQueryCode('');
+                            showToast(
+                                'error',
+                                isZh ? '查询授权已失效' : 'Mail access expired',
+                                data.message ||
+                                    (isZh
+                                        ? '请使用有效查询码重新查询。'
+                                        : 'Please enter a valid query code.'),
+                            );
+                            return;
+                        }
+                        setResult(data);
+                        setRefreshError('');
+                    } while (refreshPendingRef.current && !controller.signal.aborted);
+                } catch (err: unknown) {
+                    if (controller.signal.aborted || generation !== generationRef.current) return;
+                    const message =
+                        err instanceof Error ? err.message : isZh ? '网络连接失败' : 'Network error';
+                    setRefreshError(
+                        `${message} ${isZh ? '当前保留上次查询结果。' : 'Retaining previous results.'}`,
+                    );
+                    // The stream reconnects with backoff and reconciles again after a failed read.
+                    throw err;
+                } finally {
+                    if (activeRequestRef.current === controller) {
+                        activeRequestRef.current = null;
+                        refreshPromiseRef.current = null;
+                        setRefreshing(false);
+                    }
+                }
+            })();
+            refreshPromiseRef.current = work;
+            return work;
+        },
+        [api, currentQueryCode, isZh, showToast],
+    );
+    const refreshRef = useRef(handleRefresh);
+    refreshRef.current = handleRefresh;
 
     const handlePaste = useCallback(async () => {
         try {
@@ -422,47 +458,96 @@ export function MailQueryPage({
     }, [storageKey]);
 
     const handleBackToQueryForm = useCallback(() => {
-        if (countdownTimerRef.current) {
-            clearInterval(countdownTimerRef.current);
-            countdownTimerRef.current = null;
-        }
-        setAutoRefresh(false);
-        if (activeRequestRef.current) {
-            activeRequestRef.current.abort();
-        }
+        generationRef.current++;
+        streamRef.current?.abort();
+        activeRequestRef.current?.abort();
+        activeRequestRef.current = null;
+        refreshPromiseRef.current = null;
+        refreshPendingRef.current = false;
+        setLiveEnabled(false);
+        setLoading(false);
+        setRefreshing(false);
         setResult(null);
         setCurrentQueryCode('');
         setRefreshError('');
     }, []);
 
-    // Auto-refresh timer effect
     useEffect(() => {
-        if (!autoRefresh || !result) {
-            if (countdownTimerRef.current) {
-                clearInterval(countdownTimerRef.current);
-                countdownTimerRef.current = null;
-            }
+        if (identityRef.current === storageKey) return;
+        identityRef.current = storageKey;
+        handleBackToQueryForm();
+        setInputCode('');
+        setRecentQueries(loadRecentQueries(storageKey));
+    }, [storageKey, handleBackToQueryForm]);
+
+    useEffect(() => {
+        if (!liveEnabled || !currentQueryCode) {
+            setStreamStatus(status => (status === 'denied' ? status : 'paused'));
             return;
         }
-
-        setCountdown(10);
-        countdownTimerRef.current = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    void handleRefresh();
-                    return 10;
+        const controller = new AbortController();
+        streamRef.current = controller;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let waiting: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+        // Coalesce only notifications already received. No fixed refresh timer exists.
+        const changed = () =>
+            new Promise<void>((resolve, reject) => {
+                if (controller.signal.aborted) {
+                    resolve();
+                    return;
                 }
-                return prev - 1;
+                waiting.push({ resolve, reject });
+                if (timer) return;
+                timer = setTimeout(() => {
+                    timer = undefined;
+                    const batch = waiting;
+                    waiting = [];
+                    if (controller.signal.aborted) {
+                        batch.forEach(item => item.resolve());
+                        return;
+                    }
+                    void refreshRef.current(true).then(
+                        () => batch.forEach(item => item.resolve()),
+                        error => batch.forEach(item => item.reject(error)),
+                    );
+                }, 100);
             });
-        }, 1000);
-
+        if (typeof api.watchMailEvents !== 'function') {
+            setStreamStatus('unavailable');
+            return;
+        }
+        void api
+            .watchMailEvents(
+                currentQueryCode,
+                {
+                    onChange: changed,
+                    onStatus: status => {
+                        if (controller.signal.aborted) return;
+                        setStreamStatus(status);
+                        if (status === 'denied') {
+                            handleBackToQueryForm();
+                            showToast(
+                                'error',
+                                isZhRef.current ? '查询授权已失效' : 'Mail access expired',
+                                isZhRef.current
+                                    ? '请使用有效查询码重新查询。'
+                                    : 'Please enter a valid query code.',
+                            );
+                        }
+                    },
+                },
+                controller.signal,
+            )
+            .catch(() => {
+                if (!controller.signal.aborted) setStreamStatus('unavailable');
+            });
         return () => {
-            if (countdownTimerRef.current) {
-                clearInterval(countdownTimerRef.current);
-                countdownTimerRef.current = null;
-            }
+            controller.abort();
+            if (timer) clearTimeout(timer);
+            waiting.forEach(item => item.resolve());
+            if (streamRef.current === controller) streamRef.current = null;
         };
-    }, [autoRefresh, handleRefresh, result]);
+    }, [api, currentQueryCode, liveEnabled, storageKey, handleBackToQueryForm, showToast]);
 
     // Initial mount query (initialCode or URL params)
     useEffect(() => {
@@ -473,12 +558,14 @@ export function MailQueryPage({
         }
         if (code) {
             const cleaned = cleanCode(code);
-            if (cleaned) {
+            const key = `${storageKey}:${cleaned}`;
+            if (cleaned && initialQueryRef.current !== key) {
+                initialQueryRef.current = key;
                 setInputCode(cleaned);
                 void executeQuery(cleaned);
             }
         }
-    }, [executeQuery, initialCode]);
+    }, [executeQuery, initialCode, storageKey]);
 
     // Mails list filtering
     const mails = result?.items ?? [];
@@ -688,27 +775,42 @@ export function MailQueryPage({
                                 >
                                     <span>←</span> {isZh ? '重新查询' : 'New Query'}
                                 </button>
-                                <div className="auto-refresh-box">
-                                    <span>{isZh ? '自动刷新' : 'Auto Refresh'}</span>
+                                <div className="mail-live-controls">
+                                    <span>{isZh ? '实时收信' : 'Live updates'}</span>
                                     <label className="switch-toggle">
                                         <input
                                             type="checkbox"
-                                            id="autoRefreshToggle"
-                                            checked={autoRefresh}
-                                            onChange={e => setAutoRefresh(e.target.checked)}
+                                            id="liveUpdatesToggle"
+                                            aria-label={isZh ? '实时收信' : 'Live updates'}
+                                            checked={liveEnabled}
+                                            onChange={e => setLiveEnabled(e.target.checked)}
                                         />
                                         <span className="slider"></span>
                                     </label>
-                                    <span
-                                        id="countdownText"
-                                        style={{
-                                            fontSize: 'var(--type-meta-size)',
-                                            lineHeight: 'var(--type-meta-leading)',
-                                            color: 'var(--primary)',
-                                            minWidth: 24,
-                                        }}
-                                    >
-                                        {autoRefresh ? `${countdown}s` : ''}
+                                    <span className="mail-stream-status type-meta" role="status">
+                                        {streamStatus === 'live'
+                                            ? isZh
+                                                ? '已连接'
+                                                : 'Connected'
+                                            : streamStatus === 'connecting'
+                                              ? isZh
+                                                  ? '连接中'
+                                                  : 'Connecting'
+                                              : streamStatus === 'reconnecting'
+                                                ? isZh
+                                                    ? '正在重连'
+                                                    : 'Reconnecting'
+                                                : streamStatus === 'unavailable'
+                                                  ? isZh
+                                                      ? '实时收信不可用，请手动刷新结果'
+                                                      : 'Live updates unavailable. Refresh results manually.'
+                                                  : streamStatus === 'denied'
+                                                    ? isZh
+                                                        ? '授权已失效'
+                                                        : 'Access expired'
+                                                    : isZh
+                                                      ? '已暂停'
+                                                      : 'Paused'}
                                     </span>
                                 </div>
                             </div>
@@ -738,7 +840,7 @@ export function MailQueryPage({
                                         id="refreshNowBtn"
                                         disabled={refreshing}
                                         onClick={() => {
-                                            void handleRefresh();
+                                            void handleRefresh().catch(() => undefined);
                                         }}
                                     >
                                         <span>🔄</span>{' '}
@@ -747,8 +849,8 @@ export function MailQueryPage({
                                                 ? '正在刷新...'
                                                 : 'Refreshing...'
                                             : isZh
-                                              ? '立即刷新'
-                                              : 'Refresh'}
+                                              ? '刷新收件结果'
+                                              : 'Refresh results'}
                                     </button>
                                 </div>
                                 <div className="summary-stats">
@@ -764,6 +866,24 @@ export function MailQueryPage({
                                                   : `Recent ${result.totalEmails || 0} mails (up to 5)`}
                                         </span>
                                     </div>
+                                    {mails.length > 0 ? (
+                                        <div className="summary-stat-item">
+                                            <Clock3 size={14} aria-hidden="true" />
+                                            <span>
+                                                {isZh ? '最新收件：' : 'Latest received: '}
+                                                {formatTime(
+                                                    mails.reduce(
+                                                        (latest, mail) =>
+                                                            new Date(mail.receivedAt) > new Date(latest)
+                                                                ? mail.receivedAt
+                                                                : latest,
+                                                        mails[0].receivedAt,
+                                                    ),
+                                                    isZh,
+                                                )}
+                                            </span>
+                                        </div>
+                                    ) : null}
                                     {result.remainingDays != null ? (
                                         <div className="summary-stat-item" id="remainingDaysBox">
                                             <span>⏳</span>
@@ -825,8 +945,8 @@ export function MailQueryPage({
                                         </div>
                                         <div className="empty-desc">
                                             {isZh
-                                                ? '请稍后刷新；如确认邮箱已有邮件，请联系商家核对同步与邮件归属。'
-                                                : 'Please refresh shortly. If you are sure mails were sent, contact support.'}
+                                                ? '实时收信连接后，新邮件会自动显示。手动刷新仅更新已同步的收件结果。'
+                                                : 'New mail appears when live updates are connected. Manual refresh reads already synced results.'}
                                         </div>
                                         <div
                                             style={{
@@ -843,19 +963,19 @@ export function MailQueryPage({
                                                 id="emptyRefreshBtn"
                                                 style={{ margin: 0 }}
                                                 onClick={() => {
-                                                    void handleRefresh();
+                                                    void handleRefresh().catch(() => undefined);
                                                 }}
                                             >
-                                                🔄 {isZh ? '检查新邮件' : 'Check New Mails'}
+                                                🔄 {isZh ? '刷新收件结果' : 'Refresh results'}
                                             </button>
-                                            {!autoRefresh ? (
+                                            {!liveEnabled ? (
                                                 <button
                                                     type="button"
                                                     className="empty-autorefresh-btn"
                                                     id="emptyAutoRefreshBtn"
-                                                    onClick={() => setAutoRefresh(true)}
+                                                    onClick={() => setLiveEnabled(true)}
                                                 >
-                                                    ⚡ {isZh ? '开启自动刷新' : 'Enable Auto Refresh'}
+                                                    ⚡ {isZh ? '开启实时收信' : 'Enable live updates'}
                                                 </button>
                                             ) : null}
                                         </div>
@@ -979,8 +1099,8 @@ export function MailQueryPage({
                             </summary>
                             <p className="faq-a">
                                 {isZh
-                                    ? '邮件到达并同步后即可查看。查询后可使用“立即刷新”或开启自动刷新。'
-                                    : 'Emails appear after delivery and synchronization. Refresh the results manually or turn on auto refresh.'}
+                                    ? '邮件同步后会通过实时收信自动显示。“刷新收件结果”只更新已同步的邮件。'
+                                    : 'Live updates show newly synced mail automatically. Refresh results reads already synced mail.'}
                             </p>
                         </details>
                         <details className="faq-item">

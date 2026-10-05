@@ -95,7 +95,7 @@ export function CustomerServiceFeedbackModule() {
                         className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
                     >
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-3">
                                 <span className="font-semibold text-slate-900">客户 #{item.customerId}</span>
                                 {item.orderCode && (
                                     <span className="text-xs text-slate-500">订单 {item.orderCode}</span>
@@ -131,12 +131,17 @@ export function CustomerServiceFeedbackModule() {
                             </div>
                         )}
                         {item.comment && (
-                            <p className="mt-3 whitespace-pre-line text-sm text-slate-700">{item.comment}</p>
+                            <p className="mt-3 break-words whitespace-pre-line text-sm text-slate-700">
+                                {item.comment}
+                            </p>
                         )}
                     </article>
                 ))}
                 {(result?.totalItems ?? 0) > PAGE_SIZE && (
-                    <nav className="flex items-center justify-between" aria-label="客服评价分页">
+                    <nav
+                        className="flex flex-wrap items-center justify-between gap-3"
+                        aria-label="客服评价分页"
+                    >
                         <span className="text-xs text-slate-500">共 {result?.totalItems} 条</span>
                         <div className="flex gap-2">
                             <AdminButton

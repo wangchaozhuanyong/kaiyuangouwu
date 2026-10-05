@@ -26,6 +26,7 @@ export * from './migration-utils/index';
 export * from './plugin/index';
 export * from './process-context/index';
 export * from './scheduler/index';
+export { effectiveRefundLines } from './service/helpers/utils/refund-quantities';
 export * from './service/index';
 export { VENDURE_VERSION } from './version';
 export * from './worker/index';

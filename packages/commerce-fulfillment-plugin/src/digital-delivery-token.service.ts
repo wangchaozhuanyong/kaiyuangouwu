@@ -9,6 +9,8 @@ export interface DigitalDeliveryTokenPayload {
     channelId: string;
     host: string;
     sku: string;
+    fileVersionId?: string;
+    manualDeliveryId?: string;
     expiresAt: number;
 }
 
@@ -67,6 +69,31 @@ export class DigitalDeliveryTokenService {
             this.signingSecret.length >= MINIMUM_SECRET_LENGTH &&
             existsSync(this.rootDirectory),
         );
+    }
+
+    get privateStorageRoot(): string | undefined {
+        return this.configured ? this.rootDirectory : undefined;
+    }
+
+    pathForStorageKey(key: string): string | undefined {
+        if (!this.rootDirectory || !/^private\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9-]+\.(zip|pdf|txt|md)$/u.test(key))
+            return;
+        const candidate = path.resolve(this.rootDirectory, key);
+        // Check every existing ancestor, including the storage root, against symlink traversal.
+        for (
+            let parent = path.dirname(candidate);
+            parent.startsWith(this.rootDirectory);
+            parent = path.dirname(parent)
+        ) {
+            if (existsSync(parent) && realpathSync(parent) !== parent) return;
+            if (parent === this.rootDirectory) break;
+        }
+        if (
+            existsSync(candidate) &&
+            (lstatSync(candidate).isSymbolicLink() || realpathSync(candidate) !== candidate)
+        )
+            return;
+        return candidate;
     }
 
     createToken(

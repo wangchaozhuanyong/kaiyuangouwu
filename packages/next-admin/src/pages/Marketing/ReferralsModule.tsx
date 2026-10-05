@@ -246,7 +246,7 @@ function ReferralManagement() {
                             )}
                             {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
-                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                                     <SearchInput
                                         key={activeTab}
                                         type="search"
@@ -255,13 +255,13 @@ function ReferralManagement() {
                                         onValueChange={changeSearch}
                                         aria-label="搜索分销流水"
                                         placeholder="搜索姓名、邮箱、订单号或流水号"
-                                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
+                                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none focus:border-blue-500"
                                     />
                                     {search && (
                                         <AdminButton
                                             type="button"
                                             onClick={() => changeSearch('')}
-                                            className="absolute right-2.5 top-2 text-slate-400"
+                                            className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400"
                                             aria-label="清空分销数据搜索"
                                         >
                                             <X className="h-4 w-4" />

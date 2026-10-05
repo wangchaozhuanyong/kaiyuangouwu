@@ -1,12 +1,10 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     ChevronRight,
     CircleAlert,
     CircleCheck,
     Clock3,
-    Download,
     Headphones,
     Package,
     RotateCcw,
@@ -30,10 +28,13 @@ import {
     AfterSalesEvidenceGallery,
     AfterSalesEvidenceUploader,
 } from './components/common/after-sales-evidence';
+import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
+import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { compactUiCopy, languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { offlineLoadError, storefrontInitialQueryError } from './loading-state';
+import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -42,7 +43,7 @@ import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { DeliveryDetails, physicalDeliveryLines, TrackingCode } from './storefront-ui/delivery-details';
-import { orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
+import { customerOrderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
 import { EmptyState, Sheet, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
@@ -854,6 +855,7 @@ function AfterSalesList({
 export function OrderDetailPage({
     api,
     order,
+    market,
     locale,
     language,
     reviewEnabled = true,
@@ -905,13 +907,9 @@ export function OrderDetailPage({
     const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const inCart = order.state === 'AddingItems';
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
+    const needsAdditionalPayment = order.state === 'ArrangingAdditionalPayment';
+    const isBeingModified = order.state === 'Modifying';
     const fulfillments = order.fulfillments ?? [];
-    const digitalDeliveries = order.digitalDeliveries ?? [];
-    const autoCardDeliveries = order.autoCardDeliveries ?? [];
-    const manualDigitalDeliveries = order.manualDigitalDeliveries ?? [];
-    const readyDownloads = digitalDeliveries.filter(
-        delivery => delivery.status === 'READY' && delivery.downloadUrl,
-    );
     const canCancel =
         order.state === 'PaymentAuthorized' &&
         fulfillments.length === 0 &&
@@ -937,29 +935,37 @@ export function OrderDetailPage({
                 : reviewEnabled
                   ? 'Payment successful (test mode). Full fulfillment, logistics, review, and support workflows are enabled.'
                   : 'Payment successful (test mode). Fulfillment, logistics, and support workflows are enabled.'
-            : readyDownloads.length
+            : needsAdditionalPayment
               ? isZh
-                  ? '数字商品已可下载，链接为短效安全链接'
-                  : 'Your digital products are ready. Download links are short-lived.'
-              : inCart
+                  ? '订单已调整，请在下方核对并完成补款'
+                  : 'Your order changed. Review and complete the additional payment below.'
+              : isBeingModified
                 ? isZh
-                    ? '商品仍在购物车，尚未提交结算'
-                    : 'Items are still in the cart and checkout has not started'
-                : pending
+                    ? '请等待商家结束修改后查看订单状态'
+                    : 'Wait for the merchant to finish updating the order.'
+                : orderHasDigitalDelivery(order)
                   ? isZh
-                      ? '订单等待支付，请在支付页完成付款'
-                      : 'Complete payment to continue'
-                  : inTransit
+                      ? '数字交付状态与领取入口显示在下方'
+                      : 'Delivery status and secure claim access are shown below.'
+                  : inCart
                     ? isZh
-                        ? '商品正在运输中，请留意物流更新'
-                        : 'Your order is in transit'
-                    : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                        ? '商品仍在购物车，尚未提交结算'
+                        : 'Items are still in the cart and checkout has not started'
+                    : pending
                       ? isZh
-                          ? '商家正在准备你的商品'
-                          : 'The merchant is preparing your order'
-                      : isZh
-                        ? '订单状态已更新'
-                        : 'Order status updated';
+                          ? '订单等待支付，请在支付页完成付款'
+                          : 'Complete payment to continue'
+                      : inTransit
+                        ? isZh
+                            ? '商品正在运输中，请留意物流更新'
+                            : 'Your order is in transit'
+                        : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                          ? isZh
+                              ? '商家正在准备你的商品'
+                              : 'The merchant is preparing your order'
+                          : isZh
+                            ? '订单状态已更新'
+                            : 'Order status updated';
     const navigateToSupport = () => {
         void navigate(routeNavigateOptions({ name: 'support', orderCode: order.code }) as never);
     };
@@ -1005,7 +1011,7 @@ export function OrderDetailPage({
                     {isZh ? '查看物流' : 'Track'}
                 </button>
             )}
-            {!pending && (
+            {!pending && !needsAdditionalPayment && !isBeingModified && (
                 <button
                     type="button"
                     className={orderPageClassName('order-secondary-action')}
@@ -1166,14 +1172,17 @@ export function OrderDetailPage({
             {!isDrawer && (
                 <header className="delivery-linked-order-heading">
                     <h1>{isZh ? '订单详情' : 'Order details'}</h1>
-                    <button className="delivery-back-link" type="button" onClick={onBack}>
-                        <ArrowLeft aria-hidden="true" />
+                    <PageBackButton
+                        className="delivery-back-link"
+                        label={backLabel ?? (isZh ? '返回' : 'Back')}
+                        onClick={onBack}
+                    >
                         {backLabel ?? (isZh ? '返回' : 'Back')}
-                    </button>
+                    </PageBackButton>
                 </header>
             )}
             <section className={orderPageClassName('order-status')}>
-                <strong>{orderStateLabel(order.state, language)}</strong>
+                <strong>{customerOrderStateLabel(order, language)}</strong>
                 <span>{statusHint}</span>
                 <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
             </section>
@@ -1197,109 +1206,21 @@ export function OrderDetailPage({
                 )}
             </section>
             {isDrawer && deliveryPanel}
-            {!!digitalDeliveries.length && (
-                <section
-                    className={orderPageClassName('digital-delivery-panel')}
-                    aria-labelledby="digital-delivery-title"
-                >
-                    <header>
-                        <div>
-                            <Download aria-hidden="true" />
-                            <strong id="digital-delivery-title">
-                                {isZh ? '我的数字商品' : 'My digital products'}
-                            </strong>
-                        </div>
-                        <small>
-                            {isZh
-                                ? '每次打开订单都会生成新的安全链接'
-                                : 'Fresh secure links are generated per order view'}
-                        </small>
-                    </header>
-                    <div>
-                        {digitalDeliveries.map(delivery => (
-                            <article key={delivery.orderLineId}>
-                                <span>
-                                    <strong>{delivery.name}</strong>
-                                </span>
-                                {delivery.status === 'READY' && delivery.downloadUrl ? (
-                                    <a href={delivery.downloadUrl} rel="noreferrer">
-                                        <Download aria-hidden="true" />
-                                        {isZh ? '安全下载' : 'Secure download'}
-                                    </a>
-                                ) : (
-                                    <em>{digitalDeliveryStatus(delivery.status, language)}</em>
-                                )}
-                            </article>
-                        ))}
-                    </div>
-                </section>
+            {api && (
+                <OrderAdditionalPaymentPanel api={api} order={order} language={language} market={market} />
             )}
-            {!!autoCardDeliveries.length && (
-                <section
-                    className={orderPageClassName('digital-delivery-panel auto-card-delivery-panel')}
-                    aria-labelledby="auto-card-delivery-title"
-                >
-                    <header>
-                        <div>
-                            <ShieldCheck aria-hidden="true" />
-                            <strong id="auto-card-delivery-title">
-                                {isZh ? '邮箱自动发卡' : 'Automatic email delivery'}
-                            </strong>
-                        </div>
-                        <small>
+            {orderHasDigitalDelivery(order) &&
+                (api ? (
+                    <DigitalReceiptPanel api={api} order={order} language={language} market={market} />
+                ) : (
+                    <section className="digital-delivery-panel">
+                        <p>
                             {isZh
-                                ? '付款后系统按号池顺序取号并发送到下单邮箱；请检查垃圾邮件。'
-                                : 'Credentials are assigned in sequence and sent to the checkout email after payment.'}
-                        </small>
-                    </header>
-                    <div>
-                        {autoCardDeliveries.map(delivery => (
-                            <article key={delivery.id}>
-                                <span>
-                                    <strong>{delivery.productName}</strong>
-                                    <small>
-                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
-                                    </small>
-                                </span>
-                                <em>{autoCardDeliveryStatus(delivery.state, language)}</em>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-            )}
-            {!!manualDigitalDeliveries.length && (
-                <section
-                    className={orderPageClassName('digital-delivery-panel manual-digital-delivery-panel')}
-                    aria-labelledby="manual-digital-delivery-title"
-                >
-                    <header>
-                        <div>
-                            <Clock3 aria-hidden="true" />
-                            <strong id="manual-digital-delivery-title">
-                                {isZh ? '人工虚拟交付' : 'Manual digital delivery'}
-                            </strong>
-                        </div>
-                        <small>
-                            {isZh
-                                ? '商家完成后会将对应数量的成品发送到订单交付邮箱。'
-                                : 'The merchant will email the exact purchased quantity when preparation is complete.'}
-                        </small>
-                    </header>
-                    <div>
-                        {manualDigitalDeliveries.map(delivery => (
-                            <article key={delivery.id}>
-                                <span>
-                                    <strong>{delivery.productName}</strong>
-                                    <small>
-                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
-                                    </small>
-                                </span>
-                                <em>{manualDigitalDeliveryStatus(delivery, locale, language)}</em>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-            )}
+                                ? '领取入口暂不可用，请重新打开订单详情。'
+                                : 'Claim access is unavailable. Reopen order details.'}
+                        </p>
+                    </section>
+                ))}
             <section className={orderPageClassName('order-information')}>
                 <div>
                     <span>{isZh ? '下单时间' : 'Placed at'}</span>
@@ -1831,7 +1752,8 @@ function OrderCard({
     const isZh = language === 'zh';
     const compactCopy = compactUiCopy[language];
     const isCart = order.state === 'AddingItems';
-    const isPendingPayment = order.state === 'ArrangingPayment';
+    const needsAdditionalPayment = order.state === 'ArrangingAdditionalPayment';
+    const isPendingPayment = order.state === 'ArrangingPayment' || needsAdditionalPayment;
     const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
     const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const isDelivered = order.state === 'Delivered' || order.state === 'TestPaymentSettled';
@@ -1840,11 +1762,15 @@ function OrderCard({
         ? isZh
             ? '预估合计'
             : 'Estimated total'
-        : isPendingPayment
-          ? compactCopy.orders.due
-          : isZh
-            ? '实付'
-            : 'Total';
+        : needsAdditionalPayment
+          ? isZh
+              ? '订单金额'
+              : 'Order total'
+          : isPendingPayment
+            ? compactCopy.orders.due
+            : isZh
+              ? '实付'
+              : 'Total';
 
     const stateModifier =
         isCart || isPendingPayment
@@ -1870,7 +1796,7 @@ function OrderCard({
                     <span className="order-summary-reference" title={order.code}>
                         {isZh ? '订单' : 'Order'} {order.code}
                     </span>
-                    <span className="order-summary-state">{orderStateLabel(order.state, language)}</span>
+                    <span className="order-summary-state">{customerOrderStateLabel(order, language)}</span>
                 </header>
                 <button className="order-summary-product" type="button" onClick={onOpen}>
                     <OrderImage order={order} language={language} />
@@ -1905,7 +1831,13 @@ function OrderCard({
                         </button>
                         {isPendingPayment && (
                             <button type="button" className="primary-btn" onClick={onOpen}>
-                                {isZh ? '立即付款' : 'Pay now'}
+                                {needsAdditionalPayment
+                                    ? isZh
+                                        ? '核对补款'
+                                        : 'Review amount due'
+                                    : isZh
+                                      ? '立即付款'
+                                      : 'Pay now'}
                             </button>
                         )}
                     </div>
@@ -1923,7 +1855,7 @@ function OrderCard({
                     <ChevronRight aria-hidden="true" />
                 </button>
                 <span className={orderPageClassName(`order-state-badge ${stateModifier}`)}>
-                    {orderStateLabel(order.state, language)}
+                    {customerOrderStateLabel(order, language)}
                 </span>
             </header>
             <button className={orderPageClassName('order-card-product')} type="button" onClick={onOpen}>
@@ -1987,7 +1919,13 @@ function OrderCard({
                             className={orderPageClassName('order-btn primary-btn')}
                             onClick={onOpen}
                         >
-                            {isZh ? '立即付款' : 'Pay now'}
+                            {needsAdditionalPayment
+                                ? isZh
+                                    ? '核对补款'
+                                    : 'Review amount due'
+                                : isZh
+                                  ? '立即付款'
+                                  : 'Pay now'}
                         </button>
                     ) : isShipped ? (
                         <button
@@ -2474,41 +2412,9 @@ function fulfillmentMethodLabel(method: string, language: StorefrontLanguage): s
         return language === 'zh' ? '人工数字服务' : 'Manual digital service';
     }
     if (normalizedMethod === 'auto-card-email' || normalizedMethod === 'auto-card-fulfillment') {
-        return language === 'zh' ? '邮箱自动发卡' : 'Automatic email delivery';
+        return language === 'zh' ? '自动卡密交付' : 'Automatic credential delivery';
     }
     return method;
-}
-
-function autoCardDeliveryStatus(
-    state: NonNullable<Order['autoCardDeliveries']>[number]['state'],
-    language: StorefrontLanguage,
-): string {
-    const labels = {
-        WAITING_STOCK: language === 'zh' ? '等待补货，商家已收到告警' : 'Waiting for stock',
-        ALLOCATED: language === 'zh' ? '已取号，准备发送' : 'Credentials allocated',
-        RETRYING: language === 'zh' ? '邮件发送重试中' : 'Email delivery retrying',
-        SENT: language === 'zh' ? '已发送到下单邮箱' : 'Sent to checkout email',
-        MANUAL_REVIEW: language === 'zh' ? '发送异常，已转人工处理' : 'Delivery needs manual review',
-    };
-    return labels[state];
-}
-
-function manualDigitalDeliveryStatus(
-    delivery: NonNullable<Order['manualDigitalDeliveries']>[number],
-    locale: string,
-    language: StorefrontLanguage,
-): string {
-    if (delivery.state === 'SENT') return language === 'zh' ? '已发送到交付邮箱' : 'Sent to delivery email';
-    if (delivery.state === 'EMAIL_FAILED')
-        return language === 'zh' ? '邮件发送失败，正在重试' : 'Email failed; retrying';
-    if (delivery.state === 'MANUAL_REVIEW')
-        return language === 'zh' ? '交付异常，已转人工核查' : 'Delivery needs manual review';
-    if (delivery.state === 'CANCELLED') return language === 'zh' ? '交付任务已取消' : 'Delivery cancelled';
-    if (delivery.overdue)
-        return language === 'zh' ? '已超过预计时间，请联系商家' : 'Past estimate; contact the merchant';
-    return language === 'zh'
-        ? `预计 ${formatOrderDate(delivery.expectedAt, locale)} 前完成`
-        : `Expected by ${formatOrderDate(delivery.expectedAt, locale)}`;
 }
 
 function orderLinePolicyLabel(line: Order['lines'][number], language: StorefrontLanguage): string {
@@ -2518,8 +2424,8 @@ function orderLinePolicyLabel(line: Order['lines'][number], language: Storefront
     const delivery =
         mode === 'auto_card'
             ? isZh
-                ? '虚拟商品 · 邮箱自动发卡'
-                : 'Digital credentials · email delivery'
+                ? '虚拟商品 · 自动卡密'
+                : 'Digital · automatic credentials'
             : mode === 'file_download'
               ? isZh
                   ? '虚拟商品 · 文件下载'
@@ -2544,20 +2450,4 @@ function orderLinePolicyLabel(line: Order['lines'][number], language: Storefront
                 ? '退款需商家审核'
                 : 'Merchant-reviewed refunds';
     return `${delivery} · ${policy}`;
-}
-
-function digitalDeliveryStatus(
-    status: NonNullable<Order['digitalDeliveries']>[number]['status'],
-    language: StorefrontLanguage,
-): string {
-    const labels = {
-        READY: language === 'zh' ? '可下载' : 'Ready',
-        PAYMENT_REQUIRED:
-            language === 'zh'
-                ? '当前不可领取，请检查支付或退款状态'
-                : 'Unavailable. Check payment or refund status.',
-        NOT_CONFIGURED: language === 'zh' ? '交付服务配置中' : 'Delivery is being configured',
-        FILE_MISSING: language === 'zh' ? '内容准备中，请联系商家' : 'Content is being prepared',
-    };
-    return labels[status];
 }

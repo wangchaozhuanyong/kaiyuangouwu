@@ -725,7 +725,7 @@ function AutoCardSetupEditor({
                         </div>
                     ) : deliveries.length ? (
                         <div className="overflow-x-auto rounded-xl border border-slate-200">
-                            <table className="w-full min-w-[680px] text-left text-[11px]">
+                            <table className="admin-mobile-record-table w-full min-w-[680px] text-left text-[11px]">
                                 <thead className="bg-slate-50 text-slate-500">
                                     <tr>
                                         <th className="px-3 py-2 font-semibold">订单</th>
@@ -738,17 +738,22 @@ function AutoCardSetupEditor({
                                 <tbody className="divide-y divide-slate-100">
                                     {deliveries.map(delivery => (
                                         <tr key={delivery.id}>
-                                            <td className="px-3 py-2 font-mono font-semibold text-slate-800">
+                                            <td
+                                                data-label="订单"
+                                                className="px-3 py-2 font-mono font-semibold text-slate-800"
+                                            >
                                                 {delivery.order.code}
                                             </td>
-                                            <td className="px-3 py-2 text-slate-600">
+                                            <td data-label="收件邮箱" className="px-3 py-2 text-slate-600">
                                                 {delivery.recipientEmail}
                                             </td>
-                                            <td className="px-3 py-2 font-mono">{delivery.quantity}</td>
-                                            <td className="px-3 py-2">
+                                            <td data-label="数量" className="px-3 py-2 font-mono">
+                                                {delivery.quantity}
+                                            </td>
+                                            <td data-label="状态" className="px-3 py-2">
                                                 <DeliveryBadge state={delivery.state} />
                                             </td>
-                                            <td className="px-3 py-2 text-slate-500">
+                                            <td data-label="发送时间" className="px-3 py-2 text-slate-500">
                                                 {delivery.sentAt
                                                     ? new Date(delivery.sentAt).toLocaleString('zh-CN')
                                                     : '—'}

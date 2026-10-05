@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
     DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    heroDirectionBetweenSlides,
     heroIndexAfterManualMove,
+    heroSwipeAxis,
     isCompletedHeroSwipe,
     normalizeHeroAutoplayIntervalSeconds,
 } from './hero-carousel';
@@ -32,5 +34,20 @@ describe('hero carousel behavior', () => {
         expect(isCompletedHeroSwipe(55, 8)).toBe(true);
         expect(isCompletedHeroSwipe(39, 0)).toBe(false);
         expect(isCompletedHeroSwipe(50, 60)).toBe(false);
+    });
+
+    it('waits for an intentional axis and leaves vertical scrolling to the browser', () => {
+        expect(heroSwipeAxis(4, 3)).toBe('pending');
+        expect(heroSwipeAxis(10, 8)).toBe('pending');
+        expect(heroSwipeAxis(-15, 4)).toBe('horizontal');
+        expect(heroSwipeAxis(5, 20)).toBe('vertical');
+        expect(heroSwipeAxis(12, 12)).toBe('vertical');
+    });
+
+    it('chooses the shortest direction for numbered slide selection, including wraparound', () => {
+        expect(heroDirectionBetweenSlides(0, 1, 4)).toBe(1);
+        expect(heroDirectionBetweenSlides(0, 3, 4)).toBe(-1);
+        expect(heroDirectionBetweenSlides(3, 0, 4)).toBe(1);
+        expect(heroDirectionBetweenSlides(2, 1, 4)).toBe(-1);
     });
 });

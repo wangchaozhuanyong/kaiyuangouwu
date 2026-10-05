@@ -68,6 +68,8 @@ const passwordProtectedAdminMutations = new Set([
     'deleteZone',
     'deleteZones',
     'refundOrder',
+    'recordManualRefund',
+    'retryRefund',
     'recordStoreUsdtManualRefund',
     'refreshMyStoreExchangeRate',
     'refreshMyStoreUsdtRate',
@@ -248,6 +250,10 @@ export class MerchantInitialPasswordService {
     private isPasswordProtectedMutation(fieldName: string, args?: Record<string, unknown>): boolean {
         if (passwordProtectedAdminMutations.has(fieldName)) {
             return true;
+        }
+        if (fieldName === 'modifyOrder') {
+            const input = args?.input as { refunds?: unknown } | undefined;
+            return Array.isArray(input?.refunds) && input.refunds.length > 0;
         }
         if (fieldName === 'createRole') {
             const input = args?.input;

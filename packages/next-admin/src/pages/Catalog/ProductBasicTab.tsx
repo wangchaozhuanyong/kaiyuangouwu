@@ -1,15 +1,14 @@
-import { ExternalLink, Image as ImageIcon, X } from 'lucide-react';
+import { useMutation } from '@apollo/client/react';
+import { Image as ImageIcon, X } from 'lucide-react';
 import { useId } from 'react';
-import { Link } from 'react-router-dom';
-import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminButton, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
-import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
-import type { RefundPolicy } from '../../graphql/commerce.graphql';
-import { formatDateTime } from '../Sales/sales-utils';
+import { COPY_PRODUCT_DOMAIN, PRODUCT_TYPE_CHANGE_ALLOWED } from '../../graphql/product-domains.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { useProductEditor } from './ProductEditorContext';
-import { SOURCE_LANGUAGE_CODE } from './product-editor-types';
 
 export function ProductBasicTab() {
     const fieldId = useId();
@@ -19,14 +18,6 @@ export function ProductBasicTab() {
         setDescription,
         fulfillmentType,
         setFulfillmentType,
-        refundPolicy,
-        setRefundPolicy,
-        manualDeliverySlaMinutes,
-        setManualDeliverySlaMinutes,
-        dynamicCustomFieldValues,
-        setDynamicCustomFieldValues,
-        productExtensionFields,
-        setActiveTab,
         selectedAssetIds,
         setSelectedAssetIds,
         setIsAssetPickerOpen,
@@ -35,12 +26,37 @@ export function ProductBasicTab() {
         setKnownAssets,
         formErrors,
         setFormErrors,
-        commerceMode,
         productData,
         fixedFulfillmentType,
-        effectiveFulfillmentType,
+        navigate,
+        isDirty,
+        setErrorMessage,
         saving,
     } = useProductEditor();
+    const [copy, { loading: copying }] = useMutation<{ copyProductBasicsAsType: { id: string } }>(
+        COPY_PRODUCT_DOMAIN,
+    );
+    const typeEligibility = useQuery<{ productTypeChangeAllowed: boolean }>(PRODUCT_TYPE_CHANGE_ALLOWED, {
+        variables: { productId: productData?.product?.id },
+        skip: isCreateMode || !productData?.product,
+        fetchPolicy: 'network-only',
+    });
+    const typeLocked = !isCreateMode && typeEligibility.data?.productTypeChangeAllowed !== true;
+    const copyBasics = async () => {
+        if (!productData?.product) return;
+        try {
+            const result = await copy({
+                variables: {
+                    productId: productData.product.id,
+                    fulfillmentType: fulfillmentType === 'digital' ? 'physical' : 'digital',
+                },
+            });
+            if (!result.data) throw new Error('复制未返回结果');
+            navigate(`/catalog/products/${result.data.copyProductBasicsAsType.id}`);
+        } catch (error) {
+            setErrorMessage(toUserFacingError(error));
+        }
+    };
 
     const addUploadedGalleryAssets = (assets: UploadedImageAsset[]) => {
         setKnownAssets(current => ({
@@ -51,210 +67,94 @@ export function ProductBasicTab() {
     };
 
     if (!isCreateMode && !productData?.product) return null;
-    const storedFulfillmentType = productData?.product?.customFields?.fulfillmentType;
-    const legacyTypeMismatch =
-        !isCreateMode &&
-        !!storedFulfillmentType &&
-        !!fixedFulfillmentType &&
-        storedFulfillmentType !== fixedFulfillmentType;
 
     return (
         <div className="space-y-4">
-            <div className="grid items-start gap-4 xl:grid-cols-2">
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                    <div className="border-b border-slate-100 pb-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            商品描述
-                            <FeatureHelpButton
-                                topic="catalog.spu-core"
-                                title="SPU 核心属性"
-                                description={'编辑商城商品页中的主要文字说明'}
-                            />
-                        </h3>
-                    </div>
-                    <div>
-                        <label
-                            htmlFor={`${fieldId}-description`}
-                            className="mb-1 block text-xs font-bold text-slate-700"
-                        >
-                            商品描述 <span className="text-rose-500">*</span>
-                        </label>
-                        <AdminTextArea
-                            rows={4}
-                            id={`${fieldId}-description`}
-                            value={description}
-                            onChange={event => {
-                                setDescription(event.target.value);
-                                if (formErrors.description) {
-                                    setFormErrors(previous => ({
-                                        ...previous,
-                                        description: undefined,
-                                    }));
-                                }
-                            }}
-                            placeholder="输入商品描述、规格和包装说明..."
-                            aria-invalid={Boolean(formErrors.description)}
-                            aria-describedby={
-                                formErrors.description ? `${fieldId}-description-error` : undefined
-                            }
-                            className={`w-full resize-y rounded-lg border bg-white p-3 text-xs leading-relaxed outline-none focus:ring-1 ${
-                                formErrors.description
-                                    ? 'border-rose-500 focus:ring-rose-500'
-                                    : 'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
-                            }`}
-                        />
-                        {formErrors.description && (
-                            <p id={`${fieldId}-description-error`} className="mt-1 text-[11px] text-rose-500">
-                                {formErrors.description}
-                            </p>
-                        )}
-                        <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                            中文是商城内容源语言；英文由翻译引擎生成，并可在“多语言翻译”中复核。
-                        </p>
-                    </div>
-                </section>
-
-                {/* 商品级履约类型与售后政策 */}
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                    <div className="border-b border-slate-100 pb-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            商品类型与交付政策
-                            <FeatureHelpButton
-                                topic="catalog.product-policy"
-                                title="商品类型与交付政策"
-                                description={
-                                    '商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按 SKU 配置。'
-                                }
-                            />
-                        </h3>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                        <div>
-                            <div className="mb-2 text-xs font-bold text-slate-700">商品类型</div>
-                            {fixedFulfillmentType ? (
-                                <div
-                                    className={`rounded-lg border p-3 text-xs leading-5 ${legacyTypeMismatch ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-blue-200 bg-blue-50 text-blue-800'}`}
-                                >
-                                    当前店铺为
-                                    <strong>
-                                        {commerceMode === 'DIGITAL_ONLY' ? '仅虚拟商品' : '仅实物商品'}
-                                    </strong>
-                                    模式，
-                                    {legacyTypeMismatch ? (
-                                        <>
-                                            此历史商品已存储为
-                                            <strong>
-                                                {storedFulfillmentType === 'digital'
-                                                    ? '虚拟商品'
-                                                    : '实物商品'}
-                                            </strong>
-                                            ，与当前店铺模式不符，暂不能保存。
-                                        </>
-                                    ) : (
-                                        <>
-                                            本商品固定为
-                                            <strong>
-                                                {fixedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
-                                            </strong>
-                                            。
-                                        </>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(
-                                        [
-                                            ['digital', '虚拟商品', '通过邮箱完成数字交付'],
-                                            ['physical', '实物商品', '需要地址、库存与物流配送'],
-                                        ] as const
-                                    ).map(([value, label, detail]) => (
-                                        <AdminButton
-                                            key={value}
-                                            type="button"
-                                            onClick={() => setFulfillmentType(value)}
-                                            className={`rounded-lg border p-3 text-left transition-colors ${fulfillmentType === value ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                                        >
-                                            <span className="block text-xs font-bold">{label}</span>
-                                            <span className="mt-1 block text-[10px] leading-4">{detail}</span>
-                                        </AdminButton>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <AdminField
-                            htmlFor={`${fieldId}-refund-policy`}
-                            label={
-                                <span className="mb-2 block text-xs font-bold text-slate-700">
-                                    售后退款政策
-                                </span>
-                            }
-                            description={
-                                <>
-                                    <p className="mt-2 text-[10px] leading-4 text-slate-400">
-                                        虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
-                                    </p>
-                                </>
-                            }
-                        >
-                            <AdminSelect
-                                id={`${fieldId}-refund-policy`}
-                                value={refundPolicy}
-                                onChange={event => setRefundPolicy(event.target.value as RefundPolicy)}
-                                className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                                <option value="MERCHANT_REVIEW">允许申请退款，由商家审核</option>
-                                <option value="SEVEN_DAY_NO_REASON">7 天无理由</option>
-                                <option value="NON_REFUNDABLE">不支持退款</option>
-                            </AdminSelect>
-                        </AdminField>
-                    </div>
-
-                    {effectiveFulfillmentType === 'digital' && (
-                        <AdminField
-                            className="max-w-sm"
-                            htmlFor={`${fieldId}-manual-delivery-sla`}
-                            label={
-                                <span className="mb-1 block text-xs font-bold text-slate-700">
-                                    人工交付预计时长（分钟）
-                                </span>
-                            }
-                            description={
-                                <>
-                                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                                        仅人工交付 SKU 使用；商品页、结账页和订单详情会展示该预计时效。
-                                    </p>
-                                </>
-                            }
-                        >
-                            <AdminInput
-                                id={`${fieldId}-manual-delivery-sla`}
-                                type="number"
-                                min="5"
-                                max="525600"
-                                step="5"
-                                value={manualDeliverySlaMinutes}
-                                onChange={event =>
-                                    setManualDeliverySlaMinutes(Number(event.target.value) || 0)
-                                }
-                                className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                        </AdminField>
+            <div className="grid gap-4 md:grid-cols-2">
+                <AdminField
+                    className="space-y-1.5 text-xs font-semibold text-slate-700"
+                    label={
+                        <>
+                            <span className="flex min-h-6 items-center gap-2">
+                                商品类型 <FeatureHelpButton topic="catalog.product-editor" title="商品类型" />
+                            </span>
+                        </>
+                    }
+                >
+                    {' '}
+                    <AdminSelect
+                        aria-label="商品类型"
+                        value={fulfillmentType}
+                        disabled={saving || typeLocked || Boolean(fixedFulfillmentType)}
+                        onChange={event =>
+                            setFulfillmentType(event.target.value === 'physical' ? 'physical' : 'digital')
+                        }
+                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
+                    >
+                        <option value="digital">数字商品</option>
+                        <option value="physical">实物商品</option>
+                    </AdminSelect>
+                    {typeLocked && (
+                        <span className="block text-[11px] font-normal text-slate-500">
+                            {typeEligibility.loading
+                                ? '正在检查业务数据…'
+                                : typeEligibility.error
+                                  ? '类型检查失败，请刷新后重试'
+                                  : '已有业务数据，可复制基础资料创建另一类商品'}
+                        </span>
                     )}
-                </section>
+                </AdminField>
+                {!isCreateMode && (
+                    <div className="flex items-end">
+                        <AdminButton
+                            type="button"
+                            disabled={saving || copying || isDirty}
+                            onClick={() => void copyBasics()}
+                            className="py-2.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        >
+                            {copying
+                                ? '复制中…'
+                                : `复制基础资料创建${fulfillmentType === 'digital' ? '实物' : '数字'}商品`}
+                        </AdminButton>
+                    </div>
+                )}
             </div>
-
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+            <AdminField
+                className="block space-y-1.5 text-xs font-semibold text-slate-700"
+                label={
+                    <>
+                        <span className="flex min-h-6 items-center gap-2">
+                            商品描述 <span className="text-rose-500">*</span>
+                            <FeatureHelpButton topic="catalog.spu-core" title="商品描述" />
+                        </span>
+                    </>
+                }
+            >
+                {' '}
+                <AdminTextArea
+                    rows={5}
+                    id={`${fieldId}-description`}
+                    aria-label="商品描述"
+                    value={description}
+                    disabled={saving}
+                    onChange={event => {
+                        setDescription(event.target.value);
+                        setFormErrors(previous => ({ ...previous, description: undefined }));
+                    }}
+                    className="w-full rounded-lg border border-slate-300 p-2.5 font-normal"
+                />
+                {formErrors.description && (
+                    <span role="alert" className="block text-rose-600">
+                        {formErrors.description}
+                    </span>
+                )}
+            </AdminField>
+            <section className="border-t border-slate-100 pt-4">
                 <div className="flex min-h-12 flex-col items-start justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:gap-4">
                     <div>
-                        <h3 className="text-sm font-bold text-slate-900">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             商品详情图
-                            <FeatureHelpButton
-                                topic="catalog.product-assets"
-                                title="商品详情图"
-                                description={'可多选素材，用于展示商品细节、功能和使用说明'}
-                            />
+                            <FeatureHelpButton topic="catalog.product-assets" title="商品详情图" />
                         </h3>
                     </div>
                     <div className="flex w-full shrink-0 flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
@@ -321,7 +221,7 @@ export function ProductBasicTab() {
                             setAssetPickerMode('GALLERY');
                             setIsAssetPickerOpen(true);
                         }}
-                        className="mt-5 flex min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-5 flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <ImageIcon className="h-8 w-8 text-slate-300" />
                         <div className="text-xs font-bold text-slate-600">暂未添加详情图</div>
@@ -329,95 +229,6 @@ export function ProductBasicTab() {
                     </AdminButton>
                 )}
             </section>
-            <section
-                aria-label="商品属性与建档信息"
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
-            >
-                <div className="grid gap-5 md:grid-cols-2">
-                    <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            商品筛选属性与标签
-                            <FeatureHelpButton
-                                topic="catalog.facets"
-                                title="商品筛选属性与标签"
-                                description={
-                                    '品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。'
-                                }
-                            />
-                        </h2>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-blue-700">
-                            <AdminButton
-                                type="button"
-                                disabled={saving}
-                                onClick={() => setActiveTab('FACETS_COLLECTIONS')}
-                                className="rounded-lg border border-blue-200 px-3 py-2 hover:bg-blue-50 disabled:opacity-50"
-                            >
-                                选择本商品的属性标签
-                            </AdminButton>
-                            <Link
-                                to="/catalog/categories?tab=facets"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded py-2 hover:underline"
-                            >
-                                管理属性与标签（新窗口）
-                                <ExternalLink className="h-3.5 w-3.5" />
-                            </Link>
-                        </div>
-                    </div>
-                    <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            系统创建时间
-                            <FeatureHelpButton
-                                topic="catalog.product-dates"
-                                title="系统创建时间"
-                                description={'商品首次在本系统建档的时间，自动记录，无需填写。'}
-                            />
-                        </h2>
-
-                        <p className="mt-3 text-sm text-slate-700">
-                            {isCreateMode ? (
-                                '首次保存商品后自动记录'
-                            ) : productData?.product?.createdAt ? (
-                                <time dateTime={productData.product.createdAt}>
-                                    {formatDateTime(productData.product.createdAt)}
-                                </time>
-                            ) : (
-                                '暂未读取到系统创建时间，请刷新后重试'
-                            )}
-                        </p>
-                    </div>
-                </div>
-            </section>
-            {productExtensionFields.some(field => field.name === 'pricingMode') && (
-                <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-                    预购展示商品请在下方“销售方式”选择“展示并联系客服询价”。此类商品不显示售价，也不能加入购物车或下单。
-                </p>
-            )}
-            <DynamicCustomFieldsForm
-                helpTopic="catalog.product-editor"
-                fields={productExtensionFields}
-                values={dynamicCustomFieldValues}
-                onChange={setDynamicCustomFieldValues}
-                disabled={saving}
-                title="商品扩展属性"
-                description="这里填写系统已启用的商品补充字段，修改后随商品保存。筛选属性与标签请使用上方入口设置。"
-                footer={
-                    productExtensionFields.some(field => field.name === 'sourceCreatedAt') ? (
-                        <p className="w-full text-xs leading-5 text-slate-500">
-                            来源创建日期为选填项，用于保留旧系统或来源报表中的商品创建时间。导入时沿用表格中的“创建日期”；手动新建商品或来源日期未知时可留空，不会默认填成今天。它不影响系统创建时间，也不是生产日期或上架日期。
-                        </p>
-                    ) : undefined
-                }
-                languageCodes={[
-                    ...new Set([
-                        SOURCE_LANGUAGE_CODE,
-                        ...(productData?.product?.translations.map(translation => translation.languageCode) ??
-                            []),
-                    ]),
-                ]}
-            />
         </div>
     );
 }

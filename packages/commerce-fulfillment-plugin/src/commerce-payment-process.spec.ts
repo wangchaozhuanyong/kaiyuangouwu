@@ -1,6 +1,10 @@
+vi.mock('./commerce-order-process', () => ({ fulfillDigitalOrder: vi.fn().mockResolvedValue(undefined) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fulfillDigitalOrder } from './commerce-order-process';
 import { commercePaymentProcess } from './commerce-payment-process';
+
+vi.mock('./commerce-order-process', () => ({ fulfillDigitalOrder: vi.fn().mockResolvedValue(undefined) }));
 
 describe('commercePaymentProcess', () => {
     const connection = { getEntityOrThrow: vi.fn() };
@@ -20,7 +24,7 @@ describe('commercePaymentProcess', () => {
         } as any);
     });
 
-    it('delivers pending digital fulfillment after the order reaches an authorized state', async () => {
+    it('does not deliver digital content on authorization without actual settlement', async () => {
         connection.getEntityOrThrow.mockResolvedValue(digitalOrder('PaymentAuthorized', 'Pending'));
 
         await commercePaymentProcess.onTransitionEnd?.('Created', 'Authorized', {
@@ -28,11 +32,8 @@ describe('commercePaymentProcess', () => {
             order: { id: 'order-1' },
         } as any);
 
-        expect(orderService.transitionFulfillmentToState).toHaveBeenCalledWith(
-            expect.anything(),
-            'fulfillment-1',
-            'Delivered',
-        );
+        expect(orderService.transitionFulfillmentToState).not.toHaveBeenCalled();
+        expect(fulfillDigitalOrder).not.toHaveBeenCalled();
         expect(orderService.transitionToState).not.toHaveBeenCalled();
     });
 
@@ -97,7 +98,70 @@ describe('commercePaymentProcess', () => {
 
         expect(orderService.transitionFulfillmentToState).not.toHaveBeenCalled();
         expect(orderService.transitionToState).not.toHaveBeenCalled();
+        expect(fulfillDigitalOrder).not.toHaveBeenCalled();
     });
+
+    it('uses the single delivery entry only after the linked top-up restored the persisted paid state', async () => {
+        const order = digitalOrder('PaymentSettled', 'Pending');
+        connection.getEntityOrThrow.mockResolvedValue(order);
+        orderService.getNextOrderStates.mockReturnValue([]);
+        await commercePaymentProcess.onTransitionEnd?.('Created', 'Settled', {
+            ctx: {},
+            order: { id: order.id, state: 'ArrangingAdditionalPayment' },
+        } as any);
+        expect(fulfillDigitalOrder).toHaveBeenCalledWith(expect.anything(), order.id);
+        expect(orderService.transitionFulfillmentToState).toHaveBeenCalledWith(
+            expect.anything(),
+            'fulfillment-1',
+            'Delivered',
+        );
+    });
+
+    it.each(['ArrangingAdditionalPayment', 'Modifying'])(
+        'keeps delivery gated while the persisted order is %s',
+        async state => {
+            connection.getEntityOrThrow.mockResolvedValue({
+                ...digitalOrder('PaymentSettled', 'Pending'),
+                state,
+            });
+            await commercePaymentProcess.onTransitionEnd?.('Created', 'Settled', {
+                ctx: {},
+                order: { id: 'order-1' },
+            } as any);
+            expect(fulfillDigitalOrder).not.toHaveBeenCalled();
+            expect(orderService.transitionFulfillmentToState).not.toHaveBeenCalled();
+        },
+    );
+    it('reuses digital fulfillment when an actual capture occurs after physical shipment', async () => {
+        connection.getEntityOrThrow.mockResolvedValue({
+            ...digitalOrder('PaymentSettled', 'Pending'),
+            state: 'PartiallyShipped',
+        });
+        await commercePaymentProcess.onTransitionEnd?.('Authorized', 'Settled', {
+            ctx: {},
+            order: { id: 'order-1' },
+        } as any);
+        expect(fulfillDigitalOrder).toHaveBeenCalledWith(expect.anything(), 'order-1');
+        expect(orderService.transitionToState).not.toHaveBeenCalled();
+    });
+
+    it.each(['controlled-test-payment-test', 'metadata-test', 'underpaid', 'manual-review'])(
+        'does not use %s as settled delivery funds',
+        async source => {
+            const order = digitalOrder('PaymentSettled', 'Pending');
+            const payment = order.payments[0];
+            if (source === 'controlled-test-payment-test') payment.method = source;
+            if (source === 'metadata-test') payment.metadata = { public: { testPayment: true } };
+            if (source === 'manual-review') payment.metadata = { manualReview: { required: true } };
+            if (source === 'underpaid') payment.amount = 99;
+            connection.getEntityOrThrow.mockResolvedValue(order);
+            await commercePaymentProcess.onTransitionEnd?.('Created', 'Settled', {
+                ctx: {},
+                order: { id: order.id },
+            } as any);
+            expect(fulfillDigitalOrder).not.toHaveBeenCalled();
+        },
+    );
 });
 
 function digitalOrder(
@@ -122,6 +186,10 @@ function digitalOrder(
     return {
         id: 'order-1',
         state,
+        active: false,
+        orderPlacedAt: new Date(),
+        totalWithTax: 100,
+        payments: [{ amount: 100, state: 'Settled', method: 'receipt', metadata: {} as any, refunds: [] }],
         lines: [
             {
                 id: 'digital-line',

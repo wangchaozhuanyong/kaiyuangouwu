@@ -115,7 +115,7 @@ describe('ShopApi storefront realtime lifecycle', () => {
         vi.stubGlobal('fetch', fetchMock);
         vi.spyOn(Math, 'random').mockReturnValue(0);
         const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
-
+        await waitForMicrotasks();
         await vi.advanceTimersByTimeAsync(10_000);
         const attemptCount = fetchMock.mock.calls.length;
         controller.abort();
@@ -261,7 +261,7 @@ describe('ShopApi storefront realtime lifecycle', () => {
         const controller = new AbortController();
         const reason = new DOMException('Unmounted', 'AbortError');
         const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
-        await Promise.resolve();
+        await waitForMicrotasks();
 
         controller.abort(reason);
 
@@ -269,6 +269,18 @@ describe('ShopApi storefront realtime lifecycle', () => {
         expect(bodyCancel).toHaveBeenCalledWith(reason);
         expect(delays).toEqual([]);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open a connection when aborted while loading the realtime module', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new AbortController();
+        const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
+
+        controller.abort();
+
+        await pending;
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('ends an in-progress retry delay without issuing another request after abort', async () => {
@@ -311,5 +323,6 @@ function stubRealtimeBrowser(
 }
 
 async function waitForMicrotasks(): Promise<void> {
+    await vi.dynamicImportSettled();
     for (let index = 0; index < 8; index += 1) await Promise.resolve();
 }

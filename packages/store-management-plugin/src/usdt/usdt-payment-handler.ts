@@ -13,11 +13,13 @@ export const usdtTrc20PaymentHandler = new PaymentMethodHandler({
         { languageCode: LanguageCode.en, value: 'USDT-TRC20 solidified on-chain payment' },
     ],
     args: {},
+    refundSettlementMode: 'verified-external',
     createPayment: (ctx, order, outstandingAmount, _args, metadata) => {
         const proof = verifyUsdtPaymentProof(metadata?.proof);
         if (
             !proof ||
-            orderPaymentCurrencyCode(order) !== 'USDT' ||
+            (orderPaymentCurrencyCode(order) !== 'USDT' &&
+                !(order.state === 'ArrangingAdditionalPayment' && !order.active && order.orderPlacedAt)) ||
             proof.channelId !== String(ctx.channelId) ||
             proof.orderId !== String(order.id) ||
             proof.fiatCurrencyCode !== String(order.currencyCode) ||

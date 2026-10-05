@@ -157,7 +157,7 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('账户登录');
         expect(markup).not.toContain('auth-hero-header');
         expect(markup).toContain('aria-label="返回"');
-        expect(markup).toContain('class="auth-form-back-button"');
+        expect(markup).toContain('class="page-back-button has-label auth-form-back-button"');
         expect(markup).not.toContain('auth-route-tabs');
         expect(markup).toContain('立即注册');
         expect(markup).toContain('class="auth-form-brand"');

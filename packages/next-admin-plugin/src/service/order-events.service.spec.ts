@@ -1,4 +1,10 @@
-import { OrderPlacedEvent } from '@vendure/core';
+import { OrderProcessingChangedEvent } from '@vendure/commerce-fulfillment-plugin';
+import {
+    OrderPlacedEvent,
+    OrderStateTransitionEvent,
+    RefundEvent,
+    RefundStateTransitionEvent,
+} from '@vendure/core';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,18 +30,29 @@ function order(id = '1') {
         fulfillments: [] as Array<{ state: string; lines: Array<{ orderLineId: string; quantity: number }> }>,
     };
 }
-function harness(worker = false) {
+function harness(worker = false, needsReminder?: (order: unknown) => Promise<boolean>) {
     const source = new Subject<{ order: { id: string } }>();
     const changes = new Subject<{ order: { id: string; orderPlacedAt: Date } }>();
+    const refunds = new Subject<{ order: { id: string; orderPlacedAt: Date } }>();
+    const refundTransitions = new Subject<{ order: { id: string; orderPlacedAt: Date } }>();
+    const processingChanges = new Subject<{ orderId: string }>();
+    const subjects = new Map<unknown, Subject<any>>([
+        [OrderPlacedEvent, source],
+        [OrderStateTransitionEvent, changes],
+        [RefundEvent, refunds],
+        [RefundStateTransitionEvent, refundTransitions],
+        [OrderProcessingChangedEvent, processingChanges],
+    ]);
     const findOne = vi.fn().mockImplementation(({ where }) => Promise.resolve(order(where.id)));
     const find = vi.fn().mockResolvedValue([]);
     const service = new OrderEventsService(
-        { ofType: (type: unknown) => (type === OrderPlacedEvent ? source : changes) } as never,
+        { ofType: (type: unknown) => subjects.get(type) } as never,
         { rawConnection: { getRepository: () => ({ findOne, find }) } } as never,
         { isServer: !worker, isWorker: worker },
+        needsReminder ? ({ needsReminder } as never) : undefined,
     );
     services.push(service);
-    return { service, source, changes, findOne, find };
+    return { service, source, changes, refunds, refundTransitions, processingChanges, findOne, find };
 }
 async function flush() {
     for (let i = 0; i < 8; i++) await Promise.resolve();
@@ -79,17 +96,25 @@ describe('order placement push', () => {
         expect(findOne).toHaveBeenCalledTimes(1);
     });
     it('relays worker placement and processing events without a listener or order queries', async () => {
-        const { service, source, changes, findOne, find } = harness(true);
+        const { service, source, changes, refunds, refundTransitions, processingChanges, findOne, find } =
+            harness(true);
         await service.onApplicationBootstrap();
         expect(listenForOrderEvents).not.toHaveBeenCalled();
         source.next({ order: { id: 'worker-order' } });
         changes.next({ order: { id: 'worker-order', orderPlacedAt: new Date() } });
+        refunds.next({ order: { id: 'refund-created', orderPlacedAt: new Date() } });
+        refundTransitions.next({ order: { id: 'refund-settled', orderPlacedAt: new Date() } });
+        processingChanges.next({ orderId: 'digital-notification-failed' });
         expect(relayOrderEvent).toHaveBeenCalledWith('/private-fixture/events.sock', 'worker-order');
         expect(relayOrderEvent).toHaveBeenCalledWith(
             '/private-fixture/events.sock',
             'worker-order',
             'changed',
         );
+        for (const id of ['refund-created', 'refund-settled', 'digital-notification-failed']) {
+            expect(relayOrderEvent).toHaveBeenCalledWith('/private-fixture/events.sock', id, 'changed');
+        }
+        expect(relayOrderEvent).toHaveBeenCalledTimes(5);
         expect(findOne).not.toHaveBeenCalled();
         expect(find).not.toHaveBeenCalled();
     });
@@ -117,6 +142,182 @@ describe('order placement push', () => {
         await vi.advanceTimersByTimeAsync(HALF_HOUR);
         expect(send).not.toHaveBeenCalled();
         expect(findOne).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('processing changes without an Order state transition', () => {
+    it.each(['refund-created', 'refund-transition', 'digital-processing'] as const)(
+        '%s starts a newly actionable task without announcing a new order',
+        async kind => {
+            let actionable = false;
+            const needsReminder = vi.fn().mockImplementation(() => Promise.resolve(actionable));
+            const { service, source, refunds, refundTransitions, processingChanges, findOne } = harness(
+                false,
+                needsReminder,
+            );
+            const value = order();
+            value.state = 'Delivered';
+            findOne.mockResolvedValue(value);
+            await service.onApplicationBootstrap();
+            const send = vi.fn();
+            const unrelated = vi.fn();
+            service.subscribe('a', undefined, send, vi.fn());
+            service.subscribe('seller', undefined, unrelated, vi.fn());
+            source.next({ order: value });
+            await flush();
+            await vi.advanceTimersByTimeAsync(HALF_HOUR);
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(findOne).toHaveBeenCalledTimes(1);
+            actionable = true;
+            if (kind === 'refund-created') refunds.next({ order: value });
+            else if (kind === 'refund-transition') refundTransitions.next({ order: value });
+            else processingChanges.next({ orderId: String(value.id) });
+            await flush();
+            expect(findOne).toHaveBeenCalledTimes(2);
+            expect(send).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(HALF_HOUR);
+            expect(send).toHaveBeenCalledTimes(2);
+            expect(send).toHaveBeenLastCalledWith(
+                expect.objectContaining({ kind: 'order-pending', orderId: '1' }),
+            );
+            expect(unrelated).not.toHaveBeenCalled();
+            expect(value.state).toBe('Delivered');
+        },
+    );
+
+    it.each(['refund-transition', 'digital-processing'] as const)(
+        '%s stops resolved tasks and removes stale reconnect reminders',
+        async kind => {
+            let actionable = true;
+            const { service, refundTransitions, processingChanges, findOne } = harness(false, () =>
+                Promise.resolve(actionable),
+            );
+            const value = order();
+            value.state = 'Cancelled';
+            findOne.mockResolvedValue(value);
+            await service.onApplicationBootstrap();
+            const send = vi.fn();
+            const cursor = service.subscribe('a', undefined, send, vi.fn()).cursor;
+            await service.publishPlacedOrder('1');
+            await vi.advanceTimersByTimeAsync(HALF_HOUR);
+            expect(send).toHaveBeenCalledTimes(2);
+            actionable = false;
+            if (kind === 'refund-transition') refundTransitions.next({ order: value });
+            else processingChanges.next({ orderId: '1' });
+            await flush();
+            const reads = findOne.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(2 * HALF_HOUR);
+            expect(send).toHaveBeenCalledTimes(2);
+            expect(findOne).toHaveBeenCalledTimes(reads);
+            expect(service.subscribe('a', cursor, vi.fn(), vi.fn()).replay.map(event => event.kind)).toEqual([
+                'order-placed',
+            ]);
+            expect(value.state).toBe('Cancelled');
+        },
+    );
+
+    it('does not reset an existing reminder when another refund or notification event arrives', async () => {
+        const { service, refunds, processingChanges, findOne } = harness(false, () => Promise.resolve(true));
+        const value = order();
+        findOne.mockResolvedValue(value);
+        await service.onApplicationBootstrap();
+        const send = vi.fn();
+        service.subscribe('a', undefined, send, vi.fn());
+        await service.publishPlacedOrder('1');
+        await vi.advanceTimersByTimeAsync(HALF_HOUR / 2);
+        refunds.next({ order: value });
+        processingChanges.next({ orderId: '1' });
+        await flush();
+        await vi.advanceTimersByTimeAsync(HALF_HOUR / 2);
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'order-pending' }));
+    });
+
+    it('does not create tasks for missing or unplaced orders and removes subscriptions on shutdown', async () => {
+        const needsReminder = vi.fn().mockResolvedValue(true);
+        const { service, refunds, refundTransitions, processingChanges, findOne } = harness(
+            false,
+            needsReminder,
+        );
+        await service.onApplicationBootstrap();
+        const send = vi.fn();
+        service.subscribe('a', undefined, send, vi.fn());
+        findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...order(), orderPlacedAt: null });
+        processingChanges.next({ orderId: 'missing' });
+        await flush();
+        processingChanges.next({ orderId: 'unplaced' });
+        await flush();
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        expect(needsReminder).not.toHaveBeenCalled();
+        expect(send).not.toHaveBeenCalled();
+        await service.onApplicationShutdown();
+        refunds.next({ order: order() });
+        refundTransitions.next({ order: order() });
+        processingChanges.next({ orderId: '1' });
+        await flush();
+        expect(findOne).toHaveBeenCalledTimes(2);
+    });
+
+    it('recovers canceled funding tasks and delivery exceptions at startup through the summary provider', async () => {
+        const needsReminder = vi.fn().mockImplementation(value => Promise.resolve(value.id !== 'complete'));
+        const { service, find, findOne } = harness(false, needsReminder);
+        const canceled = { ...order('cancelled-refund'), state: 'Cancelled' };
+        const notification = { ...order('notification-failed'), state: 'Delivered' };
+        find.mockResolvedValue([canceled, notification, { ...order('complete'), state: 'Delivered' }]);
+        findOne.mockImplementation(({ where }) =>
+            Promise.resolve(where.id === canceled.id ? canceled : notification),
+        );
+        const send = vi.fn();
+        service.subscribe('a', undefined, send, vi.fn());
+        await service.onApplicationBootstrap();
+        expect(find.mock.calls[0][0].where).not.toHaveProperty('state');
+        expect(send).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        expect(send.mock.calls.map(([event]) => event.orderId).sort()).toEqual([
+            'cancelled-refund',
+            'notification-failed',
+        ]);
+    });
+
+    it('does not announce or clear timers from a summary lookup that completes after shutdown', async () => {
+        const needsReminder = vi.fn().mockResolvedValue(true);
+        const { service, findOne } = harness(false, needsReminder);
+        const send = vi.fn();
+        service.subscribe('a', undefined, send, vi.fn());
+        const cursor = service.subscribe('a', undefined, vi.fn(), vi.fn()).cursor;
+        await service.publishPlacedOrder('1');
+        let resolve!: (value: boolean) => void;
+        needsReminder.mockImplementationOnce(
+            () =>
+                new Promise(done => {
+                    resolve = done;
+                }),
+        );
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        await service.onApplicationShutdown();
+        resolve(true);
+        await flush();
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        expect(findOne).toHaveBeenCalledTimes(2);
+        expect(service.subscribe('a', cursor, vi.fn(), vi.fn()).replay.map(event => event.kind)).toEqual([
+            'order-placed',
+        ]);
+        expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a failed processing summary without emitting an unverified reminder', async () => {
+        const needsReminder = vi.fn().mockResolvedValue(true);
+        const { service, findOne } = harness(false, needsReminder);
+        const send = vi.fn();
+        service.subscribe('a', undefined, send, vi.fn());
+        await service.publishPlacedOrder('1');
+        needsReminder.mockRejectedValueOnce(new Error('summary query failed'));
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        expect(send).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        expect(findOne).toHaveBeenCalledTimes(3);
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'order-pending' }));
     });
 });
 

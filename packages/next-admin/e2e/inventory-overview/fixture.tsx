@@ -1,5 +1,6 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
@@ -189,16 +190,18 @@ const client = new ApolloClient({
     ),
 });
 createRoot(document.getElementById('root')!).render(
-    <ApolloProvider client={client}>
-        <BrowserRouter>
-            <ConfirmDialogContext.Provider value={async () => false}>
-                <FeatureHelpProvider>
-                    <div className="bg-blue-50 px-5 py-2 text-xs text-blue-800">
-                        本地验收样本 · 实际库存管理组件 · 数据和盘点仅保存在内存
-                    </div>
-                    <InventoryWarehouseModule />
-                </FeatureHelpProvider>
-            </ConfirmDialogContext.Provider>
-        </BrowserRouter>
-    </ApolloProvider>,
+    <React.Fragment>
+        <ApolloProvider client={client}>
+            <BrowserRouter>
+                <ConfirmDialogContext.Provider value={async () => false}>
+                    <FeatureHelpProvider>
+                        <div className="bg-blue-50 px-5 py-2 text-xs text-blue-800">
+                            本地验收样本 · 实际库存管理组件 · 数据和盘点仅保存在内存
+                        </div>
+                        <InventoryWarehouseModule />
+                    </FeatureHelpProvider>
+                </ConfirmDialogContext.Provider>
+            </BrowserRouter>
+        </ApolloProvider>
+    </React.Fragment>,
 );

@@ -465,7 +465,13 @@ export function StoreUsdtPanel() {
             {view === 'payments' && (
                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                     <PanelHeading title="支付流水" description="仅显示本店支付明细。" />
-                    <div className="mt-4 overflow-x-auto">
+                    <div
+                        tabIndex={0}
+                        role="region"
+                        aria-label="收款财务明细"
+                        className="admin-comparison-scroll mt-4 overflow-x-auto"
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整收款财务明细</p>
                         <table className="min-w-full text-left text-xs">
                             <thead>
                                 <tr>

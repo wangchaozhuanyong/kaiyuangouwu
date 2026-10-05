@@ -48,13 +48,13 @@ describe('ProductEditorSidebar', () => {
         const html = renderToStaticMarkup(<ProductEditorSidebar />);
 
         expect(html).toContain('aria-label="商品固定信息"');
-        expect(html).toContain('data-help-description="切换右侧步骤时保持不变"');
+        expect(html).not.toContain('切换右侧步骤时保持不变');
         expect(html).toContain('value="测试商品"');
         expect(html).toContain('value="test-product"');
-        expect(html).toContain('素材编号 #asset-1');
+        expect(html).toContain('图片编号 #asset-1');
         expect(html).toContain('AI 生成主图');
-        expect(html).toContain('待保存');
-        expect(html).toContain('虚拟商品');
+        expect(html).not.toContain('商品总览');
+        expect(html).not.toContain('SKU');
         expect(html).toContain('aspect-square');
         expect(html).toContain('object-contain');
         expect(html).not.toContain('aspect-[4/3]');

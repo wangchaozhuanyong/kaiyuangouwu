@@ -356,8 +356,7 @@
     width: 15px;
     height: 15px;
 }
-.delivery-text-button,
-.delivery-back-link {
+.delivery-text-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -380,10 +379,12 @@
 }
 .delivery-back-link {
     margin-bottom: 16px;
-    padding-left: 0;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }
-.delivery-text-button svg,
-.delivery-back-link svg {
+.delivery-text-button svg {
     width: 17px;
     height: 17px;
 }

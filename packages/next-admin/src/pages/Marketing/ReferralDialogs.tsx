@@ -315,7 +315,7 @@ export function FinancialDialog({
             {!customer ? (
                 <>
                     <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                         <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
@@ -369,11 +369,11 @@ export function FinancialDialog({
                             更换客户
                         </AdminButton>
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="mt-3 grid gap-2">
                         {wallets.data?.referralCustomerWallets.map(wallet => (
                             <div
                                 key={wallet.id}
-                                className="col-span-3 grid grid-cols-3 rounded-lg border border-slate-200 p-3 text-center text-[10px]"
+                                className="grid gap-3 sm:grid-cols-3 rounded-lg border border-slate-200 p-3 text-center text-[10px]"
                             >
                                 <SmallMetric
                                     label={`${wallet.currencyCode} 可用`}

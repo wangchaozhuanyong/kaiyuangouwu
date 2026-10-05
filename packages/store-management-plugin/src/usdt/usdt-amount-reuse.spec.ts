@@ -107,6 +107,18 @@ describe('USDT amount lifecycle on a real database', () => {
     let service: UsdtPaymentService;
     const orderService = {
         addPaymentToOrder: vi.fn(),
+        lockOrderForRefund: vi.fn(async (ctx: TestContext, orderId: number) => {
+            // Mirror the production no-op UPDATE lock on the same transaction before locking the intent.
+            if (!ctx.manager) throw new Error('Order lock requires the mutation transaction');
+            const repository = ctx.manager.getRepository(Order);
+            await repository.findOneByOrFail({ id: orderId });
+            await repository
+                .createQueryBuilder()
+                .update()
+                .set({ id: () => 'id' })
+                .where('id = :id', { id: orderId })
+                .execute();
+        }),
         withOrderMutationTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
             db.options.type === 'sqljs'
                 ? db.transaction(manager => work({ ..._ctx, manager }))
@@ -325,6 +337,10 @@ describe('USDT amount lifecycle on a real database', () => {
             transfers: [{ ...transfer(row), blockTimestamp: new Date(now.getTime() - 3_900_000) }],
         });
         const result = await service.scanPendingPayments({} as never, now);
+        expect(orderService.lockOrderForRefund).toHaveBeenCalledWith(
+            expect.objectContaining({ manager: expect.anything() }),
+            row.orderId,
+        );
         expect(result.settledCount).toBe(1);
         expect(
             await db.getRepository(StorefrontUsdtPaymentIntent).findOneByOrFail({ id: row.id }),
@@ -397,13 +413,22 @@ describe('USDT amount lifecycle on a real database', () => {
     it.runIf(process.env.USDT_TEST_DB !== undefined)(
         'keeps concurrent quote allocations unique across channels sharing a wallet',
         async () => {
-            await db.getRepository(Channel).save({ id: 2, code: 'other-test' });
+            const otherChannelId = 3; // Preserve channel 2 as the platform default.
+            await db.getRepository(Channel).save({ id: otherChannelId, code: 'other-test' });
             const quotes = await Promise.all(Array.from({ length: 12 }, () => quote()));
             for (const q of quotes.slice(6)) {
-                q.channelId = 2;
-                await db.getRepository(Order).update(q.orderId, { salesChannelId: 2 });
+                q.channelId = otherChannelId;
+                await db.getRepository(Order).update(q.orderId, { salesChannelId: otherChannelId });
                 await db.getRepository(StorefrontUsdtCheckoutQuote).save(q);
             }
+            // The second shop must opt in before this fixture can exercise shared-wallet allocation.
+            await expect(
+                service.ensureIntent({ channelId: otherChannelId } as never, quotes[6]),
+            ).rejects.toThrow('本店未开启平台 USDT 支付');
+            expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(0);
+            await db
+                .getRepository(StorePaymentMethodState)
+                .save({ channelId: otherChannelId, paymentMethodId: 1, enabled: true });
             const rows = await Promise.all(
                 quotes.map(q =>
                     db.transaction(manager =>
@@ -413,7 +438,7 @@ describe('USDT amount lifecycle on a real database', () => {
             );
             expect(new Set(rows.map(row => row.activeMatchKey)).size).toBe(12);
             expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(12);
-            expect(new Set(rows.map(row => row.channelId))).toEqual(new Set([1, 2]));
+            expect(new Set(rows.map(row => row.channelId))).toEqual(new Set([1, otherChannelId]));
         },
     );
 

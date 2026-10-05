@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
                 '/assets': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
                 '/after-sales/evidence': apiProxyTarget,
+                '/digital-delivery': apiProxyTarget,
             },
         },
         preview: {
@@ -41,6 +42,7 @@ export default defineConfig(({ mode }) => {
                 '/assets/preview': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
                 '/after-sales/evidence': apiProxyTarget,
+                '/digital-delivery': apiProxyTarget,
             },
         },
     };

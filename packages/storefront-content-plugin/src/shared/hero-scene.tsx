@@ -1,5 +1,6 @@
 import { ChevronRight, ShieldCheck, Zap } from 'lucide-react';
 import {
+    useCallback,
     useLayoutEffect,
     useRef,
     useState,
@@ -12,6 +13,7 @@ import { normalizedHeroThemePreset } from '../content-visuals';
 
 import { ContentText } from './content-text';
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
+import { sampleImageTone, type ImageTone } from './image-tone';
 
 export interface HeroSceneData extends HeroThemeData {
     title: string;
@@ -23,7 +25,7 @@ export interface HeroSceneData extends HeroThemeData {
     items: Array<{ label: string; description: string; enabled?: boolean }>;
 }
 
-/** The carousel and its draft preview render the same saved copy and local contrast surface. */
+/** The carousel and its draft preview share unaltered artwork and managed copy colors. */
 export function HeroScene({
     content,
     image,
@@ -46,13 +48,39 @@ export function HeroScene({
     const subtitle = content.subtitle.trim();
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
-    const adaptiveStyle = heroThemeStyle(content);
+    const [sampledTone, setSampledTone] = useState<{ imageUrl: typeof content.imageUrl; tone: ImageTone }>();
+    const adaptiveStyle = heroThemeStyle(
+        content,
+        sampledTone?.imageUrl === content.imageUrl ? sampledTone?.tone : undefined,
+    );
+    const sampledSource = useRef('');
     const mediaRef = useRef<HTMLDivElement>(null);
     const [overlayHeight, setOverlayHeight] = useState(0);
+
+    const sampleRenderedImage = useCallback(
+        (artworkElement: HTMLImageElement) => {
+            if (
+                !artworkElement.complete ||
+                !artworkElement.naturalWidth ||
+                artworkElement.getAttribute('aria-hidden') === 'true' ||
+                !mediaRef.current?.querySelector('.hero-rich-image-link')?.contains(artworkElement)
+            )
+                return;
+            const source = `${content.imageUrl ?? ''}\u0000${artworkElement.currentSrc || artworkElement.src}`;
+            if (sampledSource.current === source) return;
+            sampledSource.current = source;
+            setSampledTone({ imageUrl: content.imageUrl, tone: sampleImageTone(artworkElement) });
+        },
+        [content.imageUrl],
+    );
 
     useLayoutEffect(() => {
         const media = mediaRef.current;
         if (!media) return;
+        const artworkElement = media.querySelector<HTMLImageElement>(
+            '.hero-rich-image-link img:not([aria-hidden="true"])',
+        );
+        if (artworkElement) sampleRenderedImage(artworkElement);
         const overlays = Array.from(media.children).slice(1);
         const measure = () => {
             setOverlayHeight(Math.max(0, ...overlays.map(child => child.getBoundingClientRect().height)));
@@ -61,7 +89,7 @@ export function HeroScene({
         overlays.forEach(child => observer.observe(child));
         measure();
         return () => observer.disconnect();
-    }, [mediaOverlay]);
+    }, [mediaOverlay, sampleRenderedImage]);
 
     return (
         <div
@@ -69,7 +97,13 @@ export function HeroScene({
             style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
             data-copy-layout="overlay"
         >
-            <div className="hero-rich-media" ref={mediaRef}>
+            <div
+                className="hero-rich-media"
+                ref={mediaRef}
+                onLoadCapture={event => {
+                    if (event.target instanceof HTMLImageElement) sampleRenderedImage(event.target);
+                }}
+            >
                 <button
                     type="button"
                     className="hero-rich-image-link"

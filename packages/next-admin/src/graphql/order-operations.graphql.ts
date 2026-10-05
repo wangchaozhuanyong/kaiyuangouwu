@@ -1,4 +1,17 @@
 import { gql } from '@apollo/client';
+import type { OrderProcessingSummary } from '../pages/Sales/sales-utils';
+import { ORDER_PROCESSING_FIELDS } from './sales.graphql';
+
+export const RETRY_CHECKOUT_DELIVERY = gql`
+    mutation RetryCheckoutDelivery($orderId: ID!) {
+        retryCheckoutDelivery(orderId: $orderId) {
+            id
+            orderId
+            state
+            reviewReason
+        }
+    }
+`;
 
 export const ORDER_OPERATIONS_QUERY = gql`
     query NextAdminOrderOperations($id: ID!) {
@@ -12,6 +25,9 @@ export const ORDER_OPERATIONS_QUERY = gql`
             state
             totalWithTax
             currencyCode
+            processingSummary {
+                ...NextAdminOrderProcessingFields
+            }
             salesChannel {
                 id
                 code
@@ -66,6 +82,43 @@ export const ORDER_OPERATIONS_QUERY = gql`
                 usedAt
                 refundedAt
                 refundId
+            }
+        }
+    }
+    ${ORDER_PROCESSING_FIELDS}
+`;
+
+export const RECORD_MANUAL_REFUND_MUTATION = gql`
+    mutation NextAdminRecordManualRefund($input: RecordManualRefundInput!) {
+        recordManualRefund(input: $input) {
+            __typename
+            ... on Refund {
+                id
+                state
+                total
+                transactionId
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const RETRY_REFUND_MUTATION = gql`
+    mutation NextAdminRetryRefund($input: RetryRefundInput!) {
+        retryRefund(input: $input) {
+            __typename
+            ... on Refund {
+                id
+                state
+                total
+                transactionId
+            }
+            ... on ErrorResult {
+                errorCode
+                message
             }
         }
     }
@@ -202,6 +255,7 @@ export interface OrderOperationPayment {
 export interface OrderOperationsData {
     activeChannel: { id: string; code: string };
     order: {
+        processingSummary?: OrderProcessingSummary | null;
         id: string;
         code: string;
         state: string;

@@ -640,11 +640,19 @@ export function StorefrontBlockEditor({
                                         <>
                                             <Field
                                                 label="文字色"
-                                                helpText="推荐留空：将自动根据图片深浅适配高清晰文字与光晕，换图无需重新调色"
+                                                helpText={
+                                                    draft.type === 'HERO'
+                                                        ? '填写后使用设定文字色；留空时根据图片明暗选色，图片保持原色、无颜色遮罩'
+                                                        : '留空时继承商城默认文字色'
+                                                }
                                             >
                                                 <ColorInput
                                                     value={draft.textColor ?? ''}
-                                                    placeholder="自动适应图片（推荐）"
+                                                    placeholder={
+                                                        draft.type === 'HERO'
+                                                            ? '自动适应图片'
+                                                            : '继承商城默认'
+                                                    }
                                                     onChange={value =>
                                                         setDraft({ ...draft, textColor: value })
                                                     }
@@ -872,7 +880,7 @@ export function StorefrontBlockEditor({
                                     {showProducts && productSettingKey && canReadProducts && (
                                         <div className="mt-4 rounded-xl border border-slate-200 p-3">
                                             <div className="relative">
-                                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                                                 <AdminInput
                                                     value={productSearch}
                                                     onChange={event => {

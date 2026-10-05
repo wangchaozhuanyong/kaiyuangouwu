@@ -34,6 +34,7 @@ const PLATFORM_REFUND_LIMIT = 200;
 
 export interface StoreUsdtManualRefundInput {
     paymentId: ID;
+    refundId?: ID | null;
     amount: number;
     usdtAmount: string;
     recipientAddress: string;
@@ -102,7 +103,7 @@ export class UsdtManualRefundService {
         const normalized = normalizeInput(input);
         const initialContext = await this.requirePaymentContext(ctx, input.paymentId);
         this.assertAuthorized(ctx, initialContext.intent);
-        this.assertRefundable(initialContext.payment, normalized.amount);
+        this.assertRefundable(initialContext.payment, normalized.amount, input.refundId);
         if (initialContext.intent.transactionId?.toLowerCase() === normalized.transactionId) {
             throw new UserInputError('退款交易哈希不能与原收款交易哈希相同');
         }
@@ -132,22 +133,39 @@ export class UsdtManualRefundService {
                 await this.lockPayment(txCtx, input.paymentId);
                 const paymentContext = await this.requirePaymentContext(txCtx, input.paymentId);
                 this.assertAuthorized(txCtx, paymentContext.intent);
-                this.assertRefundable(paymentContext.payment, normalized.amount);
+                this.assertRefundable(paymentContext.payment, normalized.amount, input.refundId);
                 await this.assertTransactionUnused(txCtx, normalized.transactionId);
                 const operatorUserId = txCtx.activeUserId;
                 if (!operatorUserId) throw new UserInputError('请先登录后登记退款');
 
-                const created = await this.orderService.refundOrder(txCtx, {
-                    paymentId: paymentContext.payment.id,
-                    amount: normalized.amount,
-                    reason: normalized.reason,
-                });
+                const requestedRefundId = input.refundId;
+                const created = requestedRefundId
+                    ? (paymentContext.payment.refunds ?? []).find(refund =>
+                          idsAreEqual(refund.id, requestedRefundId),
+                      )
+                    : await this.orderService.refundOrder(txCtx, {
+                          paymentId: paymentContext.payment.id,
+                          amount: normalized.amount,
+                          reason: normalized.reason,
+                          idempotencyKey: `usdt-refund:${normalized.transactionId}`,
+                      });
+                if (!created) throw new UserInputError('找不到原退款申请，请刷新后重试');
                 if (isGraphQlErrorResult(created)) throw new UserInputError(created.message);
 
-                const settled = await this.orderService.settleRefund(txCtx, {
-                    id: created.id,
-                    transactionId: `${REFUND_TRANSACTION_PREFIX}${normalized.transactionId}`,
-                });
+                const settled = await this.orderService.settleRefund(
+                    txCtx,
+                    {
+                        id: created.id,
+                        transactionId: `${REFUND_TRANSACTION_PREFIX}${normalized.transactionId}`,
+                    },
+                    {
+                        source: 'verified-external',
+                        paymentId: paymentContext.payment.id,
+                        amount: normalized.amount,
+                        transactionId: `${REFUND_TRANSACTION_PREFIX}${normalized.transactionId}`,
+                        evidenceReference: `tron:${normalized.transactionId}`,
+                    },
+                );
                 const audit = await this.connection.getRepository(txCtx, StoreUsdtManualRefund).save(
                     new StoreUsdtManualRefund({
                         channelId: paymentContext.intent.channelId,
@@ -249,9 +267,19 @@ export class UsdtManualRefundService {
         if (!isSuperAdmin && !idsAreEqual(intent.channelId, ctx.channelId)) throw new ForbiddenError();
     }
 
-    private assertRefundable(payment: Payment, amount: number): void {
+    private assertRefundable(payment: Payment, amount: number, pendingRefundId?: ID | null): void {
+        if (pendingRefundId) {
+            const pending = (payment.refunds ?? []).find(refund => idsAreEqual(refund.id, pendingRefundId));
+            if (!pending || pending.state !== 'Pending' || pending.total !== amount) {
+                throw new UserInputError('请选择本笔支付下金额一致、仍在处理中的退款申请');
+            }
+        }
         const alreadyRefunded = (payment.refunds ?? [])
-            .filter(refund => refund.state !== 'Failed')
+            .filter(
+                refund =>
+                    refund.state !== 'Failed' &&
+                    (!pendingRefundId || !idsAreEqual(refund.id, pendingRefundId)),
+            )
             .reduce((sum, refund) => sum + refund.total, 0);
         const remaining = payment.amount - alreadyRefunded;
         if (amount > remaining) {

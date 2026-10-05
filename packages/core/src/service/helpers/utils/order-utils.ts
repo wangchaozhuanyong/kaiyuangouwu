@@ -1,4 +1,5 @@
 /* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { OrderLineInput } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import { summate } from '@vendure/common/lib/shared-utils';
@@ -42,6 +43,27 @@ export function totalCoveredByPayments(order: Order, state?: PaymentState | Paym
         total += payment.amount - Math.abs(settledRefundTotal);
     }
     return total;
+}
+
+/** Actual collected/authorized funds cover placed-order prices; refunds have separate unit eligibility. */
+export function totalCoveredByActualPayments(
+    order: Order,
+    states: PaymentState[] = ['Authorized', 'Settled'],
+): number {
+    const payments = order.payments.filter(
+        payment =>
+            states.includes(payment.state) &&
+            !isControlledTestPaymentMethod(payment.method) &&
+            payment.metadata?.public?.testPayment !== true &&
+            payment.metadata?.manualReview?.required !== true,
+    );
+    if (
+        !payments.length ||
+        payments.some(payment => !Number.isSafeInteger(payment.amount) || payment.amount < 0)
+    )
+        return NaN;
+    const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    return Number.isSafeInteger(total) ? total : NaN;
 }
 
 /**

@@ -1,4 +1,6 @@
 import type { ShopApiContext } from './api/client-context';
+import type { ImageStudioApi } from './api/image-studio';
+import type { RealtimeApi } from './api/realtime';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
 import type {
@@ -8,31 +10,17 @@ import type {
     CollectionSummary,
     ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
-    CreateImageGenerationInput,
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
     CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
-    CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
-    FraudRiskAppeal,
     FraudRiskCase,
-    FulfillmentDeliveryEvidence,
-    ImageGenerationJob,
-    ImageModelQuotaStatus,
-    ImageModelRecommendation,
-    ImagePrivateAssetView,
-    ImagePromptQuotaStatus,
-    ImageReferenceMode,
-    ImageStudioConfig,
-    ImageStudioWallet,
     MarketConfig,
     MyReferralOverview,
     Order,
-    OrderConfirmationToken,
-    OrderPage,
     Product,
     ProductSearchPage,
     ProductSearchSort,
@@ -75,9 +63,7 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
-import { ImageStudioApi } from './api/image-studio';
 import { MailQueryApi, type IcloudMailItem, type IcloudQueryResult } from './api/mail-query';
-import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
@@ -98,10 +84,11 @@ export class ShopApi {
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
     private readonly referralsApi: ReferralsApi;
-    private readonly imageStudioApi: ImageStudioApi;
+    private readonly createImageStudioApi: () => Promise<ImageStudioApi>;
     private readonly mailQueryApi: MailQueryApi;
+    readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
-    private readonly realtimeApi: RealtimeApi;
+    private readonly createRealtimeApi: () => Promise<RealtimeApi>;
 
     constructor(
         private readonly market: MarketConfig,
@@ -129,10 +116,17 @@ export class ShopApi {
         this.catalogApi = new CatalogApi(ctx);
         this.accountApi = new AccountApi(ctx);
         this.referralsApi = new ReferralsApi(ctx);
-        this.imageStudioApi = new ImageStudioApi(ctx);
+        this.createImageStudioApi = async () => {
+            const { ImageStudioApi } = await import('./api/image-studio');
+            return new ImageStudioApi(ctx);
+        };
         this.mailQueryApi = new MailQueryApi(ctx);
+        this.watchMailEvents = this.mailQueryApi.watchMailEvents.bind(this.mailQueryApi);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
-        this.realtimeApi = new RealtimeApi(ctx);
+        this.createRealtimeApi = async () => {
+            const { RealtimeApi } = await import('./api/realtime');
+            return new RealtimeApi(ctx);
+        };
     }
 
     enableCartCommands(controller: CartController): void {
@@ -236,43 +230,45 @@ export class ShopApi {
         return this.accountApi.fraudRiskCases(signal);
     }
 
-    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
-        return this.accountApi.appealFraudRiskCase(id, reason);
-    }
+    appealFraudRiskCase: AccountApi['appealFraudRiskCase'] = (...args) =>
+        this.accountApi.appealFraudRiskCase(...args);
 
-    async customerOrders(
-        skip = 0,
-        take = 10,
-        states?: string[],
-        code?: string,
-        signal?: AbortSignal,
-    ): Promise<OrderPage> {
-        return this.accountApi.customerOrders(skip, take, states, code, signal);
-    }
+    customerOrders: AccountApi['customerOrders'] = (...args) => this.accountApi.customerOrders(...args);
 
-    async customerOrderCounts(signal?: AbortSignal): Promise<CustomerOrderCounts> {
-        return this.accountApi.customerOrderCounts(signal);
-    }
+    customerOrderCounts: AccountApi['customerOrderCounts'] = (...args) =>
+        this.accountApi.customerOrderCounts(...args);
 
-    async order(id: string, signal?: AbortSignal): Promise<Order | null> {
-        return this.accountApi.order(id, signal);
-    }
+    order: AccountApi['order'] = (...args) => this.accountApi.order(...args);
 
-    async orderByConfirmationToken(token: string, signal?: AbortSignal): Promise<Order | null> {
-        return this.accountApi.orderByConfirmationToken(token, signal);
-    }
+    digitalDeliveryStatuses: AccountApi['digitalDeliveryStatuses'] = (...args) =>
+        this.accountApi.digitalDeliveryStatuses(...args);
 
-    async createOrderConfirmationToken(): Promise<OrderConfirmationToken> {
-        return this.accountApi.createOrderConfirmationToken();
-    }
+    claimDigitalDelivery: AccountApi['claimDigitalDelivery'] = (...args) =>
+        this.accountApi.claimDigitalDelivery(...args);
 
-    async cancelMyAuthorizedOrder(orderId: string, reason: string): Promise<Order> {
-        return this.accountApi.cancelMyAuthorizedOrder(orderId, reason);
-    }
+    orderAdditionalPaymentQuote: AccountApi['orderAdditionalPaymentQuote'] = (...args) =>
+        this.accountApi.orderAdditionalPaymentQuote(...args);
 
-    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
-        return this.accountApi.confirmFulfillmentDelivery(fulfillmentId);
-    }
+    addPaymentToModifiedOrder: AccountApi['addPaymentToModifiedOrder'] = (...args) =>
+        this.accountApi.addPaymentToModifiedOrder(...args);
+
+    orderByConfirmationToken: AccountApi['orderByConfirmationToken'] = (...args) =>
+        this.accountApi.orderByConfirmationToken(...args);
+
+    createModifiedOrderUsdtQuote: AccountApi['createModifiedOrderUsdtQuote'] = (...args) =>
+        this.accountApi.createModifiedOrderUsdtQuote(...args);
+
+    useModifiedOrderReferralBalance: AccountApi['useModifiedOrderReferralBalance'] = (...args) =>
+        this.accountApi.useModifiedOrderReferralBalance(...args);
+
+    createOrderConfirmationToken: AccountApi['createOrderConfirmationToken'] = (...args) =>
+        this.accountApi.createOrderConfirmationToken(...args);
+
+    cancelMyAuthorizedOrder: AccountApi['cancelMyAuthorizedOrder'] = (...args) =>
+        this.accountApi.cancelMyAuthorizedOrder(...args);
+
+    confirmFulfillmentDelivery: AccountApi['confirmFulfillmentDelivery'] = (...args) =>
+        this.accountApi.confirmFulfillmentDelivery(...args);
 
     async afterSalesRequests(signal?: AbortSignal): Promise<AfterSalesRequest[]> {
         return this.contentReviewsApi.afterSalesRequests(signal);
@@ -350,67 +346,52 @@ export class ShopApi {
         return this.referralsApi.useReferralBalance(amount);
     }
 
-    async imageStudioConfig(signal?: AbortSignal): Promise<ImageStudioConfig> {
-        return this.imageStudioApi.imageStudioConfig(signal);
-    }
+    imageStudioConfig: ImageStudioApi['imageStudioConfig'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioConfig(...args);
 
-    previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = (...args) =>
-        this.imageStudioApi.previewImageGenerationPrompt(...args);
+    previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = async (...args) =>
+        (await this.createImageStudioApi()).previewImageGenerationPrompt(...args);
 
-    async imageStudioBalance(signal?: AbortSignal): Promise<number> {
-        return this.imageStudioApi.imageStudioBalance(signal);
-    }
+    imageStudioBalance: ImageStudioApi['imageStudioBalance'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioBalance(...args);
 
-    async imageStudioWallet(signal?: AbortSignal): Promise<ImageStudioWallet> {
-        return this.imageStudioApi.imageStudioWallet(signal);
-    }
+    imageStudioWallet: ImageStudioApi['imageStudioWallet'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioWallet(...args);
 
-    async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {
-        return this.imageStudioApi.imagePromptQuotaStatus(signal);
-    }
+    imagePromptQuotaStatus: ImageStudioApi['imagePromptQuotaStatus'] = async (...args) =>
+        (await this.createImageStudioApi()).imagePromptQuotaStatus(...args);
 
-    async imageModelQuotaStatus(signal?: AbortSignal): Promise<ImageModelQuotaStatus[]> {
-        return this.imageStudioApi.imageModelQuotaStatus(signal);
-    }
+    imageModelQuotaStatus: ImageStudioApi['imageModelQuotaStatus'] = async (...args) =>
+        (await this.createImageStudioApi()).imageModelQuotaStatus(...args);
 
-    optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = (...args) =>
-        this.imageStudioApi.optimizeImagePrompt(...args);
+    optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = async (...args) =>
+        (await this.createImageStudioApi()).optimizeImagePrompt(...args);
 
-    async recommendImageModel(
-        prompt: string,
-        referenceMode: ImageReferenceMode,
-    ): Promise<ImageModelRecommendation> {
-        return this.imageStudioApi.recommendImageModel(prompt, referenceMode);
-    }
+    recommendImageModel: ImageStudioApi['recommendImageModel'] = async (...args) =>
+        (await this.createImageStudioApi()).recommendImageModel(...args);
 
-    async uploadImageReference(file: File, termsAccepted: boolean): Promise<ImagePrivateAssetView> {
-        return this.imageStudioApi.uploadImageReference(file, termsAccepted);
-    }
+    uploadImageReference: ImageStudioApi['uploadImageReference'] = async (...args) =>
+        (await this.createImageStudioApi()).uploadImageReference(...args);
 
-    async createImageGeneration(input: CreateImageGenerationInput): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.createImageGeneration(input);
-    }
+    createImageGeneration: ImageStudioApi['createImageGeneration'] = async (...args) =>
+        (await this.createImageStudioApi()).createImageGeneration(...args);
 
-    async myImageGenerationJob(id: string, signal?: AbortSignal): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.myImageGenerationJob(id, signal);
-    }
+    myImageGenerationJob: ImageStudioApi['myImageGenerationJob'] = async (...args) =>
+        (await this.createImageStudioApi()).myImageGenerationJob(...args);
 
-    myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = (...args) =>
-        this.imageStudioApi.myImageGenerationJobs(...args);
-    releaseImageReference: ImageStudioApi['releaseImageReference'] = (...args) =>
-        this.imageStudioApi.releaseImageReference(...args);
+    myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = async (...args) =>
+        (await this.createImageStudioApi()).myImageGenerationJobs(...args);
+    releaseImageReference: ImageStudioApi['releaseImageReference'] = async (...args) =>
+        (await this.createImageStudioApi()).releaseImageReference(...args);
 
-    async cancelQueuedImageGeneration(id: string): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.cancelQueuedImageGeneration(id);
-    }
+    cancelQueuedImageGeneration: ImageStudioApi['cancelQueuedImageGeneration'] = async (...args) =>
+        (await this.createImageStudioApi()).cancelQueuedImageGeneration(...args);
 
-    async deleteMyGeneratedImage(outputId: string): Promise<boolean> {
-        return this.imageStudioApi.deleteMyGeneratedImage(outputId);
-    }
+    deleteMyGeneratedImage: ImageStudioApi['deleteMyGeneratedImage'] = async (...args) =>
+        (await this.createImageStudioApi()).deleteMyGeneratedImage(...args);
 
-    async deleteMyImageGenerationJob(id: string): Promise<boolean> {
-        return this.imageStudioApi.deleteMyImageGenerationJob(id);
-    }
+    deleteMyImageGenerationJob: ImageStudioApi['deleteMyImageGenerationJob'] = async (...args) =>
+        (await this.createImageStudioApi()).deleteMyImageGenerationJob(...args);
 
     async recordStorefrontVisit(): Promise<boolean> {
         return this.referralsApi.recordStorefrontVisit();
@@ -621,7 +602,10 @@ export class ShopApi {
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
     ): Promise<void> {
-        return this.realtimeApi.watchRealtime(onEvent, signal);
+        if (signal.aborted) return;
+        const realtimeApi = await this.createRealtimeApi();
+        if (signal.aborted) return;
+        return realtimeApi.watchRealtime(onEvent, signal);
     }
 
     private async request<T>(

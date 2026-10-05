@@ -83,7 +83,8 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                         aria-labelledby={titleId}
                         aria-describedby={descriptionId}
                         tabIndex={-1}
-                        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"
+                        className="admin-dialog-surface w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"
+                        data-mobile-presentation="compact"
                     >
                         <form
                             onSubmit={event => {

@@ -1,7 +1,11 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { describe, expect, it } from 'vitest';
 
-import { calculateCatalogProfitReport, type ProfitOrderSource } from './catalog-profit.service';
+import {
+    calculateCatalogProfitReport,
+    orderProfitExpenseApplicability,
+    type ProfitOrderSource,
+} from './catalog-profit.service';
 
 const placedAt = new Date('2026-09-10T08:00:00.000Z');
 
@@ -15,7 +19,13 @@ function order(overrides: Partial<ProfitOrderSource> = {}): ProfitOrderSource {
         totalWithTax: 10_000,
         discountWithTax: 1_000,
         shippingWithTax: 500,
-        lines: [{ productVariantId: 'variant-1', quantity: 2 }],
+        lines: [
+            {
+                productVariantId: 'variant-1',
+                quantity: 2,
+                customFields: { fulfillmentTypeSnapshot: 'physical' },
+            },
+        ],
         payments: [
             {
                 method: 'card-payment',
@@ -29,6 +39,135 @@ function order(overrides: Partial<ProfitOrderSource> = {}): ProfitOrderSource {
 }
 
 describe('catalog profit report calculation', () => {
+    const costs = new Map([
+        ['variant-1', [{ effectiveAt: new Date('2026-09-01T00:00:00.000Z'), costMicrounits: 20_000 }]],
+    ]);
+    const digitalLine = {
+        productVariantId: 'variant-1',
+        quantity: 2,
+        customFields: { fulfillmentTypeSnapshot: 'digital' },
+    };
+
+    it('calculates digital net profit without a logistics field, while leaving legacy expenses untouched', () => {
+        const legacyExpense = {
+            carrierShippingCostMicrounits: 9_000,
+            paymentFeeMicrounits: 2_000,
+            chargebackMicrounits: 0,
+        };
+        const result = calculateCatalogProfitReport(
+            [order({ lines: [digitalLine] })],
+            costs,
+            new Map([['order-1', legacyExpense]]),
+        );
+        expect(result.items[0]).toMatchObject({
+            fulfillmentType: 'DIGITAL',
+            carrierShippingCostApplicable: false,
+            carrierShippingCostMicrounits: null,
+            netProfitMicrounits: 48_000,
+        });
+        expect(result.summary).toMatchObject({
+            carrierShippingCostApplicable: false,
+            carrierShippingCostMicrounits: null,
+            missingCarrierShippingCostOrderCount: 0,
+            netProfitMicrounits: 48_000,
+        });
+        expect(legacyExpense.carrierShippingCostMicrounits).toBe(9_000);
+    });
+
+    it('sums digital and physical orders using logistics only where applicable', () => {
+        const result = calculateCatalogProfitReport(
+            [order({ lines: [digitalLine] }), order({ id: 'order-2' })],
+            costs,
+            new Map([
+                [
+                    'order-1',
+                    {
+                        carrierShippingCostMicrounits: null,
+                        paymentFeeMicrounits: 2000,
+                        chargebackMicrounits: 0,
+                    },
+                ],
+                [
+                    'order-2',
+                    { carrierShippingCostMicrounits: 5000, paymentFeeMicrounits: 0, chargebackMicrounits: 0 },
+                ],
+            ]),
+        );
+        expect(result.summary).toMatchObject({
+            carrierShippingCostApplicable: true,
+            carrierShippingCostMicrounits: 5000,
+            missingCarrierShippingCostOrderCount: 0,
+            netProfitMicrounits: 93_000,
+        });
+    });
+
+    it('keeps an unknown payment fee unknown even when digital logistics is not applicable', () => {
+        const result = calculateCatalogProfitReport(
+            [order({ lines: [digitalLine] })],
+            costs,
+            new Map([
+                [
+                    'order-1',
+                    {
+                        carrierShippingCostMicrounits: null,
+                        paymentFeeMicrounits: null,
+                        chargebackMicrounits: 0,
+                    },
+                ],
+            ]),
+        );
+        expect(result.summary).toMatchObject({
+            missingCarrierShippingCostOrderCount: 0,
+            missingPaymentFeeOrderCount: 1,
+            paymentFeeMicrounits: null,
+            netProfitMicrounits: null,
+        });
+    });
+
+    it('requires logistics for a mixed order and for legacy lines with no reliable type', () => {
+        const expenses = new Map([
+            [
+                'order-1',
+                { carrierShippingCostMicrounits: null, paymentFeeMicrounits: 0, chargebackMicrounits: 0 },
+            ],
+        ]);
+        for (const lines of [
+            [digitalLine, { ...digitalLine, customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+            [{ productVariantId: 'variant-1', quantity: 2 }],
+        ]) {
+            const result = calculateCatalogProfitReport([order({ lines })], costs, expenses);
+            expect(result.summary).toMatchObject({
+                carrierShippingCostApplicable: true,
+                missingCarrierShippingCostOrderCount: 1,
+                netProfitMicrounits: null,
+            });
+        }
+    });
+
+    it('honours historical snapshots over changed product types, including cancelled line quantities', () => {
+        const changedProduct = {
+            ...digitalLine,
+            quantity: 0,
+            productVariant: { customFields: { fulfillmentType: 'physical' } },
+        };
+        expect(orderProfitExpenseApplicability({ lines: [changedProduct] })).toEqual({
+            fulfillmentType: 'DIGITAL',
+            carrierShippingCostApplicable: false,
+        });
+        const missingSnapshot = {
+            customFields: {},
+            productVariant: { customFields: { fulfillmentType: 'digital' } },
+        };
+        expect(orderProfitExpenseApplicability({ lines: [missingSnapshot] })).toEqual({
+            fulfillmentType: 'UNKNOWN',
+            carrierShippingCostApplicable: true,
+        });
+        expect(orderProfitExpenseApplicability({ lines: [] })).toEqual({
+            fulfillmentType: 'UNKNOWN',
+            carrierShippingCostApplicable: true,
+        });
+    });
+
     it('subtracts settled refunds and historical product cost without double-counting shipping', () => {
         const result = calculateCatalogProfitReport(
             [order()],

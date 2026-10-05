@@ -1,18 +1,24 @@
+import { InventoryLot, planFefoAllocation } from '@vendure/catalog-management-plugin';
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     AvailableStock,
+    idsAreEqual,
     LocationWithQuantity,
     MultiChannelStockLocationStrategy,
     OrderLine,
+    Product,
     ProductVariant,
     RequestContext,
     StockLevel,
     StockLocation,
-    idsAreEqual,
+    UserInputError,
 } from '@vendure/core';
 
+import { DigitalVariantConfig } from './entities/digital-product.entity';
+import { PhysicalReturnReceipt } from './entities/physical-return-receipt.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
+import { getOrderLineFulfillmentType } from './fulfillment-classification';
 
 /**
  * Keeps Vendure's normal multi-channel stock routing while allowing a loose-unit
@@ -20,12 +26,76 @@ import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
  * The physical stock transfer itself happens only during payment confirmation.
  */
 export class PackagingStockLocationStrategy extends MultiChannelStockLocationStrategy {
+    async supportsStockLocations(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        operation: 'flow' | 'create' | 'adjust' = 'flow',
+    ): Promise<boolean> {
+        const product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId);
+        if (product.customFields.fulfillmentType !== 'digital') return true;
+        if (operation !== 'flow') return false;
+        const migrated = await this.connection.getRepository(ctx, DigitalVariantConfig).exists({
+            where: { channelId: ctx.channelId, productVariantId: variant.id, migrationState: 'ACTIVE' },
+        });
+        if (migrated) return false;
+        // Existing stores retain their recorded quantities until an explicit, audited cutover.
+        const oldStocks = await this.connection
+            .getRepository(ctx, StockLevel)
+            .find({ where: { productVariantId: variant.id } });
+        return oldStocks.some(stock => stock.stockOnHand !== 0 || stock.stockAllocated !== 0);
+    }
+
+    private async digitalWithoutWarehouse(ctx: RequestContext, line: OrderLine): Promise<boolean> {
+        if (getOrderLineFulfillmentType(line) !== 'digital') return false;
+        const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, line.productVariantId);
+        return !(await this.supportsStockLocations(ctx, variant));
+    }
+
+    async forSale(ctx: RequestContext, locations: StockLocation[], line: OrderLine, quantity: number) {
+        return (await this.digitalWithoutWarehouse(ctx, line))
+            ? []
+            : super.forSale(ctx, locations, line, quantity);
+    }
+    async forRelease(ctx: RequestContext, locations: StockLocation[], line: OrderLine, quantity: number) {
+        return (await this.digitalWithoutWarehouse(ctx, line))
+            ? []
+            : super.forRelease(ctx, locations, line, quantity);
+    }
+    async forCancellation(
+        ctx: RequestContext,
+        locations: StockLocation[],
+        line: OrderLine,
+        quantity: number,
+    ) {
+        if (await this.digitalWithoutWarehouse(ctx, line)) return [];
+        if (getOrderLineFulfillmentType(line) === 'physical') {
+            const receipt = await this.connection.getRepository(ctx, PhysicalReturnReceipt).findOne({
+                where: {
+                    channelId: ctx.channelId,
+                    orderLineId: line.id,
+                    quantity,
+                    quality: 'GOOD',
+                    state: 'RECORDED',
+                },
+            });
+            if (!receipt)
+                throw new UserInputError('已发货实物必须先在售后工单完成退货验收，退款不会自动回库');
+            const location = locations.find(item => String(item.id) === String(receipt.stockLocationId));
+            if (!location) throw new UserInputError('验收仓库不属于当前店铺');
+            return [{ location, quantity }];
+        }
+        return super.forCancellation(ctx, locations, line, quantity);
+    }
     async getAvailableStock(
         ctx: RequestContext,
         productVariantId: ID,
         stockLevels: StockLevel[],
     ): Promise<AvailableStock> {
-        const unitStock = await super.getAvailableStock(ctx, productVariantId, stockLevels);
+        const unitStock = await super.getAvailableStock(
+            ctx,
+            productVariantId,
+            await this.effectiveStockLevels(ctx, productVariantId, stockLevels),
+        );
         const rule = await this.connection.getRepository(ctx, ProductPackagingRule).findOne({
             where: {
                 channelId: ctx.channelId,
@@ -42,7 +112,11 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         const packageLevels = await this.connection.getRepository(ctx, StockLevel).find({
             where: { productVariantId: rule.packageVariantId },
         });
-        const packageStock = await super.getAvailableStock(ctx, rule.packageVariantId, packageLevels);
+        const packageStock = await super.getAvailableStock(
+            ctx,
+            rule.packageVariantId,
+            await this.effectiveStockLevels(ctx, rule.packageVariantId, packageLevels),
+        );
         const settings = await this.globalSettingsService.getSettings(ctx);
         const packageThreshold = Math.max(
             rule.packageVariant.useGlobalOutOfStockThreshold
@@ -58,41 +132,62 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         };
     }
 
+    private async effectiveStockLevels(
+        ctx: RequestContext,
+        variantId: ID,
+        levels: StockLevel[],
+    ): Promise<StockLevel[]> {
+        const repository = this.connection.getRepository(ctx, InventoryLot);
+        const lots =
+            repository.manager?.queryRunner?.isTransactionActive &&
+            !['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type)
+                ? await repository
+                      .createQueryBuilder('lot')
+                      .where('lot.variantId = :variantId', { variantId })
+                      .orderBy('lot.id', 'ASC')
+                      .setLock('pessimistic_write')
+                      .getMany()
+                : await repository.find({ where: { variantId } });
+        const now = Date.now();
+        return levels.map(level => {
+            const local = lots.filter(lot => String(lot.stockLocationId) === String(level.stockLocationId));
+            if (!local.length) return level;
+            const effective = planFefoAllocation(local, Number.MAX_SAFE_INTEGER, new Date(now)).reduce(
+                (sum, item) => sum + item.quantity,
+                0,
+            );
+            return Object.assign(new StockLevel({}), level, {
+                stockOnHand: Math.min(level.stockOnHand, effective),
+            });
+        });
+    }
+
     async forAllocation(
         ctx: RequestContext,
         stockLocations: StockLocation[],
         orderLine: OrderLine,
         quantity: number,
     ): Promise<LocationWithQuantity[]> {
-        const packagingRule = await this.connection.getRepository(ctx, ProductPackagingRule).findOne({
-            where: [
-                {
-                    channelId: ctx.channelId,
-                    unitVariantId: orderLine.productVariantId,
-                    enabled: true,
-                    autoUnpack: true,
-                },
-                {
-                    channelId: ctx.channelId,
-                    packageVariantId: orderLine.productVariantId,
-                    enabled: true,
-                    autoUnpack: true,
-                },
-            ],
-        });
-        if (!packagingRule) {
-            return super.forAllocation(ctx, stockLocations, orderLine, quantity);
-        }
-
-        const [variant, settings, stockLevels] = await Promise.all([
+        if (await this.digitalWithoutWarehouse(ctx, orderLine)) return [];
+        const repository = this.connection.getRepository(ctx, StockLevel);
+        const stockLevels =
+            repository.manager?.queryRunner?.isTransactionActive &&
+            !['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type)
+                ? await repository
+                      .createQueryBuilder('stock')
+                      .where('stock.productVariantId = :id', { id: orderLine.productVariantId })
+                      .orderBy('stock.stockLocationId', 'ASC')
+                      .setLock('pessimistic_write')
+                      .getMany()
+                : await repository.find({
+                      where: { productVariantId: orderLine.productVariantId },
+                      loadEagerRelations: false,
+                  });
+        const [variant, settings] = await Promise.all([
             this.connection.getEntityOrThrow(ctx, ProductVariant, orderLine.productVariantId, {
                 loadEagerRelations: false,
             }),
             this.globalSettingsService.getSettings(ctx),
-            this.connection.getRepository(ctx, StockLevel).find({
-                where: { productVariantId: orderLine.productVariantId },
-                loadEagerRelations: false,
-            }),
         ]);
         const inventoryNotTracked =
             variant.trackInventory === GlobalFlag.FALSE ||
@@ -114,7 +209,10 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
             if (!stockLevel) {
                 continue;
             }
-            const physicalAvailable = Math.max(stockLevel.stockOnHand - stockLevel.stockAllocated, 0);
+            const effectiveLevels = await this.effectiveStockLevels(ctx, orderLine.productVariantId, [
+                stockLevel,
+            ]);
+            const physicalAvailable = Math.max(effectiveLevels[0].stockOnHand - stockLevel.stockAllocated, 0);
             const reservedHere = Math.min(stockToReserve, physicalAvailable);
             stockToReserve -= reservedHere;
             let available = physicalAvailable - reservedHere;
@@ -131,6 +229,7 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
                 break;
             }
         }
+        if (quantityRemaining > 0) throw new UserInputError('实物可售库存不足，请补货后重新交付');
         return locations;
     }
 }

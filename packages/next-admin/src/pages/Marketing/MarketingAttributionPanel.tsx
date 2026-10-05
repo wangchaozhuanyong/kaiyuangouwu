@@ -145,7 +145,13 @@ export function MarketingAttributionPanel({ currencyCode }: { currencyCode: stri
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="overflow-x-auto">
+                <div
+                    tabIndex={0}
+                    role="region"
+                    aria-label="渠道归因对比"
+                    className="admin-comparison-scroll overflow-x-auto"
+                >
+                    <p className="admin-mobile-table-hint">左右滑动查看完整渠道归因对比</p>
                     <table className="min-w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
                             <tr>

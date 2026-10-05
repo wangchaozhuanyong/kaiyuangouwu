@@ -245,7 +245,7 @@ export function StoreAllocationMatrixModule() {
                         </label>
                     </div>
                     <div className="overflow-auto">
-                        <table className="w-full text-left text-sm">
+                        <table className="admin-mobile-record-table w-full text-left text-sm">
                             <thead>
                                 <tr className="border-b border-slate-100 text-slate-500">
                                     <th className="py-3">选择</th>
@@ -257,7 +257,7 @@ export function StoreAllocationMatrixModule() {
                             <tbody>
                                 {data?.items.map(p => (
                                     <tr key={p.id} className="border-b border-slate-100">
-                                        <td className="py-3">
+                                        <td data-label="选择" className="py-3">
                                             <AdminInput
                                                 aria-label={`选择 ${p.name}`}
                                                 type="checkbox"
@@ -275,7 +275,7 @@ export function StoreAllocationMatrixModule() {
                                                 }}
                                             />
                                         </td>
-                                        <td>
+                                        <td data-label="商品">
                                             {p.name}
                                             {selected.includes(p.id) && (
                                                 <div className="mt-2 flex flex-wrap gap-3">
@@ -315,11 +315,11 @@ export function StoreAllocationMatrixModule() {
                                                 </AdminButton>
                                             )}
                                         </td>
-                                        <td>
+                                        <td data-label="维护店铺">
                                             {data.channels.find(s => s.id === p.ownerChannelId)
                                                 ?.displayName ?? '归属待核对'}
                                         </td>
-                                        <td>
+                                        <td data-label="销售店铺">
                                             {p.channelIds
                                                 .map(
                                                     id =>

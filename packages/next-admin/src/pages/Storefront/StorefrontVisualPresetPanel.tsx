@@ -153,7 +153,7 @@ export function StorefrontVisualPresetPanel() {
                         topic="storefront.decoration"
                         title="店铺皮肤"
                         description={
-                            '一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。 经典皮肤保留品牌身份色，并自动派生可读的界面强调色。'
+                            '一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。同一种皮肤统一按钮、选中态等控件配色，保留各店图片、Logo和品牌文案。'
                         }
                     />
                 </h2>
@@ -217,7 +217,7 @@ export function StorefrontVisualPresetPanel() {
             >
                 {mutation.loading ? '正在保存…' : '保存到当前店铺'}
             </AdminButton>
-            <div className="mt-3 flex gap-4 text-sm">
+            <div className="mt-3 flex flex-wrap gap-3 text-sm">
                 <AdminButton
                     type="button"
                     disabled={!consistent || busy}

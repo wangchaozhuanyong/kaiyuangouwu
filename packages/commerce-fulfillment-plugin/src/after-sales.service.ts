@@ -399,11 +399,29 @@ export class AfterSalesService {
             if (!linkedRefund) {
                 throw new UserInputError('退款不存在、尚未成功或不属于当前售后订单');
             }
-            if (linkedRefund.total < approvedAmount) {
+            const groupKey =
+                linkedRefund.metadata?.refundRequest?.modificationGroupKey ??
+                linkedRefund.metadata?.refundRequest?.quantityGroup?.key;
+            const group = groupKey
+                ? (
+                      await this.connection.getRepository(ctx, Refund).find({
+                          where: {
+                              payment: { order: { id: request.orderId, salesChannelId: ctx.channelId } },
+                          },
+                      })
+                  ).filter(
+                      refund =>
+                          (refund.metadata?.refundRequest?.modificationGroupKey ??
+                              refund.metadata?.refundRequest?.quantityGroup?.key) === groupKey,
+                  )
+                : [linkedRefund];
+            if (!group.length || group.some(refund => refund.state !== 'Settled'))
+                throw new UserInputError('同一退款的各来源款项尚未全部退回，请处理原退款记录后再结束售后');
+            if (group.reduce((sum, refund) => sum + refund.total, 0) < approvedAmount) {
                 throw new UserInputError('所选成功退款金额小于售后通过金额');
             }
             const alreadyLinked = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
-                where: { refundId: linkedRefund.id },
+                where: { refundId: In(group.map(refund => refund.id)) },
             });
             if (alreadyLinked && String(alreadyLinked.id) !== String(request.id)) {
                 throw new UserInputError('这笔退款已经关联到其他售后申请');

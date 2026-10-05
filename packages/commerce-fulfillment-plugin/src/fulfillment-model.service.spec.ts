@@ -25,6 +25,7 @@ describe('FulfillmentModelService channel mode validation', () => {
             eventBus as any,
             connection as any,
             commerceModeService as any,
+            { config: vi.fn().mockResolvedValue(null) } as any,
         );
         await service.onApplicationBootstrap();
         const handler = handlers.get('commerce-fulfillment-validate-channel-mode');
@@ -60,4 +61,54 @@ describe('FulfillmentModelService channel mode validation', () => {
         ).rejects.toThrow('经营模式切换被阻止');
         expect(commerceModeService.conflicts).toHaveBeenCalledOnce();
     });
+});
+
+describe('digital variant physical-field boundary', () => {
+    function policy() {
+        const product = { id: 'product', customFields: { fulfillmentType: 'digital' }, channels: [] };
+        const repository = { findOne: vi.fn().mockResolvedValue(product), save: vi.fn() };
+        const service = Object.assign(Object.create(FulfillmentModelService.prototype), {
+            connection: { getRepository: vi.fn().mockReturnValue(repository) },
+            digitalProducts: { initialize: vi.fn(), config: vi.fn().mockResolvedValue(null) },
+            applyProductPolicy: vi.fn(),
+        });
+        const variant = {
+            id: 'variant',
+            productId: 'product',
+            customFields: { packageQuantity: 1, purchaseUnit: '件' },
+        };
+        return { service, variant, repository };
+    }
+
+    it('normalizes saved physical defaults to N/A for an omitted physical input', async () => {
+        const { service, variant, repository } = policy();
+        await service.syncVariantPolicy({
+            type: 'created',
+            ctx: {},
+            entity: [variant],
+            input: [{ productId: 'product', customFields: { digitalDeliveryMode: 'manual_service' } }],
+        });
+        expect(variant.customFields).toMatchObject({
+            packageQuantity: null,
+            purchaseUnit: null,
+            barcode: null,
+        });
+        expect(repository.save).toHaveBeenCalledWith(variant, { reload: false });
+    });
+
+    it.each([{ customFields: { packageQuantity: 1 } }, { stockOnHand: 0 }])(
+        'still rejects an explicit physical or warehouse input %j',
+        async input => {
+            const { service, variant, repository } = policy();
+            await expect(
+                service.syncVariantPolicy({
+                    type: 'created',
+                    ctx: {},
+                    entity: [variant],
+                    input: [{ productId: 'product', ...input }],
+                }),
+            ).rejects.toThrow('数字商品不支持');
+            expect(repository.save).not.toHaveBeenCalled();
+        },
+    );
 });

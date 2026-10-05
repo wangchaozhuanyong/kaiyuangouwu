@@ -1,4 +1,5 @@
 import { AdminButton, AdminInput, AdminSelect } from '../components/AdminControls';
+import { AdminField } from '../components/AdminField';
 import {
     ADMIN_NAV_SECTIONS,
     CORE_ADMIN_NAV_ITEMS as coreNavItems,
@@ -76,6 +77,7 @@ import {
     type AppShellCommerceContextData,
     type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
+import { useMobileLayout } from '../hooks/use-mobile-layout';
 import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { pendingAdminWrites } from '../runtime/admin-resource-events';
@@ -211,6 +213,7 @@ function RouteLoadingFallback() {
 }
 
 export function AppShell() {
+    const isMobileLayout = useMobileLayout();
     const location = useLocation();
     const routerNavigate = useNavigate();
     const { preference: themePreference, resolvedTheme, setPreference: setThemePreference } = useTheme();
@@ -439,8 +442,10 @@ export function AppShell() {
         };
     }, [tabLayout, location.pathname]);
 
-    const visibleTabs = tabs.filter(tab => visibleTabPaths.includes(tab.path));
-    const overflowTabs = tabs.filter(tab => !visibleTabPaths.includes(tab.path));
+    const visibleTabs = tabs.filter(tab =>
+        isMobileLayout ? tab.path === location.pathname : visibleTabPaths.includes(tab.path),
+    );
+    const overflowTabs = isMobileLayout ? tabs : tabs.filter(tab => !visibleTabPaths.includes(tab.path));
 
     // 全局 ⌘K 键盘快捷键与方向键/回车监听
     // 当前路由是外部导航状态，需要同步手风琴分组和已打开标签。
@@ -482,12 +487,12 @@ export function AppShell() {
             window.requestAnimationFrame(() => {
                 sidebarRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus();
             });
-        } else if (wasMobileSidebarOpenRef.current) {
+        } else if (wasMobileSidebarOpenRef.current && !isCmdKOpen) {
             sidebarToggleRef.current?.focus();
         }
 
         wasMobileSidebarOpenRef.current = isSidebarOpen;
-    }, [isDesktop, isSidebarOpen]);
+    }, [isDesktop, isSidebarOpen, isCmdKOpen]);
 
     useLayoutEffect(() => {
         // 扩展页面可以挂在与 URL 前缀不同的导航分组，应优先遵循注册信息。
@@ -642,7 +647,10 @@ export function AppShell() {
                 .map(route => ({
                     path: route.path,
                     title: route.navItem?.label ?? route.title,
-                    section: route.navItem?.sectionId ?? 'settings',
+                    section:
+                        route.path === '/operations/manual-digital-delivery'
+                            ? 'digital-delivery'
+                            : (route.navItem?.sectionId ?? 'settings'),
                     order:
                         route.path === '/storefront/business-services-copy'
                             ? 1000
@@ -710,7 +718,7 @@ export function AppShell() {
         `pl-11 pr-3 py-2 rounded text-xs transition-colors block ${isActive ? 'text-blue-400 font-bold bg-white/5' : 'text-slate-400 hover:text-white hover:bg-white/5'}`;
 
     return (
-        <div className="flex h-screen overflow-hidden bg-slate-50">
+        <div className="admin-app-shell flex h-screen overflow-hidden bg-slate-50">
             <a
                 href="#main-content"
                 className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white shadow-lg transition-transform focus:translate-y-0"
@@ -734,9 +742,9 @@ export function AppShell() {
                 inert={!isDesktop && !isSidebarOpen ? true : undefined}
                 className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out xl:relative xl:z-20 ${isSidebarOpen ? 'translate-x-0 xl:w-64' : '-translate-x-full xl:w-16 xl:translate-x-0'}`}
             >
-                <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
-                    <div className="flex items-center gap-2">
-                        <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+                <div className="flex h-auto min-h-14 shrink-0 items-center justify-center border-b border-white/10 px-3 py-3 xl:h-14 xl:px-0 xl:py-0">
+                    <div className="flex min-w-0 max-w-full items-center gap-2">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
                             {!isPlatformContext && <span aria-hidden="true">{adminBrandName.charAt(0)}</span>}
                             <img
                                 key={storeLogoUrl ?? 'platform-admin'}
@@ -749,7 +757,7 @@ export function AppShell() {
                             />
                         </div>
                         {isSidebarOpen && (
-                            <span className="font-bold text-white text-base tracking-wide">
+                            <span className="min-w-0 break-words font-bold text-white text-base tracking-wide">
                                 {adminBrandName}
                             </span>
                         )}
@@ -767,6 +775,18 @@ export function AppShell() {
                         }
                     }}
                 >
+                    <AdminButton
+                        type="button"
+                        className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-slate-300 md:hidden"
+                        onClick={() => {
+                            setIsSidebarOpen(false);
+                            setIsCmdKOpen(true);
+                            setCmdSelectedIndex(0);
+                        }}
+                    >
+                        <Search className="h-4 w-4" aria-hidden="true" />
+                        {displayLanguage === 'en' ? 'Search functions' : '搜索管理功能'}
+                    </AdminButton>
                     {ADMIN_NAV_SECTIONS.map(([section, label, iconName]) => {
                         const items = navigationItems.filter(item => item.section === section);
                         if (!items.length) return null;
@@ -777,6 +797,8 @@ export function AppShell() {
                                 ? {
                                       dashboard: 'Website overview',
                                       catalog: 'Products',
+                                      'digital-delivery': 'Digital delivery',
+                                      'physical-inventory': 'Physical inventory',
                                       sales: 'Orders',
                                       'after-sales': 'After-sales',
                                       customers: 'Customers',
@@ -871,9 +893,16 @@ export function AppShell() {
                                     channelToken={channelData.activeChannel.token}
                                 />
                             )}
-                        <label className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600">
-                            <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
-                            <span className="sr-only lg:not-sr-only">当前店铺</span>
+                        <AdminField
+                            className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600"
+                            label={
+                                <>
+                                    <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+                                    <span className="sr-only lg:not-sr-only">当前店铺</span>
+                                </>
+                            }
+                        >
+                            {' '}
                             <AdminSelect
                                 value={channelData?.activeChannel.token ?? ''}
                                 onChange={event => void handleChannelChange(event.target.value)}
@@ -897,7 +926,7 @@ export function AppShell() {
                                     </option>
                                 ))}
                             </AdminSelect>
-                        </label>
+                        </AdminField>
                         <AdminButton
                             type="button"
                             className="relative hidden w-64 items-center rounded-lg bg-slate-100 py-1.5 pl-9 pr-2 text-xs text-slate-400 transition-colors hover:bg-blue-50 lg:flex"
@@ -918,12 +947,12 @@ export function AppShell() {
                                 setIsCmdKOpen(true);
                                 setCmdSelectedIndex(0);
                             }}
-                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 lg:hidden"
+                            className="hidden rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 md:flex lg:hidden"
                             aria-label="搜索管理功能"
                         >
                             <Search className="h-4 w-4" />
                         </AdminButton>
-                        <ThemeToggleButton />
+                        <ThemeToggleButton className="hidden md:flex" />
                         {/* 右上角用户菜单 (包含个人中心与退出) */}
                         <div className="relative">
                             <AdminButton
@@ -1057,7 +1086,7 @@ export function AppShell() {
                 </header>
 
                 {/* 标签栏 */}
-                <div className="relative z-20 h-10 shrink-0 select-none border-b border-t border-slate-200 bg-white flex items-center justify-between">
+                <div className="admin-tab-strip relative z-20 h-10 shrink-0 select-none border-b border-t border-slate-200 bg-white flex items-center justify-between">
                     {/* 左侧标签列表 */}
                     <div
                         ref={tabListRef}
@@ -1068,9 +1097,13 @@ export function AppShell() {
                             return (
                                 <div
                                     key={tab.path}
-                                    className={`inline-flex shrink-0 items-center rounded-md border text-xs transition-colors ${isActive ? 'border-blue-200 bg-blue-50 font-bold text-blue-600 shadow-2xs' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                    className={`admin-tab-item inline-flex shrink-0 items-center rounded-md border text-xs transition-colors ${isActive ? 'border-blue-200 bg-blue-50 font-bold text-blue-600 shadow-2xs' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
                                 >
-                                    <NavLink to={tab.href} className="px-3 py-1">
+                                    <NavLink
+                                        to={tab.href}
+                                        className="admin-tab-link px-3 py-1"
+                                        title={tab.label}
+                                    >
                                         {tab.label}
                                     </NavLink>
                                     {tabs.length > 1 && (
@@ -1321,6 +1354,7 @@ export function AppShell() {
                 >
                     <AccessibleDialogSurface
                         accessibleName="全局功能搜索"
+                        mobilePresentation="sheet"
                         onRequestClose={() => setIsCmdKOpen(false)}
                         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-scaleIn border border-slate-200"
                         onClick={e => e.stopPropagation()}
@@ -1355,9 +1389,17 @@ export function AppShell() {
                                 className="w-full px-3 py-4 focus:outline-none text-sm text-slate-700 placeholder-slate-400"
                                 autoFocus
                             />
-                            <div className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+                            <div className="hidden md:block text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
                                 ESC
                             </div>
+                            <AdminButton
+                                type="button"
+                                className="shrink-0 rounded-lg px-2 text-slate-500 md:hidden"
+                                aria-label="关闭功能搜索"
+                                onClick={() => setIsCmdKOpen(false)}
+                            >
+                                关闭
+                            </AdminButton>
                         </div>
 
                         <div

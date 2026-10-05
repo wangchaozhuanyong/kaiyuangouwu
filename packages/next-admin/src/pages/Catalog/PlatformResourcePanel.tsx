@@ -70,7 +70,7 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
             {query.loading && !query.data && <p role="status">读取归属中…</p>}
             {query.error && <p role="alert">{toUserFacingError(query.error, '资源读取失败')}</p>}
             <div className="max-h-80 overflow-auto text-sm">
-                <table className="w-full text-left">
+                <table className="admin-mobile-record-table w-full text-left">
                     <thead>
                         <tr className="border-b border-slate-100">
                             <th className="py-3">资源</th>
@@ -83,21 +83,23 @@ export function PlatformResourcePanel({ stores }: { stores: Array<{ id: string; 
                     <tbody>
                         {query.data?.platformCatalogResources.map(item => (
                             <tr key={item.resourceId} className="border-b border-slate-100">
-                                <td className="py-3">{item.name}</td>
-                                <td>{item.resourceId}</td>
-                                <td>
+                                <td data-label="资源" className="py-3">
+                                    {item.name}
+                                </td>
+                                <td data-label="ID">{item.resourceId}</td>
+                                <td data-label="维护店铺">
                                     {stores.find(s => String(s.id) === String(item.ownerChannelId))
                                         ?.displayName ??
                                         (item.scope === 'PLATFORM_TEMPLATE' ? '平台' : '待核对')}
                                 </td>
-                                <td>
+                                <td data-label="范围">
                                     {item.scope === 'STORE'
                                         ? '店铺私有'
                                         : item.scope === 'PLATFORM_TEMPLATE'
                                           ? '公共模板'
                                           : '归属待核对'}
                                 </td>
-                                <td>
+                                <td data-label="操作">
                                     {['Facet', 'ProductOptionGroup'].includes(resourceType) &&
                                         item.scope === 'STORE' && (
                                             <AdminButton

@@ -39,6 +39,21 @@ export class RefundStateMachine {
         return result;
     }
 
+    /** Dedicated, preflighted retry only; generic transition/getNextStates never expose Failed -> Pending. */
+    async transitionForRetry(ctx: RequestContext, order: Order, refund: Refund) {
+        if (refund.state !== 'Failed') {
+            throw new IllegalOperationError('只有已明确失败的退款可以重新申请处理');
+        }
+        const retryConfig: StateMachineConfig<RefundState, RefundTransitionData> = {
+            ...this.config,
+            transitions: { ...this.config.transitions, Failed: { to: ['Pending'] } },
+        };
+        const fsm = new FSM(retryConfig, refund.state);
+        const result = await fsm.transitionTo('Pending', { ctx, order, refund });
+        refund.state = 'Pending';
+        return result;
+    }
+
     private initConfig(): StateMachineConfig<RefundState, RefundTransitionData> {
         const processes = [...(this.configService.paymentOptions.refundProcess ?? [])];
         const allTransitions = processes.reduce(

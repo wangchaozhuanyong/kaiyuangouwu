@@ -43,7 +43,18 @@ describe('applyNewOptionGroupToVariants', () => {
             ['color-blue', 'large'],
         ]);
         expect(result.filter(item => !item.isNew).map(item => item.id)).toEqual(['red', 'blue']);
-        expect(result.filter(item => item.isNew).every(item => !item.id && item.sku === '')).toBe(true);
+        expect(
+            result
+                .filter(item => item.isNew)
+                .every(
+                    item =>
+                        !item.id &&
+                        item.sku.startsWith('P-') &&
+                        !item.stockOnHand &&
+                        !item.digitalFileVersionId &&
+                        !item.digitalAvailableQuantity,
+                ),
+        ).toBe(true);
         expect(result.find(item => item.id === 'blue')?.price).toBe('20');
     });
 
@@ -53,6 +64,11 @@ describe('applyNewOptionGroupToVariants', () => {
 
         expect(result).toHaveLength(2);
         expect(result[0]).toMatchObject({ id: 'base', sku: 'SKU-base', price: '20', optionIds: ['small'] });
-        expect(result[1]).toMatchObject({ isNew: true, sku: '', optionIds: ['large'] });
+        expect(result[1]).toMatchObject({
+            isNew: true,
+            optionIds: ['large'],
+            digitalStockPolicy: 'unlimited',
+        });
+        expect(result[1].sku).toMatch(/^P-/);
     });
 });

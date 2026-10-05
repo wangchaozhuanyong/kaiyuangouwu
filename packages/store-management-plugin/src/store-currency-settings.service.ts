@@ -5,6 +5,7 @@ import {
     ChannelService,
     CurrencyCode,
     EventBus,
+    ID,
     isGraphQlErrorResult,
     Order,
     OrderService,
@@ -13,6 +14,7 @@ import {
     ProductVariantPriceEvent,
     RequestContext,
     RequestContextService,
+    totalCoveredByActualPayments,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
@@ -233,6 +235,57 @@ export class StoreCurrencySettingsService {
         if (orderPaymentCurrencyCode(order) !== STOREFRONT_USDT_CURRENCY_CODE) {
             throw new UserInputError('当前订单未选择 USDT 作为付款币种');
         }
+        const coveredAmount = (order.payments ?? [])
+            .filter(payment => payment.state === 'Authorized' || payment.state === 'Settled')
+            .reduce((total, payment) => total + payment.amount, 0);
+        return this.createOrderUsdtQuote(ctx, order, Math.max(0, order.totalWithTax - coveredAmount));
+    }
+
+    /** Called only after the order-bound supplemental payment service checks owner and current amount. */
+    async createAdditionalOrderUsdtQuote(ctx: RequestContext, orderId: ID, expectedAmount: number) {
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            await this.orderService.lockOrderForRefund(txCtx, orderId);
+            const order = await this.orderService.findOne(txCtx, orderId, ['payments'], 'business');
+            if (!order) throw new UserInputError('找不到待补款订单');
+            assertOrderSalesChannel(txCtx, order);
+            const covered = totalCoveredByActualPayments(order);
+            if (
+                order.active ||
+                !order.orderPlacedAt ||
+                order.state !== 'ArrangingAdditionalPayment' ||
+                !Number.isSafeInteger(covered) ||
+                !Number.isSafeInteger(expectedAmount) ||
+                expectedAmount <= 0 ||
+                order.totalWithTax - covered !== expectedAmount ||
+                order.payments?.some(
+                    payment => payment.state === 'Created' || payment.metadata?.manualReview?.required,
+                )
+            )
+                throw new UserInputError('订单或补款金额已变化，请重新核对');
+            return this.createOrderUsdtQuote(txCtx, order, expectedAmount);
+        });
+    }
+
+    async existingOrderUsdtQuote(
+        ctx: RequestContext,
+        orderId: ID,
+    ): Promise<StorefrontUsdtCheckoutQuoteView | null> {
+        const quote = await this.connection.getRepository(ctx, StorefrontUsdtCheckoutQuote).findOne({
+            where: { channelId: ctx.channelId, orderId },
+            order: { createdAt: 'DESC', id: 'DESC' },
+        });
+        if (!quote) return null;
+        const intent = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).findOne({
+            where: { channelId: ctx.channelId, orderId, quoteId: quote.id },
+        });
+        return intent ? this.toCheckoutQuoteView(quote, intent) : null;
+    }
+
+    private async createOrderUsdtQuote(
+        ctx: RequestContext,
+        order: Order,
+        fiatAmount: number,
+    ): Promise<StorefrontUsdtCheckoutQuoteView> {
         if (order.currencyCode !== CurrencyCode.CNY && order.currencyCode !== CurrencyCode.MYR) {
             throw new UserInputError('USDT 报价目前仅支持 CNY 和 MYR 订单');
         }
@@ -246,15 +299,12 @@ export class StoreCurrencySettingsService {
                 : configuration.myrPerUsdtRate;
         if (!fiatPerUsdtRate) throw new UserInputError('当前订单币种缺少 USDT 报价');
 
-        const coveredAmount = (order.payments ?? [])
-            .filter(payment => payment.state === 'Authorized' || payment.state === 'Settled')
-            .reduce((total, payment) => total + payment.amount, 0);
-        const fiatAmount = Math.max(0, order.totalWithTax - coveredAmount);
         if (!fiatAmount) throw new UserInputError('当前订单已无待支付金额');
 
         const repository = this.connection.getRepository(ctx, StorefrontUsdtCheckoutQuote);
         const current = await repository.findOne({
             where: {
+                channelId: ctx.channelId,
                 orderId: order.id,
                 fiatCurrencyCode: order.currencyCode,
                 fiatAmount,
@@ -262,7 +312,14 @@ export class StoreCurrencySettingsService {
             },
             order: { createdAt: 'DESC', id: 'DESC' },
         });
-        if (current) {
+        const priorIntent =
+            current &&
+            (await this.connection
+                .getRepository(ctx, StorefrontUsdtPaymentIntent)
+                .findOne({ where: { quoteId: current.id, orderId: order.id, channelId: ctx.channelId } }));
+        // A settled initial payment may have the same amount as a later top-up. Its receipt must
+        // never be reused as a new payment request, even while that historical quote is unexpired.
+        if (current && (!priorIntent || priorIntent.status === 'PENDING')) {
             await this.usdtPaymentService.expirePendingIntentsForOrder(
                 ctx,
                 order.id,

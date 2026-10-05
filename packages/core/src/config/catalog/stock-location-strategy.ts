@@ -3,6 +3,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext } from '../../api/common/request-context';
 import { InjectableStrategy } from '../../common/types/injectable-strategy';
 import { OrderLine } from '../../entity/order-line/order-line.entity';
+import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { StockLocation } from '../../entity/stock-location/stock-location.entity';
 
@@ -53,6 +54,12 @@ export interface LocationWithQuantity {
  * @since 2.0.0
  */
 export interface StockLocationStrategy extends InjectableStrategy {
+    /** Optional capability gate for products managed outside warehouse inventory. */
+    supportsStockLocations?(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        operation?: 'flow' | 'create' | 'adjust',
+    ): boolean | Promise<boolean>;
     /**
      * @description
      * Returns the available stock for the given ProductVariant, taking into account

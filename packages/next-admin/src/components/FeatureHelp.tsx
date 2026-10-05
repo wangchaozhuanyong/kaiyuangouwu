@@ -17,7 +17,12 @@ import { createPortal } from 'react-dom';
 import { AdminButton } from './AdminControls';
 
 import { copyAdminText } from '../utils/admin-clipboard';
-import { featureHelpContent, featureHelpCopyText, type FeatureHelpTopic } from './feature-help-content';
+import {
+    featureHelpContent,
+    featureHelpCopyText,
+    type FeatureHelpContent,
+    type FeatureHelpTopic,
+} from './feature-help-content';
 import { calculateFeatureHelpPosition, type FeatureHelpPosition } from './feature-help-position';
 
 const OPEN_DELAY_MS = 140;
@@ -26,7 +31,7 @@ const FALLBACK_POPOVER_WIDTH = 384;
 const FALLBACK_POPOVER_HEIGHT = 360;
 
 interface FeatureHelpState {
-    topic: FeatureHelpTopic;
+    topic: FeatureHelpTopic | FeatureHelpContent;
     title: string;
     description?: string;
     trigger: HTMLButtonElement;
@@ -40,7 +45,7 @@ interface FeatureHelpContextValue {
     cancelClose: () => void;
     close: () => void;
     open: (
-        topic: FeatureHelpTopic,
+        topic: FeatureHelpTopic | FeatureHelpContent,
         title: string,
         trigger: HTMLButtonElement,
         instanceId: string,
@@ -50,7 +55,7 @@ interface FeatureHelpContextValue {
     ) => void;
     scheduleClose: () => void;
     toggle: (
-        topic: FeatureHelpTopic,
+        topic: FeatureHelpTopic | FeatureHelpContent,
         title: string,
         trigger: HTMLButtonElement,
         instanceId: string,
@@ -80,7 +85,7 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
 
     const open = useCallback(
         (
-            topic: FeatureHelpTopic,
+            topic: FeatureHelpTopic | FeatureHelpContent,
             title: string,
             trigger: HTMLButtonElement,
             instanceId: string,
@@ -110,7 +115,7 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
 
     const toggle = useCallback(
         (
-            topic: FeatureHelpTopic,
+            topic: FeatureHelpTopic | FeatureHelpContent,
             title: string,
             trigger: HTMLButtonElement,
             instanceId: string,
@@ -151,11 +156,13 @@ export function FeatureHelpProvider({ children }: { children: ReactNode }) {
 }
 
 export function FeatureHelpButton({
-    topic,
+    topic = 'catalog.product-editor',
     title,
     description,
+    content,
 }: {
-    topic: FeatureHelpTopic;
+    topic?: FeatureHelpTopic;
+    content?: FeatureHelpContent;
     title: string;
     description?: string;
 }) {
@@ -177,15 +184,38 @@ export function FeatureHelpButton({
             aria-controls={isActive ? popoverId : undefined}
             data-feature-help-trigger="true"
             onMouseEnter={event =>
-                context.open(topic, title, event.currentTarget, instanceId, popoverId, false, description)
+                context.open(
+                    content ?? topic,
+                    title,
+                    event.currentTarget,
+                    instanceId,
+                    popoverId,
+                    false,
+                    description,
+                )
             }
             onMouseLeave={context.scheduleClose}
             onFocus={event =>
-                context.open(topic, title, event.currentTarget, instanceId, popoverId, true, description)
+                context.open(
+                    content ?? topic,
+                    title,
+                    event.currentTarget,
+                    instanceId,
+                    popoverId,
+                    true,
+                    description,
+                )
             }
             onBlur={context.scheduleClose}
             onClick={event =>
-                context.toggle(topic, title, event.currentTarget, instanceId, popoverId, description)
+                context.toggle(
+                    content ?? topic,
+                    title,
+                    event.currentTarget,
+                    instanceId,
+                    popoverId,
+                    description,
+                )
             }
             onKeyDown={event => {
                 if (event.key === 'Escape') {
@@ -212,7 +242,7 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
         ),
     );
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-    const content = featureHelpContent[state.topic];
+    const content = typeof state.topic === 'string' ? featureHelpContent[state.topic] : state.topic;
 
     const updatePosition = useCallback(() => {
         const cardRect = cardRef.current?.getBoundingClientRect();

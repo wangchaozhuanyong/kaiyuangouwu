@@ -429,8 +429,10 @@ export class CatalogImportWriter {
                             name: variantDisplayName(row.normalizedData),
                         },
                     ],
-                    trackInventory: GlobalFlag.TRUE,
+                    trackInventory:
+                        row.normalizedData.fulfillmentType === 'digital' ? GlobalFlag.FALSE : GlobalFlag.TRUE,
                     stockLevels:
+                        row.normalizedData.fulfillmentType === 'digital' ||
                         row.normalizedData.stockOnHand == null
                             ? undefined
                             : [
@@ -457,7 +459,6 @@ export class CatalogImportWriter {
             }
         } else {
             const customFields = {
-                ...((variant.customFields ?? {}) as unknown as Record<string, unknown>),
                 ...variantCustomFieldUpdates(row.normalizedData, job.clearBlankFields),
             };
             const variantEnabled = effectiveVariantEnabled(row.normalizedData);
@@ -536,6 +537,19 @@ export class CatalogImportWriter {
         }
 
         if (!variant) throw new UserInputError('无法创建或加载 SKU');
+        if ((product.customFields as unknown as Record<string, unknown>).fulfillmentType === 'digital') {
+            const domainError = catalogImportTypeError(ctx, {
+                ...row.normalizedData,
+                fulfillmentType: 'digital',
+            });
+            if (domainError) throw new UserInputError(domainError);
+            await this.operations.writeDigitalImport(
+                ctx,
+                variant.id,
+                row.normalizedData,
+                Number(row.beforeSnapshot?.digitalAvailableQuantity ?? 0),
+            );
+        }
         let supplierCreated = false;
         let appliedSupplierId: ID | null = null;
         const updateSupplier =

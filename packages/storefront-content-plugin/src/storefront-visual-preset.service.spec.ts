@@ -98,27 +98,30 @@ describe('channel-scoped storefront visual presets', () => {
         });
     });
 
-    it('falls back for an unknown saved preset without rewriting the stored record', async () => {
-        const { service, ctx, rows, repository } = setup();
-        rows.set(
-            'a',
-            new StorefrontContentBlock({
-                id: '1',
+    it.each(['future-preset', 'unsupported-preset'])(
+        'falls back for saved %s without rewriting the stored record',
+        async presetId => {
+            const { service, ctx, rows, repository } = setup();
+            rows.set(
+                'a',
+                new StorefrontContentBlock({
+                    id: '1',
+                    channelId: 'a',
+                    updatedAt: new Date(),
+                    settings: { presetId },
+                }),
+            );
+            const fallback = await service.get(ctx('a'));
+            expect(fallback.presetId).toBe('classic');
+            expect(repository.save).not.toHaveBeenCalled();
+            await service.update(ctx('a'), {
                 channelId: 'a',
-                updatedAt: new Date(),
-                settings: { presetId: 'future-preset' },
-            }),
-        );
-        const fallback = await service.get(ctx('a'));
-        expect(fallback.presetId).toBe('classic');
-        expect(repository.save).not.toHaveBeenCalled();
-        await service.update(ctx('a'), {
-            channelId: 'a',
-            presetId: 'classic',
-            expectedRevision: fallback.revision,
-        });
-        expect(rows.get('a')?.settings?.presetId).toBe('classic');
-    });
+                presetId: 'classic',
+                expectedRevision: fallback.revision,
+            });
+            expect(rows.get('a')?.settings?.presetId).toBe('classic');
+        },
+    );
     it('patches only submitted settings and rejects stale layout editors', async () => {
         const { service, ctx, rows } = setup();
         const skin = await service.update(ctx('a'), {
@@ -153,7 +156,13 @@ describe('channel-scoped storefront visual presets', () => {
     });
     it('rejects missing, null and unsupported patch values', async () => {
         const { service, ctx, repository } = setup();
-        for (const patch of [{}, { desktopLayout: 'custom' }, { presetId: null }, { desktopLayout: null }]) {
+        for (const patch of [
+            {},
+            { desktopLayout: 'custom' },
+            { presetId: 'unsupported-preset' },
+            { presetId: null },
+            { desktopLayout: null },
+        ]) {
             await expect(
                 service.update(ctx('a'), { channelId: 'a', expectedRevision: 'default', ...patch } as never),
             ).rejects.toThrow();

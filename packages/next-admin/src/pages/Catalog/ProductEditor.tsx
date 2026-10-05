@@ -34,9 +34,9 @@ export function ProductEditor() {
 
     return (
         <ProductEditorProvider value={editor}>
-            <div className="h-full flex flex-col bg-slate-50">
+            <div className="admin-mobile-editor h-full grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] bg-slate-50 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_minmax(0,1fr)]">
                 {/* Top Header */}
-                <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-md sm:px-8">
+                <header className="relative md:col-start-1 md:col-span-2 md:row-start-1 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-md sm:px-8 md:pr-80">
                     <div className="flex items-center gap-3">
                         <AdminButton
                             type="button"
@@ -49,44 +49,10 @@ export function ProductEditor() {
                         </AdminButton>
                         <ProductEditorTitle isCreateMode={isCreateMode} />
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        <AdminButton
-                            type="button"
-                            onClick={leaveToProductList}
-                            className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                        >
-                            取消
-                        </AdminButton>
-                        <AdminButton
-                            type="button"
-                            onClick={handleSave}
-                            disabled={saving || legacyTypeMismatch}
-                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
-                        >
-                            {saving ? (
-                                <>
-                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    <span>保存中...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-3.5 h-3.5" />
-                                    <span>保存商品</span>
-                                    {isDirty && (
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-emerald-300"
-                                            title="有未保存变更"
-                                        />
-                                    )}
-                                </>
-                            )}
-                        </AdminButton>
-                    </div>
                 </header>
 
                 {/* Main Form Body */}
-                <div className="w-full flex-1 overflow-y-auto">
+                <div className="admin-mobile-editor-body w-full min-h-0 overflow-y-auto md:col-start-1 md:col-span-2 md:row-start-2">
                     <div className="mx-auto w-full max-w-[1680px] space-y-4 p-4 sm:p-6">
                         {/* 成功通知 */}
                         {notification && (
@@ -221,6 +187,40 @@ export function ProductEditor() {
 
                         <ProductEditorWorkspace />
                     </div>
+                </div>
+
+                <div className="admin-mobile-save-bar flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 md:col-start-2 md:row-start-1 md:z-40 md:self-center md:border-0 md:pr-8">
+                    <AdminButton
+                        type="button"
+                        onClick={leaveToProductList}
+                        className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                    >
+                        取消
+                    </AdminButton>
+                    <AdminButton
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving || legacyTypeMismatch}
+                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                        {saving ? (
+                            <>
+                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <span>保存中...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Save className="w-3.5 h-3.5" />
+                                <span>保存商品</span>
+                                {isDirty && (
+                                    <span
+                                        className="w-1.5 h-1.5 rounded-full bg-emerald-300"
+                                        title="有未保存变更"
+                                    />
+                                )}
+                            </>
+                        )}
+                    </AdminButton>
                 </div>
 
                 {/* Modals */}

@@ -2,7 +2,7 @@ import { PermissionDefinition } from '@vendure/core';
 export const digitalDeliveryModes = ['manual_service', 'file_download', 'auto_card'] as const;
 export type DigitalDeliveryMode = (typeof digitalDeliveryModes)[number];
 
-export const autoCardPoolItemStates = ['AVAILABLE', 'ASSIGNED', 'DISABLED'] as const;
+export const autoCardPoolItemStates = ['AVAILABLE', 'RESERVED', 'ASSIGNED', 'DISABLED'] as const;
 export type AutoCardPoolItemState = (typeof autoCardPoolItemStates)[number];
 
 export const autoCardDeliveryStates = [

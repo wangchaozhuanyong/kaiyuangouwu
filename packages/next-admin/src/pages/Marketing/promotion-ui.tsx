@@ -46,7 +46,7 @@ export function MultiSelector<T extends { id: string; name: string; label?: stri
     );
     return (
         <div className="mt-4 rounded-xl border border-slate-200 p-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-xs font-bold text-slate-800">{title}</h3>
                     <p className="mt-0.5 text-[9px] text-slate-400">
@@ -54,13 +54,13 @@ export function MultiSelector<T extends { id: string; name: string; label?: stri
                     </p>
                 </div>
                 <div className="relative">
-                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                     <AdminInput
                         value={search}
                         onChange={event => setSearch(event.target.value)}
                         aria-label={`搜索${title}`}
                         placeholder="搜索"
-                        className="w-48 rounded-lg border border-slate-300 py-1.5 pl-8 pr-2 text-[11px]"
+                        className="w-full min-w-0 rounded-lg border border-slate-300 py-1.5 pl-8 pr-2 text-[11px] sm:w-48"
                     />
                 </div>
             </div>

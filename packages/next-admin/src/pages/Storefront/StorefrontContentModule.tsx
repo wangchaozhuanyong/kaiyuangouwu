@@ -70,6 +70,7 @@ import {
     verifySavedBlock,
 } from './storefront-save-verification';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
+import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './StorefrontMobileViewSwitch';
 
 type ContentTab = 'PAGES' | 'ANNOUNCEMENTS' | 'LANDING';
 const CONTENT_TABS = { pages: 'PAGES', announcements: 'ANNOUNCEMENTS', landing: 'LANDING' } as const;
@@ -311,7 +312,20 @@ export function StorefrontContentModule() {
             </header>
             {!standalonePage && (
                 <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                    <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
+                    <label className="flex items-center gap-3 py-3 text-sm font-semibold text-slate-700 md:hidden">
+                        内容分类
+                        <AdminSelect
+                            aria-label="内容分类"
+                            value={tab}
+                            onChange={event => setTab(event.target.value as typeof tab)}
+                            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2"
+                        >
+                            <option value="PAGES">固定内容</option>
+                            {canManageAnnouncements && <option value="ANNOUNCEMENTS">首页公告</option>}
+                            <option value="LANDING">推广落地页</option>
+                        </AdminSelect>
+                    </label>
+                    <div className="mx-auto hidden w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold md:flex">
                         <TabButton
                             active={tab === 'PAGES'}
                             onClick={() => setTab('PAGES')}
@@ -1026,6 +1040,7 @@ function PromotionPageEditor({
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const [mobileView, setMobileView] = useState<StorefrontMobileView>('edit');
     const [contentType, setContentType] = useState(value.contentType);
     const [source, setSource] = useState(value.draftSource);
     const [reviewedImages, setReviewedImages] = useState<string | null>(null);
@@ -1138,8 +1153,11 @@ function PromotionPageEditor({
     };
 
     return (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.8fr)]">
-            <section className="rounded-xl border border-slate-200 bg-white">
+        <div className="grid min-w-0 content-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.8fr)]">
+            <StorefrontMobileViewSwitch value={mobileView} onChange={setMobileView} />
+            <section
+                className={`min-w-0 rounded-xl border border-slate-200 bg-white ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}
+            >
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <div className="flex items-center gap-2">
@@ -1255,7 +1273,9 @@ function PromotionPageEditor({
                     </div>
                 </div>
             </section>
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white xl:sticky xl:top-0 xl:self-start">
+            <section
+                className={`min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white xl:sticky xl:top-0 xl:self-start ${mobileView === 'preview' ? '' : 'hidden xl:block'}`}
+            >
                 <div className="border-b border-slate-100 p-4">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         安全预览

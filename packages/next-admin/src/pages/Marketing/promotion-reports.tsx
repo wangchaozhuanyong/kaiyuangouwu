@@ -111,7 +111,13 @@ export function CouponReport({
                         <SmallMetric label="优惠成本" value={formatMoney(totals.discount, currencyCode)} />
                         <SmallMetric label="带动成交" value={formatMoney(totals.revenue, currencyCode)} />
                     </div>
-                    <div className="overflow-x-auto">
+                    <div
+                        tabIndex={0}
+                        role="region"
+                        aria-label="促销报表明细"
+                        className="admin-comparison-scroll overflow-x-auto"
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整促销报表明细</p>
                         <table className="w-full min-w-[980px] border-collapse text-left text-xs">
                             <thead className="border-y border-slate-200 bg-slate-50 text-slate-500">
                                 <tr>
@@ -270,7 +276,13 @@ export function CouponLedger({
                 <ErrorState message={error} onRetry={onRetry} />
             ) : (
                 <>
-                    <div className="overflow-x-auto">
+                    <div
+                        tabIndex={0}
+                        role="region"
+                        aria-label="促销报表明细"
+                        className="admin-comparison-scroll overflow-x-auto"
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整促销报表明细</p>
                         <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
                             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                 <tr>

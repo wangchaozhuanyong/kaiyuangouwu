@@ -7,18 +7,21 @@ import {
     customerFacingContentRegistry,
 } from '@vendure/content-translation-plugin';
 import {
+    assertOrderSalesChannel,
     ConfigService,
     Customer,
     CustomerService,
     EventBus,
     ID,
     isGraphQlErrorResult,
+    Order,
     OrderService,
     OrderStateTransitionEvent,
     Refund,
     RefundStateTransitionEvent,
     RequestContext,
     RequestContextService,
+    totalCoveredByActualPayments,
     TransactionalConnection,
     User,
     UserInputError,
@@ -57,6 +60,7 @@ import { effectivePosterDefault, enabledPosterIds } from './referral-poster-pres
 import { ReferralPosterView } from './referral-poster-view';
 import { ReferralReportQuery } from './referral-report-query';
 import { businessDateKey, customerName, maskedCustomerName, withdrawalView } from './referral-view-helpers';
+import { ReferralWalletSpendService } from './referral-wallet-spend.service';
 import {
     REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
     referralPosterTemplates,
@@ -145,6 +149,8 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly requestContextService: RequestContextService,
         @Inject(STOREFRONT_PROMOTION_OPTIONS)
         private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
+        @Inject(ReferralWalletSpendService)
+        private readonly walletSpend: ReferralWalletSpendService | undefined = undefined,
     ) {
         this.posters = new ReferralPosterView(connection, configService);
         this.reports = new ReferralReportQuery(connection);
@@ -587,6 +593,102 @@ export class ReferralService implements OnApplicationBootstrap {
             id: wallet.id,
         });
         return { order: paymentResult, wallet: refreshedWallet, amount };
+    }
+
+    async additionalBalanceAvailability(ctx: RequestContext, order: Order): Promise<number> {
+        assertOrderSalesChannel(ctx, order);
+        const customer = order.customer;
+        if (
+            !customer ||
+            !ctx.activeUserId ||
+            String(customer.user?.id) !== String(ctx.activeUserId) ||
+            !(await this.getConfig(ctx)).allowBalanceSpend
+        )
+            return 0;
+        const wallet = await this.connection.getRepository(ctx, ReferralWallet).findOne({
+            where: {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                currencyCode: order.currencyCode,
+            },
+        });
+        return Math.max(0, wallet?.availableBalance ?? 0);
+    }
+
+    async useAdditionalBalance(
+        ctx: RequestContext,
+        orderId: ID,
+        amount: number,
+        expectedAmount: number,
+        idempotencyKey: string,
+    ): Promise<Order> {
+        if (
+            !Number.isSafeInteger(amount) ||
+            amount <= 0 ||
+            !idempotencyKey?.trim() ||
+            idempotencyKey.length > 128
+        )
+            throw new UserInputError('补款金额或幂等键无效');
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            await this.orderService.lockOrderForRefund(txCtx, orderId);
+            const order = await this.orderService.findOne(
+                txCtx,
+                orderId,
+                ['customer', 'customer.user', 'payments'],
+                'business',
+            );
+            if (!order) throw new UserInputError('找不到待补款订单');
+            assertOrderSalesChannel(txCtx, order);
+            const customer = order.customer;
+            if (!customer || !txCtx.activeUserId || String(customer.user?.id) !== String(txCtx.activeUserId))
+                throw new UserInputError('请登录订单所属账户使用余额');
+            const paid = totalCoveredByActualPayments(order);
+            const due = Number.isSafeInteger(paid) ? order.totalWithTax - paid : 0;
+            if (
+                order.active ||
+                !order.orderPlacedAt ||
+                order.state !== 'ArrangingAdditionalPayment' ||
+                !Number.isSafeInteger(expectedAmount) ||
+                due !== expectedAmount ||
+                amount > due ||
+                order.payments?.some(
+                    payment => payment.state === 'Created' || payment.metadata?.manualReview?.required,
+                )
+            )
+                throw new UserInputError('订单或补款金额已变化，请重新核对');
+            if (!this.walletSpend || amount > (await this.additionalBalanceAvailability(txCtx, order)))
+                throw new UserInputError('返利可用余额不足或当前店铺已暂停余额支付');
+            const key = createHash('sha256')
+                .update(`${txCtx.channelId}:${order.id}:${txCtx.activeUserId}:${idempotencyKey}`)
+                .digest('hex');
+            const usage = await this.walletSpend.reserve(txCtx, {
+                customerId: customer.id,
+                currencyCode: order.currencyCode,
+                amount,
+                resourceType: 'ORDER_ADDITIONAL_PAYMENT',
+                resourceId: `order:${key}`,
+                idempotencyKey: `order-balance:${key}`,
+                metadata: { orderId: String(order.id) },
+                actorId: txCtx.activeUserId,
+                actorType: 'CUSTOMER',
+            });
+            const proof = createReferralPaymentProof({
+                reservationId: String(usage.id),
+                walletUsage: true,
+                channelId: String(txCtx.channelId),
+                orderId: String(order.id),
+                customerId: String(customer.id),
+                currencyCode: order.currencyCode,
+                amount,
+                expiresAt: Date.now() + 2 * 60_000,
+            });
+            const result = await this.orderService.addPaymentToOrder(txCtx, order.id, {
+                method: REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
+                metadata: { proof },
+            });
+            if (isGraphQlErrorResult(result)) throw new UserInputError(result.message);
+            return result;
+        });
     }
 
     async recordVisit(ctx: RequestContext, visitorId?: string | null) {
@@ -1130,7 +1232,12 @@ export class ReferralService implements OnApplicationBootstrap {
             where: { id: refundId },
             relations: { payment: true },
         });
-        if (!refund || refund.payment?.method !== REFERRAL_BALANCE_PAYMENT_METHOD_CODE) return;
+        if (
+            !refund ||
+            refund.payment?.method !== REFERRAL_BALANCE_PAYMENT_METHOD_CODE ||
+            refund.payment.metadata?.public?.walletUsageId
+        )
+            return;
         const use = await this.connection.getRepository(ctx, ReferralBalanceUse).findOne({
             where: { channelId: ctx.channelId, orderId },
             ...this.balanceUseReadLock(),
@@ -1205,7 +1312,8 @@ export class ReferralService implements OnApplicationBootstrap {
             where: { channelId: ctx.channelId, orderId },
             ...this.balanceUseReadLock(),
         });
-        if (use && use.refundedAmount < use.amount && use.status !== 'RELEASED') {
+        // Captured money is returned by the explicit refund workflow, not by cancelling delivery.
+        if (use && use.refundedAmount < use.amount && use.status === 'RESERVED') {
             const delta = use.amount - use.refundedAmount;
             const wallet = await this.connection
                 .getRepository(ctx, ReferralWallet)

@@ -41,6 +41,8 @@ describe('accepted writes and bounded reads', () => {
         ['createSystemAnnouncement', 'systemAnnouncements', 'storefront'],
         ['saveImageModel', 'imageModels', 'plugins'],
         ['publishManualDigitalDelivery', 'order', 'orders'],
+        ['retryCheckoutDelivery', 'order', 'orders'],
+        ['retryCheckoutDelivery', 'digitalDeliveryExceptions', 'orders'],
         ['setDataRetentionLegalHold', 'dataRetentionRecords', 'settings'],
     ])('connects accepted %s writes to dependent %s reads', (field, read, domain) => {
         const document = gql(`mutation Mapping { ${field} { id } }`);

@@ -1,6 +1,12 @@
 import { gql } from '@apollo/client';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import {
+    AdminMobileField,
+    AdminMobileList,
+    AdminMobileRecord,
+    AdminMobileSort,
+} from '../../components/AdminMobileList';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminPageRefresh, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { StoreOfferDialog } from './StoreOfferDialog';
@@ -179,6 +185,8 @@ const formatRange = (
 };
 
 export function CatalogModule() {
+    const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
+    const [mobileStatsExpanded, setMobileStatsExpanded] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const {
@@ -433,6 +441,87 @@ export function CatalogModule() {
         });
     };
 
+    const productRows = displayProducts.map(product => {
+        const operations = operationsByProduct.get(product.id);
+        const variants = product.variants || [];
+        const pricedVariants = variants.filter(v => typeof v.price === 'number' && !isNaN(v.price));
+        const minPriceVariant = pricedVariants.reduce<ProductVariantItem | null>(
+            (lowest, current) => (!lowest || current.price < lowest.price ? current : lowest),
+            null,
+        );
+        const totalStock = variants.reduce((acc, v) => acc + (v.stockOnHand || 0), 0);
+        const fulfillmentType: FulfillmentType =
+            product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital';
+        const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
+        const categories = collectionHierarchySummary(product.collections);
+        const unlimitedDigitalStock =
+            fulfillmentType === 'digital' &&
+            variants.length > 0 &&
+            variants.every(variant => variant.customFields?.digitalStockPolicy === 'unlimited');
+        const hasUnlimitedDigitalStock =
+            fulfillmentType === 'digital' &&
+            variants.some(variant => variant.customFields?.digitalStockPolicy === 'unlimited');
+        const digitalStock = variants.reduce((total, variant) => {
+            if (variant.customFields?.digitalDeliveryMode === 'auto_card') {
+                return total + (variant.autoCardAvailableStock ?? 0);
+            }
+            if (variant.customFields?.digitalStockPolicy === 'unlimited') {
+                return total;
+            }
+            return total + Math.max(0, (variant.stockOnHand ?? 0) - (variant.stockAllocated ?? 0));
+        }, 0);
+
+        const stockUnavailable = variants.some(variant => {
+            if (fulfillmentType === 'physical') return typeof variant.stockOnHand !== 'number';
+            if (variant.customFields?.digitalDeliveryMode === 'auto_card')
+                return variant.autoCardAvailableStock == null;
+            if (variant.customFields?.digitalStockPolicy === 'unlimited') return false;
+            return typeof variant.stockOnHand !== 'number' || typeof variant.stockAllocated !== 'number';
+        });
+        const stockSummary = stockUnavailable
+            ? '未获取'
+            : fulfillmentType === 'physical'
+              ? totalStock
+              : unlimitedDigitalStock
+                ? '无限'
+                : hasUnlimitedDigitalStock
+                  ? '部分无限'
+                  : digitalStock;
+        const localAssignment = storeStatus?.items.find(item => item.productId === product.id);
+        return {
+            product,
+            operations,
+            variants,
+            minPriceVariant,
+            totalStock,
+            fulfillmentType,
+            quoteOnly,
+            categories,
+            stockSummary,
+            localAssignment,
+        };
+    });
+    const toggleProductSelection = (productId: string) =>
+        setSelectedProductIds(previous =>
+            previous.includes(productId) ? previous.filter(id => id !== productId) : [...previous, productId],
+        );
+    const togglePageSelection = () =>
+        setSelectedProductIds(previous => {
+            const allSelected =
+                displayProducts.length > 0 && displayProducts.every(product => previous.includes(product.id));
+            return allSelected
+                ? previous.filter(id => !displayProducts.some(product => product.id === id))
+                : Array.from(new Set([...previous, ...displayProducts.map(product => product.id)]));
+        });
+    const editProduct = (productId: string) =>
+        navigate(`/catalog/products/${productId}`, {
+            state: { returnTo: `${location.pathname}${location.search}` },
+        });
+    const requestDeleteProduct = (product: ProductItem) => {
+        setDeletePassword('');
+        setProductToDelete({ id: product.id, name: product.name });
+    };
+
     return (
         <div className="h-full flex flex-col bg-slate-50">
             {/* Header */}
@@ -498,8 +587,17 @@ export function CatalogModule() {
                     </div>
                 )}
 
+                <AdminButton
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-lg bg-white px-4 py-2 text-sm md:hidden"
+                    aria-expanded={mobileStatsExpanded}
+                    onClick={() => setMobileStatsExpanded(value => !value)}
+                >
+                    <span>本店经营统计</span>
+                    <span>{mobileStatsExpanded ? '收起' : '展开'}</span>
+                </AdminButton>
                 <section
-                    className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs"
+                    className={`${mobileStatsExpanded ? 'flex' : 'hidden md:flex'} flex-wrap gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs`}
                     aria-label="本店经营统计"
                 >
                     <span>本店已授权：{storeStatus?.authorized ?? '未获取'}</span>
@@ -545,9 +643,9 @@ export function CatalogModule() {
                     {/* Toolbar */}
                     <div
                         data-testid="catalog-filter-toolbar"
-                        className="sticky -top-5 z-30 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 sm:-top-8"
+                        className="relative md:sticky z-30 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 md:-top-8"
                     >
-                        <div className="flex gap-1.5">
+                        <div className="flex flex-wrap gap-1.5">
                             <AdminButton
                                 type="button"
                                 onClick={() => {
@@ -577,7 +675,47 @@ export function CatalogModule() {
                             </AdminButton>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                            <div className="relative w-full md:w-auto">
+                                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                                <SearchInput
+                                    type="search"
+                                    autoComplete="off"
+                                    disabled={Boolean(productToDelete)}
+                                    value={searchTerm}
+                                    onValueChange={setSearchTerm}
+                                    aria-label="搜索商品"
+                                    placeholder="搜索名称"
+                                    className="pl-9 pr-12 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-full md:w-64 bg-white"
+                                />
+                                {searchTerm && (
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchTerm('');
+                                        }}
+                                        className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400 hover:text-slate-600"
+                                        aria-label="清空商品搜索"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </AdminButton>
+                                )}
+                            </div>
+
+                            <AdminButton
+                                type="button"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 md:hidden"
+                                aria-expanded={mobileFiltersExpanded}
+                                onClick={() => setMobileFiltersExpanded(value => !value)}
+                            >
+                                {mobileFiltersExpanded
+                                    ? '收起筛选与排序'
+                                    : `筛选与排序${categoryId ? ' · 已选分类' : ''}`}
+                            </AdminButton>
+                        </div>
+                        <div
+                            className={`${mobileFiltersExpanded ? 'flex' : 'hidden md:flex'} w-full flex-wrap items-center gap-3`}
+                        >
                             <AdminSelect
                                 value={categoryId}
                                 onChange={event => setFilter('category', event.target.value)}
@@ -591,32 +729,6 @@ export function CatalogModule() {
                                     </option>
                                 ))}
                             </AdminSelect>
-                            <div className="relative">
-                                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                                <SearchInput
-                                    type="search"
-                                    autoComplete="off"
-                                    disabled={Boolean(productToDelete)}
-                                    value={searchTerm}
-                                    onValueChange={setSearchTerm}
-                                    aria-label="搜索商品"
-                                    placeholder="搜索名称"
-                                    className="pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-64 bg-white"
-                                />
-                                {searchTerm && (
-                                    <AdminButton
-                                        type="button"
-                                        onClick={() => {
-                                            setSearchTerm('');
-                                        }}
-                                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
-                                        aria-label="清空商品搜索"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </AdminButton>
-                                )}
-                            </div>
-
                             {isFiltered && (
                                 <AdminButton
                                     type="button"
@@ -628,6 +740,21 @@ export function CatalogModule() {
                                     <span>重置筛选</span>
                                 </AdminButton>
                             )}
+                            <div className="w-full md:hidden">
+                                <AdminMobileSort
+                                    fields={[
+                                        { value: 'updatedAt', label: '更新时间' },
+                                        { value: 'name', label: '商品名称' },
+                                        { value: 'slug', label: '商品访问标识' },
+                                    ]}
+                                    sortField={sortField}
+                                    sortDirection={sortDirection}
+                                    onSort={(field, direction) =>
+                                        toggleSort(field as typeof sortField, direction)
+                                    }
+                                    label="商品排序"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -698,9 +825,135 @@ export function CatalogModule() {
                             </div>
                         )}
 
+                        {productRows.length > 0 && (
+                            <AdminMobileList ariaLabel="商品摘要列表">
+                                <div className="flex flex-wrap items-end gap-3">
+                                    <label className="flex min-h-11 items-center gap-2 text-sm">
+                                        <AdminInput
+                                            type="checkbox"
+                                            aria-label="选择本页全部商品"
+                                            checked={displayProducts.every(product =>
+                                                selectedProductIds.includes(product.id),
+                                            )}
+                                            onChange={togglePageSelection}
+                                        />
+                                        全选本页
+                                    </label>
+                                </div>
+                                {productRows.map(
+                                    ({
+                                        product,
+                                        variants,
+                                        minPriceVariant,
+                                        fulfillmentType,
+                                        quoteOnly,
+                                        categories,
+                                        stockSummary,
+                                        localAssignment,
+                                    }) => (
+                                        <AdminMobileRecord
+                                            key={product.id}
+                                            title={
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <AdminImage
+                                                        src={product.featuredAsset?.preview}
+                                                        alt=""
+                                                        className="h-14 w-14 shrink-0 rounded-lg bg-slate-100 object-contain"
+                                                        thumbnailOptions={{
+                                                            width: 160,
+                                                            height: 160,
+                                                            preset: 'storefront-thumbnail-160',
+                                                        }}
+                                                        fallbackIcon={<ImageIcon className="h-5 w-5" />}
+                                                    />
+                                                    <span className="break-words">{product.name}</span>
+                                                </div>
+                                            }
+                                            status={
+                                                !localAssignment
+                                                    ? '未获取'
+                                                    : localAssignment.listed
+                                                      ? '已上架'
+                                                      : '仓库中'
+                                            }
+                                            selection={
+                                                <AdminInput
+                                                    type="checkbox"
+                                                    aria-label={`移动端选择商品 ${product.name}`}
+                                                    checked={selectedProductIds.includes(product.id)}
+                                                    onChange={() => toggleProductSelection(product.id)}
+                                                />
+                                            }
+                                            actions={
+                                                <>
+                                                    <AdminButton
+                                                        className="rounded-lg bg-blue-600 px-4 py-2 text-white"
+                                                        onClick={() => editProduct(product.id)}
+                                                    >
+                                                        编辑商品
+                                                    </AdminButton>
+                                                    <AdminButton
+                                                        onClick={() => setOfferProductId(product.id)}
+                                                    >
+                                                        本店经营设置
+                                                    </AdminButton>
+                                                    <AdminButton
+                                                        onClick={() => requestDeleteProduct(product)}
+                                                        aria-label={`删除商品 ${product.name}`}
+                                                        className="text-rose-600"
+                                                    >
+                                                        删除
+                                                    </AdminButton>
+                                                </>
+                                            }
+                                        >
+                                            <AdminMobileField label="销售价（起）">
+                                                {quoteOnly
+                                                    ? '联系客服询价'
+                                                    : minPriceVariant
+                                                      ? formatMoney(
+                                                            minPriceVariant.price,
+                                                            minPriceVariant.currencyCode,
+                                                        )
+                                                      : '未配置'}
+                                            </AdminMobileField>
+                                            <AdminMobileField
+                                                label={
+                                                    fulfillmentType === 'physical'
+                                                        ? '在手总库存'
+                                                        : '虚拟可售库存'
+                                                }
+                                            >
+                                                {variants.length ? stockSummary : '未配置'}
+                                            </AdminMobileField>
+                                            <AdminMobileField label="商品类型">
+                                                {fulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
+                                            </AdminMobileField>
+                                            <AdminMobileField label="规格数量">
+                                                {quoteOnly
+                                                    ? '—'
+                                                    : variants.length
+                                                      ? `${variants.length} 个规格`
+                                                      : '未配置规格'}
+                                            </AdminMobileField>
+                                            <AdminMobileField label="分类" fullWidth>
+                                                {categories.topLevel.primary} /{' '}
+                                                {categories.secondLevel.primary === '未分类'
+                                                    ? '未设置'
+                                                    : categories.secondLevel.primary}
+                                            </AdminMobileField>
+                                            <AdminMobileField label="完整信息" fullWidth>
+                                                进入编辑查看 SKU、成本、毛利率及库存策略。
+                                            </AdminMobileField>
+                                        </AdminMobileRecord>
+                                    ),
+                                )}
+                            </AdminMobileList>
+                        )}
+
                         {/* 真实数据列表 */}
                         {displayProducts.length > 0 && (
-                            <table className="w-full min-w-[2280px] border-collapse text-left text-xs">
+                            <table className="admin-desktop-table w-full min-w-[2280px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
                                         <th
@@ -729,26 +982,7 @@ export function CatalogModule() {
                                                         el.indeterminate = someSelected && !allSelected;
                                                     }
                                                 }}
-                                                onChange={() => {
-                                                    const allSelected =
-                                                        displayProducts.length > 0 &&
-                                                        displayProducts.every(p =>
-                                                            selectedProductIds.includes(p.id),
-                                                        );
-                                                    if (allSelected) {
-                                                        setSelectedProductIds(prev =>
-                                                            prev.filter(
-                                                                id => !displayProducts.some(p => p.id === id),
-                                                            ),
-                                                        );
-                                                    } else {
-                                                        const combined = new Set([
-                                                            ...selectedProductIds,
-                                                            ...displayProducts.map(p => p.id),
-                                                        ]);
-                                                        setSelectedProductIds(Array.from(combined));
-                                                    }
-                                                }}
+                                                onChange={togglePageSelection}
                                                 className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                             />
                                         </th>
@@ -820,407 +1054,339 @@ export function CatalogModule() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                                    {displayProducts.map(product => {
-                                        const operations = operationsByProduct.get(product.id);
-                                        const variants = product.variants || [];
-                                        const pricedVariants = variants.filter(
-                                            v => typeof v.price === 'number' && !isNaN(v.price),
-                                        );
-                                        const minPriceVariant =
-                                            pricedVariants.reduce<ProductVariantItem | null>(
-                                                (lowest, current) =>
-                                                    !lowest || current.price < lowest.price
-                                                        ? current
-                                                        : lowest,
-                                                null,
-                                            );
-                                        const totalStock = variants.reduce(
-                                            (acc, v) => acc + (v.stockOnHand || 0),
-                                            0,
-                                        );
-                                        const fulfillmentType: FulfillmentType =
-                                            product.customFields?.fulfillmentType === 'physical'
-                                                ? 'physical'
-                                                : 'digital';
-                                        const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
-                                        const categories = collectionHierarchySummary(product.collections);
-                                        const unlimitedDigitalStock =
-                                            fulfillmentType === 'digital' &&
-                                            variants.length > 0 &&
-                                            variants.every(
-                                                variant =>
-                                                    variant.customFields?.digitalStockPolicy === 'unlimited',
-                                            );
-                                        const hasUnlimitedDigitalStock =
-                                            fulfillmentType === 'digital' &&
-                                            variants.some(
-                                                variant =>
-                                                    variant.customFields?.digitalStockPolicy === 'unlimited',
-                                            );
-                                        const digitalStock = variants.reduce((total, variant) => {
-                                            if (variant.customFields?.digitalDeliveryMode === 'auto_card') {
-                                                return total + (variant.autoCardAvailableStock ?? 0);
-                                            }
-                                            if (variant.customFields?.digitalStockPolicy === 'unlimited') {
-                                                return total;
-                                            }
+                                    {productRows.map(
+                                        ({
+                                            product,
+                                            operations,
+                                            variants,
+                                            minPriceVariant,
+                                            totalStock,
+                                            fulfillmentType,
+                                            quoteOnly,
+                                            categories,
+                                            stockSummary,
+                                            localAssignment,
+                                        }) => {
                                             return (
-                                                total +
-                                                Math.max(
-                                                    0,
-                                                    (variant.stockOnHand ?? 0) -
-                                                        (variant.stockAllocated ?? 0),
-                                                )
-                                            );
-                                        }, 0);
-
-                                        const localAssignment = storeStatus?.items.find(
-                                            item => item.productId === product.id,
-                                        );
-                                        return (
-                                            <tr
-                                                key={product.id}
-                                                className="group h-[52px] transition-colors hover:bg-slate-50/80"
-                                            >
-                                                {/* Checkbox */}
-                                                <td className="sticky left-0 z-10 h-[52px] w-10 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <AdminInput
-                                                        type="checkbox"
-                                                        aria-label={`选择商品 ${product.name}`}
-                                                        checked={selectedProductIds.includes(product.id)}
-                                                        onChange={() => {
-                                                            setSelectedProductIds(prev =>
-                                                                prev.includes(product.id)
-                                                                    ? prev.filter(id => id !== product.id)
-                                                                    : [...prev, product.id],
-                                                            );
-                                                        }}
-                                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    />
-                                                </td>
-
-                                                {/* Featured Asset (真实素材) */}
-                                                <td className="sticky left-10 z-10 h-[52px] w-14 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <AdminButton
-                                                        type="button"
-                                                        onClick={() =>
-                                                            navigate(`/catalog/products/${product.id}`, {
-                                                                state: {
-                                                                    returnTo: `${location.pathname}${location.search}`,
-                                                                },
-                                                            })
-                                                        }
-                                                        className="w-10 h-10 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-2xs"
-                                                        aria-label={`编辑商品：${product.name}`}
-                                                    >
-                                                        <AdminImage
-                                                            src={product.featuredAsset?.preview}
-                                                            alt={product.name}
-                                                            className="w-full h-full object-cover"
-                                                            thumbnailOptions={{
-                                                                width: 160,
-                                                                height: 160,
-                                                                preset: 'storefront-thumbnail-160',
-                                                            }}
-                                                            fallbackIcon={
-                                                                <ImageIcon className="w-4 h-4 text-slate-300" />
+                                                <tr
+                                                    key={product.id}
+                                                    className="group h-[52px] transition-colors hover:bg-slate-50/80"
+                                                >
+                                                    {/* Checkbox */}
+                                                    <td className="sticky left-0 z-10 h-[52px] w-10 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                        <AdminInput
+                                                            type="checkbox"
+                                                            aria-label={`选择商品 ${product.name}`}
+                                                            checked={selectedProductIds.includes(product.id)}
+                                                            onChange={() =>
+                                                                toggleProductSelection(product.id)
                                                             }
+                                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                         />
-                                                    </AdminButton>
-                                                </td>
+                                                    </td>
 
-                                                {/* Name */}
-                                                <td className="sticky left-24 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <AdminButton
-                                                        type="button"
-                                                        onClick={() =>
-                                                            navigate(`/catalog/products/${product.id}`, {
-                                                                state: {
-                                                                    returnTo: `${location.pathname}${location.search}`,
-                                                                },
-                                                            })
-                                                        }
-                                                        className="block max-w-56 cursor-pointer truncate whitespace-nowrap text-left text-xs font-bold text-slate-900 hover:text-blue-600"
-                                                        title={product.name}
-                                                    >
-                                                        {product.name}
-                                                    </AdminButton>
-                                                </td>
+                                                    {/* Featured Asset (真实素材) */}
+                                                    <td className="sticky left-10 z-10 h-[52px] w-14 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() => editProduct(product.id)}
+                                                            className="w-10 h-10 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-2xs"
+                                                            aria-label={`编辑商品：${product.name}`}
+                                                        >
+                                                            <AdminImage
+                                                                src={product.featuredAsset?.preview}
+                                                                alt={product.name}
+                                                                className="w-full h-full object-contain"
+                                                                thumbnailOptions={{
+                                                                    width: 160,
+                                                                    height: 160,
+                                                                    preset: 'storefront-thumbnail-160',
+                                                                }}
+                                                                fallbackIcon={
+                                                                    <ImageIcon className="w-4 h-4 text-slate-300" />
+                                                                }
+                                                            />
+                                                        </AdminButton>
+                                                    </td>
 
-                                                {/* Slug */}
-                                                <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-500">
-                                                    <span className="block truncate" title={product.slug}>
-                                                        {product.slug}
-                                                    </span>
-                                                </td>
+                                                    {/* Name */}
+                                                    <td className="sticky left-24 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() => editProduct(product.id)}
+                                                            className="block max-w-56 cursor-pointer truncate whitespace-nowrap text-left text-xs font-bold text-slate-900 hover:text-blue-600"
+                                                            title={product.name}
+                                                        >
+                                                            {product.name}
+                                                        </AdminButton>
+                                                    </td>
 
-                                                {/* First-level category */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    <span
-                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.topLevel.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
-                                                    >
-                                                        {categories.topLevel.primary}
-                                                    </span>
-                                                    {categories.topLevel.extraCount > 0 && (
-                                                        <span className="ml-1 text-[10px] text-slate-400">
-                                                            +{categories.topLevel.extraCount}
+                                                    {/* Slug */}
+                                                    <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                        <span className="block truncate" title={product.slug}>
+                                                            {product.slug}
                                                         </span>
-                                                    )}
-                                                </td>
+                                                    </td>
 
-                                                {/* Second-level category */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    <span
-                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.secondLevel.primary === '未分类' ? 'bg-slate-50 text-slate-400' : 'bg-cyan-50 text-cyan-700'}`}
-                                                    >
-                                                        {categories.secondLevel.primary === '未分类'
-                                                            ? '未设置'
-                                                            : categories.secondLevel.primary}
-                                                    </span>
-                                                    {categories.secondLevel.extraCount > 0 && (
-                                                        <span className="ml-1 text-[10px] text-slate-400">
-                                                            +{categories.secondLevel.extraCount}
+                                                    {/* First-level category */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.topLevel.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
+                                                        >
+                                                            {categories.topLevel.primary}
                                                         </span>
-                                                    )}
-                                                </td>
+                                                        {categories.topLevel.extraCount > 0 && (
+                                                            <span className="ml-1 text-[10px] text-slate-400">
+                                                                +{categories.topLevel.extraCount}
+                                                            </span>
+                                                        )}
+                                                    </td>
 
-                                                {/* 当前店铺销售授权与经营入口 */}
-                                                <td className="h-[52px] px-3 py-0 whitespace-nowrap">
-                                                    <AdminButton
-                                                        className="mr-2 text-xs font-medium text-blue-600"
-                                                        onClick={() => setOfferProductId(product.id)}
-                                                    >
-                                                        本店经营设置
-                                                    </AdminButton>
-                                                    {(() => {
-                                                        const assigned = channelAssignmentsByProduct.get(
-                                                            product.id,
-                                                        );
-                                                        if (!assigned && channelAssignmentsQuery.loading) {
-                                                            return (
-                                                                <span className="text-[11px] text-slate-400 animate-pulse">
-                                                                    读取中…
-                                                                </span>
+                                                    {/* Second-level category */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.secondLevel.primary === '未分类' ? 'bg-slate-50 text-slate-400' : 'bg-cyan-50 text-cyan-700'}`}
+                                                        >
+                                                            {categories.secondLevel.primary === '未分类'
+                                                                ? '未设置'
+                                                                : categories.secondLevel.primary}
+                                                        </span>
+                                                        {categories.secondLevel.extraCount > 0 && (
+                                                            <span className="ml-1 text-[10px] text-slate-400">
+                                                                +{categories.secondLevel.extraCount}
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* 当前店铺销售授权与经营入口 */}
+                                                    <td className="h-[52px] px-3 py-0 whitespace-nowrap">
+                                                        <AdminButton
+                                                            className="mr-2 text-xs font-medium text-blue-600"
+                                                            onClick={() => setOfferProductId(product.id)}
+                                                        >
+                                                            本店经营设置
+                                                        </AdminButton>
+                                                        {(() => {
+                                                            const assigned = channelAssignmentsByProduct.get(
+                                                                product.id,
                                                             );
-                                                        }
-                                                        if (!assigned || assigned.length === 0) {
-                                                            return (
-                                                                <span className="text-[11px] text-slate-400 italic">
-                                                                    授权信息未获取
-                                                                </span>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <div className="flex flex-wrap items-center gap-1 max-w-56">
-                                                                {assigned.map(ch => (
-                                                                    <span
-                                                                        key={ch.id}
-                                                                        className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700"
-                                                                    >
-                                                                        {getChannelDisplayName(ch)}
+                                                            if (
+                                                                !assigned &&
+                                                                channelAssignmentsQuery.loading
+                                                            ) {
+                                                                return (
+                                                                    <span className="text-[11px] text-slate-400 animate-pulse">
+                                                                        读取中…
                                                                     </span>
-                                                                ))}
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </td>
-
-                                                {/* Product type */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    <span
-                                                        className={`inline-flex rounded-md px-2 py-1 text-[11px] font-bold ${fulfillmentType === 'digital' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}
-                                                    >
-                                                        {fulfillmentType === 'digital'
-                                                            ? '虚拟商品'
-                                                            : '实物商品'}
-                                                    </span>
-                                                </td>
-
-                                                {/* Status */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    {!localAssignment ? (
-                                                        <span className="text-xs text-slate-400">未获取</span>
-                                                    ) : localAssignment.listed ? (
-                                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded flex items-center gap-1 w-max">
-                                                            <CheckCircle className="w-3 h-3" /> 已上架
-                                                        </span>
-                                                    ) : (
-                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded flex items-center gap-1 w-max">
-                                                            <Package className="w-3 h-3" /> 仓库中
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                {/* Variants Count */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-600">
-                                                    {quoteOnly ? (
-                                                        '—'
-                                                    ) : variants.length > 0 ? (
-                                                        <span>
-                                                            <strong className="text-slate-900">
-                                                                {variants.length}
-                                                            </strong>{' '}
-                                                            个规格
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-slate-400 italic">
-                                                            未配置规格
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                {/* Stock */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold">
-                                                    {variants.length > 0 ? (
-                                                        <span
-                                                            className={
-                                                                totalStock <= 5
-                                                                    ? 'text-rose-600 font-bold'
-                                                                    : 'text-slate-800'
+                                                                );
                                                             }
-                                                        >
-                                                            {fulfillmentType === 'physical'
-                                                                ? totalStock
-                                                                : unlimitedDigitalStock
-                                                                  ? '无限'
-                                                                  : hasUnlimitedDigitalStock
-                                                                    ? '部分无限'
-                                                                    : digitalStock}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-slate-400">-</span>
-                                                    )}
-                                                </td>
+                                                            if (!assigned || assigned.length === 0) {
+                                                                return (
+                                                                    <span className="text-[11px] text-slate-400 italic">
+                                                                        授权信息未获取
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <div className="flex flex-wrap items-center gap-1 max-w-56">
+                                                                    {assigned.map(ch => (
+                                                                        <span
+                                                                            key={ch.id}
+                                                                            className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700"
+                                                                        >
+                                                                            {getChannelDisplayName(ch)}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
 
-                                                {/* Price */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold text-slate-900">
-                                                    {quoteOnly
-                                                        ? '联系客服询价'
-                                                        : minPriceVariant
-                                                          ? formatMoney(
-                                                                minPriceVariant.price,
-                                                                minPriceVariant.currencyCode,
-                                                            )
-                                                          : '-'}
-                                                </td>
-
-                                                {/* Purchase cost */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs">
-                                                    {operationsQuery.error && !operations ? (
+                                                    {/* Product type */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                         <span
-                                                            className="font-bold text-rose-600"
-                                                            title="成本与库存策略读取失败"
+                                                            className={`inline-flex rounded-md px-2 py-1 text-[11px] font-bold ${fulfillmentType === 'digital' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}
                                                         >
-                                                            读取失败
+                                                            {fulfillmentType === 'digital'
+                                                                ? '虚拟商品'
+                                                                : '实物商品'}
                                                         </span>
-                                                    ) : operationsQuery.loading && !operations ? (
-                                                        <span className="text-slate-400">读取中…</span>
-                                                    ) : quoteOnly &&
-                                                      operations?.minimumPurchaseCostMicrounits == null ? (
-                                                        <span className="text-slate-400">未填写</span>
-                                                    ) : operations?.minimumPurchaseCostMicrounits == null ? (
-                                                        <span className="font-bold text-rose-600">
-                                                            缺成本
-                                                        </span>
-                                                    ) : (
-                                                        <div>
-                                                            <div className="font-bold text-slate-900">
-                                                                {formatRange(
-                                                                    operations.minimumPurchaseCostMicrounits,
-                                                                    operations.maximumPurchaseCostMicrounits,
-                                                                    value =>
-                                                                        formatMicrounits(
-                                                                            value,
-                                                                            activeChannel?.defaultCurrencyCode ??
-                                                                                minPriceVariant?.currencyCode ??
-                                                                                'CNY',
-                                                                        ),
+                                                    </td>
+
+                                                    {/* Status */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                        {!localAssignment ? (
+                                                            <span className="text-xs text-slate-400">
+                                                                未获取
+                                                            </span>
+                                                        ) : localAssignment.listed ? (
+                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded flex items-center gap-1 w-max">
+                                                                <CheckCircle className="w-3 h-3" /> 已上架
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded flex items-center gap-1 w-max">
+                                                                <Package className="w-3 h-3" /> 仓库中
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Variants Count */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-600">
+                                                        {quoteOnly ? (
+                                                            '—'
+                                                        ) : variants.length > 0 ? (
+                                                            <span>
+                                                                <strong className="text-slate-900">
+                                                                    {variants.length}
+                                                                </strong>{' '}
+                                                                个规格
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-400 italic">
+                                                                未配置规格
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Stock */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold">
+                                                        {variants.length > 0 ? (
+                                                            <span
+                                                                className={
+                                                                    stockSummary === '未获取'
+                                                                        ? 'text-slate-500'
+                                                                        : totalStock <= 5
+                                                                          ? 'text-rose-600 font-bold'
+                                                                          : 'text-slate-800'
+                                                                }
+                                                            >
+                                                                {stockSummary}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-400">-</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Price */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold text-slate-900">
+                                                        {quoteOnly
+                                                            ? '联系客服询价'
+                                                            : minPriceVariant
+                                                              ? formatMoney(
+                                                                    minPriceVariant.price,
+                                                                    minPriceVariant.currencyCode,
+                                                                )
+                                                              : '-'}
+                                                    </td>
+
+                                                    {/* Purchase cost */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs">
+                                                        {operationsQuery.error && !operations ? (
+                                                            <span
+                                                                className="font-bold text-rose-600"
+                                                                title="成本与库存策略读取失败"
+                                                            >
+                                                                读取失败
+                                                            </span>
+                                                        ) : operationsQuery.loading && !operations ? (
+                                                            <span className="text-slate-400">读取中…</span>
+                                                        ) : quoteOnly &&
+                                                          operations?.minimumPurchaseCostMicrounits ==
+                                                              null ? (
+                                                            <span className="text-slate-400">未填写</span>
+                                                        ) : operations?.minimumPurchaseCostMicrounits ==
+                                                          null ? (
+                                                            <span className="font-bold text-rose-600">
+                                                                缺成本
+                                                            </span>
+                                                        ) : (
+                                                            <div>
+                                                                <div className="font-bold text-slate-900">
+                                                                    {formatRange(
+                                                                        operations.minimumPurchaseCostMicrounits,
+                                                                        operations.maximumPurchaseCostMicrounits,
+                                                                        value =>
+                                                                            formatMicrounits(
+                                                                                value,
+                                                                                activeChannel?.defaultCurrencyCode ??
+                                                                                    minPriceVariant?.currencyCode ??
+                                                                                    'CNY',
+                                                                            ),
+                                                                    )}
+                                                                </div>
+                                                                {operations.missingCostVariants > 0 && (
+                                                                    <div className="text-[10px] font-bold text-rose-600">
+                                                                        另有 {operations.missingCostVariants}{' '}
+                                                                        个 SKU 缺成本
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                            {operations.missingCostVariants > 0 && (
-                                                                <div className="text-[10px] font-bold text-rose-600">
-                                                                    另有 {operations.missingCostVariants} 个
-                                                                    SKU 缺成本
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </td>
+                                                        )}
+                                                    </td>
 
-                                                {/* Margin */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
-                                                    {quoteOnly || operations?.minimumMargin == null ? (
-                                                        <span className="text-slate-400">—</span>
-                                                    ) : (
+                                                    {/* Margin */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
+                                                        {quoteOnly || operations?.minimumMargin == null ? (
+                                                            <span className="text-slate-400">—</span>
+                                                        ) : (
+                                                            <span
+                                                                className={
+                                                                    operations.minimumMargin < 0
+                                                                        ? 'text-rose-600'
+                                                                        : 'text-emerald-700'
+                                                                }
+                                                            >
+                                                                {formatRange(
+                                                                    operations.minimumMargin,
+                                                                    operations.maximumMargin,
+                                                                    value => `${(value * 100).toFixed(1)}%`,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Inventory policy */}
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
                                                         <span
                                                             className={
-                                                                operations.minimumMargin < 0
+                                                                operations?.lowStock
                                                                     ? 'text-rose-600'
-                                                                    : 'text-emerald-700'
+                                                                    : 'text-slate-700'
                                                             }
                                                         >
-                                                            {formatRange(
-                                                                operations.minimumMargin,
-                                                                operations.maximumMargin,
-                                                                value => `${(value * 100).toFixed(1)}%`,
-                                                            )}
+                                                            {operations?.minimumStock == null
+                                                                ? '—'
+                                                                : `${operations.minimumStock} / ${operations.maximumStock ?? '—'}`}
                                                         </span>
-                                                    )}
-                                                </td>
+                                                        {operations?.lowStock && (
+                                                            <div className="text-[10px]">已低于下限</div>
+                                                        )}
+                                                    </td>
 
-                                                {/* Inventory policy */}
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
-                                                    <span
-                                                        className={
-                                                            operations?.lowStock
-                                                                ? 'text-rose-600'
-                                                                : 'text-slate-700'
-                                                        }
-                                                    >
-                                                        {operations?.minimumStock == null
-                                                            ? '—'
-                                                            : `${operations.minimumStock} / ${operations.maximumStock ?? '—'}`}
-                                                    </span>
-                                                    {operations?.lowStock && (
-                                                        <div className="text-[10px]">已低于下限</div>
-                                                    )}
-                                                </td>
-
-                                                {/* Actions */}
-                                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                        <AdminButton
-                                                            type="button"
-                                                            onClick={() =>
-                                                                navigate(`/catalog/products/${product.id}`, {
-                                                                    state: {
-                                                                        returnTo: `${location.pathname}${location.search}`,
-                                                                    },
-                                                                })
-                                                            }
-                                                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                                                        >
-                                                            <Edit3 className="w-3.5 h-3.5" /> 编辑
-                                                        </AdminButton>
-                                                        <AdminButton
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setDeletePassword('');
-                                                                setProductToDelete({
-                                                                    id: product.id,
-                                                                    name: product.name,
-                                                                });
-                                                            }}
-                                                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                                                            title="删除商品"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </AdminButton>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                    {/* Actions */}
+                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() => editProduct(product.id)}
+                                                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                                            >
+                                                                <Edit3 className="w-3.5 h-3.5" /> 编辑
+                                                            </AdminButton>
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() => requestDeleteProduct(product)}
+                                                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                                                title="删除商品"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </AdminButton>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        },
+                                    )}
                                 </tbody>
                             </table>
                         )}

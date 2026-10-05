@@ -45,6 +45,7 @@ import {
     SaveInventoryLotInput,
     UpdateCatalogInventoryThresholdInput,
     UpdateCatalogVariantOperationsInput,
+    type NormalizedCatalogRow,
 } from './types';
 
 // The export hydrates several one-to-many relations for every variant. Production
@@ -168,6 +169,22 @@ function inventoryAlertStatus(available: number, threshold: number): InventoryAl
 
 @Injectable()
 export class CatalogOperationsService {
+    private digitalImportAdapter?: {
+        read(ctx: RequestContext, id: ID): Promise<Record<string, unknown> | null>;
+        write(ctx: RequestContext, id: ID, row: NormalizedCatalogRow, expected?: number): Promise<unknown>;
+    };
+    registerDigitalImportAdapter(adapter: NonNullable<CatalogOperationsService['digitalImportAdapter']>) {
+        this.digitalImportAdapter = adapter;
+    }
+    digitalImportState(ctx: RequestContext, id: ID) {
+        return this.digitalImportAdapter?.read(ctx, id) ?? Promise.resolve(null);
+    }
+    writeDigitalImport(ctx: RequestContext, id: ID, row: NormalizedCatalogRow, expected?: number) {
+        if (!this.digitalImportAdapter)
+            throw new UserInputError('数字交付模块尚未启用，不能执行数字商品导入');
+        return this.digitalImportAdapter.write(ctx, id, row, expected);
+    }
+
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly productService: ProductService,
@@ -404,7 +421,7 @@ export class CatalogOperationsService {
         return variant;
     }
 
-    private async assignInitialCollections(
+    async assignInitialCollections(
         ctx: RequestContext,
         productId: ID,
         variantId: ID,
@@ -743,6 +760,7 @@ export class CatalogOperationsService {
     }
 
     async updateInventoryThreshold(ctx: RequestContext, input: UpdateCatalogInventoryThresholdInput) {
+        await this.requirePhysicalVariant(ctx, input.productVariantId);
         const channelStockLocations = await this.stockLocations(ctx, false);
         if (!channelStockLocations.some(location => location.id === String(input.stockLocationId))) {
             throw new UserInputError('所选库存点不属于当前店铺');
@@ -973,6 +991,7 @@ export class CatalogOperationsService {
         allowConfirmedNegativeStock = false,
         returnWorkspace = true,
     ) {
+        await this.requirePhysicalVariant(ctx, input.productVariantId);
         await this.requireStockLocation(ctx, input.stockLocationId);
         validatePolicy(input.minimumStock, input.maximumStock);
         if (!allowConfirmedNegativeStock && input.stockOnHand != null && input.stockOnHand < 0) {
@@ -1009,9 +1028,7 @@ export class CatalogOperationsService {
         const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
             channelId: ctx.channelId,
         });
-        const currentFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
         const customFields = {
-            ...currentFields,
             ...(input.barcode !== undefined ? { barcode: blankToNull(input.barcode) } : {}),
             ...(input.specification !== undefined ? { specification: blankToNull(input.specification) } : {}),
             ...(input.saleUnit !== undefined ? { saleUnit: blankToNull(input.saleUnit) } : {}),
@@ -1151,6 +1168,7 @@ export class CatalogOperationsService {
     }
 
     async saveLot(ctx: RequestContext, input: SaveInventoryLotInput, adjustStock = true) {
+        await this.requirePhysicalVariant(ctx, input.productVariantId);
         await this.requireStockLocation(ctx, input.stockLocationId);
         if (!input.lotCode.trim()) throw new UserInputError('批次号不能为空');
         if (input.quantityOnHand < 0 || !Number.isInteger(input.quantityOnHand)) {
@@ -1168,40 +1186,57 @@ export class CatalogOperationsService {
         if (manufacturedAt && expiresAt && expiresAt < manufacturedAt) {
             throw new UserInputError('到期日期不能早于生产日期');
         }
-        const stockLevel = adjustStock
-            ? await this.stockLevelForUpdate(ctx, variant.id, input.stockLocationId)
-            : null;
         const repository = this.connection.getRepository(ctx, InventoryLot);
-        const existingQuery = repository.createQueryBuilder('lot').where('lot.variantId = :variantId', {
-            variantId: variant.id,
-        });
-        if (input.id) {
-            existingQuery.andWhere('lot.id = :id', { id: input.id });
-        } else {
-            existingQuery
-                .andWhere('lot.stockLocationId = :stockLocationId', {
-                    stockLocationId: input.stockLocationId,
-                })
-                .andWhere('lot.lotCode = :lotCode', { lotCode: input.lotCode.trim() });
-        }
+        const stockRepository = this.connection.getRepository(ctx, StockLevel);
+        const stockQuery = stockRepository
+            .createQueryBuilder('stock')
+            .where('stock.productVariantId = :variantId AND stock.stockLocationId = :stockLocationId', {
+                variantId: variant.id,
+                stockLocationId: input.stockLocationId,
+            });
         if (
-            supportsPessimisticLocks(
-                repository.manager.connection.options.type,
-                repository.manager.queryRunner,
-            )
-        ) {
-            existingQuery.setLock('pessimistic_write');
-        }
-        const existing = await existingQuery.getOne();
+            stockRepository.manager.queryRunner?.isTransactionActive &&
+            !['sqljs', 'sqlite', 'better-sqlite3'].includes(stockRepository.manager.connection.options.type)
+        )
+            stockQuery.setLock('pessimistic_write');
+        const stockLevel = await stockQuery.getOne();
+        const currentStock = stockLevel?.stockOnHand ?? 0;
+        const lotQuery = repository
+            .createQueryBuilder('lot')
+            .where('lot.variantId = :variantId AND lot.stockLocationId = :stockLocationId', {
+                variantId: variant.id,
+                stockLocationId: input.stockLocationId,
+            })
+            .orderBy('lot.id', 'ASC');
+        if (
+            repository.manager.queryRunner?.isTransactionActive &&
+            !['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type)
+        )
+            lotQuery.setLock('pessimistic_write');
+        const currentLots = await lotQuery.getMany();
+        const existing = input.id
+            ? currentLots.find(item => String(item.id) === String(input.id))
+            : currentLots.find(item => item.lotCode === input.lotCode.trim());
+        if (input.id && !existing) throw new UserInputError('所选批次不属于该商品和仓库');
+        const assigned = currentLots.reduce((sum, item) => sum + item.quantityOnHand, 0);
         if (
             existing &&
             (String(existing.variantId) !== String(variant.id) ||
                 String(existing.stockLocationId) !== String(input.stockLocationId) ||
                 existing.lotCode !== input.lotCode.trim())
-        ) {
+        )
             throw new UserInputError('已有批次的 SKU、仓库和批次号不能修改');
-        }
         const previousQuantity = existing?.quantityOnHand ?? 0;
+        const delta = input.quantityOnHand - previousQuantity;
+        if (existing && String(existing.stockLocationId) !== String(input.stockLocationId))
+            throw new UserInputError('不能直接移动已有批次的仓库');
+        if (adjustStock && input.reconcileExistingStock) {
+            if (delta < 0 || assigned + delta > currentStock)
+                throw new UserInputError('分配批次数量不能超过尚未分配的现有库存');
+        } else if (adjustStock && assigned < currentStock) {
+            throw new UserInputError('启用批次前请先分配现有库存；选择“分配现有库存”不会重复增加在库数量');
+        }
+
         const lot = existing ?? new InventoryLot();
         lot.variantId = variant.id;
         lot.stockLocationId = input.stockLocationId;
@@ -1215,13 +1250,19 @@ export class CatalogOperationsService {
         lot.state =
             input.quantityOnHand === 0
                 ? 'DEPLETED'
-                : expiresAt && expiresAt < new Date()
+                : expiresAt &&
+                    expiresAt.getTime() <
+                        Date.UTC(
+                            new Date().getUTCFullYear(),
+                            new Date().getUTCMonth(),
+                            new Date().getUTCDate(),
+                        )
                   ? 'EXPIRED'
                   : 'ACTIVE';
         const saved = await repository.save(lot);
 
-        if (adjustStock && previousQuantity !== input.quantityOnHand) {
-            const current = stockLevel?.stockOnHand ?? 0;
+        if (adjustStock && !input.reconcileExistingStock && previousQuantity !== input.quantityOnHand) {
+            const current = currentStock;
             await this.stockMovementService.adjustProductVariantStock(ctx, variant.id, [
                 {
                     stockLocationId: input.stockLocationId,
@@ -1297,6 +1338,36 @@ export class CatalogOperationsService {
         return query.getOne();
     }
 
+    async physicalWorkspace(ctx: RequestContext, productId: ID) {
+        const product = await this.connection.getEntityOrThrow(ctx, Product, productId, {
+            channelId: ctx.channelId,
+        });
+        if (
+            (product.customFields as unknown as Record<string, unknown> | undefined)?.fulfillmentType !==
+            'physical'
+        )
+            throw new UserInputError('该操作仅适用于实物商品');
+        return this.workspace(ctx, productId);
+    }
+
+    async latestCost(ctx: RequestContext, variantId: ID, currencyCode: CurrencyCode) {
+        await this.connection.getEntityOrThrow(ctx, ProductVariant, variantId, { channelId: ctx.channelId });
+        return this.connection.getRepository(ctx, VariantCostRecord).findOne({
+            where: { variantId, channelId: ctx.channelId, currencyCode },
+            order: { effectiveAt: 'DESC', id: 'DESC' },
+        });
+    }
+
+    async variantSupplier(ctx: RequestContext, variantId: ID) {
+        await this.connection.getEntityOrThrow(ctx, ProductVariant, variantId, { channelId: ctx.channelId });
+        return (await this.suppliers.association(ctx, variantId))?.supplier ?? null;
+    }
+
+    async updateVariantSupplier(ctx: RequestContext, variantId: ID, supplierId: ID | null) {
+        await this.suppliers.setVariantSupplier(ctx, variantId, supplierId);
+        return true;
+    }
+
     async recordCost(
         ctx: RequestContext,
         variantId: ID,
@@ -1305,6 +1376,7 @@ export class CatalogOperationsService {
         source: string,
         sourceReference: string | null,
     ): Promise<VariantCostRecord | null> {
+        await this.connection.getEntityOrThrow(ctx, ProductVariant, variantId, { channelId: ctx.channelId });
         if (!Number.isInteger(costMicrounits) || costMicrounits < 0) {
             throw new UserInputError('进货价精度必须是千分之一货币单位');
         }
@@ -1328,6 +1400,19 @@ export class CatalogOperationsService {
         );
     }
 
+    async requirePhysicalVariant(ctx: RequestContext, id: ID): Promise<ProductVariant> {
+        const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, id, {
+            channelId: ctx.channelId,
+        });
+        const product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId);
+        if (
+            (product.customFields as unknown as Record<string, unknown> | undefined)?.fulfillmentType !==
+            'physical'
+        )
+            throw new UserInputError('该操作仅适用于实物商品；数字商品请使用数字交付工作区');
+        return variant;
+    }
+
     async savePolicy(
         ctx: RequestContext,
         variantId: ID,
@@ -1335,6 +1420,7 @@ export class CatalogOperationsService {
         minimumStock: number | null,
         maximumStock: number | null,
     ): Promise<InventoryPolicy> {
+        await this.requirePhysicalVariant(ctx, variantId);
         validatePolicy(minimumStock, maximumStock);
         const repository = this.connection.getRepository(ctx, InventoryPolicy);
         const policy =

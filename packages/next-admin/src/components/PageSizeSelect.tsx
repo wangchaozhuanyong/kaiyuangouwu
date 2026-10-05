@@ -11,7 +11,7 @@ export function PageSizeSelect({
     disabled?: boolean;
 }) {
     return (
-        <label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-slate-500">
+        <label className="admin-page-size inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-slate-500">
             <span>每页显示</span>
             <AdminSelect
                 aria-label="每页显示条数"

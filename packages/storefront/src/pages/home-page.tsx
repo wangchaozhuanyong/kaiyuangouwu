@@ -38,7 +38,14 @@ import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
-import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
+import {
+    HERO_HEIGHT_TRANSITION_MS,
+    HERO_TRANSITION_MS,
+    heroDirectionBetweenSlides,
+    heroIndexAfterManualMove,
+    heroSwipeAxis,
+    isCompletedHeroSwipe,
+} from '../hero-carousel';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -531,6 +538,22 @@ export function HomePage() {
     const [noticeFocused, setNoticeFocused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
+    const [heroMotion, setHeroMotion] = useState<{
+        nextIndex: number;
+        direction: -1 | 1;
+        offset: number;
+        phase: 'dragging' | 'prepared' | 'settling';
+        completed: boolean;
+    } | null>(null);
+    const heroMotionRef = useRef(heroMotion);
+    const heroMotionTimerRef = useRef<number | null>(null);
+    const heroMotionFrameRef = useRef<number | null>(null);
+    const heroViewportRef = useRef<HTMLElement>(null);
+    const heroStageRef = useRef<HTMLDivElement>(null);
+    const [heroStageHeight, setHeroStageHeight] = useState<number>();
+    const heroStageHeightRef = useRef<number | undefined>(undefined);
+    const heroHeightGrowthDeadlineRef = useRef(0);
+    const heroQueuedSelectionRef = useRef<{ index: number; direction?: -1 | 1 } | null>(null);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     useEffect(() => {
         const focusId = storefrontPreviewParameters().get('storefrontPreviewBlockId');
@@ -542,6 +565,8 @@ export function HomePage() {
         }
     }, [managedHeroes]);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+    const reducedMotionRef = useRef(prefersReducedMotion);
+    reducedMotionRef.current = prefersReducedMotion;
     const [pageVisible, setPageVisible] = useState(true);
     const heroGestureRef = useRef({
         active: false,
@@ -549,6 +574,8 @@ export function HomePage() {
         suppressClick: false,
         startX: 0,
         startY: 0,
+        pointerId: -1,
+        width: 0,
     });
     const heroTransitionRef = useRef(0);
     const heroCount = managedHeroes.length;
@@ -559,8 +586,6 @@ export function HomePage() {
             : undefined;
     const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
-    const heroImageWidth = managedHero?.imageAsset?.width;
-    const heroImageHeight = managedHero?.imageAsset?.height;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -611,21 +636,160 @@ export function HomePage() {
         Math.max(3, contentNumberSetting(noticeBlock?.settings?.scrollIntervalSeconds, 5)),
     );
 
+    const updateHeroMotion = useCallback((motion: typeof heroMotion) => {
+        heroMotionRef.current = motion;
+        setHeroMotion(motion);
+    }, []);
+
+    const clearHeroMotionSchedule = useCallback(() => {
+        if (heroMotionTimerRef.current !== null) window.clearTimeout(heroMotionTimerRef.current);
+        if (heroMotionFrameRef.current !== null) window.cancelAnimationFrame(heroMotionFrameRef.current);
+        heroMotionTimerRef.current = null;
+        heroMotionFrameRef.current = null;
+    }, []);
+
+    const settleHeroMotion = useCallback(
+        (motion: NonNullable<typeof heroMotion>) => {
+            clearHeroMotionSchedule();
+            const finish = () => {
+                heroMotionTimerRef.current = null;
+                if (motion.completed) setHeroIndex(motion.nextIndex);
+                updateHeroMotion(null);
+            };
+            if (reducedMotionRef.current) {
+                finish();
+                return;
+            }
+            updateHeroMotion({ ...motion, offset: 0, phase: 'settling' });
+            heroMotionTimerRef.current = window.setTimeout(finish, HERO_TRANSITION_MS);
+        },
+        [clearHeroMotionSchedule, updateHeroMotion],
+    );
+
     const showPreparedHero = useCallback(
-        async (nextIndex: number) => {
+        async (nextIndex: number, direction?: -1 | 1) => {
             const nextHero = managedHeroes[nextIndex];
-            if (!nextHero) return;
+            if (!nextHero || heroMotionRef.current?.phase === 'settling') return;
             const transitionId = ++heroTransitionRef.current;
+            clearHeroMotionSchedule();
+            if (nextIndex === heroIndex) return;
             const nextImage = nextHero.imageUrl ?? '';
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
             } catch {
                 // SafeImage shows an unavailable-image placeholder when the saved image fails.
             }
-            if (heroTransitionRef.current === transitionId) setHeroIndex(nextIndex);
+            if (heroTransitionRef.current !== transitionId) return;
+            const dragging = heroMotionRef.current?.phase === 'dragging';
+            const motion: NonNullable<typeof heroMotion> = {
+                nextIndex,
+                direction:
+                    direction ?? heroDirectionBetweenSlides(heroIndex, nextIndex, managedHeroes.length),
+                offset: dragging ? (heroMotionRef.current?.offset ?? 0) : 0,
+                phase: 'prepared',
+                completed: true,
+            };
+            if (reducedMotionRef.current) {
+                settleHeroMotion(motion);
+                return;
+            }
+            updateHeroMotion(motion);
+            const start = (): void => {
+                const remainingGrowth = Math.max(0, heroHeightGrowthDeadlineRef.current - performance.now());
+                if (remainingGrowth > 0) {
+                    heroMotionTimerRef.current = window.setTimeout(() => {
+                        heroMotionTimerRef.current = null;
+                        if (heroTransitionRef.current === transitionId) start();
+                    }, remainingGrowth);
+                } else {
+                    settleHeroMotion(motion);
+                }
+            };
+            if (dragging) {
+                start();
+                return;
+            }
+            // Paint both starting positions before applying their coordinated transition.
+            heroMotionFrameRef.current = window.requestAnimationFrame(() => {
+                heroMotionFrameRef.current = window.requestAnimationFrame(() => {
+                    heroMotionFrameRef.current = null;
+                    if (heroTransitionRef.current === transitionId) start();
+                });
+            });
         },
-        [managedHeroes],
+        [clearHeroMotionSchedule, heroIndex, managedHeroes, settleHeroMotion, updateHeroMotion],
     );
+
+    useEffect(() => {
+        ++heroTransitionRef.current;
+        clearHeroMotionSchedule();
+        heroGestureRef.current.active = false;
+        heroGestureRef.current.horizontal = false;
+        heroQueuedSelectionRef.current = null;
+        const viewport = heroViewportRef.current;
+        const pointerId = heroGestureRef.current.pointerId;
+        if (pointerId >= 0 && viewport?.hasPointerCapture(pointerId))
+            viewport.releasePointerCapture(pointerId);
+        setHeroGestureActive(false);
+        updateHeroMotion(null);
+        setHeroIndex(index => (index < managedHeroes.length ? index : 0));
+        return () => {
+            ++heroTransitionRef.current;
+            clearHeroMotionSchedule();
+        };
+    }, [managedHeroes, clearHeroMotionSchedule, updateHeroMotion]);
+
+    useLayoutEffect(() => {
+        const stage = heroStageRef.current;
+        const viewport = heroViewportRef.current;
+        if (!stage || !viewport) return;
+        const copySurfaces = Array.from(stage.querySelectorAll<HTMLElement>('.hero-rich-content'));
+        const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
+        const measure = () => {
+            const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
+            const height = Math.ceil(
+                Math.max(
+                    minimum,
+                    ...copySurfaces.map(copy => copy.getBoundingClientRect().height),
+                    gallery?.getBoundingClientRect().height ?? 0,
+                ),
+            );
+            if (height <= 0 || height === heroStageHeightRef.current) return;
+            const previous = heroStageHeightRef.current ?? stage.getBoundingClientRect().height;
+            heroStageHeightRef.current = height;
+            // Make room for the taller copy before its final horizontal entrance.
+            heroHeightGrowthDeadlineRef.current =
+                height > previous && !reducedMotionRef.current
+                    ? performance.now() + HERO_HEIGHT_TRANSITION_MS
+                    : 0;
+            setHeroStageHeight(height);
+        };
+        const observer = new ResizeObserver(measure);
+        copySurfaces.forEach(copy => observer.observe(copy));
+        observer.observe(viewport);
+        if (gallery) observer.observe(gallery);
+        window.addEventListener('resize', measure);
+        measure();
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, [desktop, heroIndex, heroMotion?.nextIndex, managedHeroes]);
+
+    useEffect(() => {
+        const queued = heroQueuedSelectionRef.current;
+        if (heroMotion || !queued) return;
+        heroQueuedSelectionRef.current = null;
+        void showPreparedHero(queued.index, queued.direction);
+    }, [heroIndex, heroMotion, showPreparedHero]);
+
+    useEffect(() => {
+        const motion = heroMotionRef.current;
+        if (!prefersReducedMotion || !motion || motion.phase === 'dragging') return;
+        clearHeroMotionSchedule();
+        if (motion.completed) setHeroIndex(motion.nextIndex);
+        updateHeroMotion(null);
+    }, [prefersReducedMotion, clearHeroMotionSchedule, updateHeroMotion]);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -677,6 +841,7 @@ export function HomePage() {
             heroCount < 2 ||
             heroInteractionPaused ||
             heroGestureActive ||
+            heroMotion ||
             heroAutoplayStopped ||
             prefersReducedMotion ||
             !pageVisible
@@ -693,6 +858,7 @@ export function HomePage() {
         heroAutoplayStopped,
         heroCount,
         heroGestureActive,
+        heroMotion,
         heroIndex,
         heroInteractionPaused,
         pageVisible,
@@ -713,9 +879,14 @@ export function HomePage() {
         if (heroIndex >= heroCount) setHeroIndex(0);
     }, [heroCount, heroIndex]);
 
-    const selectHeroManually = (index: number) => {
+    const selectHeroManually = (index: number, direction?: -1 | 1) => {
         setHeroAutoplayStopped(true);
-        void showPreparedHero(index);
+        if (heroMotionRef.current?.phase === 'settling' || heroMotionRef.current?.phase === 'prepared') {
+            heroQueuedSelectionRef.current = { index, direction };
+            return;
+        }
+        heroQueuedSelectionRef.current = null;
+        void showPreparedHero(index, direction);
     };
 
     const openActiveHero = () => {
@@ -740,45 +911,62 @@ export function HomePage() {
         const interactiveTarget =
             event.target instanceof Element ? event.target.closest('button, a, input, label') : null;
         const isHeroImageLink = interactiveTarget?.classList.contains('hero-rich-image-link');
-        if (!desktop || heroCount < 2 || event.button !== 0 || (interactiveTarget && !isHeroImageLink)) {
+        if (
+            heroCount < 2 ||
+            event.button !== 0 ||
+            event.isPrimary === false ||
+            heroGestureRef.current.active ||
+            heroMotionRef.current ||
+            (interactiveTarget && !isHeroImageLink)
+        ) {
             return;
         }
+        ++heroTransitionRef.current;
         heroGestureRef.current = {
             active: true,
             horizontal: false,
             suppressClick: false,
             startX: event.clientX,
             startY: event.clientY,
+            pointerId: event.pointerId,
+            width: event.currentTarget.getBoundingClientRect().width,
         };
         setHeroGestureActive(true);
-        event.currentTarget.classList.add('is-dragging');
     };
 
     const moveHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
         const gesture = heroGestureRef.current;
-        if (!gesture.active) return;
+        if (!gesture.active || gesture.pointerId !== event.pointerId) return;
         const deltaX = event.clientX - gesture.startX;
         const deltaY = event.clientY - gesture.startY;
         if (!gesture.horizontal) {
-            if (Math.abs(deltaY) > Math.abs(deltaX) + 6) {
+            const axis = heroSwipeAxis(deltaX, deltaY);
+            if (axis === 'vertical') {
                 gesture.active = false;
                 setHeroGestureActive(false);
-                event.currentTarget.classList.remove('is-dragging');
                 if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                     event.currentTarget.releasePointerCapture(event.pointerId);
                 }
                 return;
             }
-            if (Math.abs(deltaX) < 6) return;
+            if (axis !== 'horizontal') return;
             gesture.horizontal = true;
             event.currentTarget.setPointerCapture(event.pointerId);
         }
+        const direction = deltaX < 0 ? 1 : -1;
+        updateHeroMotion({
+            nextIndex: heroIndexAfterManualMove(heroIndex, heroCount, direction),
+            direction,
+            offset: Math.max(-gesture.width, Math.min(gesture.width, deltaX)),
+            phase: 'dragging',
+            completed: false,
+        });
         event.preventDefault();
     };
 
     const finishHeroSwipe = (event: ReactPointerEvent<HTMLElement>, cancelled = false) => {
         const gesture = heroGestureRef.current;
-        if (!gesture.active && !gesture.horizontal) return;
+        if ((!gesture.active && !gesture.horizontal) || gesture.pointerId !== event.pointerId) return;
         const deltaX = event.clientX - gesture.startX;
         const deltaY = event.clientY - gesture.startY;
         const completed = !cancelled && gesture.horizontal && isCompletedHeroSwipe(deltaX, deltaY);
@@ -787,12 +975,14 @@ export function HomePage() {
         gesture.horizontal = false;
         gesture.suppressClick = suppressClick;
         setHeroGestureActive(false);
-        event.currentTarget.classList.remove('is-dragging');
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
         }
         if (completed) {
-            selectHeroManually(heroIndexAfterManualMove(heroIndex, heroCount, deltaX < 0 ? 1 : -1));
+            const direction = deltaX < 0 ? 1 : -1;
+            selectHeroManually(heroIndexAfterManualMove(heroIndex, heroCount, direction), direction);
+        } else if (heroMotionRef.current) {
+            settleHeroMotion({ ...heroMotionRef.current, completed: false });
         }
         if (suppressClick) {
             window.setTimeout(() => {
@@ -800,6 +990,25 @@ export function HomePage() {
             }, 0);
         }
     };
+
+    useEffect(() => {
+        const cancelGesture = () => {
+            const gesture = heroGestureRef.current;
+            gesture.active = false;
+            gesture.horizontal = false;
+            heroQueuedSelectionRef.current = null;
+            const viewport = heroViewportRef.current;
+            if (gesture.pointerId >= 0 && viewport?.hasPointerCapture(gesture.pointerId))
+                viewport.releasePointerCapture(gesture.pointerId);
+            ++heroTransitionRef.current;
+            clearHeroMotionSchedule();
+            updateHeroMotion(null);
+            setHeroGestureActive(false);
+        };
+        if (!pageVisible) cancelGesture();
+        window.addEventListener('blur', cancelGesture);
+        return () => window.removeEventListener('blur', cancelGesture);
+    }, [pageVisible, clearHeroMotionSchedule, updateHeroMotion]);
 
     const quickLinks: Array<{
         id: string;
@@ -995,9 +1204,11 @@ export function HomePage() {
                                     }}
                                 >
                                     <section
+                                        ref={heroViewportRef}
                                         className={[
                                             'hero hero-image-overlay',
-                                            desktop && heroCount > 1 ? 'is-swipeable' : '',
+                                            heroCount > 1 ? 'is-swipeable' : '',
+                                            heroMotion?.phase === 'dragging' ? 'is-dragging' : '',
                                             overlayTrustBar ? 'has-service-overlay' : '',
                                             desktop && heroCount > 1 ? 'has-page-picker' : '',
                                         ]
@@ -1010,6 +1221,17 @@ export function HomePage() {
                                         onPointerMove={moveHeroSwipe}
                                         onPointerUp={event => finishHeroSwipe(event)}
                                         onPointerCancel={event => finishHeroSwipe(event, true)}
+                                        onPointerLeave={event => {
+                                            if (!heroGestureRef.current.horizontal)
+                                                finishHeroSwipe(event, true);
+                                        }}
+                                        onLostPointerCapture={event => finishHeroSwipe(event, true)}
+                                        onClickCapture={event => {
+                                            if (!heroGestureRef.current.suppressClick) return;
+                                            heroGestureRef.current.suppressClick = false;
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                        }}
                                         onDragStart={event => event.preventDefault()}
                                         onKeyDown={event => {
                                             if (
@@ -1025,77 +1247,132 @@ export function HomePage() {
                                                     heroCount,
                                                     event.key === 'ArrowLeft' ? -1 : 1,
                                                 ),
+                                                event.key === 'ArrowLeft' ? -1 : 1,
                                             );
                                         }}
                                     >
-                                        {managedHero && (
-                                            <HeroScene
-                                                content={managedHero}
-                                                mediaOverlay={
-                                                    <div className="hero-overlay-controls">
-                                                        {overlayTrustBar && (
-                                                            <div className="hero-service-overlay">
-                                                                {trustBar}
-                                                            </div>
-                                                        )}
-                                                        {desktop && heroCount > 1 && (
-                                                            <div
-                                                                className="hero-page-picker"
-                                                                role="group"
-                                                                aria-label={
-                                                                    isZh ? '选择轮播图片' : 'Choose a slide'
+                                        <div
+                                            ref={heroStageRef}
+                                            className={`hero-carousel-stage${heroMotion?.phase === 'settling' ? ' is-settling' : ''}`}
+                                            style={heroStageHeight ? { height: heroStageHeight } : undefined}
+                                        >
+                                            {[heroIndex, ...(heroMotion ? [heroMotion.nextIndex] : [])].map(
+                                                (slideIndex, position) => {
+                                                    const slide = managedHeroes[slideIndex];
+                                                    if (!slide) return null;
+                                                    const neighbor = position > 0;
+                                                    const completing =
+                                                        heroMotion?.phase === 'settling' &&
+                                                        heroMotion.completed;
+                                                    const offset = heroMotion?.offset ?? 0;
+                                                    const direction = heroMotion?.direction ?? 1;
+                                                    const translation = completing
+                                                        ? `${neighbor ? 0 : -direction * 100}%`
+                                                        : neighbor
+                                                          ? `calc(${direction * 100}% + ${offset}px)`
+                                                          : `${offset}px`;
+                                                    const slideImage = slide.imageUrl ?? '';
+                                                    return (
+                                                        <div
+                                                            key={slide.id}
+                                                            className={`hero-carousel-slide${neighbor ? ' is-neighbor' : ''}`}
+                                                            style={{
+                                                                transform: `translate3d(${translation}, 0, 0)`,
+                                                            }}
+                                                            aria-hidden={neighbor || undefined}
+                                                            inert={neighbor || undefined}
+                                                        >
+                                                            <HeroScene
+                                                                content={slide}
+                                                                mediaOverlay={
+                                                                    <div className="hero-overlay-controls">
+                                                                        {overlayTrustBar && (
+                                                                            <div className="hero-service-overlay">
+                                                                                {trustBar}
+                                                                            </div>
+                                                                        )}
+                                                                        {desktop && heroCount > 1 && (
+                                                                            <div
+                                                                                className="hero-page-picker"
+                                                                                role="group"
+                                                                                aria-label={
+                                                                                    isZh
+                                                                                        ? '选择轮播图片'
+                                                                                        : 'Choose a slide'
+                                                                                }
+                                                                            >
+                                                                                {managedHeroes.map(
+                                                                                    (item, index) => (
+                                                                                        <button
+                                                                                            key={item.id}
+                                                                                            type="button"
+                                                                                            aria-label={
+                                                                                                isZh
+                                                                                                    ? `切换到第 ${index + 1} 张图片`
+                                                                                                    : `Show slide ${index + 1}`
+                                                                                            }
+                                                                                            aria-current={
+                                                                                                index ===
+                                                                                                heroIndex
+                                                                                                    ? 'true'
+                                                                                                    : undefined
+                                                                                            }
+                                                                                            onClick={() =>
+                                                                                                selectHeroManually(
+                                                                                                    index,
+                                                                                                )
+                                                                                            }
+                                                                                        >
+                                                                                            <span className="hero-page-number">
+                                                                                                {index + 1}
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    ),
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 }
-                                                            >
-                                                                {managedHeroes.map((item, index) => (
-                                                                    <button
-                                                                        key={item.id}
-                                                                        type="button"
-                                                                        aria-label={
-                                                                            isZh
-                                                                                ? `切换到第 ${index + 1} 张图片`
-                                                                                : `Show slide ${index + 1}`
+                                                                imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${slide.title || storefrontName}`}
+                                                                onImageOpen={handleHeroImageOpen}
+                                                                onOpen={openActiveHero}
+                                                                image={
+                                                                    <SafeImage
+                                                                        src={slideImage}
+                                                                        alt={
+                                                                            slide.title ||
+                                                                            (isZh
+                                                                                ? `${storefrontName}精选`
+                                                                                : `${storefrontName} Featured`)
                                                                         }
-                                                                        aria-current={
-                                                                            index === heroIndex
-                                                                                ? 'true'
-                                                                                : undefined
+                                                                        className="hero-rich-backdrop"
+                                                                        imageKind="hero"
+                                                                        width={
+                                                                            slide.imageAsset?.width ||
+                                                                            undefined
                                                                         }
-                                                                        onClick={() =>
-                                                                            selectHeroManually(index)
+                                                                        height={
+                                                                            slide.imageAsset?.height ||
+                                                                            undefined
                                                                         }
-                                                                    >
-                                                                        <span className="hero-page-number">
-                                                                            {index + 1}
-                                                                        </span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                }
-                                                imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
-                                                onImageOpen={handleHeroImageOpen}
-                                                onOpen={openActiveHero}
-                                                image={
-                                                    <SafeImage
-                                                        src={heroImage}
-                                                        alt={
-                                                            managedHero.title ||
-                                                            (isZh
-                                                                ? `${storefrontName}精选`
-                                                                : `${storefrontName} Featured`)
-                                                        }
-                                                        className="hero-rich-backdrop"
-                                                        imageKind="hero"
-                                                        width={heroImageWidth || undefined}
-                                                        height={heroImageHeight || undefined}
-                                                        loading="eager"
-                                                        fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
-                                                        onImageReady={() => setReadyHeroImage(heroImage)}
-                                                    />
-                                                }
-                                            />
-                                        )}
+                                                                        loading="eager"
+                                                                        fetchPriority={
+                                                                            !neighbor && heroIndex === 0
+                                                                                ? 'high'
+                                                                                : 'auto'
+                                                                        }
+                                                                        onImageReady={() => {
+                                                                            if (!neighbor)
+                                                                                setReadyHeroImage(slideImage);
+                                                                        }}
+                                                                    />
+                                                                }
+                                                            />
+                                                        </div>
+                                                    );
+                                                },
+                                            )}
+                                        </div>
                                         <span
                                             className="visually-hidden"
                                             aria-live={heroAutoplayStopped ? 'polite' : 'off'}

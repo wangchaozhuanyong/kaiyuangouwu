@@ -695,6 +695,7 @@
       "dependencies": {
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
+        "@vendure/commerce-fulfillment-plugin": "0.1.0",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
         "date-fns": "^4.0.0",
@@ -972,10 +973,10 @@
     "better-sqlite3",
   ],
   "patchedDependencies": {
-    "husky@4.3.8": "patches/husky@4.3.8.patch",
-    "brace-expansion@5.0.11": "patches/brace-expansion@5.0.11.patch",
-    "braces@3.0.3": "patches/braces@3.0.3.patch",
     "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch",
+    "husky@4.3.8": "patches/husky@4.3.8.patch",
+    "braces@3.0.3": "patches/braces@3.0.3.patch",
+    "brace-expansion@5.0.11": "patches/brace-expansion@5.0.11.patch",
   },
   "overrides": {
     "@apollo/server": "5.5.0",

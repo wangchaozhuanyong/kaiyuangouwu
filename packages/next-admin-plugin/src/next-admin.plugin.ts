@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { Type } from '@vendure/common/lib/shared-types';
 import {
     PluginCommonModule,
@@ -24,7 +25,7 @@ export interface NextAdminPluginOptions {
 
 /** Hosts next-admin only; metrics and saved settings retain their existing API contract. */
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, CommerceFulfillmentPlugin],
     adminApiExtensions: { schema: adminApiExtensions, resolvers: [MetricsResolver] },
     providers: [MetricsService, OrderEventsService],
     controllers: [OrderEventsController],

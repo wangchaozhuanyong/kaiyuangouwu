@@ -40,6 +40,10 @@ const publicQueries = new Set([
     'eligibleShippingMethods',
     'eligiblePaymentMethods',
     'nextOrderStates',
+    // The resolvers still verify a signed order proof or the signed-in owner.
+    'storefrontOrderByConfirmationToken',
+    'myDigitalDeliveryContents',
+    'orderAdditionalPaymentQuote',
 ]);
 const publicMutations = new Set([
     'recordStorefrontPageView',
@@ -78,8 +82,15 @@ const publicMutations = new Set([
     'unsetOrderBillingAddress',
     'setOrderShippingMethod',
     'setOrderCustomFields',
+    // Legacy digital checkout verifies the active cart owner before updating its email.
+    'setActiveOrderDeliveryEmail',
     'transitionOrderToState',
     'addPaymentToOrder',
+    'createStorefrontOrderConfirmationToken',
+    'claimDigitalDelivery',
+    'addPaymentToModifiedOrder',
+    'createModifiedOrderUsdtQuote',
+    'setActiveOrderDeliveryEmail',
 ]);
 
 @Injectable()

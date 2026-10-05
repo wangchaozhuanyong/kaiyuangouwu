@@ -24,7 +24,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
-    margin: 14px 14px 0;
+    margin: 14px var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
     padding: 4px;
     border-radius: 10px;
     background: var(--soft);

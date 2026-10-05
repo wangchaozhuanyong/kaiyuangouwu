@@ -406,6 +406,7 @@ plans/
 # Local development data and generated test artifacts
 *.sqlite
 /packages/dev-server/vendure-dev*
+/tmp/digital-product-domains-20261004/
 
 # Local visual QA evidence (not part of production artifacts)
 /design-qa.md

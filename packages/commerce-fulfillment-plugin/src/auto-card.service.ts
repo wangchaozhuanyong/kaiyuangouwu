@@ -4,6 +4,7 @@ import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/
 import {
     assertOrderSalesChannel,
     EventBus,
+    FulfillmentLine,
     isGraphQlErrorResult,
     LanguageCode,
     Logger,
@@ -48,13 +49,17 @@ import {
     manageAutoCardSecretsPermission,
     readSoldAutoCardsPermission,
 } from './auto-card.constants';
+import { digitalDeliverableQuantity } from './digital-order-entitlement';
+import { DigitalProductService } from './digital-product.service';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { AutoCardSupplyGrant, AutoCardSupplySnapshot } from './entities/auto-card-supply-grant.entity';
 import { isAutoCardOrderLine } from './fulfillment-classification';
+import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { orderLineProductName } from './order-line-snapshot';
+import { OrderProcessingChangedEvent } from './order-processing-changed.event';
 import {
     AutoCardDeliveryListOptions,
     AutoCardImportInput,
@@ -120,6 +125,8 @@ export class AutoCardService {
         private readonly supply: AutoCardSupplyService,
         private readonly governance: CatalogGovernanceService,
         private readonly audit: GovernanceService,
+        private readonly digitalProducts: DigitalProductService,
+        private readonly receiptTokens: OrderConfirmationTokenService,
     ) {}
 
     async configForVariant(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfigView | null> {
@@ -255,18 +262,11 @@ export class AutoCardService {
             prepared,
         );
 
-        await this.productVariantService.update(ctx, [
-            {
-                id: variant.id,
-                trackInventory: 'FALSE' as any,
-                customFields: {
-                    ...variant.customFields,
-                    fulfillmentType: 'digital',
-                    digitalDeliveryMode: 'auto_card',
-                    digitalStockPolicy: 'pool_derived',
-                },
-            },
-        ]);
+        await this.digitalProducts.update(ctx, {
+            productVariantId: variant.id,
+            deliveryMode: 'auto_card',
+            stockPolicy: 'pool_derived',
+        });
         if (config.enabled) {
             await this.reconcileVariant(ctx, config.productVariantId);
             await this.publishSupplyStockChange(ctx, config.id, config.productVariantId);
@@ -449,8 +449,8 @@ export class AutoCardService {
         reason = '',
     ): Promise<AutoCardPoolItemView> {
         const item = await this.ownedPoolItemOrThrow(ctx, id);
-        if (item.state === 'ASSIGNED') {
-            throw new UserInputError('已分配的卡密不能恢复或停用');
+        if (['ASSIGNED', 'RESERVED'].includes(item.state)) {
+            throw new UserInputError('已分配或结算占用的卡密不能恢复或停用');
         }
         item.state = enabled ? 'AVAILABLE' : 'DISABLED';
         item.disabledReason = enabled ? null : reason.trim().slice(0, 2_000) || '管理员停用';
@@ -537,6 +537,12 @@ export class AutoCardService {
             });
         }
         for (const required of requiredByVariant.values()) {
+            const reserved = await Promise.all(
+                order.lines
+                    .filter(line => String(line.productVariantId) === String(required.variantId))
+                    .map(line => this.digitalProducts.reservation(ctx, line.id)),
+            );
+            if (reserved.length && reserved.every(row => row?.state === 'HELD')) continue;
             const config = (await this.supply.resolve(ctx, required.variantId))?.config;
             if (!config?.enabled) {
                 return `虚拟商品“${required.name}”的自动发卡未启用`;
@@ -555,7 +561,11 @@ export class AutoCardService {
     }
 
     async allocateSettledOrder(ctx: RequestContext, order: Order): Promise<AutoCardDelivery[]> {
-        if (order.state !== 'PaymentSettled') {
+        if (
+            !['PaymentSettled', 'PartiallyDelivered', 'Delivered', 'PartiallyShipped', 'Shipped'].includes(
+                order.state,
+            )
+        ) {
             return [];
         }
         assertOrderSalesChannel(ctx, order);
@@ -595,12 +605,13 @@ export class AutoCardService {
             });
             if (existing) {
                 this.assertDeliveryScope(ctx, existing);
-                deliveries.push(existing);
+                const updated = await this.allocateExistingDelivery(ctx, existing);
+                deliveries.push(updated);
                 const staleDispatch =
                     !existing.lastDispatchedAt ||
                     Date.now() - existing.lastDispatchedAt.getTime() > 15 * 60_000;
-                if (['ALLOCATED', 'RETRYING'].includes(existing.state) && staleDispatch) {
-                    await this.dispatch(ctx, existing, 'EMAIL_QUEUED', '重用已分配卡密继续发送');
+                if (['ALLOCATED', 'RETRYING'].includes(updated.state) && staleDispatch) {
+                    await this.dispatch(ctx, updated, 'EMAIL_QUEUED', '重用已分配卡密继续发送');
                 }
                 continue;
             }
@@ -639,32 +650,44 @@ export class AutoCardService {
         return deliveries;
     }
 
+    async notificationPayload(ctx: RequestContext, id: ID) {
+        const delivery = await this.deliveryOrThrow(ctx, id);
+        if (!digitalDeliverableQuantity(delivery.order, delivery.orderLine))
+            throw new UserInputError('当前领取资格已暂停或撤销');
+        const proof = this.receiptTokens.createForDigitalReceipt(ctx, delivery.order);
+        return {
+            deliveryId: String(delivery.id),
+            orderId: String(delivery.orderId),
+            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
+            orderCode: delivery.order.code,
+            productName: delivery.productName,
+            sku: delivery.sku,
+            isChinese: delivery.languageCode === 'zh_Hans',
+            receiptPath: `/order-confirmation?id=${encodeURIComponent(delivery.order.code)}&token=${encodeURIComponent(proof.token)}`,
+        };
+    }
+
     async emailPayload(ctx: RequestContext, deliveryId: ID): Promise<AutoCardEmailPayload> {
         const delivery = await this.deliveryOrThrow(ctx, deliveryId);
-        if (!['ALLOCATED', 'RETRYING', 'SENT'].includes(delivery.state)) {
+        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+        if (!eligible) throw new UserInputError('该订单商品尚未付款、已取消或正在退款，不能继续交付');
+        if (!delivery.poolItems.some(item => item.state === 'ASSIGNED'))
             throw new Error('当前发卡记录尚未分配卡密');
-        }
-        if (delivery.poolItems.length !== delivery.quantity) {
-            delivery.state = 'MANUAL_REVIEW';
-            delivery.lastError = `发卡数量异常：订单需要 ${delivery.quantity} 份，实际绑定 ${delivery.poolItems.length} 份`;
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
-            await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
-            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
-            throw new Error(delivery.lastError);
-        }
         const fields = parseAutoCardFieldsJson(delivery.schemaSnapshot);
         const isChinese = delivery.languageCode === 'zh_Hans';
         return {
             deliveryId: String(delivery.id),
-            recipientEmail: delivery.recipientEmail,
+            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
             orderCode: delivery.order.code,
             productName: delivery.productName,
             sku: delivery.sku,
             isChinese,
             instructions: delivery.instructionsSnapshot,
             credentials: delivery.poolItems
+                .filter(item => item.state === 'ASSIGNED')
                 .slice()
                 .sort((left, right) => left.sequence - right.sequence)
+                .slice(0, eligible)
                 .map((item, index) => {
                     const values = this.cipher.decrypt(item.encryptedPayload);
                     return {
@@ -772,7 +795,7 @@ export class AutoCardService {
             ],
             relations: {
                 channel: true,
-                order: true,
+                order: { payments: { refunds: { lines: true } } },
                 orderLine: { productVariant: true },
                 config: true,
                 poolItems: true,
@@ -838,11 +861,11 @@ export class AutoCardService {
 
     private async reconcileVariant(ctx: RequestContext, productVariantId: ID): Promise<void> {
         const waiting = await this.connection.getRepository(ctx, AutoCardDelivery).find({
-            where: { state: 'WAITING_STOCK', config: { productVariantId, channelId: ctx.channelId } },
+            where: { channelId: ctx.channelId, state: 'WAITING_STOCK', config: { productVariantId } },
             relations: {
                 channel: true,
                 config: true,
-                order: true,
+                order: { payments: { refunds: { lines: true } } },
                 orderLine: { productVariant: true },
                 poolItems: true,
             },
@@ -907,42 +930,44 @@ export class AutoCardService {
         input: AutoCardDelivery,
     ): Promise<AutoCardDelivery> {
         const delivery = await this.lockDeliveryOrThrow(ctx, input.id);
-        if (delivery.poolItems.length === delivery.quantity) {
-            if (delivery.state !== 'SENT') {
-                delivery.state = 'ALLOCATED';
-                return this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
-            }
-            return delivery;
+        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+        const remainingQuantity = Math.max(0, eligible - delivery.poolItems.length);
+        if (!remainingQuantity) {
+            delivery.quantity = delivery.poolItems.length;
+            if (eligible && delivery.state !== 'SENT') delivery.state = 'ALLOCATED';
+            return this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
         }
-        if (delivery.poolItems.length > delivery.quantity) {
-            delivery.state = 'MANUAL_REVIEW';
-            delivery.lastError = '已分配卡密数量超过订单数量，需要人工核查';
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
-            await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
-            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
-            return delivery;
-        }
-        const remainingQuantity = delivery.quantity - delivery.poolItems.length;
+        const reservation = await this.digitalProducts.reservation(ctx, delivery.orderLineId);
         const repository = this.connection.getRepository(ctx, AutoCardPoolItem);
         let candidates: AutoCardPoolItem[];
-        try {
-            candidates = await repository
-                .createQueryBuilder('item')
-                .setLock('pessimistic_write')
-                .where('item.configId = :configId', { configId: delivery.configId })
-                .andWhere('item.state = :state', { state: 'AVAILABLE' })
-                .orderBy('item.sequence', 'ASC')
-                .addOrderBy('item.id', 'ASC')
-                .take(remainingQuantity)
-                .getMany();
-        } catch (error) {
-            if (!isLockNotSupportedError(error)) throw error;
-            candidates = await repository.find({
-                where: { configId: delivery.configId, state: 'AVAILABLE' },
-                order: { sequence: 'ASC', id: 'ASC' },
-                take: remainingQuantity,
-            });
-        }
+        if (reservation?.state === 'HELD' && reservation.stockPolicy === 'pool_derived') {
+            const reservedIds = JSON.parse(reservation.poolItemIdsJson) as ID[];
+            candidates = reservedIds.length
+                ? await repository.find({
+                      where: { id: In(reservedIds), state: 'RESERVED' },
+                      order: { sequence: 'ASC' },
+                      take: remainingQuantity,
+                  })
+                : [];
+        } else
+            try {
+                candidates = await repository
+                    .createQueryBuilder('item')
+                    .setLock('pessimistic_write')
+                    .where('item.configId = :configId', { configId: delivery.configId })
+                    .andWhere('item.state = :state', { state: 'AVAILABLE' })
+                    .orderBy('item.sequence', 'ASC')
+                    .addOrderBy('item.id', 'ASC')
+                    .take(remainingQuantity)
+                    .getMany();
+            } catch (error) {
+                if (!isLockNotSupportedError(error)) throw error;
+                candidates = await repository.find({
+                    where: { configId: delivery.configId, state: 'AVAILABLE' },
+                    order: { sequence: 'ASC', id: 'ASC' },
+                    take: remainingQuantity,
+                });
+            }
         if (candidates.length < remainingQuantity) {
             delivery.state = 'WAITING_STOCK';
             delivery.lastError = `号池还需要 ${remainingQuantity} 份，当前可用 ${candidates.length} 份`;
@@ -953,13 +978,16 @@ export class AutoCardService {
             await this.publishStockShortage(ctx, delivery, candidates.length, remainingQuantity);
             return delivery;
         }
+        candidates = candidates.slice(0, remainingQuantity);
         const ids = candidates.map(item => item.id);
         const update = await repository
             .createQueryBuilder()
             .update(AutoCardPoolItem)
             .set({ state: 'ASSIGNED', assignedAt: new Date(), deliveryId: delivery.id })
             .whereInIds(ids)
-            .andWhere('state = :available', { available: 'AVAILABLE' })
+            .andWhere('state = :available', {
+                available: reservation?.state === 'HELD' ? 'RESERVED' : 'AVAILABLE',
+            })
             .execute();
         if (update.affected !== remainingQuantity) {
             delivery.state = 'WAITING_STOCK';
@@ -982,6 +1010,9 @@ export class AutoCardService {
             ),
         ];
         await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        delivery.quantity = delivery.poolItems.length;
+        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.digitalProducts.consumeLine(ctx, delivery.orderLineId, remainingQuantity);
         await this.addEvent(ctx, delivery, 'ALLOCATED', `已按号池顺序分配 ${delivery.quantity} 份卡密`);
         await this.publishSupplyStockChange(ctx, delivery.configId, delivery.config.productVariantId);
         if (wasWaitingForStock) await this.resolveStockShortage(ctx, delivery);
@@ -1006,11 +1037,40 @@ export class AutoCardService {
         );
     }
 
+    async completeAvailableDeliveries(ctx: RequestContext, orderId: ID): Promise<void> {
+        const deliveries = await this.connection.getRepository(ctx, AutoCardDelivery).find({
+            where: {
+                channelId: ctx.channelId,
+                orderId,
+                state: In(['ALLOCATED', 'RETRYING', 'SENT']),
+            },
+        });
+        for (const delivery of deliveries) {
+            await this.digitalProducts.lock(ctx, AutoCardDelivery, delivery.id);
+            const current = await this.deliveryOrThrow(ctx, delivery.id);
+            if (digitalDeliverableQuantity(current.order, current.orderLine))
+                await this.completeFulfillment(ctx, current);
+        }
+    }
+
     private async completeFulfillment(ctx: RequestContext, delivery: AutoCardDelivery): Promise<void> {
         this.assertDeliveryScope(ctx, delivery);
-        if (delivery.fulfillmentId) return;
+        const history = await this.connection
+            .getRepository(ctx, FulfillmentLine)
+            .find({ where: { orderLineId: delivery.orderLineId }, relations: ['fulfillment'] });
+        const fulfilled = history
+            .filter(item => item.fulfillment.state !== 'Cancelled')
+            .reduce((sum, item) => sum + item.quantity, 0);
+        const quantity = Math.max(
+            0,
+            Math.min(
+                delivery.poolItems.length,
+                digitalDeliverableQuantity(delivery.order, delivery.orderLine),
+            ) - fulfilled,
+        );
+        if (!quantity) return;
         const result = await this.orderService.createFulfillment(ctx, {
-            lines: [{ orderLineId: delivery.orderLineId, quantity: delivery.quantity }],
+            lines: [{ orderLineId: delivery.orderLineId, quantity }],
             handler: { code: autoCardFulfillmentHandler.code, arguments: [] },
         });
         if (isGraphQlErrorResult(result)) {
@@ -1109,7 +1169,7 @@ export class AutoCardService {
             relations: {
                 config: true,
                 channel: true,
-                order: true,
+                order: { payments: { refunds: { lines: true } } },
                 orderLine: { productVariant: true },
                 poolItems: true,
                 events: true,
@@ -1153,14 +1213,14 @@ export class AutoCardService {
         return this.deliveryOrThrow(ctx, id);
     }
 
-    private addEvent(
+    private async addEvent(
         ctx: RequestContext,
         delivery: AutoCardDelivery,
         type: AutoCardDeliveryEventType,
         note: string,
         actorType: 'SYSTEM' | 'ADMIN' = 'SYSTEM',
     ): Promise<AutoCardDeliveryEvent> {
-        return this.connection.getRepository(ctx, AutoCardDeliveryEvent).save(
+        const saved = await this.connection.getRepository(ctx, AutoCardDeliveryEvent).save(
             new AutoCardDeliveryEvent({
                 delivery,
                 deliveryId: delivery.id,
@@ -1170,6 +1230,8 @@ export class AutoCardService {
                 note: note.slice(0, 2_000),
             }),
         );
+        await this.eventBus.publish(new OrderProcessingChangedEvent(ctx, String(delivery.orderId)));
+        return saved;
     }
 
     private publishDeliveryFailure(

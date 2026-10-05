@@ -1,691 +1,299 @@
-import { Check, FolderTree, Layers, Plus, Search, Trash2 } from 'lucide-react';
-import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
+import { useMutation } from '@apollo/client/react';
+import { useState } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
-import type { DigitalDeliveryMode, DigitalStockPolicy } from '../../graphql/commerce.graphql';
-import { getChannelDisplayName } from '../../utils/channel-display';
+import { CREATE_OPTION_GROUP } from '../../graphql/catalog-admin.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { LookupPager } from './LookupPager';
-import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
-import { QuickCreateOptionGroupModal } from './QuickCreateOptionGroupModal';
-import { isSystemImportOptionGroup } from './catalog-option-groups';
+import { splitOptionValues, toOptionGroupCode } from './catalog-option-groups';
+import { SOURCE_LANGUAGE_CODE, type OptionGroupItem } from './product-editor-types';
 
+const inputClass =
+    'w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-blue-500 focus:outline-none';
+
+/** Shared specifications and pricing only. Stock and delivery belong to their domain workspaces. */
 export function ProductVariantsTab() {
     const {
-        activeCurrencyCode,
-        effectiveFulfillmentType,
         variants,
-        dynamicCustomFieldValues,
-        handleVariantFieldChange,
-        handleAddVariant,
-        handleGenerateVariantMatrix,
-        handleDeleteVariant,
-        selectedOptionGroupIds,
-        setSelectedOptionGroupIds,
+        setVariants,
         knownOptionGroups,
-        setKnownOptionGroups,
-        optionGroupSearch,
-        setOptionGroupSearch,
-        optionGroupPage,
-        optionGroupPageSize,
-        setOptionGroupPageSize,
-        setOptionGroupPage,
-        optionGroupsData,
-        optionGroupsLoading,
-        optionGroupsError,
-        catalogChannelsData,
-        formErrors,
-        handleSave,
-        saving,
-        isDirty,
-        refetchProduct,
-        isCreateMode,
-        productData,
-        isOptionTemplatesOpen,
-        setIsOptionTemplatesOpen,
-        isQuickCreateSpecOpen,
-        setIsQuickCreateSpecOpen,
+        selectedOptionGroupIds,
         handleApplyOptionGroup,
+        handleVariantFieldChange,
+        handleDeleteVariant,
+        activeCurrencyCode,
+        formErrors,
+        saving,
+        optionGroupsData,
     } = useProductEditor();
-    const quoteOnly = dynamicCustomFieldValues?.pricingMode === 'QUOTE_ONLY';
-
-    if (!isCreateMode && !productData?.product) return null;
-    const selectableOptionGroupIds = new Set(
-        [...Object.values(knownOptionGroups), ...(optionGroupsData?.productOptionGroups.items ?? [])]
-            .filter(group => !isSystemImportOptionGroup(group))
-            .map(group => group.id),
+    const [multi, setMulti] = useState(false);
+    const [specName, setSpecName] = useState('');
+    const [specValues, setSpecValues] = useState('');
+    const [batchPrice, setBatchPrice] = useState('');
+    const [error, setError] = useState('');
+    const [createGroup, { loading }] = useMutation<{ createProductOptionGroup: OptionGroupItem }>(
+        CREATE_OPTION_GROUP,
     );
-    const selectedReusableOptionGroupIds = selectedOptionGroupIds.filter(id =>
-        selectableOptionGroupIds.has(id),
-    );
-    const productSystemOptionGroups = Object.values(knownOptionGroups).filter(
-        group => isSystemImportOptionGroup(group) && selectedOptionGroupIds.includes(group.id),
-    );
-
+    const addSpecification = async () => {
+        const values = splitOptionValues(specValues);
+        if (!specName.trim() || values.length < 2) {
+            setError('请填写规格名称和至少两个规格值');
+            return;
+        }
+        if (Math.max(1, variants.length) * values.length > 100) {
+            setError('规格组合最多支持 100 个，请减少规格值');
+            return;
+        }
+        setError('');
+        try {
+            const result = await createGroup({
+                variables: {
+                    input: {
+                        code: toOptionGroupCode('', 'product-spec'),
+                        translations: [{ languageCode: SOURCE_LANGUAGE_CODE, name: specName.trim() }],
+                        options: values.map((value, index) => ({
+                            code: toOptionGroupCode('', 'value', index),
+                            translations: [{ languageCode: SOURCE_LANGUAGE_CODE, name: value }],
+                        })),
+                    },
+                },
+            });
+            if (!result.data?.createProductOptionGroup) throw new Error('未收到规格创建结果');
+            handleApplyOptionGroup(result.data.createProductOptionGroup);
+            setSpecName('');
+            setSpecValues('');
+        } catch (failure) {
+            setError(toUserFacingError(failure, '规格创建失败，请重试'));
+        }
+    };
     return (
         <div className="space-y-4">
-            <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-2xs sm:p-5">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                    这一步只需填好商品的销售规格
-                    <FeatureHelpButton topic="catalog.variants" title="商品销售规格填写步骤" />
-                </h3>
-                <div className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-3">
-                    {[
-                        ['1', '添加规格', '单一商品只添加一个；颜色、容量等多规格再用模板。'],
-                        ['2', '填销售与成本价', '直接在表格中填写销售价与采购成本，实时核算毛利率。'],
-                        ['3', '统一保存', '点击右上角“保存商品”即可全部入库生效，无需单独保存每个模块。'],
-                    ].map(([step, title, description]) => (
-                        <div key={step} className="rounded-lg border border-blue-100 bg-white p-3">
-                            <div className="flex items-center gap-2 font-bold text-slate-900">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">
-                                    {step}
-                                </span>
-                                {title}
-                            </div>
-                            <p className="mt-1.5 leading-5 text-slate-500">{description}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            <FolderTree className="h-4 w-4 text-blue-600" />
-                            店铺归属与定价
-                            <FeatureHelpButton
-                                topic="catalog.variant-channels"
-                                title="店铺独立商品"
-                                description={
-                                    '如果其他店铺也要销售同款商品，请切换到目标店铺后重新创建或导入独立副本。'
-                                }
-                            />
-                        </h3>
-                        <p className="mt-1 text-xs text-slate-500">
-                            本商品仅属于{' '}
-                            <strong className="text-blue-700">
-                                {catalogChannelsData
-                                    ? getChannelDisplayName(catalogChannelsData.activeChannel)
-                                    : '当前店铺'}
-                            </strong>
-                            ，在本店独立设置 {activeCurrencyCode} 销售价。
-                        </p>
-                    </div>
-                    <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                        单店独立
-                    </span>
-                </div>
-            </section>
-
-            <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5">
-                    <div>
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            {effectiveFulfillmentType === 'digital'
-                                ? '销售规格、价格与发货'
-                                : '商品规格、销售价与库存'}
-                            <FeatureHelpButton
-                                topic="catalog.variants"
-                                title="SKU 规格变体与交付"
-                                description={
-                                    effectiveFulfillmentType === 'digital'
-                                        ? '在同一页完成销售价、交付方式、卡密格式和库存导入'
-                                        : '普通单品维护一行即可；如有颜色、容量或多包装等区分，请展开下方【规格模板】生成多规格'
-                                }
-                            />
-                        </h3>
-                    </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                    <AdminInput
+                        type="checkbox"
+                        checked={multi || variants.length > 1 || selectedOptionGroupIds.length > 0}
+                        disabled={saving || variants.length > 1 || selectedOptionGroupIds.length > 0}
+                        onChange={event => setMulti(event.target.checked)}
+                    />
+                    多规格
+                    <FeatureHelpButton topic="catalog.variants" title="商品规格" />
+                </label>
+                <div className="flex items-center gap-2">
+                    <AdminInput
+                        aria-label="批量售价"
+                        value={batchPrice}
+                        onChange={event => setBatchPrice(event.target.value)}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={`统一售价 (${activeCurrencyCode})`}
+                        className={`${inputClass} max-w-40`}
+                    />
                     <AdminButton
                         type="button"
-                        onClick={handleAddVariant}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                        disabled={saving || batchPrice === '' || Number(batchPrice) < 0}
+                        onClick={() =>
+                            setVariants(current =>
+                                current.map(variant => ({ ...variant, price: batchPrice })),
+                            )
+                        }
+                        className="shrink-0 text-xs font-semibold text-blue-700 disabled:opacity-50"
                     >
-                        <Plus className="w-3.5 h-3.5" /> 添加一个销售规格
+                        应用全部
                     </AdminButton>
                 </div>
-
-                <details
-                    open={isOptionTemplatesOpen}
-                    onToggle={event => setIsOptionTemplatesOpen(event.currentTarget.open)}
-                    className="border-b border-slate-100 bg-slate-50/40"
-                >
-                    <summary className="cursor-pointer list-none p-4 sm:p-5">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <div className="text-xs font-bold text-slate-800">
-                                    按颜色、容量等批量生成规格（可选）
-                                </div>
-                                <div className="mt-0.5 text-[11px] text-slate-400">
-                                    普通单品不需要使用。已选 {selectedReusableOptionGroupIds.length}{' '}
-                                    个通用模板
-                                    {productSystemOptionGroups.length > 0 &&
-                                        `（含 ${productSystemOptionGroups.length} 个专属规格）`}
-                                    。
-                                </div>
-                            </div>
-                            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                                {isOptionTemplatesOpen ? '收起设置' : '展开设置'}
-                            </span>
-                        </div>
-                    </summary>
-                    <div className="space-y-3 border-t border-slate-100 p-4 sm:p-5">
-                        {variants.length <= 1 &&
-                            (variants[0]?.optionIds.length ?? 0) === 0 &&
-                            selectedReusableOptionGroupIds.length > 0 && (
-                                <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                                    <div>
-                                        <strong className="font-bold">
-                                            💡 当前为普通单品（1 个销售规格）：
-                                        </strong>
-                                        未生成矩阵时将直接按普通单品保存，不会强制关联选中的模板。若需多规格，请点击右侧【生成
-                                        SKU 矩阵】。
-                                    </div>
+            </div>
+            {(multi || variants.length > 1 || selectedOptionGroupIds.length > 0) && (
+                <div className="space-y-3">
+                    {selectedOptionGroupIds
+                        .map(id => knownOptionGroups[id])
+                        .filter(Boolean)
+                        .map(group => (
+                            <p key={group.id} className="text-xs text-slate-600">
+                                <strong>{group.name}：</strong>
+                                {group.options.map(option => option.name).join('、')}
+                            </p>
+                        ))}
+                    <div className="grid items-end gap-3 md:grid-cols-[1fr_2fr_auto]">
+                        <AdminField
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={<>规格名称</>}
+                        >
+                            {' '}
+                            <AdminInput
+                                aria-label="规格名称"
+                                value={specName}
+                                onChange={event => setSpecName(event.target.value)}
+                                placeholder="如：版本"
+                                className={inputClass}
+                            />
+                        </AdminField>
+                        <AdminField
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={<>规格值</>}
+                        >
+                            {' '}
+                            <AdminInput
+                                aria-label="规格值"
+                                value={specValues}
+                                onChange={event => setSpecValues(event.target.value)}
+                                placeholder="如：标准版，专业版"
+                                className={inputClass}
+                            />
+                        </AdminField>
+                        <AdminButton
+                            type="button"
+                            onClick={() => void addSpecification()}
+                            disabled={loading || saving}
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                        >
+                            {loading ? '生成中…' : '生成规格'}
+                        </AdminButton>
+                    </div>
+                    <details>
+                        <summary className="cursor-pointer text-xs text-slate-500">
+                            使用已有规格模板（可选）
+                        </summary>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {optionGroupsData?.productOptionGroups.items
+                                .filter(group => !selectedOptionGroupIds.includes(group.id))
+                                .map(group => (
                                     <AdminButton
                                         type="button"
-                                        onClick={() => setSelectedOptionGroupIds([])}
-                                        className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-slate-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-300 dark:hover:bg-slate-700 cursor-pointer shadow-2xs"
+                                        key={group.id}
+                                        disabled={
+                                            saving ||
+                                            Math.max(1, variants.length) * group.options.length > 100
+                                        }
+                                        onClick={() => handleApplyOptionGroup(group)}
+                                        className="rounded border px-3 py-1.5 text-xs disabled:opacity-50"
                                     >
-                                        清空已选模板
+                                        {group.name}
                                     </AdminButton>
-                                </div>
-                            )}
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <div className="text-xs font-bold text-slate-800">选择规格模板</div>
-                                <div className="mt-0.5 text-[11px] text-slate-400">
-                                    例如“颜色”有红、蓝两个选项，会生成两行待填的销售规格。
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => setIsQuickCreateSpecOpen(true)}
-                                    className="flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 cursor-pointer transition-colors shadow-2xs"
-                                >
-                                    <Plus className="h-3.5 w-3.5" /> 快速新建规格
-                                </AdminButton>
-                                <AdminButton
-                                    type="button"
-                                    onClick={handleGenerateVariantMatrix}
-                                    disabled={selectedReusableOptionGroupIds.length === 0}
-                                    className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-                                >
-                                    生成 SKU 矩阵
-                                </AdminButton>
-                            </div>
+                                ))}
                         </div>
-                        <div className="relative max-w-md">
-                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </details>
+                </div>
+            )}
+            {error && (
+                <p role="alert" className="text-xs text-rose-600">
+                    {error}
+                </p>
+            )}
+            <div className="space-y-3">
+                {variants.map((variant, index) => (
+                    <div
+                        key={variant.id ?? index}
+                        className="grid items-start gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-4"
+                    >
+                        <AdminField
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={<>{variants.length === 1 ? '规格名称' : `规格 ${index + 1}`}</>}
+                        >
+                            {' '}
                             <AdminInput
-                                aria-label="搜索规格模板"
-                                value={optionGroupSearch}
-                                onChange={event => {
-                                    setOptionGroupSearch(event.target.value);
-                                    setOptionGroupPage(0);
-                                }}
-                                placeholder="搜索规格模板名称"
-                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
+                                aria-label={`规格 ${index + 1} 名称`}
+                                value={variant.name}
+                                placeholder="默认规格"
+                                disabled={saving}
+                                onChange={event =>
+                                    handleVariantFieldChange(index, 'name', event.target.value)
+                                }
+                                className={inputClass}
                             />
+                        </AdminField>
+                        <AdminField
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={<>商品编码</>}
+                        >
+                            {' '}
+                            <AdminInput
+                                aria-label={`规格 ${index + 1} 编码`}
+                                value={variant.sku}
+                                disabled={saving}
+                                onChange={event => handleVariantFieldChange(index, 'sku', event.target.value)}
+                                className={inputClass}
+                            />
+                            {formErrors.variants?.[index]?.sku && (
+                                <span role="alert" className="block text-rose-600">
+                                    {formErrors.variants[index].sku}
+                                </span>
+                            )}
+                        </AdminField>
+                        <AdminField
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={
+                                <>
+                                    售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
+                                </>
+                            }
+                        >
+                            {' '}
+                            <AdminInput
+                                aria-label={`规格 ${index + 1} 售价`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={variant.price}
+                                disabled={saving}
+                                onChange={event =>
+                                    handleVariantFieldChange(index, 'price', event.target.value)
+                                }
+                                className={inputClass}
+                            />
+                            {formErrors.variants?.[index]?.price && (
+                                <span role="alert" className="block text-rose-600">
+                                    {formErrors.variants[index].price}
+                                </span>
+                            )}
+                        </AdminField>
+                        <div className="space-y-2">
+                            <AdminField
+                                className="block space-y-1.5 text-xs font-semibold text-slate-700"
+                                label={<>成本 ({activeCurrencyCode})</>}
+                            >
+                                {' '}
+                                <AdminInput
+                                    aria-label={`规格 ${index + 1} 成本`}
+                                    type="number"
+                                    min="0"
+                                    step="0.001"
+                                    value={variant.costPrice ?? ''}
+                                    disabled={saving}
+                                    onChange={event =>
+                                        handleVariantFieldChange(index, 'costPrice', event.target.value)
+                                    }
+                                    className={inputClass}
+                                />
+                            </AdminField>
+                            <div className="flex items-center justify-between text-xs">
+                                <label className="flex items-center gap-1.5">
+                                    <AdminInput
+                                        type="checkbox"
+                                        checked={variant.enabled}
+                                        disabled={saving}
+                                        onChange={event =>
+                                            handleVariantFieldChange(index, 'enabled', event.target.checked)
+                                        }
+                                    />
+                                    可销售
+                                </label>
+                                {!variant.id && variants.length > 1 && (
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => void handleDeleteVariant(index)}
+                                        className="text-rose-600"
+                                    >
+                                        移除此新规格
+                                    </AdminButton>
+                                )}
+                            </div>
                         </div>
-                        {productSystemOptionGroups.length > 0 && (
-                            <div className="space-y-1.5 rounded-lg border border-blue-200 bg-blue-50/60 p-3">
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
-                                        商品专属规格
-                                    </span>
-                                    来自导入或专设，已直接绑定当前商品：
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {productSystemOptionGroups.map(group => (
-                                        <div
-                                            key={group.id}
-                                            className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-2xs"
-                                        >
-                                            <span className="font-bold">{group.name || '导入规格'}</span>
-                                            <span className="text-[11px] text-blue-700 font-mono">
-                                                ({group.options.map(o => o.name).join(' / ') || '无选项'})
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {optionGroupsError ? (
-                            <div className="rounded-lg bg-rose-50 p-3 text-[11px] text-rose-700">
-                                {toUserFacingError(optionGroupsError, '规格模板读取失败，请稍后重试')}
-                            </div>
-                        ) : (optionGroupsData?.productOptionGroups.items.length ?? 0) === 0 ? (
-                            <div className="rounded-lg bg-slate-50 p-3 text-[11px] text-slate-500">
-                                尚未创建规格模板，请先到【商品管理 → 分类与属性】配置。
-                            </div>
-                        ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {optionGroupsData?.productOptionGroups.items.map(group => {
-                                    const isSelected = selectedOptionGroupIds.includes(group.id);
-                                    return (
-                                        <AdminButton
-                                            key={group.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setKnownOptionGroups(current => ({
-                                                    ...current,
-                                                    [group.id]: group,
-                                                }));
-                                                setSelectedOptionGroupIds(ids =>
-                                                    isSelected
-                                                        ? ids.filter(id => id !== group.id)
-                                                        : [...ids, group.id],
-                                                );
-                                            }}
-                                            className={`rounded-lg border px-3 py-2 text-left transition-colors ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'}`}
-                                        >
-                                            <div className="flex items-center gap-1.5 text-xs font-bold">
-                                                {isSelected && <Check className="h-3 w-3" />}
-                                                {group.name}
-                                            </div>
-                                            <div className="mt-0.5 font-mono text-[10px] opacity-70">
-                                                {group.options.length} 个选项
-                                            </div>
-                                        </AdminButton>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        <LookupPager
-                            page={optionGroupPage}
-                            loading={optionGroupsLoading}
-                            pageSize={optionGroupPageSize}
-                            onPageSizeChange={setOptionGroupPageSize}
-                            totalItems={optionGroupsData?.productOptionGroups.totalItems ?? 0}
-                            onPageChange={setOptionGroupPage}
-                        />
-                        <p className="text-[10px] leading-4 text-slate-400">
-                            系统导入时生成的内部规格不在这里显示，不需要人工选择或删除。
-                        </p>
                     </div>
-                </details>
-
-                {variants.length === 0 ? (
-                    <div className="space-y-3 p-8 text-center text-slate-400">
-                        <Layers className="w-8 h-8 mx-auto text-slate-300" />
-                        <div className="text-xs font-bold text-slate-600">还没有销售规格</div>
-                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                            普通单品点击“添加一个销售规格”，填完编码、销售价和库存即可。
-                        </p>
-                    </div>
-                ) : (
-                    <div className="mobile-scrollbar-hidden overflow-x-auto">
-                        <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
-                            <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold whitespace-nowrap">
-                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        商品规格名称
-                                    </th>
-                                    <th scope="col" className="min-w-[150px] whitespace-nowrap px-3 py-3">
-                                        SKU 编码（内部编号） <span className="text-rose-500">*</span>
-                                    </th>
-                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        成本价 ({activeCurrencyCode})
-                                    </th>
-                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        销售价 ({activeCurrencyCode}){' '}
-                                        {!quoteOnly && <span className="text-rose-500">*</span>}
-                                    </th>
-                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        毛利率
-                                    </th>
-                                    {effectiveFulfillmentType === 'digital' ? (
-                                        <>
-                                            <th
-                                                scope="col"
-                                                className="min-w-[150px] whitespace-nowrap px-3 py-3"
-                                            >
-                                                数字交付方式
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="min-w-[130px] whitespace-nowrap px-3 py-3"
-                                            >
-                                                库存规则
-                                            </th>
-                                            <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                                可售库存
-                                            </th>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                                当前库存
-                                            </th>
-                                            <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                                订单占用（只读）
-                                            </th>
-                                        </>
-                                    )}
-                                    <th scope="col" className="whitespace-nowrap px-3 py-3 text-center">
-                                        可销售
-                                    </th>
-                                    <th scope="col" className="w-16 whitespace-nowrap px-3 py-3 text-right">
-                                        操作
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 text-slate-700">
-                                {variants.map((variant, index) => {
-                                    const rowError = formErrors.variants?.[index];
-
-                                    return (
-                                        <tr
-                                            key={variant.id || index}
-                                            className="h-[52px] hover:bg-slate-50/80"
-                                        >
-                                            {/* Variant Name */}
-                                            <td className="h-[52px] px-3 py-2">
-                                                <AdminInput
-                                                    type="text"
-                                                    aria-label={`第 ${index + 1} 行规格名称`}
-                                                    value={variant.name}
-                                                    onChange={e =>
-                                                        handleVariantFieldChange(
-                                                            index,
-                                                            'name',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="如：单件、红色 / XL"
-                                                    className="w-full border border-slate-300 rounded px-2 py-1 font-bold text-slate-900 bg-white"
-                                                />
-                                            </td>
-
-                                            {/* SKU */}
-                                            <td className="h-[52px] px-3 py-2">
-                                                <AdminInput
-                                                    type="text"
-                                                    aria-label={`第 ${index + 1} 行 SKU 编码`}
-                                                    value={variant.sku}
-                                                    onChange={e =>
-                                                        handleVariantFieldChange(index, 'sku', e.target.value)
-                                                    }
-                                                    placeholder="如：SPZL-001，不可重复"
-                                                    className={`w-full font-mono border rounded px-2 py-1 bg-white ${rowError?.sku ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-700'}`}
-                                                />
-                                                {rowError?.sku && (
-                                                    <div className="text-[10px] text-rose-500 mt-0.5">
-                                                        {rowError.sku}
-                                                    </div>
-                                                )}
-                                            </td>
-
-                                            {/* Cost Price */}
-                                            <td className="h-[52px] px-3 py-2">
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-slate-400 font-mono">
-                                                        {activeCurrencyCode}
-                                                    </span>
-                                                    <AdminInput
-                                                        type="number"
-                                                        aria-label={`第 ${index + 1} 行成本价`}
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={variant.costPrice ?? ''}
-                                                        onChange={e =>
-                                                            handleVariantFieldChange(
-                                                                index,
-                                                                'costPrice',
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder="0.00"
-                                                        className="w-24 font-mono border border-slate-300 rounded px-2 py-1 bg-white text-slate-800 focus:border-blue-500"
-                                                    />
-                                                </div>
-                                            </td>
-
-                                            {/* Price */}
-                                            <td className="h-[52px] px-3 py-2">
-                                                {quoteOnly ? (
-                                                    <span className="font-semibold text-blue-700">
-                                                        联系客服询价
-                                                    </span>
-                                                ) : (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-slate-400 font-mono">
-                                                            {activeCurrencyCode}
-                                                        </span>
-                                                        <AdminInput
-                                                            type="number"
-                                                            aria-label={`第 ${index + 1} 行销售价`}
-                                                            step="0.01"
-                                                            min="0"
-                                                            value={variant.price}
-                                                            onChange={e =>
-                                                                handleVariantFieldChange(
-                                                                    index,
-                                                                    'price',
-                                                                    e.target.value,
-                                                                )
-                                                            }
-                                                            placeholder="0.00"
-                                                            className={`w-24 font-mono font-bold border rounded px-2 py-1 bg-white ${rowError?.price ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-900'}`}
-                                                        />
-                                                    </div>
-                                                )}
-                                                {rowError?.price && (
-                                                    <div className="text-[10px] text-rose-500 mt-0.5">
-                                                        {rowError.price}
-                                                    </div>
-                                                )}
-                                            </td>
-
-                                            {/* Margin */}
-                                            <td className="h-[52px] px-3 py-2 whitespace-nowrap">
-                                                {(() => {
-                                                    if (quoteOnly)
-                                                        return (
-                                                            <span className="text-slate-300 font-mono">
-                                                                —
-                                                            </span>
-                                                        );
-                                                    const cost = parseFloat(variant.costPrice || '');
-                                                    const price = parseFloat(variant.price || '');
-                                                    if (!isNaN(cost) && !isNaN(price) && price > 0) {
-                                                        const margin = ((price - cost) / price) * 100;
-                                                        return (
-                                                            <span
-                                                                className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${
-                                                                    margin >= 0
-                                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                                        : 'bg-rose-50 text-rose-700'
-                                                                }`}
-                                                            >
-                                                                {margin.toFixed(1)}%
-                                                            </span>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <span className="text-slate-300 font-mono">—</span>
-                                                    );
-                                                })()}
-                                            </td>
-
-                                            {effectiveFulfillmentType === 'digital' ? (
-                                                <>
-                                                    <td className="h-[52px] px-3 py-2">
-                                                        <AdminSelect
-                                                            aria-label={`第 ${index + 1} 行数字交付方式`}
-                                                            value={variant.digitalDeliveryMode}
-                                                            onChange={event =>
-                                                                handleVariantFieldChange(
-                                                                    index,
-                                                                    'digitalDeliveryMode',
-                                                                    event.target.value as DigitalDeliveryMode,
-                                                                )
-                                                            }
-                                                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                                                        >
-                                                            <option value="manual_service">人工交付</option>
-                                                            <option value="file_download">文件下载</option>
-                                                            <option value="auto_card">号池自动发卡</option>
-                                                        </AdminSelect>
-                                                    </td>
-                                                    <td className="h-[52px] px-3 py-2">
-                                                        {variant.digitalDeliveryMode === 'file_download' ? (
-                                                            <AdminSelect
-                                                                aria-label={`第 ${index + 1} 行数字库存规则`}
-                                                                value={variant.digitalStockPolicy}
-                                                                onChange={event =>
-                                                                    handleVariantFieldChange(
-                                                                        index,
-                                                                        'digitalStockPolicy',
-                                                                        event.target
-                                                                            .value as DigitalStockPolicy,
-                                                                    )
-                                                                }
-                                                                className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                                                            >
-                                                                <option value="limited">限制库存</option>
-                                                                <option value="unlimited">无限库存</option>
-                                                            </AdminSelect>
-                                                        ) : (
-                                                            <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
-                                                                {variant.digitalDeliveryMode === 'auto_card'
-                                                                    ? '号池实时库存'
-                                                                    : '手动限制库存'}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="h-[52px] px-3 py-2">
-                                                        {variant.digitalDeliveryMode === 'auto_card' ? (
-                                                            <div className="flex items-center gap-1 whitespace-nowrap">
-                                                                <div className="font-mono font-bold text-violet-700">
-                                                                    {variant.autoCardAvailableStock ?? 0}
-                                                                </div>
-                                                                <span className="text-[10px] text-slate-400">
-                                                                    只读，来自号池
-                                                                </span>
-                                                            </div>
-                                                        ) : variant.digitalStockPolicy === 'unlimited' ? (
-                                                            <span className="font-bold text-emerald-700">
-                                                                无限
-                                                            </span>
-                                                        ) : (
-                                                            <AdminInput
-                                                                type="number"
-                                                                aria-label={`第 ${index + 1} 行可售库存`}
-                                                                min="0"
-                                                                value={variant.stockOnHand}
-                                                                onChange={event =>
-                                                                    handleVariantFieldChange(
-                                                                        index,
-                                                                        'stockOnHand',
-                                                                        event.target.value === ''
-                                                                            ? ''
-                                                                            : parseInt(event.target.value) ||
-                                                                                  0,
-                                                                    )
-                                                                }
-                                                                placeholder="0"
-                                                                className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
-                                                            />
-                                                        )}
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {/* Stock on Hand */}
-                                                    <td className="h-[52px] px-3 py-2">
-                                                        <AdminInput
-                                                            type="number"
-                                                            aria-label={`第 ${index + 1} 行在手库存`}
-                                                            min="0"
-                                                            value={variant.stockOnHand}
-                                                            onChange={event =>
-                                                                handleVariantFieldChange(
-                                                                    index,
-                                                                    'stockOnHand',
-                                                                    event.target.value === ''
-                                                                        ? ''
-                                                                        : parseInt(event.target.value) || 0,
-                                                                )
-                                                            }
-                                                            placeholder="0"
-                                                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
-                                                        />
-                                                    </td>
-
-                                                    {/* Allocated Stock */}
-                                                    <td className="h-[52px] px-3 py-2 font-mono text-slate-400">
-                                                        {variant.stockAllocated || 0}
-                                                    </td>
-                                                </>
-                                            )}
-
-                                            {/* Enabled */}
-                                            <td className="h-[52px] px-3 py-2 text-center">
-                                                <AdminInput
-                                                    type="checkbox"
-                                                    aria-label={`第 ${index + 1} 行 SKU 启用状态`}
-                                                    checked={variant.enabled}
-                                                    onChange={e =>
-                                                        handleVariantFieldChange(
-                                                            index,
-                                                            'enabled',
-                                                            e.target.checked,
-                                                        )
-                                                    }
-                                                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-                                                />
-                                            </td>
-
-                                            {/* Actions */}
-                                            <td className="h-[52px] px-3 py-2 text-right">
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => handleDeleteVariant(index)}
-                                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                                                    title="删除该规格"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </AdminButton>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-                {variants.length > 0 && (
-                    <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-500 sm:px-5 flex flex-wrap items-center justify-between gap-2">
-                        <span>💡 销售价与成本价填写后，点击右上角【保存商品】即可统一保存生效。</span>
-                        <span className="text-[11px] text-slate-400">
-                            商品出入库、盘点与多仓调拨请前往【库存与仓储】模块。
-                        </span>
-                    </div>
-                )}
+                ))}
             </div>
-
-            {effectiveFulfillmentType === 'digital' && (
-                <ProductAutoCardSetupPanel
-                    variants={variants}
-                    productIsDirty={isDirty}
-                    productSaving={saving}
-                    onSaveProduct={handleSave}
-                    onRefreshProduct={refetchProduct}
-                />
-            )}
-
-            {isQuickCreateSpecOpen && (
-                <QuickCreateOptionGroupModal
-                    isOpen={isQuickCreateSpecOpen}
-                    onClose={() => setIsQuickCreateSpecOpen(false)}
-                    onCreated={handleApplyOptionGroup}
-                    isSingleVariantWithoutOptions={
-                        variants.length === 1 && variants[0].optionIds.length === 0
-                    }
-                />
-            )}
         </div>
     );
 }

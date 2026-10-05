@@ -774,3 +774,388 @@
         grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
     }
 }
+
+/* Shared mobile presentation. Data, permissions and action handlers stay with each page. */
+.admin-mobile-list,
+.admin-mobile-sort,
+.admin-mobile-section-select,
+.admin-mobile-table-hint {
+    display: none;
+}
+.admin-comparison-scroll {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+}
+.admin-dialog-surface {
+    min-width: 0;
+    overscroll-behavior: contain;
+}
+
+/* Keep an open filter sheet usable when rotating to a wider viewport. */
+.admin-dialog-surface .admin-mobile-sort {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    min-width: 0;
+}
+.admin-dialog-surface .admin-mobile-sort .admin-field {
+    flex: 1 1 auto;
+}
+
+@media (max-width: 767px) {
+    :root {
+        --admin-mobile-gutter: 1rem;
+    }
+    .admin-app-shell {
+        height: 100dvh;
+    }
+    .admin-app-header {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        min-height: 3.5rem;
+        gap: 0.25rem;
+        padding-block: 0.25rem;
+        padding-inline: 0.5rem;
+    }
+    .admin-header-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+    .admin-store-selector {
+        order: -1;
+        flex: 1 1 auto;
+        gap: 0.25rem;
+    }
+    .admin-store-select {
+        width: 100%;
+        min-width: 0;
+    }
+    .admin-tab-strip {
+        min-height: 3rem;
+        height: auto;
+    }
+    .admin-tab-item {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+    }
+    .admin-tab-link {
+        display: block;
+        min-width: 0;
+        min-height: var(--admin-control-min);
+        padding-block: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .admin-tab-strip [role='menu'] {
+        top: 100%;
+        width: min(22rem, calc(100vw - 1.5rem));
+        max-height: calc(100dvh - 8rem);
+    }
+    .admin-button {
+        min-width: var(--admin-control-min);
+        min-height: var(--admin-control-min);
+        height: auto;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+    .admin-control:not([aria-hidden='true']) {
+        min-height: 3rem;
+        min-width: 0;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+    .admin-field > .admin-field-row {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+    }
+    .admin-field > .admin-field-row > .admin-field-help {
+        grid-column: 1;
+    }
+    .admin-field-label {
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    .admin-field-help {
+        font-size: 0.8125rem;
+        line-height: 1.5;
+    }
+    .admin-page-size {
+        min-width: 0;
+        flex-wrap: wrap;
+        font-size: 0.8125rem;
+    }
+    .admin-workspace-content > :where(div, main),
+    .admin-workspace-content > div > :where(header, main, nav) {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .admin-workspace-content > div > :where(header, main) {
+        padding-inline: var(--admin-mobile-gutter);
+    }
+    .admin-workspace-content > div > header > .flex {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .admin-workspace-content > div > header :where(h1, h2) {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .admin-workspace-content :where(header, footer) .admin-button {
+        max-width: 100%;
+    }
+    .admin-page-status {
+        flex-wrap: wrap;
+        font-size: 0.8125rem;
+    }
+    .admin-mobile-list {
+        display: grid;
+        gap: 0.75rem;
+        min-width: 0;
+        padding: 0.75rem;
+    }
+    .admin-desktop-table {
+        display: none;
+    }
+    .admin-mobile-record {
+        min-width: 0;
+        padding: 1rem;
+        border-radius: var(--admin-radius-surface);
+        background: var(--admin-surface);
+        border: 1px solid var(--admin-border-subtle);
+        color: var(--admin-text);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    .admin-mobile-record-heading {
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .admin-mobile-record-title {
+        flex: 1 1 8rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-weight: 600;
+    }
+    .admin-mobile-record-status {
+        max-width: 100%;
+        font-size: 0.8125rem;
+    }
+    .admin-mobile-record-selection,
+    .admin-mobile-record-selection > label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: var(--admin-control-min);
+        min-height: var(--admin-control-min);
+    }
+    .admin-mobile-record-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-block: 0.75rem 0;
+    }
+    .admin-mobile-record-field {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .admin-mobile-record-field[data-full-width] {
+        grid-column: 1 / -1;
+    }
+    .admin-mobile-record-field dt {
+        margin-bottom: 0.25rem;
+        color: var(--admin-text-muted);
+        font-size: 0.8125rem;
+    }
+    .admin-mobile-record-field dd {
+        margin: 0;
+        color: var(--admin-text);
+        font-variant-numeric: tabular-nums;
+    }
+    .admin-mobile-record-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--admin-border-subtle);
+    }
+    .admin-mobile-sort {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+    .admin-mobile-sort .admin-field {
+        flex: 1 1 auto;
+    }
+    .admin-mobile-sort > .admin-button {
+        min-height: 3rem;
+        flex: 0 0 auto;
+    }
+    .admin-mobile-section-select {
+        display: block;
+        min-width: 0;
+    }
+    .admin-mobile-table-hint {
+        display: block;
+        margin-block: 0.5rem;
+        color: var(--admin-text-muted);
+        font-size: 0.8125rem;
+    }
+    /* A single DOM keeps editable cells, selection and mutations owned by the original row. */
+    table.admin-mobile-record-table {
+        display: block;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        border-collapse: separate;
+        text-align: start;
+        font-size: 0.875rem;
+    }
+    .admin-mobile-record-table > thead {
+        display: none;
+    }
+    .admin-mobile-record-table > tbody {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+    .admin-mobile-record-table > tbody > tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border: 1px solid var(--admin-border-subtle);
+        border-radius: var(--admin-radius-surface);
+        background: var(--admin-surface);
+        height: auto;
+        min-height: 0;
+    }
+    .admin-mobile-record-table > tbody > tr > :is(td, th) {
+        display: block;
+        position: static;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        height: auto;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-align: start;
+        font-size: 0.875rem;
+    }
+    .admin-mobile-record-table > tbody > tr > :is(:first-child, :last-child, [colspan], [data-mobile-wide]) {
+        grid-column: 1 / -1;
+    }
+    .admin-mobile-record-table :is(td, th)[data-label]:not([data-label=''])::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.8125rem;
+        font-weight: 400;
+        color: var(--admin-text-muted);
+    }
+    .admin-mobile-record-table :is(td, th) .truncate {
+        max-width: 100%;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .admin-mobile-record-table td > .flex {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .admin-dialog-surface {
+        max-width: calc(100vw - 1.5rem);
+        max-height: calc(100dvh - 1.5rem);
+        overflow-y: auto;
+        scroll-padding-block: 1rem;
+    }
+    .admin-dialog-surface > :is(header, footer) {
+        flex-shrink: 0;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding-inline: 1rem;
+    }
+    .admin-dialog-surface > :is(header, footer) > .flex {
+        flex-wrap: wrap;
+    }
+    .admin-dialog-surface > .flex-1 {
+        min-height: 0;
+        min-width: 0;
+    }
+    .admin-dialog-surface[data-mobile-presentation='fullscreen'],
+    .admin-dialog-surface[data-mobile-presentation='sheet'] {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        max-width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        border-radius: 0;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .admin-dialog-surface[data-mobile-presentation='sheet'] {
+        top: auto;
+        height: auto;
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 1rem);
+        border-radius: var(--admin-radius-dialog) var(--admin-radius-dialog) 0 0;
+    }
+    #app-sidebar nav :where(a, button) {
+        min-height: var(--admin-control-min);
+        font-size: 0.875rem;
+    }
+    #app-sidebar nav :where(a, button) span {
+        white-space: normal;
+    }
+    .admin-mobile-editor {
+        min-height: 0;
+    }
+    .admin-mobile-editor > header {
+        position: static;
+    }
+    .admin-mobile-editor-body {
+        min-height: 0;
+        min-width: 0;
+        overflow-y: auto;
+        scroll-padding-block: 1rem;
+    }
+    .admin-mobile-save-bar {
+        padding: 0.75rem var(--admin-mobile-gutter);
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--admin-border-subtle);
+        background: var(--admin-surface);
+        gap: 0.5rem;
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+    .admin-mobile-save-bar > .admin-button {
+        flex: 1 1 auto;
+        min-height: 3rem;
+    }
+}
+
+@media (max-width: 359px) {
+    :root {
+        --admin-mobile-gutter: 0.75rem;
+    }
+    .admin-mobile-record-fields,
+    .admin-mobile-record-table > tbody > tr {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

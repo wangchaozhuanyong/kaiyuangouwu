@@ -183,7 +183,7 @@ export function PromotersPanel({
     return (
         <div className="space-y-4">
             <TableCard title="推广员团队" description="按邀请码汇总邀请人数与成交人数">
-                <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[980px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
                             <Th>推广员姓名</Th>
@@ -197,7 +197,7 @@ export function PromotersPanel({
                     <tbody>
                         {summaries.map(item => (
                             <tr key={item.customerId} className="h-[52px] border-t border-slate-100">
-                                <Td>
+                                <Td label="推广员姓名">
                                     <span
                                         className="block max-w-44 truncate font-bold text-slate-900"
                                         title={item.customerName || item.customerEmail}
@@ -205,7 +205,7 @@ export function PromotersPanel({
                                         {item.customerName || item.customerEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="推广员邮箱">
                                     <span
                                         className="block max-w-56 truncate text-slate-500"
                                         title={item.customerEmail}
@@ -213,14 +213,14 @@ export function PromotersPanel({
                                         {item.customerEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="邀请码">
                                     <span className="font-mono font-bold text-blue-600">
                                         {item.inviteCode}
                                     </span>
                                 </Td>
-                                <Td>{item.invitedCount} 人</Td>
-                                <Td>{item.purchasedInviteeCount} 人</Td>
-                                <Td>
+                                <Td label="已邀请">{item.invitedCount} 人</Td>
+                                <Td label="已成交受邀人">{item.purchasedInviteeCount} 人</Td>
+                                <Td label="转化率">
                                     {item.invitedCount
                                         ? `${((item.purchasedInviteeCount / item.invitedCount) * 100).toFixed(1)}%`
                                         : '0%'}
@@ -268,7 +268,7 @@ export function InviteRelationshipsPanel({
     return (
         <div className="space-y-4">
             <TableCard title="邀请关系明细" description="每条绑定关系与首次成交时间均可追溯">
-                <table className="w-full min-w-[1420px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1420px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
                             <Th>邀请人姓名</Th>
@@ -284,7 +284,7 @@ export function InviteRelationshipsPanel({
                     <tbody>
                         {relationships.map(item => (
                             <tr key={item.id} className="h-[52px] border-t border-slate-100">
-                                <Td>
+                                <Td label="邀请人姓名">
                                     <span
                                         className="block max-w-40 truncate font-bold text-slate-900"
                                         title={item.inviterName || item.inviterEmail}
@@ -292,7 +292,7 @@ export function InviteRelationshipsPanel({
                                         {item.inviterName || item.inviterEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="邀请人邮箱">
                                     <span
                                         className="block max-w-56 truncate text-slate-500"
                                         title={item.inviterEmail}
@@ -300,7 +300,7 @@ export function InviteRelationshipsPanel({
                                         {item.inviterEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="受邀客户姓名">
                                     <span
                                         className="block max-w-40 truncate font-bold text-slate-900"
                                         title={item.inviteeName || item.inviteeEmail}
@@ -308,7 +308,7 @@ export function InviteRelationshipsPanel({
                                         {item.inviteeName || item.inviteeEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="受邀客户邮箱">
                                     <span
                                         className="block max-w-56 truncate text-slate-500"
                                         title={item.inviteeEmail}
@@ -316,12 +316,12 @@ export function InviteRelationshipsPanel({
                                         {item.inviteeEmail}
                                     </span>
                                 </Td>
-                                <Td>
+                                <Td label="邀请码">
                                     <span className="font-mono text-blue-600">{item.inviteCodeSnapshot}</span>
                                 </Td>
-                                <Td>{systemFieldDisplayLabel('source', item.source)}</Td>
-                                <Td>{formatDateTime(item.boundAt)}</Td>
-                                <Td>{formatDateTime(item.firstPaidOrderAt)}</Td>
+                                <Td label="来源">{systemFieldDisplayLabel('source', item.source)}</Td>
+                                <Td label="绑定时间">{formatDateTime(item.boundAt)}</Td>
+                                <Td label="首次成交">{formatDateTime(item.firstPaidOrderAt)}</Td>
                             </tr>
                         ))}
                         {!relationships.length && <EmptyRow colSpan={8} />}
@@ -364,6 +364,7 @@ export function RewardsPanel({
     const items = data?.referralRewards.items ?? [];
     return (
         <TableCard
+            comparison
             title="返利订单与退款扣回"
             description="奖励从待生效到可用、部分扣回或完全扣回均保留原始金额"
         >
@@ -491,6 +492,7 @@ export function LedgerPanel({
                 </div>
             )}
             <TableCard
+                comparison
                 title="钱包审计流水"
                 description="所有奖励、消费抵扣、退款追缴、提款和人工调整均写入不可变流水"
             >
@@ -611,7 +613,7 @@ export function WithdrawalsPanel({
             title="人工提款审批"
             description="批准仅代表审核通过；完成线下打款后必须填写外部流水号并标记已打款"
         >
-            <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
+            <table className="admin-mobile-record-table w-full min-w-[1680px] border-collapse text-left text-xs">
                 <thead>
                     <tr>
                         <Th>申请编号</Th>
@@ -629,10 +631,10 @@ export function WithdrawalsPanel({
                 <tbody>
                     {items.map(item => (
                         <tr key={item.id} className="h-[52px] border-t border-slate-100">
-                            <Td>
+                            <Td label="申请编号">
                                 <span className="font-mono font-bold text-slate-900">{item.code}</span>
                             </Td>
-                            <Td>
+                            <Td label="客户姓名">
                                 <span
                                     className="block max-w-40 truncate font-bold text-slate-900"
                                     title={item.customerName || item.customerEmail}
@@ -640,7 +642,7 @@ export function WithdrawalsPanel({
                                     {item.customerName || item.customerEmail}
                                 </span>
                             </Td>
-                            <Td>
+                            <Td label="客户邮箱">
                                 <span
                                     className="block max-w-56 truncate text-slate-500"
                                     title={item.customerEmail}
@@ -648,12 +650,12 @@ export function WithdrawalsPanel({
                                     {item.customerEmail}
                                 </span>
                             </Td>
-                            <Td>
+                            <Td label="金额">
                                 <strong className="font-mono text-rose-600">
                                     {formatMoney(item.amount, item.currencyCode)}
                                 </strong>
                             </Td>
-                            <Td>
+                            <Td label="付款方式">
                                 <span
                                     className="block max-w-40 truncate font-bold text-slate-700"
                                     title={item.payoutMethod}
@@ -661,7 +663,7 @@ export function WithdrawalsPanel({
                                     {item.payoutMethod}
                                 </span>
                             </Td>
-                            <Td>
+                            <Td label="脱敏账户">
                                 <span
                                     className="block max-w-56 truncate font-mono text-[10px] text-slate-500"
                                     title={item.payoutAccountMasked}
@@ -669,14 +671,14 @@ export function WithdrawalsPanel({
                                     {item.payoutAccountMasked}
                                 </span>
                             </Td>
-                            <Td>{formatDateTime(item.createdAt)}</Td>
-                            <Td>
+                            <Td label="申请时间">{formatDateTime(item.createdAt)}</Td>
+                            <Td label="状态">
                                 <StatusBadge value={item.status} />
                             </Td>
-                            <Td>
+                            <Td label="外部流水">
                                 <span className="font-mono text-[10px]">{item.externalReference || '—'}</span>
                             </Td>
-                            <Td>
+                            <Td label="操作">
                                 <div className="flex flex-nowrap gap-1 whitespace-nowrap">
                                     {canManage && item.status === 'PENDING' && (
                                         <>

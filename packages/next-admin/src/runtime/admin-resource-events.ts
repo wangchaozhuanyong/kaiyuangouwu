@@ -19,8 +19,14 @@ function publishWriteState(delta: number) {
     writeListeners.forEach(listener => listener());
 }
 const domainRules: Array<[ResourceDomain, RegExp]> = [
-    ['catalog', /product|catalog|stock|inventory|supplier|purchase|asset|collection|facet|optiongroup/iu],
-    ['orders', /order|fulfillment|refund|payment|aftersales|autocard|profit|manualdigitaldelivery/iu],
+    [
+        'catalog',
+        /product|catalog|stock|inventory|supplier|purchase|asset|collection|facet|optiongroup|digitalvariant|physicalvariant|physicalreturn/iu,
+    ],
+    [
+        'orders',
+        /order|fulfillment|refund|payment|aftersales|autocard|profit|manualdigitaldelivery|checkoutdelivery|digitaldelivery|physicalreturn/iu,
+    ],
     ['customers', /customer|address/iu],
     ['marketing', /promotion|coupon|referral|withdrawal|marketing|flashsale|sharing/iu],
     ['storefront', /storefront|contentblock|review|traffic|translation|systemannouncement/iu],

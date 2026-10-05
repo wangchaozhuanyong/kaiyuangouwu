@@ -41,6 +41,7 @@ import {
     variantMatches,
     warningPlan,
 } from './catalog-import-planning';
+import { CatalogOperationsService } from './catalog-operations.service';
 import { CatalogSupplierService, normalizeSupplierName } from './catalog-supplier.service';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
@@ -65,6 +66,7 @@ export class CatalogImportPreview {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly suppliers: CatalogSupplierService,
+        private readonly operations?: CatalogOperationsService,
     ) {}
 
     async planRow(
@@ -192,6 +194,22 @@ export class CatalogImportPreview {
             ) {
                 return conflictPlan('多规格商品切换销售方式需在商品编辑器中统一处理所有 SKU');
             }
+            const actualType =
+                ((targetProduct.customFields ?? {}) as unknown as Record<string, unknown>).fulfillmentType ===
+                'physical'
+                    ? 'physical'
+                    : 'digital';
+            if (row.fulfillmentType && row.fulfillmentType !== actualType) {
+                return conflictPlan('商品类型与已有商品不一致，请复制基础资料创建另一类商品');
+            }
+            const existingTypeError = catalogImportTypeError(ctx, { ...row, fulfillmentType: actualType });
+            if (existingTypeError)
+                return {
+                    ...emptyPlan('ERROR'),
+                    targetProductId: targetProduct.id,
+                    targetVariantId: targetVariant?.id ?? null,
+                    message: existingTypeError,
+                };
         }
 
         if (!targetVariant) {
@@ -384,6 +402,7 @@ export class CatalogImportPreview {
                 String(item.channelId) === String(ctx.channelId) && item.currencyCode === job.currencyCode,
         );
         return {
+            ...(await this.operations?.digitalImportState(ctx, variant.id)),
             productId: String(variant.productId),
             variantId: String(variant.id),
             productUpdatedAt: product?.updatedAt.toISOString() ?? null,
@@ -504,6 +523,14 @@ export class CatalogImportPreview {
                 snapshot.purchaseCostMicrounits,
             );
         }
+        changed(
+            changes,
+            'digitalAvailableQuantity',
+            row.digitalAvailableQuantity,
+            snapshot.digitalAvailableQuantity,
+        );
+        changed(changes, 'digitalDeliveryMode', row.digitalDeliveryMode, snapshot.digitalDeliveryMode);
+        changed(changes, 'digitalStockPolicy', row.digitalStockPolicy, snapshot.digitalStockPolicy);
         changed(changes, 'stockOnHand', row.stockOnHand, snapshot.stockOnHand);
         changedOptional(
             changes,

@@ -14,6 +14,7 @@ import {
 import { lazy, type ComponentType } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
+import { CatalogBulkChannelAction } from '../pages/Catalog/CatalogBulkChannelAction';
 import { routeModuleLoaders } from '../route-modules';
 
 import {
@@ -83,10 +84,8 @@ const OrderOperationsBlock = lazy(() =>
         default: module.OrderOperationsBlock,
     })),
 );
-const ManualDigitalDeliveryModule = lazy(() =>
-    import('../pages/Sales/ManualDigitalDeliveryModule').then(module => ({
-        default: module.ManualDigitalDeliveryModule,
-    })),
+const DigitalDeliveryModule = lazy(() =>
+    routeModuleLoaders.digitalDelivery().then(module => ({ default: module.DigitalDeliveryModule })),
 );
 
 const AiImageSettingsModule = lazy(() =>
@@ -352,6 +351,14 @@ defineNextAdminExtension({
             permissions: ['ReadCatalogExport'],
             order: 20,
         },
+        {
+            id: 'catalog-bulk-channels',
+            pageId: 'product-list',
+            label: '批量店铺',
+            component: CatalogBulkChannelAction,
+            permissions: ['UpdateProduct'],
+            order: 30,
+        },
     ],
     pageBlocks: [
         {
@@ -528,11 +535,12 @@ defineNextAdminExtension({
             id: 'operations-manual-digital-delivery',
             path: '/operations/manual-digital-delivery',
             legacyPaths: ['/manual-digital-delivery'],
-            title: '人工数字交付',
-            component: ManualDigitalDeliveryModule,
+            title: '数字交付与异常',
+            component: DigitalDeliveryModule,
+            preload: routeModuleLoaders.digitalDelivery,
             permissions: ['ReadOrder'],
             navItem: {
-                label: '人工数字交付',
+                label: '数字交付与异常',
                 sectionId: 'sales',
                 icon: Mail,
                 order: 20,

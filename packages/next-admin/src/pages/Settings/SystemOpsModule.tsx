@@ -198,59 +198,77 @@ export function SystemOpsModule() {
                     </Message>
                 )}
                 {!standalonePage && (
-                    <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
-                        <TabButton
-                            active={activeTab === 'HEALTH'}
-                            onClick={() => setTab('HEALTH')}
-                            icon={<Activity className="h-3.5 w-3.5" />}
-                        >
-                            服务健康
-                        </TabButton>
-                        <TabButton
-                            active={activeTab === 'JOBS'}
-                            onClick={() => setTab('JOBS')}
-                            icon={<Terminal className="h-3.5 w-3.5" />}
-                        >
-                            任务队列 {data?.jobs.totalItems ?? 0}
-                        </TabButton>
-                        <TabButton
-                            active={activeTab === 'SCHEDULES'}
-                            onClick={() => setTab('SCHEDULES')}
-                            icon={<CalendarClock className="h-3.5 w-3.5" />}
-                        >
-                            定时任务 {data?.scheduledTasks.length ?? 0}
-                        </TabButton>
-                        <TabButton
-                            active={activeTab === 'TELEGRAM'}
-                            onClick={() => setTab('TELEGRAM')}
-                            icon={<Send className="h-3.5 w-3.5" />}
-                        >
-                            Telegram 通知
-                        </TabButton>
-                        {canGovern && (
-                            <TabButton
-                                active={activeTab === 'GOVERNANCE'}
-                                onClick={() => setTab('GOVERNANCE')}
-                                icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                    <>
+                        <AdminField label="运维分类" className="admin-mobile-section-select">
+                            <AdminSelect
+                                aria-label="运维分类"
+                                value={activeTab}
+                                onChange={event => setTab(event.target.value as typeof activeTab)}
+                                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
                             >
-                                治理与风控
+                                <option value="HEALTH">服务健康</option>
+                                <option value="JOBS">任务队列 {data?.jobs.totalItems ?? 0}</option>
+                                <option value="SCHEDULES">定时任务 {data?.scheduledTasks.length ?? 0}</option>
+                                <option value="TELEGRAM">Telegram 通知</option>
+                                {canGovern && <option value="GOVERNANCE">治理与风控</option>}
+                                <option value="SETTINGS">配置仓库</option>
+                                <option value="API_KEYS">API 密钥</option>
+                            </AdminSelect>
+                        </AdminField>
+                        <div className="scrollbar-hidden hidden w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1 md:flex">
+                            <TabButton
+                                active={activeTab === 'HEALTH'}
+                                onClick={() => setTab('HEALTH')}
+                                icon={<Activity className="h-3.5 w-3.5" />}
+                            >
+                                服务健康
                             </TabButton>
-                        )}
-                        <TabButton
-                            active={activeTab === 'SETTINGS'}
-                            onClick={() => setTab('SETTINGS')}
-                            icon={<Settings2 className="h-3.5 w-3.5" />}
-                        >
-                            配置仓库 {data?.settingsStoreFieldDefinitions.length ?? 0}
-                        </TabButton>
-                        <TabButton
-                            active={activeTab === 'API_KEYS'}
-                            onClick={() => setTab('API_KEYS')}
-                            icon={<KeyRound className="h-3.5 w-3.5" />}
-                        >
-                            API 密钥 {data?.apiKeys?.totalItems ?? 0}
-                        </TabButton>
-                    </div>
+                            <TabButton
+                                active={activeTab === 'JOBS'}
+                                onClick={() => setTab('JOBS')}
+                                icon={<Terminal className="h-3.5 w-3.5" />}
+                            >
+                                任务队列 {data?.jobs.totalItems ?? 0}
+                            </TabButton>
+                            <TabButton
+                                active={activeTab === 'SCHEDULES'}
+                                onClick={() => setTab('SCHEDULES')}
+                                icon={<CalendarClock className="h-3.5 w-3.5" />}
+                            >
+                                定时任务 {data?.scheduledTasks.length ?? 0}
+                            </TabButton>
+                            <TabButton
+                                active={activeTab === 'TELEGRAM'}
+                                onClick={() => setTab('TELEGRAM')}
+                                icon={<Send className="h-3.5 w-3.5" />}
+                            >
+                                Telegram 通知
+                            </TabButton>
+                            {canGovern && (
+                                <TabButton
+                                    active={activeTab === 'GOVERNANCE'}
+                                    onClick={() => setTab('GOVERNANCE')}
+                                    icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                                >
+                                    治理与风控
+                                </TabButton>
+                            )}
+                            <TabButton
+                                active={activeTab === 'SETTINGS'}
+                                onClick={() => setTab('SETTINGS')}
+                                icon={<Settings2 className="h-3.5 w-3.5" />}
+                            >
+                                配置仓库 {data?.settingsStoreFieldDefinitions.length ?? 0}
+                            </TabButton>
+                            <TabButton
+                                active={activeTab === 'API_KEYS'}
+                                onClick={() => setTab('API_KEYS')}
+                                icon={<KeyRound className="h-3.5 w-3.5" />}
+                            >
+                                API 密钥 {data?.apiKeys?.totalItems ?? 0}
+                            </TabButton>
+                        </div>
+                    </>
                 )}
                 {activeTab === 'GOVERNANCE' ? (
                     <GovernanceRiskPanel />
@@ -575,7 +593,7 @@ function JobsPanel({
                     </div>
                     <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                         <div className="relative min-w-0">
-                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                             <AdminInput
                                 value={search}
                                 onChange={event => {
@@ -628,7 +646,7 @@ function JobsPanel({
                     aria-label="任务执行记录"
                     ref={recordsRef}
                 >
-                    <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
+                    <table className="admin-mobile-record-table w-full min-w-[1680px] border-collapse text-left text-xs">
                         <thead className="sticky top-0 z-30 bg-slate-50">
                             <tr className={theadClass}>
                                 <th
@@ -672,7 +690,10 @@ function JobsPanel({
                         <tbody className="divide-y divide-slate-100">
                             {visibleJobs.map(job => (
                                 <tr key={job.id} className="group h-[52px] hover:bg-slate-50">
-                                    <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                    <td
+                                        data-label="任务 ID"
+                                        className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                    >
                                         <span
                                             className="block truncate font-mono text-[10px] font-bold text-slate-700"
                                             title={job.id}
@@ -680,30 +701,52 @@ function JobsPanel({
                                             {job.id}
                                         </span>
                                     </td>
-                                    <td className="h-[52px] max-w-48 px-3 py-0 text-[10px] text-slate-500">
+                                    <td
+                                        data-label="队列"
+                                        className="h-[52px] max-w-48 px-3 py-0 text-[10px] text-slate-500"
+                                    >
                                         <span className="block truncate" title={job.queueName}>
                                             {job.queueName}
                                         </span>
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                    <td data-label="状态" className="h-[52px] whitespace-nowrap px-3 py-0">
                                         <JobStateBadge state={job.state} />
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-700">
+                                    <td
+                                        data-label="进度"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-700"
+                                    >
                                         {Math.round(job.progress)}%
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="尝试次数"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {job.attempts}
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="最大次数"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {job.retries + 1}
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="创建时间"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {formatDateTime(job.createdAt)}
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="耗时"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {formatDuration(job.duration)}
                                     </td>
-                                    <td className="h-[52px] max-w-72 px-3 py-0">
+                                    <td
+                                        data-label="错误"
+                                        data-mobile-wide
+                                        className="h-[52px] max-w-72 px-3 py-0"
+                                    >
                                         <span
                                             className="block truncate text-[10px] text-rose-600"
                                             title={job.error ?? ''}
@@ -711,7 +754,10 @@ function JobsPanel({
                                             {job.error ?? '—'}
                                         </span>
                                     </td>
-                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                    <td
+                                        data-label="操作"
+                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50"
+                                    >
                                         {!job.isSettled && (
                                             <AdminButton
                                                 type="button"
@@ -798,7 +844,7 @@ function SchedulesPanel({
                 </h2>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1720px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1720px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -839,7 +885,10 @@ function SchedulesPanel({
                     <tbody className="divide-y divide-slate-100">
                         {tasks.map(task => (
                             <tr key={task.id} className="group h-[52px] hover:bg-slate-50">
-                                <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                <td
+                                    data-label="任务名称"
+                                    className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                >
                                     <span
                                         className="block truncate font-bold text-slate-800"
                                         title={task.description || task.id}
@@ -847,22 +896,28 @@ function SchedulesPanel({
                                         {task.description || task.id}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[9px] text-slate-500">
+                                <td
+                                    data-label="任务 ID"
+                                    className="h-[52px] max-w-56 px-3 py-0 font-mono text-[9px] text-slate-500"
+                                >
                                     <span className="block truncate" title={task.id}>
                                         {task.id}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-48 px-3 py-0">
+                                <td data-label="调度说明" className="h-[52px] max-w-48 px-3 py-0">
                                     <span className="block truncate" title={task.scheduleDescription}>
                                         {task.scheduleDescription}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[9px] text-slate-500">
+                                <td
+                                    data-label="定时表达式"
+                                    className="h-[52px] max-w-44 px-3 py-0 font-mono text-[9px] text-slate-500"
+                                >
                                     <span className="block truncate" title={task.schedule}>
                                         {task.schedule}
                                     </span>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                <td data-label="状态" className="h-[52px] whitespace-nowrap px-3 py-0">
                                     <span
                                         className={[
                                             'rounded px-2 py-1 text-[9px] font-bold',
@@ -876,13 +931,23 @@ function SchedulesPanel({
                                         {task.isRunning ? '执行中' : task.enabled ? '已启用' : '已停用'}
                                     </span>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="上次执行"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     {task.lastExecutedAt ? formatDateTime(task.lastExecutedAt) : '从未执行'}
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="下次执行"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     {task.nextExecutionAt ? formatDateTime(task.nextExecutionAt) : '无计划'}
                                 </td>
-                                <td className="h-[52px] max-w-72 px-3 py-0">
+                                <td
+                                    data-label="最近结果"
+                                    data-mobile-wide
+                                    className="h-[52px] max-w-72 px-3 py-0"
+                                >
                                     <code
                                         className="block truncate text-[9px] text-slate-500"
                                         title={formatJson(task.lastResult)}
@@ -890,7 +955,10 @@ function SchedulesPanel({
                                         {task.lastResult == null ? '—' : formatJson(task.lastResult)}
                                     </code>
                                 </td>
-                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                <td
+                                    data-label="操作"
+                                    className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                >
                                     <div className="flex justify-end gap-2">
                                         <AdminButton
                                             type="button"
@@ -969,7 +1037,7 @@ function SettingsStorePanel({
                 </div>
                 <div className="flex gap-2">
                     <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                         <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
@@ -1774,7 +1842,7 @@ function Metric({
         rose: 'text-rose-700',
     };
     return (
-        <div className="border-b border-slate-100 p-4 last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+        <div className="min-w-0 border-b border-slate-100 p-4 last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
             <div className="text-[9px] font-bold text-slate-400">{label}</div>
             <div className={`mt-1 text-lg font-bold ${colors[tone]}`}>{value}</div>
             <div className="mt-1 truncate text-[9px] text-slate-400" title={detail}>

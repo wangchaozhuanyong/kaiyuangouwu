@@ -10,6 +10,7 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 
 import { getOrderWithSellerOrdersDocument } from './graphql/admin-definitions';
+import { graphql } from './graphql/graphql-admin';
 import { FragmentOf } from './graphql/graphql-shop';
 import { assignProductToChannelDocument } from './graphql/shared-definitions';
 import {
@@ -197,6 +198,48 @@ describe('Multi-vendor orders', () => {
         orderId = order.id;
 
         expect(order?.sellerOrders?.length).toBe(2);
+        const { order: fundedOrder } = await adminClient.query(
+            graphql(`
+                query SplitOrderFunding($id: ID!) {
+                    order(id: $id) {
+                        state
+                        totalWithTax
+                        payments {
+                            id
+                            state
+                            amount
+                        }
+                        sellerOrders {
+                            state
+                            totalWithTax
+                            surcharges {
+                                priceWithTax
+                            }
+                            payments {
+                                id
+                                state
+                                amount
+                            }
+                        }
+                    }
+                }
+            `),
+            { id: orderId },
+        );
+        expect(fundedOrder?.state).toBe('PaymentSettled');
+        expect(fundedOrder?.payments).toHaveLength(1);
+        expect(fundedOrder?.payments?.[0].amount).toBe(fundedOrder?.totalWithTax);
+        expect(fundedOrder?.payments?.[0].state).toBe('Settled');
+        expect(fundedOrder?.sellerOrders).toHaveLength(2);
+        for (const seller of fundedOrder?.sellerOrders ?? []) {
+            expect(seller.state).toBe('PaymentSettled');
+            expect(seller.surcharges).toHaveLength(1);
+            expect(seller.surcharges[0].priceWithTax).toBeLessThan(0);
+            expect(seller.payments).toHaveLength(1);
+            expect(seller.payments?.[0].state).toBe('Settled');
+            expect(seller.payments?.[0].amount).toBe(seller.totalWithTax);
+            expect(seller.totalWithTax).toBeGreaterThan(0);
+        }
     });
 
     it('order lines get split', async () => {

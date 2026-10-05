@@ -308,11 +308,11 @@ export function StoresPanel({
                                 </AdminButton>
                             </div>
                         )}
-                        <div className="mt-4 flex justify-between">
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <span className="text-[10px] text-slate-400">
                                 更新于 {formatDateTime(profile.updatedAt)}
                             </span>
-                            <div className="flex gap-2">
+                            <div className="flex min-w-0 flex-wrap gap-2">
                                 <AdminButton
                                     type="button"
                                     onClick={() => onDeprovision(profile)}
@@ -744,7 +744,7 @@ export function SellersPanel({
                     所属商家主体”；“法定经营主体”用于法律文案。
                 </p>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[940px] border-collapse text-left text-xs">
+                    <table className="admin-mobile-record-table w-full min-w-[940px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={theadClass}>
                                 <th
@@ -778,17 +778,26 @@ export function SellersPanel({
                                 const usages = sellerUsageLabels(profiles, seller.id);
                                 return (
                                     <tr key={seller.id} className="group h-[52px] hover:bg-slate-50/80">
-                                        <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
+                                        <td
+                                            data-label="商家主体"
+                                            className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50"
+                                        >
                                             <span className="block truncate" title={seller.name}>
                                                 {seller.name}
                                             </span>
                                         </td>
-                                        <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-400">
+                                        <td
+                                            data-label="ID"
+                                            className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-400"
+                                        >
                                             <span className="block truncate" title={seller.id}>
                                                 {seller.id}
                                             </span>
                                         </td>
-                                        <td className="h-[52px] max-w-80 px-3 py-0 text-[10px] text-slate-500">
+                                        <td
+                                            data-label="占用店铺 / Channel"
+                                            className="h-[52px] max-w-80 px-3 py-0 text-[10px] text-slate-500"
+                                        >
                                             {usages.length > 0 ? (
                                                 <span
                                                     className="block truncate text-amber-700"
@@ -800,13 +809,22 @@ export function SellersPanel({
                                                 <span className="text-emerald-700">未被店铺占用</span>
                                             )}
                                         </td>
-                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        <td
+                                            data-label="创建时间"
+                                            className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                        >
                                             {formatDateTime(seller.createdAt)}
                                         </td>
-                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        <td
+                                            data-label="更新时间"
+                                            className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                        >
                                             {formatDateTime(seller.updatedAt)}
                                         </td>
-                                        <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                        <td
+                                            data-label="操作"
+                                            className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                        >
                                             <div className="flex justify-end gap-1">
                                                 <AdminButton
                                                     type="button"

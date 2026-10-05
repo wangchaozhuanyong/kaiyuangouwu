@@ -1,5 +1,83 @@
 import { gql } from '@apollo/client';
 
+export const ORDER_PROCESSING_FIELDS = gql`
+    fragment NextAdminOrderProcessingFields on OrderProcessingSummary {
+        orderId
+        kind
+        businessState
+        paymentStatus
+        paymentLabel
+        fulfillmentStatus
+        fulfillmentLabel
+        afterSalesStatus
+        afterSalesLabel
+        isTestOrder
+        needsProcessing
+        hasException
+        canManage
+        blockedReason
+        settledAmount
+        pendingRefundAmount
+        refundedAmount
+        refundableAmount
+        refundableShippingAmount
+        outstandingAmount
+        remainingDigitalQuantity
+        remainingPhysicalQuantity
+        canRefund
+        refundBlockedReason
+        remainingPhysicalLines {
+            orderLineId
+            quantity
+        }
+        paymentCapabilities {
+            paymentId
+            canRefund
+            refundableAmount
+            refundBlockedReason
+            canCancel
+            refundSettlementMode
+        }
+        nextAction {
+            code
+            label
+            enabled
+            reason
+            targetId
+        }
+        lines {
+            orderLineId
+            productName
+            sku
+            fulfillmentType
+            digitalDeliveryMode
+            quantity
+            requiredQuantity
+            refundableQuantity
+            deliveredQuantity
+            pendingQuantity
+            pendingDispatchQuantity
+            status
+            notificationStatus
+            claimStatus
+            claimedQuantity
+            taskId
+            recipientEmail
+        }
+    }
+`;
+
+export const PREPARE_FULFILLMENT_SHIPMENT = gql`
+    mutation NextAdminPrepareFulfillmentShipment($input: PrepareFulfillmentShipmentInput!) {
+        prepareFulfillmentShipment(input: $input) {
+            id
+            state
+            method
+            trackingCode
+        }
+    }
+`;
+
 const ORDER_LIST_FIELDS = gql`
     fragment SalesOrderListFields on Order {
         id
@@ -12,6 +90,9 @@ const ORDER_LIST_FIELDS = gql`
         totalQuantity
         totalWithTax
         currencyCode
+        processingSummary {
+            ...NextAdminOrderProcessingFields
+        }
         salesChannel {
             id
             code
@@ -121,6 +202,7 @@ const ORDER_LIST_FIELDS = gql`
             }
         }
     }
+    ${ORDER_PROCESSING_FIELDS}
 `;
 
 const AFTER_SALES_FIELDS = gql`
@@ -228,23 +310,36 @@ const AFTER_SALES_FIELDS = gql`
 `;
 
 export const GET_SALES_ORDERS = gql`
-    query GetSalesOrders($options: OrderListOptions) {
+    query GetSalesOrders($options: OrderProcessingListOptions) {
         activeChannel {
             id
             code
         }
-        orders(options: $options) {
+        orders: processingOrders(options: $options) {
             items {
                 ...SalesOrderListFields
             }
             totalItems
         }
-        physicalFulfillmentTodoCount
-        fulfillmentDeliveryExceptions(options: { take: 1 }) {
-            totalItems
+        orderProcessingCounts {
+            pending
+            digital
+            physical
+            exceptions
+            afterSales
         }
     }
     ${ORDER_LIST_FIELDS}
+`;
+
+export const FINISH_ORDER_MODIFICATION = gql`
+    mutation FinishOrderModification($orderId: ID!) {
+        finishOrderModification(orderId: $orderId) {
+            id
+            state
+            nextStates
+        }
+    }
 `;
 
 export const GET_SALES_ORDER = gql`

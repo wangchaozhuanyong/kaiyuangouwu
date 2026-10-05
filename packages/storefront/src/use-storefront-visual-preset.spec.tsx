@@ -190,17 +190,49 @@ it.each(['classic', 'neo-minimalist', 'neo-minimalist'] as const)(
     },
 );
 
-it('rejects expired, foreign-origin or unsafe colors and never restores client colors into Admin preview', () => {
+it.each(['sessionStorage', 'localStorage'] as const)(
+    'ignores old merchant-colored themes in %s and accepts the new skin cache without deleting other data',
+    storageName => {
+        const legacy = JSON.stringify({
+            version: 1,
+            origin: window.location.origin,
+            savedAt: Date.now(),
+            channelCode: 'my-malaysia',
+            presetId: 'classic',
+            colors: { '--bg': '#f1f5f9', '--text': '#0f172a', '--accent': '#8f7029' },
+        });
+        const storage = window[storageName];
+        storage.setItem('__storefront_theme_v1__', legacy);
+        storage.setItem('unrelated-setting', 'preserved');
+        restoreBeforePaint();
+        expect(document.documentElement.style.getPropertyValue('--accent')).toBe('');
+        expect(document.documentElement.dataset.storefrontThemeChannel).toBeUndefined();
+        expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(true);
+
+        const colors = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic'));
+        cacheStorefrontTheme('my-malaysia', 'classic', colors);
+        expect(JSON.parse(storage.getItem('__storefront_theme_v2__') ?? 'null').version).toBe(2);
+        restoreBeforePaint();
+        expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#2563eb');
+        expect(document.documentElement.dataset.storefrontThemeChannel).toBe('my-malaysia');
+        expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(false);
+        expect(storage.getItem('__storefront_theme_v1__')).toBe(legacy);
+        expect(storage.getItem('unrelated-setting')).toBe('preserved');
+    },
+);
+
+it('rejects old versions, expired, foreign-origin or unsafe colors and never restores client colors into Admin preview', () => {
     const colors = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('neo-minimalist'));
     cacheStorefrontTheme('my-malaysia', 'neo-minimalist', colors);
-    const valid = JSON.parse(localStorage.getItem('__storefront_theme_v1__') ?? 'null');
+    const valid = JSON.parse(localStorage.getItem('__storefront_theme_v2__') ?? 'null');
     for (const invalid of [
+        { ...valid, version: 1 },
         { ...valid, savedAt: Date.now() - 8 * 86400000 },
         { ...valid, origin: 'https://other-store.example' },
         { ...valid, colors: { ...colors, '--bg': 'url(https://other-store.example)' } },
     ]) {
-        sessionStorage.setItem('__storefront_theme_v1__', JSON.stringify(invalid));
-        localStorage.setItem('__storefront_theme_v1__', JSON.stringify(invalid));
+        sessionStorage.setItem('__storefront_theme_v2__', JSON.stringify(invalid));
+        localStorage.setItem('__storefront_theme_v2__', JSON.stringify(invalid));
         restoreBeforePaint();
         expect(document.documentElement.style.getPropertyValue('--bg')).toBe('');
         expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(true);

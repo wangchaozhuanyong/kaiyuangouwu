@@ -1,0 +1,14 @@
+{
+    "extends": "../../../tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "types": ["node", "vitest/globals"],
+        "lib": ["es2019", "dom", "dom.iterable"]
+    },
+    "include": [
+        "./order-processing-closure.e2e-spec.ts",
+        "./digital-order-closure.e2e-spec.ts",
+        "./product-domains.e2e-spec.ts",
+        "../../store-management-plugin/src/markdown-it.d.ts"
+    ]
+}

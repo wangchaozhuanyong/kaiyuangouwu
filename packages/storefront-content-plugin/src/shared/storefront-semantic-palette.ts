@@ -182,21 +182,14 @@ function makeAccessibleAgainstAll(
     return candidate;
 }
 
-function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSemanticPalette {
-    // Classic keeps a light interface even when the merchant's saved brand background is dark.
-    // The original brand colors remain untouched and can still provide the identity accent.
+function resolveClassicPalette(): StorefrontSemanticPalette {
+    // UI colors belong to the selected preset, including legacy brand aliases.
+    // Saved merchant colors remain content data and must not recolor shared controls.
     const page = '#f1f5f9';
     const surface = '#ffffff';
     const surfaceText = '#0f172a';
-    const brandColor =
-        normalizeStorefrontColor(brand.primaryColor) ??
-        normalizeStorefrontColor(brand.backgroundColor) ??
-        '#d33c30';
-    const savedAccent = normalizeStorefrontColor(brand.accentColor) ?? brandColor;
-    const channels = colorChannels(savedAccent);
-    // Neutral brand identities stay intact; actionable controls need a distinct chromatic role.
-    const neutralAccent = Math.max(...channels) - Math.min(...channels) < 32;
-    const accentSource = neutralAccent ? '#2563eb' : savedAccent;
+    const brandColor = '#2563eb';
+    const accentSource = brandColor;
     // Legacy primary controls use white labels, so the derived UI accent must always support them.
     const accentForeground = '#ffffff';
     const accent = makeAccessibleAgainst(accentSource, accentForeground, 4.5, 'dark');
@@ -217,13 +210,7 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
         ),
         brand: brandColor,
         accent,
-        accentHover: makeAccessibleAgainst(
-            (neutralAccent ? null : normalizeStorefrontColor(brand.highlightColor)) ??
-                mixColors(accent, '#000000', 0.14),
-            accentForeground,
-            4.5,
-            'dark',
-        ),
+        accentHover: makeAccessibleAgainst(mixColors(accent, '#000000', 0.14), accentForeground, 4.5, 'dark'),
         accentSoft,
         accentInk,
         onAccent: accentForeground,
@@ -424,9 +411,9 @@ export function storefrontSkinCssVariables(
 
 export function resolveStorefrontSemanticPalette(
     presetId: StorefrontVisualPresetId,
-    brand: StorefrontBrandPaletteInput = {},
+    _brand: StorefrontBrandPaletteInput = {},
 ): StorefrontSemanticPalette {
-    return presetId === 'classic' ? resolveClassicPalette(brand) : { ...FIXED_PALETTES[presetId] };
+    return presetId === 'classic' ? resolveClassicPalette() : { ...FIXED_PALETTES[presetId] };
 }
 
 export function semanticPaletteCssVariables(palette: StorefrontSemanticPalette): Record<string, string> {

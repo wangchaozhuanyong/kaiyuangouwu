@@ -48,20 +48,14 @@
 }
 
 .auth-back-button {
-    width: 40px;
-    height: 40px;
-    padding: 0;
     position: static;
     border: 1px solid rgba(255, 255, 255, 0.24);
     border-radius: 12px;
     background: rgba(5, 22, 28, 0.56);
     color: white;
-    display: grid;
-    place-items: center;
     box-shadow: 0 10px 28px rgba(1, 13, 18, 0.2);
     backdrop-filter: blur(12px);
     transition:
-        transform 180ms ease,
         border-color 180ms ease,
         background 180ms ease;
 }
@@ -69,22 +63,11 @@
 .auth-back-button:hover {
     border-color: rgba(255, 255, 255, 0.46);
     background: rgba(5, 22, 28, 0.76);
-    transform: translateX(-2px);
-}
-
-.auth-back-button:active {
-    transform: translateX(-2px) scale(0.97);
 }
 
 .auth-back-button:focus-visible {
     outline: 2px solid white;
     outline-offset: 3px;
-}
-
-.auth-back-button svg {
-    width: 20px;
-    height: 20px;
-    stroke-width: 1.8;
 }
 
 .auth-brand-lockup {
