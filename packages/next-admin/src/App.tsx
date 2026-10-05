@@ -14,11 +14,18 @@ import { AdminButton } from './components/AdminControls';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
-import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
-import { LoginModule } from './pages/Auth/LoginModule';
 import { loadInstalledExtensions, routeModuleLoaders } from './route-modules';
 import { isMissingAdminSession } from './utils/authentication-error';
 import { toUserFacingError } from './utils/user-facing-error';
+
+const LoginModule = lazy(() =>
+    import('./pages/Auth/LoginModule').then(module => ({ default: module.LoginModule })),
+);
+const InitialPasswordChangeModule = lazy(() =>
+    import('./pages/Auth/InitialPasswordChangeModule').then(module => ({
+        default: module.InitialPasswordChangeModule,
+    })),
+);
 
 const AppShell = lazy(() => import('./layouts/AppShell').then(module => ({ default: module.AppShell })));
 
@@ -233,11 +240,22 @@ function AuthenticatedShell() {
 
     if (data.merchantInitialPasswordStatus.mustChangePassword) {
         return (
-            <InitialPasswordChangeModule
-                onCompleted={async () => {
-                    clearAuthSession();
-                }}
-            />
+            <Suspense
+                fallback={
+                    <div
+                        role="status"
+                        className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500"
+                    >
+                        正在加载密码修改...
+                    </div>
+                }
+            >
+                <InitialPasswordChangeModule
+                    onCompleted={async () => {
+                        clearAuthSession();
+                    }}
+                />
+            </Suspense>
         );
     }
 
@@ -296,7 +314,23 @@ function AppRoutes() {
 
     return (
         <Routes>
-            <Route path="/login" element={<LoginModule />} />
+            <Route
+                path="/login"
+                element={
+                    <Suspense
+                        fallback={
+                            <div
+                                role="status"
+                                className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500"
+                            >
+                                正在加载登录页面...
+                            </div>
+                        }
+                    >
+                        <LoginModule />
+                    </Suspense>
+                }
+            />
 
             <Route path="/" element={<AuthenticatedShell />}>
                 <Route index element={<Navigate to="/dashboard" replace />} />

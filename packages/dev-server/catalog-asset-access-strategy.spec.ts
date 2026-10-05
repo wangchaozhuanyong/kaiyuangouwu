@@ -178,6 +178,53 @@ describe('catalog media boundary', () => {
         expect(test.renderPublished).toHaveBeenCalledOnce();
         expect(test.getSessionFromToken).not.toHaveBeenCalled();
     });
+    it('limits browser and shared-cache reuse of published media to five minutes', async () => {
+        const test = harness();
+        await test.read('/preview/public-hero.jpg');
+        expect(test.headers.setHeader).toHaveBeenLastCalledWith(
+            'Cache-Control',
+            'public, max-age=300, s-maxage=300, must-revalidate',
+        );
+    });
+    it.each(['content', 'promotion', 'catalog'] as const)(
+        'rechecks withdrawn %s media when the five-minute authorization expires',
+        async publication => {
+            const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+            try {
+                const test = harness();
+                const productRepository = test.repositories.get(Product);
+                if (!productRepository) {
+                    throw new Error('Missing product fixture repository');
+                }
+                test.renderPublished.mockResolvedValue('');
+                if (publication === 'content') {
+                    test.findPublished.mockResolvedValue([
+                        { imageUrl: '/assets/preview/withdrawn.jpg', items: [] },
+                    ]);
+                } else if (publication === 'promotion') {
+                    test.renderPublished.mockResolvedValue('<img src="/assets/preview/withdrawn.jpg">');
+                } else {
+                    productRepository.findOne.mockResolvedValue({ id: 'visible-product' });
+                }
+                await expect(test.read('/preview/withdrawn.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+
+                test.findPublished.mockResolvedValue([]);
+                test.renderPublished.mockResolvedValue('');
+                productRepository.findOne.mockResolvedValue(null);
+                test.headers.setHeader.mockClear();
+                clock.mockReturnValue(1_000_000 + 5 * 60 * 1000);
+
+                await expect(test.read('/preview/withdrawn.jpg')).rejects.toThrow('Asset access denied');
+                expect(test.headers.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+                expect(test.headers.setHeader).not.toHaveBeenCalledWith(
+                    'Cache-Control',
+                    PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
+                );
+            } finally {
+                clock.mockRestore();
+            }
+        },
+    );
     it('never reuses a public authorization across store channels', async () => {
         const test = harness();
         await expect(test.read('/preview/public-hero.jpg')).resolves.toEqual({ preset: 'thumbnail' });

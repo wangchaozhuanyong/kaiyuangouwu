@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, useState } from 'react';
+import { act, lazy, useState, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineNextAdminExtension, resetNextAdminExtensionsForTests } from './extension-api';
@@ -29,6 +29,38 @@ async function renderActions() {
 }
 
 describe('collapsible extension actions', () => {
+    it('loads a lazy action in its own placeholder while preserving a sibling draft', async () => {
+        let finishLoading!: (module: { default: ComponentType }) => void;
+        const LazyAction = lazy(
+            () =>
+                new Promise<{ default: ComponentType }>(resolve => {
+                    finishLoading = resolve;
+                }),
+        );
+        function SiblingAction() {
+            const [count, setCount] = useState(0);
+            return <button onClick={() => setCount(value => value + 1)}>相邻草稿 {count}</button>;
+        }
+        defineNextAdminExtension({
+            id: 'lazy-action',
+            actions: [
+                { id: 'lazy', label: '懒加载操作', pageId: 'product-list', component: LazyAction },
+                { id: 'sibling', label: '相邻草稿', pageId: 'product-list', component: SiblingAction },
+            ],
+        });
+        const container = await renderActions();
+        expect(container.querySelector('[data-admin-extension-loading]')).not.toBeNull();
+        const sibling = Array.from(container.querySelectorAll('button')).find(button =>
+            button.textContent?.startsWith('相邻草稿'),
+        )!;
+        await act(async () => sibling.click());
+        await act(async () => finishLoading({ default: () => <button>懒加载操作已就绪</button> }));
+        expect(container.querySelector('[data-admin-extension-loading]')).toBeNull();
+        expect(container.textContent).toContain('懒加载操作已就绪');
+        expect(container.textContent).toContain('相邻草稿 1');
+        expect(sibling.isConnected).toBe(true);
+    });
+
     it('retries a failed extension without resetting a sibling action draft', async () => {
         let unavailable = true;
         function RecoverableAction() {

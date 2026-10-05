@@ -2,12 +2,16 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { GraphQLError } from 'graphql';
-import { act, StrictMode } from 'react';
+import { act, StrictMode, use } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 const auth = vi.hoisted(() => ({ clear: vi.fn(), selectedChannelToken: 'store-a', select: vi.fn() }));
+const authPages = vi.hoisted(() => ({
+    loginPending: null as Promise<void> | null,
+    passwordPending: null as Promise<void> | null,
+}));
 const extensionState = vi.hoisted(() => ({
     routes: [] as Array<{ id: string; path: string; component: () => null }>,
     load: vi.fn(async () => {}),
@@ -28,9 +32,17 @@ vi.mock('./extensions/extension-api', () => ({
 }));
 vi.mock('./route-modules', () => ({ routeModuleLoaders: {}, loadInstalledExtensions: extensionState.load }));
 vi.mock('./layouts/AppShell', () => ({ AppShell: () => <main>已进入管理界面</main> }));
-vi.mock('./pages/Auth/LoginModule', () => ({ LoginModule: () => <main>管理员登录入口</main> }));
+vi.mock('./pages/Auth/LoginModule', () => ({
+    LoginModule: () => {
+        if (authPages.loginPending) use(authPages.loginPending);
+        return <main>管理员登录入口</main>;
+    },
+}));
 vi.mock('./pages/Auth/InitialPasswordChangeModule', () => ({
-    InitialPasswordChangeModule: () => <main>首次密码修改门禁</main>,
+    InitialPasswordChangeModule: () => {
+        if (authPages.passwordPending) use(authPages.passwordPending);
+        return <main>首次密码修改门禁</main>;
+    },
 }));
 
 const cleanups: Array<() => void> = [];
@@ -51,6 +63,8 @@ beforeEach(() => {
     auth.clear.mockClear();
     auth.select.mockClear();
     auth.selectedChannelToken = 'store-a';
+    authPages.loginPending = null;
+    authPages.passwordPending = null;
     extensionState.routes = [];
     extensionState.load.mockReset();
     extensionState.load.mockResolvedValue(undefined);
@@ -95,6 +109,43 @@ async function renderApp(respond: (name: string) => Record<string, unknown> | Er
     });
     return { host, requests };
 }
+
+it('shows the pending login page without loading authenticated extensions or requesting a session', async () => {
+    let finishLoading!: () => void;
+    authPages.loginPending = new Promise<void>(resolve => {
+        finishLoading = resolve;
+    });
+    window.history.replaceState(null, '', '/login');
+
+    const { host, requests } = await renderApp(() => ({ data: ready }));
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('正在加载登录页面');
+    expect(extensionState.load).not.toHaveBeenCalled();
+    expect(requests).not.toHaveBeenCalled();
+
+    await act(async () => finishLoading());
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(host.textContent).toContain('管理员登录入口');
+    expect(window.location.pathname).toBe('/login');
+});
+
+it('keeps the password gate while its page is loading instead of entering the application shell', async () => {
+    let finishLoading!: () => void;
+    authPages.passwordPending = new Promise<void>(resolve => {
+        finishLoading = resolve;
+    });
+    const { host, requests } = await renderApp(() => ({
+        data: { ...ready, merchantInitialPasswordStatus: { mustChangePassword: true } },
+    }));
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('正在加载密码修改');
+    expect(host.textContent).not.toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
+
+    await act(async () => finishLoading());
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(host.textContent).toContain('首次密码修改门禁');
+    expect(host.textContent).not.toContain('已进入管理界面');
+    expect(requests).toHaveBeenCalledTimes(1);
+});
 
 it('keeps a direct extension URL until its routes are registered', async () => {
     let finishRegistration: (() => void) | undefined;
