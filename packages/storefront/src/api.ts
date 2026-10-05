@@ -10,7 +10,6 @@ import type {
     CollectionSummary,
     ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
-    CreateImageGenerationInput,
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
@@ -19,14 +18,6 @@ import type {
     DataSubjectExportPayload,
     DataSubjectRequest,
     FraudRiskCase,
-    ImageGenerationJob,
-    ImageModelQuotaStatus,
-    ImageModelRecommendation,
-    ImagePrivateAssetView,
-    ImagePromptQuotaStatus,
-    ImageReferenceMode,
-    ImageStudioConfig,
-    ImageStudioWallet,
     MarketConfig,
     MyReferralOverview,
     Order,
@@ -355,67 +346,52 @@ export class ShopApi {
         return this.referralsApi.useReferralBalance(amount);
     }
 
-    async imageStudioConfig(signal?: AbortSignal): Promise<ImageStudioConfig> {
-        return (await this.createImageStudioApi()).imageStudioConfig(signal);
-    }
+    imageStudioConfig: ImageStudioApi['imageStudioConfig'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioConfig(...args);
 
     previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = async (...args) =>
         (await this.createImageStudioApi()).previewImageGenerationPrompt(...args);
 
-    async imageStudioBalance(signal?: AbortSignal): Promise<number> {
-        return (await this.createImageStudioApi()).imageStudioBalance(signal);
-    }
+    imageStudioBalance: ImageStudioApi['imageStudioBalance'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioBalance(...args);
 
-    async imageStudioWallet(signal?: AbortSignal): Promise<ImageStudioWallet> {
-        return (await this.createImageStudioApi()).imageStudioWallet(signal);
-    }
+    imageStudioWallet: ImageStudioApi['imageStudioWallet'] = async (...args) =>
+        (await this.createImageStudioApi()).imageStudioWallet(...args);
 
-    async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {
-        return (await this.createImageStudioApi()).imagePromptQuotaStatus(signal);
-    }
+    imagePromptQuotaStatus: ImageStudioApi['imagePromptQuotaStatus'] = async (...args) =>
+        (await this.createImageStudioApi()).imagePromptQuotaStatus(...args);
 
-    async imageModelQuotaStatus(signal?: AbortSignal): Promise<ImageModelQuotaStatus[]> {
-        return (await this.createImageStudioApi()).imageModelQuotaStatus(signal);
-    }
+    imageModelQuotaStatus: ImageStudioApi['imageModelQuotaStatus'] = async (...args) =>
+        (await this.createImageStudioApi()).imageModelQuotaStatus(...args);
 
     optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = async (...args) =>
         (await this.createImageStudioApi()).optimizeImagePrompt(...args);
 
-    async recommendImageModel(
-        prompt: string,
-        referenceMode: ImageReferenceMode,
-    ): Promise<ImageModelRecommendation> {
-        return (await this.createImageStudioApi()).recommendImageModel(prompt, referenceMode);
-    }
+    recommendImageModel: ImageStudioApi['recommendImageModel'] = async (...args) =>
+        (await this.createImageStudioApi()).recommendImageModel(...args);
 
-    async uploadImageReference(file: File, termsAccepted: boolean): Promise<ImagePrivateAssetView> {
-        return (await this.createImageStudioApi()).uploadImageReference(file, termsAccepted);
-    }
+    uploadImageReference: ImageStudioApi['uploadImageReference'] = async (...args) =>
+        (await this.createImageStudioApi()).uploadImageReference(...args);
 
-    async createImageGeneration(input: CreateImageGenerationInput): Promise<ImageGenerationJob> {
-        return (await this.createImageStudioApi()).createImageGeneration(input);
-    }
+    createImageGeneration: ImageStudioApi['createImageGeneration'] = async (...args) =>
+        (await this.createImageStudioApi()).createImageGeneration(...args);
 
-    async myImageGenerationJob(id: string, signal?: AbortSignal): Promise<ImageGenerationJob> {
-        return (await this.createImageStudioApi()).myImageGenerationJob(id, signal);
-    }
+    myImageGenerationJob: ImageStudioApi['myImageGenerationJob'] = async (...args) =>
+        (await this.createImageStudioApi()).myImageGenerationJob(...args);
 
     myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = async (...args) =>
         (await this.createImageStudioApi()).myImageGenerationJobs(...args);
     releaseImageReference: ImageStudioApi['releaseImageReference'] = async (...args) =>
         (await this.createImageStudioApi()).releaseImageReference(...args);
 
-    async cancelQueuedImageGeneration(id: string): Promise<ImageGenerationJob> {
-        return (await this.createImageStudioApi()).cancelQueuedImageGeneration(id);
-    }
+    cancelQueuedImageGeneration: ImageStudioApi['cancelQueuedImageGeneration'] = async (...args) =>
+        (await this.createImageStudioApi()).cancelQueuedImageGeneration(...args);
 
-    async deleteMyGeneratedImage(outputId: string): Promise<boolean> {
-        return (await this.createImageStudioApi()).deleteMyGeneratedImage(outputId);
-    }
+    deleteMyGeneratedImage: ImageStudioApi['deleteMyGeneratedImage'] = async (...args) =>
+        (await this.createImageStudioApi()).deleteMyGeneratedImage(...args);
 
-    async deleteMyImageGenerationJob(id: string): Promise<boolean> {
-        return (await this.createImageStudioApi()).deleteMyImageGenerationJob(id);
-    }
+    deleteMyImageGenerationJob: ImageStudioApi['deleteMyImageGenerationJob'] = async (...args) =>
+        (await this.createImageStudioApi()).deleteMyImageGenerationJob(...args);
 
     async recordStorefrontVisit(): Promise<boolean> {
         return this.referralsApi.recordStorefrontVisit();
