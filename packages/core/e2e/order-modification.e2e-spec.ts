@@ -10,6 +10,7 @@ import { omit } from '@vendure/common/lib/omit';
 import { pick } from '@vendure/common/lib/pick';
 import { summate } from '@vendure/common/lib/shared-utils';
 import {
+    ConfigService,
     defaultShippingCalculator,
     defaultShippingEligibilityChecker,
     freeShipping,
@@ -17,12 +18,14 @@ import {
     minimumOrderAmount,
     Order,
     OrderItemPriceCalculationStrategy,
+    OrderLine,
     orderPercentageDiscount,
     PriceCalculationResult,
     productsPercentageDiscount,
     ProductVariant,
     RequestContext,
     ShippingCalculator,
+    TransactionalConnection,
 } from '@vendure/core';
 import { createErrorResultGuard, createTestEnvironment, ErrorResultGuard } from '@vendure/testing';
 import path from 'path';
@@ -50,6 +53,7 @@ import {
     addManualPaymentToOrderDocument,
     adminTransitionToStateDocument,
     cancelOrderDocument,
+    cancelPaymentDocument,
     createFulfillmentDocument,
     createPromotionDocument,
     createShippingMethodDocument,
@@ -1324,6 +1328,8 @@ describe('Order modification', () => {
         });
 
         it('addManualPaymentToOrder', async () => {
+            const { order: paymentOrder } = await adminClient.query(getOrderDocument, { id: orderId2 });
+            expect(paymentOrder).not.toBeNull();
             const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
                 input: {
                     orderId: orderId2,
@@ -1342,9 +1348,14 @@ describe('Order modification', () => {
                 state: 'Settled',
                 amount: 300,
                 method: 'test',
-                nextStates: ['Cancelled'],
+                nextStates: [],
                 metadata: {
                     foo: 'bar',
+                    refundBudget: {
+                        currencyCode: paymentOrder!.currencyCode,
+                        shippingWithTax: paymentOrder!.shippingWithTax,
+                        orderTotalWithTax: paymentOrder!.totalWithTax,
+                    },
                 },
                 refunds: [],
             });
@@ -1352,13 +1363,24 @@ describe('Order modification', () => {
             expect(addManualPaymentToOrder.modifications[0].payment?.id).toBe(
                 addManualPaymentToOrder.payments![1].id,
             );
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
         });
 
-        it('transition back to original state', async () => {
-            const transitionOrderToState = await adminTransitionOrderToState(orderId2, 'PaymentSettled');
-            orderGuard.assertSuccess(transitionOrderToState);
+        it('persists the automatically restored original state', async () => {
+            const { order } = await adminClient.query(getOrderWithModificationsDocument, { id: orderId2 });
+            expect(order?.state).toBe('PaymentSettled');
+            expect(order?.totalWithTax).toBe(getOrderPaymentsTotalWithRefunds(order!));
+        });
 
-            expect(transitionOrderToState.state).toBe('PaymentSettled');
+        it('rejects cancelling the settled additional payment', async () => {
+            const { order: before } = await adminClient.query(getOrderDocument, { id: orderId2 });
+            const payment = before!.payments![1];
+            await expect(adminClient.query(cancelPaymentDocument, { paymentId: payment.id })).rejects.toThrow(
+                '已到账款项必须通过退款处理，不能取消支付记录',
+            );
+            const { order: after } = await adminClient.query(getOrderDocument, { id: orderId2 });
+            expect(after!.payments).toEqual(before!.payments);
+            expect(after!.state).toBe('PaymentSettled');
         });
     });
 
@@ -1436,6 +1458,7 @@ describe('Order modification', () => {
     describe('refunds for multiple payments', () => {
         let orderId2: string;
         let orderLineId: string;
+        let originalPaymentId: string;
         let additionalPaymentId: string;
 
         beforeAll(async () => {
@@ -1457,12 +1480,13 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_5',
                 quantity: 1,
-            } as any);
+            });
             await proceedToArrangingPayment(shopClient);
             const order = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
             orderGuard.assertSuccess(order);
             orderLineId = order.lines[0].id;
             orderId2 = order.id;
+            originalPaymentId = order.payments![0].id;
 
             const transitionOrderToState = await adminTransitionOrderToState(orderId2, 'Modifying');
             orderGuard.assertSuccess(transitionOrderToState);
@@ -1480,7 +1504,7 @@ describe('Order modification', () => {
             const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
                 input: {
                     orderId: orderId2,
-                    method: 'test',
+                    method: testSuccessfulPaymentMethod.code,
                     transactionId: 'ABC123',
                     metadata: {
                         foo: 'bar',
@@ -1490,10 +1514,9 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
             additionalPaymentId = addManualPaymentToOrder.payments![1].id!;
 
-            const transitionOrderToState2 = await adminTransitionOrderToState(orderId2, 'PaymentSettled');
-            orderGuard.assertSuccess(transitionOrderToState2);
-
-            expect(transitionOrderToState2.state).toBe('PaymentSettled');
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
+            expect(addManualPaymentToOrder.modifications[0].isSettled).toBe(true);
+            expect(addManualPaymentToOrder.modifications[0].payment?.id).toBe(additionalPaymentId);
         });
 
         it('apply couponCode to create first refund', async () => {
@@ -1525,16 +1548,58 @@ describe('Order modification', () => {
             expect(modifyOrder.totalWithTax).toBe(getOrderPaymentsTotalWithRefunds(modifyOrder));
         });
 
-        it('reduce quantity to create second refund', async () => {
+        it('rejects refunding more than the remaining source payment balance', async () => {
+            const { order: before } = await adminClient.query(getOrderWithModificationsDocument, {
+                id: orderId2,
+            });
+            await expect(
+                adminClient.query(modifyOrderForTestDocument, {
+                    input: {
+                        dryRun: false,
+                        orderId: orderId2,
+                        adjustOrderLines: [{ orderLineId, quantity: 1 }],
+                        refund: { paymentId: additionalPaymentId, reason: 'exceeds source balance' },
+                    },
+                }),
+            ).rejects.toThrow('REFUND_AMOUNT_ERROR');
+            const { order: after } = await adminClient.query(getOrderWithModificationsDocument, {
+                id: orderId2,
+            });
+            expect(after).toEqual(before);
+        });
+
+        it('reduce quantity with explicit refunds from both source payments', async () => {
+            // C24F390 costs 14374 before 20% tax. The 500 net coupon remains spread
+            // over the two sold units, including the unit removed by this modification.
+            const expectedBeforeSubtotal = Math.round((14374 * 2 - 500) * 1.2);
+            const expectedRemainingSubtotal = Math.round((14374 - 500 / 2) * 1.2);
+            const expectedReduction = expectedBeforeSubtotal - expectedRemainingSubtotal;
+            const additionalBalance = 17249 - 600;
+            const { order: before } = await adminClient.query(getOrderWithModificationsDocument, {
+                id: orderId2,
+            });
+            expect(before!.subTotalWithTax).toBe(expectedBeforeSubtotal);
+            const { modifyOrder: preview } = await adminClient.query(modifyOrderForTestDocument, {
+                input: { dryRun: true, orderId: orderId2, adjustOrderLines: [{ orderLineId, quantity: 1 }] },
+            });
+            orderWithModificationsGuard.assertSuccess(preview);
+            expect(preview.lines[0].quantity).toBe(1);
+            expect(preview.lines[0].orderPlacedQuantity).toBe(2);
+            expect(preview.subTotalWithTax).toBe(expectedRemainingSubtotal);
+            expect(before!.totalWithTax - preview.totalWithTax).toBe(expectedReduction);
             const { modifyOrder } = await adminClient.query(modifyOrderForTestDocument, {
                 input: {
                     dryRun: false,
                     orderId: orderId2,
                     adjustOrderLines: [{ orderLineId, quantity: 1 }],
-                    refund: {
-                        paymentId: additionalPaymentId,
-                        reason: 'test 2',
-                    },
+                    refunds: [
+                        { paymentId: additionalPaymentId, amount: additionalBalance, reason: 'test 2' },
+                        {
+                            paymentId: originalPaymentId,
+                            amount: expectedReduction - additionalBalance,
+                            reason: 'test 2',
+                        },
+                    ],
                 },
             });
             orderWithModificationsGuard.assertSuccess(modifyOrder);
@@ -1557,18 +1622,14 @@ describe('Order modification', () => {
                     reason: 'test 2',
                 },
             ]);
-            // Note: During the big refactor of the OrderItem entity, the "total" value in the following
-            // assertion was changed from `300` to `600`. This is due to a change in the way we calculate
-            // refunds on pro-rated discounts. Previously, the pro-ration was not recalculated prior to
-            // the refund being calculated, so the individual OrderItem had only 1/2 the full order discount
-            // applied to it (300). Now, the pro-ration is applied to the single remaining item and therefore the
-            // entire discount of 600 gets moved over to the remaining item.
+            // Retaining the sold baseline preserves 300 gross discount per unit.
+            // The remaining 300 of this refund is explicitly allocated to the original payment.
             expect(modifyOrder?.payments?.find(p => p.id !== additionalPaymentId)?.refunds).toEqual([
                 {
                     id: 'T_6',
-                    paymentId: 'T_15',
+                    paymentId: originalPaymentId,
                     state: 'Pending',
-                    total: 600,
+                    total: 300,
                     reason: 'test 2',
                 },
             ]);
@@ -1597,7 +1658,7 @@ describe('Order modification', () => {
         await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
             productVariantId: 'T_1',
             quantity: 1,
-        } as any);
+        });
         await shopClient.query(applyCouponCodeDocument, {
             couponCode: '5OFF',
         });
@@ -1667,7 +1728,7 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_1',
                 quantity: 1,
-            } as any);
+            });
             await proceedToArrangingPayment(shopClient);
             const order = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
             orderGuard.assertSuccess(order);
@@ -1698,7 +1759,7 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_1',
                 quantity: 1,
-            } as any);
+            });
             await shopClient.query(applyCouponCodeDocument, {
                 couponCode: 'HALF',
             });
@@ -1737,7 +1798,7 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_1',
                 quantity: 2,
-            } as any);
+            });
             await shopClient.query(applyCouponCodeDocument, {
                 couponCode: '5OFF2',
             });
@@ -1820,7 +1881,7 @@ describe('Order modification', () => {
                 await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                     productVariantId: football.id,
                     quantity: 2,
-                } as any);
+                });
                 await proceedToArrangingPayment(shopClient);
                 const order = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
                 orderGuard.assertSuccess(order);
@@ -1983,7 +2044,7 @@ describe('Order modification', () => {
                 },
             });
             orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
-            await adminTransitionOrderToState(orderId4, 'PaymentSettled');
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
             await adminClient.query(createFulfillmentDocument, {
                 input: {
                     lines: order?.lines.map(l => ({ orderLineId: l.id, quantity: l.quantity })) ?? [],
@@ -2052,7 +2113,7 @@ describe('Order modification', () => {
             const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
                 input: {
                     orderId: orderId5,
-                    method: 'test',
+                    method: testSuccessfulPaymentMethod.code,
                     transactionId: 'manual-extra-payment',
                     metadata: {
                         foo: 'bar',
@@ -2060,8 +2121,7 @@ describe('Order modification', () => {
                 },
             });
             orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
-            const result2 = await adminTransitionOrderToState(orderId5, 'PaymentSettled');
-            orderGuard.assertSuccess(result2);
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
             const result3 = await adminTransitionOrderToState(orderId5, 'Modifying');
             orderGuard.assertSuccess(result3);
         });
@@ -2086,7 +2146,7 @@ describe('Order modification', () => {
                         },
                     ],
                     refund: {
-                        paymentId: order!.payments![0].id,
+                        paymentId: order!.payments!.find(p => p.transactionId === 'manual-extra-payment')!.id,
                     },
                 },
             });
@@ -2273,7 +2333,7 @@ describe('Order modification', () => {
             orderGuard.assertSuccess(history);
 
             expect(history.history.items.length).toBe(1);
-            expect(pick(history.history.items[0]!, ['type', 'data'])).toEqual({
+            expect(pick(history.history.items[0], ['type', 'data'])).toEqual({
                 type: HistoryEntryType.ORDER_COUPON_APPLIED,
                 data: { couponCode: CODE_50PC_OFF, promotionId: 'T_6' },
             });
@@ -2319,7 +2379,7 @@ describe('Order modification', () => {
             orderGuard.assertSuccess(history);
 
             expect(history.history.items.length).toBe(1);
-            expect(pick(history.history.items[0]!, ['type', 'data'])).toEqual({
+            expect(pick(history.history.items[0], ['type', 'data'])).toEqual({
                 type: HistoryEntryType.ORDER_COUPON_REMOVED,
                 data: { couponCode: CODE_50PC_OFF },
             });
@@ -2329,7 +2389,7 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_1',
                 quantity: 1,
-            } as any);
+            });
             await proceedToArrangingPayment(shopClient);
             const result = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
             orderWithModificationsGuard.assertSuccess(result);
@@ -2383,11 +2443,11 @@ describe('Order modification', () => {
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_1',
                 quantity: 1,
-            } as any);
+            });
             await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
                 productVariantId: 'T_2',
                 quantity: 1,
-            } as any);
+            });
 
             await proceedToArrangingPayment(shopClient);
             const paidOrder = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
@@ -2462,7 +2522,9 @@ describe('Order modification', () => {
             orderGuard.assertSuccess(transitionResult);
             expect(transitionResult.state).toBe('ArrangingAdditionalPayment');
 
-            // 5. Add manual payment - this should currently fail due to a bug
+            // 5. Confirm the entire outstanding amount and link both modifications.
+            const { order: paymentOrder } = await adminClient.query(getOrderDocument, { id: order.id });
+            expect(paymentOrder).not.toBeNull();
             const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
                 input: {
                     orderId: order.id,
@@ -2474,7 +2536,6 @@ describe('Order modification', () => {
                 },
             });
 
-            // This should fail due to the bug, but we expect it to succeed after the fix
             orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
 
             // Verify the payment was added correctly
@@ -2486,11 +2547,16 @@ describe('Order modification', () => {
                 id: expect.any(String),
                 transactionId: 'MULTI_MOD_123',
                 state: 'Settled',
-                amount: expect.any(Number),
+                amount: secondModification.totalWithTax - order.totalWithTax,
                 method: 'test',
-                nextStates: ['Cancelled'],
+                nextStates: [],
                 metadata: {
                     test: 'multiple modifications',
+                    refundBudget: {
+                        currencyCode: paymentOrder!.currencyCode,
+                        shippingWithTax: paymentOrder!.shippingWithTax,
+                        orderTotalWithTax: paymentOrder!.totalWithTax,
+                    },
                 },
                 refunds: [],
             });
@@ -2500,110 +2566,136 @@ describe('Order modification', () => {
             expect(addManualPaymentToOrder.modifications.length).toBe(2);
             expect(addManualPaymentToOrder.modifications[0].isSettled).toBe(true);
             expect(addManualPaymentToOrder.modifications[1].isSettled).toBe(true);
+            expect(addManualPaymentToOrder.modifications.map(m => m.payment?.id)).toEqual([
+                manualPayment!.id,
+                manualPayment!.id,
+            ]);
+            expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
         });
     });
 
-    // #5097 — a line added by a modification keeps an orderPlacedQuantity of 0, so cancelling
-    // the order left both quantities at 0 and the prorated discount amount became NaN.
+    // #5097 — legacy added lines have a sold baseline of 0. New modifications retain
+    // the sold quantity; both histories must remain readable after cancellation.
     describe('cancelling an order with a line added by a modification', () => {
-        const CODE_HALF_PRICE = 'HALF_PRICE';
-
         type CanceledOrderFragment = FragmentOf<typeof canceledOrderFragment>;
         const canceledOrderGuard: ErrorResultGuard<CanceledOrderFragment> = createErrorResultGuard(
             input => !!input.lines,
         );
 
-        it('order with discounts can still be read after cancellation', async () => {
-            await adminClient.query(createPromotionDocument, {
-                input: {
-                    enabled: true,
-                    couponCode: CODE_HALF_PRICE,
-                    conditions: [
-                        {
-                            code: minimumOrderAmount.code,
-                            arguments: [
-                                { name: 'amount', value: '0' },
-                                { name: 'taxInclusive', value: 'false' },
-                            ],
-                        },
-                    ],
-                    actions: [
-                        {
-                            code: orderPercentageDiscount.code,
-                            arguments: [{ name: 'discount', value: '50' }],
-                        },
-                    ],
-                    translations: [{ languageCode: LanguageCode.en, name: 'half price' }],
-                },
-            });
+        it.each([1, 0])(
+            'discounts remain readable after cancelling a sold baseline of %i',
+            async placedQuantity => {
+                const CODE_HALF_PRICE = `HALF_PRICE_${placedQuantity}`;
+                await adminClient.query(createPromotionDocument, {
+                    input: {
+                        enabled: true,
+                        couponCode: CODE_HALF_PRICE,
+                        conditions: [
+                            {
+                                code: minimumOrderAmount.code,
+                                arguments: [
+                                    { name: 'amount', value: '0' },
+                                    { name: 'taxInclusive', value: 'false' },
+                                ],
+                            },
+                        ],
+                        actions: [
+                            {
+                                code: orderPercentageDiscount.code,
+                                arguments: [{ name: 'discount', value: '50' }],
+                            },
+                        ],
+                        translations: [{ languageCode: LanguageCode.en, name: 'half price' }],
+                    },
+                });
 
-            // 1. Place an order with an order-level promotion applied
-            await shopClient.asUserWithCredentials('hayden.zieme12@hotmail.com', 'test');
-            await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
-                productVariantId: 'T_1',
-                quantity: 1,
-            } as AddItemInput);
-            await shopClient.query(applyCouponCodeDocument, { couponCode: CODE_HALF_PRICE });
-            await proceedToArrangingPayment(shopClient);
-            const placedOrder = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
-            orderGuard.assertSuccess(placedOrder);
+                // 1. Place an order with an order-level promotion applied
+                await shopClient.asUserWithCredentials('hayden.zieme12@hotmail.com', 'test');
+                await shopClient.query(addItemToOrderWithCustomFieldsDocument, {
+                    productVariantId: 'T_1',
+                    quantity: 1,
+                });
+                await shopClient.query(applyCouponCodeDocument, { couponCode: CODE_HALF_PRICE });
+                await proceedToArrangingPayment(shopClient);
+                const placedOrder = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
+                orderGuard.assertSuccess(placedOrder);
 
-            // 2. Add a new line via a modification, so that it has an orderPlacedQuantity of 0
-            const modifyingOrder = await adminTransitionOrderToState(placedOrder.id, 'Modifying');
-            orderGuard.assertSuccess(modifyingOrder);
-            const { modifyOrder } = await adminClient.query(modifyOrderDocument, {
-                input: {
-                    dryRun: false,
-                    orderId: placedOrder.id,
-                    addItems: [{ productVariantId: 'T_2', quantity: 1 }],
-                },
-            });
-            orderWithModificationsGuard.assertSuccess(modifyOrder);
+                // 2. Add a new line and verify that current modifications retain the sold quantity.
+                const modifyingOrder = await adminTransitionOrderToState(placedOrder.id, 'Modifying');
+                orderGuard.assertSuccess(modifyingOrder);
+                const { modifyOrder } = await adminClient.query(modifyOrderDocument, {
+                    input: {
+                        dryRun: false,
+                        orderId: placedOrder.id,
+                        addItems: [{ productVariantId: 'T_2', quantity: 1 }],
+                    },
+                });
+                orderWithModificationsGuard.assertSuccess(modifyOrder);
 
-            // 3. Settle the additional payment and return the order to its original state
-            const arrangingAdditionalPayment = await adminTransitionOrderToState(
-                placedOrder.id,
-                'ArrangingAdditionalPayment',
-            );
-            orderGuard.assertSuccess(arrangingAdditionalPayment);
-            const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
-                input: {
-                    orderId: placedOrder.id,
-                    method: 'test',
-                    transactionId: 'CANCEL_MODIFIED_123',
-                    metadata: {},
-                },
-            });
-            orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
-            const settledOrder = await adminTransitionOrderToState(placedOrder.id, 'PaymentSettled');
-            orderGuard.assertSuccess(settledOrder);
+                // 3. Settle the additional payment and return the order to its original state
+                const arrangingAdditionalPayment = await adminTransitionOrderToState(
+                    placedOrder.id,
+                    'ArrangingAdditionalPayment',
+                );
+                orderGuard.assertSuccess(arrangingAdditionalPayment);
+                const { addManualPaymentToOrder } = await adminClient.query(addManualPaymentToOrderDocument, {
+                    input: {
+                        orderId: placedOrder.id,
+                        method: 'test',
+                        transactionId: 'CANCEL_MODIFIED_123',
+                        metadata: {},
+                    },
+                });
+                orderWithModificationsGuard.assertSuccess(addManualPaymentToOrder);
+                expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
 
-            const addedLine = addManualPaymentToOrder.lines.find(l => l.orderPlacedQuantity === 0);
-            expect(addedLine).toBeDefined();
+                const addedLine = addManualPaymentToOrder.lines.find(l => l.productVariant.id === 'T_2');
+                expect(addedLine).toBeDefined();
+                expect(addedLine!.orderPlacedQuantity).toBe(1);
+                if (placedQuantity === 0) {
+                    // Seed only this isolated test row as historical data to retain the original
+                    // zero-denominator regression, which new writes can no longer produce.
+                    const config = server.app.get(ConfigService);
+                    const lineId = config.entityOptions.entityIdStrategy!.decodeId(addedLine!.id);
+                    await server.app
+                        .get(TransactionalConnection)
+                        .rawConnection.getRepository(OrderLine)
+                        .update(lineId, { orderPlacedQuantity: 0 });
+                }
+                const { order: beforeCancellation } = await adminClient.query(
+                    getOrderWithLineDiscountsDocument,
+                    {
+                        id: placedOrder.id,
+                    },
+                );
+                expect(beforeCancellation!.lines.find(l => l.id === addedLine!.id)!.orderPlacedQuantity).toBe(
+                    placedQuantity,
+                );
 
-            const { cancelOrder } = await adminClient.query(cancelOrderDocument, {
-                input: { orderId: placedOrder.id, reason: 'no longer wanted' },
-            });
-            canceledOrderGuard.assertSuccess(cancelOrder);
-            expect(cancelOrder.state).toBe('Cancelled');
+                const { cancelOrder } = await adminClient.query(cancelOrderDocument, {
+                    input: { orderId: placedOrder.id, reason: 'no longer wanted' },
+                });
+                canceledOrderGuard.assertSuccess(cancelOrder);
+                expect(cancelOrder.state).toBe('Cancelled');
 
-            // 4. Read the order back as the Admin dashboard does
-            const { order } = await adminClient.query(getOrderWithLineDiscountsDocument, {
-                id: placedOrder.id,
-            });
+                // 4. Read the order back as the Admin dashboard does
+                const { order } = await adminClient.query(getOrderWithLineDiscountsDocument, {
+                    id: placedOrder.id,
+                });
 
-            const cancelledAddedLine = order!.lines.find(l => l.id === addedLine!.id)!;
-            expect(cancelledAddedLine.quantity).toBe(0);
-            expect(cancelledAddedLine.orderPlacedQuantity).toBe(0);
-            for (const discount of cancelledAddedLine.discounts) {
-                expect(discount.amount).not.toBeNaN();
-                expect(discount.amountWithTax).not.toBeNaN();
-            }
-            for (const discount of order!.discounts) {
-                expect(discount.amount).not.toBeNaN();
-                expect(discount.amountWithTax).not.toBeNaN();
-            }
-        });
+                const cancelledAddedLine = order!.lines.find(l => l.id === addedLine!.id)!;
+                expect(cancelledAddedLine.quantity).toBe(0);
+                expect(cancelledAddedLine.orderPlacedQuantity).toBe(placedQuantity);
+                for (const discount of cancelledAddedLine.discounts) {
+                    expect(discount.amount).not.toBeNaN();
+                    expect(discount.amountWithTax).not.toBeNaN();
+                }
+                for (const discount of order!.discounts) {
+                    expect(discount.amount).not.toBeNaN();
+                    expect(discount.amountWithTax).not.toBeNaN();
+                }
+            },
+        );
     });
 
     async function adminTransitionOrderToState(id: string, state: string) {
