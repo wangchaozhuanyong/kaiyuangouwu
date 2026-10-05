@@ -1,3 +1,8 @@
+import {
+    AutoCardService,
+    ManualDigitalDeliveryService,
+    OrderConfirmationTokenService,
+} from '@vendure/commerce-fulfillment-plugin';
 import { Channel, CurrencyCode, LanguageCode, RequestContext } from '@vendure/core';
 import { FileBasedTemplateLoader } from '@vendure/email-plugin';
 import { simpleParser } from 'mailparser';
@@ -6,11 +11,6 @@ import { createServer, Socket } from 'node:net';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-    AutoCardService,
-    ManualDigitalDeliveryService,
-    OrderConfirmationTokenService,
-} from '../commerce-fulfillment-plugin/src';
 import { EmailProcessor } from '../email-plugin/src/email-processor';
 
 import { emailLanguageVariables } from './email-localization';
