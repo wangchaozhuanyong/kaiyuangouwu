@@ -1023,7 +1023,10 @@ export function CustomersModule() {
                         mobilePresentation="sheet"
                         className="w-full max-w-lg rounded-xl bg-white p-4 shadow-xl"
                     >
-                        <h2 className="mb-4 text-base font-semibold">客户筛选与排序</h2>
+                        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                            客户筛选与排序
+                            <FeatureHelpButton topic="customers.management" title="客户筛选与排序" />
+                        </h2>
                         <div className="space-y-4">
                             <AdminField label="客户分组">
                                 <AdminSelect
