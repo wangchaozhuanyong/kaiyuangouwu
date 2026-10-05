@@ -700,7 +700,9 @@ describe('storefront skin system', () => {
         const css = postcss.parse(stylesheet('./styles/experience-foundations.css'));
         const initial = new Map<string, string>();
         css.walkRules(':root', rule => {
-            rule.walkDecls(declaration => initial.set(declaration.prop, declaration.value));
+            rule.walkDecls(declaration => {
+                initial.set(declaration.prop, declaration.value);
+            });
         });
         const runtime = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic'));
         for (const token of [
