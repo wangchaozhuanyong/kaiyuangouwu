@@ -406,7 +406,7 @@ function ConfigPanel({
 
     return (
         <>
-            <div className="mx-auto w-full max-w-5xl space-y-4">
+            <div className="w-full space-y-4">
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">

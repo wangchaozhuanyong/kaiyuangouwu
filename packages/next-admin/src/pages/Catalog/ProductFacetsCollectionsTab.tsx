@@ -60,28 +60,28 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
         !hasDirectProductAssignment(collection.filters, productId ?? '');
 
     return (
-        <div className={`grid items-start gap-4 ${section ? '' : '2xl:grid-cols-2'}`}>
+        <div className={`grid min-w-0 items-start gap-4 ${section ? '' : '2xl:grid-cols-2'}`}>
             {/* Facet 筛选标签属性 */}
             {section !== 'category' && (
-                <div className="space-y-4">
-                    <div className="border-b border-slate-100 pb-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="flex shrink-0 items-center gap-2 text-sm font-bold text-slate-900">
                             筛选属性
                             <FeatureHelpButton topic="catalog.facets" title="筛选属性" />
                         </h3>
-                    </div>
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                        <AdminInput
-                            aria-label="搜索商品属性"
-                            value={facetSearch}
-                            onChange={event => {
-                                setFacetSearch(event.target.value);
-                                setFacetPage(0);
-                            }}
-                            placeholder="搜索属性名称"
-                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
-                        />
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <AdminInput
+                                aria-label="搜索商品属性"
+                                value={facetSearch}
+                                onChange={event => {
+                                    setFacetSearch(event.target.value);
+                                    setFacetPage(0);
+                                }}
+                                placeholder="搜索属性名称"
+                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
+                            />
+                        </div>
                     </div>
 
                     {facetsLoading && !facetsData ? (
@@ -103,13 +103,13 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                             </AdminButton>
                         </div>
                     ) : facetsData?.facets?.items && facetsData.facets.items.length > 0 ? (
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-6 gap-y-3">
                             {facetsData.facets.items.map(facet => (
-                                <div key={facet.id} className="space-y-2">
-                                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                        <Tag className="w-3.5 h-3.5 text-blue-500" />
-                                        <span>{facet.name}</span>
-                                        <span className="text-[10px] text-slate-400 font-mono">
+                                <div key={facet.id} className="min-w-0 space-y-2">
+                                    <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-700">
+                                        <Tag className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                                        <span className="break-words">{facet.name}</span>
+                                        <span className="break-all text-[10px] text-slate-400 font-mono">
                                             ({facet.code})
                                         </span>
                                     </div>
@@ -122,10 +122,10 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                                                     key={fv.id}
                                                     type="button"
                                                     onClick={() => toggleFacetValue(fv.id)}
-                                                    className={`px-3 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                                    className={`flex max-w-full cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-1 text-left text-xs font-medium transition-colors ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
                                                 >
                                                     {isSelected && <Check className="w-3 h-3" />}
-                                                    <span>{fv.name}</span>
+                                                    <span className="min-w-0 break-words">{fv.name}</span>
                                                 </AdminButton>
                                             );
                                         })}
@@ -150,22 +150,22 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
             )}
             {/* 所属商品分类 */}
             {section !== 'facets' && (
-                <div className="space-y-3 border-t border-slate-100 pt-4">
-                    <div className="border-b border-slate-100 pb-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <div className="min-w-0 space-y-3 border-t border-slate-100 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="flex shrink-0 items-center gap-2 text-sm font-bold text-slate-900">
                             商品分类
                             <FeatureHelpButton topic="catalog.collections" title="所属商品分类" />
                         </h3>
-                    </div>
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                        <AdminInput
-                            aria-label="搜索商品分类或专辑"
-                            value={collectionSearch}
-                            onChange={event => setCollectionSearch(event.target.value)}
-                            placeholder="搜索分类名称"
-                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
-                        />
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <AdminInput
+                                aria-label="搜索商品分类或专辑"
+                                value={collectionSearch}
+                                onChange={event => setCollectionSearch(event.target.value)}
+                                placeholder="搜索分类名称"
+                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
+                            />
+                        </div>
                     </div>
 
                     {collectionsLoading && !collectionsData ? (
@@ -201,7 +201,7 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                             </div>
 
                             {filteredCollectionGroups.length > 0 ? (
-                                <div className="grid items-start gap-3 md:grid-cols-2">
+                                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-2">
                                     {filteredCollectionGroups.map(group => {
                                         const parentSelected = selectedCollectionIds.includes(
                                             group.parent.id,
@@ -213,9 +213,9 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                                             <section
                                                 key={group.parent.id}
                                                 aria-labelledby={`collection-group-${group.parent.id}`}
-                                                className={`overflow-hidden rounded-xl border bg-white transition-colors ${parentSelected ? 'border-blue-300' : 'border-slate-200'}`}
+                                                className={`min-w-0 overflow-hidden rounded-lg border bg-white transition-colors ${parentSelected ? 'border-blue-300' : 'border-slate-200'}`}
                                             >
-                                                <div className="flex flex-col gap-2.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 bg-slate-50/80 px-2.5 py-2">
                                                     <CollectionAssignmentOption
                                                         collection={group.parent}
                                                         level="primary"
@@ -226,14 +226,14 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                                                         onToggle={toggleCollection}
                                                     />
                                                     {group.children.length > 0 && (
-                                                        <span className="shrink-0 pl-9 text-[10px] font-medium text-slate-400 sm:pl-0">
+                                                        <span className="pl-9 text-[10px] font-medium text-slate-400">
                                                             {`${group.children.length} 个二级分类${selectedChildCount > 0 ? ` · 已选 ${selectedChildCount}` : ''}`}
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 {group.children.length > 0 && (
-                                                    <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
+                                                    <div className="flex flex-wrap gap-2 p-2">
                                                         {group.children.map(child => (
                                                             <CollectionAssignmentOption
                                                                 key={child.id}
@@ -288,7 +288,7 @@ function CollectionAssignmentOption({
     const Icon = isPrimary ? FolderTree : CornerDownRight;
     return (
         <label
-            className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg text-xs transition-colors ${isPrimary ? 'flex-1 px-1 py-1' : `border p-3 ${selected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50'}`}`}
+            className={`flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-lg text-xs transition-colors md:min-h-10 ${isPrimary ? 'flex-1 px-1 py-1' : `flex-[1_1_8rem] border px-2 py-1.5 ${selected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50'}`}`}
         >
             <AdminInput
                 type="checkbox"
@@ -302,10 +302,10 @@ function CollectionAssignmentOption({
                 aria-hidden="true"
             />
             <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center gap-1.5">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                     <span
                         id={isPrimary ? `collection-group-${collection.id}` : undefined}
-                        className="truncate font-bold text-slate-800"
+                        className="min-w-0 break-words font-bold text-slate-800"
                     >
                         {collection.name}
                     </span>

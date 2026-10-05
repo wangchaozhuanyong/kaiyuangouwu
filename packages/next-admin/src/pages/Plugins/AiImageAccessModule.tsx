@@ -70,7 +70,7 @@ export function AiImageAccessModule() {
                 </div>
             </header>
             <main className="mx-auto w-full max-w-none flex-1 overflow-y-auto p-5 sm:p-8">
-                <div className="mx-auto w-full max-w-5xl space-y-4">
+                <div className="w-full space-y-4">
                     {notice && (
                         <Message kind="success" onClose={() => setNotice('')}>
                             {notice}

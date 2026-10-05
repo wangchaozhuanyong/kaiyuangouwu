@@ -132,6 +132,38 @@
         min-height: 5rem;
         resize: vertical;
     }
+    .admin-sidebar {
+        background-color: var(--admin-surface);
+        color: var(--admin-text-secondary);
+        border-inline-end: 1px solid var(--admin-border-subtle);
+    }
+    .admin-sidebar-brand {
+        color: var(--admin-text);
+        border-block-end: 1px solid var(--admin-border-subtle);
+    }
+    .admin-sidebar-nav-item {
+        border-radius: var(--admin-radius-control);
+        color: var(--admin-text-secondary);
+        transition:
+            background-color var(--admin-motion-fast),
+            color var(--admin-motion-fast);
+    }
+    .admin-sidebar-nav-item:hover,
+    .admin-sidebar-section[aria-expanded='true'] {
+        background-color: var(--admin-surface-muted);
+        color: var(--admin-text);
+    }
+    .admin-sidebar-nav-item[aria-current='page'],
+    .admin-sidebar-section[data-current='true'] {
+        background-color: color-mix(in srgb, var(--admin-focus) 10%, var(--admin-surface));
+        color: var(--admin-focus);
+        font-weight: 600;
+    }
+    .admin-sidebar-submenu {
+        margin-inline-start: 1.25rem;
+        padding-inline-start: 0.5rem;
+        border-inline-start: 1px solid var(--admin-border-subtle);
+    }
     .admin-workspace {
         display: flex;
         flex-direction: column;
@@ -828,6 +860,9 @@
         order: -1;
         flex: 1 1 auto;
         gap: 0.25rem;
+    }
+    .admin-store-selector .admin-field-label {
+        display: none;
     }
     .admin-store-select {
         width: 100%;

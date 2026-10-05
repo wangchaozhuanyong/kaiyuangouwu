@@ -12,6 +12,7 @@ import { AdminPageWorkspace } from '../../src/components/AdminPageWorkspace';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
 import { ConfirmDialogProvider } from '../../src/components/ConfirmDialog';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
+import type { EntityCustomFieldsDefinition } from '../../src/custom-fields/custom-field-types';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
 import {
     getNextAdminExtensionLegacyRoutes,
@@ -22,6 +23,9 @@ import type { StoreManagementResult, StoreProfileRecord } from '../../src/graphq
 import '../../src/index.css';
 import { AppShell } from '../../src/layouts/AppShell';
 import { STANDALONE_ADMIN_PAGES, getStandaloneAdminRedirect } from '../../src/navigation/admin-navigation';
+import { InitialPasswordChangeModule } from '../../src/pages/Auth/InitialPasswordChangeModule';
+import { LoginModule } from '../../src/pages/Auth/LoginModule';
+import { ProfileModule } from '../../src/pages/Auth/ProfileModule';
 import { AssetsModule } from '../../src/pages/Catalog/AssetsModule';
 import { CatalogModule } from '../../src/pages/Catalog/CatalogModule';
 import { CategoriesModule } from '../../src/pages/Catalog/CategoriesModule';
@@ -37,7 +41,8 @@ import { CouponReport } from '../../src/pages/Marketing/promotion-reports';
 import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { AfterSalesModule } from '../../src/pages/Sales/AfterSalesModule';
 import { CardPoolModule } from '../../src/pages/Sales/CardPoolModule';
-import { DraftOrderEditor } from '../../src/pages/Sales/OrderWorkflowEditor';
+import { OrderEditor } from '../../src/pages/Sales/OrderEditor';
+import { DraftOrderEditor, ModifyOrderEditor } from '../../src/pages/Sales/OrderWorkflowEditor';
 import { ProfitReportModule } from '../../src/pages/Sales/ProfitReportModule';
 import { SalesModule } from '../../src/pages/Sales/SalesModule';
 import { PaymentShippingManager } from '../../src/pages/Settings/PaymentShippingManager';
@@ -52,11 +57,15 @@ import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
 import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 import { FieldLayoutFixture } from './field-layout-fixture';
+import { FixtureAuditTheme } from './fixture-audit-theme';
 import { PerformanceFixture } from './performance-fixture';
 
 // Synthetic local data only. No HTTP link. Mutations are blocked unless an explicit mockWrites flag enables the small local-only whitelist below.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
+const layoutAudit = params.has('layoutAudit');
+const authFixture = view === 'login' || view === 'initial-password';
+const mockWritesEnabled = params.has('mockWrites') && !layoutAudit && !authFixture;
 // Platform-only routes use the real shell scope guard; opt in with &platform.
 const platformFixture = params.has('platform');
 const alternateScopeParams = new URLSearchParams(params);
@@ -139,33 +148,126 @@ const channel = {
     availableCurrencyCodes: ['MYR', 'CNY'],
 };
 const empty = { items: [], totalItems: 0 };
-const variants = Array.from({ length: params.has('multi') ? 3 : 1 }, (_, i) => ({
-    __typename: 'ProductVariant',
-    id: `layout-variant-${i}`,
-    name: `示例商品 ${i + 1}`,
-    sku: `LAYOUT-SKU-${i + 1}`,
-    enabled: true,
+// Existing repository artwork is served locally; audit data never changes a real asset binding.
+const auditImageUrl = new URL(
+    '../../../storefront/public/storefront/categories/category-workstations.jpg',
+    import.meta.url,
+).href;
+const auditAsset = {
+    __typename: 'Asset',
+    id: 'layout-audit-asset',
+    name: '本地布局验收图片',
+    preview: auditImageUrl,
+    source: auditImageUrl,
+    type: 'IMAGE',
+    mimeType: 'image/jpeg',
     createdAt: now,
     updatedAt: now,
-    price: 5000,
-    currencyCode: 'MYR',
-    stockOnHand: 30,
-    stockAllocated: 2,
-    stockLevel: 'IN_STOCK',
-    trackInventory: 'TRUE',
-    useGlobalOutOfStockThreshold: true,
-    options: [],
-    facetValues: [],
-    stockLevels: [],
-    prices: [{ currencyCode: 'MYR', price: 5000 }],
-    translations: [{ languageCode: 'zh_Hans', name: `示例商品 ${i + 1}` }],
-    customFields: {
-        fulfillmentType: params.has('digital') ? 'digital' : 'physical',
-        digitalDeliveryMode: 'MANUAL',
-        digitalStockPolicy: 'FINITE',
-        deliveryNote: '示例交付说明',
-    },
+};
+const auditFacets = [
+    ['品牌', 'brand', ['示例自有品牌', '精选系列', '专业系列', '日常系列']],
+    ['材质', 'material', ['实木', '金属', '织物', '环保复合材料']],
+    ['颜色', 'color', ['暖白', '原木', '石墨黑', '鼠尾草绿']],
+    ['适用空间', 'room', ['客厅', '卧室', '书房与家庭工作区', '小户型多功能空间']],
+    ['商品特点', 'features', ['可调节', '便于收纳', '易清洁', '适合长时间使用']],
+].map(([name, code, values], index) => ({
+    __typename: 'Facet',
+    id: `layout-facet-${index}`,
+    name: name as string,
+    code: code as string,
+    isPrivate: false,
+    translations: [{ languageCode: 'zh_Hans', name: name as string }],
+    values: (values as string[]).map((value, valueIndex) => ({
+        __typename: 'FacetValue',
+        id: `layout-facet-${index}-${valueIndex}`,
+        name: value,
+        code: `${code}-${valueIndex}`,
+        facet: { id: `layout-facet-${index}`, name, code },
+        translations: [{ languageCode: 'zh_Hans', name: value }],
+    })),
 }));
+const auditCustomFieldEntities: EntityCustomFieldsDefinition[] = [
+    {
+        entityName: 'Product',
+        customFields: [
+            ['auditBrand', '品牌'],
+            ['auditOrigin', '产地'],
+            ['auditMaterial', '主要材质'],
+            ['auditWarranty', '保修期限'],
+            ['auditCare', '保养说明'],
+        ].map(([name, label]) => ({
+            __typename: 'StringCustomFieldConfig',
+            name,
+            type: 'string',
+            list: false,
+            nullable: true,
+            label: [{ languageCode: 'zh_Hans', value: label }],
+        })),
+    },
+    {
+        entityName: 'ProductVariant',
+        customFields: [
+            ...[
+                ['auditSpecification', '规格'],
+                ['auditServicePeriod', '服务周期'],
+                ['auditDeliveryMethod', '交付方式'],
+            ].map(([name, label]) => ({
+                __typename: 'StringCustomFieldConfig',
+                name,
+                type: 'string',
+                list: false,
+                nullable: true,
+                label: [{ languageCode: 'zh_Hans', value: label }],
+            })),
+            {
+                __typename: 'TextCustomFieldConfig',
+                name: 'deliveryNote',
+                type: 'text',
+                list: false,
+                nullable: true,
+                label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+            },
+        ],
+    },
+];
+const auditVariantCount = Math.min(12, Math.max(1, Number(params.get('auditVariants')) || 4));
+const variants = Array.from(
+    { length: layoutAudit ? auditVariantCount : params.has('multi') ? 3 : 1 },
+    (_, i) => ({
+        __typename: 'ProductVariant',
+        id: `layout-variant-${i}`,
+        name: `示例商品 ${i + 1}`,
+        sku: `LAYOUT-SKU-${i + 1}`,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+        price: 5000,
+        currencyCode: 'MYR',
+        stockOnHand: 30,
+        stockAllocated: 2,
+        stockLevel: 'IN_STOCK',
+        trackInventory: 'TRUE',
+        useGlobalOutOfStockThreshold: true,
+        options: [],
+        facetValues: [],
+        stockLevels: [],
+        prices: [{ currencyCode: 'MYR', price: 5000 }],
+        translations: [{ languageCode: 'zh_Hans', name: `示例商品 ${i + 1}` }],
+        customFields: {
+            fulfillmentType: params.has('digital') ? 'digital' : 'physical',
+            digitalDeliveryMode: 'MANUAL',
+            digitalStockPolicy: 'FINITE',
+            deliveryNote: '示例交付说明',
+            ...(layoutAudit
+                ? {
+                      auditSpecification: `标准规格 ${i + 1}`,
+                      auditServicePeriod: '12 个月（本地测试）',
+                      auditDeliveryMethod: params.has('digital') ? '人工数字交付' : '仓库发货',
+                  }
+                : {}),
+        },
+    }),
+);
 const product = {
     __typename: 'Product',
     id: 'layout-product',
@@ -179,9 +281,18 @@ const product = {
         fulfillmentType: params.has('digital') ? 'digital' : 'physical',
         refundPolicy: 'MERCHANT_REVIEW',
         manualDeliverySlaMinutes: 1440,
+        ...(layoutAudit
+            ? {
+                  auditBrand: '本地示例品牌',
+                  auditOrigin: '本地合成数据',
+                  auditMaterial: '实木与金属',
+                  auditWarranty: '12 个月（测试值）',
+                  auditCare: '使用软布清洁，避免长时间阳光直射。',
+              }
+            : {}),
     },
-    assets: [],
-    featuredAsset: null,
+    assets: layoutAudit ? [auditAsset] : [],
+    featuredAsset: layoutAudit && !params.has('noImage') ? auditAsset : null,
     variants,
     translations: [
         {
@@ -193,7 +304,7 @@ const product = {
         },
     ],
     optionGroups: [],
-    facetValues: [],
+    facetValues: layoutAudit ? auditFacets.map(facet => facet.values[0]) : [],
     collections: [],
     channels: [channel],
 };
@@ -540,7 +651,7 @@ const data: Record<string, unknown> = {
         cnameTarget: 'routing.example.invalid',
         routingMode: 'prefer-domain',
     },
-    storeGovernanceChanges: params.has('mockWrites')
+    storeGovernanceChanges: mockWritesEnabled
         ? [
               {
                   id: 'synthetic-governance-request',
@@ -567,7 +678,7 @@ const data: Record<string, unknown> = {
     fulfillmentHandlers: [],
     globalSettings: {
         availableLanguages: ['zh_Hans', 'en'],
-        serverConfig: { entityCustomFields: [] },
+        serverConfig: { entityCustomFields: layoutAudit ? auditCustomFieldEntities : [] },
         trackInventory: true,
         outOfStockThreshold: 0,
     },
@@ -838,8 +949,8 @@ const data: Record<string, unknown> = {
             fileVersion: null,
         })),
     },
-    facets: empty,
-    assets: empty,
+    facets: layoutAudit ? { items: auditFacets, totalItems: auditFacets.length } : empty,
+    assets: layoutAudit ? { items: [auditAsset], totalItems: 1 } : empty,
     productOptionGroups: empty,
     productVariants: empty,
     collections: { items: collections, totalItems: collections.length },
@@ -1090,7 +1201,7 @@ const client = new ApolloClient({
                 }
                 if (definition.operation === 'mutation') {
                     const field = definition.selectionSet.selections.find(f => f.kind === Kind.FIELD);
-                    if (!params.has('mockWrites') || !field || field.kind !== Kind.FIELD) {
+                    if (!mockWritesEnabled || !field || field.kind !== Kind.FIELD) {
                         observer.error(
                             new Error(
                                 '只读预览禁止保存，不会写入后台。处理方法：继续检查输入和键盘，无需重试保存；填写内容仍保留。',
@@ -1299,13 +1410,22 @@ const client = new ApolloClient({
                         catalogProductWorkspace: {
                             ...(data.catalogProductWorkspace as object),
                             productId,
-                            variants: [],
+                            variants: layoutAudit
+                                ? (
+                                      data.catalogProductWorkspace as { variants: Array<{ id: string }> }
+                                  ).variants.map(variant => ({
+                                      ...variant,
+                                      id: `${productId}-${variant.id}`,
+                                  }))
+                                : [],
                         },
                         globalSettings: {
                             trackInventory: true,
                             outOfStockThreshold: 0,
                             availableLanguages: ['zh_Hans', 'en'],
-                            serverConfig: { entityCustomFields: [] },
+                            serverConfig: {
+                                entityCustomFields: layoutAudit ? auditCustomFieldEntities : [],
+                            },
                         },
                         me: {
                             id: 'tabs-admin',
@@ -1351,6 +1471,81 @@ const client = new ApolloClient({
                         );
                         return () => window.clearTimeout(timer);
                     }
+                }
+                if (layoutAudit) {
+                    const orderId = String(operation.variables.id ?? 'layout-order');
+                    const route =
+                        (window as Window & { fixtureLocation?: string }).fixtureLocation ??
+                        params.get('path') ??
+                        '';
+                    const draftOrder = route.includes('/orders/draft/');
+                    const modifyingOrder = route.includes('/modify');
+                    const lines = variants.slice(0, 3).map((variant, index) => ({
+                        __typename: 'OrderLine',
+                        id: `layout-order-line-${index}`,
+                        quantity: index + 1,
+                        featuredAsset: auditAsset,
+                        productVariant: { ...variant, product: { id: product.id, name: product.name } },
+                        unitPriceWithTax: variant.price,
+                        proratedUnitPriceWithTax: variant.price,
+                        linePriceWithTax: variant.price * (index + 1),
+                        discountedLinePriceWithTax: variant.price * (index + 1),
+                        customFields: {
+                            fulfillmentTypeSnapshot: 'physical',
+                            digitalDeliveryModeSnapshot: null,
+                        },
+                    }));
+                    const address = {
+                        fullName: '本地模拟收件人',
+                        company: '',
+                        streetLine1: '本地布局验收示例地址 100 号',
+                        streetLine2: '仅合成数据，不用于发货',
+                        city: '示例城市',
+                        province: '示例地区',
+                        postalCode: '00000',
+                        country: 'Malaysia',
+                        countryCode: 'MY',
+                        phoneNumber: '',
+                    };
+                    responseData = {
+                        ...responseData,
+                        catalogInventoryReconciliation: empty,
+                        catalogInventoryOperations: empty,
+                        manualDigitalDeliveries: empty,
+                        digitalDeliveryExceptions: [],
+                        adminTwoFactorStatus: {
+                            available: true,
+                            enabled: false,
+                            enabledAt: null,
+                            recoveryCodesRemaining: 0,
+                        },
+                        order: {
+                            ...fixtureOrder,
+                            __typename: 'Order',
+                            id: orderId,
+                            type: 'Regular',
+                            state: draftOrder ? 'Draft' : modifyingOrder ? 'Modifying' : 'PaymentSettled',
+                            active: draftOrder,
+                            salesChannel: channel,
+                            channels: [channel],
+                            nextStates: draftOrder
+                                ? ['Cancelled', 'ArrangingPayment']
+                                : ['Cancelled', 'Modifying'],
+                            lines,
+                            totalQuantity: lines.reduce((total, line) => total + line.quantity, 0),
+                            subTotalWithTax: lines.reduce((total, line) => total + line.linePriceWithTax, 0),
+                            totalWithTax: lines.reduce((total, line) => total + line.linePriceWithTax, 0),
+                            shippingWithTax: 0,
+                            shippingAddress: address,
+                            billingAddress: address,
+                            couponCodes: [],
+                            shippingLines: [],
+                            discounts: [],
+                            history: empty,
+                            customFields: {},
+                            autoCardDeliveries: [],
+                        },
+                    };
                 }
                 if (operation.operationName === 'NextAdminContentTranslationAudit') {
                     const options = operation.variables.options ?? {};
@@ -1624,13 +1819,44 @@ if (view === 'performance') {
             </ApolloProvider>
         </ThemeProvider>,
     );
+} else if (authFixture) {
+    createRoot(document.getElementById('root')!).render(
+        <ThemeProvider>
+            <FixtureAuditTheme />
+            <ApolloProvider client={client}>
+                <MemoryRouter initialEntries={[view === 'login' ? '/login' : '/initial-password']}>
+                    <div
+                        data-layout-audit-auth
+                        onSubmitCapture={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }}
+                        onClickCapture={event => {
+                            const button = (event.target as Element).closest('button');
+                            if (button?.textContent?.includes('退出登录')) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                            }
+                        }}
+                    >
+                        {view === 'login' ? (
+                            <LoginModule />
+                        ) : (
+                            <InitialPasswordChangeModule onCompleted={async () => undefined} />
+                        )}
+                    </div>
+                </MemoryRouter>
+            </ApolloProvider>
+        </ThemeProvider>,
+    );
 } else if (view === 'tabs' || view === 'split') {
     createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
+            {layoutAudit && <FixtureAuditTheme />}
             <ApolloProvider client={client}>
                 <ConfirmDialogContext.Provider
                     value={async () =>
-                        params.has('mockWrites') ? { currentPassword: 'synthetic-local-proof' } : false
+                        mockWritesEnabled ? { currentPassword: 'synthetic-local-proof' } : false
                     }
                 >
                     <FeatureHelpProvider>
@@ -1641,7 +1867,7 @@ if (view === 'performance') {
                                 hidden={params.has('presentation')}
                                 className="fixed bottom-0 right-0 z-50 flex gap-3 bg-amber-100 p-2 text-xs"
                             >
-                                {params.has('mockWrites')
+                                {mockWritesEnabled
                                     ? '本地模拟操作 · 无网络写入'
                                     : '本地模拟数据 · 写入已阻止'}
                                 <a href={`?${alternateScopeParams.toString()}`}>
@@ -1703,8 +1929,12 @@ if (view === 'performance') {
                                         ))}
                                     <Route path="*" element={<LegacyFixture />} />
                                     <Route path="dashboard" element={<DashboardModule />} />
+                                    <Route path="profile" element={<ProfileModule />} />
                                     <Route path="catalog/assets" element={<AssetsModule />} />
                                     <Route path="sales/orders" element={<SalesModule />} />
+                                    <Route path="sales/orders/draft/:id" element={<DraftOrderEditor />} />
+                                    <Route path="sales/orders/:id/modify" element={<ModifyOrderEditor />} />
+                                    <Route path="sales/orders/:id" element={<OrderEditor />} />
                                     <Route path="sales/profit" element={<ProfitReportModule />} />
                                     <Route path="customers/list" element={<CustomersModule />} />
                                     <Route
@@ -1729,20 +1959,22 @@ if (view === 'performance') {
                     <CustomFieldsContext.Provider
                         value={{
                             availableLanguages: ['zh_Hans', 'en'],
-                            entities: [
-                                {
-                                    entityName: 'ProductVariant',
-                                    customFields: [
-                                        {
-                                            name: 'deliveryNote',
-                                            type: 'text',
-                                            list: false,
-                                            nullable: true,
-                                            label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-                                        },
-                                    ],
-                                },
-                            ],
+                            entities: layoutAudit
+                                ? auditCustomFieldEntities
+                                : [
+                                      {
+                                          entityName: 'ProductVariant',
+                                          customFields: [
+                                              {
+                                                  name: 'deliveryNote',
+                                                  type: 'text',
+                                                  list: false,
+                                                  nullable: true,
+                                                  label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                                              },
+                                          ],
+                                      },
+                                  ],
                         }}
                     >
                         <FeatureHelpProvider>

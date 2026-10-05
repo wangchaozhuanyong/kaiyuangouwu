@@ -44,7 +44,7 @@ export function ProductEditorWorkspace() {
         ['more', '更多设置'],
     ] as const;
     return (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[9rem_minmax(0,1fr)]">
+        <div className="grid w-full min-w-0 gap-4 xl:grid-cols-[7.5rem_minmax(0,1fr)]">
             <AdminField label="编辑章节" className="md:hidden">
                 <AdminSelect
                     aria-label="商品编辑章节"
@@ -64,20 +64,21 @@ export function ProductEditorWorkspace() {
             </AdminField>
             <nav
                 aria-label="商品编辑分区"
-                className="sticky top-0 z-10 hidden gap-3 md:flex overflow-x-auto bg-white py-3 text-xs font-semibold text-slate-600 xl:top-4 xl:items-start xl:self-start xl:flex-col"
+                className="sticky top-0 z-10 hidden min-w-0 gap-1 overflow-x-auto rounded-lg bg-[var(--admin-surface)] p-1 text-xs font-semibold text-[var(--admin-text-secondary)] md:flex xl:top-0 xl:self-start xl:flex-col"
             >
                 {sections.map(([key, name]) => (
                     <a
                         key={key}
                         onClick={() => setCurrentSection(key)}
                         href={`#${id}-${key}`}
-                        className="shrink-0 px-2 py-1 hover:text-blue-700"
+                        aria-current={currentSection === key ? 'location' : undefined}
+                        className={`inline-flex min-h-9 shrink-0 items-center rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-focus)] ${currentSection === key ? 'bg-[var(--admin-surface-muted)] text-[var(--admin-focus)]' : 'hover:bg-[var(--admin-surface-subtle)] hover:text-[var(--admin-text)]'}`}
                     >
                         {name}
                     </a>
                 ))}
             </nav>
-            <div className="min-w-0 space-y-5">
+            <div className="min-w-0 space-y-4">
                 <section
                     id={`${id}-info`}
                     className="scroll-mt-16 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
@@ -86,12 +87,12 @@ export function ProductEditorWorkspace() {
                         商品信息
                         <FeatureHelpButton topic="catalog.product-editor" title="商品信息" />
                     </h2>
-                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(14rem,0.7fr)_minmax(0,1.6fr)]">
+                    <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-5">
                         <ProductEditorSidebar />
-                        <ProductBasicTab />
-                    </div>
-                    <div className="mt-4">
-                        <ProductFacetsCollectionsTab section="category" />
+                        <div className="min-w-0 space-y-4">
+                            <ProductBasicTab />
+                            <ProductFacetsCollectionsTab section="category" />
+                        </div>
                     </div>
                 </section>
                 <section
