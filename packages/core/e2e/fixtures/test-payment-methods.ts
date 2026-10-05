@@ -138,6 +138,7 @@ export const singleStageRefundFailingPaymentMethod = new PaymentMethodHandler({
         const metadata = isFirstRefundAttempt ? { errorMessage: 'Service temporarily unavailable' } : {};
         return {
             state: isFirstRefundAttempt ? 'Failed' : 'Settled',
+            transactionId: isFirstRefundAttempt ? undefined : `synthetic-refund:${input.idempotencyKey}`,
             metadata,
         };
     },

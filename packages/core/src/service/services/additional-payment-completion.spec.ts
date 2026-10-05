@@ -88,6 +88,83 @@ function provider(test: Awaited<ReturnType<typeof fixture>>, state: string, meta
     });
 }
 describe('additional payment completion', () => {
+    describe.each(['manual', 'gateway'] as const)('initial placed-order %s collection', source => {
+        it.each(['none', 'Cancelled', 'Declined', 'Error'] as const)(
+            'collects the full price when prior attempts are %s without claiming funds already exist',
+            async previous => {
+                const test = await fixture();
+                test.order.state = previous === 'none' ? 'ArrangingPayment' : 'ArrangingAdditionalPayment';
+                test.order.payments =
+                    previous === 'none'
+                        ? []
+                        : [new Payment({ method: 'receipt', state: previous, amount: 1500 })];
+                test.service.getOrderModifications.mockResolvedValue([]);
+                const collect = vi.fn((_ctx: unknown, _order: unknown, _amount: number) =>
+                    Promise.resolve(new Payment({ method: 'receipt', state: 'Settled', amount: 1500 })),
+                );
+                test.service.paymentService = { createManualPayment: collect, createPayment: collect };
+                expect(totalCoveredByActualPayments(test.order)).toBeNaN();
+                if (source === 'manual') {
+                    await test.service.addManualPaymentToOrder(
+                        {},
+                        { orderId: 'order', method: 'receipt', transactionId: 'synthetic-first-receipt' },
+                    );
+                } else {
+                    await test.service.addPaymentToOrder({}, 'order', { method: 'receipt', metadata: {} });
+                }
+                expect(collect).toHaveBeenCalledOnce();
+                expect(collect.mock.calls[0][2]).toBe(1500);
+            },
+        );
+        it.each([
+            { name: 'pending custom validation', state: 'Validating', amount: 1500 },
+            { name: 'unknown provider outcome', state: 'Created', amount: 1500 },
+            {
+                name: 'controlled test',
+                state: 'Settled',
+                amount: 1500,
+                method: 'controlled-test-payment-synthetic',
+            },
+            {
+                name: 'test metadata',
+                state: 'Settled',
+                amount: 1500,
+                metadata: { public: { testPayment: true } },
+            },
+            {
+                name: 'manual review',
+                state: 'Settled',
+                amount: 1500,
+                metadata: { manualReview: { required: true } },
+            },
+            { name: 'negative receipt', state: 'Settled', amount: -1 },
+            { name: 'fractional receipt', state: 'Settled', amount: 0.5 },
+            { name: 'unsafe receipt', state: 'Settled', amount: Number.MAX_SAFE_INTEGER + 1 },
+            { name: 'overpayment', state: 'Settled', amount: 1600 },
+        ])('rejects $name before starting another collection', async previous => {
+            const test = await fixture();
+            const priorPayment = new Payment({
+                method: 'method' in previous ? previous.method : 'receipt',
+                amount: previous.amount,
+                state: previous.state as Payment['state'],
+            });
+            priorPayment.metadata = 'metadata' in previous ? (previous.metadata ?? {}) : {};
+            test.order.payments = [priorPayment];
+            test.service.getOrderModifications.mockResolvedValue([]);
+            const collect = vi.fn();
+            test.service.paymentService = { createManualPayment: collect, createPayment: collect };
+            const operation =
+                source === 'manual'
+                    ? test.service.addManualPaymentToOrder(
+                          {},
+                          { orderId: 'order', method: 'receipt', transactionId: 'synthetic-first-receipt' },
+                      )
+                    : test.service.addPaymentToOrder({}, 'order', { method: 'receipt', metadata: {} });
+            await expect(operation).rejects.toThrow();
+            expect(collect).not.toHaveBeenCalled();
+        });
+    });
+
     it.each(['PartiallyShipped', 'Shipped', 'PartiallyDelivered', 'Delivered', 'Cancelled'])(
         'preserves fulfillment history when funds settle on %s',
         async state => {

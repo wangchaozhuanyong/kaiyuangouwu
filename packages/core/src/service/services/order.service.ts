@@ -1849,9 +1849,19 @@ export class OrderService {
             )
         )
             throw new UserInputError('订单有待确认的付款，请先核对原付款结果，不能重复收取补款');
-        const amount =
-            order.totalWithTax -
-            (placed ? totalCoveredByActualPayments(order) : totalCoveredByPayments(order));
+        // Placed seller orders and custom order processes can collect their first
+        // payment after placement. No attempts, or only terminal unsuccessful
+        // attempts, mean zero collected funds rather than a malformed receipt.
+        // Keep unknown, test and invalid receipts in the strict coverage path.
+        const nothingCollected = order.payments.every(payment =>
+            ['Cancelled', 'Declined', 'Error'].includes(payment.state),
+        );
+        const covered = placed
+            ? nothingCollected
+                ? 0
+                : totalCoveredByActualPayments(order)
+            : totalCoveredByPayments(order);
+        const amount = order.totalWithTax - covered;
         if (!Number.isSafeInteger(amount) || amount < 0)
             throw new UserInputError('订单付款金额异常，请先核对资金记录');
         return amount;
