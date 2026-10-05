@@ -3,13 +3,18 @@
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
+import { ContentReviewsApi } from '../api/content-reviews';
 import { enabledMarkets } from '../i18n';
 import { STOREFRONT_CONFIG_REFRESH_INTERVAL, storefrontQueryKeys } from '../query-client';
+import { type Product, type StorefrontConfig } from '../types';
 
+import { useStorefrontBootstrap } from './useStorefrontBootstrap';
+import { useStorefrontMerchandising } from './useStorefrontMerchandising';
 import { useStorefrontPublicData } from './useStorefrontPublicData';
+import { useStorefrontRouteData } from './useStorefrontRouteData';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -298,4 +303,165 @@ it('rechecks freshly restored content on mount and isolates the two stores', asy
         act(() => root.unmount());
         client.clear();
     }
+});
+
+describe('resolved storefront requests', () => {
+    const product: Product = {
+        id: '1',
+        createdAt: '2026-01-01T00:00:00Z',
+        name: 'Published product',
+        slug: 'published-product',
+        description: '',
+        featuredAsset: null,
+        assets: [],
+        collections: [],
+        variants: [],
+    };
+    const config: StorefrontConfig = {
+        code: 'my-malaysia',
+        defaultLanguageCode: 'zh_Hans',
+        defaultCurrencyCode: 'MYR',
+        availableCountries: [{ code: 'MY', name: 'Malaysia' }],
+        customFields: { storefrontNameZh: '测试店铺', storefrontNameEn: 'Test store' },
+    };
+    let client: QueryClient;
+    let root: ReturnType<typeof createRoot>;
+    let value: ReturnType<typeof useStorefrontBootstrap>;
+    let finishConfig: (config: StorefrontConfig) => void;
+    let failConfig: (error: Error) => void;
+    let requests: ReturnType<typeof mockRequests>;
+
+    function mockRequests() {
+        return {
+            products: vi.spyOn(ShopApi.prototype, 'products').mockResolvedValue([product]),
+            collections: vi.spyOn(ShopApi.prototype, 'collections').mockResolvedValue([]),
+            content: vi.spyOn(ShopApi.prototype, 'storefrontContent').mockResolvedValue({
+                blocks: [],
+                flashSales: [],
+                systemAnnouncements: [],
+                settings: {
+                    heroAutoplayIntervalSeconds: 5,
+                    auth: {
+                        emailPasswordEnabled: true,
+                        emailAutoRegistrationEnabled: false,
+                        emailQuickRegistrationEnabled: false,
+                        googleEnabled: false,
+                        googleClientId: null,
+                    },
+                },
+            }),
+            commerceMode: vi.spyOn(ShopApi.prototype, 'activeStoreCommerceMode').mockResolvedValue('HYBRID'),
+            product: vi.spyOn(ShopApi.prototype, 'product').mockResolvedValue({ ...product, id: 'detail' }),
+            catalog: vi
+                .spyOn(ShopApi.prototype, 'catalog')
+                .mockResolvedValue({ items: [product], totalItems: 1 }),
+            sales: vi.spyOn(ShopApi.prototype, 'productSales').mockResolvedValue({ '1': 1 }),
+            reviewSettings: vi.spyOn(ContentReviewsApi.prototype, 'reviewSettings').mockResolvedValue({
+                enabled: true,
+            }),
+        };
+    }
+
+    function Harness() {
+        value = useStorefrontBootstrap();
+        useStorefrontMerchandising({
+            ...value.queryContext,
+            customer: null,
+            recentProductIds: value.recentProductIds,
+            products: value.products,
+            contentBlocks: value.contentBlocks,
+            configuredBlockTypes: value.configuredBlockTypes,
+            activeRoute: 'home',
+            contentReady: value.contentQuery.data !== undefined,
+        });
+        useStorefrontRouteData({
+            ...value.queryContext,
+            customer: null,
+            customerLoadState: 'loading',
+            route: { name: 'product', id: 'detail' },
+        });
+        return null;
+    }
+
+    async function render() {
+        await act(async () => {
+            root.render(
+                <QueryClientProvider client={client}>
+                    <Harness />
+                </QueryClientProvider>,
+            );
+        });
+    }
+
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        vi.spyOn(navigator, 'language', 'get').mockReturnValue('zh-CN');
+        client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        root = createRoot(document.createElement('div'));
+        const pendingConfig = new Promise<StorefrontConfig>((resolve, reject) => {
+            finishConfig = resolve;
+            failConfig = reject;
+        });
+        vi.spyOn(ShopApi.prototype, 'storefrontConfig').mockReturnValue(pendingConfig);
+        vi.spyOn(ShopApi.prototype, 'activeCustomer').mockResolvedValue(null);
+        vi.spyOn(ShopApi.prototype, 'storefrontVisualPreset').mockResolvedValue({
+            channelId: config.code,
+            presetId: 'classic',
+            desktopLayout: 'classic',
+            revision: '1',
+        });
+        requests = mockRequests();
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        client.clear();
+        vi.restoreAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+    });
+
+    it('waits for the configured store and requests each public resource only in its resolved scope', async () => {
+        await render();
+        expect(value.storefrontContextResolved).toBe(false);
+        for (const request of Object.values(requests)) expect(request).not.toHaveBeenCalled();
+
+        await act(async () => finishConfig(config));
+        await vi.waitFor(async () => {
+            await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+            expect(value.storefrontContextResolved).toBe(true);
+            expect(requests.sales).toHaveBeenCalledTimes(1);
+        });
+        for (const [name, request] of Object.entries(requests)) {
+            expect(request, name).toHaveBeenCalledTimes(name === 'catalog' ? 2 : 1);
+        }
+        expect(value.market).toMatchObject({ code: 'my-malaysia', currencyCode: 'MYR' });
+        expect(client.getQueryData(storefrontQueryKeys.products('my-malaysia:MYR', 'zh_Hans', 12))).toEqual([
+            product,
+        ]);
+        expect(
+            client.getQueryData(
+                storefrontQueryKeys.products(storefrontQueryKeys.market(enabledMarkets[0]), 'zh_Hans', 12),
+            ),
+        ).toBeUndefined();
+    });
+
+    it.each([false, true])('keeps a failed configuration visible with cached products: %s', async cached => {
+        if (cached) {
+            client.setQueryData(
+                storefrontQueryKeys.products(storefrontQueryKeys.market(enabledMarkets[0]), 'zh_Hans', 12),
+                [product],
+            );
+        }
+        await render();
+        await act(async () => failConfig(new Error('Configuration request failed')));
+        await act(async () => vi.waitFor(() => expect(value.configQuery.isError).toBe(true)));
+
+        expect(value.storefrontContextResolved).toBe(false);
+        expect(value.publicLoadState).toBe('error');
+        expect(value.error).toBeTruthy();
+        expect(value.products).toEqual(cached ? [product] : []);
+        for (const request of Object.values(requests)) expect(request).not.toHaveBeenCalled();
+    });
 });

@@ -14,7 +14,6 @@ import {
 import { lazy, type ComponentType } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-import { CatalogBulkChannelAction } from '../pages/Catalog/CatalogBulkChannelAction';
 import { routeModuleLoaders } from '../route-modules';
 
 import {
@@ -34,6 +33,11 @@ export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=
 const CatalogUnitCustomFieldInput = lazy(() =>
     import('../pages/Catalog/catalog-unit-input').then(module => ({
         default: module.CatalogUnitCustomFieldInput,
+    })),
+);
+const CatalogBulkChannelAction = lazy(() =>
+    import('../pages/Catalog/CatalogBulkChannelAction').then(module => ({
+        default: module.CatalogBulkChannelAction,
     })),
 );
 const CatalogExportAction = lazy(() =>
