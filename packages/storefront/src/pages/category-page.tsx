@@ -15,7 +15,7 @@ import type { RouteState, SortMode } from '../storefront-router';
 import { ShopApi } from '../api';
 import { minimumProductPrice } from '../catalog-page-utils';
 import { catalogInputFromRoute } from '../catalog-route-query';
-import { centeredHorizontalScrollLeft } from '../category-navigation';
+import { animateCategoryScroll, centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
@@ -110,19 +110,52 @@ export function CategoryPage() {
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
     const primaryCategoriesRef = useRef<HTMLElement>(null);
+    const clickedCollectionRef = useRef<string | null>(null);
+    const primaryPositionFrameRef = useRef<number | null>(null);
+    const primaryScrollCancelRef = useRef<(() => void) | null>(null);
     const primaryCollections = collections;
+    const stopPrimaryScroll = useCallback(() => {
+        if (primaryPositionFrameRef.current !== null) {
+            cancelAnimationFrame(primaryPositionFrameRef.current);
+            primaryPositionFrameRef.current = null;
+        }
+        primaryScrollCancelRef.current?.();
+        primaryScrollCancelRef.current = null;
+    }, []);
+    const centerClickedCategory = (collectionId: string, index: number) => {
+        stopPrimaryScroll();
+        clickedCollectionRef.current = collectionId;
+        primaryPositionFrameRef.current = requestAnimationFrame(() => {
+            primaryPositionFrameRef.current = null;
+            const scroller = primaryCategoriesRef.current;
+            const item = scroller?.querySelectorAll<HTMLButtonElement>('button')[index];
+            if (!scroller || !item || scroller.scrollWidth <= scroller.clientWidth) return;
+            primaryScrollCancelRef.current = animateCategoryScroll(
+                scroller,
+                centeredHorizontalScrollLeft(scroller, item),
+            );
+        });
+    };
     useEffect(() => {
+        const fromClick = clickedCollectionRef.current === activeCollectionId;
+        clickedCollectionRef.current = null;
+        // The click already starts a bounded animation; route confirmation must not jump it to the end.
+        if (fromClick) return;
+        stopPrimaryScroll();
         const scroller = primaryCategoriesRef.current;
         const item = scroller?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
         if (!scroller || !item || scroller.scrollWidth <= scroller.clientWidth) return;
         const frame = requestAnimationFrame(() => {
+            primaryPositionFrameRef.current = null;
             scroller.scrollTo({
                 left: centeredHorizontalScrollLeft(scroller, item),
                 behavior: 'auto',
             });
         });
+        primaryPositionFrameRef.current = frame;
         return () => cancelAnimationFrame(frame);
-    }, [activeCollectionId, primaryCollections.length]);
+    }, [activeCollectionId, primaryCollections.length, stopPrimaryScroll]);
+    useEffect(() => stopPrimaryScroll, [stopPrimaryScroll]);
     const primary =
         activeCollectionId === 'all'
             ? undefined
@@ -296,6 +329,9 @@ export function CategoryPage() {
                             ref={primaryCategoriesRef}
                             className="primary-categories"
                             aria-label={isZh ? '一级分类' : 'Main categories'}
+                            onPointerDown={stopPrimaryScroll}
+                            onTouchStart={stopPrimaryScroll}
+                            onWheel={stopPrimaryScroll}
                         >
                             {primaryCollections.map((collection, index) => {
                                 const image = primaryCollectionImage(collection);
@@ -310,6 +346,7 @@ export function CategoryPage() {
                                         }
                                         aria-pressed={collection.id === activeCollectionId}
                                         onClick={() => {
+                                            centerClickedCategory(collection.id, index);
                                             onCollectionChange(
                                                 collection.id,
                                                 collection.children?.[0]?.id ?? collection.id,
@@ -363,7 +400,7 @@ export function CategoryPage() {
                                 className="all-primary-category-grid"
                                 aria-label={isZh ? '全部分类' : 'All categories'}
                             >
-                                {primaryCollections.map(collection => {
+                                {primaryCollections.map((collection, index) => {
                                     const image = primaryCollectionImage(collection);
                                     return (
                                         <button
@@ -375,6 +412,7 @@ export function CategoryPage() {
                                             }
                                             aria-pressed={collection.id === activeCollectionId}
                                             onClick={() => {
+                                                centerClickedCategory(collection.id, index);
                                                 onCollectionChange(
                                                     collection.id,
                                                     collection.children?.[0]?.id ?? collection.id,

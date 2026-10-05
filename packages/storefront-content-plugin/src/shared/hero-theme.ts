@@ -73,17 +73,16 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
             ? configuredBody
             : copyForeground
         : 'var(--muted)';
-    const imageOverlayBackground = hasExplicitBg ? rawBgColor : '#10212F';
-    const imageOverlayForeground = hasExplicitBg
-        ? copyForeground
-        : hasExplicitText && storefrontContrastRatio(rawTextColor, imageOverlayBackground) >= 4.5
-          ? rawTextColor
-          : '#FFFFFF';
-    const imageOverlayBodyForeground =
-        HEX_COLOR_PATTERN.test(configuredBody) &&
-        storefrontContrastRatio(configuredBody, imageOverlayBackground) >= 4.5
-            ? configuredBody
-            : imageOverlayForeground;
+    // Copy sits directly on the photograph. A saved text color is authoritative;
+    // the block background is not the image and must not force the copy back to white.
+    const imageForeground = hasExplicitText
+        ? rawTextColor
+        : imageTone === 'light'
+          ? '#0f172a'
+          : imageTone === 'dark'
+            ? '#ffffff'
+            : copyForeground;
+    const imageBodyForeground = HEX_COLOR_PATTERN.test(configuredBody) ? configuredBody : imageForeground;
 
     const accentColor = normalizedColor(
         settings.accentColor,
@@ -146,13 +145,9 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-copy-background': copyBackground,
         '--hero-copy-foreground': copyForeground,
         '--hero-copy-body-foreground': copyBodyForeground,
-        '--hero-image-overlay-start': colorWithAlpha(imageOverlayBackground, 0.86),
-        '--hero-image-overlay-middle': colorWithAlpha(imageOverlayBackground, 0.42),
-        '--hero-image-copy-foreground': imageOverlayForeground,
-        '--hero-image-body-foreground': imageOverlayBodyForeground,
-        '--hero-image-text-shadow': isLightColor(imageOverlayForeground)
-            ? '0 1px 5px rgba(5, 16, 27, 0.48)'
-            : '0 1px 5px rgba(255, 255, 255, 0.6)',
+        '--hero-image-copy-foreground': imageForeground,
+        '--hero-image-body-foreground': imageBodyForeground,
+        '--hero-image-text-shadow': 'none',
         '--hero-title-color': titleColor,
         '--hero-body-color': defaultBodyColor,
         '--hero-accent-color': accentColor,

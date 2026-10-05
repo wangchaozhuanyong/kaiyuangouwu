@@ -52,7 +52,8 @@ describe('hero theme', () => {
         expect(style['--hero-button-text-color']).toBe('#F8FAFC');
         expect(style['--hero-button-background']).toBe('#22D3EE');
         expect(style['--hero-button-foreground']).toBe('#000000');
-        expect(style['--hero-image-overlay-start']).toBe('rgba(49, 46, 129, 0.86)');
+        expect(style['--hero-image-overlay-start']).toBeUndefined();
+        expect(style['--hero-image-text-shadow']).toBe('none');
         expect(style['--hero-image-copy-foreground']).toBe('#FFFFFF');
         expect(style['--hero-image-body-foreground']).toBe('#E0F2FE');
     });
@@ -72,8 +73,8 @@ describe('hero theme', () => {
             'var(--store-foreground, var(--skin-hero-foreground, #ffffff))',
         );
         expect(style['--hero-accent-color']).toBe('var(--store-primary, var(--skin-hero-accent, #67e8f9))');
-        expect(style['--hero-image-overlay-start']).toBe('rgba(16, 33, 47, 0.86)');
-        expect(style['--hero-image-copy-foreground']).toBe('#FFFFFF');
+        expect(style['--hero-image-overlay-start']).toBeUndefined();
+        expect(style['--hero-image-copy-foreground']).toBe('var(--text)');
     });
 
     it('uses the saved theme independent of position or legacy artwork keys', () => {
@@ -90,7 +91,7 @@ describe('hero theme', () => {
 
         expect(style['--hero-stat-background']).toBe('rgba(255, 255, 255, 0.74)');
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255');
-        expect(style['--hero-image-overlay-start']).toBe('rgba(255, 247, 245, 0.86)');
+        expect(style['--hero-image-overlay-start']).toBeUndefined();
         expect(style['--hero-image-copy-foreground']).toBe('#000000');
     });
 
@@ -114,5 +115,38 @@ describe('hero theme', () => {
         expect(style['--hero-copy-foreground']).toBe('#000000');
         expect(style['--hero-copy-body-foreground']).toBe('#000000');
         expect(style['--hero-accent-readable']).toBe('#000000');
+    });
+
+    it('honors managed dark copy on the image regardless of a dark block background', () => {
+        const style = heroThemeStyle(
+            hero({
+                backgroundColor: '#0F172A',
+                textColor: '#1F2937',
+                settings: { secondaryTextColor: '#334155' },
+            }),
+            'dark',
+        );
+        expect(style['--hero-image-copy-foreground']).toBe('#1F2937');
+        expect(style['--hero-image-body-foreground']).toBe('#334155');
+        expect(style['--hero-image-text-shadow']).toBe('none');
+    });
+
+    it.each(['standard', 'warm', 'bright'])('keeps %s artwork free of image masks', themePreset => {
+        const style = heroThemeStyle(hero({ settings: { themePreset, contrastMode: 'high' } }));
+        expect(style['--hero-image-overlay-start']).toBeUndefined();
+        expect(style['--hero-image-overlay-middle']).toBeUndefined();
+        expect(style['--hero-image-text-shadow']).toBe('none');
+    });
+
+    it('adapts unset copy colors to the photograph while retaining explicitly configured colors', () => {
+        const darkBackground = hero({ backgroundColor: '#0F172A' });
+        expect(heroThemeStyle(darkBackground, 'light')['--hero-image-copy-foreground']).toBe('#0f172a');
+        expect(heroThemeStyle(darkBackground, 'dark')['--hero-image-copy-foreground']).toBe('#ffffff');
+        expect(heroThemeStyle(hero({ textColor: '#604823' }), 'light')['--hero-image-copy-foreground']).toBe(
+            '#604823',
+        );
+        expect(heroThemeStyle(hero({ textColor: '#604823' }), 'dark')['--hero-image-copy-foreground']).toBe(
+            '#604823',
+        );
     });
 });

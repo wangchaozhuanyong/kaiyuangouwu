@@ -288,6 +288,7 @@ describe('ShopApi session response ordering', () => {
         const api = new ShopApi(market);
         await api.login('fixture@example.test', 'mock-only');
         const upload = run(api, new File(['fixture'], 'fixture.png', { type: 'image/png' }));
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
         await api.logout();
         earlier.resolve(response({ [field]: { id: '1' } }, 'old-session'));
         await upload;

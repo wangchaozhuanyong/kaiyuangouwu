@@ -1,4 +1,6 @@
 import type { ShopApiContext } from './api/client-context';
+import type { ImageStudioApi } from './api/image-studio';
+import type { RealtimeApi } from './api/realtime';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
 import type {
@@ -70,9 +72,7 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
-import { ImageStudioApi } from './api/image-studio';
 import { MailQueryApi, type IcloudMailItem, type IcloudQueryResult } from './api/mail-query';
-import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
@@ -93,11 +93,11 @@ export class ShopApi {
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
     private readonly referralsApi: ReferralsApi;
-    private readonly imageStudioApi: ImageStudioApi;
+    private readonly createImageStudioApi: () => Promise<ImageStudioApi>;
     private readonly mailQueryApi: MailQueryApi;
     readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
-    private readonly realtimeApi: RealtimeApi;
+    private readonly createRealtimeApi: () => Promise<RealtimeApi>;
 
     constructor(
         private readonly market: MarketConfig,
@@ -125,11 +125,17 @@ export class ShopApi {
         this.catalogApi = new CatalogApi(ctx);
         this.accountApi = new AccountApi(ctx);
         this.referralsApi = new ReferralsApi(ctx);
-        this.imageStudioApi = new ImageStudioApi(ctx);
+        this.createImageStudioApi = async () => {
+            const { ImageStudioApi } = await import('./api/image-studio');
+            return new ImageStudioApi(ctx);
+        };
         this.mailQueryApi = new MailQueryApi(ctx);
         this.watchMailEvents = this.mailQueryApi.watchMailEvents.bind(this.mailQueryApi);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
-        this.realtimeApi = new RealtimeApi(ctx);
+        this.createRealtimeApi = async () => {
+            const { RealtimeApi } = await import('./api/realtime');
+            return new RealtimeApi(ctx);
+        };
     }
 
     enableCartCommands(controller: CartController): void {
@@ -350,65 +356,65 @@ export class ShopApi {
     }
 
     async imageStudioConfig(signal?: AbortSignal): Promise<ImageStudioConfig> {
-        return this.imageStudioApi.imageStudioConfig(signal);
+        return (await this.createImageStudioApi()).imageStudioConfig(signal);
     }
 
-    previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = (...args) =>
-        this.imageStudioApi.previewImageGenerationPrompt(...args);
+    previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = async (...args) =>
+        (await this.createImageStudioApi()).previewImageGenerationPrompt(...args);
 
     async imageStudioBalance(signal?: AbortSignal): Promise<number> {
-        return this.imageStudioApi.imageStudioBalance(signal);
+        return (await this.createImageStudioApi()).imageStudioBalance(signal);
     }
 
     async imageStudioWallet(signal?: AbortSignal): Promise<ImageStudioWallet> {
-        return this.imageStudioApi.imageStudioWallet(signal);
+        return (await this.createImageStudioApi()).imageStudioWallet(signal);
     }
 
     async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {
-        return this.imageStudioApi.imagePromptQuotaStatus(signal);
+        return (await this.createImageStudioApi()).imagePromptQuotaStatus(signal);
     }
 
     async imageModelQuotaStatus(signal?: AbortSignal): Promise<ImageModelQuotaStatus[]> {
-        return this.imageStudioApi.imageModelQuotaStatus(signal);
+        return (await this.createImageStudioApi()).imageModelQuotaStatus(signal);
     }
 
-    optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = (...args) =>
-        this.imageStudioApi.optimizeImagePrompt(...args);
+    optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = async (...args) =>
+        (await this.createImageStudioApi()).optimizeImagePrompt(...args);
 
     async recommendImageModel(
         prompt: string,
         referenceMode: ImageReferenceMode,
     ): Promise<ImageModelRecommendation> {
-        return this.imageStudioApi.recommendImageModel(prompt, referenceMode);
+        return (await this.createImageStudioApi()).recommendImageModel(prompt, referenceMode);
     }
 
     async uploadImageReference(file: File, termsAccepted: boolean): Promise<ImagePrivateAssetView> {
-        return this.imageStudioApi.uploadImageReference(file, termsAccepted);
+        return (await this.createImageStudioApi()).uploadImageReference(file, termsAccepted);
     }
 
     async createImageGeneration(input: CreateImageGenerationInput): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.createImageGeneration(input);
+        return (await this.createImageStudioApi()).createImageGeneration(input);
     }
 
     async myImageGenerationJob(id: string, signal?: AbortSignal): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.myImageGenerationJob(id, signal);
+        return (await this.createImageStudioApi()).myImageGenerationJob(id, signal);
     }
 
-    myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = (...args) =>
-        this.imageStudioApi.myImageGenerationJobs(...args);
-    releaseImageReference: ImageStudioApi['releaseImageReference'] = (...args) =>
-        this.imageStudioApi.releaseImageReference(...args);
+    myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = async (...args) =>
+        (await this.createImageStudioApi()).myImageGenerationJobs(...args);
+    releaseImageReference: ImageStudioApi['releaseImageReference'] = async (...args) =>
+        (await this.createImageStudioApi()).releaseImageReference(...args);
 
     async cancelQueuedImageGeneration(id: string): Promise<ImageGenerationJob> {
-        return this.imageStudioApi.cancelQueuedImageGeneration(id);
+        return (await this.createImageStudioApi()).cancelQueuedImageGeneration(id);
     }
 
     async deleteMyGeneratedImage(outputId: string): Promise<boolean> {
-        return this.imageStudioApi.deleteMyGeneratedImage(outputId);
+        return (await this.createImageStudioApi()).deleteMyGeneratedImage(outputId);
     }
 
     async deleteMyImageGenerationJob(id: string): Promise<boolean> {
-        return this.imageStudioApi.deleteMyImageGenerationJob(id);
+        return (await this.createImageStudioApi()).deleteMyImageGenerationJob(id);
     }
 
     async recordStorefrontVisit(): Promise<boolean> {
@@ -620,7 +626,10 @@ export class ShopApi {
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
     ): Promise<void> {
-        return this.realtimeApi.watchRealtime(onEvent, signal);
+        if (signal.aborted) return;
+        const realtimeApi = await this.createRealtimeApi();
+        if (signal.aborted) return;
+        return realtimeApi.watchRealtime(onEvent, signal);
     }
 
     private async request<T>(
