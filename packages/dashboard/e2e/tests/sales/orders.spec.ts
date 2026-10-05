@@ -1011,7 +1011,9 @@ async function createOrderWithIncreasedLineQuantity(client: VendureAdminClient):
         );
     }
 
-    await transition('PaymentSettled');
+    // The confirmed manual payment restores the placed order through its FSM.
+    // Assert that boundary instead of attempting the same transition a second time.
+    expect(addManualPaymentToOrder.state).toBe('PaymentSettled');
 
     return orderId;
 }
