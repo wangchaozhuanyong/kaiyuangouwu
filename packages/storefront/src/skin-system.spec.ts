@@ -504,6 +504,20 @@ describe('storefront skin system', () => {
     });
 
     it('keeps one page header implementation and one responsive spacing owner', () => {
+        for (const returnOwner of [
+            'storefront-ui/page-shell.tsx',
+            'pages/search-page.tsx',
+            'auth-pages.tsx',
+            'pages/logistics-page.tsx',
+            'order-pages.tsx',
+        ]) {
+            const source = readFileSync(path.join(__dirname, returnOwner), 'utf8');
+            expect(source, returnOwner).toContain('<PageBackButton');
+            // Page shell also owns the drawer close arrow, which is a separate action.
+            if (returnOwner !== 'storefront-ui/page-shell.tsx') {
+                expect(source, returnOwner).not.toMatch(/<ArrowLeft\b/u);
+            }
+        }
         const visit = (directory: string) => {
             for (const entry of readdirSync(directory, { withFileTypes: true })) {
                 const file = path.join(directory, entry.name);

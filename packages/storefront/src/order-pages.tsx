@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     ChevronRight,
     CircleAlert,
     CircleCheck,
@@ -29,6 +28,7 @@ import {
     AfterSalesEvidenceGallery,
     AfterSalesEvidenceUploader,
 } from './components/common/after-sales-evidence';
+import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
 import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { compactUiCopy, languageCodeFor } from './i18n';
@@ -1172,10 +1172,13 @@ export function OrderDetailPage({
             {!isDrawer && (
                 <header className="delivery-linked-order-heading">
                     <h1>{isZh ? '订单详情' : 'Order details'}</h1>
-                    <button className="delivery-back-link" type="button" onClick={onBack}>
-                        <ArrowLeft aria-hidden="true" />
+                    <PageBackButton
+                        className="delivery-back-link"
+                        label={backLabel ?? (isZh ? '返回' : 'Back')}
+                        onClick={onBack}
+                    >
                         {backLabel ?? (isZh ? '返回' : 'Back')}
-                    </button>
+                    </PageBackButton>
                 </header>
             )}
             <section className={orderPageClassName('order-status')}>

@@ -1724,8 +1724,17 @@
         min-height: 0;
         padding: 24px 36px;
         background: var(--soft);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-8);
+    }
+    .desktop-store-layout .auth-page-default .auth-hero-header {
+        position: static;
     }
     .desktop-store-layout .auth-page-default .auth-hero-message {
+        position: static;
+        width: 100%;
+        max-width: none;
         padding: 0;
     }
     .desktop-store-layout .auth-page-default .login-content {

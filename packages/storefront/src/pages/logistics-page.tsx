@@ -1,9 +1,10 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, ChevronRight, Package, RefreshCw, Search, UserRound, WifiOff } from 'lucide-react';
+import { ChevronRight, Package, RefreshCw, Search, UserRound, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
+import { PageBackButton } from '../components/common/page-back-button';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderStatusRefreshInterval } from '../order-refresh';
@@ -164,10 +165,13 @@ export function LogisticsPage({
                 ) : route.id ? (
                     <div className="delivery-detail-page">
                         <h1 className="delivery-desktop-title">{zh ? '物流详情' : 'Delivery details'}</h1>
-                        <button className="delivery-back-link" type="button" onClick={() => go(listRoute)}>
-                            <ArrowLeft aria-hidden="true" />
+                        <PageBackButton
+                            className="delivery-back-link"
+                            label={zh ? '返回物流列表' : 'Back to deliveries'}
+                            onClick={() => go(listRoute)}
+                        >
                             {zh ? '返回物流列表' : 'Back to deliveries'}
-                        </button>
+                        </PageBackButton>
                         {detail.isLoading ? (
                             <PageSkeleton label={zh ? '正在加载物流详情' : 'Loading delivery details'} />
                         ) : error && !selectedOrder ? (

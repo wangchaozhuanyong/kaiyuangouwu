@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     ChevronDown,
     CircleAlert,
     CircleCheck,
@@ -36,6 +35,7 @@ import {
     validateAccountPassword,
 } from './auth-validation';
 import { authHeroCopyPosition, resolveAuthVisualMessage } from './auth-visual';
+import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
 import { GoogleAuthButton } from './google-auth-button';
 import {
@@ -1455,15 +1455,11 @@ function AuthLayout({
                 )}
                 {!authVisualVariant && (
                     <div className="auth-hero-header">
-                        <button
+                        <PageBackButton
                             className="auth-back-button"
-                            type="button"
                             onClick={onBack}
-                            aria-label={language === 'zh' ? '返回' : 'Back'}
-                        >
-                            <ArrowLeft aria-hidden="true" />
-                            <span>{language === 'zh' ? '返回' : 'Back'}</span>
-                        </button>
+                            label={language === 'zh' ? '返回' : 'Back'}
+                        />
                     </div>
                 )}
                 {authVisualVariant && hasManagedHero && presentation.showLogo && (
@@ -1558,15 +1554,13 @@ function AuthLayout({
                 <div className="auth-form-column">
                     {authVisualVariant ? (
                         <div className="auth-form-toolbar">
-                            <button
+                            <PageBackButton
                                 className="auth-form-back-button"
-                                type="button"
                                 onClick={onBack}
-                                aria-label={language === 'zh' ? '返回' : 'Back'}
+                                label={language === 'zh' ? '返回' : 'Back'}
                             >
-                                <ArrowLeft aria-hidden="true" />
                                 <span>{language === 'zh' ? '返回' : 'Back'}</span>
-                            </button>
+                            </PageBackButton>
                             {onToggleLanguage && (
                                 <label className="auth-language-control">
                                     <span className="sr-only">{language === 'zh' ? '语言' : 'Language'}</span>

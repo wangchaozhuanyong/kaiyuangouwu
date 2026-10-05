@@ -3,7 +3,7 @@
     min-width: 0;
     display: grid;
     gap: 16px;
-    padding: 16px 16px 32px;
+    padding: 16px var(--page-section-inset, var(--experience-page-gutter-mobile, 16px)) 32px;
 }
 
 .two-factor-view-tabs {
@@ -199,11 +199,6 @@
 }
 
 @media (max-width: 359px) {
-    .two-factor-workspace {
-        padding-right: 12px;
-        padding-left: 12px;
-    }
-
     .two-factor-workspace > :is(.two-factor-query, .two-factor-accounts) {
         padding: 16px;
     }
@@ -215,12 +210,12 @@
 
 @media (min-width: 1024px) {
     .two-factor-workspace {
-        max-width: 1280px;
+        max-width: var(--experience-content-max, 1280px);
         margin: 0 auto;
         grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
         align-items: start;
         gap: 24px;
-        padding: 20px 24px 40px;
+        padding: 20px var(--page-section-inset, var(--experience-page-gutter-tablet, 24px)) 40px;
     }
 
     .two-factor-view-tabs {

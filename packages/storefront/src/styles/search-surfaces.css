@@ -10,10 +10,10 @@
     align-items: center;
     gap: 8px;
     height: 52px;
-    padding: 4px var(--page-section-inset, var(--experience-page-gutter-mobile)) 4px 8px;
+    padding: 4px var(--page-section-inset, var(--experience-page-gutter-mobile));
     background: var(--surface);
 }
-.search-header > button {
+.search-header > button:not(.page-back-button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -27,7 +27,7 @@
     line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
-.search-header > button > svg {
+.search-header > .search-close > svg {
     width: 20px;
     height: 20px;
 }
@@ -441,14 +441,12 @@
         background: var(--surface);
     }
     .search-page :is(.search-discovery, .search-results, .search-suggestions) {
-        padding-inline: 24px;
+        padding-inline: var(--page-section-inset, var(--experience-page-gutter-mobile));
     }
     .search-page .search-header {
         position: static;
-        grid-template-columns: 36px minmax(0, 1fr) 64px auto;
-        width: min(100%, 860px);
-        margin: 24px auto;
-        padding: 4px 0;
+        grid-template-columns: var(--experience-control-min) minmax(0, 1fr) 64px auto;
+        margin: 24px 0;
     }
     .search-header > .search-close {
         gap: 6px;

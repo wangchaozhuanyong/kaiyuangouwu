@@ -1,0 +1,36 @@
+/* Only page return actions use this geometry. Next/previous and close controls remain separate. */
+.page-back-button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--experience-control-min, 44px);
+    min-width: var(--experience-control-min, 44px);
+    min-height: var(--experience-control-min, 44px);
+    height: var(--experience-control-min, 44px);
+    margin-inline-start: calc((20px - var(--experience-control-min, 44px)) / 2);
+    padding: 0;
+    border: 0;
+    border-radius: var(--skin-control-radius, 10px);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+.page-back-button.has-label {
+    width: auto;
+    justify-content: flex-start;
+    gap: var(--space-8, 8px);
+    margin-inline-start: 0;
+}
+.page-back-button > .page-back-icon {
+    flex: none;
+    width: 20px;
+    height: 20px;
+}
+.page-back-button:focus-visible {
+    outline: var(--experience-focus-width, 2px) solid var(--focus);
+    outline-offset: var(--experience-focus-offset, 2px);
+}
+.page-back-button:disabled {
+    cursor: not-allowed;
+}
