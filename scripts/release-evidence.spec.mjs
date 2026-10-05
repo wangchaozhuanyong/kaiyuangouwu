@@ -462,9 +462,10 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     };
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
-        const workflowMatch = /\/actions\/workflows\/([^/]+)\/runs\?status=completed&per_page=100$/u.exec(
-            endpoint,
-        );
+        const workflowMatch =
+            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=100$/u.exec(
+                endpoint,
+            );
         if (workflowMatch)
             return {
                 workflow_runs: runs.filter(run => run.path.endsWith(`/${workflowMatch[1]}`)),
@@ -486,6 +487,27 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
         reader: inputFixture({ 'deploy/systemd/backup.py': 'backup-v2', ...changes }).reader,
     };
 }
+test('recent workflow indexes recover exact CI proof omitted by cached historical indexes', async () => {
+    const fixture = coverageFixture();
+    const api = fixture.api;
+    let recentReads = 0;
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/') && endpoint.includes('/runs?')) {
+            if (endpoint.includes('&created=')) {
+                recentReads++;
+                return api(endpoint);
+            }
+            return { workflow_runs: [] };
+        }
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(recentReads, 3);
+    assert.equal(result.anchor.runId, 2);
+    assert.equal(result.missing.length, 0);
+    assert.ok(result.reused.some(check => check.runId === 1));
+});
+
 test('backup-only follow-up combines narrow target proof with older full business proof', async () => {
     const result = await findInputCoverage(coverageFixture());
     assert.equal(result.missing.length, 0);
@@ -725,7 +747,7 @@ test('historical input mismatches are rejected locally without per-run PR or art
     };
     const result = await findInputCoverage(fixture);
     assert.equal(result.reused.length, 0);
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 7);
     assert.ok(calls.every(endpoint => !endpoint.includes('/pulls/') && !endpoint.includes('/artifacts')));
 });
 
