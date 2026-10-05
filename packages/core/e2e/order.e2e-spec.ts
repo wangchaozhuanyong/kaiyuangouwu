@@ -2078,12 +2078,13 @@ describe('Orders resolver', () => {
             payment2Id =
                 order.payments?.find(p => p.method === singleStageRefundablePaymentMethod.code)?.id ?? '';
             expect(payment2Id).not.toBe('');
-            expect(
-                omit(
-                    order.payments!.find(p => p.method === singleStageRefundablePaymentMethod.code)!,
-                    ['id'],
-                ),
-            ).toEqual({
+            const secondPayment = order.payments?.find(
+                p => p.method === singleStageRefundablePaymentMethod.code,
+            );
+            if (!secondPayment) {
+                throw new Error('Expected the second refundable payment receipt');
+            }
+            expect(omit(secondPayment, ['id'])).toEqual({
                 amount: orderTotalWithTax - PARTIAL_PAYMENT_AMOUNT,
                 metadata: {},
                 method: singleStageRefundablePaymentMethod.code,
