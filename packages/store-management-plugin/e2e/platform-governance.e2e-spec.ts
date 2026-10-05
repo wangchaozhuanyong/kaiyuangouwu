@@ -22,6 +22,7 @@ import {
     mergeConfig,
     Order,
     OrderLine,
+    Payment,
     Permission,
     Product,
     ProductOptionGroupService,
@@ -721,7 +722,37 @@ describe('platform governance real database and API boundaries', () => {
         );
         expect(await supply.resolve(b, variant.id)).toBeNull();
         order.state = 'PaymentSettled';
-        await connection.rawConnection.getRepository(Order).update(order.id, { state: 'PaymentSettled' });
+        order.active = false;
+        order.orderPlacedAt = new Date();
+        order.payments = [];
+        await connection.rawConnection.getRepository(Order).update(order.id, {
+            state: 'PaymentSettled',
+            active: false,
+            orderPlacedAt: order.orderPlacedAt,
+        });
+        // A state label without received funds cannot release cards. This case then
+        // seeds an already-paid synthetic legacy order; no external provider is used.
+        const unfunded = await connection.withTransaction(b, tx => auto.allocateSettledOrder(tx, order));
+        expect(unfunded[0].poolItems).toHaveLength(0);
+        expect(
+            await connection.rawConnection.getRepository(AutoCardPoolItem).count({
+                where: { configId: config.id, state: 'ASSIGNED' },
+            }),
+        ).toBe(0);
+        const payment = await connection.rawConnection.getRepository(Payment).save(
+            new Payment({
+                order,
+                state: 'Settled',
+                amount: 4800,
+                method: 'governance-snapshot-local-fixture',
+                transactionId: `fixture-${order.code}`,
+                metadata: {},
+                refunds: [],
+            }),
+        );
+        order.payments = [payment];
+        line.orderPlacedQuantity = 2;
+        await connection.rawConnection.getRepository(OrderLine).update(line.id, { orderPlacedQuantity: 2 });
         const allocated = await connection.withTransaction(b, tx => auto.allocateSettledOrder(tx, order));
         expect(allocated[0].channelId).toBe(b.channelId);
         expect(allocated[0].sourceChannelId).toBe(a.channelId);

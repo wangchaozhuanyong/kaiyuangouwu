@@ -14,6 +14,8 @@ import {
 } from '@vendure/core';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
+
+import { CheckoutResourcesService } from '../../commerce-fulfillment-plugin/src/checkout-resources.service';
 export function registerPaymentCustomerAcceptance(
     state: () => {
         server: any;
@@ -89,8 +91,17 @@ export function registerPaymentCustomerAcceptance(
                 m => m.code === method.code && m.isEligible,
             ),
         ).toBe(true);
+        const payments: PaymentService = server.app.get(PaymentService);
+        await expect(payments.createPayment(shopB, order, 1200, method.code, {})).rejects.toThrow(
+            '结算占用已失效',
+        );
+        const resources: CheckoutResourcesService = server.app.get(CheckoutResourcesService);
+        await connection.withTransaction(shopB, tx => resources.reserve(tx, order, []));
+        expect((await resources.hold(shopB, order.id))?.state).toBe('HELD');
         expect(
-            await server.app.get(PaymentService).createPayment(shopB, order, 1200, method.code, {}),
+            await connection.withTransaction(shopB, tx =>
+                payments.createPayment(tx, order, 1200, method.code, {}),
+            ),
         ).toMatchObject({ state: 'Settled', amount: 1200 });
         await methods.setStorePaymentOptionEnabled(b, method.id, false);
         await expect(

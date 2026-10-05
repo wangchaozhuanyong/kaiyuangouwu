@@ -358,7 +358,7 @@ beforeAll(async () => {
                 optionIds: [group.createProductOptionGroup.options[index].id],
                 sku: `CART-QA-${index}`,
                 price: 1000,
-                stockOnHand: 100,
+                trackInventory: 'FALSE',
                 translations: [{ languageCode: 'zh_Hans', name: `购物车验证 ${index}` }],
                 customFields: {
                     digitalDeliveryMode: 'manual_service',
@@ -1190,11 +1190,13 @@ describe('controlled test payments', () => {
             .findOneOrFail({ where: { id: decoded }, relations: ['payments'] });
         expect(saved.payments).toHaveLength(1);
         expect(placedOrderIds.filter(id => id === String(decoded))).toHaveLength(1);
-        const normalDelivery = await connection.rawConnection.query(
+        const qaDelivery = await connection.rawConnection.query(
             'SELECT COUNT(*) AS count FROM manual_digital_delivery WHERE orderId = ?',
             [decoded],
         );
-        expect(Number(normalDelivery[0].count)).toBe(1);
+        // QA funding can exercise order placement but grants no real delivery or stock movements.
+        expect(Number(qaDelivery[0].count)).toBe(0);
+        expect(await snapshot()).toEqual(baseline);
         for (const account of [guest, other]) {
             expect((await account.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
                 'INELIGIBLE_PAYMENT_METHOD_ERROR',
@@ -1206,10 +1208,16 @@ describe('controlled test payments', () => {
                 state: 'Settled',
                 amount: accountPaid.totalWithTax,
             });
+            const ordinaryDelivery = await connection.rawConnection.query(
+                'SELECT COUNT(*) AS count FROM manual_digital_delivery WHERE orderId = ?',
+                [idStrategy.decodeId(accountPaid.id)],
+            );
+            expect(Number(ordinaryDelivery[0].count)).toBe(1);
         }
 
-        // Concurrent submissions must place exactly one ordinary order, payment and delivery.
+        // Concurrent QA submissions place one order and payment, with no real delivery.
         const concurrentCart = await prepare(client, 'controlled-payment@example.test');
+        const beforeConcurrentPayment = await snapshot();
         const submissions = await Promise.allSettled([
             client.query(pay, { method: code }),
             client.query(pay, { method: code }),
@@ -1234,7 +1242,8 @@ describe('controlled test payments', () => {
             'SELECT COUNT(*) AS count FROM manual_digital_delivery WHERE orderId = ?',
             [concurrentOrder.id],
         );
-        expect(Number(concurrentDelivery[0].count)).toBe(1);
+        expect(Number(concurrentDelivery[0].count)).toBe(0);
+        expect(await snapshot()).toEqual(beforeConcurrentPayment);
 
         // The mixed physical/digital cart prepared above must use the same stock and shipment path.
         const physicalStock = async () =>
@@ -1245,13 +1254,17 @@ describe('controlled test payments', () => {
                 )
             )[0];
         const stockBefore = await physicalStock();
+        expect(Number(stockBefore.stockOnHand)).toBe(100);
+        expect(Number(stockBefore.stockAllocated)).toBe(1);
         expect((await shopClient.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
             'INELIGIBLE_PAYMENT_METHOD_ERROR',
         );
         const mixedPaid = (await shopClient.query(pay, { method: 'cart-local-fixture' })).addPaymentToOrder;
         expect(mixedPaid.state, mixedPaid.message).toBe('PaymentSettled');
         const stockAfterPayment = await physicalStock();
-        expect(Number(stockAfterPayment.stockAllocated)).toBe(Number(stockBefore.stockAllocated) + 1);
+        // Checkout already holds this unit; payment must not allocate it twice.
+        expect(Number(stockAfterPayment.stockAllocated)).toBe(1);
+        expect(Number(stockAfterPayment.stockOnHand)).toBe(100);
         const physicalLine = mixedPaid.lines.find(
             (line: any) => line.productVariant.sku === 'CART-PHYSICAL-QA',
         );
@@ -1286,6 +1299,9 @@ describe('controlled test payments', () => {
             )
         ).addFulfillmentToOrder;
         expect(fulfillment.id, fulfillment.message).toBeTruthy();
+        const stockAfterFulfillment = await physicalStock();
+        expect(Number(stockAfterFulfillment.stockAllocated)).toBe(0);
+        expect(Number(stockAfterFulfillment.stockOnHand)).toBe(99);
 
         // A subsequent order still uses the normal settlement and manual delivery path.
         await prepare(client, 'controlled-payment@example.test');
