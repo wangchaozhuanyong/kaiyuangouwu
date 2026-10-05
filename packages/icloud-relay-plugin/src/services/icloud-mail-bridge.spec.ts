@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { IcloudMailBridge, MailChange } from './icloud-mail-bridge';
 
-const require = createRequire(import.meta.url);
+const require = createRequire(__filename);
 describe('same-host mail notification bridge', () => {
     it('broadcasts from another Node process, buffers startup, and elects a replacement after broker shutdown', async () => {
         // Native short-lived socket paths are required by the Unix socket length limit.
