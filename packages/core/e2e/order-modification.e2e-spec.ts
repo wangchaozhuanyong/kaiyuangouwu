@@ -496,7 +496,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.REFUND_PAYMENT_ID_MISSING_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('addItems negative quantity', async () => {
@@ -513,7 +513,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.NEGATIVE_QUANTITY_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines negative quantity', async () => {
@@ -530,7 +530,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.NEGATIVE_QUANTITY_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('addItems insufficient stock', async () => {
@@ -547,7 +547,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.INSUFFICIENT_STOCK_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines insufficient stock', async () => {
@@ -564,7 +564,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.INSUFFICIENT_STOCK_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('addItems order limit', async () => {
@@ -581,7 +581,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.ORDER_LIMIT_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines order limit', async () => {
@@ -598,7 +598,7 @@ describe('Order modification', () => {
             orderWithModificationsGuard.assertErrorResult(modifyOrder);
 
             expect(modifyOrder.errorCode).toBe(ErrorCode.ORDER_LIMIT_ERROR);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
     });
 
@@ -619,7 +619,7 @@ describe('Order modification', () => {
             const expectedTotal = order!.totalWithTax + Math.round(14374 * 1.2); // price of variant T_5
             expect(modifyOrder.totalWithTax).toBe(expectedTotal);
             expect(modifyOrder.lines.length).toBe(order!.lines.length + 1);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('addItems with existing variant id increments existing OrderLine', async () => {
@@ -640,7 +640,7 @@ describe('Order modification', () => {
             const lineT1 = modifyOrder.lines.find(l => l.productVariant.id === 'T_1');
             expect(modifyOrder.lines.length).toBe(2);
             expect(lineT1?.quantity).toBe(2);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('addItems with existing variant id but different customFields adds new OrderLine', async () => {
@@ -667,7 +667,7 @@ describe('Order modification', () => {
                 { variantId: 'T_4', quantity: 2 },
                 { variantId: 'T_1', quantity: 1 },
             ]);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines up', async () => {
@@ -686,7 +686,7 @@ describe('Order modification', () => {
             const expectedTotal = order!.totalWithTax + order!.lines[0].unitPriceWithTax * 2;
             expect(modifyOrder.lines[0].quantity).toBe(3);
             expect(modifyOrder.totalWithTax).toBe(expectedTotal);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines down', async () => {
@@ -705,7 +705,7 @@ describe('Order modification', () => {
             const expectedTotal = order!.totalWithTax - order!.lines[1].unitPriceWithTax;
             expect(modifyOrder.lines[1].quantity).toBe(1);
             expect(modifyOrder.totalWithTax).toBe(expectedTotal);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('adjustOrderLines to zero', async () => {
@@ -725,7 +725,7 @@ describe('Order modification', () => {
                 order!.totalWithTax - order!.lines[0].unitPriceWithTax * order!.lines[0].quantity;
             expect(modifyOrder.totalWithTax).toBe(expectedTotal);
             expect(modifyOrder.lines[0].quantity).toBe(0);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('surcharge positive', async () => {
@@ -761,7 +761,7 @@ describe('Order modification', () => {
                     taxRate: 20,
                 },
             ]);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('surcharge negative', async () => {
@@ -797,7 +797,7 @@ describe('Order modification', () => {
                     taxRate: 20,
                 },
             ]);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('the configured OrderItemPriceCalculationStrategy is applied', async () => {
@@ -822,7 +822,7 @@ describe('Order modification', () => {
             const expectedTotal = order!.totalWithTax - order!.lines[1].unitPriceWithTax;
             expect(modifyOrder.lines[1].quantity).toBe(1);
             expect(modifyOrder.lines[1].linePriceWithTax).toBe(1337);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('changing shipping method', async () => {
@@ -850,7 +850,7 @@ describe('Order modification', () => {
                     },
                 },
             ]);
-            await assertOrderIsUnchanged(order!);
+            await assertOrderIsUnchanged(order);
         });
 
         it('does not add a history entry', async () => {
@@ -1369,7 +1369,7 @@ describe('Order modification', () => {
         it('persists the automatically restored original state', async () => {
             const { order } = await adminClient.query(getOrderWithModificationsDocument, { id: orderId2 });
             expect(order?.state).toBe('PaymentSettled');
-            expect(order?.totalWithTax).toBe(getOrderPaymentsTotalWithRefunds(order!));
+            expect(order?.totalWithTax).toBe(getOrderPaymentsTotalWithRefunds(order));
         });
 
         it('rejects cancelling the settled additional payment', async () => {
