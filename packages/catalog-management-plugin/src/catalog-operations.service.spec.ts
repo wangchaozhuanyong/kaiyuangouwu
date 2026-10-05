@@ -208,7 +208,11 @@ describe('CatalogOperationsService', () => {
     it('updates only the current-store replenishment threshold and preserves the stock ceiling', async () => {
         const { connection, service } = createService();
         vi.spyOn(service, 'stockLocations').mockResolvedValue([{ id: 'stock-1', name: '主仓' }]);
-        connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1' });
+        connection.getEntityOrThrow.mockResolvedValue({
+            id: 'variant-1',
+            productId: 'physical-product',
+            customFields: { fulfillmentType: 'physical' },
+        });
         connection.getRepository
             .mockImplementationOnce(
                 () => ({ findOne: vi.fn().mockResolvedValue({ id: 'level-1' }) }) as never,
@@ -234,8 +238,13 @@ describe('CatalogOperationsService', () => {
     });
 
     it('rejects replenishment updates for a warehouse outside the active store', async () => {
-        const { service } = createService();
+        const { service, connection } = createService();
         vi.spyOn(service, 'stockLocations').mockResolvedValue([]);
+        connection.getEntityOrThrow.mockResolvedValue({
+            id: 'variant-1',
+            productId: 'physical-product',
+            customFields: { fulfillmentType: 'physical' },
+        });
 
         await expect(
             service.updateInventoryThreshold({ channelId: 'channel-1' } as never, {
@@ -501,23 +510,22 @@ describe('CatalogOperationsService', () => {
 
     it('derives a saved lot expiry date from its production date and the SKU default shelf life', async () => {
         const { connection, service } = createService();
-        const lotQuery = {
+        const query = {
             where: vi.fn().mockReturnThis(),
-            andWhere: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
             getOne: vi.fn().mockResolvedValue(null),
+            getMany: vi.fn().mockResolvedValue([]),
         };
         const lotRepository = {
-            manager: {
-                connection: { options: { type: 'sqljs' } },
-                queryRunner: { isTransactionActive: true },
-            },
-            createQueryBuilder: vi.fn().mockReturnValue(lotQuery),
+            createQueryBuilder: vi.fn(() => query),
+            manager: {},
+            findOne: vi.fn(() => Promise.resolve(null)),
             save: vi.fn(value => Promise.resolve(Object.assign(value, { id: 'lot-1' }))),
         };
         vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
         connection.getEntityOrThrow.mockResolvedValue({
             id: 'variant-1',
-            customFields: { shelfLifeDays: 30 },
+            customFields: { fulfillmentType: 'physical', shelfLifeDays: 30 },
         });
         connection.getRepository.mockReturnValue(lotRepository);
 
@@ -550,6 +558,8 @@ describe('CatalogOperationsService', () => {
         const lotQuery = {
             where: vi.fn().mockReturnThis(),
             andWhere: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue([]),
             getOne: vi.fn().mockResolvedValue({
                 id: 'lot-1',
                 variantId: 'variant-1',
@@ -566,6 +576,7 @@ describe('CatalogOperationsService', () => {
             createQueryBuilder: vi.fn().mockReturnValue(lotQuery),
             save: vi.fn(),
         };
+        vi.spyOn(service, 'requirePhysicalVariant').mockResolvedValue({ id: 'variant-1' } as never);
         vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
         connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1', customFields: {} });
         connection.getRepository.mockReturnValue(lotRepository);
@@ -583,7 +594,7 @@ describe('CatalogOperationsService', () => {
                 },
                 false,
             ),
-        ).rejects.toThrow('已有批次的 SKU、仓库和批次号不能修改');
+        ).rejects.toThrow('所选批次不属于该商品和仓库');
         expect(lotRepository.save).not.toHaveBeenCalled();
     });
 

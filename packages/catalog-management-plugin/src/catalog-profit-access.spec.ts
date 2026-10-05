@@ -25,6 +25,7 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
     });
     const query = {
         innerJoin: vi.fn().mockReturnThis(),
+        leftJoinAndSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         getOne: vi.fn().mockResolvedValue({ id: 8, currencyCode: CurrencyCode.MYR }),
@@ -75,6 +76,154 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
 }
 
 describe('catalog profit access and expense writes', () => {
+    it.each([null, 0, 500])(
+        'rejects a supplied logistics field on digital orders (%s), including null/zero',
+        async carrierShippingCostMicrounits => {
+            const { service, ctx, query, repository } = setup();
+            query.getOne.mockResolvedValue({
+                id: 8,
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'digital' } }],
+            });
+            await expect(
+                service.saveOrderExpense(ctx, { orderId: '8', carrierShippingCostMicrounits }),
+            ).rejects.toThrow('纯数字订单');
+            expect(repository.update).not.toHaveBeenCalled();
+            expect(repository.findOne).not.toHaveBeenCalled();
+        },
+    );
+
+    it('preserves historical digital logistics in audits while saving other expenses', async () => {
+        const { service, ctx, query, repository } = setup();
+        query.getOne.mockResolvedValue({
+            id: 8,
+            currencyCode: CurrencyCode.MYR,
+            lines: [{ customFields: { fulfillmentTypeSnapshot: 'digital' } }],
+        });
+        const saved = await service.saveOrderExpense(ctx, { orderId: '8', paymentFeeMicrounits: 0 });
+        expect(saved.carrierShippingCostMicrounits).toBe(5_000);
+        expect(repository.update).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ carrierShippingCostMicrounits: '5000' }),
+        );
+    });
+
+    it('blocks an entire mixed import if a digital row includes logistics', async () => {
+        const { service, ctx, query, repository, eventRepository } = setup();
+        query.getMany.mockResolvedValue([
+            {
+                id: 8,
+                code: 'DIGITAL-1',
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'digital' } }],
+            },
+            {
+                id: 9,
+                code: 'PHYSICAL-1',
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+            },
+        ]);
+        await expect(
+            service.importOrderExpenses(ctx, {
+                currencyCode: CurrencyCode.MYR,
+                filename: 'expenses.csv',
+                fileHash: 'b'.repeat(64),
+                rows: [
+                    {
+                        rowNumber: 2,
+                        orderCode: 'DIGITAL-1',
+                        carrierShippingCostMicrounits: 0,
+                        paymentFeeMicrounits: 0,
+                    },
+                    { rowNumber: 3, orderCode: 'PHYSICAL-1', carrierShippingCostMicrounits: 1000 },
+                ],
+            }),
+        ).rejects.toThrow('第 2 行 DIGITAL-1');
+        expect(repository.save).not.toHaveBeenCalled();
+        expect(eventRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('imports digital payment fees and physical logistics without rewriting digital history', async () => {
+        const { service, ctx, query, repository, eventRepository } = setup();
+        query.getMany.mockResolvedValue([
+            {
+                id: 8,
+                code: 'DIGITAL-1',
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'digital' } }],
+            },
+            {
+                id: 9,
+                code: 'PHYSICAL-1',
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'physical' } }],
+            },
+        ]);
+        const existing = await repository.findOne();
+        Object.assign(repository, {
+            find: vi.fn().mockResolvedValue([existing]),
+            create: vi.fn().mockImplementation(value => value),
+        });
+        const imported = await service.importOrderExpenses(ctx, {
+            currencyCode: CurrencyCode.MYR,
+            filename: 'expenses.csv',
+            fileHash: 'c'.repeat(64),
+            rows: [
+                { rowNumber: 2, orderCode: 'DIGITAL-1', paymentFeeMicrounits: 0 },
+                { rowNumber: 3, orderCode: 'PHYSICAL-1', carrierShippingCostMicrounits: 4000 },
+            ],
+        });
+        expect(imported).toEqual({ totalRows: 2, createdCount: 1, updatedCount: 1 });
+        expect(repository.save).toHaveBeenCalledWith([
+            expect.objectContaining({
+                orderId: 8,
+                carrierShippingCostMicrounits: '5000',
+                paymentFeeMicrounits: '0',
+            }),
+            expect.objectContaining({ orderId: 9, carrierShippingCostMicrounits: '4000' }),
+        ]);
+        expect(eventRepository.save).toHaveBeenCalled();
+    });
+
+    it('previews the same applicability errors before writing and accepts omitted digital logistics', async () => {
+        const { service, ctx, query, repository } = setup([
+            Permission.ReadOrder,
+            manageCatalogOperationsPermission.Read,
+        ]);
+        query.getMany.mockResolvedValue([
+            {
+                id: 8,
+                code: 'DIGITAL-1',
+                currencyCode: CurrencyCode.MYR,
+                lines: [{ customFields: { fulfillmentTypeSnapshot: 'digital' } }],
+            },
+        ]);
+        const base = { currencyCode: CurrencyCode.MYR, filename: 'expenses.csv', fileHash: 'b'.repeat(64) };
+        const rejected = await service.validateOrderExpenseImport(ctx, {
+            ...base,
+            rows: [
+                {
+                    rowNumber: 2,
+                    orderCode: 'DIGITAL-1',
+                    carrierShippingCostMicrounits: 0,
+                    paymentFeeMicrounits: 0,
+                },
+            ],
+        });
+        expect(rejected.rows[0]).toMatchObject({
+            fulfillmentType: 'DIGITAL',
+            carrierShippingCostApplicable: false,
+            error: expect.stringContaining('纯数字订单'),
+        });
+        const accepted = await service.validateOrderExpenseImport(ctx, {
+            ...base,
+            rows: [{ rowNumber: 2, orderCode: 'DIGITAL-1', paymentFeeMicrounits: 0 }],
+        });
+        expect(accepted.rows[0]).toMatchObject({ carrierShippingCostApplicable: false, error: null });
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
     it('uses current-channel handler evidence and keeps settled real payments on cancelled orders', async () => {
         const { ctx, service, query, connection } = setup([
             Permission.ReadOrder,

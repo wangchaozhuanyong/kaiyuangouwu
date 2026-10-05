@@ -64,24 +64,148 @@ export interface CompatibleRefundOrderInput {
     paymentId: string;
     amount: number;
     reason: string;
-    lines: [];
-    shipping: 0;
+    lines: Array<{ orderLineId: string; quantity: number }>;
+    shipping: number;
     adjustment: 0;
+    idempotencyKey?: string;
+    reasonType?: 'ITEMS' | 'SHIPPING' | 'COMPENSATION';
+    afterSalesId?: string;
 }
 
 export const buildCompatibleRefundOrderInput = (
     paymentId: string,
     amount: number,
     reason: string,
+    idempotencyKey?: string,
+    scope?: {
+        lines: Array<{ orderLineId: string; quantity: number }>;
+        shipping: number;
+        reasonType?: 'ITEMS' | 'SHIPPING' | 'COMPENSATION';
+        afterSalesId?: string;
+    },
 ): CompatibleRefundOrderInput => ({
     paymentId,
     amount,
     reason,
     // Vendure still persists these deprecated columns as non-null on supported schemas.
-    lines: [],
-    shipping: 0,
+    lines: scope?.lines ?? [],
+    shipping: scope?.shipping ?? 0,
     adjustment: 0,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(scope?.reasonType ? { reasonType: scope.reasonType } : {}),
+    ...(scope?.afterSalesId ? { afterSalesId: scope.afterSalesId } : {}),
 });
+
+export interface OrderProcessingLine {
+    orderLineId: string;
+    productName: string;
+    sku: string;
+    fulfillmentType: string;
+    digitalDeliveryMode?: string | null;
+    quantity: number;
+    requiredQuantity: number;
+    refundableQuantity: number;
+    deliveredQuantity: number;
+    pendingQuantity: number;
+    pendingDispatchQuantity: number;
+    status: string;
+    notificationStatus: string;
+    claimStatus: string;
+    claimedQuantity?: number | null;
+    taskId?: string | null;
+    recipientEmail?: string | null;
+}
+
+export interface OrderProcessingSummary {
+    orderId: string;
+    kind: 'PHYSICAL' | 'DIGITAL' | 'MIXED';
+    businessState: string;
+    paymentStatus:
+        | 'TEST'
+        | 'UNPAID'
+        | 'AUTHORIZED'
+        | 'PAID'
+        | 'ADDITIONAL_PAYMENT'
+        | 'REFUND_PENDING'
+        | 'REFUND_FAILED'
+        | 'PARTIALLY_REFUNDED'
+        | 'REFUNDED';
+    paymentLabel: string;
+    fulfillmentStatus: string;
+    fulfillmentLabel: string;
+    afterSalesStatus: string;
+    afterSalesLabel: string;
+    isTestOrder: boolean;
+    needsProcessing: boolean;
+    hasException: boolean;
+    canManage: boolean;
+    blockedReason?: string | null;
+    settledAmount: number;
+    pendingRefundAmount: number;
+    refundedAmount: number;
+    refundableAmount: number;
+    refundableShippingAmount: number;
+    outstandingAmount: number;
+    remainingDigitalQuantity: number;
+    remainingPhysicalQuantity: number;
+    canRefund: boolean;
+    refundBlockedReason?: string | null;
+    paymentCapabilities: Array<{
+        paymentId: string;
+        canRefund: boolean;
+        refundableAmount: number;
+        refundBlockedReason?: string | null;
+        canCancel: boolean;
+        refundSettlementMode: 'automatic' | 'manual' | 'verified-external' | 'unsupported';
+    }>;
+    remainingPhysicalLines: Array<{ orderLineId: string; quantity: number }>;
+    nextAction?: {
+        code: string;
+        label: string;
+        enabled: boolean;
+        reason?: string | null;
+        targetId?: string | null;
+    } | null;
+    lines: OrderProcessingLine[];
+}
+
+export const getProcessingPhysicalLines = (order: { processingSummary?: OrderProcessingSummary | null }) =>
+    order.processingSummary?.remainingPhysicalLines ?? [];
+
+export const isSimulatedPayment = (method: string) =>
+    /^(?:controlled-test-payment(?:-\d+)?|internal-test-payment)$/u.test(method);
+
+export const getDigitalNotificationLabel = (lines: OrderProcessingLine[]) => {
+    const digital = lines.filter(line => line.fulfillmentType === 'digital');
+    if (!digital.length) return '无需数字通知';
+    if (digital.some(line => line.notificationStatus === 'FAILED')) return '通知失败，需处理';
+    if (digital.some(line => line.notificationStatus === 'QUEUED')) return '通知发送中';
+    if (digital.every(line => line.notificationStatus === 'SENT')) return '邮件已送出';
+    if (digital.some(line => line.notificationStatus === 'UNKNOWN')) return '通知结果待核实';
+    return '尚未通知';
+};
+
+export const getProcessingLineLabel = (status: string) =>
+    (
+        ({
+            READY: '已可领取',
+            WAITING: '待处理',
+            IN_TRANSIT: '配送中',
+            COMPLETE: '已交付',
+            BLOCKED: '已暂停',
+            EXCEPTION: '交付异常',
+            CANCELLED: '已取消',
+        }) as Record<string, string>
+    )[status] ?? '交付结果待核实';
+
+export const getClaimStatusLabel = (status: string) =>
+    status === 'CLAIMED'
+        ? '客户已领取'
+        : status === 'PARTIAL'
+          ? '客户部分领取'
+          : status === 'UNCLAIMED'
+            ? '客户未领取'
+            : '领取记录待核实';
 
 export const orderStateLabels: Record<string, string> = {
     AddingItems: '购物车中',

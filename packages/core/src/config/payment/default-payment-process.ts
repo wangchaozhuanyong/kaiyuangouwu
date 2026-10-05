@@ -2,7 +2,7 @@ import { HistoryEntryType } from '@vendure/common/lib/generated-types';
 
 import { isGraphQlErrorResult } from '../../common/error/error-result';
 import { PaymentState } from '../../service/helpers/payment-state-machine/payment-state';
-import { orderTotalIsCovered } from '../../service/helpers/utils/order-utils';
+import { orderTotalIsCovered, totalCoveredByActualPayments } from '../../service/helpers/utils/order-utils';
 
 import { PaymentProcess } from './payment-process';
 
@@ -33,7 +33,7 @@ export const defaultPaymentProcess: PaymentProcess<PaymentState> = {
             to: ['Settled', 'Error', 'Cancelled'],
         },
         Settled: {
-            to: ['Cancelled'],
+            to: [],
         },
         Declined: {
             to: ['Cancelled'],
@@ -75,20 +75,36 @@ export const defaultPaymentProcess: PaymentProcess<PaymentState> = {
             },
         });
 
+        // Capturing an authorization after shipment must preserve the recorded fulfillment state.
         if (
-            orderTotalIsCovered(order, 'Settled') &&
-            order.state !== 'PaymentSettled' &&
-            order.state !== 'ArrangingAdditionalPayment'
-        ) {
+            [
+                'Modifying',
+                'PartiallyShipped',
+                'Shipped',
+                'PartiallyDelivered',
+                'Delivered',
+                'Cancelled',
+            ].includes(order.state)
+        )
+            return;
+
+        // Creation hooks run before OrderService returns. The completing payment must
+        // already be linked to every outstanding modification before restoring the order.
+        if (order.state === 'ArrangingAdditionalPayment') {
+            const modifications = await orderService.getOrderModifications(ctx, order.id);
+            if (modifications.some(modification => !modification.isSettled)) return;
+        }
+        const covered = (states: PaymentState[]) =>
+            order.orderPlacedAt || order.state === 'ArrangingAdditionalPayment'
+                ? totalCoveredByActualPayments(order, states) >= order.totalWithTax
+                : orderTotalIsCovered(order, states);
+
+        if (covered(['Settled']) && order.state !== 'PaymentSettled') {
             const result = await orderService.transitionToState(ctx, order.id, 'PaymentSettled');
             if (isGraphQlErrorResult(result)) {
                 throw new Error(result.transitionError);
             }
-        } else if (
-            orderTotalIsCovered(order, ['Authorized', 'Settled']) &&
-            order.state !== 'PaymentAuthorized' &&
-            order.state !== 'ArrangingAdditionalPayment'
-        ) {
+        } else if (covered(['Authorized', 'Settled']) && order.state !== 'PaymentAuthorized') {
             const result = await orderService.transitionToState(ctx, order.id, 'PaymentAuthorized');
             if (isGraphQlErrorResult(result)) {
                 throw new Error(result.transitionError);

@@ -1,7 +1,5 @@
-import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
-
 import type { DocumentNode } from 'graphql';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
 import {
     CATALOG_PRODUCT_WORKSPACE_QUERY,
@@ -16,6 +14,11 @@ import {
     GET_OPTION_GROUPS,
 } from '../../graphql/catalog.graphql';
 import { STORE_COMMERCE_MODE_QUERY, type StoreCommerceModeData } from '../../graphql/commerce.graphql';
+import {
+    DIGITAL_PRODUCT_WORKSPACE,
+    type DigitalWorkspaceVariant,
+} from '../../graphql/product-domains.graphql';
+import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { fulfillmentTypeForMode } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
@@ -75,45 +78,84 @@ export function useProductEditorData({
             currencyCode: string;
             defaultCurrencyCode: string;
         };
-    }>(GET_ACTIVE_CHANNEL, {});
+    }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
 
     const activeCurrencyCode =
         channelData?.activeChannel.currencyCode ?? channelData?.activeChannel.defaultCurrencyCode ?? 'CNY';
 
-    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-first',
+    });
 
     const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
 
     const fixedFulfillmentType = fulfillmentTypeForMode(commerceMode);
 
     const {
-        data: productData,
+        data: rawProductData,
         loading: productLoading,
         error: productError,
         refetch: refetchProduct,
-    } = useQuery<{ product: ProductDetailRecord | null }>(productDetailDocument, {
-        variables: { id: productId },
+    } = useQuery<{
+        product: ProductDetailRecord | null;
+        catalogProductChannelAssignments?: {
+            items: Array<{ id: string; channels: ProductDetailRecord['channels'] }>;
+        };
+    }>(productDetailDocument, {
+        variables: { id: productId, assignmentId: productId },
         skip: isCreateMode,
+        fetchPolicy: 'network-only',
     });
+    const productData = useMemo(() => {
+        if (!rawProductData?.product) return rawProductData;
+        const assignment = rawProductData.catalogProductChannelAssignments?.items?.find(
+            item => item.id === rawProductData.product?.id,
+        );
+        // Core Product.channels only exposes the current non-default channel.
+        // The existing assignment view returns exactly the stores this admin may read.
+        return assignment
+            ? { ...rawProductData, product: { ...rawProductData.product, channels: assignment.channels } }
+            : rawProductData;
+    }, [rawProductData]);
 
-    const { data: workspaceData, refetch: refetchWorkspace } = useQuery<CatalogWorkspaceResult>(
-        CATALOG_PRODUCT_WORKSPACE_QUERY,
+    const isDigital =
+        (productData?.product?.customFields?.fulfillmentType ?? fixedFulfillmentType ?? 'digital') ===
+        'digital';
+    const digitalWorkspace = useQuery<{ digitalProductWorkspace: { variants: DigitalWorkspaceVariant[] } }>(
+        DIGITAL_PRODUCT_WORKSPACE,
         {
             variables: { productId },
-            skip: !productId || isCreateMode,
+            skip: !productId || isCreateMode || !productData?.product || !isDigital,
+            fetchPolicy: 'network-only',
         },
     );
+    const {
+        data: workspaceData,
+        loading: workspaceLoading,
+        error: workspaceError,
+        refetch: refetchPhysicalWorkspace,
+    } = useQuery<CatalogWorkspaceResult>(CATALOG_PRODUCT_WORKSPACE_QUERY, {
+        variables: { productId },
+        skip: !productId || isCreateMode || !productData?.product || isDigital,
+        fetchPolicy: 'cache-and-network',
+    });
 
     const { data: stockLocationsData } = useQuery<{
         stockLocations: { items: Array<{ id: string; name: string }>; totalItems: number };
-    }>(GET_STOCK_LOCATIONS, {});
+    }>(GET_STOCK_LOCATIONS, {
+        skip: isDigital,
+        fetchPolicy: 'cache-first',
+    });
 
     const defaultStockLocationId =
         workspaceData?.catalogProductWorkspace?.stockLocations[0]?.id ||
         stockLocationsData?.stockLocations.items[0]?.id ||
         '1';
 
-    const workspaceVariants = workspaceData?.catalogProductWorkspace?.variants;
+    const workspaceVariants = isDigital
+        ? digitalWorkspace.data?.digitalProductWorkspace?.variants
+        : workspaceData?.catalogProductWorkspace?.variants;
+    const refetchWorkspace = isDigital ? digitalWorkspace.refetch : refetchPhysicalWorkspace;
 
     const {
         data: facetsData,
@@ -129,6 +171,7 @@ export function useProductEditorData({
                 filter: deferredFacetSearch ? { name: { contains: deferredFacetSearch } } : {},
             },
         },
+        fetchPolicy: 'cache-first',
     });
 
     const {
@@ -146,6 +189,7 @@ export function useProductEditorData({
                 sort: { position: 'ASC', id: 'ASC' },
             },
         },
+        fetchPolicy: 'cache-first',
     });
 
     useEffect(() => {
@@ -202,6 +246,7 @@ export function useProductEditorData({
         channels: { items: CatalogChannel[]; totalItems: number };
     }>(GET_CATALOG_CHANNELS, {
         variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
+        fetchPolicy: 'cache-and-network',
     });
 
     useEffect(() => {
@@ -265,6 +310,7 @@ export function useProductEditorData({
             },
         },
         skip: !isAssetPickerOpen,
+        fetchPolicy: 'cache-first',
     });
 
     const {
@@ -286,6 +332,7 @@ export function useProductEditorData({
                 },
             },
         },
+        fetchPolicy: 'cache-first',
     });
     return {
         channelData,
@@ -296,8 +343,8 @@ export function useProductEditorData({
         commerceMode,
         fixedFulfillmentType,
         productData,
-        productLoading,
-        productError,
+        productLoading: productLoading || (!isCreateMode && (workspaceLoading || digitalWorkspace.loading)),
+        productError: productError ?? workspaceError ?? digitalWorkspace.error,
         refetchProduct,
         facetsData,
         facetsLoading,

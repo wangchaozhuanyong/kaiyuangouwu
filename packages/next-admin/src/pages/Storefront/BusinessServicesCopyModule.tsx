@@ -8,6 +8,7 @@ import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { AssetPicker } from './storefront-asset-picker';
+import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './StorefrontMobileViewSwitch';
 
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import {
@@ -67,6 +68,7 @@ export function BusinessServicesCopyModule() {
         sourceSignature ? copyDraft(source) : null,
     );
     const { draft, setDraft, dirty, sourceChanged, baseline: originalDraft } = serverDraft;
+    const [mobileView, setMobileView] = useState<StorefrontMobileView>('edit');
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -237,8 +239,11 @@ export function BusinessServicesCopyModule() {
                 ) : query.error || !draft ? (
                     <State tone="error" label="页面文案加载失败" action={() => void query.refetch()} />
                 ) : (
-                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-                        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="grid content-start items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+                        <StorefrontMobileViewSwitch value={mobileView} onChange={setMobileView} />
+                        <section
+                            className={`min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4 ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}
+                        >
                             <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="flex items-center gap-2 text-sm font-bold">
@@ -324,7 +329,9 @@ export function BusinessServicesCopyModule() {
                             })}
                         </section>
                         <div className="min-w-0 space-y-3 lg:sticky lg:top-0">
-                            <section className="rounded-xl border border-slate-200 bg-white p-4">
+                            <section
+                                className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 ${mobileView === 'preview' ? '' : 'hidden xl:block'}`}
+                            >
                                 <div className="flex items-center justify-between">
                                     <h2 className="flex items-center gap-2 text-sm font-bold">
                                         前台预览
@@ -371,7 +378,9 @@ export function BusinessServicesCopyModule() {
                                     )}
                                 </div>
                             </section>
-                            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                            <section
+                                className={`min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4 ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}
+                            >
                                 {' '}
                                 <fieldset disabled={!canEdit || pending} className="space-y-2">
                                     <AssetPicker

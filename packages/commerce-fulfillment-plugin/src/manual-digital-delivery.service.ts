@@ -2,21 +2,28 @@ import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     assertOrderSalesChannel,
-    Asset,
     EventBus,
+    FulfillmentLine,
     isGraphQlErrorResult,
     Logger,
     Order,
     OrderService,
+    Permission,
     RequestContext,
     RequestContextService,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
+import { GovernanceService } from '@vendure/store-management-plugin';
+import { randomUUID } from 'node:crypto';
 import { In, IsNull, LessThanOrEqual } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
+import { readSoldAutoCardsPermission } from './auto-card.constants';
+import { digitalDeliverableQuantity } from './digital-order-entitlement';
+import { DigitalProductService } from './digital-product.service';
+import { DigitalFileVersion } from './entities/digital-product.entity';
 import {
     ManualDigitalDeliveryEvent,
     ManualDigitalDeliveryEventType,
@@ -25,7 +32,9 @@ import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity
 import { isManualServiceOrderLine } from './fulfillment-classification';
 import { ManualDigitalDeliveryReadyEvent } from './manual-digital-delivery.event';
 import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
+import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { orderLineProductName } from './order-line-snapshot';
+import { OrderProcessingChangedEvent } from './order-processing-changed.event';
 
 const MAX_ATTEMPTS = 5;
 const MAX_PAGE_SIZE = 100;
@@ -41,6 +50,7 @@ export interface ManualDeliveryPackageInput {
     fields?: ManualDeliveryFieldInput[] | null;
     note?: string | null;
     attachmentAssetIds?: ID[] | null;
+    attachmentFileVersionIds?: ID[] | null;
 }
 
 export interface SaveManualDeliveryInput {
@@ -52,6 +62,7 @@ interface StoredManualDeliveryPackage {
     fields: Array<{ key: string; label: string; value: string; secret: boolean }>;
     note: string;
     attachmentAssetIds: string[];
+    attachmentFileVersionIds?: string[];
 }
 
 @Injectable()
@@ -62,10 +73,15 @@ export class ManualDigitalDeliveryService {
         private readonly eventBus: EventBus,
         private readonly orderService: OrderService,
         private readonly requestContextService: RequestContextService,
+        private readonly digitalProducts: DigitalProductService,
+        private readonly receiptTokens: OrderConfirmationTokenService,
+        private readonly audit: GovernanceService,
     ) {}
 
     async createSettledOrderTasks(ctx: RequestContext, order: Order): Promise<ManualDigitalDelivery[]> {
-        if (order.state !== 'PaymentSettled') {
+        if (
+            !['PaymentSettled', 'PartiallyDelivered', 'Delivered', 'PartiallyShipped'].includes(order.state)
+        ) {
             return [];
         }
         const manualServiceLines = order.lines.filter(isManualServiceOrderLine);
@@ -144,7 +160,11 @@ export class ManualDigitalDeliveryService {
                     order: { salesChannelId: ctx.channelId },
                     ...(options.state ? { state: options.state as ManualDigitalDelivery['state'] } : {}),
                 },
-                relations: { order: true, events: true },
+                relations: {
+                    order: { payments: { refunds: { lines: true } } },
+                    orderLine: true,
+                    events: true,
+                },
                 order: { expectedAt: 'ASC', createdAt: 'ASC' },
                 skip,
                 take,
@@ -159,13 +179,37 @@ export class ManualDigitalDeliveryService {
     async forOrder(ctx: RequestContext, orderId: ID): Promise<ManualDigitalDelivery[]> {
         const items = await this.connection.getRepository(ctx, ManualDigitalDelivery).find({
             where: { channelId: ctx.channelId, orderId, order: { salesChannelId: ctx.channelId } },
-            relations: { events: true },
+            relations: { order: { payments: { refunds: { lines: true } } }, orderLine: true, events: true },
             order: { createdAt: 'ASC' },
         });
         return items.map(item => this.attachView(item));
     }
 
+    async reveal(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
+        if (
+            ctx.apiType !== 'admin' ||
+            !ctx.activeUserId ||
+            !ctx.userHasPermissions([readSoldAutoCardsPermission.Permission, Permission.SuperAdmin])
+        )
+            throw new UserInputError('需要本单交付内容查看专用权限');
+        const delivery = await this.ownedDelivery(ctx, id);
+        await this.audit.appendAudit(ctx, {
+            eventType: 'MANUAL_DIGITAL_CONTENT_REVEALED',
+            resourceType: 'ManualDigitalDelivery',
+            resourceId: String(delivery.id),
+            actorType: 'ADMIN',
+            actorUserId: String(ctx.activeUserId),
+            actorLabel: String(ctx.activeUserId),
+            reason: '显式查看本店订单已保存交付内容',
+            payload: { orderId: String(delivery.orderId), quantity: delivery.quantity },
+            idempotencyKey: randomUUID(),
+        });
+        await this.addEvent(ctx, delivery, 'CONTENT_VIEWED', '管理员显式查看已有交付内容', 'ADMIN');
+        return Object.assign(this.attachView(delivery), { packages: this.readPackages(delivery) });
+    }
+
     async saveDraft(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
+        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
         const delivery = await this.ownedDelivery(ctx, input.id);
         if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
             throw new UserInputError('当前人工交付状态不能修改成品内容');
@@ -183,17 +227,17 @@ export class ManualDigitalDeliveryService {
     }
 
     async publish(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
+        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
         const delivery = await this.ownedDelivery(ctx, input.id);
         this.assertOrderCanDeliver(delivery);
         if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
             throw new UserInputError('当前状态不能覆盖成品；邮件失败或已发布时只能重发原成品');
         }
         const packages = await this.normalizePackages(ctx, input.packages);
-        if (packages.length !== delivery.quantity) {
-            throw new UserInputError(
-                `订单购买 ${delivery.quantity} 份，必须录入并发布 ${delivery.quantity} 个成品包`,
-            );
-        }
+        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+        if (packages.length !== eligible)
+            throw new UserInputError(`当前需交付 ${eligible} 份，请录入 ${eligible} 个成品`);
+        delivery.quantity = packages.length;
         delivery.encryptedPackages = this.cipher.encrypt({ payload: JSON.stringify(packages) });
         delivery.attachmentAssetIdsJson = JSON.stringify([
             ...new Set(packages.flatMap(item => item.attachmentAssetIds)),
@@ -203,9 +247,47 @@ export class ManualDigitalDeliveryService {
         delivery.lastDispatchedAt = new Date();
         const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
         await this.addEvent(ctx, saved, 'PUBLISHED', '管理员发布了人工交付成品', 'ADMIN');
+        await this.digitalProducts.consumeLine(
+            ctx,
+            saved.orderLineId,
+            digitalDeliverableQuantity(saved.order, saved.orderLine),
+        );
+        await this.completeFulfillment(ctx, saved);
         await this.resolveOverdue(ctx, saved);
         await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(saved.id)));
         return this.attachView(saved);
+    }
+
+    async append(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
+        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
+        const delivery = await this.ownedDelivery(ctx, input.id);
+        this.assertOrderCanDeliver(delivery);
+        if (
+            !['SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(delivery.state) ||
+            !delivery.encryptedPackages
+        )
+            throw new UserInputError('请先发布原交付内容');
+        const existing = this.readPackages(delivery);
+        const missing = Math.max(
+            0,
+            digitalDeliverableQuantity(delivery.order, delivery.orderLine) - existing.length,
+        );
+        const extra = await this.normalizePackages(ctx, input.packages);
+        if (!missing || extra.length !== missing)
+            throw new UserInputError(`当前待补交 ${missing} 份，请只填写新增成品`);
+        delivery.encryptedPackages = this.cipher.encrypt({
+            payload: JSON.stringify([...existing, ...extra]),
+        });
+        delivery.quantity = existing.length + extra.length;
+        delivery.state = 'SENDING';
+        delivery.lastError = null;
+        delivery.lastDispatchedAt = new Date();
+        await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+        await this.digitalProducts.consumeLine(ctx, delivery.orderLineId, extra.length);
+        await this.completeFulfillment(ctx, delivery);
+        await this.addEvent(ctx, delivery, 'PUBLISHED', `管理员补交 ${extra.length} 份，原内容保留`, 'ADMIN');
+        await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
+        return this.attachView(delivery);
     }
 
     async retry(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
@@ -226,6 +308,23 @@ export class ManualDigitalDeliveryService {
         return this.attachView(delivery);
     }
 
+    async notificationPayload(ctx: RequestContext, id: ID) {
+        const delivery = await this.ownedDelivery(ctx, id);
+        if (!digitalDeliverableQuantity(delivery.order, delivery.orderLine))
+            throw new UserInputError('当前领取资格已暂停或撤销');
+        const proof = this.receiptTokens.createForDigitalReceipt(ctx, delivery.order);
+        return {
+            deliveryId: String(delivery.id),
+            orderId: String(delivery.orderId),
+            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
+            orderCode: delivery.order.code,
+            productName: delivery.productName,
+            sku: delivery.sku,
+            isChinese: delivery.languageCode === 'zh_Hans',
+            receiptPath: `/order-confirmation?id=${encodeURIComponent(delivery.order.code)}&token=${encodeURIComponent(proof.token)}`,
+        };
+    }
+
     async emailPayload(ctx: RequestContext, id: ID) {
         const delivery = await this.ownedDelivery(ctx, id);
         this.assertOrderCanDeliver(delivery);
@@ -238,21 +337,18 @@ export class ManualDigitalDeliveryService {
             await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
             throw new Error(delivery.lastError);
         }
-        const assetIds = [...new Set(packages.flatMap(item => item.attachmentAssetIds))];
-        const assets = await this.attachmentAssets(ctx, assetIds);
+
         return {
             deliveryId: String(delivery.id),
-            recipientEmail: delivery.recipientEmail,
+            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
             orderCode: delivery.order.code,
             productName: delivery.productName,
             sku: delivery.sku,
             isChinese: delivery.languageCode === 'zh_Hans',
-            packages: packages.map((item, index) => ({ ...item, number: index + 1 })),
-            attachments: assets.map(asset => ({
-                id: String(asset.id),
-                filename: asset.name,
-                source: asset.source,
-            })),
+            packages: packages
+                .slice(0, digitalDeliverableQuantity(delivery.order, delivery.orderLine))
+                .map((item, index) => ({ ...item, number: index + 1 })),
+            attachments: [],
         };
     }
 
@@ -265,7 +361,7 @@ export class ManualDigitalDeliveryService {
         ) {
             throw new UserInputError('人工交付任务已关闭或当前状态不能发送邮件');
         }
-        return this.emailPayload(ctx, id);
+        return this.notificationPayload(ctx, id);
     }
 
     async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
@@ -378,11 +474,20 @@ export class ManualDigitalDeliveryService {
 
     private async completeFulfillment(ctx: RequestContext, delivery: ManualDigitalDelivery): Promise<void> {
         this.assertDeliveryScope(ctx, delivery);
-        if (delivery.fulfillmentId) {
-            return;
-        }
+        const fulfillmentLines = await this.connection
+            .getRepository(ctx, FulfillmentLine)
+            .find({ where: { orderLineId: delivery.orderLineId }, relations: ['fulfillment'] });
+        const fulfilled = fulfillmentLines
+            .filter(item => item.fulfillment.state !== 'Cancelled')
+            .reduce((sum, item) => sum + item.quantity, 0);
+        const quantity = Math.max(
+            0,
+            Math.min(delivery.quantity, digitalDeliverableQuantity(delivery.order, delivery.orderLine)) -
+                fulfilled,
+        );
+        if (!quantity) return;
         const result = await this.orderService.createFulfillment(ctx, {
-            lines: [{ orderLineId: delivery.orderLineId, quantity: delivery.quantity }],
+            lines: [{ orderLineId: delivery.orderLineId, quantity }],
             handler: { code: manualServiceFulfillmentHandler.code, arguments: [] },
         });
         if (isGraphQlErrorResult(result)) {
@@ -408,6 +513,8 @@ export class ManualDigitalDeliveryService {
             throw new UserInputError('成品包数量无效');
         }
         const packages = input.map((item, packageIndex) => {
+            if (item.attachmentAssetIds?.length)
+                throw new UserInputError('交付附件必须上传到私有交付文件，不能使用公开商品素材');
             const fields = (item.fields ?? []).map((field, fieldIndex) => {
                 const key = field.key?.trim();
                 const label = field.label?.trim();
@@ -423,7 +530,7 @@ export class ManualDigitalDeliveryService {
                 return { key, label, value, secret: Boolean(field.secret) };
             });
             const note = item.note?.trim() ?? '';
-            if (!fields.length && !note && !(item.attachmentAssetIds?.length ?? 0)) {
+            if (!fields.length && !note && !(item.attachmentFileVersionIds?.length ?? 0)) {
                 throw new UserInputError(`第 ${packageIndex + 1} 个成品包不能为空`);
             }
             if (note.length > 20_000) {
@@ -432,22 +539,19 @@ export class ManualDigitalDeliveryService {
             return {
                 fields,
                 note,
-                attachmentAssetIds: [...new Set((item.attachmentAssetIds ?? []).map(String))],
+                attachmentAssetIds: [],
+                attachmentFileVersionIds: [...new Set((item.attachmentFileVersionIds ?? []).map(String))],
             };
         });
-        const assetIds = [...new Set(packages.flatMap(item => item.attachmentAssetIds))];
-        await this.attachmentAssets(ctx, assetIds);
+        const ids = [...new Set(packages.flatMap(item => item.attachmentFileVersionIds ?? []))];
+        if (
+            ids.length &&
+            (await this.connection
+                .getRepository(ctx, DigitalFileVersion)
+                .count({ where: { id: In(ids), channelId: ctx.channelId } })) !== ids.length
+        )
+            throw new UserInputError('部分私有附件不存在或不属于当前店铺');
         return packages;
-    }
-
-    private async attachmentAssets(ctx: RequestContext, assetIds: string[]): Promise<Asset[]> {
-        if (!assetIds.length) return [];
-        // Explicit channel assignment permits sharing; existence alone does not grant access.
-        const assets = await this.connection.findByIdsInChannel(ctx, Asset, assetIds, ctx.channelId, {});
-        if (assets.length !== assetIds.length) {
-            throw new UserInputError('部分附件不存在、已删除或不属于当前店铺');
-        }
-        return assets;
     }
 
     private readPackages(delivery: ManualDigitalDelivery): StoredManualDeliveryPackage[] {
@@ -467,7 +571,10 @@ export class ManualDigitalDeliveryService {
             delivery.events.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
         }
         return Object.assign(delivery, {
-            packages: this.readPackages(delivery),
+            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
+            packages: [],
+            hasContent: Boolean(delivery.encryptedPackages),
+            eligibleQuantity: digitalDeliverableQuantity(delivery.order, delivery.orderLine),
             overdue:
                 !['SENT', 'CANCELLED'].includes(delivery.state) && delivery.expectedAt.getTime() < Date.now(),
         });
@@ -476,7 +583,7 @@ export class ManualDigitalDeliveryService {
     private async ownedDelivery(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
         const delivery = await this.connection.getRepository(ctx, ManualDigitalDelivery).findOne({
             where: { id, channelId: ctx.channelId },
-            relations: { order: { payments: { refunds: true } }, orderLine: true, events: true },
+            relations: { order: { payments: { refunds: { lines: true } } }, orderLine: true, events: true },
         });
         if (!delivery) {
             throw new UserInputError('人工交付任务不存在');
@@ -505,30 +612,19 @@ export class ManualDigitalDeliveryService {
         ) {
             throw new UserInputError('订单已取消或尚未完成付款，不能发送人工交付');
         }
-        const payments = (delivery.order.payments ?? []).filter(payment => payment.state === 'Settled');
-        const paid = payments.reduce((total, payment) => total + payment.amount, 0);
-        // A pending full refund must also stop delivery until its outcome is known.
-        const returned = payments.reduce(
-            (total, payment) =>
-                total +
-                (payment.refunds ?? [])
-                    .filter(refund => ['Pending', 'Settled'].includes(refund.state))
-                    .reduce((sum, refund) => sum + refund.total, 0),
-            0,
-        );
-        if (!payments.length || (returned > 0 && returned >= paid)) {
-            throw new UserInputError('订单已全额退款或正在全额退款，不能发送人工交付');
+        if (!digitalDeliverableQuantity(delivery.order, delivery.orderLine)) {
+            throw new UserInputError('该订单商品尚未付款、已取消或正在退款，不能继续交付');
         }
     }
 
-    private addEvent(
+    private async addEvent(
         ctx: RequestContext,
         delivery: ManualDigitalDelivery,
         type: ManualDigitalDeliveryEventType,
         note: string,
         actorType: 'SYSTEM' | 'ADMIN' = 'SYSTEM',
     ): Promise<ManualDigitalDeliveryEvent> {
-        return this.connection.getRepository(ctx, ManualDigitalDeliveryEvent).save(
+        const saved = await this.connection.getRepository(ctx, ManualDigitalDeliveryEvent).save(
             new ManualDigitalDeliveryEvent({
                 deliveryId: delivery.id,
                 type,
@@ -537,6 +633,8 @@ export class ManualDigitalDeliveryService {
                 note: note.slice(0, 2_000),
             }),
         );
+        await this.eventBus.publish(new OrderProcessingChangedEvent(ctx, String(delivery.orderId)));
+        return saved;
     }
 
     private publishDeliveryFailure(

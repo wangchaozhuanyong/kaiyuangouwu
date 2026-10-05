@@ -646,7 +646,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                             }}
                             onParse={() => void handleLocalParse()}
                             onCreatePreview={() => void handleCreatePreview()}
-                            onDownloadTemplate={() => downloadTemplate(activeChannel?.code ?? '')}
+                            onDownloadTemplate={domain => downloadTemplate(activeChannel?.code ?? '', domain)}
                         />
                     ) : jobQuery.loading && !job ? (
                         <LoadingState label="正在读取导入任务" />
@@ -756,7 +756,7 @@ function UploadPanel({
     onFieldMappingChange: (header: string, value: string) => void;
     onParse: () => void;
     onCreatePreview: () => void;
-    onDownloadTemplate: () => void;
+    onDownloadTemplate: (domain: 'digital' | 'physical') => void;
 }) {
     if (contextLoading) return <LoadingState label="正在读取当前店铺、仓库和币种" />;
     if (contextError) return <ErrorState message={contextError} onRetry={onRetryContext} />;
@@ -914,10 +914,18 @@ function UploadPanel({
                     <AdminButton
                         type="button"
                         className={secondaryButton}
-                        onClick={onDownloadTemplate}
+                        onClick={() => onDownloadTemplate('digital')}
                         disabled={locked}
                     >
-                        <Download className="h-3.5 w-3.5" /> 下载标准模板
+                        <Download className="h-3.5 w-3.5" /> 数字商品模板
+                    </AdminButton>
+                    <AdminButton
+                        type="button"
+                        className={secondaryButton}
+                        disabled={locked}
+                        onClick={() => onDownloadTemplate('physical')}
+                    >
+                        <Download className="h-3.5 w-3.5" /> 实物商品模板
                     </AdminButton>
                     <AdminButton
                         type="button"
@@ -1356,7 +1364,7 @@ function JobWorkspace({
                     <div className="p-12 text-center text-xs text-slate-500">当前筛选下没有导入行</div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1160px] text-left text-xs">
+                        <table className="admin-mobile-record-table w-full min-w-[1160px] text-left text-xs">
                             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                 <tr>
                                     <th className="p-3">行号</th>
@@ -1440,48 +1448,52 @@ function ImportRow({
     const safeAction = String(row.plannedChanges?.safeAction ?? '');
     return (
         <tr className="align-top text-slate-700 hover:bg-slate-50">
-            <td className="p-3 font-mono">{row.rowNumber}</td>
-            <td className="p-3">
+            <td data-label="行号" className="p-3 font-mono">
+                {row.rowNumber}
+            </td>
+            <td data-label="结果" className="p-3">
                 <ActionBadge action={row.action} />
             </td>
-            <td className="min-w-48 p-3">
+            <td data-label="名称" className="min-w-48 p-3">
                 <strong className="text-slate-900">{displayValue(data.name)}</strong>
                 <div className="mt-1 font-mono text-[10px] text-slate-400">
                     {displayValue(data.sku, '无 SKU')}
                 </div>
             </td>
-            <td className="whitespace-nowrap p-3">{displayValue(data.channelCode, '未填写')}</td>
-            <td className="whitespace-nowrap p-3">
+            <td data-label="导入商店" className="whitespace-nowrap p-3">
+                {displayValue(data.channelCode, '未填写')}
+            </td>
+            <td data-label="商品类型" className="whitespace-nowrap p-3">
                 {data.fulfillmentType === 'physical'
                     ? '实物'
                     : data.fulfillmentType === 'digital'
                       ? '虚拟货品'
                       : '未填写'}
             </td>
-            <td className="p-3">
+            <td data-label="一级分类 / 二级分类" className="p-3">
                 <div>{displayValue(data.category)}</div>
                 <div className="mt-1 text-[10px] text-slate-400">
                     {displayValue(data.secondaryCategory, '无二级分类')}
                 </div>
             </td>
-            <td className="p-3">
+            <td data-label="规格 / 单位" className="p-3">
                 {[displayValue(data.specification, ''), displayValue(data.primaryUnit, '')]
                     .filter(Boolean)
                     .join(' / ') || '—'}
             </td>
-            <td className="whitespace-nowrap p-3">
+            <td data-label="销售价 / 进货价 / 库存量" className="whitespace-nowrap p-3">
                 {data.pricingMode === 'QUOTE_ONLY'
                     ? '联系客服询价 · 不可下单'
                     : `销售价 ${displayValue(data.sellingPrice, '—')} / 进货价 ${displayValue(data.purchaseCost, '—')}`}
                 <div className="mt-1 text-slate-500">库存量 {displayValue(data.stockOnHand, '—')}</div>
             </td>
-            <td className="min-w-80 p-3">
+            <td data-label="说明与处理" className="min-w-80 p-3">
                 {data.featuredAssetName && (
                     <p className="mb-1 text-[10px] text-slate-500">主图素材：{data.featuredAssetName}</p>
                 )}
                 <p className="mb-2 leading-5 text-slate-500">{row.message || '—'}</p>
                 {canUpdate && row.action === 'WARNING' && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <AdminButton
                             type="button"
                             className={primaryButton}
@@ -1501,7 +1513,7 @@ function ImportRow({
                     </div>
                 )}
                 {canUpdate && row.action === 'ERROR' && !row.appliedAt && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {['CREATE', 'UPDATE'].includes(safeAction) && (
                             <AdminButton
                                 type="button"
@@ -1524,7 +1536,7 @@ function ImportRow({
                 )}
                 {canUpdate && row.action === 'CONFLICT' && (
                     <div className="space-y-2">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <AdminButton
                                 type="button"
                                 className={primaryButton}
@@ -1542,7 +1554,7 @@ function ImportRow({
                                 跳过
                             </AdminButton>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <AdminInput
                                 className={inputClass}
                                 value={targetVariantId}
@@ -1615,7 +1627,7 @@ function ImportHistory({
         );
     return (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[900px] text-left text-xs">
+            <table className="admin-mobile-record-table w-full min-w-[900px] text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                     <tr>
                         <th className="p-3">文件</th>
@@ -1629,16 +1641,16 @@ function ImportHistory({
                 <tbody className="divide-y divide-slate-100">
                     {jobs.map(job => (
                         <tr key={job.id} className="hover:bg-slate-50">
-                            <td className="p-3">
+                            <td data-label="文件" className="p-3">
                                 <strong className="text-slate-900">{job.originalFilename}</strong>
                                 <div className="mt-1 font-mono text-[10px] text-slate-400">
                                     {job.fileHash.slice(0, 12)}…
                                 </div>
                             </td>
-                            <td className="p-3">
+                            <td data-label="仓库 / 币种" className="p-3">
                                 {job.stockLocation.name} / {job.currencyCode}
                             </td>
-                            <td className="p-3">
+                            <td data-label="状态" className="p-3">
                                 <StateBadge state={job.state} />
                                 {job.state === 'RECEIVING' && (
                                     <div className="mt-1 text-[10px] text-slate-500">
@@ -1646,11 +1658,13 @@ function ImportHistory({
                                     </div>
                                 )}
                             </td>
-                            <td className="p-3">
+                            <td data-label="结果" className="p-3">
                                 新增 {job.createdCount} · 修改 {job.updatedCount} · 错误 {job.errorCount}
                             </td>
-                            <td className="p-3">{formatDateTime(job.createdAt)}</td>
-                            <td className="p-3 text-right">
+                            <td data-label="时间" className="p-3">
+                                {formatDateTime(job.createdAt)}
+                            </td>
+                            <td data-label="操作" className="p-3 text-right">
                                 <AdminButton
                                     type="button"
                                     className={secondaryButton}
@@ -1843,9 +1857,12 @@ function stateLabel(state: CatalogImportJobRecord['state']) {
     )[state];
 }
 
-function downloadTemplate(channelCode: string): void {
+function downloadTemplate(channelCode: string, domain: 'digital' | 'physical'): void {
     if (!channelCode) return;
-    downloadCsv(catalogImportTemplateCsv(channelCode), '商品导入标准模板.csv');
+    downloadCsv(
+        catalogImportTemplateCsv(channelCode, domain),
+        `${domain === 'digital' ? '数字' : '实物'}商品导入模板.csv`,
+    );
 }
 
 function downloadImportReport(job: CatalogImportJobRecord, rows: CatalogImportRowRecord[]) {

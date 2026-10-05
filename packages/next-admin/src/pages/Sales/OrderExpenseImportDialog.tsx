@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, RefreshCw, Upload
 import { useRef, useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useAdminQuery } from '../../hooks/use-admin-query';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 
 import {
     parseOrderExpenseArrayBuffer,
@@ -12,7 +14,9 @@ import {
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
     IMPORT_CATALOG_ORDER_PROFIT_EXPENSES_MUTATION,
+    VALIDATE_CATALOG_ORDER_PROFIT_EXPENSES_QUERY,
     type CatalogOrderProfitExpenseImportResult,
+    type CatalogOrderProfitExpenseImportValidationResult,
 } from '../../graphql/catalog-operations.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -37,6 +41,35 @@ export function OrderExpenseImportDialog({
         IMPORT_CATALOG_ORDER_PROFIT_EXPENSES_MUTATION,
     );
 
+    const validationQuery = useAdminQuery<CatalogOrderProfitExpenseImportValidationResult>(
+        VALIDATE_CATALOG_ORDER_PROFIT_EXPENSES_QUERY,
+        {
+            variables: {
+                input: preview
+                    ? {
+                          currencyCode,
+                          filename: preview.filename,
+                          fileHash: preview.fileHash,
+                          rows: preview.rows,
+                      }
+                    : null,
+            },
+            skip: !preview || preview.errors.length > 0 || preview.rows.length === 0,
+            notifyOnNetworkStatusChange: true,
+        },
+    );
+    const validatedRows = validationQuery.data?.validateCatalogOrderProfitExpenses.rows;
+    const validationErrors = validatedRows?.filter(row => row.error) ?? [];
+    const validationReady = Boolean(
+        preview &&
+        validatedRows &&
+        validatedRows.length === preview.rows.length &&
+        !validationQuery.loading &&
+        !validationQuery.error &&
+        validationErrors.length === 0,
+    );
+    const applicabilityByRow = new Map(validatedRows?.map(row => [row.rowNumber, row]) ?? []);
+
     const parseFile = async (file?: File) => {
         if (!file) return;
         setParsing(true);
@@ -54,7 +87,14 @@ export function OrderExpenseImportDialog({
     };
 
     const executeImport = async () => {
-        if (!preview || preview.errors.length > 0 || preview.rows.length === 0 || !confirmed) return;
+        if (
+            !preview ||
+            preview.errors.length > 0 ||
+            preview.rows.length === 0 ||
+            !confirmed ||
+            !validationReady
+        )
+            return;
         setError('');
         try {
             const response = await runImport({
@@ -70,7 +110,7 @@ export function OrderExpenseImportDialog({
             const imported = response.data?.importCatalogOrderProfitExpenses;
             if (!imported) throw new Error('后端未返回导入结果');
             setResult(imported);
-            await onImported();
+            await refreshAfterAdminWrite(async () => onImported(), setError);
         } catch (mutationError) {
             setError(toUserFacingError(mutationError, '订单费用导入失败'));
         }
@@ -138,7 +178,8 @@ export function OrderExpenseImportDialog({
 
                     <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900">
                         支持列：“订单号”、“实际物流成本”、“支付手续费”、“拒付损失”、“备注”。金额按{' '}
-                        {currencyCode} 主币单位填写，最多 3 位小数。留空不会覆盖原值；没有费用必须明确填 0。
+                        {currencyCode} 主币单位填写，最多 3
+                        位小数。留空不会覆盖原值。纯数字订单的物流成本必须留空；其余适用费用为零时明确填 0。
                     </div>
 
                     {error && (
@@ -194,59 +235,105 @@ export function OrderExpenseImportDialog({
                                     )}
                                 </div>
                             )}
-                            {preview.rows.length > 0 && (
-                                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                                    <table className="w-full min-w-[760px] text-left text-xs">
-                                        <thead className="bg-slate-50 text-slate-500">
-                                            <tr>
-                                                <th className="px-3 py-2">行</th>
-                                                <th className="px-3 py-2">订单号</th>
-                                                <th className="px-3 py-2">实际物流成本</th>
-                                                <th className="px-3 py-2">支付手续费</th>
-                                                <th className="px-3 py-2">拒付损失</th>
-                                                <th className="px-3 py-2">备注</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {preview.rows.slice(0, 20).map(row => (
-                                                <tr key={row.rowNumber}>
-                                                    <td className="px-3 py-2 font-mono">{row.rowNumber}</td>
-                                                    <td className="px-3 py-2 font-mono font-bold">
-                                                        {row.orderCode}
-                                                    </td>
-                                                    <td className="px-3 py-2 font-mono">
-                                                        {formatPreviewMoney(
-                                                            row.carrierShippingCostMicrounits,
-                                                            currencyCode,
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-2 font-mono">
-                                                        {formatPreviewMoney(
-                                                            row.paymentFeeMicrounits,
-                                                            currencyCode,
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-2 font-mono">
-                                                        {formatPreviewMoney(
-                                                            row.chargebackMicrounits,
-                                                            currencyCode,
-                                                        )}
-                                                    </td>
-                                                    <td
-                                                        className="max-w-64 truncate px-3 py-2"
-                                                        title={row.note}
-                                                    >
-                                                        {row.note || '—'}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {preview.rows.length > 20 && (
-                                        <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                                            仅展示前 20 行，实际将导入 {preview.rows.length} 行。
+                            {validationQuery.loading && (
+                                <div role="status" className="flex items-center gap-2 text-xs text-slate-600">
+                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />{' '}
+                                    正在核对店铺、币种与订单费用适用性
+                                </div>
+                            )}
+                            {validationQuery.error && (
+                                <div role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                                    {toUserFacingError(validationQuery.error, '订单费用适用性验证失败')}
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => void validationQuery.refetch()}
+                                        className="ml-2 font-semibold underline"
+                                    >
+                                        重试核对
+                                    </AdminButton>
+                                </div>
+                            )}
+                            {validationErrors.length > 0 && (
+                                <div
+                                    role="alert"
+                                    className="max-h-36 overflow-y-auto rounded-lg bg-rose-50 p-3 text-xs leading-5 text-rose-700"
+                                >
+                                    {validationErrors.slice(0, 30).map(row => (
+                                        <div key={row.rowNumber}>
+                                            第 {row.rowNumber} 行 {row.orderCode}：{row.error}
                                         </div>
-                                    )}
+                                    ))}
+                                </div>
+                            )}
+                            {preview.rows.length > 0 && (
+                                <div>
+                                    <p className="admin-comparison-hint px-3 py-2 text-xs text-slate-500">
+                                        左右滑动查看全部金额和明细列
+                                    </p>
+                                    <div
+                                        className="admin-comparison-scroll overflow-x-auto"
+                                        role="region"
+                                        aria-label="费用导入预览"
+                                        tabIndex={0}
+                                    >
+                                        <table className="w-full min-w-[760px] text-left text-xs">
+                                            <thead className="bg-slate-50 text-slate-500">
+                                                <tr>
+                                                    <th className="px-3 py-2">行</th>
+                                                    <th className="px-3 py-2">订单号</th>
+                                                    <th className="px-3 py-2">实际物流成本</th>
+                                                    <th className="px-3 py-2">支付手续费</th>
+                                                    <th className="px-3 py-2">拒付损失</th>
+                                                    <th className="px-3 py-2">备注</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {preview.rows.slice(0, 20).map(row => (
+                                                    <tr key={row.rowNumber}>
+                                                        <td className="px-3 py-2 font-mono">
+                                                            {row.rowNumber}
+                                                        </td>
+                                                        <td className="px-3 py-2 font-mono font-bold">
+                                                            {row.orderCode}
+                                                        </td>
+                                                        <td className="px-3 py-2 font-mono">
+                                                            {applicabilityByRow.get(row.rowNumber)
+                                                                ?.carrierShippingCostApplicable === false &&
+                                                            row.carrierShippingCostMicrounits === undefined
+                                                                ? '不适用'
+                                                                : formatPreviewMoney(
+                                                                      row.carrierShippingCostMicrounits,
+                                                                      currencyCode,
+                                                                  )}
+                                                        </td>
+                                                        <td className="px-3 py-2 font-mono">
+                                                            {formatPreviewMoney(
+                                                                row.paymentFeeMicrounits,
+                                                                currencyCode,
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2 font-mono">
+                                                            {formatPreviewMoney(
+                                                                row.chargebackMicrounits,
+                                                                currencyCode,
+                                                            )}
+                                                        </td>
+                                                        <td
+                                                            className="max-w-64 truncate px-3 py-2"
+                                                            title={row.note}
+                                                        >
+                                                            {row.note || '—'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        {preview.rows.length > 20 && (
+                                            <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                                                仅展示前 20 行，实际将导入 {preview.rows.length} 行。
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </>
@@ -259,7 +346,9 @@ export function OrderExpenseImportDialog({
                             type="checkbox"
                             checked={confirmed}
                             onChange={event => setConfirmed(event.target.checked)}
-                            disabled={!preview || preview.errors.length > 0 || result != null}
+                            disabled={
+                                !preview || preview.errors.length > 0 || result != null || !validationReady
+                            }
                             className="mt-1"
                         />
                         <span>我已核对当前店铺、{currencyCode} 币种和订单号，确认写入费用记录。</span>
@@ -281,6 +370,7 @@ export function OrderExpenseImportDialog({
                                     preview.errors.length > 0 ||
                                     preview.rows.length === 0 ||
                                     !confirmed ||
+                                    !validationReady ||
                                     importState.loading
                                 }
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
@@ -330,7 +420,7 @@ function formatPreviewMoney(value: number | undefined, currencyCode: string): st
 }
 
 function downloadExpenseTemplate(currencyCode: string): void {
-    const content = `\uFEFF订单号,实际物流成本,支付手续费,拒付损失,备注\nT-1001,0,0,0,${currencyCode}金额示例\n`;
+    const content = `\uFEFF订单号,实际物流成本,支付手续费,拒付损失,备注\nT-1001,,0,0,${currencyCode}数字订单示例（实物订单填写实际物流成本）\n`;
     const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;

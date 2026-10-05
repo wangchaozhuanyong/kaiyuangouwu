@@ -100,6 +100,7 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
                 estimatedCostOrderCount
                 estimatedCostLineCount
                 carrierShippingCostMicrounits
+                carrierShippingCostApplicable
                 paymentFeeMicrounits
                 chargebackMicrounits
                 netProfitMicrounits
@@ -114,6 +115,7 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
             items {
                 id
                 code
+                fulfillmentType
                 orderPlacedAt
                 currencyCode
                 quantity
@@ -128,6 +130,7 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
                 grossProfitMicrounits
                 grossMargin
                 carrierShippingCostMicrounits
+                carrierShippingCostApplicable
                 paymentFeeMicrounits
                 chargebackMicrounits
                 netProfitMicrounits
@@ -158,6 +161,10 @@ const CATALOG_ORDER_PROFIT_EXPENSE_FIELDS = gql`
 
 export const CATALOG_ORDER_PROFIT_EXPENSE_QUERY = gql`
     query NextAdminCatalogOrderProfitExpense($orderId: ID!) {
+        catalogOrderProfitExpenseApplicability(orderId: $orderId) {
+            fulfillmentType
+            carrierShippingCostApplicable
+        }
         catalogOrderProfitExpense(orderId: $orderId) {
             ...NextAdminCatalogOrderProfitExpenseFields
         }
@@ -181,6 +188,20 @@ export const SAVE_CATALOG_ORDER_PROFIT_EXPENSE_MUTATION = gql`
         }
     }
     ${CATALOG_ORDER_PROFIT_EXPENSE_FIELDS}
+`;
+
+export const VALIDATE_CATALOG_ORDER_PROFIT_EXPENSES_QUERY = gql`
+    query NextAdminValidateCatalogOrderProfitExpenses($input: ImportCatalogOrderProfitExpensesInput!) {
+        validateCatalogOrderProfitExpenses(input: $input) {
+            rows {
+                rowNumber
+                orderCode
+                fulfillmentType
+                carrierShippingCostApplicable
+                error
+            }
+        }
+    }
 `;
 
 export const IMPORT_CATALOG_ORDER_PROFIT_EXPENSES_MUTATION = gql`
@@ -1075,6 +1096,7 @@ export interface CatalogProfitReportSummary {
     estimatedCostOrderCount: number;
     estimatedCostLineCount: number;
     carrierShippingCostMicrounits?: number | null;
+    carrierShippingCostApplicable: boolean;
     paymentFeeMicrounits?: number | null;
     chargebackMicrounits?: number | null;
     netProfitMicrounits?: number | null;
@@ -1088,6 +1110,7 @@ export interface CatalogProfitReportSummary {
 }
 
 export interface CatalogProfitOrderRecord {
+    fulfillmentType: CatalogOrderProfitExpenseApplicability['fulfillmentType'];
     id: string;
     code: string;
     orderPlacedAt: string;
@@ -1104,6 +1127,7 @@ export interface CatalogProfitOrderRecord {
     grossProfitMicrounits?: number | null;
     grossMargin?: number | null;
     carrierShippingCostMicrounits?: number | null;
+    carrierShippingCostApplicable: boolean;
     paymentFeeMicrounits?: number | null;
     chargebackMicrounits?: number | null;
     netProfitMicrounits?: number | null;
@@ -1134,7 +1158,25 @@ export interface CatalogOrderProfitExpenseRecord {
     note?: string | null;
 }
 
+export interface CatalogOrderProfitExpenseApplicability {
+    fulfillmentType: 'DIGITAL' | 'PHYSICAL' | 'MIXED' | 'UNKNOWN';
+    carrierShippingCostApplicable: boolean;
+}
+
+export interface CatalogOrderProfitExpenseImportValidationResult {
+    validateCatalogOrderProfitExpenses: {
+        rows: Array<
+            CatalogOrderProfitExpenseApplicability & {
+                rowNumber: number;
+                orderCode: string;
+                error?: string | null;
+            }
+        >;
+    };
+}
+
 export interface CatalogOrderProfitExpenseQueryResult {
+    catalogOrderProfitExpenseApplicability: CatalogOrderProfitExpenseApplicability;
     catalogOrderProfitExpense?: CatalogOrderProfitExpenseRecord | null;
     catalogOrderProfitExpenseEvents: Array<{
         id: string;

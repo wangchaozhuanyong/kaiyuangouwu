@@ -1,3 +1,4 @@
+import { InventoryLot } from '@vendure/catalog-management-plugin';
 import { StockLevel } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,20 +9,22 @@ describe('PackagingStockLocationStrategy', () => {
     it('includes only convertible package stock after package allocations and threshold', async () => {
         const strategy = new PackagingStockLocationStrategy();
         const repository = vi.fn((_ctx: unknown, entity: unknown) =>
-            entity === ProductPackagingRule
-                ? {
-                      findOne: vi.fn().mockResolvedValue({
-                          packageVariantId: 'package-variant',
-                          unitsPerPackage: 24,
-                          packageVariant: {
-                              useGlobalOutOfStockThreshold: true,
-                              outOfStockThreshold: 0,
-                          },
-                      }),
-                  }
-                : {
-                      find: vi.fn().mockResolvedValue([stockLevel('package-variant', 3, 1)]),
-                  },
+            entity === InventoryLot
+                ? { find: vi.fn().mockResolvedValue([]) }
+                : entity === ProductPackagingRule
+                  ? {
+                        findOne: vi.fn().mockResolvedValue({
+                            packageVariantId: 'package-variant',
+                            unitsPerPackage: 24,
+                            packageVariant: {
+                                useGlobalOutOfStockThreshold: true,
+                                outOfStockThreshold: 0,
+                            },
+                        }),
+                    }
+                  : {
+                        find: vi.fn().mockResolvedValue([stockLevel('package-variant', 3, 1)]),
+                    },
         );
         Object.assign(strategy, {
             connection: { getRepository: repository },
@@ -49,16 +52,18 @@ describe('PackagingStockLocationStrategy', () => {
         Object.assign(strategy, {
             connection: {
                 getRepository: vi.fn((_ctx: unknown, entity: unknown) =>
-                    entity === ProductPackagingRule
-                        ? { findOne: vi.fn().mockResolvedValue({ id: 'rule-1' }) }
-                        : {
-                              find: vi
-                                  .fn()
-                                  .mockResolvedValue([
-                                      stockLevel('package-variant', 1, 0, 'location-1'),
-                                      stockLevel('package-variant', 1, 0, 'location-2'),
-                                  ]),
-                          },
+                    entity === InventoryLot
+                        ? { find: vi.fn().mockResolvedValue([]) }
+                        : entity === ProductPackagingRule
+                          ? { findOne: vi.fn().mockResolvedValue({ id: 'rule-1' }) }
+                          : {
+                                find: vi
+                                    .fn()
+                                    .mockResolvedValue([
+                                        stockLevel('package-variant', 1, 0, 'location-1'),
+                                        stockLevel('package-variant', 1, 0, 'location-2'),
+                                    ]),
+                            },
                 ),
                 getEntityOrThrow: vi.fn().mockResolvedValue({
                     trackInventory: 'TRUE',

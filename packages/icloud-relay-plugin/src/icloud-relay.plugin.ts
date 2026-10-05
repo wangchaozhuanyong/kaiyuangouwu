@@ -2,6 +2,7 @@ import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api/api-extensions';
 import { IcloudAdminResolver } from './api/icloud-admin.resolver';
+import { IcloudMailStreamController } from './api/icloud-mail-stream.controller';
 import { IcloudPortalController } from './api/icloud-portal.controller';
 import { IcloudPublicResolver } from './api/icloud-public.resolver';
 import { ICLOUD_RELAY_PLUGIN_OPTIONS, manageIcloudRelayPermission } from './constants';
@@ -21,6 +22,7 @@ import { IcloudMailHistoryService } from './services/icloud-mail-history.service
 import { IcloudMailSanitizerService } from './services/icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './services/icloud-otp-extractor.service';
 import { IcloudPublicQueryService } from './services/icloud-public-query.service';
+import { IcloudStorefrontEventsService } from './services/icloud-storefront-events.service';
 import { IcloudRelayPluginOptions } from './types';
 
 /**
@@ -61,7 +63,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudQueryAuditLog,
         IcloudMailOutbox,
     ],
-    controllers: [IcloudPortalController],
+    controllers: [IcloudPortalController, IcloudMailStreamController],
     providers: [
         { provide: ICLOUD_RELAY_PLUGIN_OPTIONS, useFactory: () => IcloudRelayPlugin.options },
         IcloudCipherService,
@@ -74,6 +76,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudPublicQueryService,
         IcloudJobService,
         IcloudMailEventsService,
+        IcloudStorefrontEventsService,
         IcloudIdleService,
     ],
     adminApiExtensions: {

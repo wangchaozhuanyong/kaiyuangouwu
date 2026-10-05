@@ -391,6 +391,7 @@ import {
         },
     ],
     exports: [
+        StoreCurrencySettingsService,
         GovernanceService,
         CatalogGovernanceService,
         ReferralWalletSpendService,

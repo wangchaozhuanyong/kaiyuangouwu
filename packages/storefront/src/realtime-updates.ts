@@ -44,6 +44,24 @@ export async function consumeStorefrontRealtimeStream(
     onEvent: (event: StorefrontRealtimeEvent) => void,
     options: StorefrontRealtimeStreamOptions = {},
 ): Promise<void> {
+    await consumeRealtimeFrames(
+        body,
+        frame => {
+            const heartbeatIntervalMs = storefrontRealtimeReadyHeartbeatInterval(frame);
+            const parsed = parseStorefrontRealtimeFrame(frame);
+            if (parsed) onEvent(parsed);
+            return { heartbeatIntervalMs: heartbeatIntervalMs ?? undefined, activity: Boolean(parsed) };
+        },
+        options,
+    );
+}
+
+/** Shared SSE framing, cancellation and heartbeat watchdog. It never fetches business data. */
+export async function consumeRealtimeFrames(
+    body: ReadableStream<Uint8Array>,
+    onFrame: (frame: string) => { heartbeatIntervalMs?: number; activity?: boolean },
+    options: StorefrontRealtimeStreamOptions = {},
+): Promise<void> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let pending = '';
@@ -94,18 +112,16 @@ export async function consumeStorefrontRealtimeStream(
             const frames = pending.split(/\r?\n\r?\n/u);
             pending = done ? '' : (frames.pop() ?? '');
             for (const frame of frames) {
-                const readyInterval = ready ? null : storefrontRealtimeReadyHeartbeatInterval(frame);
-                if (readyInterval !== null) {
+                const parsed = onFrame(frame);
+                if (!ready && parsed.heartbeatIntervalMs !== undefined) {
                     ready = true;
-                    heartbeatIntervalMs = readyInterval;
+                    heartbeatIntervalMs = parsed.heartbeatIntervalMs;
                     scheduleWatchdog(Math.max(1_000, heartbeatIntervalMs * 3));
                     options.onReady?.();
                 }
-                const parsed = parseStorefrontRealtimeFrame(frame);
-                if (ready && (parsed || frame.split(/\r?\n/u).some(line => line.startsWith(':')))) {
+                if (ready && (parsed.activity || frame.split(/\r?\n/u).some(line => line.startsWith(':')))) {
                     scheduleWatchdog(Math.max(1_000, heartbeatIntervalMs * 3));
                 }
-                if (parsed) onEvent(parsed);
             }
             if (done) {
                 completedNaturally = !options.signal?.aborted;
@@ -161,7 +177,7 @@ function storefrontRealtimeReadyHeartbeatInterval(frame: string): number | null 
     }
 }
 
-function parseStorefrontRealtimeFrameFields(frame: string): {
+export function parseStorefrontRealtimeFrameFields(frame: string): {
     eventName: string;
     data: string[];
 } {

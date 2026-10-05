@@ -32,3 +32,7 @@ export type {
     ReceiveCustomerReturnInput,
     SaveCatalogProductInput,
 } from './types.js';
+
+export { CatalogOperationsService } from './catalog-operations.service.js';
+
+export { planFefoAllocation } from './inventory-lot-lifecycle.service.js';

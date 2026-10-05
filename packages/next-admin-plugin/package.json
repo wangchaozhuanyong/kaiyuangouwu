@@ -13,6 +13,7 @@
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/commerce-fulfillment-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "date-fns": "^4.0.0",
         "express": "^5.1.0",

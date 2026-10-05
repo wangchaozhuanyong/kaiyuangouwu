@@ -11,7 +11,11 @@ type Mutation {
     addFulfillmentToOrder(input: FulfillOrderInput!): AddFulfillmentToOrderResult!
     cancelOrder(input: CancelOrderInput!): CancelOrderResult!
     refundOrder(input: RefundOrderInput!): RefundOrderResult!
+    "Retries the original failed refund using one stable identifier per reviewed attempt."
+    retryRefund(input: RetryRefundInput!): RefundOrderResult!
     settleRefund(input: SettleRefundInput!): SettleRefundResult!
+    "Confirms a manual-channel refund from an actual external receipt; it does not send money."
+    recordManualRefund(input: RecordManualRefundInput!): SettleRefundResult!
     addNoteToOrder(input: AddNoteToOrderInput!): Order!
     updateOrderNote(input: UpdateOrderNoteInput!): HistoryEntry!
     deleteOrderNote(id: ID!): DeletionResponse!
@@ -116,6 +120,12 @@ input CancelOrderInput {
     reason: String
 }
 
+enum RefundReasonType {
+    ITEMS
+    SHIPPING
+    COMPENSATION
+}
+
 input RefundOrderInput {
     lines: [OrderLineInput!] @deprecated(reason: "Use the `amount` field instead")
     shipping: Money @deprecated(reason: "Use the `amount` field instead")
@@ -125,6 +135,12 @@ input RefundOrderInput {
     Can be as much as the total amount of the payment minus the sum of all previous refunds.
     """
     amount: Money
+    """
+    A stable identifier for this refund request. Reusing it returns the original refund, including Failed or Pending outcomes.
+    """
+    idempotencyKey: String
+    reasonType: RefundReasonType
+    afterSalesId: ID
     paymentId: ID!
     reason: String
 }
@@ -137,6 +153,19 @@ input OrderLineInput {
 input SettleRefundInput {
     id: ID!
     transactionId: String!
+}
+
+input RecordManualRefundInput {
+    refundId: ID!
+    transactionId: String!
+    evidenceReference: String!
+    note: String!
+}
+
+input RetryRefundInput {
+    refundId: ID!
+    "Use a new key for a new reviewed attempt, and reuse it when retrying the same submission."
+    idempotencyKey: String!
 }
 
 input AddNoteToOrderInput {
@@ -159,6 +188,11 @@ input AdministratorPaymentInput {
 input AdministratorRefundInput {
     paymentId: ID!
     reason: String
+    """
+    Keep the same key when retrying this order modification.
+    """
+    idempotencyKey: String
+    afterSalesId: ID
     """
     The amount to be refunded to this particular Payment. This was introduced in
     v2.2.0 as the preferred way to specify the refund amount. The `lines`, `shipping` and `adjustment`

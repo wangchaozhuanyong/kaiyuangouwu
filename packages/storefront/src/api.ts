@@ -14,12 +14,9 @@ import type {
     CustomerAddressUpdateInput,
     CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
-    CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
-    FraudRiskAppeal,
     FraudRiskCase,
-    FulfillmentDeliveryEvidence,
     ImageGenerationJob,
     ImageModelQuotaStatus,
     ImageModelRecommendation,
@@ -31,8 +28,6 @@ import type {
     MarketConfig,
     MyReferralOverview,
     Order,
-    OrderConfirmationToken,
-    OrderPage,
     Product,
     ProductSearchPage,
     ProductSearchSort,
@@ -100,6 +95,7 @@ export class ShopApi {
     private readonly referralsApi: ReferralsApi;
     private readonly imageStudioApi: ImageStudioApi;
     private readonly mailQueryApi: MailQueryApi;
+    readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
     private readonly realtimeApi: RealtimeApi;
 
@@ -131,6 +127,7 @@ export class ShopApi {
         this.referralsApi = new ReferralsApi(ctx);
         this.imageStudioApi = new ImageStudioApi(ctx);
         this.mailQueryApi = new MailQueryApi(ctx);
+        this.watchMailEvents = this.mailQueryApi.watchMailEvents.bind(this.mailQueryApi);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
         this.realtimeApi = new RealtimeApi(ctx);
     }
@@ -236,43 +233,45 @@ export class ShopApi {
         return this.accountApi.fraudRiskCases(signal);
     }
 
-    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
-        return this.accountApi.appealFraudRiskCase(id, reason);
-    }
+    appealFraudRiskCase: AccountApi['appealFraudRiskCase'] = (...args) =>
+        this.accountApi.appealFraudRiskCase(...args);
 
-    async customerOrders(
-        skip = 0,
-        take = 10,
-        states?: string[],
-        code?: string,
-        signal?: AbortSignal,
-    ): Promise<OrderPage> {
-        return this.accountApi.customerOrders(skip, take, states, code, signal);
-    }
+    customerOrders: AccountApi['customerOrders'] = (...args) => this.accountApi.customerOrders(...args);
 
-    async customerOrderCounts(signal?: AbortSignal): Promise<CustomerOrderCounts> {
-        return this.accountApi.customerOrderCounts(signal);
-    }
+    customerOrderCounts: AccountApi['customerOrderCounts'] = (...args) =>
+        this.accountApi.customerOrderCounts(...args);
 
-    async order(id: string, signal?: AbortSignal): Promise<Order | null> {
-        return this.accountApi.order(id, signal);
-    }
+    order: AccountApi['order'] = (...args) => this.accountApi.order(...args);
 
-    async orderByConfirmationToken(token: string, signal?: AbortSignal): Promise<Order | null> {
-        return this.accountApi.orderByConfirmationToken(token, signal);
-    }
+    digitalDeliveryStatuses: AccountApi['digitalDeliveryStatuses'] = (...args) =>
+        this.accountApi.digitalDeliveryStatuses(...args);
 
-    async createOrderConfirmationToken(): Promise<OrderConfirmationToken> {
-        return this.accountApi.createOrderConfirmationToken();
-    }
+    claimDigitalDelivery: AccountApi['claimDigitalDelivery'] = (...args) =>
+        this.accountApi.claimDigitalDelivery(...args);
 
-    async cancelMyAuthorizedOrder(orderId: string, reason: string): Promise<Order> {
-        return this.accountApi.cancelMyAuthorizedOrder(orderId, reason);
-    }
+    orderAdditionalPaymentQuote: AccountApi['orderAdditionalPaymentQuote'] = (...args) =>
+        this.accountApi.orderAdditionalPaymentQuote(...args);
 
-    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
-        return this.accountApi.confirmFulfillmentDelivery(fulfillmentId);
-    }
+    addPaymentToModifiedOrder: AccountApi['addPaymentToModifiedOrder'] = (...args) =>
+        this.accountApi.addPaymentToModifiedOrder(...args);
+
+    orderByConfirmationToken: AccountApi['orderByConfirmationToken'] = (...args) =>
+        this.accountApi.orderByConfirmationToken(...args);
+
+    createModifiedOrderUsdtQuote: AccountApi['createModifiedOrderUsdtQuote'] = (...args) =>
+        this.accountApi.createModifiedOrderUsdtQuote(...args);
+
+    useModifiedOrderReferralBalance: AccountApi['useModifiedOrderReferralBalance'] = (...args) =>
+        this.accountApi.useModifiedOrderReferralBalance(...args);
+
+    createOrderConfirmationToken: AccountApi['createOrderConfirmationToken'] = (...args) =>
+        this.accountApi.createOrderConfirmationToken(...args);
+
+    cancelMyAuthorizedOrder: AccountApi['cancelMyAuthorizedOrder'] = (...args) =>
+        this.accountApi.cancelMyAuthorizedOrder(...args);
+
+    confirmFulfillmentDelivery: AccountApi['confirmFulfillmentDelivery'] = (...args) =>
+        this.accountApi.confirmFulfillmentDelivery(...args);
 
     async afterSalesRequests(signal?: AbortSignal): Promise<AfterSalesRequest[]> {
         return this.contentReviewsApi.afterSalesRequests(signal);

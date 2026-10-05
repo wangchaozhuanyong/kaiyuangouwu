@@ -119,14 +119,6 @@ export const orderFields = `${cartQuoteFields}
             }
         }
     }
-    digitalDeliveries {
-        orderLineId
-        sku
-        name
-        status
-        downloadUrl
-        expiresAt
-    }
     autoCardDeliveries {
         id
         createdAt

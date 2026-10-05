@@ -135,7 +135,7 @@ export function GenericPromotionsPanel() {
                     </div>
                 </div>
                 <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="min-w-[920px] w-full text-left text-xs">
+                    <table className="admin-mobile-record-table min-w-[920px] w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
                             <tr>
                                 {[
@@ -156,20 +156,28 @@ export function GenericPromotionsPanel() {
                         <tbody className="divide-y divide-slate-100">
                             {query.data.promotions.items.map(item => (
                                 <tr key={item.id}>
-                                    <td className="px-3 py-3">
+                                    <td data-label="名称" className="px-3 py-3">
                                         <strong>{item.name}</strong>
                                         <small className="mt-1 block max-w-64 truncate text-slate-500">
                                             {item.description || '无描述'}
                                         </small>
                                     </td>
-                                    <td className="px-3 py-3">{item.enabled ? '启用' : '停用'}</td>
-                                    <td className="px-3 py-3 font-mono">{item.couponCode ?? '—'}</td>
-                                    <td className="px-3 py-3">{dateRange(item)}</td>
-                                    <td className="px-3 py-3">
+                                    <td data-label="状态" className="px-3 py-3">
+                                        {item.enabled ? '启用' : '停用'}
+                                    </td>
+                                    <td data-label="优惠码" className="px-3 py-3 font-mono">
+                                        {item.couponCode ?? '—'}
+                                    </td>
+                                    <td data-label="时间范围" className="px-3 py-3">
+                                        {dateRange(item)}
+                                    </td>
+                                    <td data-label="用量限制" className="px-3 py-3">
                                         总 {item.usageLimit ?? '∞'} · 每客 {item.perCustomerUsageLimit ?? '∞'}
                                     </td>
-                                    <td className="px-3 py-3 text-slate-500">进入编辑器查看</td>
-                                    <td className="px-3 py-3">
+                                    <td data-label="条件 / 动作" className="px-3 py-3 text-slate-500">
+                                        进入编辑器查看
+                                    </td>
+                                    <td data-label="操作" className="px-3 py-3">
                                         <div className="flex gap-2">
                                             <AdminButton
                                                 type="button"

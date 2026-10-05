@@ -1,5 +1,11 @@
-import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import {
+    AdminMobileField,
+    AdminMobileList,
+    AdminMobileRecord,
+    AdminMobileSort,
+} from '../../components/AdminMobileList';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
@@ -20,7 +26,7 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
@@ -38,10 +44,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-import {
-    canCreatePhysicalFulfillment,
-    PHYSICAL_FULFILLMENT_ORDER_STATES,
-} from './order-operation-availability';
+import { canCreatePhysicalFulfillment } from './order-operation-availability';
 import { csvCell } from './sales-csv';
 import {
     canManageOrderInChannel,
@@ -49,16 +52,35 @@ import {
     formatDateTime,
     formatMoney,
     getCustomerName,
+    getDigitalNotificationLabel,
     getMutationError,
     getOrderFulfillmentKind,
     getOrderStateClass,
     getOrderStateLabel,
-    getRemainingPhysicalLines,
+    getProcessingPhysicalLines,
+    type OrderProcessingSummary,
     summarizeOrderListItem,
 } from './sales-utils';
 
-type OrderTab = 'ALL' | 'DRAFT' | 'TO_SETTLE' | 'TO_FULFILL' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+type OrderTab =
+    | 'PENDING'
+    | 'DIGITAL'
+    | 'PHYSICAL'
+    | 'EXCEPTIONS'
+    | 'AFTER_SALES'
+    | 'ALL'
+    | 'DRAFT'
+    | 'TO_SETTLE'
+    | 'TO_FULFILL'
+    | 'IN_TRANSIT'
+    | 'DELIVERED'
+    | 'CANCELLED';
 const ORDER_TABS = {
+    pending: 'PENDING',
+    digital: 'DIGITAL',
+    physical: 'PHYSICAL',
+    exceptions: 'EXCEPTIONS',
+    'after-sales': 'AFTER_SALES',
     all: 'ALL',
     drafts: 'DRAFT',
     'to-settle': 'TO_SETTLE',
@@ -96,6 +118,7 @@ interface SalesFulfillment {
 }
 
 interface SalesOrderItem {
+    processingSummary?: OrderProcessingSummary | null;
     salesChannel: {
         id: string;
         code: string;
@@ -135,8 +158,13 @@ interface SalesOrderItem {
 interface SalesOrdersData {
     activeChannel: { id: string; code: string };
     orders: { items: SalesOrderItem[]; totalItems: number };
-    physicalFulfillmentTodoCount: number;
-    fulfillmentDeliveryExceptions: { totalItems: number };
+    orderProcessingCounts: {
+        pending: number;
+        digital: number;
+        physical: number;
+        exceptions: number;
+        afterSales: number;
+    };
 }
 
 interface FulfillmentMutationData {
@@ -158,35 +186,28 @@ const ORDER_SORT_FIELDS = [
     'state',
 ] as const;
 type OrderSortField = (typeof ORDER_SORT_FIELDS)[number];
+const ORDER_SORT_OPTIONS: Array<{ value: OrderSortField; label: string }> = [
+    { value: 'orderPlacedAt', label: '下单时间' },
+    { value: 'code', label: '订单号' },
+    { value: 'totalQuantity', label: '商品数量' },
+    { value: 'customerLastName', label: '客户姓名' },
+    { value: 'totalWithTax', label: '订单金额' },
+    { value: 'state', label: '订单状态' },
+];
 const EMPTY_ORDERS: SalesOrderItem[] = [];
 const tabs: Array<{ id: OrderTab; label: string }> = [
+    { id: 'PENDING', label: '待处理' },
+    { id: 'DIGITAL', label: '虚拟待交付' },
+    { id: 'PHYSICAL', label: '实物待发货' },
+    { id: 'EXCEPTIONS', label: '异常与通知' },
+    { id: 'AFTER_SALES', label: '售后待处理' },
     { id: 'ALL', label: '全部交易' },
     { id: 'DRAFT', label: '草稿订单' },
     { id: 'TO_SETTLE', label: '支付已授权' },
-    { id: 'TO_FULFILL', label: '待处理履约' },
     { id: 'IN_TRANSIT', label: '配送中' },
     { id: 'DELIVERED', label: '已完成' },
     { id: 'CANCELLED', label: '已取消' },
 ];
-const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
-    ALL: { notIn: ['AddingItems', 'Draft'] },
-    DRAFT: { in: ['AddingItems', 'Draft'] },
-    TO_SETTLE: { eq: 'PaymentAuthorized' },
-    TO_FULFILL: { in: [...PHYSICAL_FULFILLMENT_ORDER_STATES] },
-    IN_TRANSIT: { in: ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'] },
-    DELIVERED: { eq: 'Delivered' },
-    CANCELLED: { eq: 'Cancelled' },
-};
-
-// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
-export function orderTabFilters(activeTab: OrderTab): Array<Record<string, unknown>> {
-    const filters: Array<Record<string, unknown>> = [{ state: tabStateFilter[activeTab] }];
-    // Submitted checkouts stay active until fully paid, including partial balance payments.
-    // ALL already excludes shopping carts and drafts by state; do not hide pending payments.
-    if (activeTab !== 'DRAFT' && activeTab !== 'ALL') filters.unshift({ active: { eq: false } });
-    return filters;
-}
-
 export function SalesModule() {
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
@@ -194,11 +215,12 @@ export function SalesModule() {
     const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
     const [activeTab, setActiveTab] = useUrlTab<OrderTab>(
         ORDER_TABS,
-        'all',
+        'pending',
         'tab',
         ORDER_TAB_RESET_PARAMETERS,
     );
     const location = useLocation();
+    const [, setSearchParams] = useSearchParams();
     const { isFiltered, page, pageSize, setPageSize, searchTerm, setPage, setSearchTerm, resetFilters } =
         useUrlListState();
     const { sortDirection, sortField, toggleSort } = useUrlSortState({
@@ -208,6 +230,13 @@ export function SalesModule() {
     });
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+    const [mobileFilterDraft, setMobileFilterDraft] = useState<{
+        tab: OrderTab;
+        field: OrderSortField;
+        direction: SortDirection;
+        clearSearch: boolean;
+    } | null>(null);
+    const [mobileBatchMode, setMobileBatchMode] = useState(false);
     const [isBatchOpen, setIsBatchOpen] = useState(false);
     const [carrier, setCarrier] = useState('');
     const [trackingCodes, setTrackingCodes] = useState<Record<string, string>>({});
@@ -216,24 +245,14 @@ export function SalesModule() {
     const [batchProgress, setBatchProgress] = useState('');
 
     const queryVariables = useMemo(() => {
-        const filters = orderTabFilters(activeTab);
-        const query = deferredSearchTerm.trim();
-        if (query) {
-            filters.push({
-                _or: [
-                    { code: { contains: query } },
-                    { customerLastName: { contains: query } },
-                    { deliveryEmail: { contains: query } },
-                    { transactionId: { contains: query } },
-                ],
-            });
-        }
         return {
             options: {
+                category: activeTab === 'TO_FULFILL' ? 'PHYSICAL' : activeTab,
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { [sortField]: sortDirection },
-                filter: { _and: filters },
+                term: deferredSearchTerm.trim(),
+                sortBy: sortField,
+                sortOrder: sortDirection,
             },
         };
     }, [activeTab, deferredSearchTerm, page, pageSize, sortDirection, sortField]);
@@ -251,16 +270,16 @@ export function SalesModule() {
     const [transitionFulfillment, { loading: transitioning }] = useMutation<{
         transitionFulfillmentToState: FulfillmentMutationData['addFulfillmentToOrder'];
     }>(TRANSITION_SALES_FULFILLMENT);
-    const orders = data?.orders.items ?? EMPTY_ORDERS;
-    const totalItems = data?.orders.totalItems ?? 0;
+    const orders = data?.orders?.items ?? EMPTY_ORDERS;
+    const totalItems = data?.orders?.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-    const physicalTodoCount = data?.physicalFulfillmentTodoCount ?? 0;
-    const deliveryExceptionCount = data?.fulfillmentDeliveryExceptions.totalItems ?? 0;
+    const physicalTodoCount = data?.orderProcessingCounts?.physical;
+    const deliveryExceptionCount = data?.orderProcessingCounts?.exceptions;
     const selectableOrders = orders.filter(
         order =>
             canManageOrderInChannel(order, data?.activeChannel?.id) &&
             canCreatePhysicalFulfillment(order.state) &&
-            getRemainingPhysicalLines(order).length > 0,
+            getProcessingPhysicalLines(order).length > 0,
     );
     const selectedOrders = selectableOrders.filter(order => selectedOrderIds.includes(order.id));
     const allSelectableChecked =
@@ -308,6 +327,33 @@ export function SalesModule() {
         toggleSort(field, initialDirection);
         setSelectedOrderIds([]);
     };
+    const applyMobileFilters = () => {
+        if (!mobileFilterDraft) return;
+        // Apply the existing URL filter contract atomically; sequential setters would lose one change.
+        setSearchParams(
+            current => {
+                const next = new URLSearchParams(mobileFilterDraft.clearSearch ? undefined : current);
+                const key =
+                    Object.entries(ORDER_TABS).find(([, tab]) => tab === mobileFilterDraft.tab)?.[0] ?? 'all';
+                if (key === 'pending') next.delete('tab');
+                else next.set('tab', key);
+                if (mobileFilterDraft.field === 'orderPlacedAt' && mobileFilterDraft.direction === 'DESC') {
+                    next.delete('sort');
+                    next.delete('direction');
+                } else {
+                    next.set('sort', mobileFilterDraft.field);
+                    next.set('direction', mobileFilterDraft.direction);
+                }
+                if (mobileFilterDraft.clearSearch) next.delete('search');
+                next.delete('page');
+                return next;
+            },
+            { replace: true },
+        );
+        setSelectedOrderIds([]);
+        setActionError('');
+        setMobileFilterDraft(null);
+    };
     const openBatchFulfillment = () => {
         if (selectedOrders.length === 0) return;
         setTrackingCodes(
@@ -344,7 +390,7 @@ export function SalesModule() {
                 const response = await addFulfillment({
                     variables: {
                         input: {
-                            lines: getRemainingPhysicalLines(order),
+                            lines: getProcessingPhysicalLines(order),
                             handler: {
                                 code: 'manual-fulfillment',
                                 arguments: [
@@ -432,15 +478,15 @@ export function SalesModule() {
                 <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
-                            订单与履约
+                            订单处理台
                             <FeatureHelpButton
                                 topic="sales.orders"
                                 title="订单与履约"
-                                description={'集中处理支付状态、实物发货、虚拟交付与交易查询'}
+                                description="先处理待办，再查看付款、交付、售后与通知进度"
                             />
                         </h1>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {canCreateOrder && (
                             <AdminButton
                                 type="button"
@@ -480,7 +526,7 @@ export function SalesModule() {
 
             <nav
                 aria-label="订单状态筛选"
-                className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"
+                className="scrollbar-hidden hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 md:block sm:px-8"
             >
                 <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
@@ -499,7 +545,26 @@ export function SalesModule() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
                 <div className="w-full max-w-none space-y-4">
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <details className="rounded-lg bg-white px-3 text-sm text-slate-600 md:hidden">
+                        <summary className="min-h-11 cursor-pointer py-3">
+                            共 {totalItems} 笔订单 · 运营概览
+                        </summary>
+                        <dl className="grid grid-cols-2 gap-3 pb-3">
+                            <div>
+                                <dt>实物待发货</dt>
+                                <dd className="font-semibold">{physicalTodoCount ?? '—'}</dd>
+                            </div>
+                            <div>
+                                <dt>配送异常 / 逾期</dt>
+                                <dd className="font-semibold">{deliveryExceptionCount ?? '—'}</dd>
+                            </div>
+                            <div className="col-span-2">
+                                <dt>本页可批量发货（未履约实物）</dt>
+                                <dd className="font-semibold">{selectableOrders.length}</dd>
+                            </div>
+                        </dl>
+                    </details>
+                    <div className="hidden grid-cols-2 gap-2 md:grid lg:grid-cols-4">
                         <div className="min-w-0 rounded-lg bg-slate-900 px-3 py-2.5 text-white shadow-sm">
                             <div className="text-[11px] font-medium text-slate-300">当前筛选</div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums">
@@ -513,29 +578,31 @@ export function SalesModule() {
                                 实物待发货
                             </div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-900">
-                                {physicalTodoCount}
+                                {physicalTodoCount ?? '—'}
                             </div>
                             <div className="mt-0.5 text-[11px] text-amber-700">已排除纯虚拟订单</div>
                         </div>
                         <div className="min-w-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
                                 <AlertCircle className="h-3.5 w-3.5" />
-                                配送异常 / 逾期
+                                交付异常 / 通知失败
                             </div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-rose-900">
-                                {deliveryExceptionCount}
+                                {deliveryExceptionCount ?? '—'}
                             </div>
                             <div className="mt-0.5 text-[11px] text-rose-700">需进入订单处理并留证</div>
                         </div>
                         <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
                                 <PackageCheck className="h-3.5 w-3.5" />
-                                本页可批量发货
+                                虚拟待交付
                             </div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-slate-900">
-                                {selectableOrders.length}
+                                {data?.orderProcessingCounts?.digital ?? '—'}
                             </div>
-                            <div className="mt-0.5 text-[11px] text-slate-500">只包含尚未履约的实物明细</div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                                人工成品、卡密与文件交付待办
+                            </div>
                         </div>
                     </div>
 
@@ -586,7 +653,7 @@ export function SalesModule() {
 
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
-                            <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
+                            <div className="relative w-full min-w-0 flex-auto md:flex-1 md:max-w-md">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <SearchInput
                                     value={searchTerm}
@@ -596,7 +663,7 @@ export function SalesModule() {
                                     }}
                                     aria-label="搜索订单"
                                     placeholder="搜索订单号、买家姓氏、邮箱或支付流水号"
-                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
                                     <AdminButton
@@ -604,7 +671,7 @@ export function SalesModule() {
                                         onClick={() => {
                                             setSearchTerm('');
                                         }}
-                                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
+                                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-slate-700"
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
@@ -616,14 +683,16 @@ export function SalesModule() {
                                 <AdminButton
                                     type="button"
                                     onClick={resetFilters}
-                                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                                    className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs md:flex font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
                                     title="清空搜索与筛选条件"
                                 >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                                     <span>重置筛选</span>
                                 </AdminButton>
                             )}
-                            <div className="flex items-center gap-3">
+                            <div
+                                className={`${mobileBatchMode ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-3`}
+                            >
                                 <span className="text-xs text-slate-500">
                                     已选{' '}
                                     <strong className="font-mono text-slate-900">
@@ -645,6 +714,56 @@ export function SalesModule() {
                             </div>
                         </div>
 
+                        <div className="space-y-3 border-b border-slate-200 p-4 md:hidden">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <AdminButton
+                                    type="button"
+                                    onClick={() =>
+                                        setMobileFilterDraft({
+                                            tab: activeTab,
+                                            field: sortField,
+                                            direction: sortDirection,
+                                            clearSearch: false,
+                                        })
+                                    }
+                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+                                >
+                                    筛选与排序
+                                </AdminButton>
+                                {canUpdateOrder && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <AdminButton
+                                            type="button"
+                                            aria-expanded={mobileBatchMode}
+                                            onClick={() => {
+                                                setMobileBatchMode(value => !value);
+                                                setSelectedOrderIds([]);
+                                            }}
+                                            className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+                                        >
+                                            {mobileBatchMode ? '退出批量管理' : '批量管理'}
+                                        </AdminButton>
+                                        {mobileBatchMode && (
+                                            <label className="flex min-h-11 items-center gap-2 text-sm">
+                                                <AdminInput
+                                                    type="checkbox"
+                                                    checked={allSelectableChecked}
+                                                    disabled={selectableOrders.length === 0}
+                                                    onChange={toggleAll}
+                                                />
+                                                本页可发货订单全选
+                                            </label>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                {tabs.find(tab => tab.id === activeTab)?.label} ·{' '}
+                                {ORDER_SORT_OPTIONS.find(option => option.value === sortField)?.label}
+                                {sortDirection === 'ASC' ? '升序' : '降序'}
+                            </p>
+                        </div>
+
                         {loading && !data ? (
                             <div className="space-y-3 p-6" aria-label="正在加载订单">
                                 {[1, 2, 3, 4, 5].map(item => (
@@ -661,301 +780,391 @@ export function SalesModule() {
                             </div>
                         ) : (
                             orders.length > 0 && (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[2180px] border-collapse text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
-                                                <th
-                                                    scope="col"
-                                                    className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
-                                                >
-                                                    <AdminInput
-                                                        type="checkbox"
-                                                        checked={allSelectableChecked}
-                                                        onChange={toggleAll}
-                                                        aria-label="选择本页所有可发货订单"
-                                                        className="h-4 w-4 rounded"
-                                                    />
-                                                </th>
-                                                <SortableTableHeader
-                                                    label="订单号"
-                                                    sortField="code"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    className="sticky left-12 z-20 w-48 whitespace-nowrap bg-slate-50 px-3 py-3"
-                                                />
-                                                <SortableTableHeader
-                                                    label="下单时间"
-                                                    sortField="orderPlacedAt"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    initialDirection="DESC"
-                                                    className="w-40 whitespace-nowrap px-3 py-3"
-                                                />
-                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                    商品类型
-                                                </th>
-                                                <th scope="col" className="w-60 whitespace-nowrap px-3 py-3">
-                                                    商品名称
-                                                </th>
-                                                <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
-                                                    规格
-                                                </th>
-                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
-                                                    SKU
-                                                </th>
-                                                <SortableTableHeader
-                                                    label="购买数量"
-                                                    sortField="totalQuantity"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    initialDirection="DESC"
-                                                    align="center"
-                                                    className="w-24 whitespace-nowrap px-3 py-3 text-center"
-                                                />
-                                                <SortableTableHeader
-                                                    label="买家"
-                                                    sortField="customerLastName"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    className="w-40 whitespace-nowrap px-3 py-3"
-                                                />
-                                                <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
-                                                    联系方式
-                                                </th>
-                                                <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
-                                                    收货地址
-                                                </th>
-                                                <SortableTableHeader
-                                                    label="订单金额"
-                                                    sortField="totalWithTax"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    initialDirection="DESC"
-                                                    className="w-36 whitespace-nowrap px-3 py-3"
-                                                />
-                                                <SortableTableHeader
-                                                    label="订单状态"
-                                                    sortField="state"
-                                                    activeSortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={changeSort}
-                                                    className="w-32 whitespace-nowrap px-3 py-3"
-                                                />
-                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
-                                                    履约状态
-                                                </th>
-                                                <th
-                                                    scope="col"
-                                                    className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
-                                                >
-                                                    操作
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {orders.map(order => {
-                                                const remainingLines = getRemainingPhysicalLines(order);
-                                                const canFulfill =
-                                                    canUpdateOrder &&
-                                                    canManageOrderInChannel(order, data?.activeChannel?.id) &&
-                                                    canCreatePhysicalFulfillment(order.state) &&
-                                                    remainingLines.length > 0;
-                                                const summary = summarizeOrderListItem(order);
-                                                const isSelected = selectedOrderIds.includes(order.id);
-                                                const stickyBackground = isSelected
-                                                    ? 'bg-blue-50'
-                                                    : 'bg-white group-hover:bg-slate-50';
-                                                const kindLabel =
-                                                    summary.fulfillmentKind === 'PHYSICAL'
-                                                        ? '实物'
-                                                        : summary.fulfillmentKind === 'DIGITAL'
-                                                          ? '虚拟'
-                                                          : '混合';
-                                                return (
-                                                    <tr
-                                                        key={order.id}
-                                                        className={`group h-[52px] transition hover:bg-slate-50/80 ${isSelected ? 'bg-blue-50/50' : ''}`}
-                                                    >
-                                                        <td
-                                                            className={`sticky left-0 z-10 h-[52px] w-12 px-3 py-0 ${stickyBackground}`}
+                                <>
+                                    <AdminMobileList ariaLabel="订单摘要列表">
+                                        {orders.map(order => {
+                                            const summary = summarizeOrderListItem(order);
+                                            const canFulfill =
+                                                canUpdateOrder &&
+                                                canManageOrderInChannel(order, data?.activeChannel?.id) &&
+                                                canCreatePhysicalFulfillment(order.state) &&
+                                                getProcessingPhysicalLines(order).length > 0;
+                                            return (
+                                                <AdminMobileRecord
+                                                    key={order.id}
+                                                    title={order.code}
+                                                    status={
+                                                        <span
+                                                            className={`rounded-md border px-2 py-1 text-xs ${getOrderStateClass(order.state)}`}
                                                         >
+                                                            {getOrderStateLabel(order.state)}
+                                                        </span>
+                                                    }
+                                                    selection={
+                                                        mobileBatchMode && canUpdateOrder ? (
                                                             <AdminInput
                                                                 type="checkbox"
-                                                                checked={isSelected}
+                                                                checked={selectedOrderIds.includes(order.id)}
                                                                 disabled={!canFulfill}
                                                                 onChange={() => toggleOrder(order.id)}
                                                                 aria-label={`选择订单 ${order.code}`}
-                                                                title={
-                                                                    canFulfill
-                                                                        ? '选择发货'
-                                                                        : '当前订单没有可发货的实物明细'
-                                                                }
-                                                                className="h-4 w-4 rounded disabled:cursor-not-allowed disabled:opacity-30"
                                                             />
-                                                        </td>
-                                                        <td
-                                                            className={`sticky left-12 z-10 h-[52px] max-w-48 px-3 py-0 ${stickyBackground}`}
+                                                        ) : undefined
+                                                    }
+                                                    actions={
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() =>
+                                                                navigate(`/sales/orders/${order.id}`, {
+                                                                    state: {
+                                                                        returnTo: `${location.pathname}${location.search}`,
+                                                                    },
+                                                                })
+                                                            }
+                                                            className="rounded-lg bg-blue-50 px-3 py-2 font-semibold text-blue-700"
                                                         >
-                                                            <AdminButton
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    navigate(`/sales/orders/${order.id}`, {
-                                                                        state: {
-                                                                            returnTo: `${location.pathname}${location.search}`,
-                                                                        },
-                                                                    })
-                                                                }
-                                                                className="block max-w-44 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
-                                                                title={order.code}
+                                                            {order.processingSummary?.nextAction?.label ||
+                                                                '查看订单'}
+                                                        </AdminButton>
+                                                    }
+                                                >
+                                                    <AdminMobileField label="订单金额">
+                                                        {formatMoney(order.totalWithTax, order.currencyCode)}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="商品数量">
+                                                        {summary.quantity}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="商品" fullWidth>
+                                                        {summary.productName}
+                                                        {summary.additionalLineCount > 0
+                                                            ? ` · 另 ${summary.additionalLineCount} 项`
+                                                            : ''}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="客户">
+                                                        {summary.customerName}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="资金">
+                                                        {order.processingSummary?.paymentLabel ||
+                                                            '付款待核实'}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="交付">
+                                                        {order.processingSummary?.fulfillmentLabel ||
+                                                            '交付待核实'}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="售后">
+                                                        {order.processingSummary?.afterSalesLabel ||
+                                                            '售后待核实'}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="通知">
+                                                        {order.processingSummary
+                                                            ? getDigitalNotificationLabel(
+                                                                  order.processingSummary.lines,
+                                                              )
+                                                            : '通知待核实'}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="联系方式" fullWidth>
+                                                        {summary.contact}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="下单时间" fullWidth>
+                                                        {formatDateTime(
+                                                            order.orderPlacedAt ?? order.createdAt,
+                                                        )}
+                                                    </AdminMobileField>
+                                                    <AdminMobileField label="店铺" fullWidth>
+                                                        {order.salesChannel
+                                                            ? getChannelDisplayName(order.salesChannel)
+                                                            : '归属待核实'}
+                                                    </AdminMobileField>
+                                                </AdminMobileRecord>
+                                            );
+                                        })}
+                                    </AdminMobileList>
+                                    <div className="admin-desktop-table overflow-x-auto">
+                                        <table className="w-full min-w-[1380px] border-collapse text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
+                                                    <th
+                                                        scope="col"
+                                                        className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
+                                                    >
+                                                        <AdminInput
+                                                            type="checkbox"
+                                                            checked={allSelectableChecked}
+                                                            onChange={toggleAll}
+                                                            aria-label="选择本页所有可发货订单"
+                                                            className="h-4 w-4 rounded"
+                                                        />
+                                                    </th>
+                                                    <SortableTableHeader
+                                                        label="订单号"
+                                                        sortField="code"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        className="sticky left-12 z-20 w-48 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                                    />
+                                                    <SortableTableHeader
+                                                        label="下单时间"
+                                                        sortField="orderPlacedAt"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        initialDirection="DESC"
+                                                        className="w-40 whitespace-nowrap px-3 py-3"
+                                                    />
+                                                    <th
+                                                        scope="col"
+                                                        className="w-24 whitespace-nowrap px-3 py-3"
+                                                    >
+                                                        商品类型
+                                                    </th>
+                                                    <th
+                                                        scope="col"
+                                                        className="w-60 whitespace-nowrap px-3 py-3"
+                                                    >
+                                                        商品名称
+                                                    </th>
+                                                    <SortableTableHeader
+                                                        label="购买数量"
+                                                        sortField="totalQuantity"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        initialDirection="DESC"
+                                                        align="center"
+                                                        className="w-24 whitespace-nowrap px-3 py-3 text-center"
+                                                    />
+                                                    <SortableTableHeader
+                                                        label="买家"
+                                                        sortField="customerLastName"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        className="w-40 whitespace-nowrap px-3 py-3"
+                                                    />
+                                                    <SortableTableHeader
+                                                        label="订单金额"
+                                                        sortField="totalWithTax"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        initialDirection="DESC"
+                                                        className="w-36 whitespace-nowrap px-3 py-3"
+                                                    />
+                                                    <SortableTableHeader
+                                                        label="订单状态"
+                                                        sortField="state"
+                                                        activeSortField={sortField}
+                                                        sortDirection={sortDirection}
+                                                        onSort={changeSort}
+                                                        className="w-32 whitespace-nowrap px-3 py-3"
+                                                    />
+                                                    <th
+                                                        scope="col"
+                                                        className="w-64 whitespace-nowrap px-3 py-3"
+                                                    >
+                                                        四项进度 / 下一步
+                                                    </th>
+                                                    <th
+                                                        scope="col"
+                                                        className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                                    >
+                                                        操作
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {orders.map(order => {
+                                                    const remainingLines = getProcessingPhysicalLines(order);
+                                                    const canFulfill =
+                                                        canUpdateOrder &&
+                                                        canManageOrderInChannel(
+                                                            order,
+                                                            data?.activeChannel?.id,
+                                                        ) &&
+                                                        canCreatePhysicalFulfillment(order.state) &&
+                                                        remainingLines.length > 0;
+                                                    const summary = summarizeOrderListItem(order);
+                                                    const isSelected = selectedOrderIds.includes(order.id);
+                                                    const stickyBackground = isSelected
+                                                        ? 'bg-blue-50'
+                                                        : 'bg-white group-hover:bg-slate-50';
+                                                    const kindLabel =
+                                                        summary.fulfillmentKind === 'PHYSICAL'
+                                                            ? '实物'
+                                                            : summary.fulfillmentKind === 'DIGITAL'
+                                                              ? '虚拟'
+                                                              : '混合';
+                                                    return (
+                                                        <tr
+                                                            key={order.id}
+                                                            className={`group h-[52px] transition hover:bg-slate-50/80 ${isSelected ? 'bg-blue-50/50' : ''}`}
+                                                        >
+                                                            <td
+                                                                className={`sticky left-0 z-10 h-[52px] w-12 px-3 py-0 ${stickyBackground}`}
                                                             >
-                                                                {order.code}
-                                                            </AdminButton>
-                                                            <span
-                                                                className="block truncate text-[10px] text-slate-500"
-                                                                title={
-                                                                    order.salesChannel
+                                                                <AdminInput
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    disabled={!canFulfill}
+                                                                    onChange={() => toggleOrder(order.id)}
+                                                                    aria-label={`选择订单 ${order.code}`}
+                                                                    title={
+                                                                        canFulfill
+                                                                            ? '选择发货'
+                                                                            : '当前订单没有可发货的实物明细'
+                                                                    }
+                                                                    className="h-4 w-4 rounded disabled:cursor-not-allowed disabled:opacity-30"
+                                                                />
+                                                            </td>
+                                                            <td
+                                                                className={`sticky left-12 z-10 h-[52px] max-w-48 px-3 py-0 ${stickyBackground}`}
+                                                            >
+                                                                <AdminButton
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        navigate(
+                                                                            `/sales/orders/${order.id}`,
+                                                                            {
+                                                                                state: {
+                                                                                    returnTo: `${location.pathname}${location.search}`,
+                                                                                },
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    className="block max-w-44 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
+                                                                    title={order.code}
+                                                                >
+                                                                    {order.code}
+                                                                </AdminButton>
+                                                                <span
+                                                                    className="block truncate text-[10px] text-slate-500"
+                                                                    title={
+                                                                        order.salesChannel
+                                                                            ? getChannelDisplayName(
+                                                                                  order.salesChannel,
+                                                                              )
+                                                                            : '归属待核实'
+                                                                    }
+                                                                >
+                                                                    {order.salesChannel
                                                                         ? getChannelDisplayName(
                                                                               order.salesChannel,
                                                                           )
-                                                                        : '归属待核实'
-                                                                }
-                                                            >
-                                                                {order.salesChannel
-                                                                    ? getChannelDisplayName(
-                                                                          order.salesChannel,
-                                                                      )
-                                                                    : '归属待核实'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
-                                                            {formatDateTime(
-                                                                order.orderPlacedAt ?? order.createdAt,
-                                                            )}
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                            <span className="inline-flex whitespace-nowrap rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700">
-                                                                {kindLabel}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] max-w-60 px-3 py-0">
-                                                            <div className="flex max-w-56 items-center gap-1 whitespace-nowrap">
+                                                                        : '归属待核实'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                                {formatDateTime(
+                                                                    order.orderPlacedAt ?? order.createdAt,
+                                                                )}
+                                                            </td>
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                                <span className="inline-flex whitespace-nowrap rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700">
+                                                                    {kindLabel}
+                                                                </span>
+                                                            </td>
+                                                            <td className="h-[52px] max-w-60 px-3 py-0">
+                                                                <div className="flex max-w-56 items-center gap-1 whitespace-nowrap">
+                                                                    <span
+                                                                        tabIndex={0}
+                                                                        className="min-w-0 truncate font-semibold text-slate-800 outline-none focus:text-blue-700"
+                                                                        title={summary.productName}
+                                                                        aria-label={summary.productName}
+                                                                    >
+                                                                        {summary.productName}
+                                                                    </span>
+                                                                    {summary.additionalLineCount > 0 && (
+                                                                        <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+                                                                            +{summary.additionalLineCount}项
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0 text-center font-mono font-bold text-slate-800">
+                                                                {summary.quantity}
+                                                            </td>
+                                                            <td className="h-[52px] max-w-40 px-3 py-0">
                                                                 <span
                                                                     tabIndex={0}
-                                                                    className="min-w-0 truncate font-semibold text-slate-800 outline-none focus:text-blue-700"
-                                                                    title={summary.productName}
-                                                                    aria-label={summary.productName}
+                                                                    className="block truncate font-semibold text-slate-900 outline-none focus:text-blue-700"
+                                                                    title={summary.customerName}
+                                                                    aria-label={summary.customerName}
                                                                 >
-                                                                    {summary.productName}
+                                                                    {summary.customerName}
                                                                 </span>
-                                                                {summary.additionalLineCount > 0 && (
-                                                                    <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
-                                                                        +{summary.additionalLineCount}项
-                                                                    </span>
+                                                                <span
+                                                                    className="block truncate text-[10px] text-slate-500"
+                                                                    title={summary.contact}
+                                                                >
+                                                                    {summary.contact}
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
+                                                                {formatMoney(
+                                                                    order.totalWithTax,
+                                                                    order.currencyCode,
                                                                 )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="h-[52px] max-w-48 px-3 py-0">
-                                                            <span
-                                                                tabIndex={0}
-                                                                className="block truncate outline-none focus:text-blue-700"
-                                                                title={summary.specification}
-                                                                aria-label={summary.specification}
+                                                            </td>
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                                <span
+                                                                    className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${getOrderStateClass(order.state)}`}
+                                                                >
+                                                                    {getOrderStateLabel(order.state)}
+                                                                </span>
+                                                            </td>
+                                                            <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                                <span
+                                                                    className={`whitespace-nowrap text-[10px] font-semibold ${summary.remainingPhysicalQuantity > 0 ? 'text-amber-700' : 'text-slate-500'}`}
+                                                                >
+                                                                    {order.processingSummary?.paymentLabel ||
+                                                                        '付款待核实'}{' '}
+                                                                    ·{' '}
+                                                                    {order.processingSummary
+                                                                        ?.fulfillmentLabel || '交付待核实'}
+                                                                </span>
+                                                                <span className="block text-[10px] text-slate-500">
+                                                                    {order.processingSummary
+                                                                        ?.afterSalesLabel ||
+                                                                        '售后待核实'}{' '}
+                                                                    ·{' '}
+                                                                    {order.processingSummary
+                                                                        ? getDigitalNotificationLabel(
+                                                                              order.processingSummary.lines,
+                                                                          )
+                                                                        : '通知待核实'}
+                                                                </span>
+                                                            </td>
+                                                            <td
+                                                                className={`sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 px-3 py-0 text-right ${stickyBackground}`}
                                                             >
-                                                                {summary.specification}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] max-w-40 px-3 py-0">
-                                                            <span
-                                                                tabIndex={0}
-                                                                className="block truncate font-mono text-[10px] text-slate-600 outline-none focus:text-blue-700"
-                                                                title={summary.sku}
-                                                                aria-label={summary.sku}
-                                                            >
-                                                                {summary.sku}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 text-center font-mono font-bold text-slate-800">
-                                                            {summary.quantity}
-                                                        </td>
-                                                        <td className="h-[52px] max-w-40 px-3 py-0">
-                                                            <span
-                                                                tabIndex={0}
-                                                                className="block truncate font-semibold text-slate-900 outline-none focus:text-blue-700"
-                                                                title={summary.customerName}
-                                                                aria-label={summary.customerName}
-                                                            >
-                                                                {summary.customerName}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] max-w-56 px-3 py-0">
-                                                            <span
-                                                                tabIndex={0}
-                                                                className="block truncate text-slate-600 outline-none focus:text-blue-700"
-                                                                title={summary.contact}
-                                                                aria-label={summary.contact}
-                                                            >
-                                                                {summary.contact}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] max-w-72 px-3 py-0">
-                                                            <span
-                                                                tabIndex={0}
-                                                                className="block truncate text-slate-500 outline-none focus:text-blue-700"
-                                                                title={summary.shippingAddress}
-                                                                aria-label={summary.shippingAddress}
-                                                            >
-                                                                {summary.shippingAddress}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
-                                                            {formatMoney(
-                                                                order.totalWithTax,
-                                                                order.currencyCode,
-                                                            )}
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                            <span
-                                                                className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${getOrderStateClass(order.state)}`}
-                                                            >
-                                                                {getOrderStateLabel(order.state)}
-                                                            </span>
-                                                        </td>
-                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                            <span
-                                                                className={`whitespace-nowrap text-[10px] font-semibold ${summary.remainingPhysicalQuantity > 0 ? 'text-amber-700' : 'text-slate-500'}`}
-                                                            >
-                                                                {summary.fulfillmentLabel}
-                                                            </span>
-                                                        </td>
-                                                        <td
-                                                            className={`sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 px-3 py-0 text-right ${stickyBackground}`}
-                                                        >
-                                                            <AdminButton
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    navigate(`/sales/orders/${order.id}`, {
-                                                                        state: {
-                                                                            returnTo: `${location.pathname}${location.search}`,
-                                                                        },
-                                                                    })
-                                                                }
-                                                                className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
-                                                            >
-                                                                查看处理
-                                                            </AdminButton>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                                <AdminButton
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        navigate(
+                                                                            `/sales/orders/${order.id}`,
+                                                                            {
+                                                                                state: {
+                                                                                    returnTo: `${location.pathname}${location.search}`,
+                                                                                },
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
+                                                                >
+                                                                    {order.processingSummary?.nextAction
+                                                                        ?.label || '查看订单'}
+                                                                </AdminButton>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
                             )
                         )}
 
@@ -1001,6 +1210,80 @@ export function SalesModule() {
                     </section>
                 </div>
             </div>
+
+            {mobileFilterDraft && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 sm:items-center">
+                    <AccessibleDialogSurface
+                        accessibleName="订单筛选与排序"
+                        onRequestClose={() => setMobileFilterDraft(null)}
+                        mobilePresentation="sheet"
+                        className="w-full max-w-lg rounded-xl bg-white p-4 shadow-xl"
+                    >
+                        <h2 className="mb-4 text-base font-semibold">订单筛选与排序</h2>
+                        <div className="space-y-4">
+                            <AdminField label="订单状态">
+                                <AdminSelect
+                                    value={mobileFilterDraft.tab}
+                                    onChange={event =>
+                                        setMobileFilterDraft({
+                                            ...mobileFilterDraft,
+                                            tab: event.target.value as OrderTab,
+                                        })
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                                >
+                                    {tabs.map(tab => (
+                                        <option key={tab.id} value={tab.id}>
+                                            {tab.label}
+                                        </option>
+                                    ))}
+                                </AdminSelect>
+                            </AdminField>
+                            <AdminMobileSort
+                                fields={ORDER_SORT_OPTIONS}
+                                sortField={mobileFilterDraft.field}
+                                sortDirection={mobileFilterDraft.direction}
+                                onSort={(field, direction) =>
+                                    setMobileFilterDraft({ ...mobileFilterDraft, field, direction })
+                                }
+                            />
+                            {mobileFilterDraft.clearSearch && (
+                                <p className="text-xs text-slate-500">应用后清空搜索并恢复默认条件。</p>
+                            )}
+                        </div>
+                        <footer className="mt-5 flex flex-wrap justify-end gap-2">
+                            <AdminButton
+                                type="button"
+                                onClick={() =>
+                                    setMobileFilterDraft({
+                                        tab: 'ALL',
+                                        field: 'orderPlacedAt',
+                                        direction: 'DESC',
+                                        clearSearch: true,
+                                    })
+                                }
+                                className="mr-auto rounded-lg border border-slate-300 px-3 py-2"
+                            >
+                                重置
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                onClick={() => setMobileFilterDraft(null)}
+                                className="rounded-lg border border-slate-300 px-3 py-2"
+                            >
+                                取消
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                onClick={applyMobileFilters}
+                                className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white"
+                            >
+                                应用
+                            </AdminButton>
+                        </footer>
+                    </AccessibleDialogSurface>
+                </div>
+            )}
 
             {canUpdateOrder && isBatchOpen && (
                 <div
@@ -1057,22 +1340,27 @@ export function SalesModule() {
                             <div className="space-y-2">
                                 <div className="text-xs font-semibold text-slate-700">订单与运单号</div>
                                 {selectedOrders.map(order => (
-                                    <label
+                                    <AdminField
                                         key={order.id}
                                         className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_1.2fr] sm:items-center"
+                                        label={
+                                            <>
+                                                <span>
+                                                    <span className="block font-mono text-xs font-semibold text-slate-900">
+                                                        {order.code}
+                                                    </span>
+                                                    <span className="mt-0.5 block text-[10px] text-slate-500">
+                                                        {getProcessingPhysicalLines(order).reduce(
+                                                            (sum, line) => sum + line.quantity,
+                                                            0,
+                                                        )}{' '}
+                                                        件实物
+                                                    </span>
+                                                </span>
+                                            </>
+                                        }
                                     >
-                                        <span>
-                                            <span className="block font-mono text-xs font-semibold text-slate-900">
-                                                {order.code}
-                                            </span>
-                                            <span className="mt-0.5 block text-[10px] text-slate-500">
-                                                {getRemainingPhysicalLines(order).reduce(
-                                                    (sum, line) => sum + line.quantity,
-                                                    0,
-                                                )}{' '}
-                                                件实物
-                                            </span>
-                                        </span>
+                                        {' '}
                                         <AdminInput
                                             value={trackingCodes[order.id] ?? ''}
                                             onChange={event =>
@@ -1084,7 +1372,7 @@ export function SalesModule() {
                                             placeholder="填写该订单真实运单号"
                                             className="rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                         />
-                                    </label>
+                                    </AdminField>
                                 ))}
                             </div>
                             {batchProgress && (

@@ -913,8 +913,8 @@ export function CategoriesModule() {
                     />
                 )}
                 <div
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 ${isTopLevel ? 'shadow-2xs' : ''}`}
-                    style={{ marginLeft: Math.min(depth, 3) * 20 }}
+                    className={`flex min-h-12 flex-col items-stretch justify-between sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 ${isTopLevel ? 'shadow-2xs' : ''}`}
+                    style={{ marginLeft: `calc(${Math.min(depth, 3)} * min(3vw, 20px))` }}
                 >
                     <div className="flex min-w-0 items-center gap-2">
                         <AdminInput
@@ -933,7 +933,7 @@ export function CategoriesModule() {
                             aria-label={`拖动分类 ${node.name} 排序`}
                             aria-keyshortcuts="ArrowUp ArrowDown"
                             title={locked ? '同级至少需要2个分类才可排序' : '拖拽排序，也可使用上下方向键'}
-                            className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
+                            className="hidden md:flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
                             onDragStart={event => {
                                 if (locked) {
                                     event.preventDefault();
@@ -994,7 +994,7 @@ export function CategoriesModule() {
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
                                 <span
-                                    className="truncate text-sm font-bold text-slate-900"
+                                    className="break-words text-sm font-bold text-slate-900 sm:truncate"
                                     title={`/${node.slug}`}
                                 >
                                     {node.name}
@@ -1010,8 +1010,32 @@ export function CategoriesModule() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-                        <span className="hidden text-xs text-slate-500 sm:inline">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+                        <AdminButton
+                            type="button"
+                            className="md:hidden"
+                            disabled={locked || index === 0}
+                            aria-label={`上移分类 ${node.name}`}
+                            onClick={() => {
+                                const adjacent = siblings[index - 1];
+                                if (adjacent) void handleReorder(node.id, adjacent.id, 'before', siblings);
+                            }}
+                        >
+                            上移
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            className="md:hidden"
+                            disabled={locked || index === siblings.length - 1}
+                            aria-label={`下移分类 ${node.name}`}
+                            onClick={() => {
+                                const adjacent = siblings[index + 1];
+                                if (adjacent) void handleReorder(node.id, adjacent.id, 'after', siblings);
+                            }}
+                        >
+                            下移
+                        </AdminButton>
+                        <span className="text-xs text-slate-500">
                             <strong className="font-mono text-slate-800">{node.productVariantCount}</strong>{' '}
                             个 SKU
                         </span>
@@ -1092,7 +1116,22 @@ export function CategoriesModule() {
             <CatalogTemplateLibraryPanel key={data?.activeChannel.id} onClaimed={() => void refetch()} />
 
             {!standalonePage && (
-                <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
+                <div className="px-4 py-3 md:hidden">
+                    <AdminField label="分类管理章节">
+                        <AdminSelect
+                            aria-label="分类管理章节"
+                            value={activeTab}
+                            onChange={event => setActiveTab(event.target.value as typeof activeTab)}
+                        >
+                            <option value="CATEGORIES">商品分类树</option>
+                            <option value="OPTION_TEMPLATES">规格选项模板</option>
+                            <option value="FACETS">筛选属性与标签</option>
+                        </AdminSelect>
+                    </AdminField>
+                </div>
+            )}
+            {!standalonePage && (
+                <div className="scrollbar-hidden hidden md:flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
                     {(
                         [
                             [
@@ -1261,7 +1300,7 @@ export function CategoriesModule() {
                                     >
                                         <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
                                             <div className="min-w-0">
-                                                <div className="truncate text-sm font-bold text-slate-900">
+                                                <div className="break-words text-sm font-bold text-slate-900 sm:truncate">
                                                     {group.name}
                                                 </div>
                                                 <AdminButton

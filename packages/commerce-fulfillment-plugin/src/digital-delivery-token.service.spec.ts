@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
 
 const secret = '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b';
-const fixtureRoot = path.resolve(process.cwd(), '../../reports/pending-migrations-20260913/fixtures');
+const fixtureRoot = path.resolve(process.cwd(), 'reports/digital-candidate-tests/fixtures');
 const directories: string[] = [];
 function temporaryDirectory(prefix: string): string {
     mkdirSync(fixtureRoot, { recursive: true });

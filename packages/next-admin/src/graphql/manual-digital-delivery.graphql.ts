@@ -2,12 +2,15 @@ import { gql } from '@apollo/client';
 
 export interface ManualDeliveryRecord {
     id: string;
+    updatedAt?: string;
     state:
         'WAITING_PROCESSING' | 'DRAFT' | 'SENDING' | 'SENT' | 'EMAIL_FAILED' | 'MANUAL_REVIEW' | 'CANCELLED';
     recipientEmail: string;
     productName: string;
     sku: string;
     quantity: number;
+    eligibleQuantity?: number;
+    hasContent: boolean;
     expectedAt: string;
     overdue: boolean;
     attemptCount: number;
@@ -19,7 +22,7 @@ export interface ManualDeliveryRecord {
         createdAt: string;
         note: string;
     }>;
-    packages: Array<{
+    packages?: Array<{
         fields: Array<{ key: string; label: string; value: string; secret: boolean }>;
         note: string;
         attachmentAssetIds: string[];
@@ -29,11 +32,14 @@ export interface ManualDeliveryRecord {
 const LIST_FIELDS = gql`
     fragment NextAdminManualDeliveryListFields on ManualDigitalDelivery {
         id
+        updatedAt
         state
         recipientEmail
         productName
         sku
         quantity
+        eligibleQuantity
+        hasContent
         expectedAt
         overdue
         attemptCount
@@ -49,16 +55,6 @@ const LIST_FIELDS = gql`
 const DETAIL_FIELDS = gql`
     fragment NextAdminManualDeliveryDetailFields on ManualDigitalDelivery {
         ...NextAdminManualDeliveryListFields
-        packages {
-            fields {
-                key
-                label
-                value
-                secret
-            }
-            note
-            attachmentAssetIds
-        }
         events {
             id
             createdAt
@@ -66,6 +62,25 @@ const DETAIL_FIELDS = gql`
         }
     }
     ${LIST_FIELDS}
+`;
+
+export const REVEAL_MANUAL_DELIVERY = gql`
+    mutation NextAdminRevealManualDelivery($id: ID!) {
+        revealMyManualDigitalDelivery(id: $id) {
+            ...NextAdminManualDeliveryDetailFields
+            packages {
+                fields {
+                    key
+                    label
+                    value
+                    secret
+                }
+                note
+                attachmentAssetIds
+            }
+        }
+    }
+    ${DETAIL_FIELDS}
 `;
 
 export const GET_MANUAL_DELIVERIES = gql`
@@ -94,6 +109,10 @@ export const SAVE_MANUAL_DELIVERY_DRAFT = gql`
         saveManualDigitalDeliveryDraft(input: $input) {
             id
             state
+            updatedAt
+            hasContent
+            quantity
+            eligibleQuantity
         }
     }
 `;
@@ -103,6 +122,23 @@ export const PUBLISH_MANUAL_DELIVERY = gql`
         publishManualDigitalDelivery(input: $input) {
             id
             state
+            updatedAt
+            hasContent
+            quantity
+            eligibleQuantity
+        }
+    }
+`;
+
+export const APPEND_MANUAL_DELIVERY = gql`
+    mutation NextAdminAppendManualDelivery($input: SaveManualDigitalDeliveryInput!) {
+        appendManualDigitalDelivery(input: $input) {
+            id
+            state
+            updatedAt
+            hasContent
+            quantity
+            eligibleQuantity
         }
     }
 `;

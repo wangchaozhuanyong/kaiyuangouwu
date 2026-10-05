@@ -22,6 +22,7 @@ import { assertFound, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { OrderLine } from '../../entity/order-line/order-line.entity';
+import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { StockLocation } from '../../entity/stock-location/stock-location.entity';
 import { EventBus, StockLocationEvent } from '../../event-bus/index';
@@ -42,6 +43,19 @@ import { RoleService } from './role.service';
 @Injectable()
 @Instrument()
 export class StockLocationService {
+    async supportsStockLocations(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        operation: 'flow' | 'create' | 'adjust' = 'flow',
+    ): Promise<boolean> {
+        return (
+            (await this.configService.catalogOptions.stockLocationStrategy.supportsStockLocations?.(
+                ctx,
+                variant,
+                operation,
+            )) ?? true
+        );
+    }
     constructor(
         private requestContextService: RequestContextService,
         private connection: TransactionalConnection,

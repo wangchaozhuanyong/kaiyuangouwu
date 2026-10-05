@@ -7,7 +7,7 @@ import { DigitalDeliveryService } from './digital-delivery.service';
 
 const secret = '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b';
 const directories: string[] = [];
-const fixtureRoot = path.resolve(process.cwd(), '../../reports/pending-migrations-20260913/fixtures');
+const fixtureRoot = path.resolve(process.cwd(), 'reports/digital-candidate-tests/fixtures');
 const channelId = 'channel-1';
 const requestHost = 'shop-a.test';
 const ctx = {
@@ -69,6 +69,20 @@ function createService(order: any) {
 }
 
 describe('DigitalDeliveryService', () => {
+    it('checks file readiness for worker metadata without an HTTP host or a signed URL', async () => {
+        const order = digitalOrder();
+        const { service } = createService(order);
+        const item = (
+            await service.deliveriesForOrder({ ...ctx, req: undefined }, order.id, { metadataOnly: true })
+        )[0];
+        expect(item).toMatchObject({ orderLineId: 'line-1', status: 'READY' });
+        expect(item.downloadUrl).toBeUndefined();
+        expect(item.expiresAt).toBeUndefined();
+        expect((await service.deliveriesForOrder({ ...ctx, req: undefined }, order.id))[0].status).toBe(
+            'NOT_CONFIGURED',
+        );
+    });
+
     it.each(['cancelled', 'zero-quantity', 'full-refund', 'pending-refund', 'refunded-line'])(
         'revokes existing links and stops issuance after %s',
         async change => {
@@ -84,7 +98,7 @@ describe('DigitalDeliveryService', () => {
                     {
                         state: change === 'pending-refund' ? 'Pending' : 'Settled',
                         total: change === 'refunded-line' ? 50 : 100,
-                        lines: change === 'refunded-line' ? [{ orderLineId: 'line-1', quantity: 1 }] : [],
+                        lines: [{ orderLineId: 'line-1', quantity: 1 }],
                     },
                 ];
             expect((await service.deliveriesForOrder(ctx, order.id))[0].downloadUrl).toBeUndefined();
@@ -120,7 +134,7 @@ describe('DigitalDeliveryService', () => {
     });
 
     it('revalidates the order line and payment before authorizing a download', async () => {
-        const { service } = createService(digitalOrder('Authorized'));
+        const { service } = createService(digitalOrder('Settled'));
         const [delivery] = await service.deliveriesForOrder(ctx, 'order-1');
         const token = delivery?.downloadUrl?.split('/').at(-1);
         if (!token) {
@@ -140,7 +154,7 @@ describe('DigitalDeliveryService', () => {
         await expect(service.authorizeDownload(token, 'shop-b.test')).resolves.toBeUndefined();
         await expect(service.authorizeDownload(`${token}x`, requestHost)).resolves.toBeUndefined();
 
-        const order = digitalOrder('Authorized');
+        const order = digitalOrder('Settled');
         order.salesChannelId = 'channel-2';
         const crossChannel = createService(order);
         await expect(crossChannel.service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();

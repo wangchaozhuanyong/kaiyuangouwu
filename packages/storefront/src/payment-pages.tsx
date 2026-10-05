@@ -1,25 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import {
-    Check,
-    CircleAlert,
-    CircleCheck,
-    Copy,
-    Download,
-    Gift,
-    House,
-    Package,
-    ShieldCheck,
-    WalletCards,
-} from 'lucide-react';
+import { Check, CircleAlert, CircleCheck, Copy, Gift, House, Package, WalletCards } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
-import { orderStateDisplayLabel } from '../../common/src/display-localization';
-
 import { ShopApi } from './api';
+import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
+import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability } from './payment-readiness';
@@ -28,6 +17,7 @@ import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { customerOrderStateLabel } from './storefront-ui/order-ui';
 import { EmptyState, InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
 import './styles/checkout-payment-surfaces.css';
 import './styles/order-aftercare.css';
@@ -41,7 +31,7 @@ import {
     StorefrontUsdtCheckoutQuote,
 } from './types';
 
-type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' };
+type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' | 'pending' };
 const referralCurrencyBadgeClassName =
     'grid min-h-11 place-items-center rounded-xl border border-amber-200 bg-white px-3 type-body weight-bold text-amber-700';
 
@@ -823,6 +813,9 @@ export function OrderConfirmationPage({
             : null;
     const usdtReceipt = order ? usdtPaymentReceipt(order) : null;
     const isTestOrder = order?.state === 'TestPaymentSettled';
+    const needsAdditionalPayment = order?.state === 'ArrangingAdditionalPayment';
+    const isBeingModified = order?.state === 'Modifying';
+    const isCancelled = order?.state === 'Cancelled';
     const loading = Boolean(
         code &&
         confirmationToken &&
@@ -879,7 +872,11 @@ export function OrderConfirmationPage({
         <main className="page subpage order-confirmation-page">
             <section className="order-confirmation-hero">
                 <span className="order-confirmation-icon">
-                    <CircleCheck aria-hidden="true" />
+                    {needsAdditionalPayment || isBeingModified || isCancelled ? (
+                        <CircleAlert aria-hidden="true" />
+                    ) : (
+                        <CircleCheck aria-hidden="true" />
+                    )}
                 </span>
                 <p>{isTestOrder ? (isZh ? '测试订单' : 'Test order') : isZh ? '订单状态' : 'Order status'}</p>
                 <h1>
@@ -887,18 +884,42 @@ export function OrderConfirmationPage({
                         ? isZh
                             ? '测试支付成功'
                             : 'Test payment complete'
-                        : isZh
-                          ? '订单提交成功'
-                          : 'Order confirmed'}
+                        : needsAdditionalPayment
+                          ? isZh
+                              ? '订单待补款'
+                              : 'Additional payment needed'
+                          : isBeingModified
+                            ? isZh
+                                ? '商家正在调整订单'
+                                : 'The merchant is updating your order'
+                            : isCancelled
+                              ? isZh
+                                  ? '订单已取消'
+                                  : 'Order cancelled'
+                              : isZh
+                                ? '订单提交成功'
+                                : 'Order confirmed'}
                 </h1>
                 <span>
                     {isTestOrder
                         ? isZh
                             ? '测试付款和订单流程已完成，未真实扣款、发货或扣库存，不计入收入和返利。'
                             : 'Test checkout is complete. No real charge, delivery, stock deduction, revenue or rewards.'
-                        : isZh
-                          ? '支付状态已更新，请保留订单号。'
-                          : 'The payment status has been updated. Keep your order number.'}
+                        : needsAdditionalPayment
+                          ? isZh
+                              ? '订单金额已调整，请核对下方补款金额与支付方式后确认支付。'
+                              : 'Your order total changed. Review the additional amount and payment method before confirming.'
+                          : isBeingModified
+                            ? isZh
+                                ? '请等待商家结束修改，订单会显示更新后的处理状态。'
+                                : 'Wait for the merchant to finish the update and check the order status.'
+                            : isCancelled
+                              ? isZh
+                                  ? '交付已停止。如已付款，请查看退款进度或联系商家。'
+                                  : 'Delivery has stopped. If you paid, check the refund status or contact the merchant.'
+                              : isZh
+                                ? '支付状态已更新，请保留订单号。'
+                                : 'The payment status has been updated. Keep your order number.'}
                 </span>
             </section>
             <section className="order-confirmation-summary">
@@ -909,7 +930,7 @@ export function OrderConfirmationPage({
                     </div>
                     <div>
                         <dt>{isZh ? '订单状态' : 'Status'}</dt>
-                        <dd>{orderStateLabel(order.state, language)}</dd>
+                        <dd>{customerOrderStateLabel(order, language)}</dd>
                     </div>
                     <div>
                         <dt>
@@ -918,8 +939,8 @@ export function OrderConfirmationPage({
                                     ? '模拟金额'
                                     : 'Simulated total'
                                 : isZh
-                                  ? '支付金额'
-                                  : 'Payment total'}
+                                  ? '订单金额'
+                                  : 'Order total'}
                         </dt>
                         <dd>
                             {usdtReceipt
@@ -940,73 +961,23 @@ export function OrderConfirmationPage({
                         : 'Keep your order number. Guest access through this link is available for a limited time.'}
                 </small>
             </section>
-            {!isTestOrder && !!order.digitalDeliveries?.length && (
-                <section className="digital-delivery-panel order-confirmation-downloads">
-                    <header>
-                        <div>
-                            <Download aria-hidden="true" />
-                            <strong>{isZh ? '数字商品交付' : 'Digital delivery'}</strong>
-                        </div>
-                        <small>
-                            {isZh
-                                ? '请立即保存内容；过期后可从订单详情生成新链接'
-                                : 'Save your files now. New links are available from order details.'}
-                        </small>
-                    </header>
-                    <div>
-                        {order.digitalDeliveries.map(delivery => (
-                            <article key={delivery.orderLineId}>
-                                <span>
-                                    <strong>{delivery.name}</strong>
-                                </span>
-                                {delivery.status === 'READY' && delivery.downloadUrl ? (
-                                    <a href={delivery.downloadUrl} rel="noreferrer">
-                                        <Download aria-hidden="true" />
-                                        {isZh ? '下载' : 'Download'}
-                                    </a>
-                                ) : (
-                                    <em>
-                                        {delivery.status === 'PAYMENT_REQUIRED'
-                                            ? isZh
-                                                ? '当前不可领取，请检查支付或退款状态'
-                                                : 'Unavailable. Check payment or refund status.'
-                                            : isZh
-                                              ? '内容准备中'
-                                              : 'Content is being prepared'}
-                                    </em>
-                                )}
-                            </article>
-                        ))}
-                    </div>
-                </section>
+            {!isTestOrder && orderHasDigitalDelivery(order) && (
+                <DigitalReceiptPanel
+                    api={api}
+                    order={order}
+                    language={language}
+                    market={market}
+                    confirmationToken={confirmationToken}
+                />
             )}
-            {!isTestOrder && !!order.autoCardDeliveries?.length && (
-                <section className="digital-delivery-panel auto-card-delivery-panel">
-                    <header>
-                        <div>
-                            <ShieldCheck aria-hidden="true" />
-                            <strong>{isZh ? '邮箱自动发卡' : 'Automatic email delivery'}</strong>
-                        </div>
-                        <small>
-                            {isZh
-                                ? '系统会按号池顺序发送到下单邮箱，请同时检查垃圾邮件。'
-                                : 'Credentials are assigned in sequence and sent to the checkout email.'}
-                        </small>
-                    </header>
-                    <div>
-                        {order.autoCardDeliveries.map(delivery => (
-                            <article key={delivery.id}>
-                                <span>
-                                    <strong>{delivery.productName}</strong>
-                                    <small>
-                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
-                                    </small>
-                                </span>
-                                <em>{confirmationAutoCardStatus(delivery.state, language)}</em>
-                            </article>
-                        ))}
-                    </div>
-                </section>
+            {!isTestOrder && (
+                <OrderAdditionalPaymentPanel
+                    api={api}
+                    order={order}
+                    market={market}
+                    language={language}
+                    confirmationToken={confirmationToken}
+                />
             )}
             <div className="order-confirmation-actions">
                 <button type="button" className="primary-action" onClick={() => navigateTo({ name: 'home' })}>
@@ -1017,7 +988,15 @@ export function OrderConfirmationPage({
                     <button
                         type="button"
                         onClick={() =>
-                            navigateTo({ name: 'orders', tab: isTestOrder ? undefined : 'shipping' })
+                            navigateTo({
+                                name: 'orders',
+                                tab:
+                                    isTestOrder || isCancelled || isBeingModified
+                                        ? undefined
+                                        : needsAdditionalPayment
+                                          ? 'pending'
+                                          : 'shipping',
+                            })
                         }
                     >
                         <Package aria-hidden="true" />
@@ -1027,20 +1006,6 @@ export function OrderConfirmationPage({
             </div>
         </main>
     );
-}
-
-function confirmationAutoCardStatus(
-    state: NonNullable<Order['autoCardDeliveries']>[number]['state'],
-    language: StorefrontLanguage,
-): string {
-    const labels = {
-        WAITING_STOCK: language === 'zh' ? '等待补货，商家已收到告警' : 'Waiting for stock',
-        ALLOCATED: language === 'zh' ? '已取号，准备发送' : 'Credentials allocated',
-        RETRYING: language === 'zh' ? '邮件发送重试中' : 'Email delivery retrying',
-        SENT: language === 'zh' ? '已发送到下单邮箱' : 'Sent to checkout email',
-        MANUAL_REVIEW: language === 'zh' ? '发送异常，已转人工处理' : 'Delivery needs manual review',
-    };
-    return labels[state];
 }
 
 function shippingEstimate(order: Order, language: StorefrontLanguage): string {
@@ -1095,4 +1060,3 @@ function usdtQuoteDescription(
         ? `1 USDT = ${rate}，有效至 ${expiry}`
         : `1 USDT = ${rate}, valid until ${expiry}`;
 }
-const orderStateLabel = orderStateDisplayLabel;

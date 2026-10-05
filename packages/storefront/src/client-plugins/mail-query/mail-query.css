@@ -525,7 +525,8 @@
     color: var(--primary-ink);
 }
 
-.mail-query-page .auto-refresh-box {
+.mail-query-page .mail-live-controls {
+    flex-wrap: wrap;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -534,31 +535,35 @@
     color: var(--text-secondary);
     background: var(--soft);
     border: 0;
-    padding: 6px 12px;
+    padding: 0 8px;
     border-radius: var(--radius-sm);
 }
 
 .mail-query-page .switch-toggle {
     position: relative;
     display: inline-block;
-    width: 34px;
-    height: 18px;
+    width: var(--experience-control-min);
+    height: var(--experience-control-min);
 }
 
 .mail-query-page .switch-toggle input {
     opacity: 0;
-    width: 0;
-    height: 0;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
 }
 
 .mail-query-page .slider {
     position: absolute;
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #cbd5e1;
+    top: 13px;
+    left: 5px;
+    width: 34px;
+    height: 18px;
+    background-color: var(--muted);
     transition:
         color var(--experience-motion-fast) var(--experience-ease-standard),
         background-color var(--experience-motion-fast) var(--experience-ease-standard),
@@ -576,7 +581,7 @@
     width: 14px;
     left: 2px;
     bottom: 2px;
-    background-color: white;
+    background-color: var(--surface);
     transition:
         color var(--experience-motion-fast) var(--experience-ease-standard),
         background-color var(--experience-motion-fast) var(--experience-ease-standard),
@@ -592,7 +597,13 @@
 }
 
 .mail-query-page input:checked + .slider:before {
+    background-color: var(--accent-foreground);
     transform: translateX(16px);
+}
+
+.mail-query-page .switch-toggle input:focus-visible + .slider {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .mail-query-page .result-summary-card {
@@ -1039,4 +1050,9 @@
 .mail-query-page :is(button, a, summary):focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+}
+
+.mail-query-page .mail-stream-status {
+    color: var(--text-secondary);
+    max-width: 28ch;
 }

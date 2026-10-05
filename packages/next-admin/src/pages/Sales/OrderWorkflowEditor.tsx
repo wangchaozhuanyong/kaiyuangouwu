@@ -11,10 +11,12 @@ import {
     Trash2,
     UserRound,
 } from 'lucide-react';
-import { useDeferredValue, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useDeferredValue, useMemo, useRef, useState, type SetStateAction } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { sensitiveActionContext } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -22,6 +24,7 @@ import {
     ADJUST_DRAFT_ORDER_LINE,
     APPLY_DRAFT_ORDER_COUPON,
     DELETE_DRAFT_ORDER,
+    FINISH_ORDER_MODIFICATION,
     GET_DRAFT_ORDER_SHIPPING_METHODS,
     GET_SALES_ORDER,
     MODIFY_SALES_ORDER,
@@ -37,6 +40,7 @@ import {
 } from '../../graphql/sales.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useAdminReturn } from '../../hooks/use-admin-return';
+import { useServerDraft } from '../../hooks/use-server-draft';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -44,7 +48,9 @@ import {
     formatMoney,
     getMutationError,
     getOrderStateLabel,
+    isSimulatedPayment,
     majorInputToMoney,
+    type OrderProcessingSummary,
 } from './sales-utils';
 
 interface ResultPayload {
@@ -87,6 +93,8 @@ interface WorkflowPayment {
 interface WorkflowOrder {
     salesChannel: { id: string; code: string } | null;
     id: string;
+    updatedAt: string;
+    processingSummary?: OrderProcessingSummary | null;
     code: string;
     state: string;
     nextStates: string[];
@@ -230,7 +238,9 @@ function VariantSearch({
                                 <strong className="block truncate text-xs text-slate-900">
                                     {variant.name}
                                 </strong>
-                                <span className="font-mono text-[10px] text-slate-400">{variant.sku}</span>
+                                <span className="break-all font-mono text-[10px] text-slate-400">
+                                    {variant.sku}
+                                </span>
                             </span>
                             <span className="shrink-0 font-mono text-xs text-slate-700">
                                 {formatMoney(variant.price, variant.currencyCode || currencyCode)}
@@ -576,7 +586,7 @@ export function DraftOrderEditor() {
                                                 <strong className="block truncate text-xs text-slate-900">
                                                     {line.productVariant.name}
                                                 </strong>
-                                                <span className="font-mono text-[10px] text-slate-400">
+                                                <span className="break-all font-mono text-[10px] text-slate-400">
                                                     {line.productVariant.sku} ·{' '}
                                                     {formatMoney(line.unitPriceWithTax, order.currencyCode)}
                                                 </span>
@@ -866,6 +876,8 @@ interface PreviewOrder {
 export function ModifyOrderEditor() {
     const { id } = useParams<{ id: string }>();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const afterSalesId = searchParams.get('afterSalesId') || undefined;
     const navigate = useNavigate();
     const { returnToList } = useAdminReturn('/sales/orders');
     const requestConfirmation = useConfirmDialog();
@@ -873,16 +885,53 @@ export function ModifyOrderEditor() {
         variables: { id },
         skip: !id,
     });
-    const [adjustments, setAdjustments] = useState<Record<string, number>>({});
-    const [addedItems, setAddedItems] = useState<Record<string, { variant: VariantItem; quantity: number }>>(
-        {},
+    const order = orderQuery.data?.order;
+    type ModificationDraft = {
+        adjustments: Record<string, number>;
+        addedItems: Record<string, { variant: VariantItem; quantity: number }>;
+        surcharges: SurchargeDraft[];
+        note: string;
+    };
+    const emptyDraft: ModificationDraft = { adjustments: {}, addedItems: {}, surcharges: [], note: '' };
+    const modificationDraft = useServerDraft<ModificationDraft>(
+        order?.id ?? '',
+        order ? JSON.stringify([order.updatedAt, order.totalWithTax, order.lines]) : '',
+        order ? emptyDraft : null,
     );
-    const [surcharges, setSurcharges] = useState<SurchargeDraft[]>([]);
-    const [note, setNote] = useState('');
+    const { adjustments, addedItems, surcharges, note } = modificationDraft.draft ?? emptyDraft;
+    const setField = <K extends keyof ModificationDraft>(
+        field: K,
+        value: SetStateAction<ModificationDraft[K]>,
+    ) =>
+        modificationDraft.setDraft(current => {
+            const previous = current ?? emptyDraft;
+            return {
+                ...previous,
+                [field]:
+                    typeof value === 'function'
+                        ? (value as (stored: ModificationDraft[K]) => ModificationDraft[K])(previous[field])
+                        : value,
+            };
+        });
+    const setAdjustments = (value: SetStateAction<ModificationDraft['adjustments']>) =>
+        setField('adjustments', value);
+    const setAddedItems = (value: SetStateAction<ModificationDraft['addedItems']>) =>
+        setField('addedItems', value);
+    const setSurcharges = (value: SetStateAction<ModificationDraft['surcharges']>) =>
+        setField('surcharges', value);
+    const setNote = (value: SetStateAction<string>) => setField('note', value);
     const [preview, setPreview] = useState<PreviewOrder | null>(null);
     const [actionError, setActionError] = useState('');
     const [modifyOrder, modifyState] = useMutation<{ modifyOrder: PreviewOrder }>(MODIFY_SALES_ORDER);
-    const order = orderQuery.data?.order;
+    const [finishModification, finishState] = useMutation<{ finishOrderModification: ResultPayload }>(
+        FINISH_ORDER_MODIFICATION,
+    );
+    const [modificationSaved, setModificationSaved] = useState(false);
+    const [submissionUncertain, setSubmissionUncertain] = useState(false);
+    const [modificationPassword, setModificationPassword] = useState('');
+    const modificationRefundAttempt = useRef<{ signature: string; keys: Record<string, string> } | null>(
+        null,
+    );
 
     const changedLines = useMemo(
         () => order?.lines.filter(line => Object.prototype.hasOwnProperty.call(adjustments, line.id)) ?? [],
@@ -939,7 +988,13 @@ export function ModifyOrderEditor() {
 
     const buildInput = (
         dryRun: boolean,
-        refunds?: Array<{ paymentId: string; amount: number; reason: string }>,
+        refunds?: Array<{
+            paymentId: string;
+            amount: number;
+            reason: string;
+            idempotencyKey?: string;
+            afterSalesId?: string;
+        }>,
     ) => {
         if (!order) return null;
         return {
@@ -966,6 +1021,7 @@ export function ModifyOrderEditor() {
     };
 
     const handlePreview = async () => {
+        if (modificationDraft.sourceChanged || modificationSaved || submissionUncertain) return;
         if (!order || !hasChanges) {
             setActionError('请先调整商品数量、添加商品或附加费用');
             return;
@@ -983,7 +1039,10 @@ export function ModifyOrderEditor() {
             return;
         }
         try {
-            const response = await modifyOrder({ variables: { input: buildInput(true) } });
+            const response = await modifyOrder({
+                variables: { input: buildInput(true) },
+                fetchPolicy: 'no-cache',
+            });
             const result = response.data?.modifyOrder;
             if (result?.__typename !== 'Order') throw new Error(getMutationError(result));
             setPreview(result);
@@ -996,16 +1055,47 @@ export function ModifyOrderEditor() {
     const allocateRefunds = (amount: number) => {
         if (!order) return [];
         let remaining = amount;
-        const allocations: Array<{ paymentId: string; amount: number; reason: string }> = [];
+        const signature = JSON.stringify([
+            order.id,
+            amount,
+            note.trim(),
+            adjustments,
+            Object.values(addedItems).map(item => [item.variant.id, item.quantity]),
+            surcharges,
+            afterSalesId,
+        ]);
+        if (modificationRefundAttempt.current?.signature !== signature)
+            modificationRefundAttempt.current = { signature, keys: {} };
+        const allocations: Array<{
+            paymentId: string;
+            amount: number;
+            reason: string;
+            idempotencyKey: string;
+            afterSalesId?: string;
+        }> = [];
         for (const payment of order.payments ?? []) {
-            if (payment.state !== 'Settled' || remaining <= 0) continue;
-            const alreadyRefunded = payment.refunds
-                .filter(refund => !['Failed', 'Cancelled'].includes(refund.state))
-                .reduce((sum, refund) => sum + refund.total, 0);
-            const available = Math.max(0, payment.amount - alreadyRefunded);
+            const capability = order.processingSummary?.paymentCapabilities.find(
+                item => item.paymentId === payment.id,
+            );
+            if (
+                payment.state !== 'Settled' ||
+                remaining <= 0 ||
+                isSimulatedPayment(payment.method) ||
+                !capability?.canRefund
+            )
+                continue;
+            const available = capability.refundableAmount;
             const allocated = Math.min(available, remaining);
             if (allocated > 0) {
-                allocations.push({ paymentId: payment.id, amount: allocated, reason: note.trim() });
+                const idempotencyKey = (modificationRefundAttempt.current.keys[payment.id] ??=
+                    crypto.randomUUID());
+                allocations.push({
+                    paymentId: payment.id,
+                    amount: allocated,
+                    reason: note.trim(),
+                    idempotencyKey,
+                    ...(afterSalesId ? { afterSalesId } : {}),
+                });
                 remaining -= allocated;
             }
         }
@@ -1014,7 +1104,22 @@ export function ModifyOrderEditor() {
     };
 
     const handleConfirm = async () => {
+        if (modificationDraft.sourceChanged || modificationSaved || submissionUncertain) return;
         if (!order || preview?.__typename !== 'Order' || priceDifference == null) return;
+        if (priceDifference < 0 && !modificationPassword) {
+            setActionError('减价会创建真实退款，请输入当前管理员密码核验后提交');
+            return;
+        }
+        if (
+            priceDifference < 0 &&
+            (!order.processingSummary?.canRefund || order.processingSummary.isTestOrder)
+        ) {
+            setActionError(
+                order.processingSummary?.refundBlockedReason ||
+                    '当前订单不支持真实退款，请核实资金记录后处理减价',
+            );
+            return;
+        }
         const confirmed = await requestConfirmation({
             title: '确认修改订单',
             description:
@@ -1027,14 +1132,81 @@ export function ModifyOrderEditor() {
             tone: priceDifference === 0 ? 'default' : 'warning',
         });
         if (!confirmed) return;
+        let requestStarted = false;
+        let resultReceived = false;
         try {
             const refunds = priceDifference < 0 ? allocateRefunds(Math.abs(priceDifference)) : undefined;
-            const response = await modifyOrder({ variables: { input: buildInput(false, refunds) } });
+            requestStarted = true;
+            const response = await modifyOrder({
+                variables: { input: buildInput(false, refunds) },
+                ...(refunds?.length ? { context: sensitiveActionContext(modificationPassword) } : {}),
+            });
+            resultReceived = true;
             const result = response.data?.modifyOrder;
             if (result?.__typename !== 'Order') throw new Error(getMutationError(result));
+            modificationDraft.accept(emptyDraft);
+            modificationRefundAttempt.current = null;
+            setModificationPassword('');
+            setModificationSaved(true);
+            if (result.state === 'Modifying') {
+                try {
+                    const finished = await finishModification({ variables: { orderId: order.id } });
+                    if (
+                        !finished.data?.finishOrderModification?.id ||
+                        finished.data.finishOrderModification.state === 'Modifying'
+                    )
+                        throw new Error('订单仍在修改中');
+                } catch (cause) {
+                    setActionError(
+                        `修改已写入，但尚未结束修改状态：${toUserFacingError(cause, '请重试结束修改，不要重复提交修改')}`,
+                    );
+                    return;
+                }
+            }
             navigate(`/sales/orders/${order.id}`, { state: location.state });
         } catch (error) {
-            setActionError(toUserFacingError(error, '订单修改提交失败'));
+            if (requestStarted && !resultReceived) {
+                setSubmissionUncertain(true);
+                setModificationPassword('');
+                setActionError(
+                    '修改请求的提交结果待核实，请只重新读取订单及历史记录。当前输入已保留，不会重复写入本次修改。',
+                );
+            } else setActionError(toUserFacingError(error, '订单修改提交失败'));
+        }
+    };
+
+    const handleFinishModification = async (discard: boolean) => {
+        if (!order) return;
+        if (submissionUncertain) {
+            const confirmed = await requestConfirmation({
+                title: '核实后结束修改',
+                description:
+                    '请先重新读取并核对订单明细、金额、退款及历史记录，确认本次修改的实际结果。结束操作只结束修改状态，不会重放提交，也不会撤销已写入的内容。',
+                confirmLabel: '已核实，结束修改',
+                tone: 'warning',
+            });
+            if (!confirmed) return;
+        }
+        if (!submissionUncertain && discard && (hasChanges || note.trim())) {
+            const confirmed = await requestConfirmation({
+                title: '放弃本次未保存修改',
+                description: '本页输入将被放弃，服务端会恢复订单可用状态。已实际写入的修改不会被撤销。',
+                confirmLabel: '放弃并结束修改',
+                tone: 'warning',
+            });
+            if (!confirmed) return;
+        }
+        try {
+            const response = await finishModification({ variables: { orderId: order.id } });
+            const result = response.data?.finishOrderModification;
+            if (!result?.id || result.state === 'Modifying')
+                throw new Error('后端未结束修改状态，请刷新核实');
+            setModificationSaved(true);
+            modificationDraft.accept(emptyDraft);
+            modificationRefundAttempt.current = null;
+            navigate(`/sales/orders/${order.id}`, { state: location.state });
+        } catch (cause) {
+            setActionError(toUserFacingError(cause, '无法结束修改，当前输入已保留'));
         }
     };
 
@@ -1072,207 +1244,281 @@ export function ModifyOrderEditor() {
             <WorkflowHeader
                 title={`修改订单 ${order.code}`}
                 subtitle="先预览金额和退款影响，再写入真实订单"
-                onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
+                onBack={() => void handleFinishModification(!modificationSaved)}
             />
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
                 <div className="mx-auto grid w-full max-w-none items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-                    <div className="space-y-4">
+                    <div className="min-w-0 space-y-4">
                         <WorkflowMessages error={actionError} onClose={() => setActionError('')} />
-                        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                调整订单商品
-                                <FeatureHelpButton topic="sales.order-items" title="调整订单商品" />
-                            </h2>
-                            <div className="mt-4 space-y-2">
-                                {order.lines.map(line => {
-                                    const quantity = adjustments[line.id] ?? line.quantity;
-                                    return (
+                        {submissionUncertain && (
+                            <div
+                                role="status"
+                                className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"
+                            >
+                                <span>提交结果待核实，已停止再次提交。</span>
+                                <AdminButton
+                                    type="button"
+                                    onClick={() =>
+                                        void orderQuery
+                                            .refetch()
+                                            .catch(cause =>
+                                                setActionError(toUserFacingError(cause, '订单重新读取失败')),
+                                            )
+                                    }
+                                    className="font-semibold underline"
+                                >
+                                    重新读取核实
+                                </AdminButton>
+                                <AdminButton
+                                    type="button"
+                                    onClick={() =>
+                                        navigate(`/sales/orders/${order.id}`, { state: location.state })
+                                    }
+                                    className="font-semibold underline"
+                                >
+                                    查看订单记录
+                                </AdminButton>
+                            </div>
+                        )}
+                        {modificationDraft.sourceChanged && !modificationSaved && (
+                            <DraftUpdateNotice
+                                onReload={() => {
+                                    modificationDraft.reload();
+                                    setPreview(null);
+                                }}
+                            />
+                        )}
+                        <fieldset
+                            disabled={
+                                modificationSaved ||
+                                submissionUncertain ||
+                                modificationDraft.sourceChanged ||
+                                modifyState.loading ||
+                                finishState.loading
+                            }
+                            className="space-y-4"
+                        >
+                            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+                                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                    调整订单商品
+                                    <FeatureHelpButton topic="sales.order-items" title="调整订单商品" />
+                                </h2>
+                                <div className="mt-4 space-y-2">
+                                    {order.lines.map(line => {
+                                        const quantity = adjustments[line.id] ?? line.quantity;
+                                        return (
+                                            <div
+                                                key={line.id}
+                                                className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${quantity === 0 ? 'border-rose-200 bg-rose-50/50 opacity-70' : 'border-slate-200'}`}
+                                            >
+                                                <div>
+                                                    <strong className="block break-words text-xs">
+                                                        {line.productVariant.name}
+                                                    </strong>
+                                                    <span className="break-all font-mono text-[10px] text-slate-400">
+                                                        {line.productVariant.sku} · 原数量 {line.quantity}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => setLineQuantity(line, quantity - 1)}
+                                                        className="rounded border border-slate-300 p-1.5"
+                                                        aria-label={`减少${line.productVariant.name}数量`}
+                                                    >
+                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                    </AdminButton>
+                                                    <span className="w-8 text-center font-mono text-xs font-semibold">
+                                                        {quantity}
+                                                    </span>
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => setLineQuantity(line, quantity + 1)}
+                                                        className="rounded border border-slate-300 p-1.5"
+                                                        aria-label={`增加${line.productVariant.name}数量`}
+                                                    >
+                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                    </AdminButton>
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => setLineQuantity(line, 0)}
+                                                        className="rounded p-1.5 text-rose-600"
+                                                        aria-label={`移除${line.productVariant.name}`}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </AdminButton>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {Object.values(addedItems).map(item => (
                                         <div
-                                            key={line.id}
-                                            className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${quantity === 0 ? 'border-rose-200 bg-rose-50/50 opacity-70' : 'border-slate-200'}`}
+                                            key={item.variant.id}
+                                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"
                                         >
                                             <div>
-                                                <strong className="block text-xs">
-                                                    {line.productVariant.name}
+                                                <strong className="block text-xs text-emerald-900">
+                                                    新增：{item.variant.name}
                                                 </strong>
-                                                <span className="font-mono text-[10px] text-slate-400">
-                                                    {line.productVariant.sku} · 原数量 {line.quantity}
+                                                <span className="font-mono text-[10px] text-emerald-700">
+                                                    {item.variant.sku}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <AdminButton
                                                     type="button"
-                                                    onClick={() => setLineQuantity(line, quantity - 1)}
-                                                    className="rounded border border-slate-300 p-1.5"
-                                                    aria-label={`减少${line.productVariant.name}数量`}
+                                                    onClick={() =>
+                                                        setAddedQuantity(item.variant.id, item.quantity - 1)
+                                                    }
+                                                    className="rounded border border-emerald-300 p-1.5"
                                                 >
                                                     <ChevronDown className="h-3.5 w-3.5" />
                                                 </AdminButton>
                                                 <span className="w-8 text-center font-mono text-xs font-semibold">
-                                                    {quantity}
+                                                    {item.quantity}
                                                 </span>
                                                 <AdminButton
                                                     type="button"
-                                                    onClick={() => setLineQuantity(line, quantity + 1)}
-                                                    className="rounded border border-slate-300 p-1.5"
-                                                    aria-label={`增加${line.productVariant.name}数量`}
+                                                    onClick={() =>
+                                                        setAddedQuantity(item.variant.id, item.quantity + 1)
+                                                    }
+                                                    className="rounded border border-emerald-300 p-1.5"
                                                 >
                                                     <ChevronUp className="h-3.5 w-3.5" />
                                                 </AdminButton>
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => setLineQuantity(line, 0)}
-                                                    className="rounded p-1.5 text-rose-600"
-                                                    aria-label={`移除${line.productVariant.name}`}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </AdminButton>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                                {Object.values(addedItems).map(item => (
-                                    <div
-                                        key={item.variant.id}
-                                        className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"
+                                    ))}
+                                </div>
+                                <div className="mt-5 border-t border-slate-100 pt-4">
+                                    <VariantSearch
+                                        currencyCode={order.currencyCode}
+                                        disabled={modifyState.loading}
+                                        onSelect={addVariant}
+                                    />
+                                </div>
+                            </section>
+
+                            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                        附加费用
+                                        <FeatureHelpButton topic="sales.totals" title="附加费用" />
+                                    </h2>
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => {
+                                            setSurcharges(current => [
+                                                ...current,
+                                                { id: crypto.randomUUID(), description: '', price: '' },
+                                            ]);
+                                            invalidatePreview();
+                                        }}
+                                        className="flex items-center gap-1 text-xs font-semibold text-blue-600"
                                     >
-                                        <div>
-                                            <strong className="block text-xs text-emerald-900">
-                                                新增：{item.variant.name}
-                                            </strong>
-                                            <span className="font-mono text-[10px] text-emerald-700">
-                                                {item.variant.sku}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() =>
-                                                    setAddedQuantity(item.variant.id, item.quantity - 1)
-                                                }
-                                                className="rounded border border-emerald-300 p-1.5"
-                                            >
-                                                <ChevronDown className="h-3.5 w-3.5" />
-                                            </AdminButton>
-                                            <span className="w-8 text-center font-mono text-xs font-semibold">
-                                                {item.quantity}
-                                            </span>
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() =>
-                                                    setAddedQuantity(item.variant.id, item.quantity + 1)
-                                                }
-                                                className="rounded border border-emerald-300 p-1.5"
-                                            >
-                                                <ChevronUp className="h-3.5 w-3.5" />
-                                            </AdminButton>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-5 border-t border-slate-100 pt-4">
-                                <VariantSearch
-                                    currencyCode={order.currencyCode}
-                                    disabled={modifyState.loading}
-                                    onSelect={addVariant}
-                                />
-                            </div>
-                        </section>
-
-                        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                            <div className="flex items-center justify-between gap-3">
-                                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    附加费用
-                                    <FeatureHelpButton topic="sales.totals" title="附加费用" />
-                                </h2>
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => {
-                                        setSurcharges(current => [
-                                            ...current,
-                                            { id: crypto.randomUUID(), description: '', price: '' },
-                                        ]);
-                                        invalidatePreview();
-                                    }}
-                                    className="flex items-center gap-1 text-xs font-semibold text-blue-600"
-                                >
-                                    <Plus className="h-3.5 w-3.5" /> 添加费用
-                                </AdminButton>
-                            </div>
-                            <div className="mt-3 space-y-2">
-                                {surcharges.map(item => (
-                                    <div key={item.id} className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-                                        <AdminInput
-                                            value={item.description}
-                                            onChange={event => {
-                                                setSurcharges(current =>
-                                                    current.map(currentItem =>
-                                                        currentItem.id === item.id
-                                                            ? {
-                                                                  ...currentItem,
-                                                                  description: event.target.value,
-                                                              }
-                                                            : currentItem,
-                                                    ),
-                                                );
-                                                invalidatePreview();
-                                            }}
-                                            placeholder="费用说明"
-                                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
-                                        />
-                                        <AdminInput
-                                            value={item.price}
-                                            onChange={event => {
-                                                setSurcharges(current =>
-                                                    current.map(currentItem =>
-                                                        currentItem.id === item.id
-                                                            ? { ...currentItem, price: event.target.value }
-                                                            : currentItem,
-                                                    ),
-                                                );
-                                                invalidatePreview();
-                                            }}
-                                            inputMode="decimal"
-                                            placeholder="金额"
-                                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
-                                        />
-                                        <AdminButton
-                                            type="button"
-                                            onClick={() => {
-                                                setSurcharges(current =>
-                                                    current.filter(row => row.id !== item.id),
-                                                );
-                                                invalidatePreview();
-                                            }}
-                                            className="rounded-lg p-2 text-rose-600"
-                                            aria-label="删除附加费用"
+                                        <Plus className="h-3.5 w-3.5" /> 添加费用
+                                    </AdminButton>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                    {surcharges.map(item => (
+                                        <div
+                                            key={item.id}
+                                            className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]"
                                         >
-                                            <Trash2 className="h-4 w-4" />
-                                        </AdminButton>
-                                    </div>
-                                ))}
-                                {surcharges.length === 0 && (
-                                    <p className="text-xs text-slate-400">没有新增附加费用</p>
-                                )}
-                            </div>
-                        </section>
+                                            <AdminInput
+                                                value={item.description}
+                                                onChange={event => {
+                                                    setSurcharges(current =>
+                                                        current.map(currentItem =>
+                                                            currentItem.id === item.id
+                                                                ? {
+                                                                      ...currentItem,
+                                                                      description: event.target.value,
+                                                                  }
+                                                                : currentItem,
+                                                        ),
+                                                    );
+                                                    invalidatePreview();
+                                                }}
+                                                placeholder="费用说明"
+                                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                                            />
+                                            <AdminInput
+                                                value={item.price}
+                                                onChange={event => {
+                                                    setSurcharges(current =>
+                                                        current.map(currentItem =>
+                                                            currentItem.id === item.id
+                                                                ? {
+                                                                      ...currentItem,
+                                                                      price: event.target.value,
+                                                                  }
+                                                                : currentItem,
+                                                        ),
+                                                    );
+                                                    invalidatePreview();
+                                                }}
+                                                inputMode="decimal"
+                                                placeholder="金额"
+                                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                                            />
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => {
+                                                    setSurcharges(current =>
+                                                        current.filter(row => row.id !== item.id),
+                                                    );
+                                                    invalidatePreview();
+                                                }}
+                                                className="rounded-lg p-2 text-rose-600"
+                                                aria-label="删除附加费用"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </AdminButton>
+                                        </div>
+                                    ))}
+                                    {surcharges.length === 0 && (
+                                        <p className="text-xs text-slate-400">没有新增附加费用</p>
+                                    )}
+                                </div>
+                            </section>
 
-                        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                            <label className="text-sm font-semibold text-slate-900">
-                                修改原因 *
-                                <AdminTextArea
-                                    value={note}
-                                    onChange={event => {
-                                        setNote(event.target.value);
-                                        invalidatePreview();
-                                    }}
-                                    rows={3}
-                                    maxLength={500}
-                                    placeholder="说明客户诉求、客服工单或修改依据"
-                                    className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-xs font-normal outline-none focus:border-blue-500"
-                                />
-                            </label>
-                        </section>
+                            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+                                <AdminField
+                                    className="text-sm font-semibold text-slate-900"
+                                    label={<>修改原因 *</>}
+                                >
+                                    {' '}
+                                    <AdminTextArea
+                                        value={note}
+                                        onChange={event => {
+                                            setNote(event.target.value);
+                                            invalidatePreview();
+                                        }}
+                                        rows={3}
+                                        maxLength={500}
+                                        placeholder="说明客户诉求、客服工单或修改依据"
+                                        className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-xs font-normal outline-none focus:border-blue-500"
+                                    />
+                                </AdminField>
+                                {priceDifference != null && priceDifference < 0 && (
+                                    <AdminField
+                                        className="mt-4 block text-xs font-semibold text-slate-700"
+                                        label={<>当前管理员密码（减价退款复核） *</>}
+                                    >
+                                        {' '}
+                                        <AdminInput
+                                            type="password"
+                                            autoComplete="current-password"
+                                            value={modificationPassword}
+                                            onChange={event => setModificationPassword(event.target.value)}
+                                            placeholder="输入当前管理员密码核验减价退款"
+                                            className="mt-2 w-full rounded-lg border border-slate-300 p-3 text-xs font-normal"
+                                        />
+                                    </AdminField>
+                                )}
+                            </section>
+                        </fieldset>
                     </div>
 
                     <aside className="space-y-4 lg:sticky lg:top-0">
@@ -1301,7 +1547,14 @@ export function ModifyOrderEditor() {
                         </section>
                         <AdminButton
                             type="button"
-                            disabled={!hasChanges || modifyState.loading}
+                            disabled={
+                                !hasChanges ||
+                                modificationSaved ||
+                                submissionUncertain ||
+                                modificationDraft.sourceChanged ||
+                                modifyState.loading ||
+                                finishState.loading
+                            }
                             onClick={() => void handlePreview()}
                             className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                         >
@@ -1310,11 +1563,32 @@ export function ModifyOrderEditor() {
                         </AdminButton>
                         <AdminButton
                             type="button"
-                            disabled={preview?.__typename !== 'Order' || modifyState.loading}
-                            onClick={() => void handleConfirm()}
+                            disabled={
+                                submissionUncertain ||
+                                (!modificationSaved &&
+                                    (preview?.__typename !== 'Order' || modificationDraft.sourceChanged)) ||
+                                modifyState.loading ||
+                                finishState.loading
+                            }
+                            onClick={() =>
+                                void (modificationSaved ? handleFinishModification(false) : handleConfirm())
+                            }
                             className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
-                            <Check className="h-4 w-4" /> 确认写入订单
+                            <Check className="h-4 w-4" />{' '}
+                            {modificationSaved ? '重试结束修改' : '保存并结束修改'}
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            disabled={modifyState.loading || finishState.loading}
+                            onClick={() => void handleFinishModification(!modificationSaved)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700"
+                        >
+                            {submissionUncertain
+                                ? '核实后结束修改'
+                                : modificationSaved
+                                  ? '结束修改'
+                                  : '放弃修改并退出'}
                         </AdminButton>
                         <p className="text-[10px] leading-5 text-slate-400">
                             减价会从已结算支付中分配退款；加价后需在订单支付流程中继续收取补款。

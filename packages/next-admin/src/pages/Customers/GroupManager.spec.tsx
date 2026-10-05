@@ -13,19 +13,23 @@ describe('customer group deletion form isolation', () => {
         const host = document.createElement('div');
         document.body.append(host);
         const root = createRoot(host);
+        const onClose = vi.fn();
         try {
             await act(async () =>
                 root.render(
                     <GroupManager
                         open
                         groups={[{ id: 'sim', name: '模拟组', customers: { totalItems: 1 } }] as never}
-                        onClose={vi.fn()}
+                        onClose={onClose}
                         onChanged={vi.fn()}
                         onError={vi.fn()}
                     />,
                 ),
             );
-            const input = host.querySelector<HTMLInputElement>('[aria-label="新分组名称"]')!;
+            const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+            expect(dialog).not.toBeNull();
+            expect(host.contains(dialog)).toBe(false);
+            const input = dialog.querySelector<HTMLInputElement>('[aria-label="新分组名称"]')!;
             await act(async () => {
                 Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
                     input,
@@ -33,16 +37,34 @@ describe('customer group deletion form isolation', () => {
                 );
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="删除分组"]')!.click());
-            expect(host.querySelector('[aria-label="新分组名称"]')).toBeNull();
-            expect(host.querySelectorAll('input')).toHaveLength(1);
-            expect(host.querySelector('input')?.type).toBe('password');
-            expect(host.querySelector<HTMLButtonElement>('[aria-label="重命名分组"]')?.disabled).toBe(true);
             await act(async () =>
-                [...host.querySelectorAll('button')].find(button => button.textContent === '取消')!.click(),
+                dialog.querySelector<HTMLButtonElement>('[aria-label="删除分组"]')!.click(),
             );
-            expect(host.querySelector<HTMLInputElement>('[aria-label="新分组名称"]')?.value).toBe('模拟草稿');
+            expect(dialog.querySelector('[aria-label="新分组名称"]')).toBeNull();
+            expect(dialog.querySelectorAll('input')).toHaveLength(1);
+            expect(dialog.querySelector('input')?.type).toBe('password');
+            expect(dialog.querySelector<HTMLButtonElement>('[aria-label="重命名分组"]')?.disabled).toBe(true);
+            await act(async () =>
+                [...dialog.querySelectorAll('button')].find(button => button.textContent === '取消')!.click(),
+            );
+            expect(dialog.querySelector<HTMLInputElement>('[aria-label="新分组名称"]')?.value).toBe(
+                '模拟草稿',
+            );
             expect(mocks.mutate).not.toHaveBeenCalled();
+            await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="关闭"]')!.click());
+            expect(onClose).toHaveBeenCalledTimes(1);
+            await act(async () =>
+                root.render(
+                    <GroupManager
+                        open={false}
+                        groups={[]}
+                        onClose={onClose}
+                        onChanged={vi.fn()}
+                        onError={vi.fn()}
+                    />,
+                ),
+            );
+            expect(document.body.querySelector('[role="dialog"]')).toBeNull();
         } finally {
             await act(async () => root.unmount());
             host.remove();

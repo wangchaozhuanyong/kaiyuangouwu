@@ -638,6 +638,25 @@ describe('option group usage', () => {
             expect(handle?.getAttribute('title')).toContain('同级至少需要2个分类才可排序');
         });
 
+        it('offers touch reorder buttons that use the same sibling move operation', async () => {
+            const { container, requests } = await renderCategories({
+                customCollections: [
+                    createCategoryFixture('cat-1', '精品白酒', 0, 'root'),
+                    createCategoryFixture('cat-2', '坦克咖啡', 1, 'root'),
+                ],
+            });
+            expect(
+                container.querySelector<HTMLButtonElement>('[aria-label="上移分类 精品白酒"]')?.disabled,
+            ).toBe(true);
+            await act(async () =>
+                container.querySelector<HTMLButtonElement>('[aria-label="下移分类 精品白酒"]')!.click(),
+            );
+            expect(requests).toHaveBeenCalledWith(
+                'MoveCatalogCollection',
+                expect.objectContaining({ input: { collectionId: 'cat-1', parentId: 'root', index: 1 } }),
+            );
+        });
+
         it('reorders top-level categories using keyboard ArrowDown and triggers MoveCatalogCollection', async () => {
             const collections = [
                 createCategoryFixture('cat-1', '精品白酒', 0, 'root'),

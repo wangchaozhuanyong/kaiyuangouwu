@@ -689,7 +689,7 @@ export function TelegramNotificationsPanel() {
                     ))}
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
+                    <table className="admin-mobile-record-table w-full min-w-[1180px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={tableHeadClass}>
                                 <th className="px-4 py-3">事件</th>
@@ -724,15 +724,18 @@ export function TelegramNotificationsPanel() {
                                     override?.actionRequired ?? route.defaultActionRequired;
                                 return (
                                     <tr key={eventLabel(route.eventType)} className="hover:bg-slate-50">
-                                        <td className="px-4 py-3 font-mono text-[10px] text-slate-700">
+                                        <td
+                                            data-label="事件"
+                                            className="px-4 py-3 font-mono text-[10px] text-slate-700"
+                                        >
                                             {eventLabel(route.eventType)}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="等级" className="px-4 py-3">
                                             <span className={severityBadge(route.severity)}>
                                                 {displayState(route.severity)}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="主责" data-mobile-wide className="px-4 py-3">
                                             <AdminSelect
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 主责部门'
@@ -752,7 +755,7 @@ export function TelegramNotificationsPanel() {
                                                 ))}
                                             </AdminSelect>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="协作" data-mobile-wide className="px-4 py-3">
                                             <AdminSelect
                                                 multiple
                                                 aria-label={
@@ -778,7 +781,7 @@ export function TelegramNotificationsPanel() {
                                                     ))}
                                             </AdminSelect>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="升级" data-mobile-wide className="px-4 py-3">
                                             <AdminSelect
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 升级部门'
@@ -800,7 +803,7 @@ export function TelegramNotificationsPanel() {
                                                 ))}
                                             </AdminSelect>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="需处理" className="px-4 py-3">
                                             <AdminInput
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) + ' 需要处理'
@@ -815,7 +818,7 @@ export function TelegramNotificationsPanel() {
                                                 }
                                             />
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td data-label="处理时限" data-mobile-wide className="px-4 py-3">
                                             <AdminInput
                                                 aria-label={
                                                     eventTypeDisplayLabel(route.eventType) +
@@ -835,10 +838,14 @@ export function TelegramNotificationsPanel() {
                                                 className={compactInputClass + ' w-20'}
                                             />
                                         </td>
-                                        <td className="max-w-80 px-4 py-3 text-slate-600">
+                                        <td
+                                            data-label="处理建议"
+                                            data-mobile-wide
+                                            className="max-w-80 px-4 py-3 text-slate-600"
+                                        >
                                             {route.actionHint}
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td data-label="路由操作" className="px-4 py-3 text-right">
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => resetRouteOverride(route.eventType)}
@@ -1022,7 +1029,7 @@ export function TelegramNotificationsPanel() {
                     </AdminSelect>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1240px] border-collapse text-left text-xs">
+                    <table className="admin-mobile-record-table w-full min-w-[1240px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={tableHeadClass}>
                                 <th className="px-4 py-3">时间</th>
@@ -1038,10 +1045,13 @@ export function TelegramNotificationsPanel() {
                         <tbody className="divide-y divide-slate-100">
                             {deliveries.items.map(delivery => (
                                 <tr key={delivery.id} className="hover:bg-slate-50">
-                                    <td className="whitespace-nowrap px-4 py-3 text-[10px] text-slate-500">
+                                    <td
+                                        data-label="时间"
+                                        className="whitespace-nowrap px-4 py-3 text-[10px] text-slate-500"
+                                    >
                                         {formatDateTime(delivery.createdAt)}
                                     </td>
-                                    <td className="max-w-80 px-4 py-3">
+                                    <td data-label="通知" className="max-w-80 px-4 py-3">
                                         <strong
                                             className="block truncate text-slate-800"
                                             title={delivery.title}
@@ -1052,25 +1062,29 @@ export function TelegramNotificationsPanel() {
                                             {eventLabel(delivery.eventType)}
                                         </code>
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td data-label="等级" className="px-4 py-3">
                                         <span className={severityBadge(delivery.severity)}>
                                             {displayState(delivery.severity)}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 font-bold text-slate-700">
+                                    <td data-label="责任" className="px-4 py-3 font-bold text-slate-700">
                                         {routing.departments.find(
                                             department => department.code === delivery.ownerDepartmentCode,
                                         )?.nameZh ?? '运营调度中心'}
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td data-label="状态" className="px-4 py-3">
                                         <span className={statusBadge(delivery.deliveryStatus)}>
                                             {displayState(delivery.deliveryStatus)}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-slate-600">
+                                    <td data-label="尝试" className="px-4 py-3 text-slate-600">
                                         {delivery.attempts}/{delivery.maxAttempts}
                                     </td>
-                                    <td className="max-w-72 px-4 py-3 text-[10px] text-rose-700">
+                                    <td
+                                        data-label="错误"
+                                        data-mobile-wide
+                                        className="max-w-72 px-4 py-3 text-[10px] text-rose-700"
+                                    >
                                         <span
                                             className="block truncate"
                                             title={chineseError(delivery.lastError)}
@@ -1078,7 +1092,7 @@ export function TelegramNotificationsPanel() {
                                             {chineseError(delivery.lastError)}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td data-label="操作" className="px-4 py-3 text-right">
                                         {['DEAD', 'RETRY'].includes(delivery.deliveryStatus) && (
                                             <AdminButton
                                                 type="button"

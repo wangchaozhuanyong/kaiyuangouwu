@@ -10,7 +10,7 @@ export const fulfillmentDeliveryProcess: FulfillmentProcess<string> = {
     },
     onTransitionStart(_fromState, toState, { ctx, fulfillment, orders }) {
         if (toState === 'Pending' || toState === 'Shipped') {
-            return deliveryService.guardPhysicalFulfillmentPayment(fulfillment, orders);
+            return deliveryService.guardPhysicalFulfillmentPayment(ctx, fulfillment, orders, toState);
         }
         if (toState === 'Delivered') {
             return deliveryService.guardDeliveredTransition(ctx, fulfillment, orders);

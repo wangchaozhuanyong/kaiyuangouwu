@@ -374,6 +374,32 @@ describe('policy and support configuration uses verified writes as well', () => 
     );
 });
 
+it('keeps the preview instance and language when switching the mobile editing view', async () => {
+    await render();
+    const preview = host.querySelector('[data-testid="shared-client-preview"]')!;
+    const instance = preview.getAttribute('data-client-preview');
+    const switcher = host.querySelector('[aria-label="编辑与预览视图"]')!;
+    const buttons = switcher.querySelectorAll<HTMLButtonElement>('button');
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
+    expect(preview.closest('aside')?.classList.contains('hidden')).toBe(true);
+    await act(async () => buttons[1].click());
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="预览语言"]')!;
+    await act(async () => {
+        select.value = 'en';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => buttons[0].click());
+    await act(async () => buttons[1].click());
+    expect(host.querySelector('[data-testid="shared-client-preview"]')).toBe(preview);
+    expect(preview.getAttribute('data-client-preview')).toBe(instance);
+    expect(preview.getAttribute('data-language')).toBe('en');
+    expect(preview.closest('aside')?.classList.contains('hidden')).toBe(false);
+    expect(buttons[1].getAttribute('aria-pressed')).toBe('true');
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.other).not.toHaveBeenCalled();
+});
+
 it('forwards the selected language to the shared client preview without changing saved content', async () => {
     current = data('a', true);
     current.storefrontContentBlocks[0].translations = [current.storefrontContentBlocks[0].translations[0]];

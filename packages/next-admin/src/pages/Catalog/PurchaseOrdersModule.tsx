@@ -164,7 +164,7 @@ export function PurchaseOrdersModule() {
                         <State label="当前筛选下没有采购单" />
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[900px] text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[900px] text-left text-xs">
                                 <thead className="bg-slate-50 text-slate-500">
                                     <tr>
                                         {['采购单', '供货商', '状态', '收货进度', '待付', '预计到货'].map(
@@ -183,21 +183,28 @@ export function PurchaseOrdersModule() {
                                             onClick={() => setSelectedId(order.id)}
                                             className="cursor-pointer hover:bg-slate-50"
                                         >
-                                            <td className="px-4 py-3 font-mono font-bold text-blue-700">
+                                            <td
+                                                data-label="采购单"
+                                                className="px-4 py-3 font-mono font-bold text-blue-700"
+                                            >
                                                 {order.code}
                                             </td>
-                                            <td className="px-4 py-3">{order.supplier.name}</td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="供货商" className="px-4 py-3">
+                                                {order.supplier.name}
+                                            </td>
+                                            <td data-label="状态" className="px-4 py-3">
                                                 <Status order={order} />
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="收货进度" className="px-4 py-3">
                                                 {sum(order.lines.map(line => line.receivedQuantity))} /{' '}
                                                 {sum(order.lines.map(line => line.orderedQuantity))}
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="待付" className="px-4 py-3">
                                                 {money(order.outstandingMicrounits, order.currencyCode)}
                                             </td>
-                                            <td className="px-4 py-3">{dateOnly(order.expectedAt)}</td>
+                                            <td data-label="预计到货" className="px-4 py-3">
+                                                {dateOnly(order.expectedAt)}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -597,7 +604,7 @@ function OrderDetailDialog({
                     </div>
                     {error && <Notice message={error} />}
                     <div className="overflow-x-auto rounded-xl border">
-                        <table className="w-full min-w-[720px] text-left text-xs">
+                        <table className="admin-mobile-record-table w-full min-w-[720px] text-left text-xs">
                             <thead className="bg-slate-50">
                                 <tr>
                                     {['SKU', '订购', '到货', '合格', '不合格', '待收'].map(label => (
@@ -610,15 +617,25 @@ function OrderDetailDialog({
                             <tbody>
                                 {order.lines.map(line => (
                                     <tr key={line.id} className="border-t">
-                                        <td className="px-3 py-2">
+                                        <td data-label="SKU" className="px-3 py-2">
                                             <strong>{line.variant.name}</strong>
                                             <small className="ml-2 font-mono">{line.variant.sku}</small>
                                         </td>
-                                        <td className="px-3 py-2">{line.orderedQuantity}</td>
-                                        <td className="px-3 py-2">{line.receivedQuantity}</td>
-                                        <td className="px-3 py-2">{line.acceptedQuantity}</td>
-                                        <td className="px-3 py-2 text-rose-700">{line.rejectedQuantity}</td>
-                                        <td className="px-3 py-2">{line.outstandingQuantity}</td>
+                                        <td data-label="订购" className="px-3 py-2">
+                                            {line.orderedQuantity}
+                                        </td>
+                                        <td data-label="到货" className="px-3 py-2">
+                                            {line.receivedQuantity}
+                                        </td>
+                                        <td data-label="合格" className="px-3 py-2">
+                                            {line.acceptedQuantity}
+                                        </td>
+                                        <td data-label="不合格" className="px-3 py-2 text-rose-700">
+                                            {line.rejectedQuantity}
+                                        </td>
+                                        <td data-label="待收" className="px-3 py-2">
+                                            {line.outstandingQuantity}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

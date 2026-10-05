@@ -4,16 +4,25 @@ import {
     Channel,
     ChannelEvent,
     EventBus,
+    ID,
     OrderLine,
     OrderLineEvent,
     Product,
     ProductEvent,
     ProductVariant,
     ProductVariantEvent,
+    RequestContext,
+    StockLevel,
     TransactionalConnection,
+    UserInputError,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { CommerceModeService } from './commerce-mode.service';
+import { physicalVariantFields } from './digital-product.policy';
+import { DigitalProductService } from './digital-product.service';
+import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+import { DigitalVariantConfig } from './entities/digital-product.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 import { DigitalStockPolicy, FulfillmentType, StoreCommerceMode } from './types';
 
@@ -25,6 +34,7 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
         private readonly eventBus: EventBus,
         private readonly connection: TransactionalConnection,
         private readonly commerceModeService: CommerceModeService,
+        private readonly digitalProducts: DigitalProductService,
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
@@ -96,6 +106,42 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
         );
     }
 
+    async canChangeProductType(ctx: RequestContext, productId: ID) {
+        const product = await this.connection.getEntityOrThrow(ctx, Product, productId, {
+            channelId: ctx.channelId,
+            relations: ['variants'],
+        });
+        const ids = product.variants.map(variant => variant.id);
+        if (!ids.length) return true;
+        const [orders, stocks, pool, resources, packaging] = await Promise.all([
+            this.connection.getRepository(ctx, OrderLine).count({ where: { productVariantId: In(ids) } }),
+            this.connection.getRepository(ctx, StockLevel).find({ where: { productVariantId: In(ids) } }),
+            this.connection
+                .getRepository(ctx, AutoCardPoolItem)
+                .count({ where: { config: { productVariantId: In(ids) } } }),
+            this.connection
+                .getRepository(ctx, DigitalVariantConfig)
+                .find({ where: { productVariantId: In(ids) } }),
+            this.connection.getRepository(ctx, ProductPackagingRule).count({ where: { productId } }),
+        ]);
+        const lotMetadata = this.connection.rawConnection.entityMetadatas.find(
+            item => item.name === 'InventoryLot',
+        );
+        const lots = lotMetadata
+            ? await this.connection
+                  .getRepository(ctx, lotMetadata.target)
+                  .count({ where: { variantId: In(ids) } })
+            : 0;
+        return !(
+            orders ||
+            pool ||
+            packaging ||
+            lots ||
+            stocks.some(row => row.stockOnHand || row.stockAllocated) ||
+            resources.some(row => row.fileVersionId || row.availableQuantity)
+        );
+    }
+
     private async validateAndSyncProduct(event: ProductEvent): Promise<void> {
         if (event.type === 'deleted') {
             return;
@@ -108,6 +154,20 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
             return;
         }
         let fulfillmentType = this.productFulfillmentType(product);
+        if (
+            event.type === 'updated' &&
+            product.variants.some(
+                variant =>
+                    variant.customFields.fulfillmentType &&
+                    variant.customFields.fulfillmentType !== fulfillmentType,
+            )
+        ) {
+            if (!(await this.canChangeProductType(event.ctx, product.id))) {
+                throw new UserInputError(
+                    '商品已有订单、库存或交付资源，不能转换类型；请复制基础资料创建另一类商品',
+                );
+            }
+        }
         if (event.type === 'created') {
             const fixedTypes = new Set(
                 product.channels.flatMap(channel => {
@@ -166,6 +226,50 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
                 continue;
             }
             const fulfillmentType = this.productFulfillmentType(product);
+            const inputs = Array.isArray(event.input)
+                ? event.input.filter(input => typeof input === 'object')
+                : [];
+            if (fulfillmentType === 'digital') {
+                for (const input of inputs) {
+                    const fields = (input as { customFields?: Record<string, unknown> }).customFields;
+                    const incompatible = physicalVariantFields.find(
+                        field => fields?.[field] !== undefined && fields[field] !== null,
+                    );
+                    if (incompatible) throw new UserInputError(`数字商品不支持实物字段 ${incompatible}`);
+                    if (
+                        (input as { stockOnHand?: unknown }).stockOnHand !== undefined ||
+                        (input as { stockLevels?: unknown }).stockLevels !== undefined
+                    )
+                        throw new UserInputError('数字商品不支持仓库库存，请使用数字份数配置');
+                    const id = (input as { id?: string }).id;
+                    if (id && (fields?.digitalDeliveryMode || fields?.digitalStockPolicy)) {
+                        throw new UserInputError('请使用当前店铺的数字商品配置接口更新交付方式和份数策略');
+                    }
+                }
+                if (event.type === 'created') {
+                    for (const variant of variants) {
+                        variant.customFields = {
+                            ...variant.customFields,
+                            ...Object.fromEntries(physicalVariantFields.map(field => [field, null])),
+                        };
+                        await this.connection
+                            .getRepository(event.ctx, ProductVariant)
+                            .save(variant, { reload: false });
+                        for (const channel of product.channels.filter(
+                            salesChannel => salesChannel.code !== '__default_channel__',
+                        )) {
+                            await this.digitalProducts.initialize(event.ctx.copy({ channel }), variant);
+                        }
+                    }
+                }
+            }
+            if (fulfillmentType === 'physical') {
+                for (const input of inputs) {
+                    const fields = (input as { customFields?: Record<string, unknown> }).customFields;
+                    if (fields?.digitalDeliveryMode != null || fields?.digitalStockPolicy != null)
+                        throw new UserInputError('实物商品不支持数字交付或份数配置');
+                }
+            }
             for (const channel of product.channels) {
                 this.commerceModeService.assertProductTypeAllowed(
                     this.commerceModeService.modeForChannel(channel),
@@ -185,7 +289,9 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
         });
         const fulfillmentType = product ? this.productFulfillmentType(product) : 'digital';
         const digitalDeliveryMode =
-            event.orderLine.productVariant.customFields?.digitalDeliveryMode ?? 'manual_service';
+            (await this.digitalProducts.config(event.ctx, event.orderLine.productVariantId))?.deliveryMode ??
+            event.orderLine.productVariant.customFields?.digitalDeliveryMode ??
+            'manual_service';
         event.orderLine.customFields = {
             ...event.orderLine.customFields,
             fulfillmentTypeSnapshot: fulfillmentType,
@@ -207,17 +313,42 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
     ): Promise<void> {
         const fulfillmentType = this.productFulfillmentType(product);
         for (const variant of variants) {
+            let digitalConfig =
+                fulfillmentType === 'digital' ? await this.digitalProducts.config(ctx, variant.id) : null;
+            const converting =
+                variant.customFields?.fulfillmentType &&
+                variant.customFields.fulfillmentType !== fulfillmentType;
+            if (fulfillmentType === 'digital' && converting) {
+                variant.customFields = {
+                    ...variant.customFields,
+                    ...Object.fromEntries(physicalVariantFields.map(field => [field, null])),
+                    digitalDeliveryMode: 'manual_service',
+                    digitalStockPolicy: 'unlimited',
+                };
+                for (const channel of product.channels.filter(
+                    salesChannel => salesChannel.code !== '__default_channel__',
+                )) {
+                    await this.digitalProducts.initialize(ctx.copy({ channel }), variant);
+                }
+                digitalConfig = await this.digitalProducts.config(ctx, variant.id);
+            }
+            if (fulfillmentType === 'physical' && converting) {
+                await this.connection
+                    .getRepository(ctx, DigitalVariantConfig)
+                    .update({ productVariantId: variant.id }, { migrationState: 'PREPARED' });
+            }
             const deliveryMode = variant.customFields?.digitalDeliveryMode ?? 'manual_service';
             let stockPolicy: DigitalStockPolicy = variant.customFields?.digitalStockPolicy ?? 'limited';
             let trackInventory = variant.trackInventory;
             if (fulfillmentType === 'physical') {
                 stockPolicy = 'limited';
+                if (converting) trackInventory = GlobalFlag.INHERIT;
             } else if (deliveryMode === 'auto_card') {
                 stockPolicy = 'pool_derived';
                 trackInventory = GlobalFlag.FALSE;
-            } else if (deliveryMode === 'manual_service') {
-                stockPolicy = 'limited';
-                trackInventory = GlobalFlag.TRUE;
+            } else if (digitalConfig) {
+                if (await this.digitalProducts.allStoresMigrated(ctx, variant.id))
+                    trackInventory = GlobalFlag.FALSE;
             } else if (stockPolicy === 'unlimited') {
                 trackInventory = GlobalFlag.FALSE;
             } else {
@@ -227,13 +358,18 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
             const changed =
                 variant.customFields?.fulfillmentType !== fulfillmentType ||
                 variant.customFields?.digitalStockPolicy !== stockPolicy ||
-                variant.trackInventory !== trackInventory;
+                variant.trackInventory !== trackInventory ||
+                Boolean(converting) ||
+                (fulfillmentType === 'physical' && variant.customFields.packageQuantity == null);
             if (!changed) {
                 continue;
             }
             variant.customFields = {
                 ...variant.customFields,
                 fulfillmentType,
+                ...(fulfillmentType === 'physical' && variant.customFields.packageQuantity == null
+                    ? { packageQuantity: 1 }
+                    : {}),
                 digitalStockPolicy: stockPolicy,
             };
             variant.trackInventory = trackInventory;

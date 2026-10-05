@@ -1,4 +1,7 @@
+import type { MailStreamCallbacks } from './mail-events';
+
 import { BaseDomainApi } from './base-domain-api';
+import { SEND_CLIENT_CHANNEL_TOKEN } from './helpers';
 
 export interface IcloudMailItem {
     id: string;
@@ -33,6 +36,14 @@ export interface IcloudQueryResult {
 }
 
 export class MailQueryApi extends BaseDomainApi {
+    async watchMailEvents(code: string, callbacks: MailStreamCallbacks, signal: AbortSignal): Promise<void> {
+        const headers: Record<string, string> = {};
+        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
+        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
+        const { watchMailEvents } = await import('./mail-events');
+        return watchMailEvents(code, headers, callbacks, signal);
+    }
+
     async queryMails(code: string, signal?: AbortSignal): Promise<IcloudQueryResult> {
         const result = await this.request<{ icloudQueryMails: IcloudQueryResult }>(
             `

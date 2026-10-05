@@ -30,10 +30,12 @@ export function TableCard({
     title,
     description,
     children,
+    comparison = false,
 }: {
     title: string;
     description: string;
     children: React.ReactNode;
+    comparison?: boolean;
 }) {
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
@@ -43,7 +45,15 @@ export function TableCard({
                     <FeatureHelpButton topic="marketing.referrals" title={title} description={description} />
                 </h2>
             </div>
-            <div className="overflow-x-auto">{children}</div>
+            <div
+                className={comparison ? 'admin-comparison-scroll overflow-x-auto' : 'overflow-x-auto'}
+                tabIndex={comparison ? 0 : undefined}
+                role={comparison ? 'region' : undefined}
+                aria-label={comparison ? title : undefined}
+            >
+                {comparison && <p className="admin-mobile-table-hint">左右滑动查看完整{title}</p>}
+                {children}
+            </div>
         </section>
     );
 }
@@ -54,8 +64,12 @@ export function Th({ children }: { children: React.ReactNode }) {
         </th>
     );
 }
-export function Td({ children }: { children: React.ReactNode }) {
-    return <td className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-700">{children}</td>;
+export function Td({ children, label }: { children: React.ReactNode; label?: string }) {
+    return (
+        <td data-label={label} className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-700">
+            {children}
+        </td>
+    );
 }
 export function EmptyRow({ colSpan }: { colSpan: number }) {
     return (
@@ -497,20 +511,36 @@ export function ReferralTabs({
     ] as const;
 
     return (
-        <nav
-            aria-label="分销与返利子导航"
-            className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs"
-        >
-            {tabs.map(([tab, label, Icon]) => (
-                <TabButton
-                    key={tab}
-                    active={activeTab === tab}
-                    onClick={() => onChange(tab)}
-                    icon={<Icon className="h-3.5 w-3.5" />}
+        <>
+            <AdminField label="分销分类" className="admin-mobile-section-select">
+                <AdminSelect
+                    aria-label="分销分类"
+                    value={activeTab}
+                    onChange={event => onChange(event.target.value as ReferralTab)}
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
                 >
-                    {label}
-                </TabButton>
-            ))}
-        </nav>
+                    {tabs.map(([value, label]) => (
+                        <option key={value} value={value}>
+                            {label}
+                        </option>
+                    ))}
+                </AdminSelect>
+            </AdminField>
+            <nav
+                aria-label="分销与返利子导航"
+                className="hidden max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs md:flex"
+            >
+                {tabs.map(([tab, label, Icon]) => (
+                    <TabButton
+                        key={tab}
+                        active={activeTab === tab}
+                        onClick={() => onChange(tab)}
+                        icon={<Icon className="h-3.5 w-3.5" />}
+                    >
+                        {label}
+                    </TabButton>
+                ))}
+            </nav>
+        </>
     );
 }

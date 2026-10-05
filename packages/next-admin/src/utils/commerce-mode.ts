@@ -10,21 +10,24 @@ export const fulfillmentTypeForMode = (mode: StoreCommerceMode): FulfillmentType
 
 export const commerceModeAllowsPath = (mode: StoreCommerceMode, path: string) => {
     if (mode === 'DIGITAL_ONLY' && path.startsWith('/catalog/inventory')) return false;
-    if (mode === 'PHYSICAL_ONLY' && path.startsWith('/catalog/card-pool')) return false;
+    if (
+        mode === 'PHYSICAL_ONLY' &&
+        (path.startsWith('/catalog/card-pool') || path.startsWith('/operations/manual-digital-delivery'))
+    )
+        return false;
     return true;
 };
 
 export const stockPolicyForDeliveryMode = (
     mode: DigitalDeliveryMode,
-    current: DigitalStockPolicy = 'limited',
+    current: DigitalStockPolicy = 'unlimited',
 ): DigitalStockPolicy => {
     if (mode === 'auto_card') return 'pool_derived';
-    if (mode === 'manual_service') return 'limited';
-    return current === 'unlimited' ? 'unlimited' : 'limited';
+    return current === 'limited' ? 'limited' : 'unlimited';
 };
 
-export const trackInventoryForDigitalVariant = (mode: DigitalDeliveryMode, policy: DigitalStockPolicy) =>
-    mode === 'auto_card' || policy === 'unlimited' ? 'FALSE' : 'TRUE';
+export const trackInventoryForDigitalVariant = (_mode: DigitalDeliveryMode, _policy: DigitalStockPolicy) =>
+    'FALSE' as const;
 
 export const collectionSummary = (collections: ReadonlyArray<{ name: string }> | undefined) => {
     if (!collections?.length) return { primary: '未分类', extraCount: 0 };

@@ -1,6 +1,15 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Permission } from '@vendure/common/lib/generated-types';
-import { Allow, Ctx, ID, ListQueryOptions, Product, RequestContext } from '@vendure/core';
+import {
+    Allow,
+    Ctx,
+    CurrencyCode,
+    ID,
+    ListQueryOptions,
+    Product,
+    RequestContext,
+    Transaction,
+} from '@vendure/core';
 
 import {
     CatalogChannelAssignmentFilter,
@@ -66,6 +75,46 @@ export class CatalogManagementAdminResolver {
         private readonly purchaseOrders: PurchaseOrderService,
         private readonly inventoryControl: InventoryControlService,
     ) {}
+
+    @Query()
+    @Allow(Permission.ReadProduct)
+    physicalProductWorkspace(@Ctx() ctx: RequestContext, @Args('productId') productId: ID) {
+        return this.operations.physicalWorkspace(ctx, productId);
+    }
+
+    @Mutation()
+    @Transaction()
+    @Allow(Permission.UpdateProduct)
+    updatePhysicalVariant(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateCatalogVariantOperationsInput,
+    ) {
+        return this.operations.updateVariant(ctx, input);
+    }
+
+    @Mutation()
+    @Transaction()
+    @Allow(Permission.UpdateProduct)
+    async updateProductVariantCost(
+        @Ctx() ctx: RequestContext,
+        @Args('productVariantId') id: ID,
+        @Args('currencyCode') currency: CurrencyCode,
+        @Args('costMicrounits') cost: number,
+    ) {
+        await this.operations.recordCost(ctx, id, currency, cost, 'MANUAL', null);
+        return true;
+    }
+
+    @Mutation()
+    @Transaction()
+    @Allow(Permission.UpdateProduct)
+    updateProductVariantSupplier(
+        @Ctx() ctx: RequestContext,
+        @Args('productVariantId') id: ID,
+        @Args('supplierId') supplierId: ID | null,
+    ) {
+        return this.operations.updateVariantSupplier(ctx, id, supplierId);
+    }
 
     @Query()
     @Allow(Permission.ReadProduct)
@@ -144,6 +193,21 @@ export class CatalogManagementAdminResolver {
     @Allow(manageCatalogOperationsPermission.Read)
     catalogProductOperations(@Ctx() ctx: RequestContext, @Args('productIds') productIds: ID[]) {
         return this.operations.productOperations(ctx, productIds);
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
+    catalogOrderProfitExpenseApplicability(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
+        return this.profit.orderExpenseApplicability(ctx, String(orderId));
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
+    validateCatalogOrderProfitExpenses(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ImportCatalogOrderProfitExpensesInput,
+    ) {
+        return this.profit.validateOrderExpenseImport(ctx, input);
     }
 
     @Query()
@@ -357,6 +421,7 @@ export class CatalogManagementAdminResolver {
     }
 
     @Mutation()
+    @Transaction()
     @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
     saveCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: SaveManualInventoryLotInput) {
         return this.inventoryControl.saveManualLot(ctx, input);

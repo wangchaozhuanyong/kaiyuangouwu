@@ -12,6 +12,7 @@ export const routeModuleLoaders = {
     inventory: () => import('./pages/Catalog/InventoryWarehouseModule'),
     inventoryControl: () => import('./pages/Catalog/InventoryControlModule'),
     cardPool: () => import('./pages/Sales/CardPoolModule'),
+    digitalDelivery: () => import('./pages/Sales/DigitalDeliveryModule'),
     assets: () => import('./pages/Catalog/AssetsModule'),
     sales: () => import('./pages/Sales/SalesModule'),
     profitReport: () => import('./pages/Sales/ProfitReportModule'),
@@ -66,6 +67,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/catalog/inventory') return 'inventory';
     if (pathname === '/catalog/inventory-control') return 'inventoryControl';
     if (pathname === '/catalog/card-pool') return 'cardPool';
+    if (pathname === '/operations/manual-digital-delivery') return 'digitalDelivery';
     if (pathname === '/catalog/assets') return 'assets';
     if (pathname === '/catalog/allocation') return 'storeAllocation';
     if (pathname.startsWith('/catalog')) return 'catalog';

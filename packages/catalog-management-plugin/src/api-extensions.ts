@@ -399,6 +399,14 @@ export const adminApiExtensions = gql`
         variants: [CatalogWorkspaceVariant!]!
     }
 
+    type PhysicalProductWorkspace {
+        productId: ID!
+        channelId: ID!
+        currencyCode: CurrencyCode!
+        stockLocations: [CatalogImportStockLocation!]!
+        variants: [CatalogWorkspaceVariant!]!
+    }
+
     type CatalogProductCreationContext {
         currencyCode: CurrencyCode!
         stockLocations: [CatalogImportStockLocation!]!
@@ -575,6 +583,7 @@ export const adminApiExtensions = gql`
         estimatedCostOrderCount: Int!
         estimatedCostLineCount: Int!
         carrierShippingCostMicrounits: Float
+        carrierShippingCostApplicable: Boolean!
         paymentFeeMicrounits: Float
         chargebackMicrounits: Float
         netProfitMicrounits: Float
@@ -587,12 +596,31 @@ export const adminApiExtensions = gql`
         includesChargebacks: Boolean!
     }
 
+    type CatalogOrderProfitExpenseApplicability {
+        fulfillmentType: String!
+        carrierShippingCostApplicable: Boolean!
+    }
+
+    type CatalogOrderProfitExpenseImportValidationRow {
+        rowNumber: Int!
+        orderCode: String!
+        fulfillmentType: String!
+        carrierShippingCostApplicable: Boolean!
+        error: String
+    }
+
+    type CatalogOrderProfitExpenseImportValidation {
+        rows: [CatalogOrderProfitExpenseImportValidationRow!]!
+    }
+
     type CatalogProfitOrder implements Node {
         id: ID!
         code: String!
         orderPlacedAt: DateTime!
         currencyCode: CurrencyCode!
         quantity: Int!
+        fulfillmentType: String!
+        carrierShippingCostApplicable: Boolean!
         settledRevenueMicrounits: Float!
         refundedRevenueMicrounits: Float!
         netRevenueMicrounits: Float!
@@ -713,6 +741,9 @@ export const adminApiExtensions = gql`
         primaryUnit: String!
         purchaseUnit: String!
         packageQuantity: Float
+        digitalAvailableQuantity: Int
+        digitalDeliveryMode: String
+        digitalStockPolicy: String
         stockOnHand: Int
         stockAdjustmentIdempotencyKey: String
         stockAdjustmentReason: String
@@ -755,6 +786,26 @@ export const adminApiExtensions = gql`
     }
 
     input UpdateCatalogVariantOperationsInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        sku: String
+        enabled: Boolean
+        barcode: String
+        specification: String
+        saleUnit: String
+        purchaseUnit: String
+        packageQuantity: Float
+        shelfLifeDays: Int
+        sellingPrice: Money
+        purchaseCostMicrounits: Float
+        currencyCode: CurrencyCode!
+        stockOnHand: Int
+        minimumStock: Int
+        maximumStock: Int
+        supplierId: ID
+    }
+
+    input UpdatePhysicalVariantInput {
         productVariantId: ID!
         stockLocationId: ID!
         sku: String
@@ -878,6 +929,7 @@ export const adminApiExtensions = gql`
     }
 
     input SaveCatalogInventoryLotInput {
+        reconcileExistingStock: Boolean
         id: ID
         productVariantId: ID!
         stockLocationId: ID!
@@ -1035,6 +1087,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
+        physicalProductWorkspace(productId: ID!): PhysicalProductWorkspace!
         catalogProductChannelAssignments(
             options: ProductListOptions
             assignmentFilter: CatalogChannelAssignmentFilterInput
@@ -1057,6 +1110,10 @@ export const adminApiExtensions = gql`
             take: Int
         ): CatalogProductSummaryList!
         catalogProductOperations(productIds: [ID!]!): [CatalogProductOperationsSummary!]!
+        catalogOrderProfitExpenseApplicability(orderId: ID!): CatalogOrderProfitExpenseApplicability!
+        validateCatalogOrderProfitExpenses(
+            input: ImportCatalogOrderProfitExpensesInput!
+        ): CatalogOrderProfitExpenseImportValidation!
         catalogOrderProfitExpense(orderId: ID!): CatalogOrderProfitExpense
         catalogOrderProfitExpenseEvents(orderId: ID!): [CatalogOrderProfitExpenseEvent!]!
         catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
@@ -1074,6 +1131,13 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        updateProductVariantSupplier(productVariantId: ID!, supplierId: ID): Boolean!
+        updatePhysicalVariant(input: UpdatePhysicalVariantInput!): PhysicalProductWorkspace!
+        updateProductVariantCost(
+            productVariantId: ID!
+            currencyCode: CurrencyCode!
+            costMicrounits: Float!
+        ): Boolean!
         applyCatalogVariantMatrix(input: ApplyCatalogVariantMatrixInput!): Product!
         beginCatalogImport(input: BeginCatalogImportInput!): CatalogImportJob!
         appendCatalogImportRows(input: AppendCatalogImportRowsInput!): CatalogImportJob!

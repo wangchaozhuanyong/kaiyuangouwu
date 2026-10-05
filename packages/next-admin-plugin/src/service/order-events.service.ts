@@ -1,4 +1,5 @@
-import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
+import { OrderProcessingChangedEvent, OrderProcessingService } from '@vendure/commerce-fulfillment-plugin';
 import {
     EventBus,
     Logger,
@@ -6,6 +7,8 @@ import {
     OrderPlacedEvent,
     OrderStateTransitionEvent,
     ProcessContext,
+    RefundEvent,
+    RefundStateTransitionEvent,
     TransactionalConnection,
 } from '@vendure/core';
 import { randomUUID } from 'node:crypto';
@@ -67,6 +70,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
         private readonly eventBus: EventBus,
         private readonly connection: TransactionalConnection,
         private readonly processContext: ProcessContext,
+        @Optional() private readonly processing?: OrderProcessingService,
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
@@ -88,10 +92,18 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
         this.subscriptions.push(
             this.eventBus.ofType(OrderStateTransitionEvent).subscribe(event => {
                 if (!event.order.orderPlacedAt) return;
-                const operation = this.processContext.isWorker
-                    ? relayOrderEvent(socketPath, String(event.order.id), 'changed')
-                    : this.refreshOrder(String(event.order.id));
-                void operation.catch(() => Logger.error('Unable to update order reminder', 'OrderEvents'));
+                this.processingChanged(socketPath, String(event.order.id));
+            }),
+        );
+        this.subscriptions.push(
+            this.eventBus.ofType(RefundEvent).subscribe(event => {
+                if (event.order.orderPlacedAt) this.processingChanged(socketPath, String(event.order.id));
+            }),
+            this.eventBus.ofType(RefundStateTransitionEvent).subscribe(event => {
+                if (event.order.orderPlacedAt) this.processingChanged(socketPath, String(event.order.id));
+            }),
+            this.eventBus.ofType(OrderProcessingChangedEvent).subscribe(event => {
+                this.processingChanged(socketPath, String(event.orderId));
             }),
         );
         // One startup recovery pass restores timers after a restart, without announcing historical orders.
@@ -157,7 +169,8 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
             const oldest = this.seen.values().next().value;
             if (oldest) this.seen.delete(oldest);
         }
-        this.trackOrder(order);
+        await this.trackOrder(order);
+        if (this.stopped) return;
         this.publish(order, 'order-placed', order.orderPlacedAt);
     }
 
@@ -167,7 +180,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
             where: { id: orderId },
             relations: ORDER_RELATIONS,
         });
-        if (order) this.trackOrder(order);
+        if (order) await this.trackOrder(order);
         else this.stopReminder(orderId);
     }
 
@@ -179,21 +192,21 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
                     ...(after === undefined ? {} : { id: MoreThan(after) }),
                     active: false,
                     orderPlacedAt: Not(IsNull()),
-                    state: In(PENDING_STATES),
+                    ...(this.processing ? {} : { state: In(PENDING_STATES) }),
                 },
                 relations: ORDER_RELATIONS,
                 order: { id: 'ASC' },
                 take: 100,
             });
-            for (const order of orders) this.trackOrder(order, true);
+            for (const order of orders) await this.trackOrder(order, true);
             if (orders.length < 100) return;
             after = orders[orders.length - 1].id;
         }
     }
 
-    private trackOrder(order: Order, restored = false): void {
+    private async trackOrder(order: Order, restored = false): Promise<void> {
         const orderId = String(order.id);
-        if (!order.orderPlacedAt || !needsProcessing(order)) {
+        if (!order.orderPlacedAt || !(await this.requiresProcessing(order))) {
             this.stopReminder(orderId);
             return;
         }
@@ -245,7 +258,9 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
                 relations: ORDER_RELATIONS,
             });
             if (this.stopped || this.pending.get(orderId) !== entry) return;
-            if (!order || !needsProcessing(order)) {
+            const actionable = order && (await this.requiresProcessing(order));
+            if (this.stopped || this.pending.get(orderId) !== entry) return;
+            if (!order || !actionable) {
                 this.stopReminder(orderId);
                 return;
             }
@@ -281,5 +296,21 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
                 }
             }
         }
+    }
+
+    private requiresProcessing(order: Order): Promise<boolean> {
+        return this.processing
+            ? this.processing.needsReminder(order)
+            : Promise.resolve(needsProcessing(order));
+    }
+
+    private processingChanged(socketPath: string, orderId: string): void {
+        if (this.stopped) return;
+        // All sources use the same committed-order refresh. A refund or notification retry may
+        // change the next task while the Order keeps its existing state.
+        const operation = this.processContext.isWorker
+            ? relayOrderEvent(socketPath, orderId, 'changed')
+            : this.refreshOrder(orderId);
+        void operation.catch(() => Logger.error('Unable to update order reminder', 'OrderEvents'));
     }
 }

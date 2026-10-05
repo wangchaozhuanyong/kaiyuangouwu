@@ -4,11 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
-import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
-import { useServerDraft } from '../../hooks/use-server-draft';
-import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
-import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -67,6 +63,7 @@ interface VariantDraft {
 }
 
 interface LotDraft {
+    reconcileExistingStock?: boolean;
     id?: string;
     productVariantId: string;
     stockLocationId: string;
@@ -75,20 +72,21 @@ interface LotDraft {
     expiresAt: string;
     quantityOnHand: string;
     purchaseCost: string;
-    reason: string;
 }
 
 export function CatalogOperationsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const isDigital = isDigitalProduct(context);
     const query = useQuery<CatalogWorkspaceResult>(CATALOG_PRODUCT_WORKSPACE_QUERY, {
         variables: { productId },
-        skip: !productId,
+        skip: !productId || isDigital,
+        fetchPolicy: 'cache-and-network',
     });
     const supplierQuery = useQuery<{
         catalogSuppliers: { items: CatalogSupplierRecord[]; totalItems: number };
     }>(CATALOG_SUPPLIERS_QUERY, {
         variables: { options: { skip: 0, take: 100 } },
-        skip: !productId,
+        skip: !productId || isDigital,
     });
     const [saveOperations, saveState] = useMutation(UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION);
     const [saveLot, lotState] = useMutation(SAVE_CATALOG_INVENTORY_LOT_MUTATION);
@@ -96,7 +94,6 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
     const [stockLocationId, setStockLocationId] = useState('');
     const [drafts, setDrafts] = useState<Record<string, VariantDraft>>({});
     const [dirtyIds, setDirtyIds] = useState<string[]>([]);
-    useUnsavedChangesWarning(dirtyIds.length > 0, '当前页面还有未保存的 SKU 修改，确定放弃吗？');
     const [lotDraft, setLotDraft] = useState<LotDraft | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -121,9 +118,9 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
         return [...records.values()];
     }, [supplierQuery.data, workspace]);
 
-    if (!productId) return null;
+    if (!productId || isDigital) return null;
     if (query.loading && !workspace) return <PanelState label="正在读取采购、库存与批次数据…" />;
-    if ((query.error && !query.data) || !workspace) {
+    if (query.error || !workspace) {
         return (
             <PanelState tone="error" label="商品供应链工作区加载失败" action={() => void query.refetch()} />
         );
@@ -149,13 +146,13 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
         if (!stockLocationId || !dirtyIds.length) return;
         try {
             const inputs = dirtyIds.map(id =>
-                operationInput(drafts[id], stockLocationId, workspace.currencyCode),
+                operationInput(drafts[id], stockLocationId, workspace.currencyCode, !isDigital),
             );
             await Promise.all(inputs.map(input => saveOperations({ variables: { input } })));
             setDirtyIds([]);
             setNotice(`已保存 ${inputs.length} 个 SKU 的经营与采购资料`);
             setError('');
-            await refreshAfterAdminWrite(() => query.refetch(), setError);
+            await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, 'SKU 经营资料保存失败，请检查输入后重试'));
         }
@@ -168,6 +165,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         ...(draft.id ? { id: draft.id } : {}),
                         productVariantId: draft.productVariantId,
                         stockLocationId: draft.stockLocationId,
+                        reconcileExistingStock: draft.reconcileExistingStock ?? false,
                         lotCode: requiredText(draft.lotCode, '批次号'),
                         manufacturedAt: dateInputToUtcDateTime(draft.manufacturedAt),
                         expiresAt: dateInputToUtcDateTime(draft.expiresAt),
@@ -176,15 +174,13 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                             ? Math.round(number(draft.purchaseCost, '批次成本') * 1_000)
                             : null,
                         currencyCode: workspace.currencyCode,
-                        idempotencyKey: crypto.randomUUID(),
-                        reason: requiredText(draft.reason, '调整原因'),
                     },
                 },
             });
             setLotDraft(null);
-            setNotice('库存批次已保存，并生成对应库存调整流水');
+            setNotice(draft.reconcileExistingStock ? '已为现有库存分配批次，在库数量不变' : '库存批次已保存');
             setError('');
-            await refreshAfterAdminWrite(() => query.refetch(), setError);
+            await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, '库存批次保存失败，请检查输入后重试'));
         }
@@ -204,14 +200,13 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Boxes className="h-4 w-4 text-blue-600" /> SKU 供应链与供货商扩展（可选）
-                        <FeatureHelpButton
-                            topic="catalog.inventory"
-                            title="SKU 供应链与供货商扩展"
-                            description={
-                                '采购成本可在上方主表格直接填写并统一保存；供货商、批次和保质期可按需在此维护。'
-                            }
-                        />
+                        <FeatureHelpButton topic="catalog.inventory" title="SKU 供应链与供货商扩展" />
                     </h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                        {isDigital
+                            ? '采购成本可在上方主表格直接填写并统一保存；供货商可按需在此维护。'
+                            : '采购成本可在上方主表格直接填写并统一保存；供货商、批次和保质期可按需在此维护。'}
+                    </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                     <AdminField className="text-xs font-bold text-slate-600" label="当前仓库">
@@ -321,7 +316,9 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                 </div>
                                 <details className="border-t border-slate-100">
                                     <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                                        更多经营资料（条码、单位、库存预警、批次等）
+                                        {isDigital
+                                            ? '更多经营资料（条码、单位、库存预警等）'
+                                            : '更多经营资料（条码、单位、库存预警、批次等）'}
                                     </summary>
                                     <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                                         <TextField
@@ -358,24 +355,28 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                 updateDraft(variant.id, { purchaseUnit })
                                             }
                                         />
-                                        <TextField
-                                            label="包装换算"
-                                            description="1 个采购单位含多少销售单位。例如 1 箱 = 12 瓶填 12；同单位填 1。"
-                                            type="number"
-                                            value={draft.packageQuantity}
-                                            onChange={packageQuantity =>
-                                                updateDraft(variant.id, { packageQuantity })
-                                            }
-                                        />
-                                        <TextField
-                                            label="默认保质期（天）"
-                                            description="只作批次默认值。新增库存批次并填写生产日期后自动算到期日；只填这里不能知道现有库存何时过期。"
-                                            type="number"
-                                            value={draft.shelfLifeDays}
-                                            onChange={shelfLifeDays =>
-                                                updateDraft(variant.id, { shelfLifeDays })
-                                            }
-                                        />
+                                        {!isDigital && (
+                                            <TextField
+                                                label="包装换算"
+                                                description="1 个采购单位含多少销售单位。例如 1 箱 = 12 瓶填 12；同单位填 1。"
+                                                type="number"
+                                                value={draft.packageQuantity}
+                                                onChange={packageQuantity =>
+                                                    updateDraft(variant.id, { packageQuantity })
+                                                }
+                                            />
+                                        )}
+                                        {!isDigital && (
+                                            <TextField
+                                                label="默认保质期（天）"
+                                                description="只作批次默认值。新增库存批次并填写生产日期后自动算到期日；只填这里不能知道现有库存何时过期。"
+                                                type="number"
+                                                value={draft.shelfLifeDays}
+                                                onChange={shelfLifeDays =>
+                                                    updateDraft(variant.id, { shelfLifeDays })
+                                                }
+                                            />
+                                        )}
                                         <TextField
                                             label="库存下限"
                                             description="库存低于此数量时标记为低库存；留空表示不设置。"
@@ -404,17 +405,19 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                             />
                                             允许销售该 SKU
                                         </label>
-                                        <div className="flex items-end sm:col-span-2 xl:col-span-2">
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() =>
-                                                    setLotDraft(emptyLot(variant.id, stockLocationId))
-                                                }
-                                                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
-                                            >
-                                                <Plus className="h-4 w-4" /> 新增库存批次
-                                            </AdminButton>
-                                        </div>
+                                        {!isDigital && (
+                                            <div className="flex items-end sm:col-span-2 xl:col-span-2">
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setLotDraft(emptyLot(variant.id, stockLocationId))
+                                                    }
+                                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
+                                                >
+                                                    <Plus className="h-4 w-4" /> 新增库存批次
+                                                </AdminButton>
+                                            </div>
+                                        )}
                                     </div>
                                 </details>
                             </article>
@@ -423,100 +426,110 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 </div>
             )}
 
-            <details className="border-t border-slate-200 pt-4">
-                <summary className="cursor-pointer list-none">
-                    <div className="flex items-center justify-between gap-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            <CalendarClock className="h-4 w-4 text-amber-600" /> 库存批次与效期（可选）
-                            <FeatureHelpButton
-                                topic="catalog.inventory"
-                                title="库存批次与效期"
-                                description={
-                                    '真正的到期时间记录在每一批库存上；系统按到期日期优先出库，并识别过期库存。'
-                                }
-                            />
-                        </h3>
-                        <span className="text-xs text-slate-500">已记录 {visibleLots.length} 个批次</span>
-                    </div>
-                </summary>
-                {!visibleLots.length ? (
-                    <p className="mt-3 text-xs text-slate-500">
-                        当前仓库还没有库存批次，因此现在无法判断这批库存何时过期。请在对应 SKU
-                        的“更多经营资料”中新增库存批次。
-                    </p>
-                ) : (
-                    <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                        <table className="min-w-[850px] w-full text-left text-xs">
-                            <thead className="bg-slate-50 text-slate-500">
-                                <tr>
-                                    {[
-                                        'SKU',
-                                        '批次号',
-                                        '生产日期',
-                                        '到期日期',
-                                        '数量',
-                                        '成本',
-                                        '状态',
-                                        '操作',
-                                    ].map(label => (
-                                        <th key={label} className="px-3 py-2.5 font-bold">
-                                            {label}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {visibleLots.map(lot => (
-                                    <tr key={lot.id}>
-                                        <td className="px-3 py-3">
-                                            <strong>{lot.variantName}</strong>
-                                            <small className="ml-2 font-mono text-slate-500">{lot.sku}</small>
-                                        </td>
-                                        <td className="px-3 py-3 font-mono">{lot.lotCode}</td>
-                                        <td className="px-3 py-3">{dateOnly(lot.manufacturedAt)}</td>
-                                        <td className="px-3 py-3">{dateOnly(lot.expiresAt)}</td>
-                                        <td className="px-3 py-3">{lot.quantityOnHand}</td>
-                                        <td className="px-3 py-3">
-                                            {lot.purchaseCostMicrounits == null
-                                                ? '—'
-                                                : `${workspace.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
-                                        </td>
-                                        <td className="px-3 py-3">{systemStatusDisplayLabel(lot.state)}</td>
-                                        <td className="px-3 py-3">
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() =>
-                                                    setLotDraft({
-                                                        id: lot.id,
-                                                        productVariantId: lot.productVariantId,
-                                                        stockLocationId: lot.stockLocationId,
-                                                        lotCode: lot.lotCode,
-                                                        manufacturedAt: inputDate(lot.manufacturedAt),
-                                                        expiresAt: inputDate(lot.expiresAt),
-                                                        quantityOnHand: String(lot.quantityOnHand),
-                                                        purchaseCost:
-                                                            lot.purchaseCostMicrounits == null
-                                                                ? ''
-                                                                : (
-                                                                      lot.purchaseCostMicrounits / 1_000
-                                                                  ).toFixed(3),
-                                                        reason: '',
-                                                    })
-                                                }
-                                                className="font-bold text-blue-600 hover:underline"
-                                            >
-                                                编辑
-                                            </AdminButton>
-                                        </td>
+            {!isDigital && (
+                <details className="border-t border-slate-200 pt-4">
+                    <summary className="cursor-pointer list-none">
+                        <div className="flex items-center justify-between gap-3">
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                <CalendarClock className="h-4 w-4 text-amber-600" /> 库存批次与效期（可选）
+                                <FeatureHelpButton topic="catalog.inventory" title="库存批次与效期" />
+                            </h3>
+                            <span className="text-xs text-slate-500">已记录 {visibleLots.length} 个批次</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                            真正的到期时间记录在每一批库存上；系统按到期日期优先出库，并识别过期库存。
+                        </p>
+                    </summary>
+                    {!visibleLots.length ? (
+                        <p className="mt-3 text-xs text-slate-500">
+                            当前仓库还没有库存批次，因此现在无法判断这批库存何时过期。请在对应 SKU
+                            的“更多经营资料”中新增库存批次。
+                        </p>
+                    ) : (
+                        <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="admin-mobile-record-table min-w-[850px] w-full text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500">
+                                    <tr>
+                                        {[
+                                            'SKU',
+                                            '批次号',
+                                            '生产日期',
+                                            '到期日期',
+                                            '数量',
+                                            '成本',
+                                            '状态',
+                                            '操作',
+                                        ].map(label => (
+                                            <th key={label} className="px-3 py-2.5 font-bold">
+                                                {label}
+                                            </th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </details>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {visibleLots.map(lot => (
+                                        <tr key={lot.id}>
+                                            <td data-label="SKU" className="px-3 py-3">
+                                                <strong>{lot.variantName}</strong>
+                                                <small className="ml-2 font-mono text-slate-500">
+                                                    {lot.sku}
+                                                </small>
+                                            </td>
+                                            <td data-label="批次号" className="px-3 py-3 font-mono">
+                                                {lot.lotCode}
+                                            </td>
+                                            <td data-label="生产日期" className="px-3 py-3">
+                                                {dateOnly(lot.manufacturedAt)}
+                                            </td>
+                                            <td data-label="到期日期" className="px-3 py-3">
+                                                {dateOnly(lot.expiresAt)}
+                                            </td>
+                                            <td data-label="数量" className="px-3 py-3">
+                                                {lot.quantityOnHand}
+                                            </td>
+                                            <td data-label="成本" className="px-3 py-3">
+                                                {lot.purchaseCostMicrounits == null
+                                                    ? '—'
+                                                    : `${workspace.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
+                                            </td>
+                                            <td data-label="状态" className="px-3 py-3">
+                                                {systemStatusDisplayLabel(lot.state)}
+                                            </td>
+                                            <td data-label="操作" className="px-3 py-3">
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setLotDraft({
+                                                            id: lot.id,
+                                                            productVariantId: lot.productVariantId,
+                                                            stockLocationId: lot.stockLocationId,
+                                                            lotCode: lot.lotCode,
+                                                            manufacturedAt: inputDate(lot.manufacturedAt),
+                                                            expiresAt: inputDate(lot.expiresAt),
+                                                            quantityOnHand: String(lot.quantityOnHand),
+                                                            purchaseCost:
+                                                                lot.purchaseCostMicrounits == null
+                                                                    ? ''
+                                                                    : (
+                                                                          lot.purchaseCostMicrounits / 1_000
+                                                                      ).toFixed(3),
+                                                        })
+                                                    }
+                                                    className="font-bold text-blue-600 hover:underline"
+                                                >
+                                                    编辑
+                                                </AdminButton>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </details>
+            )}
 
-            {lotDraft && (
+            {!isDigital && lotDraft && (
                 <LotEditor
                     value={lotDraft}
                     currencyCode={workspace.currencyCode}
@@ -532,63 +545,51 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
 
 export function ProductPackagingBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const isDigital = isDigitalProduct(context);
     const query = useQuery<ProductPackagingWorkspaceResult>(PRODUCT_PACKAGING_WORKSPACE_QUERY, {
         variables: { productId },
-        skip: !productId,
+        skip: !productId || isDigital,
+        fetchPolicy: 'cache-and-network',
     });
     const [updatePackaging, updateState] = useMutation(UPDATE_PRODUCT_PACKAGING_MUTATION);
     const data = query.data;
     const variants = useMemo(() => data?.product?.variants ?? [], [data?.product?.variants]);
+    const [unitVariantId, setUnitVariantId] = useState('');
+    const [packageVariantId, setPackageVariantId] = useState('');
+    const [unitLabel, setUnitLabel] = useState('件');
+    const [packageLabel, setPackageLabel] = useState('箱');
+    const [unitsPerPackage, setUnitsPerPackage] = useState('24');
+    const [enabled, setEnabled] = useState(true);
+    const [autoUnpack, setAutoUnpack] = useState(true);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-    const rule = data?.productPackaging;
-    const source = data
-        ? {
-              unitVariantId: rule?.unitVariant.id ?? variants[0]?.id ?? '',
-              packageVariantId: rule?.packageVariant.id ?? variants[1]?.id ?? '',
-              unitLabel: rule?.unitLabel ?? '件',
-              packageLabel: rule?.packageLabel ?? '箱',
-              unitsPerPackage: String(rule?.unitsPerPackage ?? 24),
-              enabled: rule?.enabled ?? true,
-              autoUnpack: rule?.autoUnpack ?? true,
-          }
-        : null;
-    const draftOwner = useServerDraft(productId, source ? JSON.stringify(source) : '', source);
-    const draft = draftOwner.draft ?? {
-        unitVariantId: '',
-        packageVariantId: '',
-        unitLabel: '件',
-        packageLabel: '箱',
-        unitsPerPackage: '24',
-        enabled: true,
-        autoUnpack: true,
-    };
-    const { unitVariantId, packageVariantId, unitLabel, packageLabel, unitsPerPackage, enabled, autoUnpack } =
-        draft;
-    const setUnitVariantId = (value: string) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), unitVariantId: value }));
-    const setPackageVariantId = (value: string) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), packageVariantId: value }));
-    const setUnitLabel = (value: string) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), unitLabel: value }));
-    const setPackageLabel = (value: string) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), packageLabel: value }));
-    const setUnitsPerPackage = (value: string) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), unitsPerPackage: value }));
-    const setEnabled = (value: boolean) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), enabled: value }));
-    const setAutoUnpack = (value: boolean) =>
-        draftOwner.setDraft(current => ({ ...(current ?? draft), autoUnpack: value }));
 
-    if (!productId) return null;
+    /* oxlint-disable react/set-state-in-effect -- the versioned packaging response initializes the form. */
+    useEffect(() => {
+        const rule = data?.productPackaging;
+        if (rule) {
+            setUnitVariantId(rule.unitVariant.id);
+            setPackageVariantId(rule.packageVariant.id);
+            setUnitLabel(rule.unitLabel);
+            setPackageLabel(rule.packageLabel);
+            setUnitsPerPackage(String(rule.unitsPerPackage));
+            setEnabled(rule.enabled);
+            setAutoUnpack(rule.autoUnpack);
+        } else if (variants.length >= 2 && !unitVariantId && !packageVariantId) {
+            setUnitVariantId(variants[0].id);
+            setPackageVariantId(variants[1].id);
+        }
+    }, [data?.productPackaging, packageVariantId, unitVariantId, variants]);
+    /* oxlint-enable react/set-state-in-effect */
+
+    if (!productId || isDigital) return null;
     if (query.loading && !data) return <PanelState label="正在读取包装换算配置…" />;
-    if ((query.error && !query.data) || !data)
+    if (query.error || !data)
         return <PanelState tone="error" label="包装配置加载失败" action={() => void query.refetch()} />;
     if (variants.length < 2) {
         return null;
     }
     const save = async () => {
-        if (draftOwner.sourceChanged) return;
         try {
             if (unitVariantId === packageVariantId) throw new Error('散件 SKU 与整包 SKU 不能相同');
             const quantity = integer(unitsPerPackage, '每包数量');
@@ -612,8 +613,7 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
             });
             setNotice('包装换算与自动拆包配置已保存');
             setError('');
-            draftOwner.accept(draft);
-            await refreshAfterAdminWrite(() => query.refetch(), setError);
+            await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, '包装配置保存失败，请检查输入后重试'));
         }
@@ -635,13 +635,12 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                 <AdminButton
                     type="button"
                     onClick={() => void save()}
-                    disabled={updateState.loading || draftOwner.sourceChanged}
+                    disabled={updateState.loading}
                     className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                 >
                     <Save className="h-4 w-4" /> {updateState.loading ? '保存中…' : '保存包装配置'}
                 </AdminButton>
             </div>
-            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -745,13 +744,13 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
     const query = useQuery<VariantPricesData>(PRODUCT_VARIANT_PRICES_QUERY, {
         variables: { productId },
         skip: !productId,
+        fetchPolicy: 'cache-and-network',
     });
     const [updatePrices, updateState] = useMutation<{
         updateProductVariants: Array<{ id: string }>;
     }>(UPDATE_PRODUCT_VARIANT_PRICES_MUTATION);
     const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
     const [dirtyIds, setDirtyIds] = useState<string[]>([]);
-    useUnsavedChangesWarning(dirtyIds.length > 0, '当前页面还有未保存的 SKU 修改，确定放弃吗？');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const data = query.data;
@@ -790,7 +789,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
     /* oxlint-enable react/set-state-in-effect */
     if (!productId) return null;
     if (query.loading && !data) return <PanelState label="正在读取多币种 SKU 价格…" />;
-    if ((query.error && !query.data) || !data?.product)
+    if (query.error || !data?.product)
         return (
             <PanelState tone="error" label="多币种 SKU 价格加载失败" action={() => void query.refetch()} />
         );
@@ -819,22 +818,18 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
             }
             setDirtyIds([]);
             setNotice(`已保存 ${input.length} 个 SKU 的 ${currencies.length} 种币种价格`);
-            await refreshAfterAdminWrite(() => query.refetch(), setError);
+            await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, '多币种价格保存失败'));
         }
     };
     return (
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+        <section className="space-y-4 border-t border-slate-100 pt-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <CircleDollarSign className="h-4 w-4 text-emerald-600" /> 其他币种价格（可选）
-                        <FeatureHelpButton
-                            topic="catalog.variant-channels"
-                            title="其他币种价格"
-                            description={'只有当前店铺同时收取多种币种时才需要设置；不会覆盖其他店铺。'}
-                        />
+                        <FeatureHelpButton topic="catalog.variant-channels" title="其他币种价格" />
                     </h2>
                 </div>
                 <AdminButton
@@ -852,6 +847,9 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <p className="admin-mobile-table-hint">
+                    各币种价格用于横向比较，请左右滑动查看；输入与保存保持在当前表格。
+                </p>
                 <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500">
                         <tr>
@@ -914,6 +912,7 @@ interface ProductVariantCustomFieldsData {
 
 export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const isDigital = isDigitalProduct(context);
     const productName =
         (typeof context.entity?.name === 'string' && context.entity.name) ||
         ((context.entity?.translations as Array<{ name?: string }>)?.[0]?.name ?? '');
@@ -923,9 +922,18 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         () =>
             definitions.filter(
                 field =>
-                    isDashboardVisibleCustomField(field) && hasAnyPermission(field.requiresPermission ?? []),
+                    isDashboardVisibleCustomField(field) &&
+                    hasAnyPermission(field.requiresPermission ?? []) &&
+                    ![
+                        'fulfillmentType',
+                        'digitalDeliveryMode',
+                        'digitalStockPolicy',
+                        'packageQuantity',
+                        'shelfLifeDays',
+                    ].includes(field.name) &&
+                    (!isDigital || !['barcode', 'purchaseUnit', 'saleUnit'].includes(field.name)),
             ),
-        [definitions, hasAnyPermission],
+        [definitions, hasAnyPermission, isDigital],
     );
     const document = useMemo(
         () =>
@@ -939,8 +947,11 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     const query = useQuery<ProductVariantCustomFieldsData>(document, {
         variables: { productId },
         skip: !productId || visibleDefinitions.length === 0,
+        fetchPolicy: 'cache-and-network',
     });
     const [selectedId, setSelectedId] = useState('');
+    const [sourceSignature, setSourceSignature] = useState('');
+    const [values, setValues] = useState<CustomFieldValueMap>({});
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [update, updateState] = useMutation<{
@@ -952,15 +963,16 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         ? `${selected.id}:${JSON.stringify([selected.customFields ?? {}, selected.translations])}`
         : '';
 
-    const draftOwner = useServerDraft<CustomFieldValueMap>(
-        `${productId}:${selected?.id ?? ''}`,
-        nextSignature,
-        selected
-            ? customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations)
-            : null,
-    );
-    const values = draftOwner.draft ?? {};
-    const setValues = draftOwner.setDraft;
+    /* oxlint-disable react/set-state-in-effect -- GraphQL result initializes the selected SKU draft. */
+    useEffect(() => {
+        if (!selected || nextSignature === sourceSignature) return;
+        setSelectedId(selected.id);
+        setValues(
+            customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations),
+        );
+        setSourceSignature(nextSignature);
+    }, [nextSignature, selected, sourceSignature, visibleDefinitions]);
+    /* oxlint-enable react/set-state-in-effect */
 
     if (!productId || visibleDefinitions.length === 0) return null;
     if (query.loading && !query.data) {
@@ -970,20 +982,25 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             />
         );
     }
-    if ((query.error && !query.data) || !query.data?.product) {
+    if (query.error || !query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
     }
     if (variants.length === 0) return null;
     const selectVariant = (id: string) => {
         const variant = variants.find(item => item.id === id);
         if (!variant) return;
-        if (draftOwner.dirty && !window.confirm('切换 SKU 会放弃当前未保存的修改，确定继续吗？')) return;
         setSelectedId(id);
+        setValues(
+            customFieldValuesFromEntity(visibleDefinitions, variant.customFields, variant.translations),
+        );
+        setSourceSignature(
+            `${variant.id}:${JSON.stringify([variant.customFields ?? {}, variant.translations])}`,
+        );
         setNotice('');
         setError('');
     };
     const save = async () => {
-        if (!selected || draftOwner.sourceChanged) return;
+        if (!selected) return;
         const validation = validateCustomFieldValues(visibleDefinitions, values);
         if (Object.keys(validation).length > 0) {
             setError(Object.values(validation)[0] ?? 'SKU 扩展字段校验失败');
@@ -1014,28 +1031,24 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             }
             setNotice(`SKU ${selected.sku} 的扩展字段已保存`);
             setError('');
-            draftOwner.accept(values);
-            await refreshAfterAdminWrite(() => query.refetch(), setError);
+            setSourceSignature('');
+            await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, 'SKU 扩展字段保存失败'));
         }
     };
     return (
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+        <section className="space-y-4 border-t border-slate-100 pt-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        其他 SKU 资料（可选）
+                        规格补充资料（可选）
                         {productName && (
                             <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
                                 商品：{productName}
                             </span>
                         )}
-                        <FeatureHelpButton
-                            topic="catalog.sku-custom-fields"
-                            title="其他 SKU 资料"
-                            description={'包含商品条码、单位、规格等经营资料，按 SKU 分别保存。'}
-                        />
+                        <FeatureHelpButton topic="catalog.sku-custom-fields" title="规格补充资料" />
                     </h2>
                 </div>
                 <div className="flex gap-2">
@@ -1054,7 +1067,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     <AdminButton
                         type="button"
                         onClick={() => void save()}
-                        disabled={!selected || updateState.loading || draftOwner.sourceChanged}
+                        disabled={!selected || updateState.loading}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         <Save className="h-4 w-4" />
@@ -1062,7 +1075,6 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     </AdminButton>
                 </div>
             </div>
-            {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
@@ -1075,7 +1087,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                 fields={visibleDefinitions}
                 values={values}
                 onChange={setValues}
-                disabled={updateState.loading || draftOwner.sourceChanged}
+                disabled={updateState.loading}
             />
         </section>
     );
@@ -1133,6 +1145,28 @@ function LotEditor({
                         ? '这个 SKU 没有设置默认保质期。请手动填写实际到期日期；只记录生产日期不会自动判断过期。'
                         : `这个 SKU 的默认保质期是 ${defaultShelfLifeDays} 天。填写生产日期后会自动带出到期日期，你仍可按包装上的实际日期修改。`}
                 </p>
+                <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                    <AdminInput
+                        type="checkbox"
+                        checked={draft.reconcileExistingStock ?? false}
+                        onChange={event =>
+                            setDraft(current => ({
+                                ...current,
+                                reconcileExistingStock: event.target.checked,
+                            }))
+                        }
+                    />
+                    分配现有库存（数量不变）
+                    <FeatureHelpButton
+                        title="批次操作"
+                        content={{
+                            purpose:
+                                '首次启用批次时，先把仓库现有数量分配到批次。完成分配后，新增入库才会增加在库数量。',
+                            requirements: [],
+                            example: '',
+                        }}
+                    />
+                </label>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <TextField
                         label="批次号 *"
@@ -1168,12 +1202,6 @@ function LotEditor({
                         value={draft.purchaseCost}
                         onChange={cost => update('purchaseCost', cost)}
                     />
-                    <TextField
-                        label="调整原因 *"
-                        description="用于审计追溯，例如盘点差异、破损报废或入库单号。"
-                        value={draft.reason}
-                        onChange={reason => update('reason', reason)}
-                    />
                 </div>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
                     <AdminButton
@@ -1186,7 +1214,7 @@ function LotEditor({
                     <AdminButton
                         type="button"
                         onClick={() => void onSave(draft)}
-                        disabled={saving || !draft.reason.trim()}
+                        disabled={saving}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         {saving ? '保存中…' : '保存批次'}
@@ -1219,14 +1247,22 @@ function toDraft(variant: CatalogWorkspaceVariantRecord, stockLocationId: string
     };
 }
 
-function operationInput(draft: VariantDraft, stockLocationId: string, currencyCode: string) {
+function isDigitalProduct(context: NextAdminPageBlockContext) {
+    const customFields = context.entity?.customFields as Record<string, unknown> | null | undefined;
+    return customFields?.fulfillmentType === 'digital';
+}
+
+function operationInput(
+    draft: VariantDraft,
+    stockLocationId: string,
+    currencyCode: string,
+    supportsPhysicalInventory: boolean,
+) {
     if (!draft) throw new Error('SKU 草稿不存在，请刷新后重试');
     const minimumStock = optionalInteger(draft.minimumStock, '库存下限');
     const maximumStock = optionalInteger(draft.maximumStock, '库存上限');
     if (minimumStock != null && maximumStock != null && maximumStock < minimumStock)
         throw new Error('库存上限不能小于库存下限');
-    const packageQuantity = number(draft.packageQuantity, '包装换算');
-    if (packageQuantity <= 0) throw new Error('包装换算必须大于 0');
     const input: Record<string, unknown> = {
         productVariantId: draft.id,
         stockLocationId,
@@ -1236,14 +1272,19 @@ function operationInput(draft: VariantDraft, stockLocationId: string, currencyCo
         specification: draft.specification.trim(),
         saleUnit: draft.saleUnit.trim(),
         purchaseUnit: draft.purchaseUnit.trim(),
-        packageQuantity,
-        shelfLifeDays: optionalInteger(draft.shelfLifeDays, '保质期'),
         sellingPrice: Math.round(number(draft.sellingPrice, '销售价') * 100),
         currencyCode,
+        stockOnHand: integer(draft.stockOnHand, '库存'),
         minimumStock,
         maximumStock,
         supplierId: draft.supplierId || null,
     };
+    if (supportsPhysicalInventory) {
+        const packageQuantity = number(draft.packageQuantity, '包装换算');
+        if (packageQuantity <= 0) throw new Error('包装换算必须大于 0');
+        input.packageQuantity = packageQuantity;
+        input.shelfLifeDays = optionalInteger(draft.shelfLifeDays, '保质期');
+    }
     if (draft.purchaseCost.trim())
         input.purchaseCostMicrounits = Math.round(number(draft.purchaseCost, '采购成本') * 1_000);
     return input;
@@ -1257,7 +1298,6 @@ const emptyLot = (productVariantId: string, stockLocationId: string): LotDraft =
     expiresAt: '',
     quantityOnHand: '0',
     purchaseCost: '',
-    reason: '',
 });
 const stringId = (value: unknown) =>
     typeof value === 'string' || typeof value === 'number' ? String(value) : '';

@@ -1,3 +1,4 @@
+import { InventoryLot } from '@vendure/catalog-management-plugin';
 import { Product, ProductVariant, StockAdjustment, StockLevel, StockMovementEvent } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -79,6 +80,17 @@ describe('ProductPackagingService automatic unpacking', () => {
         const unpackEventSave = vi.fn().mockImplementation(value => Promise.resolve(value));
         const connection = {
             getRepository: vi.fn((_ctx: unknown, entity: unknown) => {
+                if (entity === InventoryLot) {
+                    const builder: any = {
+                        where: vi.fn().mockReturnThis(),
+                        getMany: vi.fn().mockResolvedValue([]),
+                    };
+                    return {
+                        manager: { connection: { options: { type: 'sqljs' } } },
+                        find: vi.fn().mockResolvedValue([]),
+                        createQueryBuilder: vi.fn(() => builder),
+                    };
+                }
                 if (entity === StockLevel) return { save: stockLevelSave };
                 if (entity === StockAdjustment) return { save: stockAdjustmentSave };
                 if (entity === PackagingUnpackEvent) return { save: unpackEventSave };
@@ -146,6 +158,7 @@ describe('ProductPackagingService automatic unpacking', () => {
 
 function stockLevel(productVariantId: string, stockOnHand: number): StockLevel {
     const level = new StockLevel({
+        id: `${productVariantId}-stock`,
         productVariantId,
         stockLocationId: 'location-1',
         stockOnHand,

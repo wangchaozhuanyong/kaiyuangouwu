@@ -220,7 +220,7 @@ export function RolesModule() {
                         </div>
                     )}
                     <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                         <AdminInput
                             value={search}
                             onChange={event => setSearch(event.target.value)}
@@ -386,7 +386,7 @@ function MembersTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1500px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -424,7 +424,10 @@ function MembersTable({
                     <tbody className="divide-y divide-slate-100">
                         {members.map(member => (
                             <tr key={member.id} className="group h-[52px] hover:bg-slate-50">
-                                <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
+                                <td
+                                    data-label="姓名"
+                                    className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50"
+                                >
                                     <span
                                         className="block truncate"
                                         title={`${member.firstName}${member.lastName}`}
@@ -433,7 +436,10 @@ function MembersTable({
                                         {member.lastName}
                                     </span>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold">
+                                <td
+                                    data-label="当前账号"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold"
+                                >
                                     <span
                                         className={
                                             member.id === activeId ? 'text-blue-700' : 'text-slate-400'
@@ -442,17 +448,20 @@ function MembersTable({
                                         {member.id === activeId ? '是' : '否'}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                <td data-label="邮箱" className="h-[52px] max-w-56 px-3 py-0">
                                     <span className="block truncate" title={member.emailAddress}>
                                         {member.emailAddress}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="登录标识"
+                                    className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     <span className="block truncate" title={member.user.identifier}>
                                         {member.user.identifier}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                <td data-label="角色" className="h-[52px] max-w-56 px-3 py-0">
                                     <div className="flex max-w-52 items-center gap-1 whitespace-nowrap">
                                         <span
                                             className="min-w-0 truncate rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600"
@@ -472,15 +481,24 @@ function MembersTable({
                                         </span>
                                     </div>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="最近登录"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     {member.user.lastLogin
                                         ? formatDateTime(member.user.lastLogin)
                                         : '从未登录'}
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400">
+                                <td
+                                    data-label="创建时间"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400"
+                                >
                                     {formatDateTime(member.createdAt)}
                                 </td>
-                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                <td
+                                    data-label="操作"
+                                    className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                >
                                     <div className="flex justify-end gap-1">
                                         {actorAccess?.authority === 'OWNER' &&
                                             member.access.scope === 'PLATFORM' &&
@@ -573,7 +591,7 @@ function RolesTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1120px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -607,7 +625,10 @@ function RolesTable({
                             const system = isSystemRole(role);
                             return (
                                 <tr key={role.id} className="group h-[52px] hover:bg-slate-50">
-                                    <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                    <td
+                                        data-label="角色名称"
+                                        className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                    >
                                         <div className="flex items-center gap-2 truncate font-bold text-slate-900">
                                             <Shield
                                                 className={`h-4 w-4 ${system ? 'text-emerald-600' : 'text-blue-600'}`}
@@ -615,10 +636,16 @@ function RolesTable({
                                             {getRoleLabel(role)}
                                         </div>
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold text-slate-600">
+                                    <td
+                                        data-label="类型"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold text-slate-600"
+                                    >
                                         {system ? '系统保留' : '自定义'}
                                     </td>
-                                    <td className="h-[52px] max-w-56 px-3 py-0 text-slate-600">
+                                    <td
+                                        data-label="渠道范围"
+                                        className="h-[52px] max-w-56 px-3 py-0 text-slate-600"
+                                    >
                                         <span
                                             className="block truncate"
                                             title={
@@ -640,13 +667,22 @@ function RolesTable({
                                                   : '未限定渠道'}
                                         </span>
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-blue-700">
+                                    <td
+                                        data-label="权限"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-blue-700"
+                                    >
                                         {role.permissions.length} 项
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                    <td
+                                        data-label="关联员工"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0"
+                                    >
                                         {memberCount(role.id)} 人
                                     </td>
-                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                    <td
+                                        data-label="操作"
+                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                    >
                                         <div className="flex justify-end gap-1">
                                             <AdminButton
                                                 type="button"

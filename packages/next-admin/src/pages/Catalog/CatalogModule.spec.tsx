@@ -22,6 +22,7 @@ async function renderCatalog({
     channelCode = 'meiyijia',
     digital = false,
     stockAllocated = 0,
+    stockUnavailable = false,
     productTotal = 1,
     assignmentTotal = 1,
     requests,
@@ -31,6 +32,7 @@ async function renderCatalog({
     channelCode?: string;
     digital?: boolean;
     stockAllocated?: number;
+    stockUnavailable?: boolean;
     productTotal?: number;
     assignmentTotal?: number;
     requests?: Array<{ name: string; variables: Record<string, unknown> }>;
@@ -112,7 +114,7 @@ async function renderCatalog({
                                                     currencyCode: 'MYR',
                                                     stockLevel:
                                                         stockAllocated >= 105 ? 'OUT_OF_STOCK' : 'IN_STOCK',
-                                                    stockOnHand: 105,
+                                                    stockOnHand: stockUnavailable ? null : 105,
                                                     stockAllocated,
                                                     enabled: true,
                                                     trackInventory: 'TRUE',
@@ -307,13 +309,12 @@ describe('CatalogModule category columns', () => {
         expect(physicalCells[physicalHeaders.indexOf('在手总库存')]).toBe('105');
     });
 
-    it('keeps the filter toolbar pinned above the scrolling product table', async () => {
+    it('pins desktop filters while keeping the mobile toolbar in normal flow', async () => {
         const container = await renderCatalog();
         const toolbar = container.querySelector<HTMLElement>('[data-testid="catalog-filter-toolbar"]');
 
-        expect(toolbar?.classList.contains('sticky')).toBe(true);
-        expect(toolbar?.classList.contains('-top-5')).toBe(true);
-        expect(toolbar?.classList.contains('sm:-top-8')).toBe(true);
+        expect(toolbar?.classList.contains('md:sticky')).toBe(true);
+        expect(toolbar?.classList.contains('md:-top-8')).toBe(true);
         expect(toolbar?.parentElement?.classList.contains('overflow-hidden')).toBe(false);
     });
 
@@ -374,6 +375,53 @@ describe('CatalogModule category columns', () => {
         expect(container.textContent).toContain('已选 1 个商品');
         expect(container.textContent).toContain('跨店销售授权由平台管理中心分配');
         expect(container.textContent).not.toContain('批量上架到店铺');
+    });
+});
+
+describe('CatalogModule mobile actions', () => {
+    it('keeps missing inventory unknown in both the phone summary and the table', async () => {
+        const container = await renderCatalog({ stockUnavailable: true });
+        const card = container.querySelector('.admin-mobile-record')!;
+        const stockField = [...card.querySelectorAll('dt')].find(label => label.textContent === '在手总库存');
+        expect(stockField?.nextElementSibling?.textContent).toBe('未获取');
+        const headers = [...container.querySelectorAll('thead th')].map(cell => cell.textContent?.trim());
+        const cells = [...container.querySelectorAll('tbody tr:first-child td')];
+        expect(cells[headers.indexOf('在手总库存')]?.textContent?.trim()).toBe('未获取');
+    });
+
+    it('keeps the mobile selection and the original table selection in sync', async () => {
+        const container = await renderCatalog();
+        const cardSelection = container.querySelector<HTMLInputElement>(
+            '[aria-label="移动端选择商品 白利群2"]',
+        )!;
+        await act(async () => cardSelection.click());
+        expect(container.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')?.checked).toBe(true);
+        expect(container.textContent).toContain('已选 1 个商品');
+        await act(async () =>
+            container.querySelector<HTMLInputElement>('[aria-label="选择本页全部商品"]')!.click(),
+        );
+        expect(container.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')?.checked).toBe(
+            false,
+        );
+    });
+
+    it('uses the original URL-backed query when sorting from the mobile controls', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({ requests });
+        const sorter = container.querySelector<HTMLSelectElement>('[aria-label="商品排序"]')!;
+        await act(async () => {
+            sorter.value = 'name';
+            sorter.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        expect(requests.filter(request => request.name === 'GetProducts').at(-1)?.variables).toMatchObject({
+            options: { sort: { name: 'DESC' } },
+        });
+        await act(async () =>
+            container.querySelector<HTMLButtonElement>('[aria-label^="商品排序方向"]')!.click(),
+        );
+        expect(requests.filter(request => request.name === 'GetProducts').at(-1)?.variables).toMatchObject({
+            options: { sort: { name: 'ASC' } },
+        });
     });
 });
 

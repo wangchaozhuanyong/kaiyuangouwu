@@ -872,7 +872,7 @@ export function StorefrontBlockEditor({
                                     {showProducts && productSettingKey && canReadProducts && (
                                         <div className="mt-4 rounded-xl border border-slate-200 p-3">
                                             <div className="relative">
-                                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                                                 <AdminInput
                                                     value={productSearch}
                                                     onChange={event => {

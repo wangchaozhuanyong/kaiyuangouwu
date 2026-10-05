@@ -131,11 +131,22 @@ describe('UsdtManualRefundService', () => {
             paymentId: 'payment-1',
             amount: 2_500,
             reason: '客户申请退款',
+            idempotencyKey: `usdt-refund:${refundTransactionId}`,
         });
-        expect(orderService.settleRefund).toHaveBeenCalledWith(ctx, {
-            id: 'refund-1',
-            transactionId: `tron:${refundTransactionId}`,
-        });
+        expect(orderService.settleRefund).toHaveBeenCalledWith(
+            ctx,
+            {
+                id: 'refund-1',
+                transactionId: `tron:${refundTransactionId}`,
+            },
+            {
+                source: 'verified-external',
+                paymentId: 'payment-1',
+                amount: 2_500,
+                transactionId: `tron:${refundTransactionId}`,
+                evidenceReference: `tron:${refundTransactionId}`,
+            },
+        );
         expect(auditRepository.save).toHaveBeenCalledWith(
             expect.objectContaining({
                 refundId: 'refund-1',
@@ -176,6 +187,29 @@ describe('UsdtManualRefundService', () => {
         );
 
         expect(orderService.refundOrder).not.toHaveBeenCalled();
+    });
+
+    it('settles an existing Pending request from verified chain evidence without allocating its budget twice', async () => {
+        const pending = new Refund({ id: 'existing-pending', total: 2_500, state: 'Pending', payment });
+        payment.refunds = [
+            pending,
+            new Refund({ id: 'previous-refund', total: 7_500, state: 'Settled', payment }),
+        ];
+        const ctx = createContext();
+        await service.record(ctx, { ...validInput(), refundId: pending.id });
+        expect(orderService.refundOrder).not.toHaveBeenCalled();
+        expect(orderService.settleRefund).toHaveBeenCalledWith(
+            ctx,
+            { id: pending.id, transactionId: `tron:${refundTransactionId}` },
+            expect.objectContaining({ source: 'verified-external', paymentId: payment.id, amount: 2_500 }),
+        );
+    });
+
+    it('rejects an unrelated or mismatched Pending request before inspecting the chain', async () => {
+        await expect(
+            service.record(createContext(), { ...validInput(), refundId: 'another-request' }),
+        ).rejects.toThrow('本笔支付');
+        expect(tronClient.solidifiedUsdtTransfer).not.toHaveBeenCalled();
     });
 
     it('rejects a mismatched recipient, amount or sender from the chain receipt', async () => {

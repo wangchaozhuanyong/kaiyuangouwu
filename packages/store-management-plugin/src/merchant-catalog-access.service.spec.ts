@@ -553,7 +553,7 @@ describe('MerchantCatalogAccessService', () => {
     it('reserves advanced order administration and sensitive finance without explicit permission', async () => {
         const { service } = createService();
 
-        for (const fieldName of ['settlePayment', 'refundOrder']) {
+        for (const fieldName of ['settlePayment', 'refundOrder', 'recordManualRefund', 'retryRefund']) {
             await expect(
                 service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
                     id: 'foreign-id',
@@ -596,6 +596,20 @@ describe('MerchantCatalogAccessService', () => {
                 input: { orderId: 'order-b' },
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it('allows scoped order modifications but requires finance permission for refund allocations', async () => {
+        const { service } = createService({ visibleEntityIds: ['order-a'] });
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'modifyOrder', {
+                input: { orderId: 'order-a', refunds: [] },
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'modifyOrder', {
+                input: { orderId: 'order-a', refunds: [{ paymentId: 'payment-a', amount: 100 }] },
+            }),
+        ).rejects.toThrow('敏感店铺财务权限');
     });
 
     it('allows explicitly authorized sensitive finance only for this store', async () => {

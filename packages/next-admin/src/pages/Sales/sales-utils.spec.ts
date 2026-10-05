@@ -3,10 +3,18 @@ import type { OrderListSummaryInput } from './sales-utils';
 import {
     buildCompatibleRefundOrderInput,
     canManageOrderInChannel,
+    getClaimStatusLabel,
     getOrderProductDisplayName,
     getPaymentMethodLabel,
     summarizeOrderListItem,
 } from './sales-utils';
+
+it('distinguishes partial claim from claimed and preserves unknown claim history', () => {
+    expect(getClaimStatusLabel('PARTIAL')).toBe('客户部分领取');
+    expect(getClaimStatusLabel('CLAIMED')).toBe('客户已领取');
+    expect(getClaimStatusLabel('UNCLAIMED')).toBe('客户未领取');
+    expect(getClaimStatusLabel('UNKNOWN')).toBe('领取记录待核实');
+});
 
 describe('payment method labels', () => {
     it('keeps simulated payments visibly distinct across stores, even with a misleading configured name', () => {

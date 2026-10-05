@@ -328,8 +328,8 @@ export function ReviewsModule() {
                     )}
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
-                            <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
-                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <div className="relative min-w-0 w-full flex-1 sm:max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                                 <AdminInput
                                     value={searchTerm}
                                     onChange={event => {
@@ -338,7 +338,7 @@ export function ReviewsModule() {
                                     }}
                                     aria-label="搜索商品评价"
                                     placeholder="搜索标题、内容、买家、商品或 SKU"
-                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-12 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 />
                                 {searchTerm && (
                                     <AdminButton
@@ -347,7 +347,7 @@ export function ReviewsModule() {
                                             setSearchTerm('');
                                             setPage(0);
                                         }}
-                                        className="absolute right-2.5 top-2 text-slate-400"
+                                        className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400"
                                         aria-label="清空搜索"
                                     >
                                         <X className="h-4 w-4" />
@@ -375,7 +375,7 @@ export function ReviewsModule() {
                         ) : (
                             reviews.length > 0 && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[2020px] border-collapse text-left text-xs">
+                                    <table className="admin-mobile-record-table w-full min-w-[2020px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                                 <th
@@ -428,7 +428,10 @@ export function ReviewsModule() {
                                                     key={review.id}
                                                     className="group h-[52px] hover:bg-slate-50/80"
                                                 >
-                                                    <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="买家"
+                                                        className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                                    >
                                                         <span
                                                             className="block truncate font-semibold text-slate-900"
                                                             title={review.customerName}
@@ -436,7 +439,10 @@ export function ReviewsModule() {
                                                             {review.customerName}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-semibold">
+                                                    <td
+                                                        data-label="购买验证"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-semibold"
+                                                    >
                                                         <span
                                                             className={
                                                                 review.orderLineId
@@ -447,7 +453,10 @@ export function ReviewsModule() {
                                                             {review.orderLineId ? '已关联订单' : '未关联订单'}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-60 px-3 py-0">
+                                                    <td
+                                                        data-label="商品名称"
+                                                        className="h-[52px] max-w-60 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate font-semibold text-slate-800"
                                                             title={review.productName}
@@ -455,15 +464,25 @@ export function ReviewsModule() {
                                                             {review.productName}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <td
+                                                        data-label="SKU"
+                                                        className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                    >
                                                         <span className="block truncate" title={review.sku}>
                                                             {review.sku}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                    <td
+                                                        data-label="评分"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0"
+                                                    >
                                                         <Rating value={review.rating} />
                                                     </td>
-                                                    <td className="h-[52px] max-w-52 px-3 py-0">
+                                                    <td
+                                                        data-label="评价标题"
+                                                        data-mobile-wide
+                                                        className="h-[52px] max-w-52 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate font-semibold text-slate-900"
                                                             title={review.title}
@@ -471,7 +490,11 @@ export function ReviewsModule() {
                                                             {review.title}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-80 px-3 py-0">
+                                                    <td
+                                                        data-label="评价内容"
+                                                        data-mobile-wide
+                                                        className="h-[52px] max-w-80 px-3 py-0"
+                                                    >
                                                         <span
                                                             tabIndex={0}
                                                             className="block truncate text-slate-600 outline-none focus:text-blue-700"
@@ -481,7 +504,11 @@ export function ReviewsModule() {
                                                             {review.body}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-72 px-3 py-0">
+                                                    <td
+                                                        data-label="商家回复"
+                                                        data-mobile-wide
+                                                        className="h-[52px] max-w-72 px-3 py-0"
+                                                    >
                                                         <span
                                                             tabIndex={0}
                                                             className="block truncate text-slate-600 outline-none focus:text-blue-700"
@@ -491,22 +518,34 @@ export function ReviewsModule() {
                                                             {review.merchantResponse || '-'}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                    <td
+                                                        data-label="状态"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0"
+                                                    >
                                                         <span
                                                             className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${stateClasses[review.state]}`}
                                                         >
                                                             {stateLabels[review.state]}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <td
+                                                        data-label="提交时间"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                    >
                                                         {formatDateTime(review.createdAt)}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <td
+                                                        data-label="处理时间"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                    >
                                                         {review.moderatedAt
                                                             ? formatDateTime(review.moderatedAt)
                                                             : '-'}
                                                     </td>
-                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="操作"
+                                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50"
+                                                    >
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() => openReview(review)}

@@ -8,7 +8,7 @@ import { buildProductCollectionGroups, filterProductCollectionGroups } from './p
 import { type CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
 
-export function ProductFacetsCollectionsTab() {
+export function ProductFacetsCollectionsTab({ section }: { section?: 'category' | 'facets' }) {
     const {
         selectedFacetValueIds,
         selectedCollectionIds,
@@ -60,215 +60,213 @@ export function ProductFacetsCollectionsTab() {
         !hasDirectProductAssignment(collection.filters, productId ?? '');
 
     return (
-        <div className="grid items-start gap-4 2xl:grid-cols-2">
+        <div className={`grid items-start gap-4 ${section ? '' : '2xl:grid-cols-2'}`}>
             {/* Facet 筛选标签属性 */}
-            <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                <div className="border-b border-slate-100 pb-3">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        Facet 属性标签关联
-                        <FeatureHelpButton
-                            topic="catalog.facets"
-                            title="Facet 属性标签关联"
-                            description={'勾选商品所属的 Facet 标签，将直接保存至后端并用于前台筛选检索'}
+            {section !== 'category' && (
+                <div className="space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            筛选属性
+                            <FeatureHelpButton topic="catalog.facets" title="筛选属性" />
+                        </h3>
+                    </div>
+                    <div className="relative max-w-md">
+                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <AdminInput
+                            aria-label="搜索商品属性"
+                            value={facetSearch}
+                            onChange={event => {
+                                setFacetSearch(event.target.value);
+                                setFacetPage(0);
+                            }}
+                            placeholder="搜索属性名称"
+                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
                         />
-                    </h3>
-                </div>
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                    <AdminInput
-                        aria-label="搜索商品属性"
-                        value={facetSearch}
-                        onChange={event => {
-                            setFacetSearch(event.target.value);
-                            setFacetPage(0);
-                        }}
-                        placeholder="搜索属性名称"
-                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
+                    </div>
+
+                    {facetsLoading && !facetsData ? (
+                        <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
+                            正在读取属性标签…
+                        </div>
+                    ) : facetsError ? (
+                        <div
+                            role="alert"
+                            className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
+                        >
+                            <span>{toUserFacingError(facetsError, '属性标签读取失败，请稍后重试')}</span>
+                            <AdminButton
+                                type="button"
+                                onClick={() => void refetchFacets()}
+                                className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
+                            >
+                                重试
+                            </AdminButton>
+                        </div>
+                    ) : facetsData?.facets?.items && facetsData.facets.items.length > 0 ? (
+                        <div className="space-y-4">
+                            {facetsData.facets.items.map(facet => (
+                                <div key={facet.id} className="space-y-2">
+                                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                        <Tag className="w-3.5 h-3.5 text-blue-500" />
+                                        <span>{facet.name}</span>
+                                        <span className="text-[10px] text-slate-400 font-mono">
+                                            ({facet.code})
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        {facet.values.map(fv => {
+                                            const isSelected = selectedFacetValueIds.includes(fv.id);
+                                            return (
+                                                <AdminButton
+                                                    key={fv.id}
+                                                    type="button"
+                                                    onClick={() => toggleFacetValue(fv.id)}
+                                                    className={`px-3 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                                >
+                                                    {isSelected && <Check className="w-3 h-3" />}
+                                                    <span>{fv.name}</span>
+                                                </AdminButton>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
+                            暂无筛选属性，可在商品分类与属性中添加。
+                        </div>
+                    )}
+                    <LookupPager
+                        page={facetPage}
+                        loading={facetsLoading}
+                        pageSize={facetPageSize}
+                        onPageSizeChange={setFacetPageSize}
+                        totalItems={facetsData?.facets.totalItems ?? 0}
+                        onPageChange={setFacetPage}
                     />
                 </div>
-
-                {facetsLoading && !facetsData ? (
-                    <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">正在读取属性标签…</div>
-                ) : facetsError ? (
-                    <div
-                        role="alert"
-                        className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
-                    >
-                        <span>{toUserFacingError(facetsError, '属性标签读取失败，请稍后重试')}</span>
-                        <AdminButton
-                            type="button"
-                            onClick={() => void refetchFacets()}
-                            className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
-                        >
-                            重试
-                        </AdminButton>
+            )}
+            {/* 所属商品分类 */}
+            {section !== 'facets' && (
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                    <div className="border-b border-slate-100 pb-3">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            商品分类
+                            <FeatureHelpButton topic="catalog.collections" title="所属商品分类" />
+                        </h3>
                     </div>
-                ) : facetsData?.facets?.items && facetsData.facets.items.length > 0 ? (
-                    <div className="space-y-4">
-                        {facetsData.facets.items.map(facet => (
-                            <div key={facet.id} className="space-y-2">
-                                <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                    <Tag className="w-3.5 h-3.5 text-blue-500" />
-                                    <span>{facet.name}</span>
-                                </div>
+                    <div className="relative max-w-md">
+                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <AdminInput
+                            aria-label="搜索商品分类或专辑"
+                            value={collectionSearch}
+                            onChange={event => setCollectionSearch(event.target.value)}
+                            placeholder="搜索分类名称"
+                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
+                        />
+                    </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    {facet.values.map(fv => {
-                                        const isSelected = selectedFacetValueIds.includes(fv.id);
+                    {collectionsLoading && !collectionsData ? (
+                        <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
+                            正在读取商品分类…
+                        </div>
+                    ) : collectionsError ? (
+                        <div
+                            role="alert"
+                            className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
+                        >
+                            <span>{toUserFacingError(collectionsError, '商品分类读取失败，请稍后重试')}</span>
+                            <AdminButton
+                                type="button"
+                                onClick={() => void refetchCollections()}
+                                className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
+                            >
+                                重试
+                            </AdminButton>
+                        </div>
+                    ) : collectionGroups.length > 0 ? (
+                        <div className="space-y-3 pt-1">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                <span className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700">
+                                    一级分类 {collectionGroups.length}
+                                </span>
+                                <span className="rounded bg-slate-100 px-2 py-1 font-bold text-slate-600">
+                                    二级分类 {secondLevelCollectionCount}
+                                </span>
+                                <span className="ml-auto font-medium text-slate-500">
+                                    已选择 {selectedCollectionIds.length} 个分类
+                                </span>
+                            </div>
+
+                            {filteredCollectionGroups.length > 0 ? (
+                                <div className="grid items-start gap-3 md:grid-cols-2">
+                                    {filteredCollectionGroups.map(group => {
+                                        const parentSelected = selectedCollectionIds.includes(
+                                            group.parent.id,
+                                        );
+                                        const selectedChildCount = group.children.filter(child =>
+                                            selectedCollectionIds.includes(child.id),
+                                        ).length;
                                         return (
-                                            <AdminButton
-                                                key={fv.id}
-                                                type="button"
-                                                onClick={() => toggleFacetValue(fv.id)}
-                                                className={`px-3 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                            <section
+                                                key={group.parent.id}
+                                                aria-labelledby={`collection-group-${group.parent.id}`}
+                                                className={`overflow-hidden rounded-xl border bg-white transition-colors ${parentSelected ? 'border-blue-300' : 'border-slate-200'}`}
                                             >
-                                                {isSelected && <Check className="w-3 h-3" />}
-                                                <span>{fv.name}</span>
-                                            </AdminButton>
+                                                <div className="flex flex-col gap-2.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                                                    <CollectionAssignmentOption
+                                                        collection={group.parent}
+                                                        level="primary"
+                                                        selected={parentSelected}
+                                                        automaticallyMatched={isAutomaticallyMatched(
+                                                            group.parent,
+                                                        )}
+                                                        onToggle={toggleCollection}
+                                                    />
+                                                    {group.children.length > 0 && (
+                                                        <span className="shrink-0 pl-9 text-[10px] font-medium text-slate-400 sm:pl-0">
+                                                            {`${group.children.length} 个二级分类${selectedChildCount > 0 ? ` · 已选 ${selectedChildCount}` : ''}`}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {group.children.length > 0 && (
+                                                    <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
+                                                        {group.children.map(child => (
+                                                            <CollectionAssignmentOption
+                                                                key={child.id}
+                                                                collection={child}
+                                                                level="secondary"
+                                                                selected={selectedCollectionIds.includes(
+                                                                    child.id,
+                                                                )}
+                                                                automaticallyMatched={isAutomaticallyMatched(
+                                                                    child,
+                                                                )}
+                                                                onToggle={toggleCollection}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </section>
                                         );
                                     })}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
-                        系统中尚未配置任何 Facet 属性标签，可在【商品 ➡️ 分类与属性】中先创建属性。
-                    </div>
-                )}
-                <LookupPager
-                    page={facetPage}
-                    loading={facetsLoading}
-                    pageSize={facetPageSize}
-                    onPageSizeChange={setFacetPageSize}
-                    totalItems={facetsData?.facets.totalItems ?? 0}
-                    onPageChange={setFacetPage}
-                />
-            </div>
-
-            {/* 所属商品分类 */}
-            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                <div className="border-b border-slate-100 pb-3">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        所属商品分类 (Collections)
-                        <FeatureHelpButton
-                            topic="catalog.collections"
-                            title="所属商品分类"
-                            description={
-                                '勾选后直接加入分类；已有 Facet 自动分类规则会完整保留，不会被人工归类覆盖'
-                            }
-                        />
-                    </h3>
-                </div>
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                    <AdminInput
-                        aria-label="搜索商品分类或专辑"
-                        value={collectionSearch}
-                        onChange={event => setCollectionSearch(event.target.value)}
-                        placeholder="搜索一级分类、二级分类或 slug"
-                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
-                    />
-                </div>
-
-                {collectionsLoading && !collectionsData ? (
-                    <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">正在读取商品分类…</div>
-                ) : collectionsError ? (
-                    <div
-                        role="alert"
-                        className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
-                    >
-                        <span>{toUserFacingError(collectionsError, '商品分类读取失败，请稍后重试')}</span>
-                        <AdminButton
-                            type="button"
-                            onClick={() => void refetchCollections()}
-                            className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
-                        >
-                            重试
-                        </AdminButton>
-                    </div>
-                ) : collectionGroups.length > 0 ? (
-                    <div className="space-y-3 pt-1">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                            <span className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700">
-                                一级分类 {collectionGroups.length}
-                            </span>
-                            <span className="rounded bg-slate-100 px-2 py-1 font-bold text-slate-600">
-                                二级分类 {secondLevelCollectionCount}
-                            </span>
-                            <span className="ml-auto font-medium text-slate-500">
-                                已选择 {selectedCollectionIds.length} 个分类
-                            </span>
+                            ) : (
+                                <div className="rounded-lg bg-slate-50 p-5 text-center text-xs text-slate-500">
+                                    未找到匹配的一级分类或二级分类。
+                                </div>
+                            )}
                         </div>
-
-                        {filteredCollectionGroups.length > 0 ? (
-                            <div className="space-y-3">
-                                {filteredCollectionGroups.map(group => {
-                                    const parentSelected = selectedCollectionIds.includes(group.parent.id);
-                                    const selectedChildCount = group.children.filter(child =>
-                                        selectedCollectionIds.includes(child.id),
-                                    ).length;
-                                    return (
-                                        <section
-                                            key={group.parent.id}
-                                            aria-labelledby={`collection-group-${group.parent.id}`}
-                                            className={`overflow-hidden rounded-xl border bg-white transition-colors ${parentSelected ? 'border-blue-300' : 'border-slate-200'}`}
-                                        >
-                                            <div className="flex flex-col gap-2.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                                                <CollectionAssignmentOption
-                                                    collection={group.parent}
-                                                    level="primary"
-                                                    selected={parentSelected}
-                                                    automaticallyMatched={isAutomaticallyMatched(
-                                                        group.parent,
-                                                    )}
-                                                    onToggle={toggleCollection}
-                                                />
-                                                <span className="shrink-0 pl-9 text-[10px] font-medium text-slate-400 sm:pl-0">
-                                                    {group.children.length > 0
-                                                        ? `${group.children.length} 个二级分类${selectedChildCount > 0 ? ` · 已选 ${selectedChildCount}` : ''}`
-                                                        : '暂无二级分类'}
-                                                </span>
-                                            </div>
-
-                                            {group.children.length > 0 ? (
-                                                <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
-                                                    {group.children.map(child => (
-                                                        <CollectionAssignmentOption
-                                                            key={child.id}
-                                                            collection={child}
-                                                            level="secondary"
-                                                            selected={selectedCollectionIds.includes(
-                                                                child.id,
-                                                            )}
-                                                            automaticallyMatched={isAutomaticallyMatched(
-                                                                child,
-                                                            )}
-                                                            onToggle={toggleCollection}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="px-4 py-3 text-[11px] text-slate-400">
-                                                    可直接选择上方一级分类，或先到“分类与属性”中创建二级分类。
-                                                </div>
-                                            )}
-                                        </section>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="rounded-lg bg-slate-50 p-5 text-center text-xs text-slate-500">
-                                未找到匹配的一级分类或二级分类。
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
-                        当前店铺暂无分类专辑。
-                    </div>
-                )}
-            </div>
+                    ) : (
+                        <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
+                            当前店铺暂无分类专辑。
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

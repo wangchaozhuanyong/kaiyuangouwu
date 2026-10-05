@@ -5,6 +5,7 @@ import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { ManualDigitalDelivery } from './manual-digital-delivery.entity';
 
 export type ManualDigitalDeliveryEventType =
+    | 'CONTENT_VIEWED'
     | 'TASK_CREATED'
     | 'DRAFT_SAVED'
     | 'PUBLISHED'

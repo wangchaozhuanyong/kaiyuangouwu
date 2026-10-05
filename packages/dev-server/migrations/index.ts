@@ -146,6 +146,7 @@ import { AddUnifiedStoreNotifications1790899200000 } from './1790899200000-add-u
 import { AddPlatformCatalogGovernance1790913600000 } from './1790913600000-add-platform-catalog-governance';
 import { AddStorePaymentMethodState1790917200000 } from './1790917200000-add-store-payment-method-state';
 import { AddIcloudMailEvents1791075600000 } from './1791075600000-add-icloud-mail-events';
+import { AddDigitalProductDomains1791086400000 } from './1791086400000-add-digital-product-domains';
 import { ExpandIcloudMailBodies1791120600000 } from './1791120600000-expand-icloud-mail-bodies';
 
 export const devServerMigrations = [
@@ -297,5 +298,6 @@ export const devServerMigrations = [
     AddPlatformCatalogGovernance1790913600000,
     AddStorePaymentMethodState1790917200000,
     AddIcloudMailEvents1791075600000,
+    AddDigitalProductDomains1791086400000,
     ExpandIcloudMailBodies1791120600000,
 ];

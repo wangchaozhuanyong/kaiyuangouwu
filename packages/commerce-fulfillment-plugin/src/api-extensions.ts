@@ -1,5 +1,7 @@
 import { gql } from 'graphql-tag';
 
+import { orderProcessingSchema } from './order-processing-schema';
+
 const afterSalesTypes = gql`
     enum AfterSalesType {
         REFUND_ONLY
@@ -159,6 +161,7 @@ const afterSalesTypes = gql`
 const autoCardAdminTypes = gql`
     enum AutoCardPoolItemState {
         AVAILABLE
+        RESERVED
         ASSIGNED
         DISABLED
     }
@@ -403,7 +406,25 @@ const manualDeliveryCommonTypes = gql`
 `;
 
 const manualDeliveryAdminTypes = gql`
+    input ReceivePhysicalReturnInput {
+        requestId: ID!
+        orderLineId: ID!
+        stockLocationId: ID!
+        quantity: Int!
+        quality: String!
+        idempotencyKey: String!
+    }
+    type PhysicalReturnReceipt {
+        id: ID!
+        orderLineId: ID!
+        stockLocationId: ID!
+        quantity: Int!
+        quality: String!
+        state: String!
+        createdAt: DateTime!
+    }
     enum ManualDigitalDeliveryEventType {
+        CONTENT_VIEWED
         TASK_CREATED
         DRAFT_SAVED
         PUBLISHED
@@ -427,6 +448,7 @@ const manualDeliveryAdminTypes = gql`
         fields: [ManualDigitalDeliveryFieldInput!]
         note: String
         attachmentAssetIds: [ID!]
+        attachmentFileVersionIds: [ID!]
     }
 
     input SaveManualDigitalDeliveryInput {
@@ -451,6 +473,7 @@ const manualDeliveryAdminTypes = gql`
         fields: [ManualDigitalDeliveryField!]!
         note: String!
         attachmentAssetIds: [ID!]!
+        attachmentFileVersionIds: [ID!]
     }
 
     type ManualDigitalDeliveryEvent implements Node {
@@ -481,6 +504,8 @@ const manualDeliveryAdminTypes = gql`
         fulfillmentId: String
         order: Order!
         orderLineId: ID!
+        hasContent: Boolean!
+        eligibleQuantity: Int!
         packages: [ManualDigitalDeliveryPackage!]!
         events: [ManualDigitalDeliveryEvent!]!
     }
@@ -704,6 +729,7 @@ export const shopApiExtensions = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${orderProcessingSchema}
     ${afterSalesTypes}
     ${autoCardAdminTypes}
     ${productPackagingTypes}
@@ -847,6 +873,7 @@ export const adminApiExtensions = gql`
         myStoreCommerceMode: StoreCommerceModeConfiguration!
         manualDigitalDeliveries(options: ManualDigitalDeliveryListOptions): ManualDigitalDeliveryList!
         manualDigitalDelivery(id: ID!): ManualDigitalDelivery
+        physicalReturnReceipts(requestId: ID!): [PhysicalReturnReceipt!]!
         afterSalesRequests(options: AfterSalesRequestListOptions): AfterSalesRequestList!
         physicalFulfillmentTodoCount: Int!
         autoCardConfig(productVariantId: ID!): AutoCardConfig
@@ -860,9 +887,12 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        receivePhysicalReturn(input: ReceivePhysicalReturnInput!): PhysicalReturnReceipt!
         updateMyStoreCommerceMode(mode: StoreCommerceMode!): StoreCommerceModeConfiguration!
         saveManualDigitalDeliveryDraft(input: SaveManualDigitalDeliveryInput!): ManualDigitalDelivery!
         publishManualDigitalDelivery(input: SaveManualDigitalDeliveryInput!): ManualDigitalDelivery!
+        revealMyManualDigitalDelivery(id: ID!): ManualDigitalDelivery!
+        appendManualDigitalDelivery(input: SaveManualDigitalDeliveryInput!): ManualDigitalDelivery!
         retryManualDigitalDelivery(id: ID!): ManualDigitalDelivery!
         transitionAfterSalesRequest(input: TransitionAfterSalesRequestInput!): AfterSalesRequest!
         receiveAfterSalesReturn(input: ReceiveAfterSalesReturnInput!): AfterSalesRequest!

@@ -1,5 +1,8 @@
 import { getStandaloneAdminPage } from '../navigation/admin-navigation';
 const BUILT_IN_MENU_ROUTES = [
+    ['/catalog/inventory', 'physical-inventory'],
+    ['/catalog/card-pool', 'digital-delivery'],
+    ['/operations/manual-digital-delivery', 'digital-delivery'],
     ['/catalog', 'catalog'],
     ['/sales', 'sales'],
     ['/marketing', 'marketing'],
@@ -57,6 +60,7 @@ export function filterAccessibleAdminChannels<T extends ChannelIdentity>(
 }
 
 export function resolveAppShellOpenMenu(pathname: string, extensionSectionId?: string) {
+    if (pathname.startsWith('/operations/manual-digital-delivery')) return 'digital-delivery';
     const extensionMenu = extensionSectionId?.trim();
     if (extensionMenu) return extensionMenu;
     const page = getStandaloneAdminPage(pathname);

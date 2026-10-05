@@ -4,7 +4,9 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import {
     AlertCircle,
+    ArrowDown,
     ArrowRight,
+    ArrowUp,
     Clock3,
     Eye,
     EyeOff,
@@ -327,6 +329,20 @@ export function DashboardModule() {
         widgetId => allowedWidgets.includes(widgetId) && !widgetPreferences.hidden.includes(widgetId),
     );
 
+    const moveWidget = (widgetId: DashboardWidgetId, direction: -1 | 1) => {
+        setWidgetPreferences(previous => {
+            const allowedOrder = previous.order.filter(id => allowedWidgets.includes(id));
+            const index = allowedOrder.indexOf(widgetId);
+            const neighbor = allowedOrder[index + direction];
+            if (!neighbor) return previous;
+            const order = [...previous.order];
+            const currentIndex = order.indexOf(widgetId);
+            const neighborIndex = order.indexOf(neighbor);
+            [order[currentIndex], order[neighborIndex]] = [order[neighborIndex], order[currentIndex]];
+            return { ...previous, order };
+        });
+    };
+
     if (isPlatformContext) {
         return (
             <div className="flex h-full flex-col bg-slate-50">
@@ -476,7 +492,7 @@ export function DashboardModule() {
                         return (
                             <div
                                 key={widgetId}
-                                className={`relative min-w-0 ${spanClass} ${draggedWidget === widgetId ? 'opacity-50' : ''}`}
+                                className={`relative min-w-0 ${spanClass} ${draggedWidget === widgetId ? 'opacity-50' : ''} ${isCustomizing ? 'pt-16' : ''}`}
                                 onDragOver={event => event.preventDefault()}
                                 onDrop={() => {
                                     moveWidgetBefore(widgetId);
@@ -700,7 +716,7 @@ export function DashboardModule() {
                                             </div>
                                         ) : (
                                             <div className="overflow-x-auto">
-                                                <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+                                                <table className="admin-mobile-record-table w-full min-w-[760px] border-collapse text-left text-xs">
                                                     <thead className="bg-slate-50 text-[11px] text-slate-500">
                                                         <tr>
                                                             <th
@@ -747,7 +763,10 @@ export function DashboardModule() {
                                                                 key={order.id}
                                                                 className="group h-[52px] hover:bg-blue-50/40"
                                                             >
-                                                                <td className="sticky left-0 z-[1] h-[52px] bg-white px-4 py-0 group-hover:bg-blue-50">
+                                                                <td
+                                                                    data-label="订单号"
+                                                                    className="sticky left-0 z-[1] h-[52px] bg-white px-4 py-0 group-hover:bg-blue-50"
+                                                                >
                                                                     <AdminButton
                                                                         type="button"
                                                                         onClick={() =>
@@ -760,7 +779,10 @@ export function DashboardModule() {
                                                                         {order.code}
                                                                     </AdminButton>
                                                                 </td>
-                                                                <td className="h-[52px] max-w-44 px-4 py-0 text-slate-700">
+                                                                <td
+                                                                    data-label="买家"
+                                                                    className="h-[52px] max-w-44 px-4 py-0 text-slate-700"
+                                                                >
                                                                     <span
                                                                         className="block truncate"
                                                                         title={getCustomerName(
@@ -770,23 +792,35 @@ export function DashboardModule() {
                                                                         {getCustomerName(order.customer)}
                                                                     </span>
                                                                 </td>
-                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 text-slate-600">
+                                                                <td
+                                                                    data-label="购买数量"
+                                                                    className="h-[52px] whitespace-nowrap px-4 py-0 text-slate-600"
+                                                                >
                                                                     {order.totalQuantity} 件
                                                                 </td>
-                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 font-mono font-bold text-slate-900">
+                                                                <td
+                                                                    data-label="金额"
+                                                                    className="h-[52px] whitespace-nowrap px-4 py-0 font-mono font-bold text-slate-900"
+                                                                >
                                                                     {formatMoney(
                                                                         order.totalWithTax,
                                                                         order.currencyCode,
                                                                     )}
                                                                 </td>
-                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0">
+                                                                <td
+                                                                    data-label="状态"
+                                                                    className="h-[52px] whitespace-nowrap px-4 py-0"
+                                                                >
                                                                     <span
                                                                         className={`rounded-md border px-2 py-1 text-[11px] font-bold ${getOrderStateClass(order.state)}`}
                                                                     >
                                                                         {getOrderStateLabel(order.state)}
                                                                     </span>
                                                                 </td>
-                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 font-mono text-[10px] text-slate-500">
+                                                                <td
+                                                                    data-label="下单时间"
+                                                                    className="h-[52px] whitespace-nowrap px-4 py-0 font-mono text-[10px] text-slate-500"
+                                                                >
                                                                     {formatDateTime(
                                                                         order.orderPlacedAt ??
                                                                             order.createdAt,
@@ -1003,29 +1037,48 @@ export function DashboardModule() {
                                 <div className="mt-3 space-y-2">
                                     {widgetPreferences.order
                                         .filter(widgetId => allowedWidgets.includes(widgetId))
-                                        .map(widgetId => {
+                                        .map((widgetId, index, widgets) => {
                                             const visible = !widgetPreferences.hidden.includes(widgetId);
                                             return (
-                                                <AdminButton
-                                                    key={widgetId}
-                                                    type="button"
-                                                    onClick={() => toggleWidget(widgetId)}
-                                                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:bg-slate-50"
-                                                >
-                                                    <span className="text-xs font-medium text-slate-700">
-                                                        {WIDGET_LABELS[widgetId]}
-                                                    </span>
-                                                    <span
-                                                        className={`flex items-center gap-1 text-[11px] font-bold ${visible ? 'text-emerald-700' : 'text-slate-400'}`}
+                                                <div key={widgetId} className="flex items-center gap-1.5">
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => toggleWidget(widgetId)}
+                                                        className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:bg-slate-50"
                                                     >
-                                                        {visible ? (
-                                                            <Eye className="h-3.5 w-3.5" />
-                                                        ) : (
-                                                            <EyeOff className="h-3.5 w-3.5" />
-                                                        )}
-                                                        {visible ? '显示' : '隐藏'}
-                                                    </span>
-                                                </AdminButton>
+                                                        <span className="text-xs font-medium text-slate-700">
+                                                            {WIDGET_LABELS[widgetId]}
+                                                        </span>
+                                                        <span
+                                                            className={`flex items-center gap-1 text-[11px] font-bold ${visible ? 'text-emerald-700' : 'text-slate-400'}`}
+                                                        >
+                                                            {visible ? (
+                                                                <Eye className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <EyeOff className="h-3.5 w-3.5" />
+                                                            )}
+                                                            {visible ? '显示' : '隐藏'}
+                                                        </span>
+                                                    </AdminButton>
+                                                    <AdminButton
+                                                        type="button"
+                                                        aria-label={`上移${WIDGET_LABELS[widgetId]}`}
+                                                        disabled={index === 0}
+                                                        onClick={() => moveWidget(widgetId, -1)}
+                                                        className="rounded-lg border border-slate-200 p-2 text-slate-600 disabled:opacity-40"
+                                                    >
+                                                        <ArrowUp className="h-4 w-4" />
+                                                    </AdminButton>
+                                                    <AdminButton
+                                                        type="button"
+                                                        aria-label={`下移${WIDGET_LABELS[widgetId]}`}
+                                                        disabled={index === widgets.length - 1}
+                                                        onClick={() => moveWidget(widgetId, 1)}
+                                                        className="rounded-lg border border-slate-200 p-2 text-slate-600 disabled:opacity-40"
+                                                    >
+                                                        <ArrowDown className="h-4 w-4" />
+                                                    </AdminButton>
+                                                </div>
                                             );
                                         })}
                                 </div>

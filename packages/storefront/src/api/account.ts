@@ -1,3 +1,5 @@
+import type { DigitalReceiptContent, DigitalReceiptStatus } from '../digital-receipt-panel';
+import type { OrderAdditionalPaymentQuote } from '../order-additional-payment-panel';
 import type {
     ActiveCustomer,
     Asset,
@@ -15,6 +17,7 @@ import type {
     OrderConfirmationToken,
     OrderPage,
     StorefrontRegistrationConsentInput,
+    StorefrontUsdtCheckoutQuote,
 } from '../types';
 
 import { BaseDomainApi } from './base-domain-api';
@@ -351,6 +354,197 @@ export class AccountApi extends BaseDomainApi {
             signal,
         );
         return result.order;
+    }
+
+    async digitalDeliveryStatuses(orderId: string, confirmationToken?: string, signal?: AbortSignal) {
+        const response = await this.request<{ myDigitalDeliveryContents: DigitalReceiptStatus[] }>(
+            `
+query ($orderId: ID!, $confirmationToken: String) {
+  myDigitalDeliveryContents(
+    orderId: $orderId
+    confirmationToken: $confirmationToken
+  ) {
+    orderLineId
+    mode
+    state
+    eligibleQuantity
+    readyQuantity
+    claimedQuantity
+    notificationState
+  }
+}
+`,
+            { orderId, confirmationToken },
+            signal,
+        );
+        return response.myDigitalDeliveryContents.map(item => ({
+            orderLineId: String(item.orderLineId),
+            mode: item.mode,
+            state: item.state,
+            eligibleQuantity: item.eligibleQuantity,
+            readyQuantity: item.readyQuantity,
+            claimedQuantity: item.claimedQuantity,
+            notificationState: item.notificationState,
+        }));
+    }
+
+    async claimDigitalDelivery(orderId: string, orderLineId: string, confirmationToken?: string) {
+        const response = await this.request<{ claimDigitalDelivery: DigitalReceiptContent }>(
+            `
+mutation ($orderId: ID!, $orderLineId: ID!, $confirmationToken: String) {
+  claimDigitalDelivery(
+    orderId: $orderId
+    orderLineId: $orderLineId
+    confirmationToken: $confirmationToken
+  ) {
+    orderLineId
+    mode
+    state
+    eligibleQuantity
+    readyQuantity
+    claimedQuantity
+    notificationState
+    instructions
+    downloadUrl
+    packages {
+      number
+      note
+      fields {
+        label
+        value
+      }
+      attachments {
+        name
+        downloadUrl
+      }
+    }
+  }
+}
+`,
+            { orderId, orderLineId, confirmationToken },
+        );
+        return response.claimDigitalDelivery;
+    }
+
+    async orderAdditionalPaymentQuote(orderId: string, confirmationToken?: string, signal?: AbortSignal) {
+        const response = await this.request<{ orderAdditionalPaymentQuote: OrderAdditionalPaymentQuote }>(
+            `
+query ($orderId: ID!, $confirmationToken: String) {
+  orderAdditionalPaymentQuote(
+    orderId: $orderId
+    confirmationToken: $confirmationToken
+  ) {
+    orderId
+    state
+    outstandingAmount
+    blockedReason
+    walletAvailableAmount
+    usdtPayment {
+      id
+      fiatCurrencyCode
+      fiatAmount
+      fiatPerUsdtRate
+      markupPercent
+      usdtAmount
+      source
+      network
+      tokenContractAddress
+      receivingAddress
+      receivingAddressFingerprint
+      paymentStatus
+      transactionId
+      settledAt
+      createdAt
+      expiresAt
+    }
+    methods {
+      id
+      code
+      name
+      description
+      isEligible
+      eligibilityMessage
+    }
+  }
+}
+`,
+            { orderId, confirmationToken },
+            signal,
+        );
+        return response.orderAdditionalPaymentQuote;
+    }
+
+    async addPaymentToModifiedOrder(
+        orderId: string,
+        method: string,
+        expectedAmount: number,
+        confirmationToken?: string,
+    ): Promise<Order> {
+        const response = await this.request<{ addPaymentToModifiedOrder: Order & ErrorResult }>(
+            `
+mutation ($input: OrderAdditionalPaymentInput!) {
+  addPaymentToModifiedOrder(input: $input) {
+    __typename
+    ... on Order {
+      ${orderFields}
+    }
+    ... on ErrorResult {
+      errorCode
+      message
+    }
+  }
+}
+`,
+            { input: { orderId, confirmationToken, expectedAmount, payment: { method, metadata: {} } } },
+        );
+        this.assertNoError(response.addPaymentToModifiedOrder);
+        return response.addPaymentToModifiedOrder;
+    }
+
+    async createModifiedOrderUsdtQuote(
+        orderId: string,
+        expectedAmount: number,
+        confirmationToken?: string,
+    ): Promise<StorefrontUsdtCheckoutQuote> {
+        const response = await this.request<{ createModifiedOrderUsdtQuote: StorefrontUsdtCheckoutQuote }>(
+            `
+mutation ($input: ModifiedOrderUsdtQuoteInput!) {
+  createModifiedOrderUsdtQuote(input: $input) {
+    id
+    fiatCurrencyCode
+    fiatAmount
+    fiatPerUsdtRate
+    markupPercent
+    usdtAmount
+    source
+    network
+    tokenContractAddress
+    receivingAddress
+    receivingAddressFingerprint
+    paymentStatus
+    transactionId
+    settledAt
+    createdAt
+    expiresAt
+  }
+}
+`,
+            { input: { orderId, expectedAmount, confirmationToken } },
+        );
+        return response.createModifiedOrderUsdtQuote;
+    }
+
+    async useModifiedOrderReferralBalance(
+        orderId: string,
+        expectedAmount: number,
+        amount: number,
+        idempotencyKey: string,
+    ): Promise<Order> {
+        const response = await this.request<{ useModifiedOrderReferralBalance: Order }>(
+            `mutation($input:ModifiedOrderBalanceInput!){useModifiedOrderReferralBalance(input:$input){${orderFields}}}`,
+            { input: { orderId, expectedAmount, amount, idempotencyKey } },
+        );
+        return response.useModifiedOrderReferralBalance;
     }
 
     async orderByConfirmationToken(token: string, signal?: AbortSignal): Promise<Order | null> {

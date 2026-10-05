@@ -187,6 +187,8 @@ describe('MerchantInitialPasswordService', () => {
         'addManualPaymentToOrder',
         'cancelPayment',
         'refundOrder',
+        'recordManualRefund',
+        'retryRefund',
         'settlePayment',
         'settleRefund',
         'transitionPaymentToState',

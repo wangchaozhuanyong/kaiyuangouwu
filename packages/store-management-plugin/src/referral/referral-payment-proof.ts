@@ -8,6 +8,9 @@ export interface ReferralPaymentProofPayload {
     currencyCode: string;
     amount: number;
     expiresAt: number;
+    /** Supplemental payments use the shared wallet usage ledger, scoped to the issuing store. */
+    walletUsage?: true;
+    channelId?: string;
 }
 
 let paymentProofSecret = 'development-referral-payment-proof-secret';
@@ -40,6 +43,7 @@ export function verifyReferralPaymentProof(proof: unknown): ReferralPaymentProof
             !payload.currencyCode ||
             !Number.isInteger(payload.amount) ||
             Number(payload.amount) <= 0 ||
+            (payload.walletUsage !== undefined && (payload.walletUsage !== true || !payload.channelId)) ||
             !Number.isFinite(payload.expiresAt) ||
             Number(payload.expiresAt) <= Date.now()
         ) {

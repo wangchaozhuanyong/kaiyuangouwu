@@ -16,7 +16,7 @@ import {
     type CatalogOrderProfitExpenseRecord,
 } from '../../graphql/catalog-operations.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { expenseInputToMicrounits, expenseMicrounitsToInput } from './order-profit-expense';
+import { expenseDraftToInput, expenseMicrounitsToInput } from './order-profit-expense';
 
 interface SaveResult {
     saveCatalogOrderProfitExpense: CatalogOrderProfitExpenseRecord;
@@ -43,6 +43,8 @@ export function OrderProfitExpensePanel({
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const expense = query.data?.catalogOrderProfitExpense;
+    const applicability = query.data?.catalogOrderProfitExpenseApplicability;
+    const carrierCostApplicable = applicability?.carrierShippingCostApplicable === true;
     const source = query.data
         ? {
               carrierCost: expenseMicrounitsToInput(expense?.carrierShippingCostMicrounits),
@@ -50,6 +52,7 @@ export function OrderProfitExpensePanel({
               chargeback: expenseMicrounitsToInput(expense?.chargebackMicrounits),
               note: expense?.note ?? '',
               updatedAt: expense?.updatedAt ?? null,
+              fulfillmentType: applicability?.fulfillmentType ?? 'UNKNOWN',
           }
         : null;
     const draftOwner = useServerDraft(orderId, source ? JSON.stringify(source) : '', source);
@@ -59,6 +62,7 @@ export function OrderProfitExpensePanel({
         chargeback: '',
         note: '',
         updatedAt: null,
+        fulfillmentType: 'UNKNOWN',
     };
     const { carrierCost, paymentFee, chargeback, note } = draft;
     const setField = (field: 'carrierCost' | 'paymentFee' | 'chargeback' | 'note', value: string) =>
@@ -69,7 +73,7 @@ export function OrderProfitExpensePanel({
     const setNote = (value: string) => setField('note', value);
 
     const handleSave = async () => {
-        if (draftOwner.sourceChanged) return;
+        if (draftOwner.sourceChanged || !applicability) return;
         setError('');
         setMessage('');
         try {
@@ -77,13 +81,7 @@ export function OrderProfitExpensePanel({
                 variables: {
                     input: {
                         orderId,
-                        carrierShippingCostMicrounits: expenseInputToMicrounits(
-                            carrierCost,
-                            '承运商实际物流成本',
-                        ),
-                        paymentFeeMicrounits: expenseInputToMicrounits(paymentFee, '支付手续费'),
-                        chargebackMicrounits: expenseInputToMicrounits(chargeback, '拒付损失'),
-                        note: note.trim() || null,
+                        ...expenseDraftToInput(draft, carrierCostApplicable),
                         expectedUpdatedAt: draft.updatedAt,
                         idempotencyKey: `next-admin:${crypto.randomUUID()}`,
                     },
@@ -109,7 +107,7 @@ export function OrderProfitExpensePanel({
                         <FeatureHelpButton
                             topic="sales.order-expenses"
                             title="订单经营费用"
-                            description={'按实际支出填写；没有费用填 0，尚未核算请留空。'}
+                            description={`${!applicability ? '按商品类型核算适用经营费用。' : carrierCostApplicable ? '实物物流与支付费用分别核算。' : '数字商品核算支付费用和拒付损失，物流成本不适用。'}没有适用费用填 0，尚未核算请留空。`}
                         />
                     </h2>
                 </div>
@@ -140,14 +138,36 @@ export function OrderProfitExpensePanel({
             ) : (
                 <>
                     {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
+                    {applicability?.fulfillmentType === 'UNKNOWN' && (
+                        <p className="mt-3 text-xs text-amber-700">
+                            历史订单缺少商品类型记录；保留物流费用核算，避免把未知费用当零。
+                        </p>
+                    )}
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <ExpenseField
-                            label="承运商实际物流成本"
-                            value={carrierCost}
-                            currencyCode={currencyCode}
-                            disabled={!canUpdate || saveState.loading}
-                            onChange={setCarrierCost}
-                        />
+                        {carrierCostApplicable ? (
+                            <ExpenseField
+                                label={
+                                    applicability?.fulfillmentType === 'MIXED'
+                                        ? '实物部分承运商物流成本'
+                                        : '承运商实际物流成本'
+                                }
+                                value={carrierCost}
+                                currencyCode={currencyCode}
+                                disabled={!canUpdate || saveState.loading}
+                                onChange={setCarrierCost}
+                            />
+                        ) : (
+                            <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                                <div className="font-semibold">数字商品 · 物流成本不适用</div>
+                                {expense?.carrierShippingCostMicrounits != null && (
+                                    <p className="mt-1 text-[11px]">
+                                        历史物流费用 {currencyCode}{' '}
+                                        {expenseMicrounitsToInput(expense.carrierShippingCostMicrounits)}{' '}
+                                        保留审计，不计入本订单净利润。
+                                    </p>
+                                )}
+                            </div>
+                        )}
                         <ExpenseField
                             label="支付手续费"
                             value={paymentFee}
@@ -163,18 +183,29 @@ export function OrderProfitExpensePanel({
                             onChange={setChargeback}
                         />
                     </div>
-                    <label className="mt-3 block text-[11px] font-semibold text-slate-600">
-                        <span>财务备注</span>
+                    <AdminField
+                        className="mt-3 block text-[11px] font-semibold text-slate-600"
+                        label={
+                            <>
+                                <span>财务备注</span>
+                            </>
+                        }
+                    >
+                        {' '}
                         <AdminTextArea
                             value={note}
                             onChange={event => setNote(event.target.value)}
                             disabled={!canUpdate || saveState.loading}
                             maxLength={500}
                             rows={2}
-                            placeholder="例：对账单批次、承运商单号或手续费依据"
+                            placeholder={
+                                carrierCostApplicable
+                                    ? '例：对账单批次、承运商单号或手续费依据'
+                                    : '例：对账单批次或手续费依据'
+                            }
                             className="mt-1 block w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50"
                         />
-                    </label>
+                    </AdminField>
                     {error && (
                         <div role="alert" className="mt-3 text-xs font-semibold text-rose-600">
                             {error}
@@ -193,7 +224,7 @@ export function OrderProfitExpensePanel({
                             <AdminButton
                                 type="button"
                                 onClick={() => void handleSave()}
-                                disabled={saveState.loading || draftOwner.sourceChanged}
+                                disabled={saveState.loading || draftOwner.sourceChanged || !applicability}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                             >
                                 {saveState.loading ? (

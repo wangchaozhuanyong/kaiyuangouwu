@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InventoryLot, planFefoAllocation } from '@vendure/catalog-management-plugin';
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
@@ -87,7 +88,7 @@ export class ProductPackagingService {
             relations: ['channels'],
         });
         if (
-            product.channels.length !== 1 ||
+            product.channels.filter(channel => channel.code !== '__default_channel__').length !== 1 ||
             !product.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))
         ) {
             throw new UserInputError(
@@ -106,7 +107,7 @@ export class ProductPackagingService {
         if (
             [unitVariant, packageVariant].some(
                 variant =>
-                    variant.channels.length !== 1 ||
+                    variant.channels.filter(channel => channel.code !== '__default_channel__').length !== 1 ||
                     !variant.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)),
             )
         ) {
@@ -177,9 +178,9 @@ export class ProductPackagingService {
             this.outOfStockThreshold(rule.packageVariant, settings.outOfStockThreshold),
             0,
         );
-        const unitStockAvailable = Math.max(unit.stockOnHand - unit.stockAllocated - unitThreshold, 0);
+        const unitStockAvailable = Math.max(unit.effectiveOnHand - unit.stockAllocated - unitThreshold, 0);
         const packageStockAvailable = Math.max(
-            packageStock.stockOnHand - packageStock.stockAllocated - packageThreshold,
+            packageStock.effectiveOnHand - packageStock.stockAllocated - packageThreshold,
             0,
         );
         return {
@@ -190,7 +191,7 @@ export class ProductPackagingService {
             packageStockAllocated: packageStock.stockAllocated,
             packageStockAvailable,
             convertibleUnitStock: Math.max(
-                unit.stockOnHand -
+                unit.effectiveOnHand -
                     unit.stockAllocated -
                     unitThreshold +
                     (rule.enabled && rule.autoUnpack ? packageStockAvailable * rule.unitsPerPackage : 0),
@@ -274,7 +275,7 @@ export class ProductPackagingService {
     async autoUnpackForOrder(
         ctx: RequestContext,
         order: Order,
-        orderLines: OrderLine[],
+        orderLines: Array<Pick<OrderLine, 'productVariantId' | 'quantity'>>,
         rules: ProductPackagingRule[],
         lockedStockLevels: StockLevel[],
     ): Promise<string | undefined> {
@@ -291,8 +292,9 @@ export class ProductPackagingService {
                 .reduce((total, line) => total + line.quantity, 0);
             const unitRows = this.activeChannelRows(ctx, lockedStockLevels, rule.unitVariantId);
             const packageRows = this.activeChannelRows(ctx, lockedStockLevels, rule.packageVariantId);
-            const unitTotals = this.sumRows(unitRows);
-            const packageTotals = this.sumRows(packageRows);
+            const unitTotals = this.sumRows(await this.effectiveRows(ctx, unitRows));
+            const effectivePackageRows = await this.effectiveRows(ctx, packageRows);
+            const packageTotals = this.sumRows(effectivePackageRows);
             const calculation = calculateAutoUnpack({
                 unitDemand,
                 packageDemand,
@@ -324,7 +326,9 @@ export class ProductPackagingService {
                 if (remaining === 0) {
                     break;
                 }
-                const availableAtLocation = Math.max(packageRow.stockOnHand - packageRow.stockAllocated, 0);
+                const effective = effectivePackageRows.find(row => idsAreEqual(row.id, packageRow.id));
+                if (!effective) throw new UserInputError('包装库存已变化，请重新结算');
+                const availableAtLocation = Math.max(effective.stockOnHand - packageRow.stockAllocated, 0);
                 const packagesOpened = Math.min(remaining, availableAtLocation);
                 if (packagesOpened === 0) {
                     continue;
@@ -340,6 +344,14 @@ export class ProductPackagingService {
                 const packageStockBefore = packageRow.stockOnHand;
                 const unitStockBefore = unitRow.stockOnHand;
                 const unitsCreated = packagesOpened * rule.unitsPerPackage;
+                const lotTransfers = await this.transferLots(
+                    ctx,
+                    rule,
+                    packageRow,
+                    unitRow,
+                    packagesOpened,
+                    order.id,
+                );
                 packageRow.stockOnHand -= packagesOpened;
                 unitRow.stockOnHand += unitsCreated;
                 await this.connection.getRepository(ctx, StockLevel).save([packageRow, unitRow]);
@@ -362,6 +374,7 @@ export class ProductPackagingService {
                         stockLocationId: packageRow.stockLocationId,
                         orderId: order.id,
                         reason: 'ORDER_AUTO',
+                        lotTransfersJson: JSON.stringify(lotTransfers),
                         packagesOpened,
                         unitsCreated,
                         packageStockBefore,
@@ -382,6 +395,65 @@ export class ProductPackagingService {
         return undefined;
     }
 
+    private async transferLots(
+        ctx: RequestContext,
+        rule: ProductPackagingRule,
+        packageRow: StockLevel,
+        unitRow: StockLevel,
+        quantity: number,
+        orderId: ID,
+    ) {
+        const repository = this.connection.getRepository(ctx, InventoryLot);
+        const query = repository
+            .createQueryBuilder('lot')
+            .where('lot.variantId = :variantId AND lot.stockLocationId = :locationId', {
+                variantId: rule.packageVariantId,
+                locationId: packageRow.stockLocationId,
+            });
+        if (!['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type))
+            query.setLock('pessimistic_write');
+        const source = await query.getMany();
+        if (!source.length) return [];
+        const plan = planFefoAllocation(source, quantity, new Date());
+        if (plan.reduce((sum, item) => sum + item.quantity, 0) !== quantity)
+            throw new UserInputError('可拆包装的有效批次数量不足');
+        const target = await repository.find({
+            where: { variantId: rule.unitVariantId, stockLocationId: unitRow.stockLocationId },
+        });
+        if (!target.length && unitRow.stockOnHand > 0)
+            throw new UserInputError('自动拆包前请先为现有散件库存分配批次，避免重复增加数量');
+        const result = [] as Array<{ sourceLotId: ID; targetLotId: ID; packages: number; units: number }>;
+        for (const item of plan) {
+            const lot = source.find(record => String(record.id) === String(item.lotId));
+            if (!lot) throw new UserInputError('来源批次已变化，请重新结算');
+            lot.quantityOnHand -= item.quantity;
+            if (!lot.quantityOnHand) lot.state = 'DEPLETED';
+            const lotCode = `UNPACK-${String(lot.id)}-${String(orderId)}`;
+            const previous = target.find(record => record.lotCode === lotCode);
+            const units = item.quantity * rule.unitsPerPackage;
+            const converted = await repository.save(
+                new InventoryLot({
+                    ...previous,
+                    variantId: rule.unitVariantId,
+                    stockLocationId: unitRow.stockLocationId,
+                    lotCode,
+                    manufacturedAt: lot.manufacturedAt,
+                    expiresAt: lot.expiresAt,
+                    quantityOnHand: (previous?.quantityOnHand ?? 0) + units,
+                    state: 'ACTIVE',
+                    currencyCode: lot.currencyCode,
+                    purchaseCostMicrounits:
+                        lot.purchaseCostMicrounits == null
+                            ? null
+                            : String(Math.round(Number(lot.purchaseCostMicrounits) / rule.unitsPerPackage)),
+                }),
+            );
+            await repository.save(lot);
+            result.push({ sourceLotId: lot.id, targetLotId: converted.id, packages: item.quantity, units });
+        }
+        return result;
+    }
+
     private activeChannelRows(ctx: RequestContext, rows: StockLevel[], productVariantId: ID): StockLevel[] {
         return rows.filter(
             row =>
@@ -390,7 +462,10 @@ export class ProductPackagingService {
         );
     }
 
-    private async ownStockTotals(ctx: RequestContext, productVariantId: ID): Promise<StockTotals> {
+    private async ownStockTotals(
+        ctx: RequestContext,
+        productVariantId: ID,
+    ): Promise<StockTotals & { effectiveOnHand: number }> {
         const rows = await this.connection
             .getRepository(ctx, StockLevel)
             .createQueryBuilder('stock')
@@ -399,7 +474,10 @@ export class ProductPackagingService {
             .where('stock.productVariantId = :productVariantId', { productVariantId })
             .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
             .getMany();
-        return this.sumRows(rows);
+        return {
+            ...this.sumRows(rows),
+            effectiveOnHand: this.sumRows(await this.effectiveRows(ctx, rows)).stockOnHand,
+        };
     }
 
     private sumRows(rows: StockLevel[]): StockTotals {
@@ -410,6 +488,28 @@ export class ProductPackagingService {
             }),
             { stockOnHand: 0, stockAllocated: 0 },
         );
+    }
+
+    private async effectiveRows(ctx: RequestContext, rows: StockLevel[]) {
+        if (!rows.length) return [];
+        const lots = await this.connection
+            .getRepository(ctx, InventoryLot)
+            .find({ where: { variantId: In([...new Set(rows.map(row => row.productVariantId))]) } });
+        return rows.map(row => {
+            const local = lots.filter(
+                lot =>
+                    idsAreEqual(lot.variantId, row.productVariantId) &&
+                    idsAreEqual(lot.stockLocationId, row.stockLocationId),
+            );
+            if (!local.length) return row;
+            const available = planFefoAllocation(local, Number.MAX_SAFE_INTEGER, new Date()).reduce(
+                (sum, item) => sum + item.quantity,
+                0,
+            );
+            return Object.assign(new StockLevel({}), row, {
+                stockOnHand: Math.min(row.stockOnHand, available),
+            });
+        });
     }
 
     private outOfStockThreshold(variant: ProductVariant, globalThreshold: number): number {

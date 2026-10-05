@@ -88,7 +88,7 @@ export function TargetValueInput({
         return (
             <div className="space-y-2">
                 <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
                     <AdminInput
                         value={lookupSearch}
                         onChange={event => setLookupSearch(event.target.value)}

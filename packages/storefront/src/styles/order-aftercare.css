@@ -178,6 +178,38 @@
     background: var(--accent-hover);
 }
 
+.digital-receipt-panel :is(p, dl, dd) {
+    margin: 0;
+    min-width: 0;
+}
+.digital-receipt-panel > header p {
+    margin-top: 8px;
+    color: var(--muted);
+}
+.digital-receipt-panel article > button {
+    justify-self: start;
+    min-height: 44px;
+    max-width: 100%;
+    white-space: normal;
+    padding: 10px 16px;
+}
+.digital-receipt-content,
+.digital-receipt-package,
+.digital-receipt-package dl {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+.digital-receipt-package {
+    padding: 16px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+}
+.digital-receipt-content :is(p, dd) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .after-sales-list {
     display: grid;
     align-items: start;
@@ -604,6 +636,15 @@
     .digital-delivery-panel article :is(em, a) {
         justify-self: end;
     }
+    .digital-receipt-panel article > button {
+        grid-column: 2;
+    }
+    .digital-receipt-panel .digital-receipt-content {
+        grid-column: 1 / -1;
+    }
+    .digital-receipt-panel .digital-receipt-content a {
+        justify-self: start;
+    }
 }
 @media (min-width: 1024px) {
     .digital-delivery-panel {
@@ -618,4 +659,19 @@
     .after-sales-card {
         padding: 24px;
     }
+}
+.order-additional-payment label {
+    display: grid;
+    gap: 0.5rem;
+    margin-block: 1rem;
+}
+
+.order-additional-payment select {
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.65rem;
+    color: inherit;
+    background: var(--control-surface);
+    border: 1px solid var(--skin-divider);
+    border-radius: var(--skin-control-radius);
 }

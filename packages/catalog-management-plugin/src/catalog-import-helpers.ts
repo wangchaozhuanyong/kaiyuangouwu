@@ -1,7 +1,11 @@
 import { normalizeString } from '@vendure/common/lib/normalize-string';
 import { FacetValue, ProductService, RequestContext, UserInputError } from '@vendure/core';
 
-import { parseCatalogFulfillmentType, validateCatalogCategories } from './catalog-import-classification';
+import {
+    digitalImportFields,
+    parseCatalogFulfillmentType,
+    validateCatalogCategories,
+} from './catalog-import-classification';
 import { parseCatalogImportStore } from './catalog-import-store';
 import { normalizeSupplierDisplayName } from './catalog-supplier.service';
 import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
@@ -172,6 +176,9 @@ export function validateImportSource(input: BeginCatalogImportInput): void {
         'purchaseUnit',
         'packageQuantity',
         'stockOnHand',
+        'digitalAvailableQuantity',
+        'digitalDeliveryMode',
+        'digitalStockPolicy',
         'purchaseCost',
         'sellingPrice',
         'reportedMargin',
@@ -280,6 +287,9 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         'purchaseUnit',
         'packageQuantity',
         'stockOnHand',
+        'digitalAvailableQuantity',
+        'digitalDeliveryMode',
+        'digitalStockPolicy',
         'purchaseCost',
         'sellingPrice',
         'reportedMargin',
@@ -316,6 +326,13 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         primaryUnit: safeImportText(row.primaryUnit, 80),
         purchaseUnit: safeImportText(row.purchaseUnit, 80),
         packageQuantity: row.packageQuantity,
+        digitalAvailableQuantity: finiteRowNumber(
+            row.digitalAvailableQuantity ?? null,
+            row.rowNumber,
+            '可售份数',
+            false,
+        ),
+        ...digitalImportFields(row.digitalDeliveryMode, row.digitalStockPolicy),
         stockOnHand: row.stockOnHand,
         purchaseCost,
         sellingPrice,

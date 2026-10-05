@@ -27,7 +27,7 @@ export interface CatalogCollectionHierarchyRecord {
 
 export function parseCatalogFulfillmentType(value: unknown, rowNumber: number): CatalogFulfillmentType {
     const text = (typeof value === 'string' ? value : '').normalize('NFKC').trim().toLowerCase();
-    if (['digital', '虚拟', '虚拟货品', '虚拟商品'].includes(text)) return 'digital';
+    if (['digital', '数字', '数字商品', '虚拟', '虚拟货品', '虚拟商品'].includes(text)) return 'digital';
     if (['physical', '实物', '实物货品', '实物商品'].includes(text)) return 'physical';
     throw new Error(`第 ${rowNumber} 行：商品类型必须填写“虚拟货品”或“实物”`);
 }
@@ -91,12 +91,58 @@ export function validateCatalogCategories(
     }
 }
 
+export function digitalImportFields(mode?: unknown, policy?: unknown) {
+    const modes: Record<string, NonNullable<NormalizedCatalogRow['digitalDeliveryMode']>> = {
+        auto_card: 'auto_card',
+        manual_service: 'manual_service',
+        file_download: 'file_download',
+        自动发卡: 'auto_card',
+        人工交付: 'manual_service',
+        文件下载: 'file_download',
+    };
+    const policies: Record<string, NonNullable<NormalizedCatalogRow['digitalStockPolicy']>> = {
+        limited: 'limited',
+        unlimited: 'unlimited',
+        pool_derived: 'pool_derived',
+        限量: 'limited',
+        不限量: 'unlimited',
+        卡密池: 'pool_derived',
+    };
+    if (mode != null && typeof mode !== 'string') throw new Error('数字交付方式无效');
+    if (policy != null && typeof policy !== 'string') throw new Error('数字份数限制无效');
+    const modeKey = typeof mode === 'string' ? mode.trim() : '';
+    const policyKey = typeof policy === 'string' ? policy.trim() : '';
+    if (modeKey && !modes[modeKey]) throw new Error('数字交付方式无效');
+    if (policyKey && !policies[policyKey]) throw new Error('数字份数限制无效');
+    return { digitalDeliveryMode: modes[modeKey], digitalStockPolicy: policies[policyKey] };
+}
+
 export function catalogImportTypeError(ctx: RequestContext, row: NormalizedCatalogRow): string | null {
     if (!row.fulfillmentType) return null;
     try {
         parseCatalogFulfillmentType(row.fulfillmentType, row.rowNumber);
     } catch (error) {
         return error instanceof Error ? error.message : String(error);
+    }
+    const physicalFields = [
+        'barcode',
+        'primaryUnit',
+        'purchaseUnit',
+        'packageQuantity',
+        'stockOnHand',
+        'stockLocationCode',
+        'shelfLifeDays',
+        'manufacturedAt',
+        'lotCode',
+        'lotQuantity',
+        'maximumStock',
+        'minimumStock',
+    ] as const;
+    if (row.fulfillmentType === 'digital') {
+        const incompatible = physicalFields.find(field => row[field] != null && row[field] !== '');
+        if (incompatible) return `数字商品不能填写实物库存或包装字段：${incompatible}`;
+    } else if (row.digitalAvailableQuantity != null || row.digitalDeliveryMode || row.digitalStockPolicy) {
+        return '实物商品不能填写数字份数或交付配置';
     }
     const mode = (ctx.channel?.customFields as unknown as Record<string, unknown>)?.commerceMode;
     if (mode === 'DIGITAL_ONLY' && row.fulfillmentType === 'physical')

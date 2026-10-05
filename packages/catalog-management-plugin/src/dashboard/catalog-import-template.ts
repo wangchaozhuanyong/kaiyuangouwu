@@ -2,7 +2,7 @@ import type { NormalizedCatalogRow } from '../types';
 
 import { CATALOG_FIELD_DEFINITIONS } from '../catalog-field-definitions';
 
-export function catalogImportTemplateCsv(channelCode: string): string {
+export function catalogImportTemplateCsv(channelCode: string, domain?: 'digital' | 'physical'): string {
     const examples: Array<Partial<Record<keyof NormalizedCatalogRow, string | number>>> = [
         {
             name: '示例实物商品',
@@ -26,8 +26,8 @@ export function catalogImportTemplateCsv(channelCode: string): string {
             category: '数字服务',
             secondaryCategory: '',
             sku: 'EXAMPLE-DIGITAL-001',
-            primaryUnit: '份',
-            packageQuantity: 1,
+            digitalDeliveryMode: '人工交付',
+            digitalStockPolicy: '不限量',
             purchaseCost: 5,
             sellingPrice: 10,
         },
@@ -40,12 +40,35 @@ export function catalogImportTemplateCsv(channelCode: string): string {
             primaryUnit: '件',
         },
     ];
+    const physicalOnly = new Set([
+        'barcode',
+        'primaryUnit',
+        'purchaseUnit',
+        'packageQuantity',
+        'stockLocationCode',
+        'stockOnHand',
+        'minimumStock',
+        'maximumStock',
+        'manufacturedAt',
+        'shelfLifeDays',
+        'lotCode',
+        'lotQuantity',
+    ]);
+    const digitalOnly = new Set(['digitalAvailableQuantity', 'digitalDeliveryMode', 'digitalStockPolicy']);
+    const fields = CATALOG_FIELD_DEFINITIONS.filter(
+        field => !domain || !(domain === 'digital' ? physicalOnly : digitalOnly).has(field.value),
+    );
+    const selected = domain
+        ? examples.filter(example =>
+              domain === 'digital'
+                  ? example.sku === 'EXAMPLE-DIGITAL-001'
+                  : example.sku === 'EXAMPLE-PHYSICAL-001',
+          )
+        : examples;
     const rows = [
-        CATALOG_FIELD_DEFINITIONS.map(field => field.label),
-        ...examples.map(example =>
-            CATALOG_FIELD_DEFINITIONS.map(field =>
-                field.value === 'channelCode' ? channelCode : (example[field.value] ?? ''),
-            ),
+        fields.map(field => field.label),
+        ...selected.map(example =>
+            fields.map(field => (field.value === 'channelCode' ? channelCode : (example[field.value] ?? ''))),
         ),
     ];
     return rows

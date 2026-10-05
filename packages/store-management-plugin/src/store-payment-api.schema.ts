@@ -110,6 +110,7 @@ export const storePaymentApiSchema = gql`
     }
 
     input StoreUsdtManualRefundInput {
+        refundId: ID
         paymentId: ID!
         amount: Money!
         usdtAmount: String!

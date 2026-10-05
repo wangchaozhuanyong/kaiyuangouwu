@@ -103,3 +103,57 @@ describe('public mail verification codes', () => {
         },
     );
 });
+
+describe('shared public mail authorization', () => {
+    function fixture(virtual: unknown = null, primary: unknown = null) {
+        const repos: Record<string, any> = {
+            IcloudQueryAuditLog: { save: vi.fn() },
+            IcloudVirtualEmail: { findOne: vi.fn().mockResolvedValue(virtual) },
+            IcloudPrimaryAccount: { findOne: vi.fn().mockResolvedValue(primary) },
+            IcloudReceivedMail: { find: vi.fn() },
+        };
+        const service = new IcloudPublicQueryService(
+            { getRepository: (_ctx: unknown, entity: { name: string }) => repos[entity.name] } as never,
+            new IcloudAccessCodeService(),
+            new IcloudOtpExtractorService(),
+        );
+        return {
+            service,
+            repos,
+            authorize: () =>
+                service.authorizeQueryTarget({} as RequestContext, ' buy-aaaa-bbbb ', '127.0.0.1'),
+        };
+    }
+    it('authorizes the exact buyer without reading any mails or the primary query code', async () => {
+        const buyer = { id: 'v1', aliasEmail: 'alias@example.test', primaryAccount: { status: 'ACTIVE' } };
+        const f = fixture(buyer);
+        expect((await f.authorize()).virtual).toBe(buyer);
+        expect(f.repos.IcloudVirtualEmail.findOne.mock.calls[0][0].where).toEqual({
+            buyerQueryCode: 'BUY-AAAA-BBBB',
+        });
+        expect(f.repos.IcloudPrimaryAccount.findOne).not.toHaveBeenCalled();
+        expect(f.repos.IcloudReceivedMail.find).not.toHaveBeenCalled();
+    });
+    it.each([
+        [{ id: 'v1', status: 'DISABLED' }, null, 'DISABLED'],
+        [{ id: 'v1', primaryAccount: { status: 'DISABLED' } }, null, 'DISABLED'],
+        [null, { id: 'p1', status: 'DISABLED' }, 'DISABLED'],
+        [{ id: 'v1', codeExpiresAt: new Date(0) }, null, 'EXPIRED'],
+        [null, { id: 'p1', codeExpiresAt: new Date(0) }, 'EXPIRED'],
+    ])(
+        'applies the same expiry and disabled checks to reads and subscriptions',
+        async (virtual, primary, result) => {
+            const f = fixture(virtual, primary);
+            expect((await f.authorize()).error).toBeTruthy();
+            expect(f.repos.IcloudQueryAuditLog.save.mock.calls[0][0].result).toBe(result);
+            expect(f.repos.IcloudReceivedMail.find).not.toHaveBeenCalled();
+        },
+    );
+    it('shares invalid-code lockout and records rate-limit audit entries', async () => {
+        const f = fixture();
+        for (let i = 0; i < 5; i++) await f.authorize();
+        expect((await f.authorize()).error).toContain('15');
+        expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(5);
+        expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)[0].result).toBe('RATE_LIMITED');
+    });
+});

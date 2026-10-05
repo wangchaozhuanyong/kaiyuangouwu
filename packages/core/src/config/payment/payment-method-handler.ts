@@ -101,6 +101,9 @@ export interface CreateRefundResult {
     metadata?: PaymentMetadata;
 }
 
+/** How a refund may be confirmed as money actually returned. */
+export type RefundSettlementMode = 'automatic' | 'manual' | 'verified-external' | 'unsupported';
+
 /**
  * @description
  * This object is the return value of the {@link SettlePaymentFn} when the Payment
@@ -287,6 +290,8 @@ export interface PaymentMethodConfigOptions<T extends ConfigArgs> extends Config
      * omitted and any Refunds will have to be settled manually by an administrator.
      */
     createRefund?: CreateRefundFn<T>;
+    /** Defaults to automatic when createRefund exists, otherwise manual receipt registration. */
+    refundSettlementMode?: RefundSettlementMode;
     /**
      * @description
      * This function, when specified, will be invoked before any transition from one {@link PaymentState} to another.
@@ -352,6 +357,7 @@ export interface PaymentMethodConfigOptions<T extends ConfigArgs> extends Config
  * @docsCategory payment
  */
 export class PaymentMethodHandler<T extends ConfigArgs = ConfigArgs> extends ConfigurableOperationDef<T> {
+    readonly refundSettlementMode: RefundSettlementMode;
     private readonly createPaymentFn: CreatePaymentFn<T>;
     private readonly settlePaymentFn: SettlePaymentFn<T>;
     private readonly cancelPaymentFn?: CancelPaymentFn<T>;
@@ -364,7 +370,14 @@ export class PaymentMethodHandler<T extends ConfigArgs = ConfigArgs> extends Con
         this.settlePaymentFn = config.settlePayment;
         this.cancelPaymentFn = config.cancelPayment;
         this.createRefundFn = config.createRefund;
+        this.refundSettlementMode =
+            config.refundSettlementMode ?? (config.createRefund ? 'automatic' : 'manual');
         this.onTransitionStartFn = config.onStateTransitionStart;
+    }
+
+    /** A missing cancellation callback must never pretend to revoke an authorization. */
+    get supportsPaymentCancellation(): boolean {
+        return this.cancelPaymentFn != null;
     }
 
     /**

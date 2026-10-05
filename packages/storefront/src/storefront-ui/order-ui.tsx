@@ -79,6 +79,24 @@ export function orderNotification(
             tone: 'muted',
         };
     }
+    if (order.state === 'ArrangingAdditionalPayment') {
+        return {
+            title: isZh ? '订单等待补款' : 'Order awaiting additional payment',
+            detail: isZh
+                ? `订单 ${order.code} 已调整，请核对补款金额后继续支付`
+                : `Order ${order.code} was updated. Review the additional amount before paying.`,
+            tone: 'pending',
+        };
+    }
+    if (order.state === 'Modifying') {
+        return {
+            title: isZh ? '商家正在调整订单' : 'The merchant is updating your order',
+            detail: isZh
+                ? `请等待订单 ${order.code} 调整完成`
+                : `Wait for the update to ${order.code} to finish.`,
+            tone: 'progress',
+        };
+    }
     if (order.state === 'ArrangingPayment') {
         return {
             title: isZh ? '订单等待支付' : 'Order awaiting payment',
@@ -136,17 +154,46 @@ export function addressText(address: CustomerAddress): string {
         .join(' ');
 }
 
-export const orderStateLabel = (state: string, language: StorefrontLanguage): string =>
-    state === 'AddingItems'
-        ? language === 'zh'
-            ? '购物车中'
-            : 'In cart'
-        : orderStateDisplayLabel(state, language);
+export function orderStateLabel(state: string, language: StorefrontLanguage): string {
+    const customerLabels: Record<string, [string, string]> = {
+        AddingItems: ['购物车中', 'In cart'],
+        ArrangingAdditionalPayment: ['待补款', 'Additional payment needed'],
+        Modifying: ['商家调整中', 'Order being updated'],
+    };
+    return customerLabels[state]?.[language === 'zh' ? 0 : 1] ?? orderStateDisplayLabel(state, language);
+}
 
 export const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
 
+/** Business delivery labels do not claim that an email was received or content was claimed. */
+export function customerOrderStateLabel(
+    order: Pick<OrderSummary, 'state' | 'lines'>,
+    language: StorefrontLanguage,
+) {
+    const allDigital =
+        order.lines.length > 0 &&
+        order.lines.every(
+            line =>
+                (line.customFields.fulfillmentTypeSnapshot ??
+                    line.productVariant.customFields.fulfillmentType) === 'digital',
+        );
+    if (allDigital) {
+        const labels: Record<string, [string, string]> = {
+            PaymentAuthorized: ['待确认收款', 'Awaiting payment settlement'],
+            PaymentSettled: ['待交付', 'Preparing digital delivery'],
+            PartiallyShipped: ['部分交付', 'Partially delivered'],
+            Shipped: ['交付进行中', 'Delivery in progress'],
+            PartiallyDelivered: ['部分交付', 'Partially delivered'],
+            Delivered: ['已交付', 'Delivered'],
+        };
+        const label = labels[order.state];
+        if (label) return label[language === 'zh' ? 0 : 1];
+    }
+    return orderStateLabel(order.state, language);
+}
+
 export function orderStatesForTab(tab: OrderTab): string[] | undefined {
-    if (tab === 'pending') return ['ArrangingPayment'];
+    if (tab === 'pending') return ['ArrangingPayment', 'ArrangingAdditionalPayment'];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
     if (tab === 'completed') return ['Delivered'];

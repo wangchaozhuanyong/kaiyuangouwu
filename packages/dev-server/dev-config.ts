@@ -129,13 +129,15 @@ const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .filter(Boolean);
 const autoCardDeliveryEmailHandler = new EmailEventListener('auto-card-delivery')
     .on(AutoCardDeliveryReadyEvent)
-    .loadData(({ event, injector }) =>
-        injector.get(AutoCardService).emailPayload(event.ctx, event.deliveryId),
-    )
+    .loadData(async ({ event, injector }) => {
+        const data = await injector.get(AutoCardService).notificationPayload(event.ctx, event.deliveryId);
+        const storefrontUrl = await storefrontUrlForChannel(event.ctx, injector.get(TransactionalConnection));
+        return { ...data, receiptUrl: `${storefrontUrl}${data.receiptPath}` };
+    })
     .setRecipient(event => event.data.recipientEmail)
     .setFrom('{{ fromAddress }}')
     .setSubject(event =>
-        event.data.isChinese ? '您购买的虚拟商品已自动发货' : 'Your digital credentials are ready',
+        event.data.isChinese ? '您购买的数字商品可以领取了' : 'Your digital item is ready to claim',
     )
     .setTemplateVars(event => event.data)
     .setMetadata(event => ({
@@ -145,21 +147,19 @@ const autoCardDeliveryEmailHandler = new EmailEventListener('auto-card-delivery'
 
 const manualDigitalDeliveryEmailHandler = new EmailEventListener('manual-digital-delivery')
     .on(ManualDigitalDeliveryReadyEvent)
-    .loadData(({ event, injector }) =>
-        injector.get(ManualDigitalDeliveryService).emailPayload(event.ctx, event.deliveryId),
-    )
+    .loadData(async ({ event, injector }) => {
+        const data = await injector
+            .get(ManualDigitalDeliveryService)
+            .notificationPayload(event.ctx, event.deliveryId);
+        const storefrontUrl = await storefrontUrlForChannel(event.ctx, injector.get(TransactionalConnection));
+        return { ...data, receiptUrl: `${storefrontUrl}${data.receiptPath}` };
+    })
     .setRecipient(event => event.data.recipientEmail)
     .setFrom('{{ fromAddress }}')
     .setSubject(event =>
-        event.data.isChinese ? '您购买的虚拟商品已完成交付' : 'Your digital order is ready',
+        event.data.isChinese ? '您购买的数字商品可以领取了' : 'Your digital item is ready to claim',
     )
     .setTemplateVars(event => event.data)
-    .setAttachments(event =>
-        event.data.attachments.map(attachment => ({
-            filename: attachment.filename,
-            path: safeAssetAttachmentPath(attachment.source),
-        })),
-    )
     .setMetadata(event => ({
         type: 'manual-digital-delivery',
         deliveryId: event.data.deliveryId,
@@ -379,15 +379,6 @@ const assetUploadDir = configuredDirectory('VENDURE_ASSET_UPLOAD_DIR', path.join
 const customerImages = customerImageConfiguration(assetUploadDir, IS_PRODUCTION);
 const commerceFulfillmentOptions = { testPaymentsEnabled, evidenceStorage: customerImages.evidenceStorage };
 
-function safeAssetAttachmentPath(source: string): string {
-    const root = path.resolve(assetUploadDir);
-    const resolved = path.resolve(root, source);
-    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-        throw new Error('Invalid manual delivery attachment path');
-    }
-    return resolved;
-}
-
 async function storefrontUrlForChannel(
     ctx: RequestContext,
     connection: TransactionalConnection,
@@ -419,7 +410,9 @@ function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
     const commonOptions = {
         handlers: localizedEmailHandlers,
         templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
-        beforeSend: createManualDeliveryEmailGuard(assetUploadDir),
+        beforeSend: createManualDeliveryEmailGuard((ctx, injector) =>
+            storefrontUrlForChannel(ctx, injector.get(TransactionalConnection)),
+        ),
         globalTemplateVars: (ctx: RequestContext, injector: Injector) =>
             emailTemplateVars(ctx, injector, fromAddress),
     };

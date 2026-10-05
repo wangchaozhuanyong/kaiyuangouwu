@@ -98,7 +98,7 @@ export class CatalogImportService {
         private readonly searchService: SearchService,
         private readonly suppliers: CatalogSupplierService,
     ) {
-        this.preview = new CatalogImportPreview(this.connection, this.suppliers);
+        this.preview = new CatalogImportPreview(this.connection, this.suppliers, this.operations);
         this.writer = new CatalogImportWriter(
             this.connection,
             this.productService,

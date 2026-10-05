@@ -200,33 +200,51 @@ export function AiImageSettingsModule() {
             </header>
             {!standalonePage && (
                 <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                    <div className="mx-auto flex w-full max-w-none gap-6 overflow-x-auto text-xs font-bold">
-                        <Tab
-                            active={tab === 'CONFIG'}
-                            onClick={() => setTab('CONFIG')}
-                            icon={Cpu}
-                            label="运营配置"
-                        />
-                        <Tab
-                            active={tab === 'JOBS'}
-                            onClick={() => setTab('JOBS')}
-                            icon={ImageIcon}
-                            label={`任务与售后 ${query.data?.imageGenerationJobs?.totalItems ?? 0}`}
-                            badge={unknownCount ? `${unknownCount} 本页待确认` : undefined}
-                        />
-                        <Tab
-                            active={tab === 'USAGE'}
-                            onClick={() => setTab('USAGE')}
-                            icon={CircleDollarSign}
-                            label="使用记录与费用"
-                        />
-                        <Tab
-                            active={tab === 'SKILLS'}
-                            onClick={() => setTab('SKILLS')}
-                            icon={ShieldCheck}
-                            label="提示词规则包"
-                        />
-                    </div>
+                    <>
+                        <AdminField label="工坊分类" className="admin-mobile-section-select">
+                            <AdminSelect
+                                aria-label="工坊分类"
+                                value={tab}
+                                onChange={event => setTab(event.target.value as typeof tab)}
+                                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                            >
+                                <option value="CONFIG">运营配置</option>
+                                <option value="JOBS">
+                                    任务与售后 {query.data?.imageGenerationJobs?.totalItems ?? 0}
+                                    {unknownCount ? ' · 本页有待确认' : ''}
+                                </option>
+                                <option value="USAGE">使用记录与费用</option>
+                                <option value="SKILLS">提示词规则包</option>
+                            </AdminSelect>
+                        </AdminField>
+                        <div className="mx-auto hidden w-full max-w-none gap-6 overflow-x-auto text-xs font-bold md:flex">
+                            <Tab
+                                active={tab === 'CONFIG'}
+                                onClick={() => setTab('CONFIG')}
+                                icon={Cpu}
+                                label="运营配置"
+                            />
+                            <Tab
+                                active={tab === 'JOBS'}
+                                onClick={() => setTab('JOBS')}
+                                icon={ImageIcon}
+                                label={`任务与售后 ${query.data?.imageGenerationJobs?.totalItems ?? 0}`}
+                                badge={unknownCount ? `${unknownCount} 本页待确认` : undefined}
+                            />
+                            <Tab
+                                active={tab === 'USAGE'}
+                                onClick={() => setTab('USAGE')}
+                                icon={CircleDollarSign}
+                                label="使用记录与费用"
+                            />
+                            <Tab
+                                active={tab === 'SKILLS'}
+                                onClick={() => setTab('SKILLS')}
+                                icon={ShieldCheck}
+                                label="提示词规则包"
+                            />
+                        </div>
+                    </>
                 </nav>
             )}
             <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
@@ -1135,7 +1153,7 @@ function JobsPanel({
             {jobs.length > 0 && (
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1480px] border-collapse text-left text-xs">
+                        <table className="admin-mobile-record-table w-full min-w-[1480px] border-collapse text-left text-xs">
                             <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                     <th
@@ -1187,7 +1205,10 @@ function JobsPanel({
                                         '';
                                     return (
                                         <tr key={job.id} className="group h-12 hover:bg-slate-50/80">
-                                            <td className="sticky left-0 z-[1] max-w-56 bg-white px-3 py-2 group-hover:bg-slate-50">
+                                            <td
+                                                data-label="任务 ID"
+                                                className="sticky left-0 z-[1] max-w-56 bg-white px-3 py-2 group-hover:bg-slate-50"
+                                            >
                                                 <span
                                                     className="block truncate font-mono font-bold text-slate-900"
                                                     title={job.id}
@@ -1195,10 +1216,13 @@ function JobsPanel({
                                                     {job.id}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="创建时间"
+                                                className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {formatDateTime(job.createdAt)}
                                             </td>
-                                            <td className="max-w-48 px-3 py-2">
+                                            <td data-label="模型" className="max-w-48 px-3 py-2">
                                                 <span
                                                     className="block truncate font-semibold text-slate-800"
                                                     title={job.modelNameSnapshot}
@@ -1206,25 +1230,41 @@ function JobsPanel({
                                                     {job.modelNameSnapshot}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 text-center font-mono font-bold text-slate-800">
+                                            <td
+                                                data-label="数量"
+                                                className="whitespace-nowrap px-3 py-2 text-center font-mono font-bold text-slate-800"
+                                            >
                                                 {job.quantity}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">
+                                            <td
+                                                data-label="单价"
+                                                className="whitespace-nowrap px-3 py-2 font-mono text-slate-700"
+                                            >
                                                 {formatMoney(job.unitPriceSnapshot, job.currencyCode)}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-900">
+                                            <td
+                                                data-label="已扣金额"
+                                                className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-900"
+                                            >
                                                 {formatMoney(job.capturedAmount, job.currencyCode)}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-600">
+                                            <td
+                                                data-label="已退金额"
+                                                className="whitespace-nowrap px-3 py-2 font-mono text-slate-600"
+                                            >
                                                 {formatMoney(job.releasedAmount, job.currencyCode)}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2">
+                                            <td data-label="任务状态" className="whitespace-nowrap px-3 py-2">
                                                 <StateBadge state={job.state} />
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2">
+                                            <td data-label="输出结果" className="whitespace-nowrap px-3 py-2">
                                                 <OutputStateSummary outputs={job.outputs} />
                                             </td>
-                                            <td className="max-w-56 px-3 py-2">
+                                            <td
+                                                data-label="错误"
+                                                data-mobile-wide
+                                                className="max-w-56 px-3 py-2"
+                                            >
                                                 <span
                                                     className={`block truncate text-[10px] ${errorMessage ? 'text-rose-600' : 'text-slate-400'}`}
                                                     title={errorMessage || undefined}
@@ -1232,7 +1272,10 @@ function JobsPanel({
                                                     {errorMessage || '-'}
                                                 </span>
                                             </td>
-                                            <td className="sticky right-0 border-l border-slate-100 bg-white px-3 py-2 text-right group-hover:bg-slate-50">
+                                            <td
+                                                data-label="操作"
+                                                className="sticky right-0 border-l border-slate-100 bg-white px-3 py-2 text-right group-hover:bg-slate-50"
+                                            >
                                                 <AdminButton
                                                     type="button"
                                                     onClick={() => setSelectedJob(job)}
@@ -1361,7 +1404,7 @@ function JobOutputsDialog({
                 <div className="overflow-auto p-4">
                     <div className="overflow-hidden rounded-xl border border-slate-200">
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[820px] border-collapse text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[820px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                         <th scope="col" className="whitespace-nowrap px-3 py-3">
@@ -1387,23 +1430,36 @@ function JobOutputsDialog({
                                 <tbody className="divide-y divide-slate-100">
                                     {job.outputs.map(output => (
                                         <tr key={output.id} className="h-12 hover:bg-slate-50/80">
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-800">
+                                            <td
+                                                data-label="输出"
+                                                className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-800"
+                                            >
                                                 #{output.outputIndex + 1}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2">
+                                            <td data-label="状态" className="whitespace-nowrap px-3 py-2">
                                                 <StateBadge
                                                     state={output.refundedAt ? 'REFUNDED' : output.state}
                                                 />
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 text-center font-mono text-slate-600">
+                                            <td
+                                                data-label="尝试次数"
+                                                className="whitespace-nowrap px-3 py-2 text-center font-mono text-slate-600"
+                                            >
                                                 {output.attemptCount}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="完成时间"
+                                                className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {output.completedAt
                                                     ? formatDateTime(output.completedAt)
                                                     : '-'}
                                             </td>
-                                            <td className="max-w-64 px-3 py-2">
+                                            <td
+                                                data-label="错误"
+                                                data-mobile-wide
+                                                className="max-w-64 px-3 py-2"
+                                            >
                                                 <span
                                                     className={`block truncate text-[10px] ${output.errorMessage ? 'text-rose-600' : 'text-slate-400'}`}
                                                     title={
@@ -1414,7 +1470,10 @@ function JobOutputsDialog({
                                                     {serviceMessageDisplay(output.errorMessage, 'zh') || '-'}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-2 text-right">
+                                            <td
+                                                data-label="操作"
+                                                className="whitespace-nowrap px-3 py-2 text-right"
+                                            >
                                                 {output.state === 'UNKNOWN' && !output.refundedAt ? (
                                                     <AdminButton
                                                         type="button"

@@ -1,8 +1,3 @@
 {
-    "extends": "../../../tsconfig.json",
-    "compilerOptions": {
-        "noEmit": true,
-        "lib": ["es2019", "dom", "dom.iterable"]
-    },
-    "include": ["./**/*.ts"]
+    "extends": "./tsconfig.order-closure.json"
 }

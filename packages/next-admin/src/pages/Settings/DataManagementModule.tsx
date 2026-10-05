@@ -395,7 +395,7 @@ export function DataManagementModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[1320px] border-collapse text-left text-xs">
                                     <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
                                         <tr>
                                             <th className="px-4 py-3">资源</th>
@@ -411,7 +411,7 @@ export function DataManagementModule() {
                                     <tbody className="divide-y divide-slate-100">
                                         {visible.map(record => (
                                             <tr key={record.id} className="hover:bg-slate-50/70">
-                                                <td className="px-4 py-3">
+                                                <td data-label="资源" className="px-4 py-3">
                                                     <strong className="block text-slate-800">
                                                         {resourceLabel(record.resourceType)}
                                                     </strong>
@@ -419,22 +419,32 @@ export function DataManagementModule() {
                                                         #{record.resourceKey} · 店铺 {record.channelId}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td data-label="状态" className="px-4 py-3">
                                                     <StatusBadge record={record} />
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-600">
+                                                <td data-label="原因" className="px-4 py-3 text-slate-600">
                                                     {reasonLabel(record.reason)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                                <td
+                                                    data-label="进入恢复区"
+                                                    className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500"
+                                                >
                                                     {formatDateTime(record.quarantinedAt)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                                <td
+                                                    data-label="计划清理"
+                                                    className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500"
+                                                >
                                                     {formatDateTime(record.purgeAfter)}
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-600">
+                                                <td data-label="尝试" className="px-4 py-3 text-slate-600">
                                                     {record.attemptCount}
                                                 </td>
-                                                <td className="max-w-80 px-4 py-3">
+                                                <td
+                                                    data-label="异常/保留"
+                                                    data-mobile-wide
+                                                    className="max-w-80 px-4 py-3"
+                                                >
                                                     <span
                                                         className={
                                                             record.legalHold
@@ -452,7 +462,7 @@ export function DataManagementModule() {
                                                               ) ?? '—')}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td data-label="操作" className="px-4 py-3">
                                                     <div className="flex justify-end gap-2">
                                                         {record.legalHold ? (
                                                             <AdminButton
@@ -528,7 +538,7 @@ export function DataManagementModule() {
                             </h2>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[1120px] border-collapse text-left text-xs">
                                 <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
                                     <tr>
                                         <th className="px-4 py-3">请求</th>
@@ -543,7 +553,7 @@ export function DataManagementModule() {
                                 <tbody className="divide-y divide-slate-100">
                                     {subjectRequests.map(request => (
                                         <tr key={request.id} className="hover:bg-slate-50/70">
-                                            <td className="px-4 py-3">
+                                            <td data-label="请求" className="px-4 py-3">
                                                 <strong className="block text-slate-800">
                                                     {request.requestType === 'EXPORT'
                                                         ? '个人数据导出'
@@ -553,22 +563,32 @@ export function DataManagementModule() {
                                                     #{request.id} · 店铺 {request.channelId}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="状态" className="px-4 py-3">
                                                 <SubjectStatusBadge status={request.status} />
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="申请时间"
+                                                className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {formatDateTime(request.requestedAt)}
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="计划处理"
+                                                className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {request.dueAt ? formatDateTime(request.dueAt) : '—'}
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600">
+                                            <td data-label="尝试" className="px-4 py-3 text-slate-600">
                                                 {request.attemptCount}
                                             </td>
-                                            <td className="max-w-96 px-4 py-3 text-rose-600">
+                                            <td
+                                                data-label="阻断/错误"
+                                                data-mobile-wide
+                                                className="max-w-96 px-4 py-3 text-rose-600"
+                                            >
                                                 {serviceMessageDisplay(request.lastError, 'zh') ?? '—'}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td data-label="操作" className="px-4 py-3 text-right">
                                                 {request.requestType === 'ACCOUNT_CLOSURE' &&
                                                     ['BLOCKED', 'FAILED'].includes(request.status) && (
                                                         <AdminButton
@@ -614,7 +634,7 @@ export function DataManagementModule() {
                             </h2>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                            <table className="admin-mobile-record-table w-full min-w-[980px] border-collapse text-left text-xs">
                                 <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
                                     <tr>
                                         <th className="px-4 py-3">用途</th>
@@ -628,7 +648,7 @@ export function DataManagementModule() {
                                 <tbody className="divide-y divide-slate-100">
                                     {consentRecords.map(record => (
                                         <tr key={record.id} className="hover:bg-slate-50/70">
-                                            <td className="px-4 py-3">
+                                            <td data-label="用途" className="px-4 py-3">
                                                 <strong className="block text-slate-800">
                                                     {consentPurposeLabel(record.purpose)}
                                                 </strong>
@@ -636,7 +656,7 @@ export function DataManagementModule() {
                                                     店铺 {record.channelId}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="动作" className="px-4 py-3">
                                                 <span
                                                     className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${
                                                         record.action === 'GRANTED'
@@ -647,20 +667,29 @@ export function DataManagementModule() {
                                                     {record.action === 'GRANTED' ? '已授予' : '已撤回'}
                                                 </span>
                                             </td>
-                                            <td className="max-w-72 px-4 py-3 font-mono text-[10px] text-slate-600">
+                                            <td
+                                                data-label="版本"
+                                                className="max-w-72 px-4 py-3 font-mono text-[10px] text-slate-600"
+                                            >
                                                 {record.policyVersion}
                                             </td>
-                                            <td className="px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="校验值"
+                                                className="px-4 py-3 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {record.policyDigest.slice(0, 16)}…
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600">
+                                            <td data-label="来源/语言" className="px-4 py-3 text-slate-600">
                                                 {systemFieldDisplayLabel('source', record.source)} ·{' '}
                                                 {systemFieldDisplayLabel(
                                                     'defaultLanguageCode',
                                                     record.locale,
                                                 )}
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            <td
+                                                data-label="记录时间"
+                                                className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500"
+                                            >
                                                 {formatDateTime(record.recordedAt)}
                                             </td>
                                         </tr>

@@ -109,6 +109,7 @@ function createHarness(
         update: vi.fn().mockResolvedValue({ affected: 1 }),
     };
     const refundRepository = {
+        find: vi.fn().mockResolvedValue([]),
         findOne: vi.fn().mockResolvedValue({
             id: 'refund-1',
             state: 'Settled',
@@ -458,6 +459,58 @@ describe('AfterSalesService', () => {
             expect.objectContaining({ state: 'COMPLETED', refundId: 'refund-1' }),
         );
     });
+    it.each(['Pending', 'Failed', 'Settled'])(
+        'requires every original-payment fragment to settle before closing after-sales (%s)',
+        async state => {
+            const test = createHarness({ requestState: 'APPROVED', requestApprovedAmount: 4900 });
+            const request = {
+                id: 'request-1',
+                state: 'APPROVED',
+                approvedAmount: 4900,
+                requestedAmount: 4900,
+                orderId: 'order-1',
+                order: test.order,
+                items: [],
+                events: [],
+                refundId: null,
+            };
+            test.requestRepository.findOne.mockResolvedValueOnce(request).mockResolvedValueOnce(null);
+            const anchor: any = {
+                id: 'refund-1',
+                state: 'Settled',
+                total: 2450,
+                payment: { order: test.order },
+                metadata: { refundRequest: { modificationGroupKey: 'original-group' } },
+            };
+            test.refundRepository.findOne.mockResolvedValue(anchor);
+            test.refundRepository.find.mockResolvedValue([
+                anchor,
+                { ...anchor, id: 'refund-2', state },
+                {
+                    ...anchor,
+                    id: 'foreign-group',
+                    total: 99999,
+                    metadata: { refundRequest: { modificationGroupKey: 'another-group' } },
+                },
+            ]);
+            const operation = test.service.transitionForAdmin(test.ctx, {
+                id: 'request-1',
+                state: 'COMPLETED',
+                resolution: 'Synthetic split refund reviewed.',
+                refundId: 'refund-1',
+            });
+            if (state !== 'Settled') {
+                await expect(operation).rejects.toThrow('尚未全部退回');
+                expect(test.requestRepository.update).not.toHaveBeenCalled();
+            } else {
+                await operation;
+                expect(test.requestRepository.update).toHaveBeenCalledWith(
+                    expect.anything(),
+                    expect.objectContaining({ state: 'COMPLETED' }),
+                );
+            }
+        },
+    );
 
     it('does not expose a legacy Chinese resolution to an English client', () => {
         const test = createHarness();

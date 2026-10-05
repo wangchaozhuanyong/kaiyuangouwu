@@ -70,6 +70,14 @@ describe('compact editors retain drafts', () => {
         expect(chinese.closest('[hidden]')).not.toBeNull();
         expect(english.closest('[hidden]')).toBeNull();
         await fill(english, 'English draft');
+        const mobileViews = host.querySelectorAll<HTMLButtonElement>('[aria-label="编辑与预览视图"] button');
+        await act(async () => mobileViews[1].click());
+        expect(mobileViews[1].getAttribute('aria-pressed')).toBe('true');
+        expect(english.closest('section')?.classList.contains('hidden')).toBe(true);
+        await act(async () => mobileViews[0].click());
+        expect(english.closest('section')?.classList.contains('hidden')).toBe(false);
+        expect(english.value).toBe('English draft');
+        expect(mocks.mutate).not.toHaveBeenCalled();
         await select(language, 'zh_Hans');
         expect(chinese.value).toBe('中文草稿');
         expect(english.value).toBe('English draft');

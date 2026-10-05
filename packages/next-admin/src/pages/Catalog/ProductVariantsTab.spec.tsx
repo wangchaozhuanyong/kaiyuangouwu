@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
+import { ProductMoreSettings } from './ProductMoreSettings';
 import { ProductVariantsTab } from './ProductVariantsTab';
 
 const editorState = vi.hoisted(() => ({
@@ -17,34 +18,19 @@ const editorState = vi.hoisted(() => ({
     optionGroupPageSize: 20,
     optionGroupsData: { productOptionGroups: { items: [], totalItems: 0 } },
     catalogChannelsData: {
-        activeChannel: {
-            id: 'default',
-            code: '__default_channel__',
-            customFields: null as {
-                storefrontNameZh?: string | null;
-                storefrontNameEn?: string | null;
-            } | null,
-        },
+        activeChannel: { id: 'default', code: '__default_channel__', displayName: '平台' },
         channels: {
             items: [
-                {
-                    id: 'default',
-                    code: '__default_channel__',
-                    defaultCurrencyCode: 'CNY',
-                    customFields: null,
-                },
-                {
-                    id: 'meiyijia',
-                    code: 'meiyijia',
-                    defaultCurrencyCode: 'MYR',
-                    customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
-                },
+                { id: 'default', code: '__default_channel__', defaultCurrencyCode: 'CNY' },
+                { id: 'meiyijia', code: '美宜佳', defaultCurrencyCode: 'MYR' },
             ],
         },
     },
     selectedChannelIds: [] as string[],
     setSelectedChannelIds: vi.fn(),
     formErrors: {},
+    productExtensionFields: [],
+    dynamicCustomFieldValues: {},
     isCreateMode: false,
     productData: { product: { id: 'product-1' } },
     isOptionTemplatesOpen: false,
@@ -54,27 +40,27 @@ const editorState = vi.hoisted(() => ({
     handleApplyOptionGroup: vi.fn(),
 }));
 
+vi.mock('@apollo/client/react', () => ({ useMutation: () => [vi.fn(), { loading: false }] }));
 vi.mock('./ProductEditorContext', () => ({ useProductEditor: () => editorState }));
 
 describe('ProductVariantsTab store isolation', () => {
-    it('shows only the selected store as the product owner and offers no cross-store checkbox', () => {
+    it('preserves single-store ownership when an older draft contains other channel IDs', () => {
         editorState.catalogChannelsData.activeChannel = {
             id: 'meiyijia',
-            code: 'my-malaysia',
-            customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
+            code: 'merchant-store',
+            displayName: '美宜佳',
         };
+        editorState.selectedChannelIds = ['default', 'meiyijia'];
         const container = document.createElement('div');
         container.innerHTML = renderToStaticMarkup(
             <FeatureHelpProvider>
-                <ProductVariantsTab />
+                <ProductMoreSettings />
             </FeatureHelpProvider>,
         );
-
         expect(container.textContent).toContain('本商品仅属于 美宜佳');
         expect(container.textContent).toContain('单店独立');
-        expect(container.textContent).not.toContain('重新创建或导入独立副本');
-        expect(container.querySelector('button[aria-label="查看“店铺独立商品”功能说明"]')).not.toBeNull();
         expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+        expect(container.querySelector('button[aria-label="查看“店铺独立商品”功能说明"]')).not.toBeNull();
     });
 
     it('renders quick create button and displays imported exclusive specification badges', () => {
@@ -98,8 +84,8 @@ describe('ProductVariantsTab store isolation', () => {
             </FeatureHelpProvider>,
         );
 
-        expect(container.textContent).toContain('快速新建规格');
-        expect(container.textContent).toContain('商品专属规格');
-        expect(container.textContent).toContain('单盒 / 整条');
+        expect(container.textContent).toContain('生成规格');
+        expect(container.textContent).toContain('导入规格');
+        expect(container.textContent).toContain('单盒、整条');
     });
 });

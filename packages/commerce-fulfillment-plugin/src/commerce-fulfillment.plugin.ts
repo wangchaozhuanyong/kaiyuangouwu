@@ -3,6 +3,7 @@ import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { gql } from 'graphql-tag';
 
 import {
     AFTER_SALES_EVIDENCE_STORAGE,
@@ -29,6 +30,7 @@ import { manageAutoCardSecretsPermission, readSoldAutoCardsPermission } from './
 import { autoCardAdminResolvers, autoCardShopResolvers } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
 import { CartDeliveryCommandAdapter } from './cart-delivery-command.adapter';
+import { CheckoutResourcesService, reconcileCheckoutResourcesTask } from './checkout-resources.service';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { CommerceModeAdminResolver, CommerceModeShopResolver } from './commerce-mode.resolver';
 import { CommerceModeService } from './commerce-mode.service';
@@ -44,12 +46,19 @@ import { ControlledTestPaymentConfigService } from './controlled-test-payment-co
 import { CustomerDeliveryEmailShopResolver } from './customer-delivery-email.resolver';
 import { CustomerDeliveryEmailService } from './customer-delivery-email.service';
 import { CustomerOrderCancellationService } from './customer-order-cancellation.service';
+import { DigitalCatalogImportAdapter } from './digital-catalog-import.adapter';
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
 import { DigitalDeliveryController } from './digital-delivery.controller';
 import { DigitalDeliveryService } from './digital-delivery.service';
+import { DigitalFileService } from './digital-file.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
+import { DigitalProductAdminResolver } from './digital-product.resolver';
+import { digitalProductAdminSchema } from './digital-product.schema';
+import { DigitalProductService } from './digital-product.service';
+import { DigitalReceiptShopResolver } from './digital-receipt.resolver';
+import { digitalReceiptShopSchema } from './digital-receipt.schema';
+import { DigitalReceiptService } from './digital-receipt.service';
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
-import { AfterSalesEvidence } from './entities/after-sales-evidence.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
@@ -58,11 +67,20 @@ import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { AutoCardSupplyGrant, AutoCardSupplySnapshot } from './entities/auto-card-supply-grant.entity';
 import { CustomerDeliveryEmail } from './entities/customer-delivery-email.entity';
+import {
+    CheckoutResourceHold,
+    DigitalFileVersion,
+    DigitalOrderReservation,
+    DigitalQuotaMovement,
+    DigitalReceiptAccess,
+    DigitalVariantConfig,
+} from './entities/digital-product.entity';
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
 import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
 import { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
+import { PhysicalReturnReceipt } from './entities/physical-return-receipt.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 import { StoreNotificationRead } from './entities/store-notification-read.entity';
 import { fulfillmentDeliveryProcess } from './fulfillment-delivery.process';
@@ -82,13 +100,21 @@ import {
 } from './manual-digital-delivery.resolver';
 import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
+import {
+    OrderAdditionalPaymentShopResolver,
+    orderAdditionalPaymentShopSchema,
+} from './order-additional-payment.resolver';
+import { OrderAdditionalPaymentService } from './order-additional-payment.service';
 import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { OrderConfirmationResolver } from './order-confirmation.resolver';
 import { CustomerOrderCancellationResolver, OrderFulfillmentResolver } from './order-fulfillment.resolver';
-import { OrderOperationsAdminResolver } from './order-operations.resolver';
+import { OrderOperationsAdminResolver, OrderProcessingFieldResolver } from './order-operations.resolver';
 import { OrderOperationsService } from './order-operations.service';
+import { OrderProcessingService } from './order-processing.service';
 import { PackagingStockLocationStrategy } from './packaging-stock-location-strategy';
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
+import { PhysicalReturnService } from './physical-return.service';
+import { ProductDomainCopyService } from './product-domain-copy.service';
 import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
 import { ProductPackagingService } from './product-packaging.service';
 import { QuoteOnlyOrderInterceptor } from './quote-only-order-interceptor';
@@ -106,7 +132,13 @@ import './types';
         StoreManagementPlugin,
     ],
     entities: [
-        AfterSalesEvidence,
+        PhysicalReturnReceipt,
+        DigitalVariantConfig,
+        DigitalOrderReservation,
+        DigitalQuotaMovement,
+        DigitalFileVersion,
+        CheckoutResourceHold,
+        DigitalReceiptAccess,
         AfterSalesRequest,
         AfterSalesItem,
         AfterSalesEvent,
@@ -127,6 +159,13 @@ import './types';
     ],
     controllers: [DigitalDeliveryController, AfterSalesEvidenceController],
     providers: [
+        DigitalReceiptService,
+        PhysicalReturnService,
+        ProductDomainCopyService,
+        DigitalProductService,
+        DigitalFileService,
+        CheckoutResourcesService,
+        DigitalCatalogImportAdapter,
         ControlledTestPaymentConfigService,
         CartDeliveryCommandAdapter,
         AfterSalesService,
@@ -149,6 +188,8 @@ import './types';
         DigitalDeliveryTokenService,
         OrderConfirmationTokenService,
         OrderOperationsService,
+        OrderProcessingService,
+        OrderAdditionalPaymentService,
         ProductPackagingService,
         ManualDigitalDeliveryService,
         ManualDigitalDeliveryEmailResultService,
@@ -157,11 +198,16 @@ import './types';
         StoreNotificationReadService,
     ],
     adminApiExtensions: {
-        schema: adminApiExtensions,
+        schema: gql`
+            ${adminApiExtensions}
+            ${digitalProductAdminSchema}
+        `,
         resolvers: [
+            DigitalProductAdminResolver,
             AfterSalesAdminResolver,
             AfterSalesEvidenceFieldResolver,
             OrderOperationsAdminResolver,
+            OrderProcessingFieldResolver,
             ...autoCardAdminResolvers,
             CommerceModeAdminResolver,
             ProductPackagingAdminResolver,
@@ -172,10 +218,17 @@ import './types';
             FulfillmentDeliveryFieldResolver,
         ],
     },
+    exports: [OrderProcessingService],
     shopApiExtensions: {
-        schema: shopApiExtensions,
+        schema: gql`
+            ${shopApiExtensions}
+            ${digitalReceiptShopSchema}
+            ${orderAdditionalPaymentShopSchema}
+        `,
         resolvers: [
             OrderFulfillmentResolver,
+            DigitalReceiptShopResolver,
+            OrderAdditionalPaymentShopResolver,
             OrderConfirmationResolver,
             CustomerOrderCancellationResolver,
             AfterSalesShopResolver,
@@ -421,7 +474,7 @@ import './types';
         config.customFields.ProductVariant.push({
             name: 'digitalStockPolicy',
             type: 'string',
-            defaultValue: 'limited',
+            defaultValue: 'unlimited',
             public: true,
             ui: { dashboard: false },
             label: [
@@ -452,6 +505,18 @@ import './types';
                 },
             ],
         });
+        if (!config.customFields.Order.some(field => field.name === 'deliveryEmail'))
+            config.customFields.Order.push({
+                name: 'deliveryEmail',
+                type: 'string',
+                length: 254,
+                nullable: true,
+                public: true,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '数字商品交付邮箱' },
+                    { languageCode: LanguageCode.en, value: 'Digital delivery email' },
+                ],
+            });
         config.customFields.OrderLine.push({
             name: 'fulfillmentTypeSnapshot',
             type: 'string',
@@ -514,6 +579,7 @@ import './types';
             config.paymentOptions.paymentMethodHandlers.push(testPayment.handler);
         }
         config.schedulerOptions.tasks.push(reconcileAutoCardDeliveriesTask);
+        config.schedulerOptions.tasks.push(reconcileCheckoutResourcesTask);
         config.schedulerOptions.tasks.push(reconcileManualDigitalDeliveriesTask);
         config.schedulerOptions.tasks.push(purgeAfterSalesEvidenceTask);
         config.schedulerOptions.tasks.push(reconcileFulfillmentDeliveriesTask);

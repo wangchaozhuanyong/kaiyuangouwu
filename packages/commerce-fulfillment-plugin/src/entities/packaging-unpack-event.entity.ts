@@ -14,6 +14,9 @@ export class PackagingUnpackEvent extends VendureEntity {
         super(input);
     }
 
+    @Column({ type: 'text', default: () => "('[]')" })
+    lotTransfersJson: string;
+
     @Column({ type: 'varchar', length: 24 })
     reason: PackagingUnpackReason;
 

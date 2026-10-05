@@ -1,4 +1,4 @@
-import { Boxes, Image as ImageIcon, Link2, Package, Sparkles, Tag, X } from 'lucide-react';
+import { Image as ImageIcon, Link2, Sparkles, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -36,13 +36,8 @@ export function ProductEditorSidebar() {
         setKnownAssets,
         setIsAssetPickerOpen,
         setAssetPickerMode,
-        effectiveFulfillmentType,
-        variants,
-        selectedFacetValueIds,
-        selectedCollectionIds,
         formErrors,
         setFormErrors,
-        isDirty,
         saving,
     } = useProductEditor();
 
@@ -54,43 +49,14 @@ export function ProductEditorSidebar() {
     };
 
     if (!isCreateMode && !productData?.product) return null;
-    const storedFulfillmentType = productData?.product?.customFields?.fulfillmentType;
-    const displayedFulfillmentType =
-        !isCreateMode && (storedFulfillmentType === 'digital' || storedFulfillmentType === 'physical')
-            ? storedFulfillmentType
-            : effectiveFulfillmentType;
 
     return (
-        <aside
-            className="order-2 self-start lg:sticky lg:top-4 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1"
-            aria-label="商品固定信息"
-        >
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
+        <aside className="min-w-0 self-start" aria-label="商品固定信息">
+            <div className="min-w-0">
+                <div className="space-y-4">
                     <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            <Package className="h-4 w-4 text-blue-600" />
-                            商品总览
-                            <FeatureHelpButton
-                                topic="catalog.product-editor"
-                                title="商品编辑器"
-                                description={'切换右侧步骤时保持不变'}
-                            />
-                        </h2>
-                    </div>
-                    <span
-                        className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
-                            isDirty ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                    >
-                        {isDirty ? '待保存' : '已同步'}
-                    </span>
-                </div>
-
-                <div className="space-y-4 p-4">
-                    <div>
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-bold text-slate-700">
                                 商品主图
                                 <FeatureHelpButton topic="catalog.product-assets" title="商品主图" />
                             </span>
@@ -134,8 +100,8 @@ export function ProductEditorSidebar() {
                                     alt="商品主图预览"
                                     className="h-full w-full object-contain"
                                 />
-                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-slate-950/80 to-transparent px-3 pb-2.5 pt-8 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                    <span className="truncate text-[10px]">素材编号 #{featuredAssetId}</span>
+                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-slate-950/80 to-transparent px-3 pb-2.5 pt-8 text-white opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                                    <span className="truncate text-[10px]">图片编号 #{featuredAssetId}</span>
                                     <AdminButton
                                         type="button"
                                         disabled={saving}
@@ -159,11 +125,10 @@ export function ProductEditorSidebar() {
                                     setAssetPickerMode('FEATURED');
                                     setIsAssetPickerOpen(true);
                                 }}
-                                className="flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <ImageIcon className="h-7 w-7 text-slate-300" />
                                 <span className="text-xs font-bold text-slate-600">选择商品主图</span>
-                                <span className="text-[10px] text-slate-400">从真实素材库中选择</span>
                             </AdminButton>
                         )}
                     </div>
@@ -226,11 +191,11 @@ export function ProductEditorSidebar() {
                         />
                     </AdminField>
 
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 py-2.5">
                         <div>
                             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                                 商品状态
-                                <FeatureHelpButton topic="catalog.spu-core" title="SPU 核心属性" />
+                                <FeatureHelpButton topic="catalog.spu-core" title="商品状态" />
                             </div>
                             <div className="mt-0.5 text-[10px] text-slate-400">
                                 {enabled ? '当前商品已启用' : '当前商品已禁用'}
@@ -255,34 +220,6 @@ export function ProductEditorSidebar() {
                             </span>
                         </label>
                     </div>
-                </div>
-
-                <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/60">
-                    <div className="px-2 py-3 text-center">
-                        <Boxes className="mx-auto h-3.5 w-3.5 text-blue-500" />
-                        <div className="mt-1 text-xs font-bold text-slate-800">{variants.length}</div>
-                        <div className="text-[9px] text-slate-400">SKU</div>
-                    </div>
-                    <div className="px-2 py-3 text-center">
-                        <Tag className="mx-auto h-3.5 w-3.5 text-violet-500" />
-                        <div className="mt-1 text-xs font-bold text-slate-800">
-                            {selectedFacetValueIds.length}
-                        </div>
-                        <div className="text-[9px] text-slate-400">标签</div>
-                    </div>
-                    <div className="px-2 py-3 text-center">
-                        <Package className="mx-auto h-3.5 w-3.5 text-emerald-500" />
-                        <div className="mt-1 text-xs font-bold text-slate-800">
-                            {selectedCollectionIds.length}
-                        </div>
-                        <div className="text-[9px] text-slate-400">分类</div>
-                    </div>
-                </div>
-                <div className="border-t border-slate-100 px-4 py-2.5 text-[10px] text-slate-400">
-                    {storedFulfillmentType && !isCreateMode ? '已存储类型：' : '当前类型：'}
-                    <span className="font-bold text-slate-600">
-                        {displayedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
-                    </span>
                 </div>
             </div>
             {aiDialogOpen && (

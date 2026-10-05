@@ -184,7 +184,7 @@ export function SuppliersModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="min-w-[900px] w-full text-left text-xs">
+                                <table className="admin-mobile-record-table min-w-[900px] w-full text-left text-xs">
                                     <thead className="bg-slate-50 text-slate-500">
                                         <tr>
                                             {[
@@ -205,19 +205,25 @@ export function SuppliersModule() {
                                     <tbody className="divide-y divide-slate-100">
                                         {result.items.map(supplier => (
                                             <tr key={supplier.id} className="hover:bg-slate-50/70">
-                                                <td className="px-4 py-3 font-bold text-slate-900">
+                                                <td
+                                                    data-label="名称"
+                                                    className="px-4 py-3 font-bold text-slate-900"
+                                                >
                                                     {supplier.name}
                                                 </td>
-                                                <td className="px-4 py-3 font-mono text-slate-600">
+                                                <td
+                                                    data-label="编码"
+                                                    className="px-4 py-3 font-mono text-slate-600"
+                                                >
                                                     {supplier.code}
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-600">
+                                                <td data-label="联系人" className="px-4 py-3 text-slate-600">
                                                     {supplier.contactName || '—'}
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-600">
+                                                <td data-label="电话" className="px-4 py-3 text-slate-600">
                                                     {supplier.phone || '—'}
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td data-label="关联 SKU" className="px-4 py-3">
                                                     <AdminButton
                                                         type="button"
                                                         onClick={() => setViewing(supplier)}
@@ -226,14 +232,14 @@ export function SuppliersModule() {
                                                         {supplier.linkedVariantCount}
                                                     </AdminButton>
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td data-label="状态" className="px-4 py-3">
                                                     <span
                                                         className={`rounded-full px-2 py-1 font-bold ${supplier.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                                                     >
                                                         {supplier.enabled ? '启用' : '停用'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td data-label="操作" className="px-4 py-3">
                                                     <AdminButton
                                                         type="button"
                                                         onClick={() => openEdit(supplier)}

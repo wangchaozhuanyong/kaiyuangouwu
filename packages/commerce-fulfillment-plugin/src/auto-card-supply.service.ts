@@ -14,6 +14,7 @@ import {
 } from '@vendure/core';
 import { CatalogGovernanceService, StorefrontDataChangedEvent } from '@vendure/store-management-plugin';
 
+import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardSupplyGrant, AutoCardSupplySnapshot } from './entities/auto-card-supply-grant.entity';
@@ -257,11 +258,24 @@ export class AutoCardSupplyService {
             .getRepository(ctx, AutoCardSupplySnapshot)
             .findOne({ where: { orderLineId: line.id, orderId: order.id, channelId: ctx.channelId } });
         if (snapshot) {
-            if (
-                snapshot.quantity !== line.quantity ||
-                String(order.salesChannelId) !== String(snapshot.channelId)
-            )
+            if (String(order.salesChannelId) !== String(snapshot.channelId))
                 throw new UserInputError('供货快照与付款订单不一致');
+            if (snapshot.quantity < line.quantity) {
+                // An explicitly paid increase can extend the original supply, but cannot
+                // silently switch supplier/grant or allocate quantities awaiting payment.
+                const current = await this.resolve(ctx, line.productVariantId);
+                if (
+                    digitalDeliverableQuantity(order, line) < line.quantity ||
+                    !current ||
+                    String(current.config.id) !== String(snapshot.configId) ||
+                    String(current.config.channelId) !== String(snapshot.sourceChannelId) ||
+                    String(current.grant?.id ?? '') !== String(snapshot.grantId ?? '') ||
+                    (current.grant?.version ?? null) !== snapshot.grantVersion
+                )
+                    throw new UserInputError('新增卡密份数的付款或原始供货授权待核验');
+                snapshot.quantity = line.quantity;
+                await this.connection.getRepository(ctx, AutoCardSupplySnapshot).save(snapshot);
+            }
             const originalConfig = await this.connection.getRepository(ctx, AutoCardConfig).findOne({
                 where: {
                     id: snapshot.configId,

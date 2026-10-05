@@ -28,8 +28,10 @@ import {
     OrderListOptions,
     OrderProcessState,
     OrderType,
+    RecordManualRefundInput,
     RefundOrderInput,
     RefundOrderResult,
+    RetryRefundInput,
     SetOrderCustomerInput,
     SettlePaymentResult,
     SettleRefundInput,
@@ -90,6 +92,7 @@ import { Fulfillment } from '../../entity/fulfillment/fulfillment.entity';
 import { HistoryEntry } from '../../entity/history-entry/history-entry.entity';
 import { OrderModification } from '../../entity/order-modification/order-modification.entity';
 import { Payment } from '../../entity/payment/payment.entity';
+import { PaymentMethod } from '../../entity/payment-method/payment-method.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { Promotion } from '../../entity/promotion/promotion.entity';
 import { Refund } from '../../entity/refund/refund.entity';
@@ -120,7 +123,11 @@ import { ShippingCalculator } from '../helpers/shipping-calculator/shipping-calc
 import { TranslatorService } from '../helpers/translator/translator.service';
 import { couponCodesMatch } from '../helpers/utils/coupon-codes-match';
 import { isForeignKeyViolationError } from '../helpers/utils/db-errors';
-import { getOrdersFromLines, totalCoveredByPayments } from '../helpers/utils/order-utils';
+import {
+    getOrdersFromLines,
+    totalCoveredByActualPayments,
+    totalCoveredByPayments,
+} from '../helpers/utils/order-utils';
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { ChannelService } from './channel.service';
@@ -129,7 +136,7 @@ import { CustomerService } from './customer.service';
 import { FulfillmentService } from './fulfillment.service';
 import { HistoryService } from './history.service';
 import { PaymentMethodService } from './payment-method.service';
-import { PaymentService } from './payment.service';
+import { PaymentService, VerifiedRefundSettlementEvidence } from './payment.service';
 import { ProductVariantService } from './product-variant.service';
 import { PromotionService } from './promotion.service';
 import { StockLevelService } from './stock-level.service';
@@ -143,6 +150,30 @@ import { StockLevelService } from './stock-level.service';
 @Injectable()
 @Instrument()
 export class OrderService {
+    /** Plugins validate their own after-sales references and fulfillment-specific costs. */
+    registerRefundRequestValidator(
+        id: string,
+        validator: (
+            ctx: RequestContext,
+            order: Order,
+            input: RefundOrderInput,
+            existingRefund?: Refund,
+        ) => Promise<void>,
+    ): void {
+        this.paymentService.registerRefundRequestValidator(id, validator);
+    }
+    private readonly orderModificationValidators = new Map<
+        string,
+        (ctx: RequestContext, order: Order, input: ModifyOrderInput) => Promise<void>
+    >();
+
+    /** Plugins reject unsafe changes before preview, inventory changes, or additional payment. */
+    registerOrderModificationValidator(
+        id: string,
+        validator: (ctx: RequestContext, order: Order, input: ModifyOrderInput) => Promise<void>,
+    ): void {
+        this.orderModificationValidators.set(id, validator);
+    }
     private readonly checkoutValidators = new Map<
         string,
         (
@@ -1401,6 +1432,14 @@ export class OrderService {
             });
             if (refund.state === state) return refund;
 
+            if (state === 'Settled') {
+                await this.paymentService.validateRefundSettlement(
+                    txCtx,
+                    refund,
+                    transactionId ?? refund.transactionId ?? '',
+                );
+            }
+
             if (transactionId && refund.transactionId !== transactionId) {
                 refund.transactionId = transactionId;
             }
@@ -1440,7 +1479,19 @@ export class OrderService {
         ctx: RequestContext,
         input: ModifyOrderInput,
     ): Promise<ErrorResultUnion<ModifyOrderResult, Order>> {
-        const order = await this.getOrderOrThrow(ctx, input.orderId);
+        await this.lockOrderForRefund(ctx, input.orderId);
+        const order = await this.getOrderOrThrow(ctx, input.orderId, [
+            'lines',
+            'lines.productVariant',
+            'lines.productVariant.productVariantPrices',
+            'shippingLines',
+            'surcharges',
+            'customer',
+            'payments',
+            'payments.refunds',
+            'payments.refunds.lines',
+        ]);
+        for (const validator of this.orderModificationValidators.values()) await validator(ctx, order, input);
         const result = await this.orderModifier.modifyOrder(ctx, input, order);
 
         if (isGraphQlErrorResult(result)) {
@@ -1485,6 +1536,7 @@ export class OrderService {
         input: PaymentInput,
     ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
         this.assertInTransaction(ctx, 'OrderService.addPaymentToOrder');
+        await this.lockOrderForRefund(ctx, orderId);
         const order = await this.getOrderOrThrow(ctx, orderId);
         if (!this.canAddPaymentToOrder(order)) {
             return new OrderPaymentStateError();
@@ -1535,13 +1587,14 @@ export class OrderService {
             });
         }
         freshOrder.payments = await this.getOrderPayments(ctx, freshOrder.id);
-        const amountToPay = freshOrder.totalWithTax - totalCoveredByPayments(freshOrder);
+        const amountToPay = this.paymentAmountStillDue(freshOrder);
         const payment = await this.paymentService.createPayment(
             ctx,
             freshOrder,
             amountToPay,
             input.method,
             input.metadata,
+            (paymentCtx, created) => this.linkAdditionalPaymentModifications(paymentCtx, freshOrder, created),
         );
 
         if (isGraphQlErrorResult(payment)) {
@@ -1701,6 +1754,7 @@ export class OrderService {
         input: ManualPaymentInput,
     ): Promise<ErrorResultUnion<AddManualPaymentToOrderResult, Order>> {
         this.assertInTransaction(ctx, 'OrderService.addManualPaymentToOrder');
+        await this.lockOrderForRefund(ctx, input.orderId);
         const order = await this.getOrderOrThrow(ctx, input.orderId);
         if (order.state !== 'ArrangingAdditionalPayment' && order.state !== 'ArrangingPayment') {
             return new ManualPaymentStateError();
@@ -1724,7 +1778,7 @@ export class OrderService {
             : order;
         const existingPayments = await this.getOrderPayments(ctx, freshManualOrder.id);
         freshManualOrder.payments = existingPayments;
-        const amount = freshManualOrder.totalWithTax - totalCoveredByPayments(freshManualOrder);
+        const amount = this.paymentAmountStillDue(freshManualOrder);
         const modifications = await this.getOrderModifications(ctx, freshManualOrder.id);
         const unsettledModifications = modifications.filter(m => !m.isSettled);
         if (0 < unsettledModifications.length) {
@@ -1736,7 +1790,14 @@ export class OrderService {
             }
         }
 
-        const payment = await this.paymentService.createManualPayment(ctx, freshManualOrder, amount, input);
+        const payment = await this.paymentService.createManualPayment(
+            ctx,
+            freshManualOrder,
+            amount,
+            input,
+            (paymentCtx, created) =>
+                this.linkAdditionalPaymentModifications(paymentCtx, freshManualOrder, created),
+        );
         await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
@@ -1748,11 +1809,52 @@ export class OrderService {
                 message: '付款记录已保留，需要人工核对优惠券与实际付款时间，请勿重复登记',
             });
         }
-        for (const modification of unsettledModifications) {
+        return assertFound(this.findOne(ctx, freshManualOrder.id));
+    }
+
+    /** Link the confirmed completing payment before payment hooks restore the placed Order via its FSM. */
+    private async linkAdditionalPaymentModifications(ctx: RequestContext, order: Order, payment: Payment) {
+        if (order.state !== 'ArrangingAdditionalPayment') return;
+        const payments = await this.getOrderPayments(ctx, order.id);
+        const confirmed = payments.find(item => idsAreEqual(item.id, payment.id));
+        if (
+            !confirmed ||
+            !['Authorized', 'Settled'].includes(confirmed.state) ||
+            confirmed.metadata?.manualReview?.required === true
+        )
+            return;
+        const current = Object.assign(Object.create(order), { payments }) as Order;
+        const realPayment = totalCoveredByActualPayments({ ...current, payments: [confirmed] } as Order);
+        const covered = totalCoveredByActualPayments(current);
+        if (
+            !Number.isSafeInteger(realPayment) ||
+            realPayment <= 0 ||
+            !Number.isSafeInteger(covered) ||
+            covered < current.totalWithTax
+        )
+            return;
+        const modifications = await this.getOrderModifications(ctx, order.id);
+        for (const modification of modifications.filter(item => item.priceChange > 0 && !item.isSettled)) {
             modification.payment = payment;
             await this.connection.getRepository(ctx, OrderModification).save(modification);
         }
-        return assertFound(this.findOne(ctx, freshManualOrder.id));
+    }
+
+    private paymentAmountStillDue(order: Order): number {
+        const placed = order.orderPlacedAt || order.state === 'ArrangingAdditionalPayment';
+        if (
+            placed &&
+            order.payments.some(
+                payment => payment.state === 'Created' || payment.metadata?.manualReview?.required,
+            )
+        )
+            throw new UserInputError('订单有待确认的付款，请先核对原付款结果，不能重复收取补款');
+        const amount =
+            order.totalWithTax -
+            (placed ? totalCoveredByActualPayments(order) : totalCoveredByPayments(order));
+        if (!Number.isSafeInteger(amount) || amount < 0)
+            throw new UserInputError('订单付款金额异常，请先核对资金记录');
+        return amount;
     }
 
     /**
@@ -1998,6 +2100,25 @@ export class OrderService {
         return this.withOrderMutationTransaction(ctx, txCtx => this.refundOrderInTransaction(txCtx, input));
     }
 
+    /** Retry one original failed record without creating another refund or changing its approved scope. */
+    async retryRefund(
+        ctx: RequestContext,
+        input: RetryRefundInput,
+    ): Promise<ErrorResultUnion<RefundOrderResult, Refund>> {
+        if (!ctx.activeUserId) throw new UserInputError('请先登录后重试退款');
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            let refund = await this.connection.getEntityOrThrow(txCtx, Refund, input.refundId, {
+                relations: ['payment', 'payment.order', 'lines'],
+            });
+            assertOrderSalesChannel(txCtx, refund.payment.order);
+            await this.lockOrderForRefund(txCtx, refund.payment.order.id);
+            refund = await this.connection.getEntityOrThrow(txCtx, Refund, refund.id, {
+                relations: ['payment', 'payment.order', 'lines'],
+            });
+            return this.paymentService.retryRefund(txCtx, refund, input.idempotencyKey);
+        });
+    }
+
     /** Establish the isolation level before any refund snapshot is read. */
     withOrderMutationTransaction<T>(
         ctx: RequestContext,
@@ -2047,6 +2168,12 @@ export class OrderService {
             return new PaymentOrderMismatchError();
         }
         await this.lockOrderForRefund(ctx, payment.order.id);
+        const originalRequest = await this.paymentService.findRefundByIdempotencyKey(
+            ctx,
+            input,
+            payment.order.id,
+        );
+        if (originalRequest) return originalRequest;
         const order = await this.connection.getEntityOrThrow(ctx, Order, payment.order.id);
         if (
             order.state === 'AddingItems' ||
@@ -2068,7 +2195,11 @@ export class OrderService {
      * @description
      * Settles a Refund by transitioning it to the `Settled` state.
      */
-    async settleRefund(ctx: RequestContext, input: SettleRefundInput): Promise<Refund> {
+    async settleRefund(
+        ctx: RequestContext,
+        input: SettleRefundInput,
+        evidence?: VerifiedRefundSettlementEvidence,
+    ): Promise<Refund> {
         // Wrapped in withTransaction so the state save and onTransitionEnd hooks
         // are atomic — see the equivalent comment on transitionToState. #4686.
         return this.withOrderMutationTransaction(ctx, async txCtx => {
@@ -2079,9 +2210,46 @@ export class OrderService {
             refund = await this.connection.getEntityOrThrow(txCtx, Refund, refund.id, {
                 relations: ['payment', 'payment.order'],
             });
-            if (refund.state === 'Settled') return refund;
+            assertOrderSalesChannel(txCtx, refund.payment.order);
+            if (refund.state === 'Settled') {
+                if (refund.transactionId !== input.transactionId)
+                    throw new UserInputError('该退款已成功，不能改写为另一笔流水');
+                return refund;
+            }
+
+            await this.paymentService.validateRefundSettlement(txCtx, refund, input.transactionId, evidence);
+            if (evidence) {
+                refund.metadata = {
+                    ...refund.metadata,
+                    ...(refund.metadata?.refundRequest
+                        ? {
+                              refundRequest: {
+                                  ...refund.metadata.refundRequest,
+                                  outcomeUnknown: false,
+                                  requiresReconciliation: false,
+                              },
+                          }
+                        : {}),
+                    settlementEvidence: {
+                        source: evidence.source,
+                        reference: evidence.evidenceReference,
+                        recordedBy: txCtx.activeUserId ? String(txCtx.activeUserId) : null,
+                        recordedAt: new Date().toISOString(),
+                    },
+                };
+            }
 
             refund.transactionId = input.transactionId;
+            if (Array.isArray(refund.metadata?.refundAttempts)) {
+                const attempt = refund.metadata.refundAttempts[refund.metadata.refundAttempts.length - 1];
+                if (attempt?.state === 'Pending')
+                    Object.assign(attempt, {
+                        state: 'Settled',
+                        transactionId: input.transactionId,
+                        completedAt: new Date().toISOString(),
+                        outcomeUnknown: false,
+                    });
+            }
             const fromState = refund.state;
             const toState = 'Settled';
             const { finalize } = await this.refundStateMachine.transition(
@@ -2096,6 +2264,73 @@ export class OrderService {
                 new RefundStateTransitionEvent(fromState, toState, txCtx, refund, refund.payment.order),
             );
             return refund;
+        });
+    }
+
+    /** Record an actual offline refund receipt, without initiating a payment transfer. */
+    async recordManualRefund(ctx: RequestContext, input: RecordManualRefundInput): Promise<Refund> {
+        if (!ctx.activeUserId) throw new UserInputError('请先登录后登记退款凭证');
+        const transactionId = input.transactionId.trim();
+        const evidenceReference = input.evidenceReference.trim();
+        const note = input.note.trim();
+        if (
+            !transactionId ||
+            transactionId.length > 255 ||
+            !evidenceReference ||
+            evidenceReference.length > 1000 ||
+            !note ||
+            note.length > 1000
+        ) {
+            throw new UserInputError('请填写真实退款流水、凭证引用和登记说明');
+        }
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            let refund = await this.connection.getEntityOrThrow(txCtx, Refund, input.refundId, {
+                relations: ['payment', 'payment.order'],
+            });
+            await this.lockOrderForRefund(txCtx, refund.payment.order.id);
+            refund = await this.connection.getEntityOrThrow(txCtx, Refund, refund.id, {
+                relations: ['payment', 'payment.order'],
+            });
+            assertOrderSalesChannel(txCtx, refund.payment.order);
+            const { handler, paymentMethod } = await this.paymentMethodService.getMethodAndOperations(
+                txCtx,
+                refund.payment.method,
+                true,
+            );
+            if (handler.refundSettlementMode !== 'manual')
+                throw new UserInputError('该支付方式必须通过渠道回执或专用凭证核验处理');
+            // Serializes receipt registration across different orders using the same
+            // manual channel; an order lock alone cannot prevent receipt reuse.
+            await this.connection
+                .getRepository(txCtx, PaymentMethod)
+                .createQueryBuilder()
+                .update()
+                .set({ updatedAt: () => 'updatedAt' })
+                .where('id = :id', { id: paymentMethod.id })
+                .execute();
+            const duplicates = await this.connection
+                .getRepository(txCtx, Refund)
+                .find({ where: { method: refund.method, transactionId } });
+            if (duplicates.some(existing => !idsAreEqual(existing.id, refund.id)))
+                throw new UserInputError('该退款流水已登记，请勿重复使用');
+            if (refund.state === 'Settled') {
+                if (refund.transactionId !== transactionId)
+                    throw new UserInputError('已成功退款不能改写流水');
+                return refund;
+            }
+            refund.metadata = { ...refund.metadata, manualReceiptNote: note };
+            await this.connection.getRepository(txCtx, Refund).save(refund);
+            return this.settleRefund(
+                txCtx,
+                { id: refund.id, transactionId },
+                {
+                    source: 'manual-registration',
+                    paymentId: refund.payment.id,
+                    amount: refund.total,
+                    transactionId,
+                    evidenceReference,
+                },
+            );
         });
     }
 
@@ -2561,3 +2796,4 @@ export class OrderService {
         }
     }
 }
+// organize-imports-ignore -- Preserve ESLint ordering of parent and hyphenated entity paths.

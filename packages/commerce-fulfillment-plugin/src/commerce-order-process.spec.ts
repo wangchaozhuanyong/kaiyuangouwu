@@ -4,6 +4,15 @@ import { commerceOrderProcess } from './commerce-order-process';
 
 describe('commerceOrderProcess digital fulfillment', () => {
     let hydratedOrder: any;
+    const checkoutResources = {
+        hold: vi.fn().mockResolvedValue(null),
+        confirm: vi.fn(),
+        canDeliver: vi.fn().mockResolvedValue(false),
+        reserve: vi.fn(),
+        assertCancellationAllowed: vi.fn(),
+        markReview: vi.fn(),
+        outstandingAllocation: vi.fn().mockResolvedValue(0),
+    };
     const orderService = {
         createFulfillment: vi.fn(),
     };
@@ -20,7 +29,8 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const connection = {
         getEntityOrThrow: vi.fn(),
         getRepository: vi.fn().mockReturnValue({
-            find: vi.fn().mockResolvedValue([{ product: { customFields: { pricingMode: 'FIXED' } } }]),
+            find: vi.fn().mockResolvedValue([]),
+            manager: { connection: { options: { type: 'mysql' } } },
             createQueryBuilder: vi.fn().mockReturnValue(stockQueryBuilder),
         }),
     };
@@ -61,6 +71,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
         createSettledOrderTasks: vi.fn().mockResolvedValue([]),
         cancelOrder: vi.fn().mockResolvedValue(undefined),
     };
+
     beforeEach(async () => {
         vi.clearAllMocks();
         orderService.createFulfillment.mockResolvedValue({ id: 'fulfillment-1' });
@@ -68,7 +79,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
         stockQueryBuilder.getMany.mockResolvedValue([]);
         connection.getEntityOrThrow.mockImplementation(() => Promise.resolve(hydratedOrder));
         const services = [
-            { resourceForSku: vi.fn() },
+            {},
             orderService,
             productVariantService,
             stockMovementService,
@@ -79,6 +90,8 @@ describe('commerceOrderProcess digital fulfillment', () => {
             productPackagingService,
             commerceModeService,
             manualDigitalDeliveryService,
+            { config: vi.fn().mockResolvedValue(null) },
+            checkoutResources,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
         hydratedOrder = undefined;
@@ -118,13 +131,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
             order,
         } as any);
 
-        expect(orderService.createFulfillment).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({
-                lines: [{ orderLineId: 'digital-line', quantity: 2 }],
-                handler: { code: 'digital-fulfillment', arguments: [] },
-            }),
-        );
+        expect(orderService.createFulfillment).not.toHaveBeenCalled();
         expect(stockMovementService.createAllocationsForOrderLines).toHaveBeenCalledWith(expect.anything(), [
             { orderLineId: 'physical-line', quantity: 1 },
         ]);
@@ -176,11 +183,11 @@ describe('commerceOrderProcess digital fulfillment', () => {
             order,
         } as any);
 
-        expect(autoCardService.allocateSettledOrder).toHaveBeenCalled();
+        expect(autoCardService.allocateSettledOrder).not.toHaveBeenCalled();
         expect(orderService.createFulfillment).not.toHaveBeenCalled();
     });
 
-    it('locks stock rows and performs a final stock check before confirming payment', async () => {
+    it('locks stock rows and records a delivery exception when paid physical stock is insufficient', async () => {
         stockQueryBuilder.getMany.mockResolvedValue([
             {
                 productVariantId: 'variant-1',
@@ -212,18 +219,10 @@ describe('commerceOrderProcess digital fulfillment', () => {
                 ctx,
                 order,
             } as any),
-        ).resolves.toBe('insufficient stock');
+        ).resolves.toBeUndefined();
+        expect(checkoutResources.markReview).toHaveBeenCalledWith(ctx, order, 'insufficient stock');
         expect(stockQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
         expect(productVariantService.getSaleableStockLevel).not.toHaveBeenCalled();
-    });
-
-    it('blocks starting a new payment from the platform management center', async () => {
-        await expect(
-            commerceOrderProcess.onTransitionStart?.('AddingItems', 'ArrangingPayment', {
-                ctx: { channel: { code: '__default_channel__' } },
-                order: { lines: [] },
-            } as any),
-        ).resolves.toBe('平台管理中心不经营，请到经营店铺购买');
     });
 
     it('does not create another fulfillment for unrelated transitions', async () => {

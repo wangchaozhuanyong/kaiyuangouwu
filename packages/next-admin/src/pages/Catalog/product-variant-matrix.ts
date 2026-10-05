@@ -5,7 +5,7 @@ const blankVariant = (
     optionIds: string[],
     optionNames: string[],
 ): ProductVariantState => ({
-    sku: '',
+    sku: `P-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
     name: `${productName.trim()} ${optionNames.join(' / ')}`.trim(),
     price: '',
     costPrice: '',
@@ -13,7 +13,7 @@ const blankVariant = (
     stockAllocated: 0,
     enabled: true,
     digitalDeliveryMode: 'manual_service',
-    digitalStockPolicy: 'limited',
+    digitalStockPolicy: 'unlimited',
     optionIds,
     isNew: true,
 });
@@ -54,10 +54,15 @@ export function applyNewOptionGroupToVariants(
         const generated = remainingOptions.map((option): ProductVariantState => ({
             ...variant,
             id: undefined,
-            sku: '',
+            sku: `P-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
             name: `${baseName} (${option.name})`,
             stockOnHand: '',
             stockAllocated: 0,
+            digitalAvailableQuantity: 0,
+            digitalFileVersionId: null,
+            digitalFileName: undefined,
+            autoCardAvailableStock: undefined,
+            digitalMigrationRequired: false,
             optionIds: [...variant.optionIds, option.id],
             isNew: true,
         }));

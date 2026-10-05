@@ -43,6 +43,9 @@ describe('public storefront browsing boundary', () => {
         'storefrontReviewSettings',
         'activeStoreCommerceMode',
         'icloudQueryMails',
+        'storefrontOrderByConfirmationToken',
+        'myDigitalDeliveryContents',
+        'orderAdditionalPaymentQuote',
     ])('allows anonymous public browsing: %s', field => {
         const { run, next } = invoke(field);
         expect(run).not.toThrow();
@@ -59,6 +62,7 @@ describe('public storefront browsing boundary', () => {
         'previewImageGenerationPrompt',
         'icloudPrimaryAccounts',
         'icloudReceivedMails',
+        'myDeliveryEmails',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
     it.each([
         'setCustomerAvatar',
@@ -67,6 +71,9 @@ describe('public storefront browsing boundary', () => {
         'resetIcloudMasterCode',
         'createIcloudPrimaryAccount',
         'icloudQueryMails',
+        'saveMyDeliveryEmail',
+        'setMyDefaultDeliveryEmail',
+        'deleteMyDeliveryEmail',
     ])('does not make customer mutations public: %s', field =>
         expect(invoke(field, 'Mutation').run).toThrow(),
     );
@@ -75,6 +82,17 @@ describe('public storefront browsing boundary', () => {
         Object.assign(parsed.info, { path: { key: 'login' }, operation: { name: { value: 'Login' } } });
         expect(run).toThrow();
         expect(invoke('login', 'Query').run).toThrow();
+    });
+    it('passes only the active-cart delivery email setter through for guests', () => {
+        const { run, next } = invoke('setActiveOrderDeliveryEmail', 'Mutation');
+        expect(run).not.toThrow();
+        expect(next.handle).toHaveBeenCalledTimes(1);
+        expect(invoke('setActiveOrderDeliveryEmail', 'Query').run).toThrow();
+    });
+    it('passes the placed-order payment mutation only through its explicitly authorized entry', () => {
+        expect(invoke('addPaymentToModifiedOrder', 'Mutation').run).not.toThrow();
+        expect(invoke('addPaymentToModifiedOrder', 'Query').run).toThrow();
+        expect(invoke('orderAdditionalPaymentQuote', 'Mutation').run).toThrow();
     });
     it.each([
         'activeCustomer',
@@ -98,6 +116,7 @@ describe('public storefront browsing boundary', () => {
             'eligibleShippingMethods',
             'eligiblePaymentMethods',
             'nextOrderStates',
+            'myDigitalDeliveryContents',
         ]) {
             expect(invoke(field).run).not.toThrow();
         }
@@ -127,6 +146,9 @@ describe('public storefront browsing boundary', () => {
             'setOrderCustomFields',
             'transitionOrderToState',
             'addPaymentToOrder',
+            'createStorefrontOrderConfirmationToken',
+            'claimDigitalDelivery',
+            'setActiveOrderDeliveryEmail',
         ]) {
             expect(invoke(field, 'Mutation').run).not.toThrow();
         }

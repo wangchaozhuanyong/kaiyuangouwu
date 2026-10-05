@@ -6,6 +6,7 @@ export default defineConfig({
             'email-templates.spec.ts',
             'customer-image-config.spec.ts',
             'order-confirmation-email.spec.ts',
+            'manual-delivery-email-guard.spec.ts',
             'migrations/**/*.spec.ts',
             'runtime-admin-credentials.spec.ts',
             'storefront-*-authentication-strategy.spec.ts',

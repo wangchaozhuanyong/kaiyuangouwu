@@ -366,6 +366,9 @@ export class ProductVariantService {
      * as well as the local and global `outOfStockThreshold` settings.
      */
     async getSaleableStockLevel(ctx: RequestContext, variant: ProductVariant): Promise<number> {
+        const strategy = this.configService.catalogOptions.stockLocationStrategy;
+        if ((await strategy.supportsStockLocations?.(ctx, variant, 'flow')) === false)
+            return Number.MAX_SAFE_INTEGER;
         const { outOfStockThreshold, trackInventory } = await this.globalSettingsService.getSettings(ctx);
 
         const inventoryNotTracked =
@@ -415,6 +418,9 @@ export class ProductVariantService {
      * for those variants which are tracking inventory.
      */
     async getFulfillableStockLevel(ctx: RequestContext, variant: ProductVariant): Promise<number> {
+        const strategy = this.configService.catalogOptions.stockLocationStrategy;
+        if ((await strategy.supportsStockLocations?.(ctx, variant, 'flow')) === false)
+            return Number.MAX_SAFE_INTEGER;
         const { outOfStockThreshold, trackInventory } = await this.globalSettingsService.getSettings(ctx);
         const inventoryNotTracked =
             variant.trackInventory === GlobalFlag.FALSE ||
@@ -430,13 +436,19 @@ export class ProductVariantService {
         ctx: RequestContext,
         input: CreateProductVariantInput[],
     ): Promise<Array<Translated<ProductVariant>>> {
+        // Entity saves can populate custom-field defaults on the shared input object.
+        // Policy handlers must inspect the fields the caller supplied, not those defaults.
+        const eventInput = input.map(item => ({
+            ...item,
+            ...(item.customFields && { customFields: { ...item.customFields } }),
+        }));
         const ids: ID[] = [];
         for (const productInput of input) {
             const id = await this.createSingle(ctx, productInput);
             ids.push(id);
         }
         const createdVariants = await this.findByIds(ctx, ids);
-        await this.eventBus.publish(new ProductVariantEvent(ctx, createdVariants, 'created', input));
+        await this.eventBus.publish(new ProductVariantEvent(ctx, createdVariants, 'created', eventInput));
         return createdVariants;
     }
 
@@ -444,6 +456,10 @@ export class ProductVariantService {
         ctx: RequestContext,
         input: UpdateProductVariantInput[],
     ): Promise<Array<Translated<ProductVariant>>> {
+        const eventInput = input.map(item => ({
+            ...item,
+            ...(item.customFields && { customFields: { ...item.customFields } }),
+        }));
         for (const productInput of input) {
             const localFields = new Set(['id', 'price', 'currencyCode', 'stockOnHand', 'stockLevels']);
             if (Object.keys(productInput).some(key => !localFields.has(key))) {
@@ -458,7 +474,7 @@ export class ProductVariantService {
             ctx,
             input.map(i => i.id),
         );
-        await this.eventBus.publish(new ProductVariantEvent(ctx, updatedVariants, 'updated', input));
+        await this.eventBus.publish(new ProductVariantEvent(ctx, updatedVariants, 'updated', eventInput));
         return updatedVariants;
     }
 
@@ -1003,6 +1019,20 @@ export class ProductVariantService {
     ): Promise<void> {
         if (variantIds.length === 0) {
             return;
+        }
+        const strategy = this.configService.catalogOptions.stockLocationStrategy;
+        const capability = strategy.supportsStockLocations?.bind(strategy);
+        if (capability) {
+            const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+                where: { id: In(variantIds) },
+            });
+            const supported = await Promise.all(
+                variants.map(async variant =>
+                    (await capability(ctx, variant, 'create')) ? variant.id : null,
+                ),
+            );
+            variantIds = supported.filter((id): id is ID => id !== null);
+            if (variantIds.length === 0) return;
         }
         const stockLocations = await this.connection
             .getRepository(ctx, StockLocation)

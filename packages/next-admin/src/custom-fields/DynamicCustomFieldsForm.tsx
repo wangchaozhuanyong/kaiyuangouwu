@@ -29,6 +29,7 @@ interface DynamicCustomFieldsFormProps {
     description?: string;
     footer?: ReactNode;
     columns?: 1 | 2;
+    embedded?: boolean;
 }
 
 export function DynamicCustomFieldsForm({
@@ -44,6 +45,7 @@ export function DynamicCustomFieldsForm({
     description = '字段由后端配置动态生成，新增扩展字段无需重写本页。',
     footer,
     columns = 2,
+    embedded = false,
 }: DynamicCustomFieldsFormProps) {
     const { hasAnyPermission } = useAdminPermissions();
     const [showErrors, setShowErrors] = useState(false);
@@ -58,15 +60,26 @@ export function DynamicCustomFieldsForm({
 
     if (visibleFields.length === 0) return null;
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+        <section
+            className={
+                embedded
+                    ? 'border-t border-slate-100 pt-4'
+                    : 'rounded-xl border border-slate-200 bg-white p-5 shadow-2xs'
+            }
+        >
             <div className="mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     {title}
-                    {helpTopic && <FeatureHelpButton topic={helpTopic} title={title} />}
+                    <FeatureHelpButton
+                        topic={helpTopic}
+                        title={title}
+                        content={{ purpose: description, requirements: [], example: '' }}
+                    />
                 </h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
             </div>
-            <div className={columns === 1 ? 'grid gap-3' : 'grid gap-4 md:grid-cols-2'}>
+            <div
+                className={columns === 1 ? 'grid gap-3 [&>label]:col-span-full' : 'grid gap-4 md:grid-cols-2'}
+            >
                 {visibleFields.map(field => (
                     <CustomFieldControl
                         key={field.name}
@@ -360,8 +373,17 @@ function FieldShell({
 }) {
     return (
         <AdminField
-            label={label}
-            description={description}
+            label={
+                <span className="inline-flex min-h-6 items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    {label}
+                    {description && (
+                        <FeatureHelpButton
+                            title={label}
+                            content={{ purpose: description, requirements: [], example: '' }}
+                        />
+                    )}
+                </span>
+            }
             error={error}
             layout={fullWidth ? 'stacked' : 'auto'}
             className={`text-xs font-semibold text-slate-700 ${fullWidth ? 'md:col-span-2' : ''}`}

@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
+import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
-import { orderTabFilters } from './SalesModule';
+import { GET_SALES_ORDERS } from '../../graphql/sales.graphql';
 
-describe('sales order tab filters', () => {
-    it('includes submitted active checkouts in all transactions but excludes carts and drafts', () => {
-        expect(orderTabFilters('ALL')).toEqual([{ state: { notIn: ['AddingItems', 'Draft'] } }]);
+describe('sales order processing query', () => {
+    it('uses server processing categories and authoritative counts rather than order state filters', () => {
+        const document = print(GET_SALES_ORDERS);
+        expect(document).toContain('$options: OrderProcessingListOptions');
+        expect(document).toContain('orders: processingOrders(options: $options)');
+        expect(document).toContain('orderProcessingCounts');
+        expect(document).toContain('processingSummary');
+        expect(document).not.toContain('physicalFulfillmentTodoCount');
     });
-    it('keeps the dedicated draft filter', () => {
-        expect(orderTabFilters('DRAFT')).toEqual([{ state: { in: ['AddingItems', 'Draft'] } }]);
-    });
-    it.each(['TO_SETTLE', 'TO_FULFILL', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'] as const)(
-        'preserves completed-checkout filtering for %s',
-        tab => {
-            const filters = orderTabFilters(tab);
-            expect(filters[0]).toEqual({ active: { eq: false } });
-            expect(filters[1]).toHaveProperty('state');
-        },
-    );
 });

@@ -10,7 +10,6 @@ import {
     IcloudAccountStatus,
     IcloudAuditResult,
     IcloudQueryTargetType,
-    IcloudVirtualEmailStatus,
     PublicMailItem,
     PublicMailQueryResult,
 } from '../types';
@@ -38,77 +37,15 @@ export class IcloudPublicQueryService {
         clientIp: string,
         userAgent?: string,
     ): Promise<PublicMailQueryResult> {
+        const target = await this.authorizeQueryTarget(ctx, queryCode, clientIp, userAgent);
+        if (target.error) return { success: false, message: target.error, totalEmails: 0, items: [] };
         const code = queryCode.trim().toUpperCase();
         const auditRepo = this.connection.getRepository(ctx, IcloudQueryAuditLog);
-
-        // 1. Rate limiting check
-        const lockCheck = this.checkRateLimit(clientIp);
-        if (lockCheck) {
-            await this.recordAudit(
-                auditRepo,
-                code,
-                null,
-                null,
-                clientIp,
-                userAgent || null,
-                IcloudAuditResult.RATE_LIMITED,
-            );
-            return {
-                success: false,
-                message: '查询过于频繁，请 15 分钟后再试。',
-                totalEmails: 0,
-                items: [],
-            };
-        }
-
-        // 2. Try matching as Virtual Email buyer code
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
-        const virtualMatch = await virtualRepo.findOne({
-            where: { buyerQueryCode: code },
-            relations: ['primaryAccount'],
-        });
-
+        const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
+        const virtualMatch = target.virtual;
+        const primaryMatch = target.primary;
         if (virtualMatch) {
-            if (
-                virtualMatch.status === IcloudVirtualEmailStatus.DISABLED ||
-                virtualMatch.primaryAccount?.status === IcloudAccountStatus.DISABLED
-            ) {
-                await this.recordAudit(
-                    auditRepo,
-                    code,
-                    IcloudQueryTargetType.VIRTUAL,
-                    String(virtualMatch.id),
-                    clientIp,
-                    userAgent || null,
-                    IcloudAuditResult.DISABLED,
-                );
-                return {
-                    success: false,
-                    message: '该邮箱已禁用，请联系客服。',
-                    totalEmails: 0,
-                    items: [],
-                };
-            }
-
-            // Check expiration
-            if (this.codeService.isExpired(virtualMatch.codeExpiresAt)) {
-                await this.recordAudit(
-                    auditRepo,
-                    code,
-                    IcloudQueryTargetType.VIRTUAL,
-                    String(virtualMatch.id),
-                    clientIp,
-                    userAgent || null,
-                    IcloudAuditResult.EXPIRED,
-                );
-                return {
-                    success: false,
-                    message: '该查询码已过期，请联系客服获取最新查询码。',
-                    totalEmails: 0,
-                    items: [],
-                };
-            }
-
             // Fetch emails for this virtual email
             const mailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
             const mails = await mailRepo.find({
@@ -146,50 +83,7 @@ export class IcloudPublicQueryService {
                 items: mails.map(m => this.toPublicMailItem(m, virtualMatch.aliasEmail)),
             };
         }
-
-        // 3. Try matching as Primary Account master code
-        const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-        const primaryMatch = await primaryRepo.findOne({
-            where: { masterQueryCode: code },
-        });
-
         if (primaryMatch) {
-            if (primaryMatch.status === IcloudAccountStatus.DISABLED) {
-                await this.recordAudit(
-                    auditRepo,
-                    code,
-                    IcloudQueryTargetType.PRIMARY,
-                    String(primaryMatch.id),
-                    clientIp,
-                    userAgent || null,
-                    IcloudAuditResult.DISABLED,
-                );
-                return {
-                    success: false,
-                    message: '该主邮箱已禁用，请联系管理员。',
-                    totalEmails: 0,
-                    items: [],
-                };
-            }
-
-            if (this.codeService.isExpired(primaryMatch.codeExpiresAt)) {
-                await this.recordAudit(
-                    auditRepo,
-                    code,
-                    IcloudQueryTargetType.PRIMARY,
-                    String(primaryMatch.id),
-                    clientIp,
-                    userAgent || null,
-                    IcloudAuditResult.EXPIRED,
-                );
-                return {
-                    success: false,
-                    message: '该主查询码已过期，请联系管理员。',
-                    totalEmails: 0,
-                    items: [],
-                };
-            }
-
             // Fetch all emails for this primary account
             const mailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
             const mails = await mailRepo.find({
@@ -241,25 +135,91 @@ export class IcloudPublicQueryService {
                 })),
             };
         }
+        return { success: false, message: '无效的查询码，请检查后重试。', totalEmails: 0, items: [] };
+    }
 
-        // 4. Code not found
-        this.recordFailedAttempt(clientIp);
-        await this.recordAudit(
-            auditRepo,
-            code,
-            null,
-            null,
-            clientIp,
-            userAgent || null,
-            IcloudAuditResult.INVALID_CODE,
-        );
-
-        return {
-            success: false,
-            message: '无效的查询码，请检查后重试。',
-            totalEmails: 0,
-            items: [],
-        };
+    /** Shared authorization for public reads and subscriptions. Does not read mail. */
+    async authorizeQueryTarget(
+        ctx: RequestContext,
+        queryCode: string,
+        clientIp: string,
+        userAgent?: string,
+    ): Promise<{
+        virtual?: IcloudVirtualEmail;
+        primary?: IcloudPrimaryAccount;
+        error?: string;
+    }> {
+        const code = queryCode.trim().toUpperCase();
+        const auditRepo = this.connection.getRepository(ctx, IcloudQueryAuditLog);
+        if (this.checkRateLimit(clientIp)) {
+            await this.recordAudit(
+                auditRepo,
+                code,
+                null,
+                null,
+                clientIp,
+                userAgent ?? null,
+                IcloudAuditResult.RATE_LIMITED,
+            );
+            return { error: '查询过于频繁，请 15 分钟后再试。' };
+        }
+        const virtual = await this.connection.getRepository(ctx, IcloudVirtualEmail).findOne({
+            where: { buyerQueryCode: code },
+            relations: ['primaryAccount'],
+        });
+        const primary = virtual
+            ? undefined
+            : ((await this.connection
+                  .getRepository(ctx, IcloudPrimaryAccount)
+                  .findOne({ where: { masterQueryCode: code } })) ?? undefined);
+        const match = virtual ?? primary;
+        if (!match) {
+            this.recordFailedAttempt(clientIp);
+            await this.recordAudit(
+                auditRepo,
+                code,
+                null,
+                null,
+                clientIp,
+                userAgent ?? null,
+                IcloudAuditResult.INVALID_CODE,
+            );
+            return { error: '无效的查询码，请检查后重试。' };
+        }
+        const type = virtual ? IcloudQueryTargetType.VIRTUAL : IcloudQueryTargetType.PRIMARY;
+        if (
+            match.status === IcloudAccountStatus.DISABLED ||
+            virtual?.primaryAccount?.status === IcloudAccountStatus.DISABLED
+        ) {
+            await this.recordAudit(
+                auditRepo,
+                code,
+                type,
+                String(match.id),
+                clientIp,
+                userAgent ?? null,
+                IcloudAuditResult.DISABLED,
+            );
+            return { error: virtual ? '该邮箱已禁用，请联系客服。' : '该主邮箱已禁用，请联系管理员。' };
+        }
+        if (this.codeService.isExpired(match.codeExpiresAt)) {
+            await this.recordAudit(
+                auditRepo,
+                code,
+                type,
+                String(match.id),
+                clientIp,
+                userAgent ?? null,
+                IcloudAuditResult.EXPIRED,
+            );
+            return {
+                error: virtual
+                    ? '该查询码已过期，请联系客服获取最新查询码。'
+                    : '该主查询码已过期，请联系管理员。',
+            };
+        }
+        this.failedAttempts.delete(clientIp);
+        return { virtual: virtual ?? undefined, primary };
     }
 
     // ==========================================

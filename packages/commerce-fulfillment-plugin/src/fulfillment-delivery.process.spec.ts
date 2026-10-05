@@ -1,44 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { fulfillmentDeliveryProcess } from './fulfillment-delivery.process';
-import { FulfillmentDeliveryService } from './fulfillment-delivery.service';
 
 describe('fulfillmentDeliveryProcess', () => {
-    it.each(['Pending', 'Shipped'])(
-        'rejects a shared fulfillment containing an unpaid physical order before %s',
-        async state => {
-            const service = new FulfillmentDeliveryService(
-                null as any,
-                null as any,
-                null as any,
-                null as any,
-                null as any,
-            );
-            await fulfillmentDeliveryProcess.init?.({ get: vi.fn().mockReturnValue(service) } as any);
-            const fulfillment = {
-                lines: [{ orderLineId: 'paid-line' }, { orderLineId: 'unpaid-line' }],
-            } as any;
-            const orders = [
-                {
-                    id: 'paid',
-                    state: 'PaymentSettled',
-                    lines: [{ id: 'paid-line', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
-                },
-                {
-                    id: 'unpaid',
-                    state: 'ArrangingPayment',
-                    lines: [{ id: 'unpaid-line', customFields: { fulfillmentTypeSnapshot: 'physical' } }],
-                },
-            ] as any;
-            const transition = fulfillmentDeliveryProcess.onTransitionStart;
-            if (!transition) throw new Error('Expected fulfillment transition guard');
-            for (const sequence of [orders, [...orders].reverse()]) {
-                expect(
-                    await transition('Created', state, { ctx: {} as any, fulfillment, orders: sequence }),
-                ).toContain('订单未付款');
-            }
-        },
-    );
+    it.each(['Pending', 'Shipped'])('awaits the authoritative shipment guard before %s', async state => {
+        const service = { guardPhysicalFulfillmentPayment: vi.fn().mockResolvedValue('退款后剩余份数不足') };
+        await fulfillmentDeliveryProcess.init?.({ get: vi.fn().mockReturnValue(service) } as any);
+        const data = {
+            ctx: { channelId: 'store' },
+            fulfillment: { id: 'package' },
+            orders: [{ id: 'order' }],
+        } as any;
+        await expect(fulfillmentDeliveryProcess.onTransitionStart?.('Created', state, data)).resolves.toBe(
+            '退款后剩余份数不足',
+        );
+        expect(service.guardPhysicalFulfillmentPayment).toHaveBeenCalledWith(
+            data.ctx,
+            data.fulfillment,
+            data.orders,
+            state,
+        );
+    });
 
     it('records shipping and blocks proof-less physical delivery transitions', async () => {
         const service = {

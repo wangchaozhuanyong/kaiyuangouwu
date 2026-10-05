@@ -484,7 +484,7 @@ export function AssetsModule() {
                     </div>
                 )}
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 p-4">
+                    <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/50 p-4 md:flex-row md:items-center md:justify-between">
                         <div className="flex gap-2">
                             {(['ALL', 'IMAGE', 'VIDEO'] as const).map(type => (
                                 <AdminButton
@@ -505,7 +505,7 @@ export function AssetsModule() {
                                 </AdminButton>
                             ))}
                         </div>
-                        <div className="relative">
+                        <div className="relative w-full min-w-0 md:w-auto">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                             <AdminInput
                                 value={searchTerm}
@@ -515,7 +515,7 @@ export function AssetsModule() {
                                 }}
                                 aria-label="搜索素材"
                                 placeholder="搜索素材名称..."
-                                className="w-64 rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-4 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full md:w-64 rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-4 text-xs outline-none focus:ring-1 focus:ring-blue-500"
                             />
                         </div>
                     </div>
@@ -549,7 +549,7 @@ export function AssetsModule() {
                         </div>
                     )}
                     {loading && !data ? (
-                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
+                        <div className="grid grid-cols-2 gap-3 p-3 sm:gap-4 sm:p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(item => (
                                 <div
                                     key={item}
@@ -563,7 +563,7 @@ export function AssetsModule() {
                             <p>当前筛选条件下暂无真实素材</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
+                        <div className="grid grid-cols-2 gap-3 p-3 sm:gap-4 sm:p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
                             {assets.map(asset => (
                                 <div
                                     key={asset.id}
@@ -605,7 +605,7 @@ export function AssetsModule() {
                                             ) : (
                                                 <File className="h-9 w-9 text-slate-400" />
                                             )}
-                                            <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-0 shadow-sm group-hover:opacity-100">
+                                            <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-100 shadow-sm md:opacity-0 md:group-hover:opacity-100">
                                                 <FileEdit className="h-3.5 w-3.5" />
                                             </span>
                                         </div>

@@ -10,6 +10,7 @@ import {
 } from './catalog-field-definitions';
 import {
     catalogCategoryPath,
+    digitalImportFields,
     parseCatalogFulfillmentType,
     parseCatalogPricingMode,
     validateCatalogCategories,
@@ -266,6 +267,8 @@ function normalizeRow(
         primaryUnit: textValue(values.get('primaryUnit')),
         purchaseUnit: textValue(values.get('purchaseUnit')),
         packageQuantity,
+        digitalAvailableQuantity: integerValue(values.get('digitalAvailableQuantity'), rowNumber, '可售份数'),
+        ...digitalImportFields(values.get('digitalDeliveryMode'), values.get('digitalStockPolicy')),
         stockOnHand,
         purchaseCost,
         sellingPrice,

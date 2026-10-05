@@ -44,6 +44,7 @@ export type {
 } from './digital-delivery-token.service';
 export { DigitalDeliveryService } from './digital-delivery.service';
 export type { DigitalDeliveryItem, DigitalDeliveryStatus } from './digital-delivery.service';
+export * from './digital-fulfillment.guard';
 export { AfterSalesEvent } from './entities/after-sales-event.entity';
 export { AfterSalesItem } from './entities/after-sales-item.entity';
 export { AfterSalesRequest } from './entities/after-sales-request.entity';
@@ -81,8 +82,25 @@ export type {
     OrderConfirmationTokenPayload,
     OrderConfirmationTokenResult,
 } from './order-confirmation-token.service';
+export { OrderProcessingChangedEvent } from './order-processing-changed.event';
+export { matchesProcessingCategory, summarizeProcessing } from './order-processing-summary';
+export type {
+    OrderProcessingSummary,
+    ProcessingCategory,
+    ProcessingSource,
+} from './order-processing-summary';
+export { OrderProcessingService } from './order-processing.service';
+export type { OrderProcessingListOptions } from './order-processing.service';
 export { PackagingStockLocationStrategy } from './packaging-stock-location-strategy';
 export { calculateAutoUnpack } from './product-packaging-calculation';
 export { ProductPackagingService } from './product-packaging.service';
 export type { ProductPackagingStockSummary } from './product-packaging.service';
 export type { FulfillmentType } from './types';
+
+export { CheckoutResourcesService } from './checkout-resources.service';
+export { fulfillDigitalOrder } from './commerce-order-process';
+export { DigitalFileService } from './digital-file.service';
+export { DigitalProductService } from './digital-product.service';
+export { DigitalReceiptShopResolver } from './digital-receipt.resolver';
+export { DigitalReceiptService } from './digital-receipt.service';
+export * from './entities/digital-product.entity';

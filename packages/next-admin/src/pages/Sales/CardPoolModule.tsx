@@ -490,7 +490,7 @@ function PoolTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1320px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -533,10 +533,17 @@ function PoolTable({
                                 : '无字段';
                             return (
                                 <tr key={item.id} className="group h-[52px] hover:bg-slate-50">
-                                    <td className="sticky left-0 z-10 h-[52px] whitespace-nowrap bg-white px-3 py-0 font-mono font-bold text-slate-700 group-hover:bg-slate-50">
+                                    <td
+                                        data-label="序号"
+                                        className="sticky left-0 z-10 h-[52px] whitespace-nowrap bg-white px-3 py-0 font-mono font-bold text-slate-700 group-hover:bg-slate-50"
+                                    >
                                         #{item.sequence}
                                     </td>
-                                    <td className="h-[52px] max-w-72 px-3 py-0">
+                                    <td
+                                        data-label="卡密摘要（脱敏）"
+                                        data-mobile-wide
+                                        className="h-[52px] max-w-72 px-3 py-0"
+                                    >
                                         <div className="flex max-w-68 items-center gap-1 whitespace-nowrap">
                                             <code
                                                 className="min-w-0 truncate font-mono text-[10px] text-slate-700"
@@ -551,21 +558,34 @@ function PoolTable({
                                             )}
                                         </div>
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                    <td data-label="状态" className="h-[52px] whitespace-nowrap px-3 py-0">
                                         <PoolStateBadge state={item.state} />
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="入库时间"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {formatDateTime(item.createdAt)}
                                     </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="分配时间"
+                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         {item.assignedAt ? formatDateTime(item.assignedAt) : '—'}
                                     </td>
-                                    <td className="h-[52px] max-w-52 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <td
+                                        data-label="关联交付"
+                                        className="h-[52px] max-w-52 px-3 py-0 font-mono text-[10px] text-slate-500"
+                                    >
                                         <span className="block truncate" title={item.deliveryId ?? undefined}>
                                             {item.deliveryId ?? '—'}
                                         </span>
                                     </td>
-                                    <td className="h-[52px] max-w-56 px-3 py-0 text-[10px] text-rose-600">
+                                    <td
+                                        data-label="停用原因"
+                                        data-mobile-wide
+                                        className="h-[52px] max-w-56 px-3 py-0 text-[10px] text-rose-600"
+                                    >
                                         <span
                                             className="block truncate"
                                             title={item.disabledReason ?? undefined}
@@ -573,7 +593,10 @@ function PoolTable({
                                             {item.disabledReason ?? '—'}
                                         </span>
                                     </td>
-                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                    <td
+                                        data-label="操作"
+                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                    >
                                         <div className="flex justify-end gap-1">
                                             <AdminButton
                                                 type="button"
@@ -691,7 +714,7 @@ function DeliveriesTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
+                <table className="admin-mobile-record-table w-full min-w-[1680px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -738,15 +761,25 @@ function DeliveriesTable({
                     <tbody className="divide-y divide-slate-100">
                         {items.map(item => (
                             <tr key={item.id} className="group h-[52px] hover:bg-slate-50">
-                                <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 font-mono font-bold text-blue-700 group-hover:bg-slate-50">
+                                <td
+                                    data-label="订单号"
+                                    className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 font-mono font-bold text-blue-700 group-hover:bg-slate-50"
+                                >
                                     <span className="block truncate" title={item.order.code}>
                                         {item.order.code}
                                     </span>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+                                <td
+                                    data-label="订单状态"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500"
+                                >
                                     {getOrderStateLabel(item.order.state)}
                                 </td>
-                                <td className="h-[52px] max-w-60 px-3 py-0">
+                                <td
+                                    data-label="商品名称"
+                                    data-mobile-wide
+                                    className="h-[52px] max-w-60 px-3 py-0"
+                                >
                                     <strong
                                         className="block truncate text-slate-800"
                                         title={item.productName}
@@ -754,29 +787,50 @@ function DeliveriesTable({
                                         {item.productName}
                                     </strong>
                                 </td>
-                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="SKU"
+                                    data-mobile-wide
+                                    className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     <span className="block truncate" title={item.sku}>
                                         {item.sku}
                                     </span>
                                 </td>
-                                <td className="h-[52px] max-w-56 px-3 py-0 text-slate-600">
+                                <td
+                                    data-label="收件邮箱"
+                                    data-mobile-wide
+                                    className="h-[52px] max-w-56 px-3 py-0 text-slate-600"
+                                >
                                     <span className="block truncate" title={item.recipientEmail}>
                                         {item.recipientEmail}
                                     </span>
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold">
+                                <td
+                                    data-label="数量"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold"
+                                >
                                     {item.quantity}
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                <td data-label="交付状态" className="h-[52px] whitespace-nowrap px-3 py-0">
                                     <DeliveryStateBadge state={item.state} />
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-500">
+                                <td
+                                    data-label="尝试次数"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-500"
+                                >
                                     {item.attemptCount}
                                 </td>
-                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                <td
+                                    data-label="发送时间"
+                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                >
                                     {item.sentAt ? formatDateTime(item.sentAt) : '—'}
                                 </td>
-                                <td className="h-[52px] max-w-64 px-3 py-0">
+                                <td
+                                    data-label="错误"
+                                    data-mobile-wide
+                                    className="h-[52px] max-w-64 px-3 py-0"
+                                >
                                     <span
                                         className="block truncate text-[10px] text-rose-600"
                                         title={serviceMessageDisplay(item.lastError, 'zh') ?? ''}
@@ -784,7 +838,10 @@ function DeliveriesTable({
                                         {serviceMessageDisplay(item.lastError, 'zh') ?? '—'}
                                     </span>
                                 </td>
-                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                <td
+                                    data-label="操作"
+                                    className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50"
+                                >
                                     {hasAnyPermission(['ReadSoldAutoCards']) &&
                                         item.state !== 'WAITING_STOCK' && (
                                             <AdminButton
@@ -837,7 +894,7 @@ function RevealDialog({
                 {value.fields.map(field => (
                     <div
                         key={field.key}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
                     >
                         <div>
                             <div className="text-[9px] text-slate-400">{field.label}</div>

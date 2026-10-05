@@ -13,3 +13,22 @@ export function expenseInputToMicrounits(value: string, label: string): number |
     if (!Number.isSafeInteger(microunits)) throw new Error(`${label}超出可支持范围`);
     return microunits;
 }
+
+export function expenseDraftToInput(
+    draft: { carrierCost: string; paymentFee: string; chargeback: string; note: string },
+    carrierShippingCostApplicable: boolean,
+) {
+    return {
+        ...(carrierShippingCostApplicable
+            ? {
+                  carrierShippingCostMicrounits: expenseInputToMicrounits(
+                      draft.carrierCost,
+                      '承运商实际物流成本',
+                  ),
+              }
+            : {}),
+        paymentFeeMicrounits: expenseInputToMicrounits(draft.paymentFee, '支付手续费'),
+        chargebackMicrounits: expenseInputToMicrounits(draft.chargeback, '拒付损失'),
+        note: draft.note.trim() || null,
+    };
+}

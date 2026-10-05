@@ -32,6 +32,7 @@ describe('public product availability resolver', () => {
         const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
+            { available: vi.fn().mockResolvedValue(undefined) } as never,
         );
 
         await expect(
@@ -56,6 +57,7 @@ describe('public product availability resolver', () => {
         const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
+            { available: vi.fn().mockResolvedValue(undefined) } as never,
         );
 
         await expect(

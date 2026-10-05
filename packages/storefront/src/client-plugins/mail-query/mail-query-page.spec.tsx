@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ShopApi } from '../../api';
+import type { MailStreamCallbacks } from '../../api/mail-events';
 import { MailQueryPage } from './mail-query-page';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -361,6 +362,186 @@ describe('MailQueryPage', () => {
         expect(container.textContent).toContain('New mail');
         expect(container.querySelector('#refreshStatus')?.textContent).toContain('Temporary network error');
         expect(queryMails).toHaveBeenCalledTimes(3);
+    });
+
+    it('receives events without idle polling and preserves the mailbox filter, expanded body and language changes', async () => {
+        const first = {
+            success: true,
+            message: null,
+            targetType: 'PRIMARY',
+            primaryEmail: 'own***@example.test',
+            aliasEmail: null,
+            codeExpiresAt: null,
+            remainingDays: 3,
+            totalEmails: 1,
+            items: [
+                {
+                    id: 'm1',
+                    virtualEmailId: 'v1',
+                    fromAddress: 'sender@example.test',
+                    fromName: 'Sender',
+                    subject: 'First mail',
+                    receivedAt: '2026-10-04T12:00:00Z',
+                    extractedCode: null,
+                    bodyText: 'Expanded mail body',
+                    bodyHtml: '',
+                    targetEmail: 'ali***@example.test',
+                },
+            ],
+            virtualEmailsList: [
+                { id: 'v1', aliasEmail: 'one***@example.test', note: null },
+                { id: 'v2', aliasEmail: 'two***@example.test', note: null },
+            ],
+        };
+        const queryMails = vi
+            .fn()
+            .mockResolvedValueOnce(first)
+            .mockResolvedValue({
+                ...first,
+                totalEmails: 2,
+                items: [
+                    {
+                        ...first.items[0],
+                        id: 'm2',
+                        virtualEmailId: 'v2',
+                        subject: 'Other alias',
+                        receivedAt: '2026-10-04T13:00:00Z',
+                    },
+                    ...first.items,
+                ],
+            });
+        let callbacks!: MailStreamCallbacks;
+        let subscription!: AbortSignal;
+        const watchMailEvents = vi.fn((_code: string, next: MailStreamCallbacks, signal: AbortSignal) => {
+            callbacks = next;
+            subscription = signal;
+            next.onStatus('live');
+            return new Promise<void>(resolve =>
+                signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+        });
+        const api = { queryMails, watchMailEvents } as unknown as ShopApi;
+        await act(async () => {
+            root.render(<MailQueryPage api={api} marketCode="store-a" initialCode="MSTR-AAAA-BBBB" />);
+            await Promise.resolve();
+        });
+        expect(container.querySelector<HTMLInputElement>('#liveUpdatesToggle')?.checked).toBe(true);
+        expect(watchMailEvents).toHaveBeenCalledOnce();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(120_000);
+        });
+        expect(queryMails).toHaveBeenCalledOnce();
+        const select = container.querySelector<HTMLSelectElement>('#filterSelect');
+        if (!select) throw new Error('Missing alias filter');
+        act(() => {
+            select.value = 'v1';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            container.querySelector<HTMLButtonElement>('.toggle-body-btn')?.click();
+        });
+        const pending: Array<Promise<void>> = [];
+        await act(async () => {
+            pending.push(Promise.resolve(callbacks.onChange()), Promise.resolve(callbacks.onChange()));
+            await vi.advanceTimersByTimeAsync(100);
+            await Promise.all(pending);
+        });
+        expect(queryMails).toHaveBeenCalledTimes(2);
+        expect(select.value).toBe('v1');
+        expect(container.textContent).toContain('Expanded mail body');
+        expect(container.textContent).not.toContain('Other alias');
+        expect(container.querySelector('#totalMailCount')?.textContent).toContain('2');
+        await act(async () => {
+            root.render(
+                <MailQueryPage api={api} marketCode="store-a" language="en" initialCode="MSTR-AAAA-BBBB" />,
+            );
+            await Promise.resolve();
+        });
+        expect(queryMails).toHaveBeenCalledTimes(2);
+        expect(watchMailEvents).toHaveBeenCalledOnce();
+        expect(container.textContent).toContain('Latest received:');
+        act(() => container.querySelector<HTMLInputElement>('#liveUpdatesToggle')?.click());
+        expect(subscription.aborted).toBe(true);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(120_000);
+        });
+        expect(queryMails).toHaveBeenCalledTimes(2);
+    });
+
+    it('reads again when a distinct event arrives during an in-flight refresh and ignores old query responses', async () => {
+        const result = (subject: string) => ({
+            success: true,
+            targetType: 'VIRTUAL',
+            aliasEmail: 'buy***@example.test',
+            totalEmails: 1,
+            items: [{ id: subject, subject, receivedAt: '2026-10-04T12:00:00Z', bodyText: subject }],
+            virtualEmailsList: [],
+        });
+        let finish!: (value: unknown) => void;
+        const queryMails = vi
+            .fn()
+            .mockResolvedValueOnce(result('initial'))
+            .mockImplementationOnce(
+                () =>
+                    new Promise(resolve => {
+                        finish = resolve;
+                    }),
+            )
+            .mockResolvedValueOnce(result('latest'));
+        let callbacks!: MailStreamCallbacks;
+        const watchMailEvents = vi.fn((_code: string, next: MailStreamCallbacks, signal: AbortSignal) => {
+            callbacks = next;
+            return new Promise<void>(resolve =>
+                signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+        });
+        const api = { queryMails, watchMailEvents } as unknown as ShopApi;
+        await act(async () => {
+            root.render(<MailQueryPage api={api} marketCode="store-a" initialCode="BUY-AAAA-BBBB" />);
+            await Promise.resolve();
+        });
+        const pending: Array<Promise<void>> = [];
+        await act(async () => {
+            pending.push(Promise.resolve(callbacks.onChange()));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+        await act(async () => {
+            pending.push(Promise.resolve(callbacks.onChange()));
+            await vi.advanceTimersByTimeAsync(100);
+            finish(result('stale'));
+            await Promise.all(pending);
+        });
+        expect(queryMails).toHaveBeenCalledTimes(3);
+        expect(container.textContent).toContain('latest');
+        expect(container.textContent).not.toContain('stale');
+        let staleFinish!: (value: unknown) => void;
+        queryMails.mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    staleFinish = resolve;
+                }),
+        );
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#refreshNowBtn')?.click();
+            await Promise.resolve();
+        });
+        const oldSignal = queryMails.mock.calls[3][1] as AbortSignal;
+        act(() => {
+            container.querySelector<HTMLButtonElement>('#backQueryBtn')?.click();
+        });
+        expect(oldSignal.aborted).toBe(true);
+        const input = container.querySelector<HTMLInputElement>('#codeInput');
+        if (!input) throw new Error('Missing query input');
+        act(() => setInputValue(input, 'BUY-CCCC-DDDD'));
+        queryMails.mockResolvedValue(result('new query'));
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#queryBtn')?.click();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            staleFinish(result('old response'));
+            await Promise.resolve();
+        });
+        expect(container.textContent).toContain('new query');
+        expect(container.textContent).not.toContain('old response');
     });
 
     it('shows toast when attempting query with empty input', async () => {

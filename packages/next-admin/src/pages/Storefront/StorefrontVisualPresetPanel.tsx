@@ -217,7 +217,7 @@ export function StorefrontVisualPresetPanel() {
             >
                 {mutation.loading ? '正在保存…' : '保存到当前店铺'}
             </AdminButton>
-            <div className="mt-3 flex gap-4 text-sm">
+            <div className="mt-3 flex flex-wrap gap-3 text-sm">
                 <AdminButton
                     type="button"
                     disabled={!consistent || busy}

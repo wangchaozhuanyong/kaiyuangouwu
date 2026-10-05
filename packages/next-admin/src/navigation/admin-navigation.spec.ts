@@ -12,8 +12,10 @@ import {
 } from './admin-navigation';
 
 describe('standalone administration navigation', () => {
-    it('has 12 two-level groups and unique independently loadable pages', () => {
-        expect(ADMIN_NAV_SECTIONS).toHaveLength(12);
+    it('preserves released groups and separates digital and physical operations and unique independently loadable pages', () => {
+        expect(ADMIN_NAV_SECTIONS).toHaveLength(14);
+        expect(getStandaloneAdminPage('/catalog/inventory/lots')?.section).toBe('physical-inventory');
+        expect(getStandaloneAdminPage('/catalog/card-pool/deliveries')?.section).toBe('digital-delivery');
         expect(new Set(STANDALONE_ADMIN_PAGES.map(p => p.path)).size).toBe(STANDALONE_ADMIN_PAGES.length);
         for (const page of STANDALONE_ADMIN_PAGES) {
             expect(getStandaloneAdminPage(page.path)).toBe(page);

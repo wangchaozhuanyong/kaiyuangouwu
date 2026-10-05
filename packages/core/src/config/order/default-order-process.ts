@@ -17,7 +17,7 @@ import {
     orderItemsAreShipped,
     orderLinesAreAllCancelled,
     orderTotalIsCovered,
-    totalCoveredByPayments,
+    totalCoveredByActualPayments,
 } from '../../service/helpers/utils/order-utils';
 
 import { OrderProcess } from './order-process';
@@ -289,8 +289,8 @@ export function configureDefaultOrderProcess(options: DefaultOrderProcessOptions
                     },
                 });
                 order.payments = existingPayments;
-                const deficit = order.totalWithTax - totalCoveredByPayments(order);
-                if (0 < deficit) {
+                const deficit = order.totalWithTax - totalCoveredByActualPayments(order);
+                if (!Number.isSafeInteger(deficit) || 0 < deficit) {
                     return 'message.cannot-transition-from-arranging-additional-payment';
                 }
             }
@@ -353,13 +353,19 @@ export function configureDefaultOrderProcess(options: DefaultOrderProcessOptions
                 }
             }
             if (options.checkPaymentsCoverTotal !== false) {
+                const covered = (states: Array<'Authorized' | 'Settled'>) =>
+                    order.orderPlacedAt
+                        ? totalCoveredByActualPayments(order, states) >= order.totalWithTax
+                        : orderTotalIsCovered(order, states);
                 if (toState === 'PaymentAuthorized') {
-                    const hasAnAuthorizedPayment = !!order.payments.find(p => p.state === 'Authorized');
-                    if (!orderTotalIsCovered(order, ['Authorized', 'Settled']) || !hasAnAuthorizedPayment) {
+                    const hasAnAuthorizedPayment = order.orderPlacedAt
+                        ? Number.isSafeInteger(totalCoveredByActualPayments(order, ['Authorized']))
+                        : !!order.payments.find(p => p.state === 'Authorized');
+                    if (!covered(['Authorized', 'Settled']) || !hasAnAuthorizedPayment) {
                         return 'message.cannot-transition-without-authorized-payments';
                     }
                 }
-                if (toState === 'PaymentSettled' && !orderTotalIsCovered(order, 'Settled')) {
+                if (toState === 'PaymentSettled' && !covered(['Settled'])) {
                     return 'message.cannot-transition-without-settled-payments';
                 }
             }

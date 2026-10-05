@@ -1,7 +1,13 @@
 import { Args, Parent, ResolveField, Resolver } from '@nestjs/graphql';
-import { HistoryEntryListOptions, QueryOrdersArgs, SortOrder } from '@vendure/common/lib/generated-types';
+import {
+    HistoryEntryListOptions,
+    Permission,
+    QueryOrdersArgs,
+    SortOrder,
+} from '@vendure/common/lib/generated-types';
 import { PaginatedList } from '@vendure/common/lib/shared-types';
 
+import { idsAreEqual } from '../../../common/utils';
 import { Address } from '../../../entity/address/address.entity';
 import { Customer } from '../../../entity/customer/customer.entity';
 import { Order } from '../../../entity/order/order.entity';
@@ -26,8 +32,7 @@ export class CustomerEntityResolver {
         @Parent() customer: Customer,
         @Api() apiType: ApiType,
     ): Promise<Address[]> {
-        if (apiType === 'shop' && !ctx.activeUserId) {
-            // Guest customers should not be able to see this data
+        if (!(await this.customerForRead(ctx, customer, apiType))) {
             return [];
         }
         return this.customerService.findAddressesByCustomerId(ctx, customer.id);
@@ -41,22 +46,44 @@ export class CustomerEntityResolver {
         @Api() apiType: ApiType,
         @Relations(Order) relations: RelationPaths<Order>,
     ): Promise<PaginatedList<Order>> {
-        if (apiType === 'shop' && !ctx.activeUserId) {
-            // Guest customers should not be able to see this data
+        if (!(await this.customerForRead(ctx, customer, apiType))) {
             return { items: [], totalItems: 0 };
         }
         return this.orderService.findByCustomerId(ctx, customer.id, args.options || undefined, relations);
     }
 
     @ResolveField()
-    async user(@Ctx() ctx: RequestContext, @Parent() customer: Customer) {
-        if (customer.user) {
-            return customer.user;
+    async user(@Ctx() ctx: RequestContext, @Parent() customer: Customer, @Api() apiType: ApiType) {
+        const readable = await this.customerForRead(ctx, customer, apiType);
+        if (!readable) {
+            return null;
+        }
+        if (readable.user) {
+            return readable.user;
         }
         // Re-load the customer's actual user relation rather than looking up by email,
         // since an email lookup can return a User belonging to a different Customer entity.
-        const loaded = await this.customerService.findOne(ctx, customer.id, ['user']);
+        const loaded = await this.customerService.findOne(ctx, readable.id, ['user']);
         return loaded?.user ?? null;
+    }
+
+    private async customerForRead(
+        ctx: RequestContext,
+        customer: Customer,
+        apiType: ApiType,
+    ): Promise<Customer | undefined> {
+        if (apiType === 'admin') {
+            return ctx.userHasPermissions([Permission.ReadCustomer]) ? customer : undefined;
+        }
+        if (apiType !== 'shop' || !ctx.activeUserId) {
+            return;
+        }
+        // An order confirmation proof authorizes that order, not the customer's
+        // address book, other orders or account. Recheck ownership on each nested field.
+        const withUser = customer.user
+            ? customer
+            : await this.customerService.findOne(ctx, customer.id, ['user']);
+        return withUser?.user && idsAreEqual(withUser.user.id, ctx.activeUserId) ? withUser : undefined;
     }
 }
 

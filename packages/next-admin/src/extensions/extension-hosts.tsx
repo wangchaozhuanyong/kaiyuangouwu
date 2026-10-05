@@ -66,16 +66,20 @@ export function NextAdminPageBlocks({
     pageId,
     entity,
     fallback = null,
+    excludeIds = [],
 }: {
     pageId: string;
     entity?: Record<string, unknown> | null;
     fallback?: ReactNode;
+    excludeIds?: string[];
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const context = useExtensionContext(pageId, entity);
     const blocks = getNextAdminPageBlocks(pageId).filter(
         block =>
-            hasAnyPermission(block.permissions ?? []) && (!block.shouldRender || block.shouldRender(context)),
+            !excludeIds.includes(block.id) &&
+            hasAnyPermission(block.permissions ?? []) &&
+            (!block.shouldRender || block.shouldRender(context)),
     );
 
     if (blocks.length === 0) return fallback;

@@ -9,7 +9,9 @@ import {
     Truck,
     WalletCards,
 } from 'lucide-react';
+import { AdminField } from '../../components/AdminField';
 
+import { AdminSelect } from '../../components/AdminControls';
 import { TabButton } from './settings-ui';
 import type { StoreSettingsTab } from './store-settings-state';
 
@@ -24,77 +26,51 @@ export function StoreSettingsNavigation({
     canReadFinance: boolean;
     canReadBusinessSettings: boolean;
 }) {
+    const tabs: Array<{ value: StoreSettingsTab; label: string; icon: typeof Store }> = [
+        { value: 'STORES', label: '店铺实例', icon: Store },
+        { value: 'DOMAINS', label: '独立域名', icon: Globe2 },
+        { value: 'SELLERS', label: '商家主体', icon: Building2 },
+        { value: 'PAYMENT', label: '支付', icon: CreditCard },
+        { value: 'SHIPPING', label: '配送', icon: Truck },
+        ...(canReadFinance
+            ? [
+                  { value: 'CURRENCY' as const, label: '币种与汇率', icon: CircleDollarSign },
+                  { value: 'USDT' as const, label: 'USDT 收款', icon: WalletCards },
+              ]
+            : []),
+        ...(canReadBusinessSettings
+            ? [{ value: 'BUSINESS' as const, label: '业务基础', icon: ReceiptText }]
+            : []),
+        { value: 'PERMISSION_AUDITS', label: '权限审计记录', icon: ShieldCheck },
+    ];
     return (
-        <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
-            <TabButton
-                active={tab === 'STORES'}
-                onClick={() => onTabChange('STORES')}
-                icon={<Store className="h-3.5 w-3.5" />}
-            >
-                店铺实例
-            </TabButton>
-            <TabButton
-                active={tab === 'DOMAINS'}
-                onClick={() => onTabChange('DOMAINS')}
-                icon={<Globe2 className="h-3.5 w-3.5" />}
-            >
-                独立域名
-            </TabButton>
-            <TabButton
-                active={tab === 'SELLERS'}
-                onClick={() => onTabChange('SELLERS')}
-                icon={<Building2 className="h-3.5 w-3.5" />}
-            >
-                商家主体
-            </TabButton>
-            <TabButton
-                active={tab === 'PAYMENT'}
-                onClick={() => onTabChange('PAYMENT')}
-                icon={<CreditCard className="h-3.5 w-3.5" />}
-            >
-                支付
-            </TabButton>
-            <TabButton
-                active={tab === 'SHIPPING'}
-                onClick={() => onTabChange('SHIPPING')}
-                icon={<Truck className="h-3.5 w-3.5" />}
-            >
-                配送
-            </TabButton>
-            {canReadFinance && (
-                <TabButton
-                    active={tab === 'CURRENCY'}
-                    onClick={() => onTabChange('CURRENCY')}
-                    icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+        <>
+            <AdminField label="设置分类" className="admin-mobile-section-select">
+                <AdminSelect
+                    aria-label="设置分类"
+                    value={tab}
+                    onChange={event => onTabChange(event.target.value as StoreSettingsTab)}
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
                 >
-                    币种与汇率
-                </TabButton>
-            )}
-            {canReadFinance && (
-                <TabButton
-                    active={tab === 'USDT'}
-                    onClick={() => onTabChange('USDT')}
-                    icon={<WalletCards className="h-3.5 w-3.5" />}
-                >
-                    USDT 收款
-                </TabButton>
-            )}
-            {canReadBusinessSettings && (
-                <TabButton
-                    active={tab === 'BUSINESS'}
-                    onClick={() => onTabChange('BUSINESS')}
-                    icon={<ReceiptText className="h-3.5 w-3.5" />}
-                >
-                    业务基础
-                </TabButton>
-            )}
-            <TabButton
-                active={tab === 'PERMISSION_AUDITS'}
-                onClick={() => onTabChange('PERMISSION_AUDITS')}
-                icon={<ShieldCheck className="h-3.5 w-3.5" />}
-            >
-                权限审计记录
-            </TabButton>
-        </div>
+                    {tabs.map(item => (
+                        <option key={item.value} value={item.value}>
+                            {item.label}
+                        </option>
+                    ))}
+                </AdminSelect>
+            </AdminField>
+            <div className="scrollbar-hidden hidden w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1 md:flex">
+                {tabs.map(({ value, label, icon: Icon }) => (
+                    <TabButton
+                        key={value}
+                        active={tab === value}
+                        onClick={() => onTabChange(value)}
+                        icon={<Icon className="h-3.5 w-3.5" />}
+                    >
+                        {label}
+                    </TabButton>
+                ))}
+            </div>
+        </>
     );
 }

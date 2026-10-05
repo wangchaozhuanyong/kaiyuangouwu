@@ -29,6 +29,7 @@ import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { AdminMobileSort } from '../../components/AdminMobileList';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -262,6 +263,7 @@ interface InventoryLotRow {
 }
 
 interface InventoryLotDraft {
+    reconcileExistingStock?: boolean;
     id?: string;
     productVariantId: string;
     stockLocationId: string;
@@ -307,6 +309,14 @@ const EMPTY_LOCATIONS: StockLocationItem[] = [];
 const EMPTY_CATALOG_EXPORT_ROWS: CatalogExportRowRecord[] = [];
 const INVENTORY_SORT_FIELDS = ['updatedAt', 'name', 'sku', 'price', 'stockOnHand', 'stockAllocated'] as const;
 type InventorySortField = (typeof INVENTORY_SORT_FIELDS)[number];
+const INVENTORY_MOBILE_SORT_FIELDS = [
+    { value: 'updatedAt', label: '更新时间' },
+    { value: 'name', label: '规格名称' },
+    { value: 'sku', label: 'SKU' },
+    { value: 'price', label: '当前店铺价格' },
+    { value: 'stockOnHand', label: '在手库存' },
+    { value: 'stockAllocated', label: '锁定库存' },
+];
 const movementLabels: Record<StockMovementItem['type'], string> = {
     ADJUSTMENT: '库存盘点调整',
     ALLOCATION: '订单占用',
@@ -704,6 +714,7 @@ export function InventoryWarehouseModule() {
                         manufacturedAt: dateInputToUtcDateTime(lotDraft.manufacturedAt),
                         expiresAt: dateInputToUtcDateTime(lotDraft.expiresAt),
                         quantityOnHand,
+                        reconcileExistingStock: lotDraft.reconcileExistingStock ?? false,
                         purchaseCostMicrounits:
                             purchaseCost == null ? null : Math.round(purchaseCost * 1_000),
                         currencyCode: variant.currencyCode,
@@ -1152,7 +1163,33 @@ export function InventoryWarehouseModule() {
             </div>
 
             {(!standalonePage || standalonePage.key === 'all') && (
-                <div className="scrollbar-hidden flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
+                <div className="px-4 py-3 md:hidden">
+                    <AdminField label="库存管理章节">
+                        <AdminSelect
+                            aria-label="库存管理章节"
+                            value={activeTab}
+                            onChange={event => {
+                                setActiveTab(event.target.value as typeof activeTab);
+                                setPage(0);
+                                setSelectedVariantIds([]);
+                            }}
+                        >
+                            {tabs
+                                .filter(
+                                    ([key]) =>
+                                        !standalonePage || ['ALL', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(key),
+                                )
+                                .map(([key, , label]) => (
+                                    <option key={key} value={key}>
+                                        {label}
+                                    </option>
+                                ))}
+                        </AdminSelect>
+                    </AdminField>
+                </div>
+            )}
+            {(!standalonePage || standalonePage.key === 'all') && (
+                <div className="scrollbar-hidden hidden md:flex shrink-0 gap-6 overflow-x-auto border-b border-slate-200 bg-white px-5 text-xs font-bold sm:px-8">
                     {tabs
                         .filter(
                             ([key]) => !standalonePage || ['ALL', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(key),
@@ -1280,11 +1317,37 @@ export function InventoryWarehouseModule() {
                                 </div>
                             </div>
                         </div>
+                        <div className="flex flex-wrap items-center gap-3 p-4 md:hidden">
+                            <AdminMobileSort
+                                fields={INVENTORY_MOBILE_SORT_FIELDS}
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                                onSort={(field, direction) =>
+                                    changeSort(field as InventorySortField, direction)
+                                }
+                            />
+                            <label className="flex min-h-11 items-center gap-2 text-sm">
+                                <AdminInput
+                                    type="checkbox"
+                                    aria-label="手机选择当前页全部 SKU"
+                                    checked={
+                                        variants.length > 0 &&
+                                        variants.every(variant => selectedVariantIds.includes(variant.id))
+                                    }
+                                    onChange={event =>
+                                        setSelectedVariantIds(
+                                            event.target.checked ? variants.map(variant => variant.id) : [],
+                                        )
+                                    }
+                                />
+                                全选本页
+                            </label>
+                        </div>
                         {variants.length === 0 ? (
                             <div className="p-16 text-center text-xs text-slate-400">当前条件下没有 SKU</div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1380px] border-collapse text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[1380px] border-collapse text-left text-xs">
                                     <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                         <tr>
                                             <th
@@ -1384,7 +1447,10 @@ export function InventoryWarehouseModule() {
                                                     key={variant.id}
                                                     className="group h-[52px] hover:bg-slate-50"
                                                 >
-                                                    <td className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="选择"
+                                                        className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50"
+                                                    >
                                                         <AdminInput
                                                             type="checkbox"
                                                             checked={selectedVariantIds.includes(variant.id)}
@@ -1405,7 +1471,10 @@ export function InventoryWarehouseModule() {
                                                             aria-label={`选择 SKU ${variant.sku}`}
                                                         />
                                                     </td>
-                                                    <td className="sticky left-12 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="商品名称"
+                                                        className="sticky left-12 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                                    >
                                                         <span
                                                             className="block truncate font-bold text-slate-900"
                                                             title={variant.product.name}
@@ -1413,7 +1482,10 @@ export function InventoryWarehouseModule() {
                                                             {variant.product.name}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-56 px-3 py-0">
+                                                    <td
+                                                        data-label="规格名称"
+                                                        className="h-[52px] max-w-56 px-3 py-0"
+                                                    >
                                                         <span
                                                             className="block truncate text-slate-500"
                                                             title={variant.name}
@@ -1421,21 +1493,36 @@ export function InventoryWarehouseModule() {
                                                             {variant.name}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono font-bold text-slate-700">
+                                                    <td
+                                                        data-label="SKU"
+                                                        className="h-[52px] max-w-44 px-3 py-0 font-mono font-bold text-slate-700"
+                                                    >
                                                         <span className="block truncate" title={variant.sku}>
                                                             {variant.sku}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900">
+                                                    <td
+                                                        data-label="当前店铺价格"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900"
+                                                    >
                                                         {formatMoney(variant.price, variant.currencyCode)}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900">
+                                                    <td
+                                                        data-label="在手"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900"
+                                                    >
                                                         {onHand}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-amber-600">
+                                                    <td
+                                                        data-label="锁定"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-amber-600"
+                                                    >
                                                         {allocated}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                    <td
+                                                        data-label="状态"
+                                                        className="h-[52px] whitespace-nowrap px-3 py-0"
+                                                    >
                                                         {variant.enabled ? (
                                                             <span className="rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
                                                                 销售中
@@ -1446,7 +1533,10 @@ export function InventoryWarehouseModule() {
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
+                                                    <td
+                                                        data-label="操作"
+                                                        className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50"
+                                                    >
                                                         <AdminButton
                                                             type="button"
                                                             onClick={() =>
@@ -1607,7 +1697,7 @@ export function InventoryWarehouseModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1260px] border-collapse text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[1260px] border-collapse text-left text-xs">
                                     <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                         <tr>
                                             {[
@@ -1635,40 +1725,64 @@ export function InventoryWarehouseModule() {
                                     <tbody className="divide-y divide-slate-100">
                                         {lotRows.map(lot => (
                                             <tr key={lot.id} className="h-[52px] hover:bg-slate-50">
-                                                <td className="max-w-56 px-3 py-0 font-bold text-slate-900">
+                                                <td
+                                                    data-label="商品"
+                                                    className="max-w-56 px-3 py-0 font-bold text-slate-900"
+                                                >
                                                     <span className="block truncate" title={lot.productName}>
                                                         {lot.productName}
                                                     </span>
                                                 </td>
-                                                <td className="max-w-44 px-3 py-0 font-mono text-[10px]">
+                                                <td
+                                                    data-label="SKU"
+                                                    className="max-w-44 px-3 py-0 font-mono text-[10px]"
+                                                >
                                                     <span className="block truncate" title={lot.sku}>
                                                         {lot.sku}
                                                     </span>
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">
+                                                <td
+                                                    data-label="库存点"
+                                                    className="whitespace-nowrap px-3 py-0"
+                                                >
                                                     {lot.stockLocationName}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0 font-mono font-bold">
+                                                <td
+                                                    data-label="批次号"
+                                                    className="whitespace-nowrap px-3 py-0 font-mono font-bold"
+                                                >
                                                     {lot.lotCode}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">
+                                                <td
+                                                    data-label="生产日期"
+                                                    className="whitespace-nowrap px-3 py-0"
+                                                >
                                                     {formatDate(lot.manufacturedAt)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">
+                                                <td
+                                                    data-label="到期日期"
+                                                    className="whitespace-nowrap px-3 py-0"
+                                                >
                                                     {formatDate(lot.expiresAt)}
                                                 </td>
-                                                <td className="px-3 py-0 font-mono font-bold">
+                                                <td
+                                                    data-label="数量"
+                                                    className="px-3 py-0 font-mono font-bold"
+                                                >
                                                     {lot.quantityOnHand}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0 font-mono">
+                                                <td
+                                                    data-label="批次成本"
+                                                    className="whitespace-nowrap px-3 py-0 font-mono"
+                                                >
                                                     {lot.purchaseCostMicrounits == null
                                                         ? '—'
                                                         : `${lot.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">
+                                                <td data-label="状态" className="whitespace-nowrap px-3 py-0">
                                                     {systemStatusDisplayLabel(lot.state)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">
+                                                <td data-label="操作" className="whitespace-nowrap px-3 py-0">
                                                     <AdminButton
                                                         type="button"
                                                         onClick={() =>
@@ -1770,7 +1884,7 @@ export function InventoryWarehouseModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[920px] border-collapse text-left text-xs">
+                                <table className="admin-mobile-record-table w-full min-w-[920px] border-collapse text-left text-xs">
                                     <thead>
                                         <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                             <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
@@ -1796,7 +1910,10 @@ export function InventoryWarehouseModule() {
                                                 key={log.variantId + ':' + log.id}
                                                 className="h-[52px] hover:bg-slate-50/80"
                                             >
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                <td
+                                                    data-label="类型"
+                                                    className="h-[52px] whitespace-nowrap px-3 py-0"
+                                                >
                                                     <span className="flex w-max items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-700">
                                                         {log.quantity >= 0 ? (
                                                             <ArrowDownRight className="h-3.5 w-3.5" />
@@ -1807,6 +1924,7 @@ export function InventoryWarehouseModule() {
                                                     </span>
                                                 </td>
                                                 <td
+                                                    data-label="数量"
                                                     className={
                                                         'h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold ' +
                                                         (log.quantity >= 0
@@ -1816,7 +1934,7 @@ export function InventoryWarehouseModule() {
                                                 >
                                                     {log.quantity > 0 ? '+' + log.quantity : log.quantity}
                                                 </td>
-                                                <td className="h-[52px] max-w-64 px-3 py-0">
+                                                <td data-label="名称" className="h-[52px] max-w-64 px-3 py-0">
                                                     <span
                                                         className="block truncate font-bold text-slate-900"
                                                         title={log.productName}
@@ -1824,12 +1942,18 @@ export function InventoryWarehouseModule() {
                                                         {log.productName}
                                                     </span>
                                                 </td>
-                                                <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                <td
+                                                    data-label="SKU"
+                                                    className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                >
                                                     <span className="block truncate" title={log.sku}>
                                                         {log.sku}
                                                     </span>
                                                 </td>
-                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                <td
+                                                    data-label="时间"
+                                                    className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500"
+                                                >
                                                     {formatDateTime(log.createdAt)}
                                                 </td>
                                             </tr>
@@ -2192,9 +2316,17 @@ export function InventoryStockOverview({
     }
     return (
         <div className="overflow-x-auto">
+            <div className="p-4 md:hidden">
+                <AdminMobileSort
+                    fields={INVENTORY_MOBILE_SORT_FIELDS.filter(field => field.value !== 'price')}
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onSort={(field, direction) => onSort(field as InventorySortField, direction)}
+                />
+            </div>
             <table
                 aria-label="SKU 库存总览"
-                className="w-full min-w-[880px] border-collapse text-left text-xs"
+                className="admin-mobile-record-table w-full min-w-[880px] border-collapse text-left text-xs"
             >
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                     <tr>
@@ -2251,7 +2383,7 @@ export function InventoryStockOverview({
                         <tr className="bg-slate-50/70">
                             <th scope="rowgroup" colSpan={8} className="px-4 py-3 font-bold text-slate-900">
                                 {product.name}
-                                <span className="ml-3 font-normal text-slate-500">
+                                <span className="mt-1 block whitespace-nowrap font-normal text-slate-500 md:ml-3 md:mt-0 md:inline">
                                     本页 {product.items.length} 个 SKU
                                 </span>
                             </th>
@@ -2269,27 +2401,41 @@ export function InventoryStockOverview({
                             return (
                                 <Fragment key={item.variantId}>
                                     <tr className="h-14 hover:bg-slate-50">
-                                        <th scope="row" className="px-4 py-3 font-medium text-slate-800">
+                                        <th
+                                            scope="row"
+                                            data-label="规格 / 库存点"
+                                            className="px-4 py-3 font-medium text-slate-800"
+                                        >
                                             {variantLabel}
                                         </th>
-                                        <td className="px-3 py-3 font-mono text-[11px] text-slate-600">
+                                        <td
+                                            data-label="SKU"
+                                            className="px-3 py-3 font-mono text-[11px] text-slate-600"
+                                        >
                                             {item.sku}
                                         </td>
-                                        <td className="px-3 py-3 text-slate-500">
+                                        <td data-label="库存点" className="px-3 py-3 text-slate-500">
                                             {item.locations.length} 个
                                         </td>
-                                        <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                                        <td
+                                            data-label="总在手"
+                                            className="px-3 py-3 font-mono font-bold text-slate-900"
+                                        >
                                             {hasStock ? item.stockOnHand : '—'}
                                         </td>
-                                        <td className="px-3 py-3 font-mono text-amber-700">
+                                        <td
+                                            data-label="总锁定"
+                                            className="px-3 py-3 font-mono text-amber-700"
+                                        >
                                             {hasStock ? item.stockAllocated : '—'}
                                         </td>
                                         <td
+                                            data-label="总可售"
                                             className={`px-3 py-3 font-mono font-bold ${item.stockAvailable <= 0 ? 'text-rose-700' : 'text-emerald-700'}`}
                                         >
                                             {hasStock && tracked ? item.stockAvailable : '—'}
                                         </td>
-                                        <td className="whitespace-nowrap px-3 py-3">
+                                        <td data-label="库存状态" className="whitespace-nowrap px-3 py-3">
                                             {!tracked ? (
                                                 <span className="text-slate-500">不跟踪仓库库存</span>
                                             ) : !hasStock ? (
@@ -2300,7 +2446,7 @@ export function InventoryStockOverview({
                                                 />
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td data-label="仓库明细" className="px-4 py-3 text-right">
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => onToggle(item.variantId)}
@@ -2335,7 +2481,7 @@ export function InventoryStockOverview({
                                                         </p>
                                                         <table
                                                             aria-label={`${item.sku} 仓库库存`}
-                                                            className="w-full text-left text-[11px]"
+                                                            className="admin-mobile-record-table w-full text-left text-[11px]"
                                                         >
                                                             <thead className="border-b border-slate-200 text-slate-500">
                                                                 <tr>
@@ -2363,27 +2509,43 @@ export function InventoryStockOverview({
                                                                     <tr key={stock.id} className="h-12">
                                                                         <th
                                                                             scope="row"
+                                                                            data-label="规格 / 库存点"
                                                                             className="px-3 py-2 font-medium text-slate-700"
                                                                         >
                                                                             {stock.warehouse}
                                                                         </th>
-                                                                        <td className="px-3 py-2 font-mono">
+                                                                        <td
+                                                                            data-label="在手"
+                                                                            className="px-3 py-2 font-mono"
+                                                                        >
                                                                             {stock.stockOnHand}
                                                                         </td>
-                                                                        <td className="px-3 py-2 font-mono text-amber-700">
+                                                                        <td
+                                                                            data-label="锁定"
+                                                                            className="px-3 py-2 font-mono text-amber-700"
+                                                                        >
                                                                             {stock.stockAllocated}
                                                                         </td>
-                                                                        <td className="px-3 py-2 font-mono font-bold">
+                                                                        <td
+                                                                            data-label="可售"
+                                                                            className="px-3 py-2 font-mono font-bold"
+                                                                        >
                                                                             {tracked
                                                                                 ? stock.stockAvailable
                                                                                 : '—'}
                                                                         </td>
-                                                                        <td className="px-3 py-2 font-mono text-slate-500">
+                                                                        <td
+                                                                            data-label="补货预警值"
+                                                                            className="px-3 py-2 font-mono text-slate-500"
+                                                                        >
                                                                             {tracked
                                                                                 ? stock.safetyThreshold
                                                                                 : '—'}
                                                                         </td>
-                                                                        <td className="whitespace-nowrap px-3 py-2">
+                                                                        <td
+                                                                            data-label="仓库状态"
+                                                                            className="whitespace-nowrap px-3 py-2"
+                                                                        >
                                                                             {stock.status ===
                                                                             'NOT_TRACKED' ? (
                                                                                 <span className="text-slate-500">
@@ -2395,7 +2557,10 @@ export function InventoryStockOverview({
                                                                                 />
                                                                             )}
                                                                         </td>
-                                                                        <td className="px-3 py-2 text-right">
+                                                                        <td
+                                                                            data-label="操作"
+                                                                            className="px-3 py-2 text-right"
+                                                                        >
                                                                             <AdminButton
                                                                                 type="button"
                                                                                 onClick={() =>
@@ -2503,7 +2668,7 @@ function InventoryAlertPanel({
                 </div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1040px] border-collapse text-left text-xs">
+                    <table className="admin-mobile-record-table w-full min-w-[1040px] border-collapse text-left text-xs">
                         <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                             <tr>
                                 <th scope="col" className="w-12 px-3 py-3" aria-label="展开仓库明细" />
@@ -2538,7 +2703,7 @@ function InventoryAlertPanel({
                                     className="border-b border-slate-100 last:border-0"
                                 >
                                     <tr className="h-[58px] hover:bg-slate-50/80">
-                                        <td className="px-3 py-0">
+                                        <td data-label="仓库明细" className="px-3 py-0">
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => onToggle(item.variantId)}
@@ -2553,7 +2718,7 @@ function InventoryAlertPanel({
                                                 )}
                                             </AdminButton>
                                         </td>
-                                        <td className="max-w-64 px-3 py-0">
+                                        <td data-label="商品 / 规格" className="max-w-64 px-3 py-0">
                                             <span
                                                 className="block truncate font-bold text-slate-900"
                                                 title={item.productName}
@@ -2567,26 +2732,36 @@ function InventoryAlertPanel({
                                                 {item.variantName}
                                             </span>
                                         </td>
-                                        <td className="max-w-44 px-3 py-0 font-mono text-[11px] text-slate-700">
+                                        <td
+                                            data-label="SKU"
+                                            className="max-w-44 px-3 py-0 font-mono text-[11px] text-slate-700"
+                                        >
                                             <span className="block truncate" title={item.sku}>
                                                 {item.sku}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-0 font-mono font-bold text-slate-900">
+                                        <td
+                                            data-label="全仓在手"
+                                            className="px-3 py-0 font-mono font-bold text-slate-900"
+                                        >
                                             {item.stockOnHand}
                                         </td>
-                                        <td className="px-3 py-0 font-mono text-amber-700">
+                                        <td
+                                            data-label="全仓锁定"
+                                            className="px-3 py-0 font-mono text-amber-700"
+                                        >
                                             {item.stockAllocated}
                                         </td>
                                         <td
+                                            data-label="全仓可售"
                                             className={`px-3 py-0 font-mono font-bold ${item.stockAvailable <= 0 ? 'text-rose-700' : 'text-amber-700'}`}
                                         >
                                             {item.stockAvailable}
                                         </td>
-                                        <td className="px-3 py-0">
+                                        <td data-label="状态" className="px-3 py-0">
                                             <InventoryAlertBadge status={item.status} />
                                         </td>
-                                        <td className="px-3 py-0 text-right">
+                                        <td data-label="操作" className="px-3 py-0 text-right">
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => onEditProduct(item)}
@@ -2605,7 +2780,7 @@ function InventoryAlertPanel({
                                                     </div>
                                                 ) : (
                                                     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                                        <table className="w-full min-w-[920px] text-left text-[11px]">
+                                                        <table className="admin-mobile-record-table w-full min-w-[920px] text-left text-[11px]">
                                                             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                                                 <tr>
                                                                     <th className="px-3 py-2">库存点</th>
@@ -2625,21 +2800,34 @@ function InventoryAlertPanel({
                                                                     const saving = savingThresholdKey === key;
                                                                     return (
                                                                         <tr key={key} className="h-[54px]">
-                                                                            <td className="px-3 py-0 font-bold text-slate-800">
+                                                                            <td
+                                                                                data-label="库存点"
+                                                                                className="px-3 py-0 font-bold text-slate-800"
+                                                                            >
                                                                                 {level.stockLocationName}
                                                                             </td>
-                                                                            <td className="px-3 py-0 font-mono">
+                                                                            <td
+                                                                                data-label="在手"
+                                                                                className="px-3 py-0 font-mono"
+                                                                            >
                                                                                 {level.stockOnHand}
                                                                             </td>
-                                                                            <td className="px-3 py-0 font-mono text-amber-700">
+                                                                            <td
+                                                                                data-label="锁定"
+                                                                                className="px-3 py-0 font-mono text-amber-700"
+                                                                            >
                                                                                 {level.stockAllocated}
                                                                             </td>
                                                                             <td
+                                                                                data-label="可售"
                                                                                 className={`px-3 py-0 font-mono font-bold ${level.stockAvailable <= 0 ? 'text-rose-700' : 'text-slate-900'}`}
                                                                             >
                                                                                 {level.stockAvailable}
                                                                             </td>
-                                                                            <td className="px-3 py-0">
+                                                                            <td
+                                                                                data-label="补货预警值"
+                                                                                className="px-3 py-0"
+                                                                            >
                                                                                 <div className="flex items-center gap-1.5">
                                                                                     <AdminInput
                                                                                         type="number"
@@ -2671,12 +2859,18 @@ function InventoryAlertPanel({
                                                                                     )}
                                                                                 </div>
                                                                             </td>
-                                                                            <td className="px-3 py-0">
+                                                                            <td
+                                                                                data-label="状态"
+                                                                                className="px-3 py-0"
+                                                                            >
                                                                                 <InventoryAlertBadge
                                                                                     status={level.status}
                                                                                 />
                                                                             </td>
-                                                                            <td className="px-3 py-0 text-right whitespace-nowrap">
+                                                                            <td
+                                                                                data-label="操作"
+                                                                                className="px-3 py-0 text-right whitespace-nowrap"
+                                                                            >
                                                                                 <AdminButton
                                                                                     type="button"
                                                                                     disabled={saving}
@@ -2981,6 +3175,23 @@ export function InventoryLotDialog({
                             ))}
                         </AdminSelect>
                     </AdminField>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 sm:col-span-2">
+                        <AdminInput
+                            type="checkbox"
+                            checked={draft.reconcileExistingStock ?? false}
+                            onChange={event => update({ reconcileExistingStock: event.target.checked })}
+                        />
+                        分配现有库存（数量不变）
+                        <FeatureHelpButton
+                            title="批次操作"
+                            content={{
+                                purpose:
+                                    '首次启用批次时，先分配仓库现有数量。完成分配后，新增批次入库才增加在库数量。',
+                                requirements: [],
+                                example: '',
+                            }}
+                        />
+                    </label>
                     <InventoryLotField
                         label="批次号 *"
                         value={draft.lotCode}

@@ -67,10 +67,7 @@ export class OrderConfirmationTokenService {
             : DEFAULT_TOKEN_TTL_SECONDS;
         const configuredEmailTtl =
             configuration?.emailTokenTtlSeconds ??
-            Number(
-                process.env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS ||
-                    DEFAULT_EMAIL_TOKEN_TTL_SECONDS,
-            );
+            Number(process.env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS || DEFAULT_EMAIL_TOKEN_TTL_SECONDS);
         this.emailTokenTtlSeconds = Number.isInteger(configuredEmailTtl)
             ? Math.min(MAX_EMAIL_TOKEN_TTL_SECONDS, Math.max(60, configuredEmailTtl))
             : DEFAULT_EMAIL_TOKEN_TTL_SECONDS;
@@ -105,6 +102,22 @@ export class OrderConfirmationTokenService {
             String(ctx.channelId),
             this.emailTokenTtlSeconds,
             nowMilliseconds,
+        );
+    }
+
+    createForDigitalReceipt(ctx: RequestContext, order: Order): OrderConfirmationTokenResult {
+        if (
+            String(order.salesChannelId) !== String(ctx.channelId) ||
+            order.active ||
+            order.state === 'Cancelled' ||
+            !order.payments?.some(payment => payment.state === 'Settled')
+        )
+            throw new UserInputError('该订单不可领取数字交付');
+        return this.issueToken(
+            String(order.id),
+            String(ctx.channelId),
+            this.emailTokenTtlSeconds,
+            Date.now(),
         );
     }
 
