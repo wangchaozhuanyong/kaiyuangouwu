@@ -1,6 +1,12 @@
+// organize-imports-ignore -- Preserve ESLint ordering between Node imports and Vitest.
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
-import { normalizeStorefrontVisualPreset } from '../../storefront-content-plugin/src/visual-presets';
+import {
+    isStorefrontVisualPresetId,
+    normalizeStorefrontVisualPreset,
+} from '../../storefront-content-plugin/src/visual-presets';
 
 import { storefrontRealtimeQueryMatches, type StorefrontRealtimeEvent } from './realtime-updates';
 import { applyStorefrontVisualPreset, readStorefrontPreviewPreset } from './use-storefront-visual-preset';
@@ -16,6 +22,74 @@ describe('storefront visual preset lifecycle', () => {
         expect(root.dataset.storefrontPreset).toBe('classic');
         expect(normalizeStorefrontVisualPreset('invalid')).toBe('classic');
     });
+
+    it('rejects the removed skin and falls back for old configuration and preview URLs', () => {
+        expect(isStorefrontVisualPresetId('unsupported-preset')).toBe(false);
+        const root = { dataset: {} } as HTMLElement;
+        applyStorefrontVisualPreset(root, 'unsupported-preset');
+        expect(root.dataset.storefrontPreset).toBe('classic');
+        expect(
+            readStorefrontPreviewPreset(
+                '?storefrontPreviewEmbedded=1&storefrontPreviewPreset=unsupported-preset',
+            ),
+        ).toBeNull();
+    });
+
+    it.each(['sessionStorage', 'localStorage'])(
+        'rejects unsupported cached skins and restores valid %s themes before the app loads',
+        storage => {
+            const script = readFileSync(
+                new URL('../public/storefront/restore-theme.js', import.meta.url),
+                'utf8',
+            );
+            for (const [cached, expected] of [
+                ['unsupported-preset', 'classic'],
+                ['classic', 'classic'],
+                ['neo-minimalist', 'neo-minimalist'],
+            ]) {
+                const attributes: Record<string, string> = { 'data-storefront-preset': 'classic' };
+                const properties: Record<string, string> = {};
+                const origin = 'https://store.example.test';
+                const payload = JSON.stringify({
+                    version: 1,
+                    origin,
+                    channelCode: 'skin-test-store',
+                    savedAt: Date.now(),
+                    presetId: cached,
+                    colors: { '--bg': '#ffffff', '--text': '#111827' },
+                });
+                runInNewContext(script, {
+                    URLSearchParams,
+                    location: { origin, search: '' },
+                    window: {
+                        sessionStorage: { getItem: () => (storage === 'sessionStorage' ? payload : null) },
+                        localStorage: { getItem: () => (storage === 'localStorage' ? payload : null) },
+                    },
+                    document: {
+                        querySelector: () => ({ content: '' }),
+                        documentElement: {
+                            style: {
+                                setProperty: (name: string, value: string) => {
+                                    properties[name] = value;
+                                },
+                            },
+                            removeAttribute: (name: string) => {
+                                delete attributes[name];
+                            },
+                            setAttribute: (name: string, value: string) => {
+                                attributes[name] = value;
+                            },
+                        },
+                    },
+                });
+                expect(attributes['data-storefront-preset']).toBe(expected);
+                expect(attributes['data-storefront-theme-channel']).toBe(
+                    cached === 'unsupported-preset' ? undefined : 'skin-test-store',
+                );
+                expect(properties['--bg']).toBe(cached === 'unsupported-preset' ? undefined : '#ffffff');
+            }
+        },
+    );
 
     it('invalidates only the active store skin after a content event', () => {
         const event: StorefrontRealtimeEvent = {

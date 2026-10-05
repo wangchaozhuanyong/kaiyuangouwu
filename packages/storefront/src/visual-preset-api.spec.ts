@@ -15,30 +15,33 @@ const market: MarketConfig = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('visual preset Shop API compatibility', () => {
-    it('reads the active store selection and falls back for unknown preset versions', async () => {
-        const fetchMock = vi.fn().mockResolvedValue(
-            new Response(
-                JSON.stringify({
-                    data: {
-                        activeChannel: { id: 'store-a' },
-                        storefrontVisualPreset: {
-                            channelId: 'store-a',
-                            presetId: 'future-skin',
-                            revision: '1',
+    it.each(['future-skin', 'unsupported-preset'])(
+        'reads the active store selection and falls back for %s',
+        async presetId => {
+            const fetchMock = vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            activeChannel: { id: 'store-a' },
+                            storefrontVisualPreset: {
+                                channelId: 'store-a',
+                                presetId,
+                                revision: '1',
+                            },
                         },
-                    },
-                }),
-            ),
-        );
-        vi.stubGlobal('fetch', fetchMock);
-        await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toEqual({
-            channelId: 'store-a',
-            presetId: 'classic',
-            desktopLayout: 'classic',
-            revision: '1',
-        });
-        expect(fetchMock.mock.calls[0][1].headers['vendure-token']).toBe(market.code);
-    });
+                    }),
+                ),
+            );
+            vi.stubGlobal('fetch', fetchMock);
+            await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toEqual({
+                channelId: 'store-a',
+                presetId: 'classic',
+                desktopLayout: 'classic',
+                revision: '1',
+            });
+            expect(fetchMock.mock.calls[0][1].headers['vendure-token']).toBe(market.code);
+        },
+    );
 
     it('keeps the existing appearance when a rolling release reaches an older API', async () => {
         vi.stubGlobal(
