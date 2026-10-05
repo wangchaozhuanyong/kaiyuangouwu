@@ -1445,7 +1445,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await adminClient.asSuperAdmin();
         }
     });
-    it('matches the real admin auth preview with explicit block colors, skin colors and classic brand inheritance', async () => {
+    it('matches the real admin auth preview with explicit block colors and fixed skin controls', async () => {
         // Build this case's auth fixtures when running it alone; earlier tests are not a setup step.
         for (const index of [0, 2]) {
             adminClient.setChannelToken(stores[index].token);
@@ -1572,7 +1572,7 @@ describe('unified storefront Admin API to Shop API', () => {
             for (const [state, background, accent] of [
                 ['explicit', 'rgb(32, 51, 70)', 'rgb(102, 84, 200)'],
                 ['inherited', 'rgb(14, 20, 33)', 'rgb(102, 84, 200)'],
-                ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
+                ['classic', 'rgb(255, 255, 255)', 'rgb(37, 99, 235)'],
             ]) {
                 if (state === 'inherited')
                     await adminClient.query(UPDATE, {
@@ -1616,6 +1616,10 @@ describe('unified storefront Admin API to Shop API', () => {
                 );
                 await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', background);
                 await browserExpect(page.locator('.wide-action')).toHaveCSS('background-color', accent);
+                await browserExpect(clientFrame.locator('.wide-action')).toHaveCSS(
+                    'background-color',
+                    accent,
+                );
                 if (state === 'explicit')
                     expect(
                         await page
