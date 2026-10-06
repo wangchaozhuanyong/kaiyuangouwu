@@ -317,7 +317,7 @@ describe('HomePage carousel pointer interactions', () => {
         await advance();
         expect(activeSlide().textContent).toContain('Second slide');
     });
-    it.each(['.hero-rich-copy-surface', '.hero-rich-stats-row'])(
+    it.each(['.hero-rich-copy-region', '.hero-rich-copy-surface', '.hero-rich-stats-row', '.home-trust-bar'])(
         'stops mobile autoplay while reading the scrolling %s',
         async selector => {
             await render(false, [
@@ -337,6 +337,23 @@ describe('HomePage carousel pointer interactions', () => {
                     ],
                 },
                 heroes[1],
+                {
+                    ...heroBlock,
+                    id: 'service-information',
+                    type: 'TRUST_BAR',
+                    items: [
+                        {
+                            id: 'support',
+                            enabled: true,
+                            position: 0,
+                            imageUrl: null,
+                            targetType: 'NONE',
+                            targetValue: null,
+                            label: 'Malaysia customer support',
+                            description: '',
+                        },
+                    ],
+                },
             ]);
             await interact(() => requiredElement(activeSlide(), selector).dispatchEvent(new Event('scroll')));
             await advance(10_000);

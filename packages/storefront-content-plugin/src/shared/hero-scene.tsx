@@ -49,6 +49,8 @@ export function HeroScene({
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
     const [sampledTone, setSampledTone] = useState<{ imageUrl: typeof content.imageUrl; tone: ImageTone }>();
+    const [artworkShape, setArtworkShape] = useState<{ imageUrl: typeof content.imageUrl; wide: boolean }>();
+    const wideArtwork = artworkShape?.imageUrl === content.imageUrl && artworkShape?.wide;
     const adaptiveStyle = heroThemeStyle(
         content,
         sampledTone?.imageUrl === content.imageUrl ? sampledTone?.tone : undefined,
@@ -66,6 +68,15 @@ export function HeroScene({
                 !mediaRef.current?.querySelector('.hero-rich-image-link')?.contains(artworkElement)
             )
                 return;
+            const wide =
+                artworkElement.naturalHeight > 0 &&
+                artworkElement.naturalWidth / artworkElement.naturalHeight > 2.5;
+            // Shape can change even when the tone for this source has already been sampled.
+            setArtworkShape(current =>
+                current?.imageUrl === content.imageUrl && current?.wide === wide
+                    ? current
+                    : { imageUrl: content.imageUrl, wide },
+            );
             const source = `${content.imageUrl ?? ''}\u0000${artworkElement.currentSrc || artworkElement.src}`;
             if (sampledSource.current === source) return;
             sampledSource.current = source;
@@ -93,7 +104,7 @@ export function HeroScene({
 
     return (
         <div
-            className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
+            className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}${wideArtwork ? ' has-wide-artwork' : ''}`}
             style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
             data-copy-layout="overlay"
         >
@@ -115,38 +126,45 @@ export function HeroScene({
                 {mediaOverlay}
             </div>
             <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
-                <div className="hero-rich-copy-surface">
-                    {subtitle && (
-                        <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
-                            {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
-                            <ContentText as="span">{subtitle}</ContentText>
+                <div
+                    className="hero-rich-copy-region"
+                    role={wideArtwork ? 'region' : undefined}
+                    aria-label={wideArtwork ? title || imageLabel : undefined}
+                    tabIndex={wideArtwork ? 0 : undefined}
+                >
+                    <div className="hero-rich-copy-surface">
+                        {subtitle && (
+                            <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
+                                {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
+                                <ContentText as="span">{subtitle}</ContentText>
+                            </div>
+                        )}
+                        <h1 className="hero-rich-title">{title}</h1>
+                        {body && <ContentText className="hero-rich-desc">{body}</ContentText>}
+                    </div>
+                    {items.length > 0 && (
+                        <div className="hero-rich-stats-row">
+                            {items.map((item, index) => (
+                                <div
+                                    className={`hero-stat-badge${warm ? ' is-vip' : ''}`}
+                                    key={`${item.label}-${index}`}
+                                >
+                                    <span className="stat-num">{item.label}</span>
+                                    <ContentText as="span" className="stat-lbl">
+                                        {item.description}
+                                    </ContentText>
+                                </div>
+                            ))}
                         </div>
                     )}
-                    <h1 className="hero-rich-title">{title}</h1>
-                    {body && <ContentText className="hero-rich-desc">{body}</ContentText>}
                 </div>
-                {items.length > 0 && (
-                    <div className="hero-rich-stats-row">
-                        {items.map((item, index) => (
-                            <div
-                                className={`hero-stat-badge${warm ? ' is-vip' : ''}`}
-                                key={`${item.label}-${index}`}
-                            >
-                                <span className="stat-num">{item.label}</span>
-                                <ContentText as="span" className="stat-lbl">
-                                    {item.description}
-                                </ContentText>
-                            </div>
-                        ))}
-                    </div>
-                )}
                 {ctaLabel && content.targetType !== 'NONE' && (
                     <button
                         type="button"
                         className={`hero-rich-cta-btn ${warm ? 'is-vip-btn' : ''}`}
                         onClick={onOpen}
                     >
-                        {ctaLabel}
+                        <span className="hero-rich-cta-label">{ctaLabel}</span>
                         <ChevronRight aria-hidden="true" />
                     </button>
                 )}

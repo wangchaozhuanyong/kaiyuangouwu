@@ -204,9 +204,21 @@
         text-align: center;
     }
 
-    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy .home-trust-item {
-        flex-direction: column;
+    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy {
+        display: flex;
+        flex-wrap: nowrap;
         justify-content: flex-start;
+        gap: var(--space-12);
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+    }
+
+    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy .home-trust-item {
+        flex: 0 0 auto;
+        flex-direction: row;
+        justify-content: flex-start;
+        white-space: nowrap;
     }
 }
 @media (max-width: 359px) {

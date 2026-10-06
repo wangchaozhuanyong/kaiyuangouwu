@@ -12,6 +12,118 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
+    it('uses actual wide artwork dimensions without stale source or tone-cache shape state', async () => {
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockImplementation(function (
+            this: HTMLImageElement,
+        ) {
+            return this.dataset.ready === 'true';
+        });
+        vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockImplementation(function (
+            this: HTMLImageElement,
+        ) {
+            return Number(this.dataset.width) || 0;
+        });
+        vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockImplementation(function (
+            this: HTMLImageElement,
+        ) {
+            return Number(this.dataset.height) || 0;
+        });
+        const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const content: HeroSceneData = {
+            imageUrl: '/wide-original.jpg',
+            title: '主标题保留',
+            subtitle: '品牌说明保留',
+            body: '较长的商品说明全部保留并可滚动查看',
+            ctaLabel: 'Browse the complete product collection',
+            targetType: 'PAGE',
+            items: [{ label: '权益', description: '统计说明保留' }],
+        };
+        const render = (ready: boolean, width: number, height: number) =>
+            act(async () => {
+                root.render(
+                    <HeroScene
+                        content={{ ...content }}
+                        image={
+                            <img
+                                key={content.imageUrl}
+                                src={content.imageUrl ?? ''}
+                                alt="Artwork"
+                                data-ready={ready}
+                                data-width={width}
+                                data-height={height}
+                            />
+                        }
+                        imageLabel="打开内容"
+                        mediaOverlay={<div className="test-trust">原服务栏</div>}
+                    />,
+                );
+                await Promise.resolve();
+            });
+        const artwork = () => {
+            const image = host.querySelector<HTMLImageElement>('.hero-rich-image-link img');
+            if (!image) throw new Error('Missing current artwork');
+            return image;
+        };
+        const wide = () => host.firstElementChild?.classList.contains('has-wide-artwork');
+        const load = (image: HTMLImageElement) =>
+            act(async () => {
+                image.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+        try {
+            await render(true, 2200, 715);
+            expect(wide()).toBe(true);
+            const region = host.querySelector<HTMLElement>('.hero-rich-copy-region');
+            if (!region) throw new Error('Missing copy scroll region');
+            for (const text of [content.title, content.subtitle, content.body, '权益', '统计说明保留']) {
+                expect(region.textContent).toContain(text);
+            }
+            expect(region.contains(host.querySelector('.hero-rich-cta-btn'))).toBe(false);
+            expect(host.querySelector('.hero-rich-cta-label')?.textContent).toBe(content.ctaLabel);
+            expect(host.querySelector('.hero-rich-cta-btn')?.textContent).toBe(content.ctaLabel);
+            expect(region.contains(host.querySelector('.test-trust'))).toBe(false);
+            expect(region.getAttribute('tabindex')).toBe('0');
+            const oldImage = artwork();
+            content.imageUrl = '/phone-original.jpg';
+            await render(false, 0, 0);
+            expect(wide()).toBe(false);
+            await load(oldImage);
+            expect(wide()).toBe(false);
+            const image = artwork();
+            image.dataset.ready = 'true';
+            image.dataset.width = '1200';
+            image.dataset.height = '900';
+            await load(image);
+            expect(wide()).toBe(false);
+            expect(canvas).toHaveBeenCalledTimes(2);
+            // The current source is already tone-cached; a later real ratio must still update composition.
+            image.dataset.width = '2200';
+            image.dataset.height = '715';
+            await load(image);
+            expect(wide()).toBe(true);
+            image.dataset.height = '1100';
+            await load(image);
+            expect(wide()).toBe(false);
+            expect(canvas).toHaveBeenCalledTimes(2);
+        } finally {
+            await act(async () => {
+                root.unmount();
+                await Promise.resolve();
+            });
+            host.remove();
+        }
+    });
+
     it('samples cached and newly loaded artwork without letting overlay icons or old images set copy colors', async () => {
         vi.stubGlobal(
             'ResizeObserver',

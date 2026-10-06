@@ -1057,6 +1057,7 @@ export function HomePage() {
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                 style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
+                tabIndex={!desktop && trustBarHasLongCopy ? 0 : undefined}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
@@ -1224,7 +1225,7 @@ export function HomePage() {
                                                 !desktop &&
                                                 event.target instanceof HTMLElement &&
                                                 event.target.matches(
-                                                    '.hero-rich-copy-surface, .hero-rich-stats-row',
+                                                    '.hero-rich-copy-region, .hero-rich-copy-surface, .hero-rich-stats-row, .home-trust-bar',
                                                 )
                                             )
                                                 setHeroAutoplayStopped(true);

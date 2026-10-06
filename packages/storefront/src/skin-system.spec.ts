@@ -1055,6 +1055,7 @@ describe('storefront skin system', () => {
         );
         expect(source).toMatch(/\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*max-height:\s*none;/);
         expect(source).not.toContain("data-copy-layout='below'");
+        expect(source).toMatch(/\.hero-rich-copy-region\s*\{[^}]*display:\s*contents;/);
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
@@ -1071,6 +1072,19 @@ describe('storefront skin system', () => {
         expect(mobileSource).toMatch(/\.hero-rich-copy-surface[^}]*overflow-y:\s*auto;/);
         expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/);
         expect(mobileSource).toMatch(/\.hero-rich-cta-btn[^}]*flex-shrink:\s*0;/);
+        expect(mobileSource).toMatch(
+            /\.has-wide-artwork \.hero-rich-content\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+        );
+        expect(mobileSource).toMatch(
+            /\.has-wide-artwork \.hero-rich-copy-region\s*\{[^}]*display:\s*block;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/,
+        );
+        expect(mobileSource).toMatch(/\.has-wide-artwork \.hero-rich-title\s*\{[^}]*order:\s*-1;/);
+        expect(mobileSource).toMatch(
+            /\.has-wide-artwork :is\(\.hero-rich-copy-surface, \.hero-rich-stats-row\)\s*\{[^}]*overflow:\s*visible;/,
+        );
+        expect(mobileSource).toMatch(
+            /\.has-wide-artwork \.hero-rich-cta-btn\s*\{[^}]*grid-column:\s*2;[^}]*min-height:\s*var\(--experience-control-min, 44px\);/,
+        );
         expect(mobileSource).not.toMatch(
             /#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i,
         );
