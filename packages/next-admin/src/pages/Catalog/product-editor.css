@@ -1,0 +1,253 @@
+/* Shared Admin tokens, with page-local geometry for the product editing workflow. */
+.product-editor-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.product-editor-title-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.product-editor-body-content {
+    padding: 0 28px 28px;
+}
+.product-editor-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    gap: 24px;
+    min-height: 64px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--admin-border-subtle);
+    background: var(--admin-surface-subtle);
+}
+.product-editor-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 16px 2px;
+    border-radius: 0;
+    color: var(--admin-text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+}
+.product-editor-tab[aria-selected='true'] {
+    color: var(--admin-focus);
+    font-weight: 700;
+}
+.product-editor-tab[aria-selected='true']::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--admin-focus);
+    content: '';
+}
+.product-editor-tab-number {
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.7;
+}
+.product-editor-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+    gap: 24px;
+}
+.product-editor-main {
+    min-width: 0;
+}
+.product-editor-tab-panel:not([hidden]) {
+    display: grid;
+    gap: 20px;
+}
+.product-editor-tab-panel[hidden] {
+    display: none;
+}
+.product-editor-panel {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--admin-border-subtle);
+    border-radius: var(--admin-radius-surface);
+    background: var(--admin-surface);
+}
+.product-editor-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.product-editor-description-field .admin-field-label {
+    display: none;
+}
+.product-editor-description {
+    min-height: 330px;
+    line-height: 1.9;
+    font-size: 13px;
+    resize: vertical;
+}
+.product-editor-description-reader {
+    min-height: 330px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.9;
+    font-size: 13px;
+    color: var(--admin-text-secondary);
+}
+.product-editor-view-button {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--admin-text-muted);
+}
+.product-editor-view-button[aria-pressed='true'] {
+    border-radius: var(--admin-radius-control);
+    background: var(--admin-surface-muted);
+    color: var(--admin-text);
+}
+.product-editor-gallery-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 10px;
+    background: var(--admin-surface-subtle);
+    border-radius: var(--admin-radius-control);
+}
+.product-editor-media-upload > .admin-button {
+    width: 100%;
+    justify-content: center;
+    border: 1px solid var(--admin-border-strong);
+    background: var(--admin-surface);
+    color: var(--admin-text-secondary);
+    font-weight: 500;
+}
+.product-editor-enabled-switch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+}
+.product-editor-switch-track {
+    display: block;
+    width: 34px;
+    height: 20px;
+    padding: 3px;
+    border-radius: 20px;
+    background: var(--admin-border-strong);
+    transition: background-color 0.15s ease;
+}
+.product-editor-switch-track > span {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--admin-surface);
+    transition: transform 0.15s ease;
+}
+.product-editor-enabled-switch[data-enabled='true'] .product-editor-switch-track {
+    background: var(--admin-focus);
+}
+.product-editor-enabled-switch[data-enabled='true'] .product-editor-switch-track > span {
+    transform: translateX(14px);
+}
+.product-editor-independent-fields > div {
+    display: grid;
+    gap: 20px;
+}
+.product-editor-independent-fields > div > section {
+    min-width: 0;
+    margin: 0;
+    padding: 20px;
+    border: 1px solid var(--admin-border-subtle);
+    border-radius: var(--admin-radius-surface);
+    background: var(--admin-surface);
+}
+.product-editor-draft-label {
+    white-space: nowrap;
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+    .product-editor-columns {
+        grid-template-columns: minmax(0, 1fr) 270px;
+        gap: 16px;
+    }
+    .product-editor-body-content {
+        padding-right: 20px;
+        padding-left: 20px;
+    }
+    .product-editor-title {
+        gap: 8px;
+    }
+    .product-editor-draft-label {
+        display: none;
+    }
+}
+@media (max-width: 767px) {
+    .product-editor-page > header {
+        padding: 12px;
+        gap: 8px;
+    }
+    .product-editor-title {
+        flex: 1;
+        gap: 8px;
+    }
+    .product-editor-title h1 {
+        font-size: 16px;
+    }
+    .product-editor-title-name {
+        font-size: 12px;
+    }
+    .product-editor-title > [data-feature-help-trigger],
+    .product-editor-title-status {
+        display: none;
+    }
+    .product-editor-body-content {
+        padding: 0 12px 20px;
+    }
+    .product-editor-tabs {
+        gap: 0;
+        justify-content: space-between;
+        min-height: 52px;
+        margin-bottom: 16px;
+    }
+    .product-editor-tab {
+        gap: 4px;
+        padding: 12px 0;
+        font-size: 12px;
+    }
+    .product-editor-tab-number {
+        display: none;
+    }
+    .product-editor-columns {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+    }
+    .product-editor-panel {
+        padding: 16px;
+    }
+    .product-editor-panel-heading {
+        margin-bottom: 16px;
+    }
+    .product-editor-featured-image {
+        max-width: 230px;
+    }
+    .product-editor-draft-label {
+        display: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .product-editor-switch-track,
+    .product-editor-switch-track > span {
+        transition: none;
+    }
+}

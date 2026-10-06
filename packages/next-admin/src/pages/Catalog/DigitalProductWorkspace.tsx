@@ -1,5 +1,5 @@
 import { print } from 'graphql';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { client, uploadAdminFile } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -28,10 +28,12 @@ interface MigrationPreview {
 }
 
 export function DigitalProductWorkspace() {
+    const fieldId = useId();
     const {
         variants,
         setVariants,
         handleVariantFieldChange,
+        formErrors,
         saving,
         refetchWorkspace,
         handleSave,
@@ -285,6 +287,12 @@ export function DigitalProductWorkspace() {
                                         {' '}
                                         <AdminInput
                                             aria-label={`规格 ${index + 1} 可售份数`}
+                                            aria-invalid={Boolean(formErrors.variants?.[index]?.stock)}
+                                            aria-describedby={
+                                                formErrors.variants?.[index]?.stock
+                                                    ? `${fieldId}-${index}-stock-error`
+                                                    : undefined
+                                            }
                                             type="number"
                                             min="0"
                                             step="1"
@@ -299,6 +307,15 @@ export function DigitalProductWorkspace() {
                                             }
                                             className={fieldClass}
                                         />
+                                        {formErrors.variants?.[index]?.stock && (
+                                            <span
+                                                id={`${fieldId}-${index}-stock-error`}
+                                                role="alert"
+                                                className="block text-rose-600"
+                                            >
+                                                {formErrors.variants[index].stock}
+                                            </span>
+                                        )}
                                     </AdminField>
                                 )}
                                 {variant.digitalDeliveryMode === 'file_download' && (

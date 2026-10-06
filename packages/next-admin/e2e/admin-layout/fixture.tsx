@@ -56,16 +56,30 @@ import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessS
 import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
 import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
+import type { CollectionFilterValue } from '../../src/utils/product-collection-assignment';
 import { FieldLayoutFixture } from './field-layout-fixture';
 import { FixtureAuditTheme } from './fixture-audit-theme';
 import { PerformanceFixture } from './performance-fixture';
+import {
+    productEditorDesignCategories,
+    productEditorDesignContent,
+    productEditorDesignCustomFields,
+    productEditorDesignFacets,
+} from './product-editor-design-data';
 
 // Synthetic local data only. No HTTP link. Mutations are blocked unless an explicit mockWrites flag enables the small local-only whitelist below.
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
 const layoutAudit = params.has('layoutAudit');
+const productEditorDesign = params.has('productEditorDesign');
+const digitalFixture = params.has('digital') || (productEditorDesign && !params.has('physical'));
+const productFixtureName = productEditorDesign ? productEditorDesignContent.name : '布局验收示例商品';
+const productFixtureSlug = productEditorDesign ? productEditorDesignContent.slug : 'layout-demo';
+const productFixtureDescription = productEditorDesign
+    ? productEditorDesignContent.description
+    : '<p>商品简介和主图应当优先展示。</p>';
 const authFixture = view === 'login' || view === 'initial-password';
-const mockWritesEnabled = params.has('mockWrites') && !layoutAudit && !authFixture;
+const mockWritesEnabled = params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign;
 // Platform-only routes use the real shell scope guard; opt in with &platform.
 const platformFixture = params.has('platform');
 const alternateScopeParams = new URLSearchParams(params);
@@ -103,6 +117,7 @@ const viewLabels: Record<string, string> = {
 if (!params.has('light')) document.documentElement.classList.add('dark');
 const now = '2026-09-09T10:00:00Z';
 const mutationReceipts: Array<{ field: string }> = [];
+const blockedMutations: Array<{ field: string }> = [];
 const fixturePermissions = params.has('restricted')
     ? ['ReadOrder']
     : params.get('role') === 'store-admin'
@@ -135,114 +150,136 @@ const fixturePermissions = params.has('restricted')
         : ['SuperAdmin'];
 const channel = {
     id: 'layout-channel',
-    code: platformFixture ? '__default_channel__' : '布局验收店铺',
+    code: platformFixture ? '__default_channel__' : productEditorDesign ? 'MOYAO AI｜模钥' : '布局验收店铺',
     customFields: {
-        storefrontNameZh: platformFixture ? '布局验收平台' : '布局验收店铺',
+        storefrontNameZh: platformFixture
+            ? '布局验收平台'
+            : productEditorDesign
+              ? 'MOYAO AI｜模钥'
+              : '布局验收店铺',
         storefrontNameEn: platformFixture ? 'Layout platform' : 'Layout demo',
     },
     token: 'synthetic-layout-channel',
     defaultLanguageCode: 'zh_Hans',
     availableLanguageCodes: ['zh_Hans', 'en'],
-    currencyCode: 'MYR',
-    defaultCurrencyCode: 'MYR',
-    availableCurrencyCodes: ['MYR', 'CNY'],
+    currencyCode: productEditorDesign ? 'CNY' : 'MYR',
+    defaultCurrencyCode: productEditorDesign ? 'CNY' : 'MYR',
+    availableCurrencyCodes: productEditorDesign ? ['CNY', 'MYR'] : ['MYR', 'CNY'],
 };
 const empty = { items: [], totalItems: 0 };
 // Existing repository artwork is served locally; audit data never changes a real asset binding.
-const auditImageUrl = new URL(
-    '../../../storefront/public/storefront/categories/category-workstations.jpg',
-    import.meta.url,
-).href;
+const auditImageUrl = productEditorDesign
+    ? productEditorDesignContent.imageUrl
+    : new URL('../../../storefront/public/storefront/categories/category-workstations.jpg', import.meta.url)
+          .href;
 const auditAsset = {
     __typename: 'Asset',
-    id: 'layout-audit-asset',
-    name: '本地布局验收图片',
+    id: productEditorDesign ? '1048' : 'layout-audit-asset',
+    name: productEditorDesign ? 'moyao-product-codex-20261002-v1.png' : '本地布局验收图片',
     preview: auditImageUrl,
     source: auditImageUrl,
     type: 'IMAGE',
-    mimeType: 'image/jpeg',
+    mimeType: productEditorDesign ? 'image/png' : 'image/jpeg',
     createdAt: now,
     updatedAt: now,
 };
-const auditFacets = [
-    ['品牌', 'brand', ['示例自有品牌', '精选系列', '专业系列', '日常系列']],
-    ['材质', 'material', ['实木', '金属', '织物', '环保复合材料']],
-    ['颜色', 'color', ['暖白', '原木', '石墨黑', '鼠尾草绿']],
-    ['适用空间', 'room', ['客厅', '卧室', '书房与家庭工作区', '小户型多功能空间']],
-    ['商品特点', 'features', ['可调节', '便于收纳', '易清洁', '适合长时间使用']],
-].map(([name, code, values], index) => ({
-    __typename: 'Facet',
-    id: `layout-facet-${index}`,
-    name: name as string,
-    code: code as string,
-    isPrivate: false,
-    translations: [{ languageCode: 'zh_Hans', name: name as string }],
-    values: (values as string[]).map((value, valueIndex) => ({
-        __typename: 'FacetValue',
-        id: `layout-facet-${index}-${valueIndex}`,
-        name: value,
-        code: `${code}-${valueIndex}`,
-        facet: { id: `layout-facet-${index}`, name, code },
-        translations: [{ languageCode: 'zh_Hans', name: value }],
-    })),
-}));
-const auditCustomFieldEntities: EntityCustomFieldsDefinition[] = [
-    {
-        entityName: 'Product',
-        customFields: [
-            ['auditBrand', '品牌'],
-            ['auditOrigin', '产地'],
-            ['auditMaterial', '主要材质'],
-            ['auditWarranty', '保修期限'],
-            ['auditCare', '保养说明'],
-        ].map(([name, label]) => ({
-            __typename: 'StringCustomFieldConfig',
-            name,
-            type: 'string',
-            list: false,
-            nullable: true,
-            label: [{ languageCode: 'zh_Hans', value: label }],
-        })),
-    },
-    {
-        entityName: 'ProductVariant',
-        customFields: [
-            ...[
-                ['auditSpecification', '规格'],
-                ['auditServicePeriod', '服务周期'],
-                ['auditDeliveryMethod', '交付方式'],
-            ].map(([name, label]) => ({
-                __typename: 'StringCustomFieldConfig',
-                name,
-                type: 'string',
-                list: false,
-                nullable: true,
-                label: [{ languageCode: 'zh_Hans', value: label }],
-            })),
-            {
-                __typename: 'TextCustomFieldConfig',
-                name: 'deliveryNote',
-                type: 'text',
-                list: false,
-                nullable: true,
-                label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-            },
-        ],
-    },
-];
+const auditFacets = productEditorDesign
+    ? productEditorDesignFacets
+    : [
+          ['品牌', 'brand', ['示例自有品牌', '精选系列', '专业系列', '日常系列']],
+          ['材质', 'material', ['实木', '金属', '织物', '环保复合材料']],
+          ['颜色', 'color', ['暖白', '原木', '石墨黑', '鼠尾草绿']],
+          ['适用空间', 'room', ['客厅', '卧室', '书房与家庭工作区', '小户型多功能空间']],
+          ['商品特点', 'features', ['可调节', '便于收纳', '易清洁', '适合长时间使用']],
+      ].map(([name, code, values], index) => ({
+          __typename: 'Facet',
+          id: `layout-facet-${index}`,
+          name: name as string,
+          code: code as string,
+          isPrivate: false,
+          translations: [{ languageCode: 'zh_Hans', name: name as string }],
+          values: (values as string[]).map((value, valueIndex) => ({
+              __typename: 'FacetValue',
+              id: `layout-facet-${index}-${valueIndex}`,
+              name: value,
+              code: `${code}-${valueIndex}`,
+              facet: { id: `layout-facet-${index}`, name, code },
+              translations: [{ languageCode: 'zh_Hans', name: value }],
+          })),
+      }));
+const auditCustomFieldEntities: EntityCustomFieldsDefinition[] = productEditorDesign
+    ? productEditorDesignCustomFields
+    : [
+          {
+              entityName: 'Product',
+              customFields: [
+                  ['auditBrand', '品牌'],
+                  ['auditOrigin', '产地'],
+                  ['auditMaterial', '主要材质'],
+                  ['auditWarranty', '保修期限'],
+                  ['auditCare', '保养说明'],
+              ].map(([name, label]) => ({
+                  __typename: 'StringCustomFieldConfig',
+                  name,
+                  type: 'string',
+                  list: false,
+                  nullable: true,
+                  label: [{ languageCode: 'zh_Hans', value: label }],
+              })),
+          },
+          {
+              entityName: 'ProductVariant',
+              customFields: [
+                  ...[
+                      ['auditSpecification', '规格'],
+                      ['auditServicePeriod', '服务周期'],
+                      ['auditDeliveryMethod', '交付方式'],
+                  ].map(([name, label]) => ({
+                      __typename: 'StringCustomFieldConfig',
+                      name,
+                      type: 'string',
+                      list: false,
+                      nullable: true,
+                      label: [{ languageCode: 'zh_Hans', value: label }],
+                  })),
+                  {
+                      __typename: 'TextCustomFieldConfig',
+                      name: 'deliveryNote',
+                      type: 'text',
+                      list: false,
+                      nullable: true,
+                      label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                  },
+              ],
+          },
+      ];
 const auditVariantCount = Math.min(12, Math.max(1, Number(params.get('auditVariants')) || 4));
 const variants = Array.from(
-    { length: layoutAudit ? auditVariantCount : params.has('multi') ? 3 : 1 },
+    {
+        length: productEditorDesign
+            ? params.has('multi')
+                ? 3
+                : 1
+            : layoutAudit
+              ? auditVariantCount
+              : params.has('multi')
+                ? 3
+                : 1,
+    },
     (_, i) => ({
         __typename: 'ProductVariant',
         id: `layout-variant-${i}`,
-        name: `示例商品 ${i + 1}`,
-        sku: `LAYOUT-SKU-${i + 1}`,
+        name: productEditorDesign
+            ? `${productEditorDesignContent.variantName}${i ? ` · 本地样本 ${i + 1}` : ''}`
+            : `示例商品 ${i + 1}`,
+        sku: productEditorDesign
+            ? `${productEditorDesignContent.sku}${i ? `-SAMPLE-${i + 1}` : ''}`
+            : `LAYOUT-SKU-${i + 1}`,
         enabled: true,
         createdAt: now,
         updatedAt: now,
-        price: 5000,
-        currencyCode: 'MYR',
+        price: productEditorDesign ? 68000 : 5000,
+        currencyCode: productEditorDesign ? 'CNY' : 'MYR',
         stockOnHand: 30,
         stockAllocated: 2,
         stockLevel: 'IN_STOCK',
@@ -251,18 +288,28 @@ const variants = Array.from(
         options: [],
         facetValues: [],
         stockLevels: [],
-        prices: [{ currencyCode: 'MYR', price: 5000 }],
-        translations: [{ languageCode: 'zh_Hans', name: `示例商品 ${i + 1}` }],
+        prices: [
+            { currencyCode: productEditorDesign ? 'CNY' : 'MYR', price: productEditorDesign ? 68000 : 5000 },
+        ],
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                name: productEditorDesign
+                    ? `${productEditorDesignContent.variantName}${i ? ` · 本地样本 ${i + 1}` : ''}`
+                    : `示例商品 ${i + 1}`,
+            },
+        ],
         customFields: {
-            fulfillmentType: params.has('digital') ? 'digital' : 'physical',
+            fulfillmentType: digitalFixture ? 'digital' : 'physical',
             digitalDeliveryMode: 'MANUAL',
             digitalStockPolicy: 'FINITE',
             deliveryNote: '示例交付说明',
+            ...(productEditorDesign ? { specification: '1个月' } : {}),
             ...(layoutAudit
                 ? {
                       auditSpecification: `标准规格 ${i + 1}`,
                       auditServicePeriod: '12 个月（本地测试）',
-                      auditDeliveryMethod: params.has('digital') ? '人工数字交付' : '仓库发货',
+                      auditDeliveryMethod: digitalFixture ? '人工数字交付' : '仓库发货',
                   }
                 : {}),
         },
@@ -271,16 +318,17 @@ const variants = Array.from(
 const product = {
     __typename: 'Product',
     id: 'layout-product',
-    name: '布局验收示例商品',
-    slug: 'layout-demo',
-    description: '<p>商品简介和主图应当优先展示。</p>',
+    name: productFixtureName,
+    slug: productFixtureSlug,
+    description: productFixtureDescription,
     enabled: true,
-    createdAt: now,
+    createdAt: productEditorDesign ? '2026-10-02T03:28:00Z' : now,
     updatedAt: now,
     customFields: {
-        fulfillmentType: params.has('digital') ? 'digital' : 'physical',
+        fulfillmentType: digitalFixture ? 'digital' : 'physical',
         refundPolicy: 'MERCHANT_REVIEW',
-        manualDeliverySlaMinutes: 1440,
+        manualDeliverySlaMinutes: productEditorDesign ? 30 : 1440,
+        ...(productEditorDesign ? { sourceCreatedAt: null, pricingMode: 'FIXED' } : {}),
         ...(layoutAudit
             ? {
                   auditBrand: '本地示例品牌',
@@ -291,21 +339,25 @@ const product = {
               }
             : {}),
     },
-    assets: layoutAudit ? [auditAsset] : [],
-    featuredAsset: layoutAudit && !params.has('noImage') ? auditAsset : null,
+    assets: layoutAudit || productEditorDesign ? [auditAsset] : [],
+    featuredAsset: (layoutAudit || productEditorDesign) && !params.has('noImage') ? auditAsset : null,
     variants,
     translations: [
         {
             id: 'translation-1',
             languageCode: 'zh_Hans',
-            name: '布局验收示例商品',
-            slug: 'layout-demo',
-            description: '<p>商品简介和主图应当优先展示。</p>',
+            name: productFixtureName,
+            slug: productFixtureSlug,
+            description: productFixtureDescription,
         },
     ],
     optionGroups: [],
-    facetValues: layoutAudit ? auditFacets.map(facet => facet.values[0]) : [],
-    collections: [],
+    facetValues: productEditorDesign
+        ? auditFacets.slice(3).map(facet => facet.values[1])
+        : layoutAudit
+          ? auditFacets.map(facet => facet.values[0])
+          : [],
+    collections: [] as Array<{ id: string; name: string; slug: string; filters: CollectionFilterValue[] }>,
     channels: [channel],
 };
 const summary = {
@@ -394,27 +446,48 @@ const payment = {
     transactionId: 'synthetic-transaction',
     createdAt: now,
 };
-const collections = Array.from({ length: 8 }, (_, i) => ({
-    __typename: 'Collection',
-    id: `collection-${i}`,
-    name: `示例分类 ${i + 1}`,
-    slug: `demo-${i}`,
-    position: i,
-    isPrivate: false,
-    createdAt: now,
-    updatedAt: now,
-    parentId: 'root',
-    parent: { id: 'root', name: '根分类' },
-    breadcrumbs: [],
-    children: [],
-    filters: [],
-    translations: [
-        { languageCode: 'zh_Hans', name: `示例分类 ${i + 1}`, slug: `demo-${i}`, description: '' },
-    ],
-    description: '',
-    featuredAsset: null,
-    productVariants: empty,
-}));
+const collections = Array.from(
+    { length: productEditorDesign ? productEditorDesignCategories.length : 8 },
+    (_, i) => ({
+        __typename: 'Collection',
+        id: `collection-${i}`,
+        name: productEditorDesign ? productEditorDesignCategories[i][0] : `示例分类 ${i + 1}`,
+        slug: productEditorDesign ? productEditorDesignCategories[i][1] : `demo-${i}`,
+        position: i,
+        isPrivate: false,
+        createdAt: now,
+        updatedAt: now,
+        parentId: 'root',
+        parent: { id: 'root', name: '根分类' },
+        breadcrumbs: [],
+        children: [],
+        // The editor restores explicit membership from the same rule used by real collections.
+        filters:
+            productEditorDesign && i === 0
+                ? [
+                      {
+                          code: 'product-id-filter',
+                          args: [
+                              { name: 'productIds', value: JSON.stringify([product.id]) },
+                              { name: 'combineWithAnd', value: 'true' },
+                          ],
+                      },
+                  ]
+                : [],
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                name: productEditorDesign ? productEditorDesignCategories[i][0] : `示例分类 ${i + 1}`,
+                slug: productEditorDesign ? productEditorDesignCategories[i][1] : `demo-${i}`,
+                description: '',
+            },
+        ],
+        description: '',
+        featuredAsset: null,
+        productVariants: empty,
+    }),
+);
+if (productEditorDesign) product.collections.push(collections[0]);
 const unconfiguredSetup = {
     myStoreCurrencyConfiguration: {
         // Keep the typename stable between direct and fragment-based selections.
@@ -678,7 +751,9 @@ const data: Record<string, unknown> = {
     fulfillmentHandlers: [],
     globalSettings: {
         availableLanguages: ['zh_Hans', 'en'],
-        serverConfig: { entityCustomFields: layoutAudit ? auditCustomFieldEntities : [] },
+        serverConfig: {
+            entityCustomFields: layoutAudit || productEditorDesign ? auditCustomFieldEntities : [],
+        },
         trackInventory: true,
         outOfStockThreshold: 0,
     },
@@ -934,7 +1009,7 @@ const data: Record<string, unknown> = {
     channels: { items: [channel], totalItems: 1 },
     myStoreCommerceMode: { mode: 'HYBRID', conflicts: [] },
     product,
-    productTypeChangeAllowed: !params.has('locked'),
+    productTypeChangeAllowed: !params.has('locked') && (!productEditorDesign || params.has('unlocked')),
     digitalProductWorkspace: {
         productId: product.id,
         variants: variants.map(variant => ({
@@ -943,24 +1018,27 @@ const data: Record<string, unknown> = {
             deliveryMode: 'manual_service',
             stockPolicy: 'unlimited',
             availableQuantity: null,
-            migrationRequired: params.has('migration'),
-            purchaseCostMicrounits: 25000,
+            migrationRequired:
+                params.has('migration') ||
+                (productEditorDesign && digitalFixture && !params.has('currentInventory')),
+            purchaseCostMicrounits: productEditorDesign ? 632000 : 25000,
             supplier: null,
             fileVersion: null,
         })),
     },
-    facets: layoutAudit ? { items: auditFacets, totalItems: auditFacets.length } : empty,
-    assets: layoutAudit ? { items: [auditAsset], totalItems: 1 } : empty,
+    facets:
+        layoutAudit || productEditorDesign ? { items: auditFacets, totalItems: auditFacets.length } : empty,
+    assets: layoutAudit || productEditorDesign ? { items: [auditAsset], totalItems: 1 } : empty,
     productOptionGroups: empty,
     productVariants: empty,
     collections: { items: collections, totalItems: collections.length },
-    selectedCollections: empty,
+    selectedCollections: productEditorDesign ? { items: [collections[0]], totalItems: 1 } : empty,
     catalogSuppliers: {
         items: Array.from({ length: params.has('empty') ? 0 : params.has('multi') ? 3 : 1 }, (_, i) => ({
             id: `supplier-${i}`,
             name: `[QA] 模拟采购供货商 ${i + 1}`,
             code: `QA-SUPPLIER-${i + 1}`,
-            enabled: view === 'suppliers' || view === 'purchases',
+            enabled: view === 'suppliers' || view === 'purchases' || productEditorDesign,
             contactName: null,
             phone: null,
             email: null,
@@ -977,18 +1055,18 @@ const data: Record<string, unknown> = {
     catalogProductWorkspace: {
         productId: product.id,
         channelId: channel.id,
-        currencyCode: 'MYR',
+        currencyCode: productEditorDesign ? 'CNY' : 'MYR',
         stockLocations: [{ id: 'stock-1', name: '示例仓库' }],
         variants: variants.map(v => ({
             ...v,
             barcode: '',
-            specification: '',
+            specification: productEditorDesign ? '1个月' : '',
             saleUnit: '件',
             purchaseUnit: '件',
             packageQuantity: 1,
             shelfLifeDays: 365,
-            sellingPrice: 5000,
-            purchaseCostMicrounits: 25000,
+            sellingPrice: productEditorDesign ? 68000 : 5000,
+            purchaseCostMicrounits: productEditorDesign ? 632000 : 25000,
             grossProfitMicrounits: 25000,
             margin: 0.5,
             stockLevels: [
@@ -1181,7 +1259,7 @@ function project(
     return result;
 }
 const layoutQueries: { name: string; variables: unknown }[] = [];
-Object.assign(window, { layoutQueries, mutationReceipts });
+Object.assign(window, { layoutQueries, mutationReceipts, blockedMutations });
 const client = new ApolloClient({
     cache: createAdminCache(),
     link: new ApolloLink(
@@ -1202,6 +1280,7 @@ const client = new ApolloClient({
                 if (definition.operation === 'mutation') {
                     const field = definition.selectionSet.selections.find(f => f.kind === Kind.FIELD);
                     if (!mockWritesEnabled || !field || field.kind !== Kind.FIELD) {
+                        if (field?.kind === Kind.FIELD) blockedMutations.push({ field: field.name.value });
                         observer.error(
                             new Error(
                                 '只读预览禁止保存，不会写入后台。处理方法：继续检查输入和键盘，无需重试保存；填写内容仍保留。',
@@ -1410,21 +1489,37 @@ const client = new ApolloClient({
                         catalogProductWorkspace: {
                             ...(data.catalogProductWorkspace as object),
                             productId,
-                            variants: layoutAudit
-                                ? (
-                                      data.catalogProductWorkspace as { variants: Array<{ id: string }> }
-                                  ).variants.map(variant => ({
-                                      ...variant,
-                                      id: `${productId}-${variant.id}`,
-                                  }))
-                                : [],
+                            variants:
+                                layoutAudit || productEditorDesign
+                                    ? (
+                                          data.catalogProductWorkspace as { variants: Array<{ id: string }> }
+                                      ).variants.map(variant => ({
+                                          ...variant,
+                                          id: `${productId}-${variant.id}`,
+                                      }))
+                                    : [],
                         },
+                        ...(productEditorDesign
+                            ? {
+                                  digitalProductWorkspace: {
+                                      ...(data.digitalProductWorkspace as object),
+                                      productId,
+                                      variants: (
+                                          data.digitalProductWorkspace as { variants: Array<{ id: string }> }
+                                      ).variants.map(variant => ({
+                                          ...variant,
+                                          id: `${productId}-${variant.id}`,
+                                      })),
+                                  },
+                              }
+                            : {}),
                         globalSettings: {
                             trackInventory: true,
                             outOfStockThreshold: 0,
                             availableLanguages: ['zh_Hans', 'en'],
                             serverConfig: {
-                                entityCustomFields: layoutAudit ? auditCustomFieldEntities : [],
+                                entityCustomFields:
+                                    layoutAudit || productEditorDesign ? auditCustomFieldEntities : [],
                             },
                         },
                         me: {
@@ -1959,22 +2054,23 @@ if (view === 'performance') {
                     <CustomFieldsContext.Provider
                         value={{
                             availableLanguages: ['zh_Hans', 'en'],
-                            entities: layoutAudit
-                                ? auditCustomFieldEntities
-                                : [
-                                      {
-                                          entityName: 'ProductVariant',
-                                          customFields: [
-                                              {
-                                                  name: 'deliveryNote',
-                                                  type: 'text',
-                                                  list: false,
-                                                  nullable: true,
-                                                  label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-                                              },
-                                          ],
-                                      },
-                                  ],
+                            entities:
+                                layoutAudit || productEditorDesign
+                                    ? auditCustomFieldEntities
+                                    : [
+                                          {
+                                              entityName: 'ProductVariant',
+                                              customFields: [
+                                                  {
+                                                      name: 'deliveryNote',
+                                                      type: 'text',
+                                                      list: false,
+                                                      nullable: true,
+                                                      label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                                                  },
+                                              ],
+                                          },
+                                      ],
                         }}
                     >
                         <FeatureHelpProvider>

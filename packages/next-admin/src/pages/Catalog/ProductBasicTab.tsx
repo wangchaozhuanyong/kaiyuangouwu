@@ -1,13 +1,9 @@
-import { useMutation } from '@apollo/client/react';
 import { Image as ImageIcon, X } from 'lucide-react';
-import { useId } from 'react';
-import { AdminButton, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { useId, useState } from 'react';
+import { AdminButton, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
-import { COPY_PRODUCT_DOMAIN, PRODUCT_TYPE_CHANGE_ALLOWED } from '../../graphql/product-domains.graphql';
-import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
-import { toUserFacingError } from '../../utils/user-facing-error';
 import { useProductEditor } from './ProductEditorContext';
 
 export function ProductBasicTab() {
@@ -16,8 +12,6 @@ export function ProductBasicTab() {
         isCreateMode,
         description,
         setDescription,
-        fulfillmentType,
-        setFulfillmentType,
         selectedAssetIds,
         setSelectedAssetIds,
         setIsAssetPickerOpen,
@@ -27,36 +21,10 @@ export function ProductBasicTab() {
         formErrors,
         setFormErrors,
         productData,
-        fixedFulfillmentType,
-        navigate,
-        isDirty,
-        setErrorMessage,
         saving,
     } = useProductEditor();
-    const [copy, { loading: copying }] = useMutation<{ copyProductBasicsAsType: { id: string } }>(
-        COPY_PRODUCT_DOMAIN,
-    );
-    const typeEligibility = useQuery<{ productTypeChangeAllowed: boolean }>(PRODUCT_TYPE_CHANGE_ALLOWED, {
-        variables: { productId: productData?.product?.id },
-        skip: isCreateMode || !productData?.product,
-        fetchPolicy: 'network-only',
-    });
-    const typeLocked = !isCreateMode && typeEligibility.data?.productTypeChangeAllowed !== true;
-    const copyBasics = async () => {
-        if (!productData?.product) return;
-        try {
-            const result = await copy({
-                variables: {
-                    productId: productData.product.id,
-                    fulfillmentType: fulfillmentType === 'digital' ? 'physical' : 'digital',
-                },
-            });
-            if (!result.data) throw new Error('复制未返回结果');
-            navigate(`/catalog/products/${result.data.copyProductBasicsAsType.id}`);
-        } catch (error) {
-            setErrorMessage(toUserFacingError(error));
-        }
-    };
+    const [readingRequested, setReading] = useState(false);
+    const reading = readingRequested && !formErrors.description;
 
     const addUploadedGalleryAssets = (assets: UploadedImageAsset[]) => {
         setKnownAssets(current => ({
@@ -69,88 +37,75 @@ export function ProductBasicTab() {
     if (!isCreateMode && !productData?.product) return null;
 
     return (
-        <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                <AdminField
-                    className="w-full min-w-0 space-y-1.5 text-xs font-semibold text-slate-700 sm:w-80"
-                    label={
-                        <>
-                            <span className="flex min-h-6 items-center gap-2">
-                                商品类型 <FeatureHelpButton topic="catalog.product-editor" title="商品类型" />
-                            </span>
-                        </>
-                    }
-                >
-                    {' '}
-                    <AdminSelect
-                        aria-label="商品类型"
-                        value={fulfillmentType}
-                        disabled={saving || typeLocked || Boolean(fixedFulfillmentType)}
-                        onChange={event =>
-                            setFulfillmentType(event.target.value === 'physical' ? 'physical' : 'digital')
-                        }
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
-                    >
-                        <option value="digital">数字商品</option>
-                        <option value="physical">实物商品</option>
-                    </AdminSelect>
-                    {typeLocked && (
-                        <span className="block text-[11px] font-normal text-slate-500">
-                            {typeEligibility.loading
-                                ? '正在检查业务数据…'
-                                : typeEligibility.error
-                                  ? '类型检查失败，请刷新后重试'
-                                  : '已有业务数据，可复制基础资料创建另一类商品'}
-                        </span>
-                    )}
-                </AdminField>
-                {!isCreateMode && (
-                    <div className="flex min-h-9 items-center">
+        <div className="product-editor-basic min-w-0 space-y-5">
+            <section className="product-editor-panel">
+                <div className="product-editor-panel-heading">
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        商品描述 <span className="text-rose-500">*</span>
+                        <FeatureHelpButton topic="catalog.spu-core" title="商品描述" />
+                    </h2>
+                    <div className="flex items-center gap-1" aria-label="描述显示方式">
                         <AdminButton
                             type="button"
-                            disabled={saving || copying || isDirty}
-                            onClick={() => void copyBasics()}
-                            className="py-2.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                            aria-pressed={!reading}
+                            onClick={() => setReading(false)}
+                            className="product-editor-view-button"
                         >
-                            {copying
-                                ? '复制中…'
-                                : `复制基础资料创建${fulfillmentType === 'digital' ? '实物' : '数字'}商品`}
+                            编辑
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            aria-pressed={reading}
+                            onClick={() => setReading(true)}
+                            className="product-editor-view-button"
+                        >
+                            阅读
                         </AdminButton>
                     </div>
+                </div>
+                <div hidden={reading}>
+                    <AdminField
+                        layout="stacked"
+                        className="product-editor-description-field text-sm text-slate-700"
+                        label={<span className="sr-only">商品描述</span>}
+                    >
+                        {' '}
+                        <AdminTextArea
+                            rows={14}
+                            id={`${fieldId}-description`}
+                            aria-label="商品描述"
+                            value={description}
+                            disabled={saving}
+                            onChange={event => {
+                                setReading(false);
+                                setDescription(event.target.value);
+                                setFormErrors(previous => ({ ...previous, description: undefined }));
+                            }}
+                            aria-invalid={Boolean(formErrors.description)}
+                            aria-describedby={
+                                formErrors.description ? `${fieldId}-description-error` : undefined
+                            }
+                            className="product-editor-description w-full rounded-lg border border-slate-300 p-3 font-normal"
+                        />
+                        {formErrors.description && (
+                            <span
+                                id={`${fieldId}-description-error`}
+                                role="alert"
+                                className="block text-rose-600"
+                            >
+                                {formErrors.description}
+                            </span>
+                        )}
+                    </AdminField>
+                </div>
+                {reading && (
+                    <div className="product-editor-description-reader" aria-label="商品描述阅读">
+                        {description || '尚未填写商品描述'}
+                    </div>
                 )}
-            </div>
-            <AdminField
-                layout="stacked"
-                className="block space-y-1.5 text-xs font-semibold text-slate-700"
-                label={
-                    <>
-                        <span className="flex min-h-6 items-center gap-2">
-                            商品描述 <span className="text-rose-500">*</span>
-                            <FeatureHelpButton topic="catalog.spu-core" title="商品描述" />
-                        </span>
-                    </>
-                }
-            >
-                {' '}
-                <AdminTextArea
-                    rows={4}
-                    id={`${fieldId}-description`}
-                    aria-label="商品描述"
-                    value={description}
-                    disabled={saving}
-                    onChange={event => {
-                        setDescription(event.target.value);
-                        setFormErrors(previous => ({ ...previous, description: undefined }));
-                    }}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 font-normal"
-                />
-                {formErrors.description && (
-                    <span role="alert" className="block text-rose-600">
-                        {formErrors.description}
-                    </span>
-                )}
-            </AdminField>
-            <section className="border-t border-slate-100 pt-3">
+                <p className="mt-2 text-right text-xs text-slate-400">{description.length} 字符</p>
+            </section>
+            <section className="product-editor-panel">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -181,24 +136,27 @@ export function ProductBasicTab() {
                 </div>
 
                 {selectedAssetIds.length > 0 ? (
-                    <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(5rem,5rem))] gap-2">
+                    <div className="product-editor-gallery mt-3 grid gap-2">
                         {selectedAssetIds.map(assetId => {
                             const asset = knownAssets[assetId];
                             return (
                                 <div
                                     key={assetId}
-                                    className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white"
+                                    className="product-editor-gallery-item"
                                     title={asset?.name ?? `Asset ID: ${assetId}`}
                                 >
                                     {asset?.preview ? (
                                         <img
                                             src={asset.preview}
                                             alt={asset.name}
-                                            className="h-full w-full object-contain"
+                                            className="h-16 w-16 shrink-0 rounded-lg object-contain"
                                         />
                                     ) : (
-                                        <ImageIcon className="absolute inset-0 m-auto h-5 w-5 text-slate-300" />
+                                        <ImageIcon className="h-16 w-16 shrink-0 p-4 text-slate-300" />
                                     )}
+                                    <span className="min-w-0 flex-1 break-all text-xs text-slate-600">
+                                        {asset?.name ?? `图片 #${assetId}`}
+                                    </span>
                                     <AdminButton
                                         type="button"
                                         disabled={saving}
@@ -206,7 +164,7 @@ export function ProductBasicTab() {
                                             setSelectedAssetIds(ids => ids.filter(id => id !== assetId))
                                         }
                                         aria-label={`移除素材 ${asset?.name ?? assetId}`}
-                                        className="absolute right-1.5 top-1.5 rounded bg-slate-950/70 p-1 text-white opacity-100 transition hover:bg-rose-600 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+                                        className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                                     >
                                         <X className="h-3 w-3" />
                                     </AdminButton>
