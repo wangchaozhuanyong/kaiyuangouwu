@@ -31,6 +31,28 @@ const record = (value: unknown): Data =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Data) : {};
 const records = (value: unknown): Data[] => (Array.isArray(value) ? value.map(record) : []);
 
+/** Only an explicitly published phone HERO binding can join the store's public media. */
+export function publicHeroMobileImage(block: unknown, origin: string): string | undefined {
+    const content = record(block);
+    if (content.type !== 'HERO' || content.enabled === false) return;
+    const source = record(content.settings).mobileImageUrl;
+    if (typeof source !== 'string' || !source.trim()) return;
+    try {
+        const url = new URL(source.trim(), origin);
+        const path = decodeURIComponent(url.pathname);
+        if (
+            url.origin === new URL(origin).origin &&
+            !url.username &&
+            !url.password &&
+            /^\/assets\/(?:preview|source)\//u.test(path) &&
+            !path.split('/').includes('..')
+        )
+            return source.trim();
+    } catch {
+        /* Invalid or another store's URL never grants anonymous media access. */
+    }
+}
+
 /** Pure projection of already-authorized page data. Never queries a catalog or follows a URL. */
 export function publicPageMedia(
     page: Pick<
@@ -72,6 +94,16 @@ export function publicPageMedia(
     for (const block of orderedBlocks) {
         const type = typeof block.type === 'string' ? block.type : '';
         add(block.imageUrl, publicContentImageKinds(type, 'block'));
+        const mobileImage = publicHeroMobileImage(block, `https://${page.scope.host}`);
+        if (mobileImage) {
+            const settings = record(block.settings);
+            const dimension = (value: unknown) =>
+                typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+            add(mobileImage, publicContentImageKinds(type, 'block'), {
+                width: dimension(settings.mobileImageWidth),
+                height: dimension(settings.mobileImageHeight),
+            });
+        }
         for (const item of records(block.items)) {
             if (item.enabled !== false) add(item.imageUrl, publicContentImageKinds(type, 'item'));
         }

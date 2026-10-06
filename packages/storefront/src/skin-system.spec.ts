@@ -1036,7 +1036,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('preserves desktop overlays and gives every phone artwork one full 12:5 canvas', () => {
+    it('preserves desktop and tablet canvases while phones use the approved 16:9 artwork frame', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1074,6 +1074,7 @@ describe('storefront skin system', () => {
         expect(mobileSource).toMatch(
             /\.hero-rich-copy-region[^}]*display:\s*block;[^}]*min-height:\s*0;[^}]*flex:\s*1;[^}]*overflow-y:\s*auto;/,
         );
+        expect(mobileSource).toMatch(/\.hero-rich-copy-region[^}]*touch-action:\s*pan-y;/);
         expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow:\s*visible;/);
         expect(mobileSource).toMatch(/\.hero-rich-cta-btn[^}]*flex-shrink:\s*0;/);
         expect(mobileSource).toMatch(/\.hero-rich-copy-surface \.hero-rich-title\s*\{[^}]*order:\s*-2;/);
@@ -1088,6 +1089,18 @@ describe('storefront skin system', () => {
         expect(services).toMatch(
             /\.home-page \.hero \.hero-service-overlay \.home-trust-bar\.has-long-copy\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/,
         );
+        const phone = mobile.nodes.find(
+            node => node.type === 'atrule' && node.params === '(max-width: 767px)',
+        );
+        if (!phone || phone.type !== 'atrule') throw new Error('Expected a phone-only composition');
+        const phoneSource = phone.toString();
+        expect(phoneSource).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9;/);
+        expect(phoneSource).toMatch(/\.hero-rich-copy-region\s*\{[^}]*width:\s*60%;/);
+        expect(phoneSource).toMatch(/\.hero-rich-cta-btn\s*\{[^}]*max-width:\s*60%;/);
+        expect(phoneSource).toMatch(
+            /\.home-trust-bar\.has-long-copy\s*\{[^}]*background:\s*var\(--surface\);[^}]*color:\s*var\(--text\);/,
+        );
+        expect(phoneSource).toMatch(/\.home-trust-item\s*\{[^}]*color:\s*var\(--text\);/);
         expect(mobileSource).not.toMatch(
             /#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i,
         );

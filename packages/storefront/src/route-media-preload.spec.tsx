@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { preload } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { authOriginalImageUrl } from '../../storefront-content-plugin/src/shared/auth-visual';
 
@@ -16,6 +16,7 @@ vi.mock('react-dom', async importOriginal => ({
 
 describe('navigation image hints', () => {
     beforeEach(() => vi.mocked(preload).mockClear());
+    afterEach(() => vi.unstubAllGlobals());
     const block = (type: StorefrontContentBlock['type'], imageUrl: string) =>
         ({ id: type, type, enabled: true, imageUrl }) as StorefrontContentBlock;
 
@@ -46,19 +47,29 @@ describe('navigation image hints', () => {
         expect(preload).not.toHaveBeenCalled();
     });
 
-    it('prepares only the first usable home slide, leaving later slides out of the route barrier', () => {
-        preloadRouteMedia(
-            { name: 'home' },
-            [
-                block('HERO', ''),
-                block('HERO', '/assets/preview/first.jpg'),
-                block('HERO', '/assets/preview/later.jpg'),
-            ],
-            [],
-        );
-        expect(preload).toHaveBeenCalledOnce();
-        expect(vi.mocked(preload).mock.calls[0][0]).toContain('first.jpg');
-    });
+    it.each([767, 768, 1024])(
+        'leaves responsive home artwork priority to the rendered image at %s px',
+        width => {
+            vi.stubGlobal(
+                'matchMedia',
+                vi.fn((query: string) => ({
+                    matches: query === '(max-width: 767px)' ? width <= 767 : width >= 1024,
+                })),
+            );
+            preloadRouteMedia(
+                { name: 'home' },
+                [
+                    {
+                        ...block('HERO', '/assets/preview/desktop.jpg'),
+                        settings: { mobileImageUrl: '/assets/preview/phone.jpg' },
+                    },
+                ],
+                [],
+                width >= 1024,
+            );
+            expect(preload).not.toHaveBeenCalled();
+        },
+    );
 
     it('does not preload an arbitrary catalog product when no home hero is configured', () => {
         preloadRouteMedia(
