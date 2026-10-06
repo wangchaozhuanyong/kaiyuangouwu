@@ -1,10 +1,8 @@
 import { preload } from 'react-dom';
 
 import { authOriginalImageUrl } from '../../storefront-content-plugin/src/shared/auth-visual';
-import { heroImageSourceForViewport } from '../../storefront-content-plugin/src/shared/hero-image-source';
 
 import { findAuthVisualContent } from './auth-visual';
-import { viewportMatches } from './desktop-layout';
 import { productImage } from './product-media';
 import { imageSources } from './responsive-image';
 import { RouteState } from './storefront-router';
@@ -15,8 +13,9 @@ export function preloadRouteMedia(
     route: RouteState,
     blocks: StorefrontContentBlock[],
     products: Product[],
-    desktopViewport = viewportMatches(),
-    wideHeroViewport = desktopViewport || viewportMatches('(min-width: 600px)'),
+    desktopViewport = typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(min-width: 1024px)').matches,
 ) {
     let source: string | undefined;
     let kind: 'detail' | 'hero' = 'detail';
@@ -28,11 +27,10 @@ export function preloadRouteMedia(
         if (content?.imageUrl) source = authOriginalImageUrl(content.imageUrl);
         sizes = '(min-width: 1024px) 640px, 1px';
     } else if (route.name === 'home') {
-        const hero = blocks.find(
-            block => block.type === 'HERO' && heroImageSourceForViewport(block, wideHeroViewport),
-        );
-        source = heroImageSourceForViewport(hero, wideHeroViewport);
-        kind = 'hero';
+        source = blocks.find(block => block.type === 'HERO' && block.imageUrl?.trim())?.imageUrl ?? undefined;
+        if (source) {
+            kind = 'hero';
+        }
         // Product modules may use their own selections. Let the rendered priority card
         // request its actual image instead of speculating from the catalog's first item.
     } else if (route.name === 'product') {

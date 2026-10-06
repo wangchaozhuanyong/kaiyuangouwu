@@ -1036,7 +1036,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('fills the marketing scene and keeps desktop and phone copy on the image', () => {
+    it('preserves desktop artwork overlays and displays the whole same artwork above mobile copy', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1058,6 +1058,17 @@ describe('storefront skin system', () => {
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
+        const mobile = postcss.parse(stylesheet('./styles/hero-mobile-overlay.css'));
+        expect(mobile.nodes).toHaveLength(2);
+        const responsive = mobile.nodes[1];
+        expect(responsive.type).toBe('atrule');
+        if (responsive.type !== 'atrule') throw new Error('Expected a responsive composition');
+        expect(responsive.params).toBe('(max-width: 1023px)');
+        const mobileSource = responsive.toString();
+        expect(mobileSource).toMatch(/\.hero-rich-backdrop[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/);
+        expect(mobileSource).toContain('color: var(--text);');
+        expect(mobileSource).toContain('color: var(--muted);');
+        expect(mobileSource).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl/i);
     });
 
     it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {

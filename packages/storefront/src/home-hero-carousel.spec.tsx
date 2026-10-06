@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { preload } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { DesktopLayoutContext } from './desktop-layout';
 import { HERO_HEIGHT_TRANSITION_MS, HERO_TRANSITION_MS } from './hero-carousel';
 import { HomePage, type HomePageProps } from './pages/home-page';
-import { preloadRouteMedia } from './route-media-preload';
 import { HomePageContext } from './storefront-page-contexts';
 import * as productDisplay from './storefront-ui/product-display';
 import { type MarketConfig, type StorefrontContentBlock } from './types';
@@ -15,11 +13,6 @@ import { type MarketConfig, type StorefrontContentBlock } from './types';
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
     useNavigate: () => vi.fn(),
-}));
-
-vi.mock('react-dom', async importOriginal => ({
-    ...(await importOriginal<typeof import('react-dom')>()),
-    preload: vi.fn(),
 }));
 
 const market: MarketConfig = {
@@ -110,8 +103,6 @@ describe('HomePage carousel pointer interactions', () => {
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     let reducedMotion: boolean;
-    let viewportWidth: number;
-    let mediaListeners: Map<string, Set<() => void>>;
     let resizeObservers: Array<{ elements: Set<Element>; notify: () => void }>;
     let boundsMock: MockInstance<() => DOMRect>;
     const target = vi.fn();
@@ -138,9 +129,6 @@ describe('HomePage carousel pointer interactions', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         reducedMotion = false;
-        viewportWidth = 390;
-        mediaListeners = new Map();
-        vi.mocked(preload).mockClear();
         resizeObservers = [];
         target.mockClear();
         vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -165,19 +153,11 @@ describe('HomePage carousel pointer interactions', () => {
         );
         vi.stubGlobal(
             'matchMedia',
-            vi.fn((query: string) => {
-                const listeners = mediaListeners.get(query) ?? new Set<() => void>();
-                mediaListeners.set(query, listeners);
-                return {
-                    get matches() {
-                        return query.includes('prefers-reduced-motion')
-                            ? reducedMotion
-                            : viewportWidth >= Number(query.match(/min-width:\s*(\d+)/)?.[1] ?? Infinity);
-                    },
-                    addEventListener: (_event: string, listener: () => void) => listeners.add(listener),
-                    removeEventListener: (_event: string, listener: () => void) => listeners.delete(listener),
-                };
-            }),
+            vi.fn(() => ({
+                matches: reducedMotion,
+                addEventListener: vi.fn(),
+                removeEventListener: vi.fn(),
+            })),
         );
         vi.spyOn(productDisplay, 'decodeStorefrontImage').mockResolvedValue(undefined);
         boundsMock = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -268,147 +248,6 @@ describe('HomePage carousel pointer interactions', () => {
     function activeButton(selector: string) {
         return requiredElement<HTMLButtonElement>(activeSlide(), selector);
     }
-
-    it.each([320, 390, 599, 600, 768, 1024])(
-        'renders and preloads the same artwork at %s px without changing the layout breakpoint',
-        async width => {
-            viewportWidth = width;
-            const responsiveHero: StorefrontContentBlock = {
-                ...heroes[0],
-                settings: { mobileImageUrl: '/phone-composition.jpg' },
-            };
-            await render(width >= 1024, [responsiveHero, heroes[1]]);
-            preloadRouteMedia({ name: 'home' }, [responsiveHero], []);
-            const image = requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img');
-            const expected = width < 600 ? '/phone-composition.jpg' : responsiveHero.imageUrl;
-            expect(image.getAttribute('src')).toBe(expected);
-            expect(vi.mocked(preload).mock.calls[0][0]).toBe(expected);
-            expect(Boolean(host.querySelector('.hero-page-picker'))).toBe(width >= 1024);
-        },
-    );
-
-    it('switches phone artwork at 600 px while retaining the mobile layout through tablet widths', async () => {
-        viewportWidth = 599;
-        const responsiveHero: StorefrontContentBlock = {
-            ...heroes[0],
-            settings: { mobileImageUrl: '/phone-breakpoint.jpg' },
-        };
-        await render(false, [responsiveHero]);
-        const copy = activeSlide().textContent;
-        const artwork = () => requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img');
-        expect(artwork().getAttribute('src')).toBe('/phone-breakpoint.jpg');
-        for (const width of [600, 768, 599]) {
-            await interact(() => {
-                viewportWidth = width;
-                mediaListeners.get('(min-width: 600px)')?.forEach(listener => listener());
-            });
-            expect(artwork().getAttribute('src')).toBe(
-                width < 600 ? '/phone-breakpoint.jpg' : responsiveHero.imageUrl,
-            );
-            expect(activeSlide().textContent).toBe(copy);
-            expect(host.querySelector('.is-neighbor')).toBeNull();
-        }
-    });
-
-    it('switches only artwork and intrinsic dimensions when the viewport changes', async () => {
-        const responsiveHero: StorefrontContentBlock = {
-            ...heroes[0],
-            imageAsset: { width: 1600, height: 667 },
-            settings: {
-                mobileImageUrl: '/mobile-first.jpg',
-                mobileImageWidth: 1200,
-                mobileImageHeight: 910,
-            },
-        };
-        const artwork = () => requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img');
-        await render(true, [responsiveHero]);
-        expect(artwork().getAttribute('src')).toBe(responsiveHero.imageUrl);
-        expect(artwork().getAttribute('width')).toBe('1600');
-        expect(artwork().getAttribute('height')).toBe('667');
-        const copy = activeSlide().textContent;
-        await render(false, [responsiveHero]);
-        expect(artwork().getAttribute('src')).toBe('/mobile-first.jpg');
-        expect(artwork().getAttribute('width')).toBe('1200');
-        expect(artwork().getAttribute('height')).toBe('910');
-        expect(activeSlide().textContent).toBe(copy);
-        expect(host.querySelectorAll('.hero-carousel-slide')).toHaveLength(1);
-        await render(true, [responsiveHero]);
-        expect(artwork().getAttribute('src')).toBe(responsiveHero.imageUrl);
-    });
-
-    it.each([false, true])(
-        'decodes and renders the matching neighboring composition, desktop=%s',
-        async desktop => {
-            const responsiveHeroes = heroes.map((hero, index) => ({
-                ...hero,
-                settings: { mobileImageUrl: `/mobile-${index + 1}.jpg` },
-            }));
-            await render(desktop, responsiveHeroes);
-            await pointer('pointerdown', 260);
-            await pointer('pointermove', 180);
-            const neighbor = requiredElement<HTMLImageElement>(
-                host,
-                '.is-neighbor .hero-rich-image-link img',
-            );
-            expect(neighbor.getAttribute('src')).toBe(desktop ? '/second.jpg' : '/mobile-2.jpg');
-            await pointer('pointerup', 180);
-            expect(productDisplay.decodeStorefrontImage).toHaveBeenCalledWith(
-                desktop ? '/second.jpg' : '/mobile-2.jpg',
-                'hero',
-            );
-            await advance();
-            expect(
-                requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img').getAttribute(
-                    'src',
-                ),
-            ).toBe(desktop ? '/second.jpg' : '/mobile-2.jpg');
-        },
-    );
-
-    it('prefetches mobile neighbors only after the visible mobile candidate is ready', async () => {
-        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-        const responsiveHeroes = heroes.slice(0, 2).map((hero, index) => ({
-            ...hero,
-            settings: { mobileImageUrl: `/prefetch-mobile-${index + 1}.jpg` },
-        }));
-        await render(false, responsiveHeroes);
-        expect(productDisplay.decodeStorefrontImage).not.toHaveBeenCalled();
-        const image = requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img');
-        Object.defineProperties(image, { complete: { value: true }, naturalWidth: { value: 1200 } });
-        await interact(() => image.dispatchEvent(new Event('load')));
-        expect(productDisplay.decodeStorefrontImage).toHaveBeenCalledExactlyOnceWith(
-            '/prefetch-mobile-2.jpg',
-            'hero',
-        );
-        vi.mocked(productDisplay.decodeStorefrontImage).mockClear();
-        await render(true, responsiveHeroes);
-        expect(productDisplay.decodeStorefrontImage).not.toHaveBeenCalled();
-    });
-
-    it('discards a desktop decode completed after switching to the mobile composition', async () => {
-        let finishDecode: () => void = () => undefined;
-        vi.mocked(productDisplay.decodeStorefrontImage).mockImplementation(
-            () =>
-                new Promise<void>(resolve => {
-                    finishDecode = resolve;
-                }),
-        );
-        const responsiveHeroes = heroes.map((hero, index) => ({
-            ...hero,
-            settings: { mobileImageUrl: `/switch-mobile-${index + 1}.jpg` },
-        }));
-        await render(true, responsiveHeroes);
-        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
-        expect(productDisplay.decodeStorefrontImage).toHaveBeenCalledWith('/second.jpg', 'hero');
-        await render(false, responsiveHeroes);
-        await interact(() => finishDecode());
-        await advance();
-        expect(activeSlide().textContent).toContain('First slide');
-        expect(host.querySelector('.is-neighbor')).toBeNull();
-        expect(
-            requiredElement<HTMLImageElement>(activeSlide(), '.hero-rich-image-link img').getAttribute('src'),
-        ).toBe('/switch-mobile-1.jpg');
-    });
 
     it.each([false, true])(
         'tracks horizontal dragging and coordinates next-slide movement, desktop=%s',
@@ -558,11 +397,11 @@ describe('HomePage carousel pointer interactions', () => {
         expect(activeSlide().textContent).toContain('First slide');
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
-    it('makes room for taller copy before entrance, then shrinks after the shorter scene settles', async () => {
+    it('measures the whole mobile image and copy before entrance, then shrinks after settling', async () => {
         let tallHeight = 520;
         boundsMock.mockImplementation(function (this: Element) {
             const height =
-                this.matches('.hero-rich-content') && this.textContent?.includes('Tall copy')
+                this.matches('.hero-scene-wrapper') && this.textContent?.includes('Tall copy')
                     ? tallHeight
                     : 320;
             return {
@@ -592,8 +431,8 @@ describe('HomePage carousel pointer interactions', () => {
         expect(stage.style.height).toBe('520px');
         // Responsive wrapping and late font sizing trigger the actual content observer.
         tallHeight = 580;
-        const copy = requiredElement(activeSlide(), '.hero-rich-content');
-        const observer = resizeObservers.find(candidate => candidate.elements.has(copy));
+        const scene = requiredElement(activeSlide(), '.hero-scene-wrapper');
+        const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
         expect(observer).toBeDefined();
         if (!observer) throw new Error('Expected the current slide resize observer');
         await interact(() => observer.notify());

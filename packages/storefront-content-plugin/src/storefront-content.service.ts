@@ -196,7 +196,6 @@ export class StorefrontContentService {
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
-        normalized.settings = await this.resolveHeroMobileImage(ctx, normalized.type, normalized.settings);
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
@@ -318,7 +317,6 @@ export class StorefrontContentService {
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
         const image = await this.resolveImage(ctx, next.imageAssetId, requestedImageUrl, '区块图片');
         this.assertEnabledHeroHasImage(next.type, next.enabled, image);
-        next.settings = await this.resolveHeroMobileImage(ctx, next.type, next.settings);
         Object.assign(block, {
             code: next.code,
             internalName: next.internalName,
@@ -1265,57 +1263,6 @@ export class StorefrontContentService {
             if (error instanceof UserInputError) throw error;
             throw new UserInputError(`${label}导入失败，请改为上传到素材库`);
         }
-    }
-
-    private async resolveHeroMobileImage(
-        ctx: RequestContext,
-        type: StorefrontContentBlockType,
-        settings: StorefrontContentSettingsValue | null,
-    ): Promise<StorefrontContentSettingsValue | null> {
-        if (
-            type !== 'HERO' ||
-            !settings ||
-            !('mobileImageAssetId' in settings || 'mobileImageUrl' in settings)
-        ) {
-            return settings;
-        }
-        const assetId = settings.mobileImageAssetId;
-        const url = settings.mobileImageUrl;
-        if (assetId != null && (typeof assetId !== 'string' || !assetId.trim())) {
-            throw new UserInputError('手机轮播图片素材编号格式不正确');
-        }
-        if (url != null && typeof url !== 'string') {
-            throw new UserInputError('手机轮播图片地址格式不正确');
-        }
-        this.validateImageUrl(url, '手机轮播图片');
-        for (const key of ['mobileImageWidth', 'mobileImageHeight']) {
-            const dimension = settings[key];
-            if (
-                dimension != null &&
-                (typeof dimension !== 'number' || !Number.isInteger(dimension) || dimension <= 0)
-            ) {
-                throw new UserInputError('手机轮播图片尺寸必须是正整数');
-            }
-        }
-        const image = await this.resolveImage(ctx, assetId, url, '手机轮播图片');
-        if (image.asset && !image.asset.mimeType.startsWith('image/')) {
-            throw new UserInputError('手机轮播图片必须选择图片素材');
-        }
-        if (
-            image.asset &&
-            [image.asset.width, image.asset.height].some(value => !Number.isInteger(value) || value <= 0)
-        ) {
-            throw new UserInputError('手机轮播图片无法读取有效尺寸，请重新上传图片素材');
-        }
-        return {
-            ...settings,
-            mobileImageAssetId: image.asset ? String(image.asset.id) : null,
-            mobileImageUrl: image.imageUrl,
-            mobileImageWidth:
-                image.asset?.width ?? (image.imageUrl ? (settings.mobileImageWidth ?? null) : null),
-            mobileImageHeight:
-                image.asset?.height ?? (image.imageUrl ? (settings.mobileImageHeight ?? null) : null),
-        };
     }
 
     private publishedLegacyImageUrl(imageUrl: string | null): string | null {

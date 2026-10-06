@@ -4,7 +4,6 @@ import 'reflect-metadata';
 import { Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
-import { storefrontAssetUrl } from './content-image';
 import { createContentPublicationChecker } from './content-publication';
 import { DESKTOP_CATEGORY_BANNER_PURPOSE, desktopCategoryBannerCode } from './desktop-category-banner';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
@@ -29,18 +28,10 @@ describe('StorefrontContentService image replacement guard', () => {
                 id: 'block',
                 updatedAt: new Date('2026-09-26T00:00:00Z'),
                 imageAssetId: 'merchant',
-                settings: { mobileImageAssetId: 'merchant-mobile', mobileImageUrl: '/assets/mobile.webp' },
                 items: [{ id: 'item', imageAssetId: 'card' }] as never,
             });
             vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockResolvedValue(block);
-            for (const patch of [
-                { imageAssetId: 'template' },
-                { imageAssetId: null },
-                { items: [] },
-                { settings: { mobileImageAssetId: 'template-mobile' } },
-                { settings: { mobileImageAssetId: null, mobileImageUrl: null } },
-                { settings: { accentColor: '#292d32' } },
-            ]) {
+            for (const patch of [{ imageAssetId: 'template' }, { imageAssetId: null }, { items: [] }]) {
                 await expect(
                     service.update({ channelId } as never, {
                         id: 'block',
@@ -58,7 +49,6 @@ describe('StorefrontContentService image replacement guard', () => {
             id: 'block',
             updatedAt: new Date('2026-09-26T00:00:00Z'),
             imageAssetId: 'merchant',
-            settings: { mobileImageAssetId: 'merchant-mobile', mobileImageUrl: '/assets/mobile.webp' },
             translations: [],
             items: [],
         });
@@ -69,8 +59,6 @@ describe('StorefrontContentService image replacement guard', () => {
         for (const patch of [
             { backgroundColor: '#ffffff' },
             { imageAssetId: 'reviewed', allowImageReplacement: true },
-            { settings: { ...block.settings, accentColor: '#292d32' } },
-            { settings: { mobileImageAssetId: 'reviewed-mobile' }, allowImageReplacement: true },
         ]) {
             await expect(
                 service.update({ channelId: 'store' } as never, {
@@ -80,7 +68,7 @@ describe('StorefrontContentService image replacement guard', () => {
                 }),
             ).rejects.toThrow('validation reached');
         }
-        expect(validation).toHaveBeenCalledTimes(4);
+        expect(validation).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -677,218 +665,6 @@ describe('StorefrontContentService sharing content isolation', () => {
 });
 
 describe('StorefrontContentService image ownership', () => {
-    const mobileAsset = {
-        id: 'mobile-asset',
-        preview: 'https://shop.example.test/assets/preview/mobile.webp',
-        mimeType: 'image/webp',
-        width: 1098,
-        height: 840,
-    };
-    const mobileContext = { channelId: 'store-mobile' };
-    const mobileImageService = () => {
-        const repository = {
-            findOne: vi.fn().mockResolvedValue(mobileAsset),
-            save: vi.fn((block: StorefrontContentBlock) => Promise.resolve(block)),
-        };
-        const externalImageService = {
-            import: vi.fn().mockResolvedValue(mobileAsset),
-            storefrontUrl: vi.fn(storefrontAssetUrl),
-        };
-        const service = new StorefrontContentService(
-            { getRepository: () => repository } as never,
-            {} as never,
-            externalImageService as never,
-            {} as never,
-        );
-        return { service, repository, externalImageService };
-    };
-
-    it('normalizes a mobile Asset binding to its public URL and authoritative dimensions', async () => {
-        const { service, repository, externalImageService } = mobileImageService();
-        const settings = {
-            mobileImageAssetId: 'mobile-asset',
-            mobileImageUrl: '/assets/stale.webp',
-            mobileImageWidth: 1,
-            mobileImageHeight: 2,
-            accentColor: '#292d32',
-        };
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'HERO', settings),
-        ).resolves.toEqual({
-            ...settings,
-            mobileImageUrl: '/assets/preview/mobile.webp',
-            mobileImageWidth: 1098,
-            mobileImageHeight: 840,
-        });
-        expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 'mobile-asset' } });
-        expect(externalImageService.storefrontUrl).toHaveBeenCalledWith(mobileAsset);
-        expect(externalImageService.import).not.toHaveBeenCalled();
-        expect(settings.mobileImageUrl).toBe('/assets/stale.webp');
-    });
-
-    it('imports a mobile external image through the existing asset path', async () => {
-        const { service, externalImageService } = mobileImageService();
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'HERO', {
-                mobileImageUrl: 'https://images.example.test/mobile.webp',
-            }),
-        ).resolves.toEqual({
-            mobileImageAssetId: 'mobile-asset',
-            mobileImageUrl: '/assets/preview/mobile.webp',
-            mobileImageWidth: 1098,
-            mobileImageHeight: 840,
-        });
-        expect(externalImageService.import).toHaveBeenCalledWith(
-            mobileContext,
-            'https://images.example.test/mobile.webp',
-        );
-    });
-
-    it('leaves legacy settings and non-HERO blocks untouched without asset access', async () => {
-        const { service, repository, externalImageService } = mobileImageService();
-        for (const settings of [null, { accentColor: '#292d32' }]) {
-            await expect(
-                (service as any).resolveHeroMobileImage(mobileContext, 'HERO', settings),
-            ).resolves.toBe(settings);
-        }
-        const authSettings = { mobileDecorationImageUrl: '/assets/decoration.webp' };
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'AUTH_LOGIN', authSettings),
-        ).resolves.toBe(authSettings);
-        expect(repository.findOne).not.toHaveBeenCalled();
-        expect(externalImageService.import).not.toHaveBeenCalled();
-    });
-
-    it('clears only the explicitly removed mobile image and its dimensions', async () => {
-        const { service, repository } = mobileImageService();
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'HERO', {
-                mobileImageAssetId: null,
-                mobileImageUrl: null,
-                mobileImageWidth: 1098,
-                mobileImageHeight: 840,
-                accentColor: '#292d32',
-            }),
-        ).resolves.toEqual({
-            mobileImageAssetId: null,
-            mobileImageUrl: null,
-            mobileImageWidth: null,
-            mobileImageHeight: null,
-            accentColor: '#292d32',
-        });
-        expect(repository.findOne).not.toHaveBeenCalled();
-    });
-
-    it.each([
-        { settings: { mobileImageAssetId: 12 }, error: '素材编号' },
-        { settings: { mobileImageAssetId: ' ' }, error: '素材编号' },
-        { settings: { mobileImageUrl: 12 }, error: '地址格式' },
-        { settings: { mobileImageUrl: 'javascript:alert(1)' }, error: '素材库' },
-        { settings: { mobileImageUrl: '/unmanaged/mobile.webp' }, error: '素材库' },
-        { settings: { mobileImageUrl: '/assets/mobile.webp', mobileImageWidth: 0 }, error: '正整数' },
-        { settings: { mobileImageUrl: '/assets/mobile.webp', mobileImageHeight: -1 }, error: '正整数' },
-        { settings: { mobileImageUrl: '/assets/mobile.webp', mobileImageWidth: 1.5 }, error: '正整数' },
-        { settings: { mobileImageUrl: '/assets/mobile.webp', mobileImageHeight: '840' }, error: '正整数' },
-    ])(
-        'rejects malformed mobile image settings before resolving assets: $settings',
-        async ({ settings, error }) => {
-            const { service, repository, externalImageService } = mobileImageService();
-            await expect(
-                (service as any).resolveHeroMobileImage(mobileContext, 'HERO', settings),
-            ).rejects.toThrow(error);
-            expect(repository.findOne).not.toHaveBeenCalled();
-            expect(externalImageService.import).not.toHaveBeenCalled();
-        },
-    );
-
-    it('rejects a missing mobile Asset instead of retaining a stale URL', async () => {
-        const { service, repository } = mobileImageService();
-        repository.findOne.mockResolvedValueOnce(null);
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'HERO', {
-                mobileImageAssetId: 'deleted-asset',
-                mobileImageUrl: '/assets/stale.webp',
-            }),
-        ).rejects.toThrow();
-        expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 'deleted-asset' } });
-    });
-
-    it('rejects non-image mobile Assets', async () => {
-        const { service, repository } = mobileImageService();
-        repository.findOne.mockResolvedValueOnce({ ...mobileAsset, mimeType: 'application/pdf' });
-        await expect(
-            (service as any).resolveHeroMobileImage(mobileContext, 'HERO', {
-                mobileImageAssetId: 'mobile-asset',
-            }),
-        ).rejects.toThrow('必须选择图片素材');
-    });
-
-    it.each([{ width: 0 }, { height: 0 }, { width: -1 }, { height: -1 }, { width: 1.5 }, { height: 1.5 }])(
-        'rejects invalid mobile Asset dimensions: %j',
-        async metadata => {
-            const { service, repository } = mobileImageService();
-            repository.findOne.mockResolvedValueOnce({ ...mobileAsset, ...metadata });
-            await expect(
-                (service as any).resolveHeroMobileImage(mobileContext, 'HERO', {
-                    mobileImageAssetId: 'mobile-asset',
-                    mobileImageWidth: 1098,
-                    mobileImageHeight: 840,
-                }),
-            ).rejects.toThrow('无法读取有效尺寸，请重新上传图片素材');
-        },
-    );
-
-    it.each(['create', 'update'] as const)(
-        'persists normalized mobile media through %s without replacing the desktop image',
-        async operation => {
-            const { service, repository } = mobileImageService();
-            const block = new StorefrontContentBlock({
-                ...createInput(),
-                id: 'hero-block',
-                imageAssetId: null,
-                imageUrl: '/assets/preview/desktop.webp',
-                updatedAt: new Date('2026-10-06T00:00:00Z'),
-                items: [],
-                translations: [{ languageCode: LanguageCode.zh_Hans, title: '首页主图' }] as never,
-            });
-            vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockResolvedValue(block);
-            vi.spyOn(service as any, 'assertUniqueCode').mockResolvedValue(undefined);
-            vi.spyOn(service as any, 'replaceBlockTranslations').mockResolvedValue(undefined);
-            vi.spyOn(service as any, 'syncItems').mockResolvedValue(undefined);
-            vi.spyOn(service as any, 'getOwnedBlockOrThrow').mockImplementation(
-                () => repository.save.mock.calls.at(-1)?.[0],
-            );
-            vi.spyOn(service as any, 'translateBlock').mockImplementation(saved => saved);
-            vi.spyOn(service as any, 'publishChanged').mockResolvedValue(undefined);
-            const settings = {
-                mobileImageAssetId: 'mobile-asset',
-                mobileImageWidth: 1,
-                mobileImageHeight: 2,
-                accentColor: '#292d32',
-            };
-            const result =
-                operation === 'create'
-                    ? await service.create(
-                          mobileContext as never,
-                          createInput({ imageUrl: block.imageUrl, settings }),
-                      )
-                    : await service.update(mobileContext as never, {
-                          id: block.id,
-                          expectedUpdatedAt: block.updatedAt,
-                          settings,
-                      });
-            expect(repository.save).toHaveBeenCalledTimes(1);
-            expect(result.imageUrl).toBe('/assets/preview/desktop.webp');
-            expect(result.settings).toEqual({
-                ...settings,
-                mobileImageUrl: '/assets/preview/mobile.webp',
-                mobileImageWidth: 1098,
-                mobileImageHeight: 840,
-            });
-            expect(repository.save.mock.calls[0][0].settings).toEqual(result.settings);
-        },
-    );
-
     it('imports an external URL and replaces it with the resulting Asset preview', async () => {
         const asset = { id: 'asset-1', preview: '/assets/preview/imported.png' };
         const connection = {

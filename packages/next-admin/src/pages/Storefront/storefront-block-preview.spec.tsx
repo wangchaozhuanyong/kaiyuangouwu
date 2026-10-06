@@ -226,48 +226,6 @@ describe('real client decoration preview', () => {
         expect(host.querySelector('[role="alert"]')).toBeNull();
     });
 
-    it('sends the optional phone image and its dimensions to the real client in either viewport', async () => {
-        const { host, block, render } = await renderPreview();
-        const frame = host.querySelector('iframe')!;
-        const session = new DOMParser().parseFromString(frame.srcdoc, 'text/html').documentElement.dataset
-            .decorationSession;
-        const send = vi.spyOn(frame.contentWindow!, 'postMessage');
-        block.settings = {
-            mobileImageUrl: '/assets/phone.webp',
-            mobileImageAssetId: 'phone',
-            mobileImageWidth: 1280,
-            mobileImageHeight: 960,
-        };
-        await render();
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent('message', {
-                    origin: window.location.origin,
-                    source: frame.contentWindow,
-                    data: { type: 'decoration-ready', session },
-                }),
-            ),
-        );
-        const expected = expect.objectContaining({
-            type: 'decoration-draft',
-            draft: expect.objectContaining({
-                block: expect.objectContaining({
-                    imageUrl: '/assets/hero.png',
-                    imageAsset: { width: 1600, height: 520 },
-                    settings: block.settings,
-                }),
-            }),
-        });
-        expect(send).toHaveBeenLastCalledWith(expected, window.location.origin);
-        await act(async () =>
-            Array.from(host.querySelectorAll('button'))
-                .find(button => button.textContent === '电脑')!
-                .click(),
-        );
-        expect(frame.width).toBe('1440');
-        expect(send).toHaveBeenLastCalledWith(expected, window.location.origin);
-    });
-
     it('only sends the latest draft to its own iframe with the matching session and origin', async () => {
         const { host, block, render } = await renderPreview();
         const frame = host.querySelector('iframe')!;

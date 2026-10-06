@@ -56,15 +56,6 @@ export function imageReplacements(
             imageAssetId: after.imageAssetId ?? null,
             imageUrl: after.imageUrl ?? null,
         });
-        const mobileHero = (value: ImageBinding) => ({
-            imageAssetId:
-                typeof value.settings?.mobileImageAssetId === 'string'
-                    ? value.settings.mobileImageAssetId
-                    : null,
-            imageUrl:
-                typeof value.settings?.mobileImageUrl === 'string' ? value.settings.mobileImageUrl : null,
-        });
-        check('mobile-hero', mobileHero(previous), mobileHero(patch));
     }
 
     if (patch.items != null) {

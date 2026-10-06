@@ -1,42 +1,118 @@
-/* The storefront and the Admin iframe import this same mobile composition. */
+/* Same published artwork in the storefront and its Admin preview; only phone composition changes. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
-        min-height: 280px;
+        min-height: 0;
+        background: var(--surface);
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        background: var(--surface);
+    }
+
+    .hero.hero-image-overlay .hero-rich-media {
+        display: contents;
+    }
+
+    .hero.hero-image-overlay .hero-rich-image-link,
+    .hero.hero-image-overlay .safe-image-frame {
+        position: relative;
+        inset: auto;
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 0;
+        background: var(--surface);
+    }
+
+    .hero.hero-image-overlay .hero-rich-image-link {
+        order: 0;
+        flex-shrink: 0;
+    }
+
+    .hero.hero-image-overlay .hero-rich-backdrop {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+    }
+
+    .hero.hero-image-overlay .safe-image-preview {
+        object-fit: contain;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
+        order: 1;
         position: relative;
-        top: auto;
-        left: auto;
-        transform: none;
         width: 100%;
-        min-height: 280px;
+        min-height: 0;
         max-height: none;
-        padding: 16px 20px calc(var(--hero-overlay-height, 0px) + 32px);
-        gap: 10px;
+        margin: 0;
+        padding: 18px 20px 16px;
+        gap: 12px;
+        background: var(--surface);
+        color: var(--text);
+    }
+
+    .hero.hero-image-overlay .hero-rich-copy-surface {
+        width: 100%;
+        max-width: 100%;
+        gap: 8px;
+    }
+
+    .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-title {
+        color: var(--text);
+        font-size: var(--type-hero-size);
+        line-height: var(--type-hero-leading);
+        text-wrap: pretty;
         overflow-wrap: anywhere;
     }
 
-    .hero.hero-image-overlay .hero-rich-title {
-        font-size: var(--type-hero-size);
-        line-height: var(--type-hero-leading);
+    .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-desc {
+        color: var(--muted);
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+        font-weight: var(--font-weight-normal);
     }
 
-    .hero.hero-image-overlay .hero-rich-desc {
-        font-size: var(--type-helper-size);
-        line-height: var(--type-helper-leading);
-    }
-
-    .hero.hero-image-overlay .hero-rich-pill {
+    .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-pill {
+        color: var(--accent-ink);
         font-size: var(--type-meta-size);
         line-height: var(--type-meta-leading);
         letter-spacing: var(--tracking-normal);
     }
 
+    .hero.hero-image-overlay .hero-stat-badge :is(.stat-num, .stat-lbl) {
+        color: var(--text);
+    }
+
     .hero.hero-image-overlay .hero-rich-cta-btn {
-        padding: 10px 16px;
-        margin-top: 4px;
-        font-size: var(--type-label-size);
-        line-height: var(--type-label-leading);
+        padding: 10px 18px;
+        margin-top: 0;
+        font-size: var(--type-action-size);
+        line-height: var(--type-action-leading);
+    }
+
+    .home-page .hero.hero-image-overlay .hero-overlay-controls {
+        order: 2;
+        position: static;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0 16px 16px;
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar {
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-item {
+        color: var(--muted);
     }
 }

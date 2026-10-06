@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { heroImageForViewport } from '../../../../storefront-content-plugin/src/shared/hero-image';
 import { newContentBlock } from './storefront-content-utils';
 import {
     applyDecorationDraft,
@@ -57,40 +56,6 @@ describe('decoration drafts follow the Shop publication contract', () => {
             imageUrl: '/assets/preview/banner.png',
             imageAsset: { width: 1600, height: 520 },
             items: [],
-        });
-    });
-
-    it('preserves phone image dimensions in a draft and selects the same media as the real client', () => {
-        const block = newContentBlock('HERO', 0, '轮播');
-        block.imageAsset = {
-            id: 'desktop',
-            name: 'desktop.png',
-            preview: '/assets/desktop.png',
-            source: '/assets/desktop-original.png',
-            width: 1600,
-            height: 650,
-        };
-        block.settings = {
-            themePreset: 'bright',
-            mobileImageUrl: '/assets/phone.png',
-            mobileImageAssetId: 'phone',
-            mobileImageWidth: 1280,
-            mobileImageHeight: 960,
-        };
-        const draft = decorationDraft(block, 'zh_Hans').block!;
-        expect(draft.settings).toEqual(block.settings);
-        expect(heroImageForViewport(draft, false)).toEqual({
-            imageUrl: '/assets/phone.png',
-            imageAsset: { width: 1280, height: 960 },
-        });
-        expect(heroImageForViewport(draft, true)).toEqual({
-            imageUrl: '/assets/desktop.png',
-            imageAsset: { width: 1600, height: 650 },
-        });
-        block.settings.mobileImageUrl = null;
-        expect(heroImageForViewport(decorationDraft(block, 'zh_Hans').block!, false)).toEqual({
-            imageUrl: '/assets/desktop.png',
-            imageAsset: { width: 1600, height: 650 },
         });
     });
 

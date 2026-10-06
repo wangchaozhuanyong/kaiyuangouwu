@@ -32,13 +32,12 @@ import {
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
-import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
-import { useDesktopLayout, useDesktopViewport } from '../desktop-layout';
+import { useDesktopLayout } from '../desktop-layout';
 import {
     HERO_HEIGHT_TRANSITION_MS,
     HERO_TRANSITION_MS,
@@ -454,8 +453,6 @@ export interface HomePageProps {
 export function HomePage() {
     const navigate = useNavigate();
     const desktop = useDesktopLayout();
-    const wideHeroViewport = useDesktopViewport('(min-width: 600px)');
-    const wideHeroImage = desktop || wideHeroViewport;
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         products,
@@ -504,12 +501,8 @@ export function HomePage() {
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
-        () =>
-            contentBlocks.filter(
-                block =>
-                    block.type === 'HERO' && Boolean(heroImageForViewport(block, wideHeroImage).imageUrl),
-            ),
-        [contentBlocks, wideHeroImage],
+        () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
+        [contentBlocks],
     );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
@@ -592,7 +585,7 @@ export function HomePage() {
             ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
             : undefined;
     const hero = managedHeroProduct;
-    const heroImage = heroImageForViewport(managedHero, wideHeroImage).imageUrl;
+    const heroImage = managedHero?.imageUrl ?? '';
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -680,7 +673,7 @@ export function HomePage() {
             const transitionId = ++heroTransitionRef.current;
             clearHeroMotionSchedule();
             if (nextIndex === heroIndex) return;
-            const nextImage = heroImageForViewport(nextHero, wideHeroImage).imageUrl;
+            const nextImage = nextHero.imageUrl ?? '';
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
             } catch {
@@ -724,14 +717,7 @@ export function HomePage() {
                 });
             });
         },
-        [
-            clearHeroMotionSchedule,
-            wideHeroImage,
-            heroIndex,
-            managedHeroes,
-            settleHeroMotion,
-            updateHeroMotion,
-        ],
+        [clearHeroMotionSchedule, heroIndex, managedHeroes, settleHeroMotion, updateHeroMotion],
     );
 
     useEffect(() => {
@@ -757,14 +743,16 @@ export function HomePage() {
         const stage = heroStageRef.current;
         const viewport = heroViewportRef.current;
         if (!stage || !viewport) return;
-        const copySurfaces = Array.from(stage.querySelectorAll<HTMLElement>('.hero-rich-content'));
+        const heightSurfaces = Array.from(
+            stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
+        );
         const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
         const measure = () => {
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
                 Math.max(
                     minimum,
-                    ...copySurfaces.map(copy => copy.getBoundingClientRect().height),
+                    ...heightSurfaces.map(surface => surface.getBoundingClientRect().height),
                     gallery?.getBoundingClientRect().height ?? 0,
                 ),
             );
@@ -779,7 +767,7 @@ export function HomePage() {
             setHeroStageHeight(height);
         };
         const observer = new ResizeObserver(measure);
-        copySurfaces.forEach(copy => observer.observe(copy));
+        heightSurfaces.forEach(surface => observer.observe(surface));
         observer.observe(viewport);
         if (gallery) observer.observe(gallery);
         window.addEventListener('resize', measure);
@@ -885,9 +873,9 @@ export function HomePage() {
         const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
         const nextHero = managedHeroes[nextIndex];
         if (!nextHero) return;
-        const nextImage = heroImageForViewport(nextHero, wideHeroImage).imageUrl;
+        const nextImage = nextHero.imageUrl ?? '';
         void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
-    }, [wideHeroImage, heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
+    }, [heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -1285,11 +1273,7 @@ export function HomePage() {
                                                         : neighbor
                                                           ? `calc(${direction * 100}% + ${offset}px)`
                                                           : `${offset}px`;
-                                                    const slideMedia = heroImageForViewport(
-                                                        slide,
-                                                        wideHeroImage,
-                                                    );
-                                                    const slideImage = slideMedia.imageUrl;
+                                                    const slideImage = slide.imageUrl ?? '';
                                                     return (
                                                         <div
                                                             key={slide.id}
@@ -1301,7 +1285,7 @@ export function HomePage() {
                                                             inert={neighbor || undefined}
                                                         >
                                                             <HeroScene
-                                                                content={{ ...slide, imageUrl: slideImage }}
+                                                                content={slide}
                                                                 mediaOverlay={
                                                                     <div className="hero-overlay-controls">
                                                                         {overlayTrustBar && (
@@ -1366,11 +1350,11 @@ export function HomePage() {
                                                                         className="hero-rich-backdrop"
                                                                         imageKind="hero"
                                                                         width={
-                                                                            slideMedia.imageAsset?.width ||
+                                                                            slide.imageAsset?.width ||
                                                                             undefined
                                                                         }
                                                                         height={
-                                                                            slideMedia.imageAsset?.height ||
+                                                                            slide.imageAsset?.height ||
                                                                             undefined
                                                                         }
                                                                         loading="eager"
