@@ -165,7 +165,7 @@ h6 {
     font-family: var(--font-numeric);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-numeric);
-    color: var(--accent-ink);
+    color: var(--price-ink, var(--accent-ink));
     font-weight: var(--font-weight-bold);
 }
 

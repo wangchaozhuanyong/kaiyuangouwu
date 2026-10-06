@@ -304,6 +304,7 @@ export function AppShell() {
         profileContextQuery.data?.myStoreProfile?.channelId === channelData?.activeChannel.id
             ? profileContextQuery.data?.myStoreProfile?.logoAsset?.preview
             : undefined;
+    const adminLogoUrl = storeLogoUrl || (isPlatformContext ? adminBrandIcon : undefined);
     const displayLanguage = getAdminDisplayLanguage();
     const adminBrandName = isPlatformContext
         ? getChannelDisplayName('__default_channel__', displayLanguage)
@@ -718,8 +719,10 @@ export function AppShell() {
         }
     };
 
-    const navItemClass = ({ isActive }: { isActive: boolean }) =>
-        `pl-11 pr-3 py-2 rounded text-xs transition-colors block ${isActive ? 'text-blue-400 font-bold bg-white/5' : 'text-slate-400 hover:text-white hover:bg-white/5'}`;
+    const activeNavigationSection = resolveAppShellOpenMenu(
+        location.pathname,
+        getNextAdminExtensionRoute(location.pathname)?.navItem?.sectionId,
+    );
 
     return (
         <div className="admin-app-shell flex h-screen overflow-hidden bg-slate-50">
@@ -744,24 +747,29 @@ export function AppShell() {
                 ref={sidebarRef}
                 aria-hidden={!isDesktop && !isSidebarOpen}
                 inert={!isDesktop && !isSidebarOpen ? true : undefined}
-                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out xl:relative xl:z-20 ${isSidebarOpen ? 'translate-x-0 xl:w-64' : '-translate-x-full xl:w-16 xl:translate-x-0'}`}
+                className={`admin-sidebar fixed inset-y-0 left-0 z-40 flex w-56 shrink-0 flex-col transition-[transform,width] duration-150 ease-out xl:relative xl:z-20 ${isSidebarOpen ? 'translate-x-0 xl:w-56' : '-translate-x-full xl:w-16 xl:translate-x-0'}`}
             >
-                <div className="flex h-auto min-h-14 shrink-0 items-center justify-center border-b border-white/10 px-3 py-3 xl:h-14 xl:px-0 xl:py-0">
+                <div className="admin-sidebar-brand flex h-auto min-h-14 shrink-0 items-center justify-center border-b px-3 py-3 xl:h-14 xl:py-0">
                     <div className="flex min-w-0 max-w-full items-center gap-2">
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
-                            {!isPlatformContext && <span aria-hidden="true">{adminBrandName.charAt(0)}</span>}
-                            <img
-                                key={storeLogoUrl ?? 'platform-admin'}
-                                src={storeLogoUrl ?? (isPlatformContext ? adminBrandIcon : undefined)}
-                                alt=""
-                                className="absolute inset-0 h-full w-full bg-white object-contain"
-                                onError={event => {
-                                    event.currentTarget.style.display = 'none';
-                                }}
-                            />
+                            <span aria-hidden="true">{adminBrandName.charAt(0)}</span>
+                            {adminLogoUrl && (
+                                <img
+                                    key={adminLogoUrl}
+                                    src={adminLogoUrl}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full bg-white object-contain"
+                                    onError={event => {
+                                        event.currentTarget.style.display = 'none';
+                                    }}
+                                />
+                            )}
                         </div>
                         {isSidebarOpen && (
-                            <span className="min-w-0 break-words font-bold text-white text-base tracking-wide">
+                            <span
+                                className="min-w-0 break-words font-bold text-sm leading-tight line-clamp-2"
+                                title={adminBrandName}
+                            >
                                 {adminBrandName}
                             </span>
                         )}
@@ -769,6 +777,7 @@ export function AppShell() {
                 </div>
 
                 <nav
+                    aria-label={displayLanguage === 'en' ? 'Administration navigation' : '管理导航'}
                     className="custom-scrollbar flex-1 space-y-1 overflow-x-hidden overflow-y-auto p-2"
                     onClick={event => {
                         if (
@@ -781,7 +790,7 @@ export function AppShell() {
                 >
                     <AdminButton
                         type="button"
-                        className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-slate-300 md:hidden"
+                        className="admin-sidebar-nav-item mb-2 flex w-full items-center gap-3 px-3 py-2 text-xs md:hidden"
                         onClick={() => {
                             setIsSidebarOpen(false);
                             setIsCmdKOpen(true);
@@ -821,9 +830,8 @@ export function AppShell() {
                                     key={section}
                                     to={items[0].path}
                                     aria-label={labelText}
-                                    className={({ isActive }) =>
-                                        `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
-                                    }
+                                    title={!isSidebarOpen ? labelText : undefined}
+                                    className={`admin-sidebar-nav-item flex min-h-10 items-center ${isSidebarOpen ? 'px-3' : 'mx-auto w-12 justify-center'}`}
                                 >
                                     <Icon className="h-4 w-4 shrink-0" />
                                     {isSidebarOpen && <span className="ml-3 text-xs">{labelText}</span>}
@@ -834,14 +842,21 @@ export function AppShell() {
                                 <AdminButton
                                     type="button"
                                     aria-label={labelText}
-                                    aria-expanded={openMenu === section}
+                                    aria-expanded={isSidebarOpen && openMenu === section}
+                                    aria-controls={
+                                        isSidebarOpen && openMenu === section
+                                            ? `admin-nav-${section}`
+                                            : undefined
+                                    }
+                                    title={!isSidebarOpen ? labelText : undefined}
+                                    data-current={activeNavigationSection === section ? 'true' : undefined}
                                     onClick={() => toggleMenu(section)}
-                                    className={`flex h-10 w-full items-center rounded-lg text-left text-slate-400 transition-colors hover:bg-white/5 hover:text-white ${isSidebarOpen ? 'px-3' : 'justify-center'}`}
+                                    className={`admin-sidebar-nav-item admin-sidebar-section flex min-h-10 w-full items-center text-left ${isSidebarOpen ? 'px-3' : 'justify-center'}`}
                                 >
-                                    <Icon className="h-4 w-4 shrink-0 text-blue-400" />
+                                    <Icon className="h-4 w-4 shrink-0" />
                                     {isSidebarOpen && (
                                         <>
-                                            <span className="ml-3 flex-1 whitespace-nowrap text-xs">
+                                            <span className="ml-3 min-w-0 flex-1 break-words text-xs">
                                                 {labelText}
                                             </span>
                                             <ChevronDown
@@ -851,9 +866,16 @@ export function AppShell() {
                                     )}
                                 </AdminButton>
                                 {isSidebarOpen && openMenu === section && (
-                                    <div className="mt-1 space-y-0.5">
+                                    <div
+                                        id={`admin-nav-${section}`}
+                                        className="admin-sidebar-submenu mt-1 space-y-0.5"
+                                    >
                                         {items.map(item => (
-                                            <NavLink key={item.path} to={item.path} className={navItemClass}>
+                                            <NavLink
+                                                key={item.path}
+                                                to={item.path}
+                                                className="admin-sidebar-nav-item block px-3 py-2 text-xs"
+                                            >
                                                 {item.title}
                                             </NavLink>
                                         ))}

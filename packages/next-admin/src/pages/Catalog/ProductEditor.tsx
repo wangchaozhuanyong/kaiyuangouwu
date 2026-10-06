@@ -53,7 +53,7 @@ export function ProductEditor() {
 
                 {/* Main Form Body */}
                 <div className="admin-mobile-editor-body w-full min-h-0 overflow-y-auto md:col-start-1 md:col-span-2 md:row-start-2">
-                    <div className="mx-auto w-full max-w-[1680px] space-y-4 p-4 sm:p-6">
+                    <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
                         {/* 成功通知 */}
                         {notification && (
                             <div

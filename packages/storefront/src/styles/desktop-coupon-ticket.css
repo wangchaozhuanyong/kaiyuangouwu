@@ -35,9 +35,19 @@
         gap: 9px;
         min-width: 0;
         padding: 16px 10px;
-        background: color-mix(in srgb, var(--coupon-face) 10%, var(--surface));
+        background: var(--skin-coupon-tint, color-mix(in srgb, var(--coupon-face) 10%, var(--surface)));
         color: var(--coupon-face);
         text-align: center;
+    }
+    .desktop-coupon-ticket.is-history .desktop-coupon-value {
+        color: var(--skin-coupon-inactive-ink, var(--coupon-face));
+    }
+    .desktop-coupon-ticket.is-history .desktop-coupon-value,
+    .desktop-coupon-ticket.is-unavailable .desktop-coupon-value {
+        background: var(
+            --skin-coupon-inactive-surface,
+            color-mix(in srgb, var(--coupon-face) 10%, var(--surface))
+        );
     }
     .desktop-coupon-value > div {
         display: flex;
@@ -108,24 +118,35 @@
         padding: 5px 8px;
         border: 0;
         border-radius: 5px;
-        background: var(--control-surface);
-        color: var(--text);
+        background: var(--skin-coupon-inactive-surface, var(--control-surface));
+        color: var(--skin-coupon-inactive-ink, var(--text));
         box-shadow: none;
         font: inherit;
         font-size: var(--type-label-size);
         line-height: var(--type-label-leading);
     }
     .desktop-coupon-ticket .desktop-coupon-action > button:not(:disabled) {
-        color: var(--accent-ink);
+        background: var(--skin-coupon-action-surface, var(--control-surface));
+        color: var(--skin-coupon-action-ink, var(--accent-ink));
         cursor: pointer;
+    }
+    .desktop-coupon-ticket .desktop-coupon-action > button:hover:not(:disabled) {
+        background: var(--skin-coupon-action-hover, var(--control-surface));
+    }
+    .desktop-coupon-ticket .desktop-coupon-action > button:active:not(:disabled) {
+        background: var(--skin-coupon-action-pressed, var(--control-surface));
     }
     .desktop-coupon-ticket .desktop-coupon-action > button:disabled {
         opacity: 1;
         color: var(--muted);
         cursor: not-allowed;
     }
+    .desktop-coupon-ticket .desktop-coupon-action > .coupon-ticket-status:not(.is-used) {
+        background: var(--skin-coupon-pending-surface, var(--control-surface));
+        color: var(--skin-coupon-pending-ink, var(--text));
+    }
     .desktop-coupon-ticket .desktop-coupon-action > button:focus-visible {
-        outline: 2px solid var(--accent-ink);
+        outline: 2px solid var(--skin-coupon-focus, var(--accent-ink));
         outline-offset: 2px;
     }
     .coupon-sheet-content .applied-coupons {

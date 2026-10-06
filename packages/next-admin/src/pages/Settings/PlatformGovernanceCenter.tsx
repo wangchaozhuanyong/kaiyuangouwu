@@ -412,39 +412,41 @@ export function PlatformGovernanceCenter({
                         </div>
                     </section>
                 )}
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    {!standalonePage && (
-                        <StoreSettingsNavigation
-                            tab={tab}
-                            onTabChange={setTab}
-                            canReadFinance={canReadFinance}
-                            canReadBusinessSettings={canReadBusinessSettings}
-                        />
-                    )}
-                    {tab === 'DOMAINS' && profiles.length > 0 && (
-                        <AdminSelect
-                            value={selectedProfile?.id ?? ''}
-                            onChange={event => setSelectedStoreId(event.target.value)}
-                            className={`${inputClass} w-full xl:w-72`}
-                        >
-                            {profiles.map(profile => (
-                                <option key={profile.id} value={profile.id}>
-                                    {storeName(profile)}
-                                </option>
-                            ))}
-                        </AdminSelect>
-                    )}
-                    {tab === 'SELLERS' && (
-                        <AdminButton
-                            type="button"
-                            onClick={() => setSellerOpen(true)}
-                            className={primaryButton}
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            新增商家主体
-                        </AdminButton>
-                    )}
-                </div>
+                {(!standalonePage || (tab === 'DOMAINS' && profiles.length > 0) || tab === 'SELLERS') && (
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        {!standalonePage && (
+                            <StoreSettingsNavigation
+                                tab={tab}
+                                onTabChange={setTab}
+                                canReadFinance={canReadFinance}
+                                canReadBusinessSettings={canReadBusinessSettings}
+                            />
+                        )}
+                        {tab === 'DOMAINS' && profiles.length > 0 && (
+                            <AdminSelect
+                                value={selectedProfile?.id ?? ''}
+                                onChange={event => setSelectedStoreId(event.target.value)}
+                                className={`${inputClass} w-full xl:w-72`}
+                            >
+                                {profiles.map(profile => (
+                                    <option key={profile.id} value={profile.id}>
+                                        {storeName(profile)}
+                                    </option>
+                                ))}
+                            </AdminSelect>
+                        )}
+                        {tab === 'SELLERS' && (
+                            <AdminButton
+                                type="button"
+                                onClick={() => setSellerOpen(true)}
+                                className={primaryButton}
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                新增商家主体
+                            </AdminButton>
+                        )}
+                    </div>
+                )}
                 {query.error && !query.data ? (
                     <ErrorState message={queryError} onRetry={() => void query.refetch()} />
                 ) : !initializedStoreSettings ? (

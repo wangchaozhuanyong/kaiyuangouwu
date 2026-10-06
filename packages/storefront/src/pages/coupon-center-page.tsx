@@ -430,6 +430,7 @@ export function CouponCenterPage() {
                                             key={record.id}
                                             card={couponCardFromUsageRecord(record, language, index)}
                                             muted
+                                            historical
                                             action={
                                                 <span className="coupon-ticket-status is-used">
                                                     <Check size={13} aria-hidden="true" />
@@ -644,24 +645,35 @@ export function CouponQueryBoundary({
 function CouponTicket({
     card,
     muted,
+    historical = false,
     action,
     meta,
     scope,
 }: {
     card: StorefrontCouponCard;
     muted?: boolean;
+    historical?: boolean;
     action: ReactNode;
     meta?: string;
     scope: string;
 }) {
     const desktop = useDesktopLayout();
-    if (desktop) return <DesktopCouponTicket card={card} action={action} meta={meta} scope={scope} />;
+    if (desktop)
+        return (
+            <DesktopCouponTicket
+                card={card}
+                action={action}
+                meta={meta}
+                scope={scope}
+                historical={historical}
+            />
+        );
     return (
         <article className="coupon-center-ticket-item">
             <div
                 className={`coupon-ticket-card coupon-center-ticket coupon-ticket-${card.theme}${
                     muted ? ' is-claimed' : ''
-                }`}
+                }${historical ? ' is-history' : ''}`}
             >
                 <div className="coupon-ticket-main">
                     <div className="coupon-ticket-top">

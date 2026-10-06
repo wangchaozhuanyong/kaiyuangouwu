@@ -4,7 +4,7 @@
 /* Composite search fields own one stable boundary, including their input focus. */
 :is(.proto-search-form, .search-input-field) {
     height: var(--experience-control-min);
-    border: 1px solid var(--line);
+    border: 1px solid var(--control-border, var(--line));
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     outline: 0;
@@ -146,6 +146,15 @@
     background: var(--auth-accent-hover, var(--accent-hover));
     color: var(--auth-button-foreground, var(--accent-foreground));
     box-shadow: none;
+}
+
+:is(.primary-action, .order-btn.primary-btn):active:not(:disabled) {
+    border-color: var(--accent-pressed, var(--auth-accent, var(--accent)));
+    background: var(--accent-pressed, var(--auth-accent, var(--accent)));
+}
+:is(.primary-action, .order-btn.primary-btn):hover:active:not(:disabled) {
+    border-color: var(--accent-pressed, var(--auth-accent-hover, var(--accent-hover)));
+    background: var(--accent-pressed, var(--auth-accent-hover, var(--accent-hover)));
 }
 
 .primary-action:disabled {

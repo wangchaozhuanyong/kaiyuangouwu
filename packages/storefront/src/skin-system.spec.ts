@@ -399,7 +399,7 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // The shared account surface uses foreground-derived shortcut and referral dividers.
+                        // Account dividers retain their geometry while each preset supplies its approved color.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
                             [
@@ -407,7 +407,7 @@ describe('storefront skin system', () => {
                                 '.account-identity-promotion|top',
                             ].includes(`${selector.trim()}|${border[1]}`) &&
                             border[2].trim() ===
-                                '1px solid color-mix(in srgb, var(--accent-foreground) 24%, transparent)'
+                                '1px solid var(--skin-account-divider, color-mix(in srgb, var(--accent-foreground) 24%, transparent))'
                         ) {
                             continue;
                         }
@@ -1100,7 +1100,7 @@ describe('storefront skin system', () => {
 
     it('uses readable emphasis for every price and sizes the actual card price markup', () => {
         const source = stylesheet('./styles.css');
-        expect(source).toMatch(/\.price-lockup\s*\{[^}]*color:\s*var\(--accent-ink\);/);
+        expect(source).toMatch(/\.price-lockup\s*\{[^}]*color:\s*var\(--price-ink, var\(--accent-ink\)\);/);
         for (const part of ['symbol', 'decimal']) {
             const block = source.match(
                 new RegExp('\\.price-lockup \\.price-' + part + '\\s*\\{([^}]+)\\}'),

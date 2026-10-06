@@ -30,6 +30,7 @@ interface DynamicCustomFieldsFormProps {
     footer?: ReactNode;
     columns?: 1 | 2;
     embedded?: boolean;
+    compact?: boolean;
 }
 
 export function DynamicCustomFieldsForm({
@@ -46,6 +47,7 @@ export function DynamicCustomFieldsForm({
     footer,
     columns = 2,
     embedded = false,
+    compact = false,
 }: DynamicCustomFieldsFormProps) {
     const { hasAnyPermission } = useAdminPermissions();
     const [showErrors, setShowErrors] = useState(false);
@@ -62,23 +64,33 @@ export function DynamicCustomFieldsForm({
     return (
         <section
             className={
-                embedded
-                    ? 'border-t border-slate-100 pt-4'
-                    : 'rounded-xl border border-slate-200 bg-white p-5 shadow-2xs'
+                compact
+                    ? '@container min-w-0'
+                    : embedded
+                      ? 'border-t border-slate-100 pt-4'
+                      : 'rounded-xl border border-slate-200 bg-white p-5 shadow-2xs'
             }
         >
-            <div className="mb-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                    {title}
-                    <FeatureHelpButton
-                        topic={helpTopic}
-                        title={title}
-                        content={{ purpose: description, requirements: [], example: '' }}
-                    />
-                </h2>
-            </div>
+            {title && (
+                <div className={compact ? 'mb-3' : 'mb-4'}>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        {title}
+                        <FeatureHelpButton
+                            topic={helpTopic}
+                            title={title}
+                            content={{ purpose: description, requirements: [], example: '' }}
+                        />
+                    </h2>
+                </div>
+            )}
             <div
-                className={columns === 1 ? 'grid gap-3 [&>label]:col-span-full' : 'grid gap-4 md:grid-cols-2'}
+                className={
+                    compact
+                        ? 'grid min-w-0 grid-cols-1 gap-3 @min-[36rem]:grid-cols-2 @min-[60rem]:grid-cols-3 [&>.admin-field]:min-w-0 [&>[data-admin-field=stacked]]:col-span-full'
+                        : columns === 1
+                          ? 'grid gap-3 [&>label]:col-span-full'
+                          : 'grid gap-4 md:grid-cols-2'
+                }
             >
                 {visibleFields.map(field => (
                     <CustomFieldControl

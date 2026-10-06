@@ -1,9 +1,9 @@
-/* Shared account feature surface: one stronger skin-colored group above reading content. */
+/* Shared account surface roles keep identity content distinct from primary actions. */
 .account-identity {
     overflow: hidden;
     border-radius: var(--skin-card-radius);
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--skin-account-surface, var(--accent));
+    color: var(--skin-account-ink, var(--accent-foreground));
     box-shadow: var(--skin-card-shadow);
 }
 .account-identity-card {
@@ -20,7 +20,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-12);
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
@@ -35,7 +35,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
-    color: inherit;
+    color: var(--skin-account-emphasis, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     cursor: pointer;
@@ -65,7 +65,7 @@
     border: 0;
     border-radius: 50%;
     background: var(--accent-foreground);
-    color: var(--accent);
+    color: var(--skin-account-avatar-ink, var(--accent));
     font-size: var(--type-metric-size);
     line-height: var(--type-metric-leading);
     font-weight: var(--font-weight-semibold);
@@ -90,7 +90,7 @@
 .account-identity-details p {
     margin: 0;
     overflow-wrap: anywhere;
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
@@ -111,16 +111,17 @@
     padding: 0 var(--space-4);
     border: 0;
     background: transparent;
-    color: inherit;
+    color: var(--skin-account-emphasis, inherit);
     text-align: center;
     cursor: pointer;
 }
-/* Keep three equal columns with subtle separators derived from the active foreground. */
+/* Keep the existing separators; their color follows the shared account surface. */
 .account-identity-assets > button + button {
-    border-left: 1px solid color-mix(in srgb, var(--accent-foreground) 24%, transparent);
+    border-left: 1px solid
+        var(--skin-account-divider, color-mix(in srgb, var(--accent-foreground) 24%, transparent));
 }
 .account-identity-assets > button:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--skin-account-hover, var(--accent-hover));
 }
 .account-identity-assets > button > span {
     display: flex;
@@ -150,7 +151,7 @@
     line-height: var(--type-label-leading);
 }
 .account-identity-assets small {
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
@@ -158,13 +159,13 @@
     cursor: default;
 }
 .account-identity-assets > button:disabled :is(svg, strong, small) {
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
 }
 .account-identity button {
     font-family: inherit;
 }
 .account-identity button:focus-visible {
-    outline: var(--experience-focus-width) solid var(--accent-foreground);
+    outline: var(--experience-focus-width) solid var(--skin-account-focus, var(--accent-foreground));
     outline-offset: var(--experience-focus-offset);
 }
 .account-identity-promotion {
@@ -176,7 +177,8 @@
     margin-top: 0;
     padding: var(--space-8) var(--space-16);
     border: 0;
-    border-top: 1px solid color-mix(in srgb, var(--accent-foreground) 24%, transparent);
+    border-top: 1px solid
+        var(--skin-account-divider, color-mix(in srgb, var(--accent-foreground) 24%, transparent));
     background: transparent;
     color: inherit;
 }
@@ -199,15 +201,19 @@
     padding: var(--space-8) var(--space-16);
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--accent-foreground);
-    color: var(--accent);
+    background: var(--skin-account-action-surface, var(--accent-foreground));
+    color: var(--skin-account-action-ink, var(--accent));
     font-size: var(--type-label-size);
     font-weight: var(--font-weight-semibold);
     line-height: var(--type-label-leading);
     cursor: pointer;
 }
 .account-identity-promotion-actions > button:hover {
-    color: var(--accent-hover);
+    background: var(--skin-account-action-hover, var(--accent-foreground));
+    color: var(--skin-account-action-hover-ink, var(--accent-hover));
+}
+.account-identity-promotion-actions > button:active {
+    background: var(--skin-account-action-pressed, var(--accent-foreground));
 }
 .account-identity-promotion-actions > button svg {
     width: 16px;
@@ -221,7 +227,7 @@
 }
 .account-identity-promotion-balance p {
     margin: 0;
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
@@ -231,7 +237,7 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: var(--space-4);
-    color: inherit;
+    color: var(--skin-account-emphasis, inherit);
     font-size: var(--type-price-size);
     font-weight: var(--font-weight-semibold);
     line-height: var(--type-price-leading);
@@ -248,7 +254,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-4);
-    color: inherit;
+    color: var(--skin-account-muted, inherit);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
@@ -277,24 +283,28 @@
     padding: 0 var(--space-16);
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--accent-foreground);
-    color: var(--accent);
+    background: var(--skin-account-action-surface, var(--accent-foreground));
+    color: var(--skin-account-action-ink, var(--accent));
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
 .account-identity-guest-actions button:hover {
-    color: var(--accent-hover);
+    background: var(--skin-account-action-hover, var(--accent-foreground));
+    color: var(--skin-account-action-hover-ink, var(--accent-hover));
+}
+.account-identity-guest-actions button:first-child:active {
+    background: var(--skin-account-action-pressed, var(--accent-foreground));
 }
 .account-identity-guest-actions button + button {
-    border: 1px solid var(--accent-foreground);
+    border: 1px solid var(--skin-account-secondary-border, var(--accent-foreground));
     background: transparent;
     color: inherit;
 }
 .account-identity-guest-actions button + button:hover {
-    background: var(--accent-hover);
-    color: var(--accent-foreground);
+    background: var(--skin-account-hover, var(--accent-hover));
+    color: var(--skin-account-secondary-hover-ink, var(--accent-foreground));
 }
 @media (max-width: 1023px) {
     .account-page .account-identity {

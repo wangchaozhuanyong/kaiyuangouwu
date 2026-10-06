@@ -671,7 +671,7 @@ export function CatalogModule() {
                     {/* Toolbar */}
                     <div
                         data-testid="catalog-filter-toolbar"
-                        className="relative md:sticky z-30 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 md:-top-8"
+                        className="relative md:sticky z-30 flex flex-wrap items-center gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 md:-top-8"
                     >
                         <div className="flex flex-wrap gap-1.5">
                             <AdminButton
@@ -703,7 +703,7 @@ export function CatalogModule() {
                             </AdminButton>
                         </div>
 
-                        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                        <div className="flex w-full flex-wrap items-center gap-2 md:order-last md:ml-auto md:w-auto">
                             <div className="relative w-full md:w-auto">
                                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                 <SearchInput
@@ -742,7 +742,7 @@ export function CatalogModule() {
                             </AdminButton>
                         </div>
                         <div
-                            className={`${mobileFiltersExpanded ? 'flex' : 'hidden md:flex'} w-full flex-wrap items-center gap-3`}
+                            className={`${mobileFiltersExpanded ? 'flex' : 'hidden md:flex'} w-full flex-wrap items-center gap-3 md:w-auto`}
                         >
                             <AdminSelect
                                 value={categoryId}

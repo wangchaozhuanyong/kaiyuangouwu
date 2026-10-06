@@ -509,6 +509,7 @@ describe('ShopApi storefront mutations', () => {
         };
         expect(request.query).toContain('query StorefrontProducts($options: ProductListOptions)');
         expect(request.query).toContain('saleableStockLevel');
+        expect(request.query).toContain('autoCardAvailableStock');
         expect(request.query).not.toMatch(/\bstockLevel\b/);
         expect(request.variables).toEqual({ options: { take: 12, sort: { name: 'ASC' } } });
     });
@@ -1166,6 +1167,8 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain(
             'product { id name description featuredAsset { id preview } customFields { pricingMode } }',
         );
+        expect(request.query).toContain('saleableStockLevel');
+        expect(request.query).toContain('autoCardAvailableStock');
         expect(cart.lines[0].productVariant?.product.description).toBe(description);
     });
 
@@ -1923,6 +1926,9 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('query StorefrontCustomer');
         expect(request.query).toContain('checkoutShipping { methodName }');
+        // Historical variants may be unavailable; account reads must not resolve their current stock.
+        expect(request.query).not.toContain('saleableStockLevel');
+        expect(request.query).not.toContain('autoCardAvailableStock');
         expect(request.query).not.toContain('digitalDeliveries');
         expect(request.query).not.toContain('taxSummary');
         expect(request.query).not.toContain('handlerCode');
@@ -2258,6 +2264,8 @@ describe('ShopApi storefront mutations', () => {
         };
         expect(request.query).toContain('orders(options: $options)');
         expect(request.query).toContain('checkoutFulfillment { containsDigitalProducts }');
+        expect(request.query).not.toContain('saleableStockLevel');
+        expect(request.query).not.toContain('autoCardAvailableStock');
         expect(request.query).not.toContain('digitalDeliveries');
         expect(request.query).not.toContain('taxSummary');
         expect(request.query).not.toContain('handlerCode');
@@ -2308,6 +2316,8 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('taxSummary { description taxRate taxBase taxTotal }');
         expect(request.query).toContain('discounts { adjustmentSource description amountWithTax }');
+        expect(request.query).toContain('saleableStockLevel');
+        expect(request.query).toContain('autoCardAvailableStock');
         expect(request.query).not.toContain('handlerCode');
         expect(request.query).toContain('checkoutShipping {');
         expect(request.query).toContain('estimateMinDays');

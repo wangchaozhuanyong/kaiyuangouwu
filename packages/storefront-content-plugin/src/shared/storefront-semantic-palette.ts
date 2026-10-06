@@ -23,6 +23,7 @@ export interface StorefrontSemanticPalette {
     selection: string;
     selectionHover: string;
     onSelection: string;
+    selectionSoft?: string;
     interactionHover: string;
     interactionPressed: string;
     interactionInk: string;
@@ -187,47 +188,39 @@ function resolveClassicPalette(): StorefrontSemanticPalette {
     // Saved merchant colors remain content data and must not recolor shared controls.
     const page = '#f1f5f9';
     const surface = '#ffffff';
-    const surfaceText = '#0f172a';
-    const brandColor = '#2563eb';
+    const surfaceText = '#25292d';
+    const brandColor = '#292d32';
     const accentSource = brandColor;
     // Legacy primary controls use white labels, so the derived UI accent must always support them.
     const accentForeground = '#ffffff';
     const accent = makeAccessibleAgainst(accentSource, accentForeground, 4.5, 'dark');
 
-    const accentSoft = mixColors(surface, accent, 0.08);
-    const accentInk = makeAccessibleAgainstAll(accent, [page, surface, accentSoft], 4.5, 'dark');
+    const accentSoft = '#f4f2ed';
+    const accentInk = surfaceText;
     return {
         page,
         surface,
         elevated: '#ffffff',
-        subtle: mixColors(surface, surfaceText, 0.055),
+        // Existing white and gray foundations remain unchanged by the accent redesign.
+        subtle: '#f2f2f3',
         text: surfaceText,
-        muted: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.42),
-            [page, surface, accentSoft],
-            4.5,
-            'dark',
-        ),
+        muted: '#626b75',
         brand: brandColor,
         accent,
-        accentHover: makeAccessibleAgainst(mixColors(accent, '#000000', 0.14), accentForeground, 4.5, 'dark'),
+        accentHover: '#161a1e',
         accentSoft,
         accentInk,
         onAccent: accentForeground,
-        selection: '#24455d',
-        selectionHover: '#183447',
+        selection: '#735b36',
+        selectionHover: '#604b2c',
         onSelection: '#ffffff',
-        interactionHover: '#dee9f0',
-        interactionPressed: '#c6d8e4',
-        interactionInk: '#24455d',
-        border: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.58), [page, surface], 3, 'dark'),
-        borderStrong: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.42),
-            [page, surface],
-            3,
-            'dark',
-        ),
-        focus: makeAccessibleAgainstAll(accent, [page, surface], 3, 'dark'),
+        selectionSoft: accentSoft,
+        interactionHover: '#f4f2ed',
+        interactionPressed: '#eae5dc',
+        interactionInk: '#735b36',
+        border: '#7c8288',
+        borderStrong: '#7c8288',
+        focus: '#735b36',
         success: makeAccessibleAgainst('#047857', surface, 4.5),
         warning: makeAccessibleAgainst('#92400e', surface, 4.5),
         danger: makeAccessibleAgainst('#b91c1c', surface, 4.5),
@@ -263,33 +256,32 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
     },
 };
 
+const SHARED_SKIN_GEOMETRY = {
+    displayFont:
+        "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+    cardRadius: '16px',
+    heroRadius: '20px',
+    controlRadius: '10px',
+    mediaRadius: '12px',
+};
+
 const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment> = {
     classic: {
-        divider: '#e4ebf3',
-        cardOutline: '1px solid #d2ddea',
-        cardOutlineHover: '#c5d3e4',
-        displayFont:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-        cardRadius: '16px',
-        heroRadius: '20px',
-        controlRadius: '10px',
-        mediaRadius: '12px',
-        cardShadow: '0 2px 8px rgba(34, 65, 102, 0.04)',
-        cardHoverShadow: '0 4px 12px rgba(34, 65, 102, 0.07)',
-        heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
-        headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
+        divider: '#dfe3e8',
+        cardOutline: '1px solid #dfe3e8',
+        cardOutlineHover: '#cbd1d8',
+        ...SHARED_SKIN_GEOMETRY,
+        cardShadow: '0 2px 8px rgba(37, 41, 45, 0.04)',
+        cardHoverShadow: '0 4px 12px rgba(37, 41, 45, 0.07)',
+        heroShadow: '0 6px 24px rgba(37, 41, 45, 0.06)',
+        headerShadow: '0 2px 10px rgba(37, 41, 45, 0.04)',
     },
 
     'neo-minimalist': {
         divider: '#2a3548',
         cardOutline: 'initial',
         cardOutlineHover: 'initial',
-        displayFont:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-        cardRadius: '16px',
-        heroRadius: '20px',
-        controlRadius: '10px',
-        mediaRadius: '12px',
+        ...SHARED_SKIN_GEOMETRY,
         cardShadow: '0 8px 24px rgba(0, 0, 0, 0.24)',
         cardHoverShadow: '0 12px 28px rgba(0, 0, 0, 0.34)',
         heroShadow: '0 12px 32px rgba(0, 0, 0, 0.28)',
@@ -302,22 +294,22 @@ type StorefrontToolTone = 'security' | 'mail' | 'studio' | 'coupon' | 'support';
 /** Identity colors for service modules; text and controls still use the semantic palette. */
 const TOOL_ICON_TONES: Record<
     StorefrontVisualPresetId,
-    Record<StorefrontToolTone, { foreground: string; background: string }>
+    Record<StorefrontToolTone, [foreground: string, background: string]>
 > = {
     classic: {
-        security: { foreground: '#1d4ed8', background: '#dbeafe' },
-        mail: { foreground: '#0f766e', background: '#ccfbf1' },
-        studio: { foreground: '#6d28d9', background: '#ede9fe' },
-        coupon: { foreground: '#92400e', background: '#fef3c7' },
-        support: { foreground: '#b42318', background: '#fee4e2' },
+        security: ['#1d4ed8', '#dbeafe'],
+        mail: ['#0f766e', '#ccfbf1'],
+        studio: ['#6d28d9', '#ede9fe'],
+        coupon: ['#92400e', '#fef3c7'],
+        support: ['#b42318', '#fee4e2'],
     },
 
     'neo-minimalist': {
-        security: { foreground: '#93c5fd', background: '#19304f' },
-        mail: { foreground: '#5eead4', background: '#113b3a' },
-        studio: { foreground: '#c4b5fd', background: '#2b2052' },
-        coupon: { foreground: '#fcd34d', background: '#463414' },
-        support: { foreground: '#fda4af', background: '#4c2432' },
+        security: ['#93c5fd', '#19304f'],
+        mail: ['#5eead4', '#113b3a'],
+        studio: ['#c4b5fd', '#2b2052'],
+        coupon: ['#fcd34d', '#463414'],
+        support: ['#fda4af', '#4c2432'],
     },
 };
 
@@ -347,14 +339,15 @@ export function storefrontServiceCardCssVariables(
     const target = dark ? '#ffffff' : '#000000';
     const variables: Record<string, string> = {};
     for (const [tone, hue] of Object.entries(SERVICE_CARD_HUES)) {
+        const prefix = `--skin-service-${tone}-`;
         const surface = mixColors(palette.surface, hue, dark ? 0.25 : 0.14);
         const action = mixColors(palette.surface, hue, dark ? 0.43 : 0.31);
         const hover = mixColors(palette.surface, hue, dark ? 0.51 : 0.39);
-        variables[`--skin-service-${tone}-surface`] = surface;
-        variables[`--skin-service-${tone}-action`] = action;
-        variables[`--skin-service-${tone}-action-hover`] = hover;
-        variables[`--skin-service-${tone}-ink`] = serviceCardInk(hue, [surface, action, hover], target);
-        variables[`--skin-service-${tone}-description`] = serviceCardInk(palette.muted, [surface], target);
+        variables[`${prefix}surface`] = surface;
+        variables[`${prefix}action`] = action;
+        variables[`${prefix}action-hover`] = hover;
+        variables[`${prefix}ink`] = serviceCardInk(hue, [surface, action, hover], target);
+        variables[`${prefix}description`] = serviceCardInk(palette.muted, [surface], target);
     }
     return variables;
 }
@@ -363,28 +356,225 @@ export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetI
     return { ...SKIN_TREATMENTS[presetId] };
 }
 
+function assignColorVariables(
+    variables: Record<string, string>,
+    prefix: string,
+    colors: Record<string, string>,
+    fallback?: string,
+    useFallback = false,
+): void {
+    for (const [names, color] of Object.entries(colors)) {
+        for (const name of names.split(' ')) {
+            variables[prefix + name] = useFallback ? (fallback as string) : color;
+        }
+    }
+}
+
 export function storefrontSkinCssVariables(
     presetId: StorefrontVisualPresetId,
     palette: StorefrontSemanticPalette = resolveStorefrontSemanticPalette(presetId),
 ): Record<string, string> {
     const treatment = resolveStorefrontSkinTreatment(presetId);
+    const classic = presetId === 'classic';
     const variables: Record<string, string> = {
         ...storefrontServiceCardCssVariables(palette),
-        '--skin-divider': treatment.divider,
-        '--skin-card-outline': treatment.cardOutline,
-        '--skin-card-outline-hover': treatment.cardOutlineHover,
-        // Opt-in elevation for surfaces with an existing custom (or absent) shadow.
-        '--skin-card-outline-shadow': treatment.cardOutline === 'initial' ? 'initial' : treatment.cardShadow,
-        '--skin-display-font': treatment.displayFont,
-        '--skin-card-radius': treatment.cardRadius,
-        '--skin-hero-radius': treatment.heroRadius,
-        '--skin-control-radius': treatment.controlRadius,
-        '--skin-media-radius': treatment.mediaRadius,
-        '--skin-card-shadow': treatment.cardShadow,
-        '--skin-card-hover-shadow': treatment.cardHoverShadow,
-        '--skin-hero-shadow': treatment.heroShadow,
-        '--skin-header-shadow': treatment.headerShadow,
+        '--accent-disabled-text': palette.muted,
     };
+    assignColorVariables(variables, '--skin-', {
+        divider: treatment.divider,
+        'card-outline': treatment.cardOutline,
+        'card-outline-hover': treatment.cardOutlineHover,
+        // Opt-in elevation retains the existing initial fallback in other skins.
+        'card-outline-shadow': treatment.cardOutline === 'initial' ? 'initial' : treatment.cardShadow,
+        'display-font': treatment.displayFont,
+        'card-radius': treatment.cardRadius,
+        'hero-radius': treatment.heroRadius,
+        'control-radius': treatment.controlRadius,
+        'media-radius': treatment.mediaRadius,
+        'card-shadow': treatment.cardShadow,
+        'card-hover-shadow': treatment.cardHoverShadow,
+        'hero-shadow': treatment.heroShadow,
+        'header-shadow': treatment.headerShadow,
+    });
+    // Module colors belong to the shared skin; grouped aliases preserve identical values.
+    const moduleColors: Array<[string, string, Record<string, string>]> = [
+        [
+            '--',
+            'initial',
+            {
+                'accent-pressed': '#0f1215',
+                'skin-primary-hover': '#161a1e',
+                'control-border': '#7c8288',
+                'savings-ink': '#9b432c',
+            },
+        ],
+        [
+            '--',
+            palette.subtle,
+            {
+                'accent-disabled-bg': '#f0f1f2',
+            },
+        ],
+        [
+            '--',
+            palette.accentInk,
+            {
+                'price-ink': '#25292d',
+            },
+        ],
+        [
+            '--',
+            palette.accentSoft,
+            {
+                'savings-surface': '#fff2e8',
+            },
+        ],
+        [
+            '--',
+            palette.selection,
+            {
+                'navigation-surface': '#f4f2ed',
+            },
+        ],
+        [
+            '--',
+            palette.onSelection,
+            {
+                'navigation-foreground': '#735b36',
+            },
+        ],
+        [
+            '--',
+            palette.selectionHover,
+            {
+                'navigation-hover': '#eae5dc',
+            },
+        ],
+        [
+            '--skin-account-',
+            palette.accent,
+            {
+                surface: '#f5eee3',
+                'avatar-ink': '#735b36',
+                'action-ink': '#ffffff',
+            },
+        ],
+        [
+            '--skin-account-',
+            palette.onAccent,
+            {
+                'ink secondary-hover-ink': '#25292d',
+                muted: '#696052',
+                'emphasis focus': '#735b36',
+                'action-surface': '#292d32',
+                'action-hover': '#161a1e',
+                'action-pressed': '#0f1215',
+                'secondary-border': '#7c8288',
+            },
+        ],
+        [
+            '--skin-account-',
+            'color-mix(in srgb, var(--accent-foreground) 24%, transparent)',
+            {
+                divider: '#d8cbbb',
+            },
+        ],
+        [
+            '--skin-account-',
+            palette.accentHover,
+            {
+                hover: '#eee3d3',
+                'action-hover-ink': '#ffffff',
+            },
+        ],
+        [
+            '--skin-referral-',
+            palette.accent,
+            {
+                surface: '#eef3ee',
+            },
+        ],
+        [
+            '--skin-referral-',
+            palette.onAccent,
+            {
+                ink: '#314c3b',
+                muted: '#58655c',
+                'secondary-border': '#7c8288',
+                focus: '#735b36',
+            },
+        ],
+        [
+            '--skin-referral-',
+            palette.accentHover,
+            {
+                hover: '#dfe9df',
+                pressed: '#d6e2d6',
+            },
+        ],
+        [
+            '--skin-referral-',
+            palette.surface,
+            {
+                'link-surface': '#eef3ee',
+            },
+        ],
+        [
+            '--skin-referral-',
+            palette.text,
+            {
+                'link-ink': '#314c3b',
+            },
+        ],
+        [
+            '--skin-coupon-',
+            'initial',
+            {
+                tint: '#fff2e8',
+                'action-surface': '#fbede5',
+                'action-hover': '#f4dcd0',
+                'action-pressed': '#efd6c8',
+                'action-ink': '#9b432c',
+                opacity: '1',
+                'inactive-surface': '#f0f1f2',
+                'inactive-ink': '#626b75',
+                'pending-surface': '#fff5df',
+                'pending-ink': '#92400e',
+                focus: '#735b36',
+            },
+        ],
+        [
+            '--coupon-',
+            '#e99084',
+            {
+                'rose-ink': '#9b432c',
+            },
+        ],
+        [
+            '--coupon-',
+            '#d8bc80',
+            {
+                'gold-ink': '#9b432c',
+            },
+        ],
+        [
+            '--coupon-',
+            '#91bfc9',
+            {
+                'blue-ink': '#9b432c',
+            },
+        ],
+        [
+            '--coupon-',
+            '#88c8b1',
+            {
+                'emerald-ink': '#9b432c',
+            },
+        ],
+    ];
+    for (const [prefix, fallback, colors] of moduleColors) {
+        assignColorVariables(variables, prefix, colors, fallback, !classic);
+    }
     // Transparent icons sit directly on the shared surfaces, including hover states.
     // Derive their contrast from the resolved palette rather than a former icon tile.
     const iconSurfaces = [
@@ -397,14 +587,10 @@ export function storefrontSkinCssVariables(
         palette.interactionPressed,
     ];
     const direction = storefrontRelativeLuminance(palette.text) < 0.5 ? 'dark' : 'light';
-    for (const [tone, colors] of Object.entries(TOOL_ICON_TONES[presetId])) {
-        variables[`--skin-tool-${tone}-foreground`] = makeAccessibleAgainstAll(
-            colors.foreground,
-            iconSurfaces,
-            3,
-            direction,
-        );
-        variables[`--skin-tool-${tone}-background`] = colors.background;
+    for (const [tone, [foreground, background]] of Object.entries(TOOL_ICON_TONES[presetId])) {
+        const prefix = `--skin-tool-${tone}-`;
+        variables[`${prefix}foreground`] = makeAccessibleAgainstAll(foreground, iconSurfaces, 3, direction);
+        variables[`${prefix}background`] = background;
     }
     return variables;
 }
@@ -417,44 +603,36 @@ export function resolveStorefrontSemanticPalette(
 }
 
 export function semanticPaletteCssVariables(palette: StorefrontSemanticPalette): Record<string, string> {
-    return {
-        '--store-background': palette.page,
-        '--store-primary': palette.brand,
-        '--store-highlight': palette.accentHover,
-        '--store-foreground': palette.text,
-        '--auth-store-background': palette.page,
-        '--auth-store-foreground': palette.text,
-        '--brand-background': palette.page,
-        '--brand-primary': palette.brand,
-        '--brand-accent': palette.accent,
-        '--brand-highlight': palette.accentHover,
-        '--bg': palette.page,
-        '--paper': palette.surface,
-        '--surface': palette.surface,
-        '--surface-elevated': palette.elevated,
-        '--soft': palette.subtle,
-        '--text': palette.text,
-        '--muted': palette.muted,
-        '--accent': palette.accent,
-        '--accent-hover': palette.accentHover,
-        '--accent-soft': palette.accentSoft,
-        '--accent-foreground': palette.onAccent,
-        '--accent-ink': palette.accentInk,
-        '--selection': palette.selection,
-        '--selection-hover': palette.selectionHover,
-        '--selection-foreground': palette.onSelection,
-        '--selection-soft': mixColors(palette.surface, palette.interactionHover, 0.5),
-        '--interaction-hover': palette.interactionHover,
-        '--interaction-pressed': palette.interactionPressed,
-        '--interaction-ink': palette.interactionInk,
-        // Resting field edges are quiet. Strong boundaries and focus remain separate roles.
-        '--line': mixColors(palette.surface, palette.text, 0.14),
-        '--line-strong': palette.borderStrong,
-        '--focus': palette.focus,
-        '--success': palette.success,
-        '--warning': palette.warning,
-        '--danger': palette.danger,
-    };
+    const variables: Record<string, string> = {};
+    assignColorVariables(variables, '--', {
+        'store-background auth-store-background brand-background bg': palette.page,
+        'store-primary brand-primary': palette.brand,
+        'store-highlight brand-highlight accent-hover': palette.accentHover,
+        'store-foreground auth-store-foreground text': palette.text,
+        'brand-accent accent': palette.accent,
+        'paper surface': palette.surface,
+        'surface-elevated': palette.elevated,
+        soft: palette.subtle,
+        muted: palette.muted,
+        'accent-soft': palette.accentSoft,
+        'accent-foreground': palette.onAccent,
+        'accent-ink': palette.accentInk,
+        selection: palette.selection,
+        'selection-hover': palette.selectionHover,
+        'selection-foreground': palette.onSelection,
+        'interaction-hover': palette.interactionHover,
+        'interaction-pressed': palette.interactionPressed,
+        'interaction-ink': palette.interactionInk,
+        'line-strong': palette.borderStrong,
+        focus: palette.focus,
+        success: palette.success,
+        warning: palette.warning,
+        danger: palette.danger,
+        // Derived selection and neutral field edges retain their existing calculations.
+        'selection-soft': palette.selectionSoft ?? mixColors(palette.surface, palette.interactionHover, 0.5),
+        line: mixColors(palette.surface, palette.text, 0.14),
+    });
+    return variables;
 }
 
 export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalette): StorefrontPaletteAudit {

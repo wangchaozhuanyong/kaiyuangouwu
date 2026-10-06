@@ -68,7 +68,7 @@ export function ProductVariantsTab() {
         }
     };
     return (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                     <AdminInput
@@ -80,7 +80,7 @@ export function ProductVariantsTab() {
                     多规格
                     <FeatureHelpButton topic="catalog.variants" title="商品规格" />
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="grid w-full max-w-64 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:w-64">
                     <AdminInput
                         aria-label="批量售价"
                         value={batchPrice}
@@ -89,7 +89,7 @@ export function ProductVariantsTab() {
                         min="0"
                         step="0.01"
                         placeholder={`统一售价 (${activeCurrencyCode})`}
-                        className={`${inputClass} max-w-40`}
+                        className={inputClass}
                     />
                     <AdminButton
                         type="button"
@@ -99,7 +99,7 @@ export function ProductVariantsTab() {
                                 current.map(variant => ({ ...variant, price: batchPrice })),
                             )
                         }
-                        className="shrink-0 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        className="shrink-0 whitespace-nowrap text-xs font-semibold text-blue-700 disabled:opacity-50"
                     >
                         应用全部
                     </AdminButton>
@@ -116,7 +116,7 @@ export function ProductVariantsTab() {
                                 {group.options.map(option => option.name).join('、')}
                             </p>
                         ))}
-                    <div className="grid items-end gap-3 md:grid-cols-[1fr_2fr_auto]">
+                    <div className="grid min-w-0 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
                         <AdminField
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={<>规格名称</>}
@@ -186,7 +186,7 @@ export function ProductVariantsTab() {
                 {variants.map((variant, index) => (
                     <div
                         key={variant.id ?? index}
-                        className="grid items-start gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-4"
+                        className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-start gap-3 border-t border-slate-100 pt-3"
                     >
                         <AdminField
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
@@ -249,7 +249,7 @@ export function ProductVariantsTab() {
                                 </span>
                             )}
                         </AdminField>
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <AdminField
                                 className="block space-y-1.5 text-xs font-semibold text-slate-700"
                                 label={<>成本 ({activeCurrencyCode})</>}
@@ -268,7 +268,7 @@ export function ProductVariantsTab() {
                                     className={inputClass}
                                 />
                             </AdminField>
-                            <div className="flex items-center justify-between text-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                 <label className="flex items-center gap-1.5">
                                     <AdminInput
                                         type="checkbox"

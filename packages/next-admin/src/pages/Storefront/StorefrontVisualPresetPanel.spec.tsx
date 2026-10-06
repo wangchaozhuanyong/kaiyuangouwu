@@ -90,7 +90,7 @@ describe('fixed desktop layout skin settings', () => {
                 return rootVariables;
             });
             expect(new Set(previews).size).toBe(1);
-            if (presetId === 'classic') expect(previews[0]).toContain('--accent:#2563eb');
+            if (presetId === 'classic') expect(previews[0]).toContain('--accent:#292d32');
         },
     );
 

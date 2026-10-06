@@ -51,7 +51,7 @@ describe('storefront visual preset lifecycle', () => {
                 const properties: Record<string, string> = {};
                 const origin = 'https://store.example.test';
                 const payload = JSON.stringify({
-                    version: 2,
+                    version: 3,
                     origin,
                     channelCode: 'skin-test-store',
                     savedAt: Date.now(),
@@ -62,8 +62,18 @@ describe('storefront visual preset lifecycle', () => {
                     URLSearchParams,
                     location: { origin, search: '' },
                     window: {
-                        sessionStorage: { getItem: () => (storage === 'sessionStorage' ? payload : null) },
-                        localStorage: { getItem: () => (storage === 'localStorage' ? payload : null) },
+                        sessionStorage: {
+                            getItem: (key: string) =>
+                                storage === 'sessionStorage' && key === '__storefront_theme_v3__'
+                                    ? payload
+                                    : null,
+                        },
+                        localStorage: {
+                            getItem: (key: string) =>
+                                storage === 'localStorage' && key === '__storefront_theme_v3__'
+                                    ? payload
+                                    : null,
+                        },
                     },
                     document: {
                         querySelector: () => ({ content: '' }),

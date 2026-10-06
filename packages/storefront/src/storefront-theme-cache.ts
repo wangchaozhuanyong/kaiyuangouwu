@@ -3,9 +3,9 @@ import {
     type StorefrontVisualPresetId,
 } from '../../storefront-content-plugin/src/visual-presets';
 
-// v2 uses preset-owned colors; v1 may contain merchant-derived control colors.
+// v3 owns the graphite/champagne classic palette; v2 still contains classic blue.
 // Keep the versioned key in sync with the parser-blocking restore-theme.js.
-const THEME_CACHE_KEY = '__storefront_theme_v2__';
+const THEME_CACHE_KEY = '__storefront_theme_v3__';
 
 export function restoredStorefrontTheme(): {
     presetId: StorefrontVisualPresetId;
@@ -23,7 +23,7 @@ export function cacheStorefrontTheme(
     colors: Record<string, string>,
 ) {
     const payload = JSON.stringify({
-        version: 2,
+        version: 3,
         origin: window.location.origin,
         savedAt: Date.now(),
         channelCode,

@@ -691,8 +691,8 @@
     padding: 0 8px;
     border: none;
     border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--skin-coupon-action-surface, var(--accent));
+    color: var(--skin-coupon-action-ink, var(--accent-foreground));
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -718,17 +718,19 @@
 }
 
 .coupon-claim-btn:hover:not(:disabled) {
-    opacity: 0.93;
+    opacity: var(--skin-coupon-opacity, 0.93);
     transform: translateY(-1px);
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+    background: var(--skin-coupon-action-hover, var(--accent));
 }
 
 .coupon-claim-btn:active:not(:disabled) {
     transform: scale(0.95);
+    background: var(--skin-coupon-action-pressed, var(--accent));
 }
 
 .coupon-claim-btn.is-claiming {
-    opacity: 0.78;
+    opacity: var(--skin-coupon-opacity, 0.78);
     cursor: wait;
 }
 

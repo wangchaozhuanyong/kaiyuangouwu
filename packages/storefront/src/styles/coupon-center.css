@@ -27,7 +27,7 @@
     padding: 24px;
     background: linear-gradient(
         120deg,
-        var(--skin-tool-security-background, var(--selection-soft)),
+        var(--skin-coupon-tint, var(--skin-tool-security-background, var(--selection-soft))),
         var(--surface)
     );
 }
@@ -54,7 +54,7 @@
     bottom: -28px;
     width: 132px;
     height: 132px;
-    color: var(--skin-tool-security-foreground, var(--selection));
+    color: var(--skin-coupon-action-ink, var(--skin-tool-security-foreground, var(--selection)));
     opacity: 0.1;
     transform: rotate(-18deg);
     pointer-events: none;
@@ -104,16 +104,16 @@
     height: 22px;
 }
 .coupon-guide-symbol.is-conditions {
-    color: var(--skin-tool-security-foreground, var(--accent-ink));
-    background: var(--skin-tool-security-background, var(--accent-soft));
+    color: var(--skin-coupon-action-ink, var(--skin-tool-security-foreground, var(--accent-ink)));
+    background: var(--skin-coupon-tint, var(--skin-tool-security-background, var(--accent-soft)));
 }
 .coupon-guide-symbol.is-discounts {
-    color: var(--skin-tool-mail-foreground, var(--success));
-    background: var(--skin-tool-mail-background, var(--soft));
+    color: var(--skin-coupon-action-ink, var(--skin-tool-mail-foreground, var(--success)));
+    background: var(--skin-coupon-tint, var(--skin-tool-mail-background, var(--soft)));
 }
 .coupon-guide-symbol.is-amount {
-    color: var(--skin-tool-coupon-foreground, var(--warning));
-    background: var(--skin-tool-coupon-background, var(--warning-bg));
+    color: var(--skin-coupon-action-ink, var(--skin-tool-coupon-foreground, var(--warning)));
+    background: var(--skin-coupon-tint, var(--skin-tool-coupon-background, var(--warning-bg)));
 }
 @container coupon-guide (min-width: 600px) {
     .coupon-center-guide dl {
@@ -178,14 +178,14 @@
 }
 
 .coupon-center-tabs button.is-active {
-    background: var(--selection);
-    color: var(--selection-foreground);
+    background: var(--navigation-surface, var(--selection));
+    color: var(--navigation-foreground, var(--selection-foreground));
     font-weight: var(--font-weight-semibold);
 }
 
 .coupon-center-tabs button.is-active:hover:not(:disabled) {
-    background: var(--selection-hover);
-    color: var(--selection-foreground);
+    background: var(--navigation-hover, var(--selection-hover));
+    color: var(--navigation-foreground, var(--selection-foreground));
 }
 
 .coupon-center-tabs small {
@@ -202,7 +202,7 @@
     --coupon-accent: var(--accent-ink);
     --coupon-surface: var(--surface);
     --coupon-border: var(--line-subtle);
-    --coupon-hero-surface: var(--accent-soft);
+    --coupon-hero-surface: var(--skin-coupon-tint, var(--accent-soft));
     overflow: hidden;
     border: 1px solid var(--coupon-border);
     border-radius: var(--skin-card-radius);
@@ -228,7 +228,10 @@
 }
 .coupon-activity-card[class*='coupon-ticket-'] {
     --coupon-border: color-mix(in srgb, var(--coupon-accent) 30%, var(--line-subtle));
-    --coupon-hero-surface: color-mix(in srgb, var(--coupon-accent) 12%, var(--surface));
+    --coupon-hero-surface: var(
+        --skin-coupon-tint,
+        color-mix(in srgb, var(--coupon-accent) 12%, var(--surface))
+    );
 }
 .coupon-activity-card.is-claimed {
     opacity: 1;
@@ -269,8 +272,8 @@
     padding: 0 11px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--skin-coupon-action-surface, var(--accent));
+    color: var(--skin-coupon-action-ink, var(--accent-foreground));
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -287,7 +290,13 @@
     color: var(--muted);
 }
 .coupon-activity-action:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--skin-coupon-action-hover, var(--accent-hover));
+}
+.coupon-activity-action:active:not(:disabled) {
+    background: var(--skin-coupon-action-pressed, var(--accent));
+}
+.coupon-activity-action:hover:active:not(:disabled) {
+    background: var(--skin-coupon-action-pressed, var(--accent-hover));
 }
 
 .coupon-activity-action .coupon-btn-text-wrap {
@@ -404,9 +413,22 @@
     padding: 0 2px;
     border: 0;
     border-radius: 999px;
-    background: transparent;
-    color: var(--coupon-accent);
+    background: var(--skin-coupon-action-surface, transparent);
+    color: var(--skin-coupon-action-ink, var(--coupon-accent));
     box-shadow: none;
+}
+.coupon-center-ticket .coupon-claim-btn:hover:not(:disabled) {
+    background: var(--skin-coupon-action-hover, transparent);
+}
+.coupon-center-ticket .coupon-claim-btn:active:not(:disabled) {
+    background: var(--skin-coupon-action-pressed, transparent);
+}
+.coupon-center-ticket .coupon-claim-btn.is-claimed {
+    background: var(--skin-coupon-inactive-surface, transparent);
+    color: var(--skin-coupon-inactive-ink, var(--coupon-accent));
+}
+.coupon-center-ticket.is-history .coupon-ticket-value {
+    color: var(--skin-coupon-inactive-ink, var(--coupon-accent));
 }
 
 .coupon-center-ticket .coupon-btn-text-wrap {
@@ -448,6 +470,10 @@
 
 .coupon-ticket-status.is-used {
     flex-direction: row;
+}
+.coupon-ticket-status:not(.is-used) {
+    background: var(--skin-coupon-pending-surface, var(--soft));
+    color: var(--skin-coupon-pending-ink, var(--muted));
 }
 
 .coupon-center-instructions {

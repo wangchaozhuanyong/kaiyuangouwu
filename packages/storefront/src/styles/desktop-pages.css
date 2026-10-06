@@ -470,7 +470,7 @@
         font-weight: var(--font-weight-semibold);
     }
     .desktop-store-layout .cart-summary-breakdown .discount .summary-value {
-        color: var(--accent);
+        color: var(--savings-ink, var(--accent));
     }
     .desktop-store-layout .cart-summary-panel > .coupon-row {
         width: 100%;
@@ -805,7 +805,12 @@
         transform: translateY(-1px);
     }
     .desktop-store-layout .cart-checkout-bar > button:active:not(:disabled) {
+        background: var(--accent-pressed, var(--accent));
         transform: translateY(0);
+    }
+
+    .desktop-store-layout .cart-checkout-bar > button:hover:active:not(:disabled) {
+        background: var(--accent-pressed, var(--accent-hover));
     }
 
     /* Checkout: one form, two desktop columns. Business values and submission remain shared. */

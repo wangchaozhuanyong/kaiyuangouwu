@@ -69,10 +69,10 @@ export function ProductBasicTab() {
     if (!isCreateMode && !productData?.product) return null;
 
     return (
-        <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+        <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
                 <AdminField
-                    className="space-y-1.5 text-xs font-semibold text-slate-700"
+                    className="w-full min-w-0 space-y-1.5 text-xs font-semibold text-slate-700 sm:w-80"
                     label={
                         <>
                             <span className="flex min-h-6 items-center gap-2">
@@ -105,7 +105,7 @@ export function ProductBasicTab() {
                     )}
                 </AdminField>
                 {!isCreateMode && (
-                    <div className="flex items-end">
+                    <div className="flex min-h-9 items-center">
                         <AdminButton
                             type="button"
                             disabled={saving || copying || isDirty}
@@ -120,6 +120,7 @@ export function ProductBasicTab() {
                 )}
             </div>
             <AdminField
+                layout="stacked"
                 className="block space-y-1.5 text-xs font-semibold text-slate-700"
                 label={
                     <>
@@ -132,7 +133,7 @@ export function ProductBasicTab() {
             >
                 {' '}
                 <AdminTextArea
-                    rows={5}
+                    rows={4}
                     id={`${fieldId}-description`}
                     aria-label="商品描述"
                     value={description}
@@ -149,8 +150,8 @@ export function ProductBasicTab() {
                     </span>
                 )}
             </AdminField>
-            <section className="border-t border-slate-100 pt-4">
-                <div className="flex min-h-12 flex-col items-start justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:gap-4">
+            <section className="border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             商品详情图
@@ -180,7 +181,7 @@ export function ProductBasicTab() {
                 </div>
 
                 {selectedAssetIds.length > 0 ? (
-                    <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(5rem,6rem))] gap-3">
+                    <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(5rem,5rem))] gap-2">
                         {selectedAssetIds.map(assetId => {
                             const asset = knownAssets[assetId];
                             return (
@@ -193,7 +194,7 @@ export function ProductBasicTab() {
                                         <img
                                             src={asset.preview}
                                             alt={asset.name}
-                                            className="h-full w-full object-cover"
+                                            className="h-full w-full object-contain"
                                         />
                                     ) : (
                                         <ImageIcon className="absolute inset-0 m-auto h-5 w-5 text-slate-300" />
@@ -221,7 +222,7 @@ export function ProductBasicTab() {
                             setAssetPickerMode('GALLERY');
                             setIsAssetPickerOpen(true);
                         }}
-                        className="mt-5 flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-3 flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <ImageIcon className="h-8 w-8 text-slate-300" />
                         <div className="text-xs font-bold text-slate-600">暂未添加详情图</div>

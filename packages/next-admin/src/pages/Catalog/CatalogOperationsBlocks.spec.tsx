@@ -209,6 +209,9 @@ describe('ProductVariantCustomFieldsBlock', () => {
             </CustomFieldsContext.Provider>
         );
         await mount(editor('physical'));
+        expect(host.querySelectorAll('h2')).toHaveLength(1);
+        expect(host.textContent?.match(/测试商品/g)).toHaveLength(1);
+        expect(host.querySelector<HTMLSelectElement>('[aria-label="选择补充资料规格"]')?.value).toBe('sku-1');
         expect(host.textContent).not.toContain('包装换算数量');
         expect(host.textContent).not.toContain('默认保质期');
         await act(async () => root?.render(editor('digital')));

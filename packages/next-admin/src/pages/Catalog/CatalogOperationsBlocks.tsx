@@ -1038,28 +1038,28 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         }
     };
     return (
-        <section className="space-y-4 border-t border-slate-100 pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+        <section className="min-w-0 space-y-3 border-t border-slate-100 pt-3">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <h2 className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-900">
                         规格补充资料（可选）
                         {productName && (
-                            <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                            <span className="min-w-0 max-w-full break-words rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
                                 商品：{productName}
                             </span>
                         )}
                         <FeatureHelpButton topic="catalog.sku-custom-fields" title="规格补充资料" />
                     </h2>
                 </div>
-                <div className="flex gap-2">
+                <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 sm:w-auto sm:max-w-full sm:flex-[0_1_28rem]">
                     <AdminSelect
+                        aria-label="选择补充资料规格"
                         value={selected?.id ?? ''}
                         onChange={event => selectVariant(event.target.value)}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                     >
                         {variants.map(variant => (
                             <option key={variant.id} value={variant.id}>
-                                {productName ? `【${productName}】` : ''}
                                 {variant.name} · {variant.sku}
                             </option>
                         ))}
@@ -1068,7 +1068,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                         type="button"
                         onClick={() => void save()}
                         disabled={!selected || updateState.loading}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         <Save className="h-4 w-4" />
                         {updateState.loading ? '保存中…' : '保存字段'}
@@ -1078,12 +1078,9 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
-                title={
-                    productName
-                        ? `商品《${productName}》· 规格【${selected?.name || '规格'}】(${selected?.sku})`
-                        : `SKU 扩展字段${selected ? ` · ${selected.sku}` : ''}`
-                }
-                helpTopic="catalog.sku-custom-fields"
+                embedded
+                compact
+                title=""
                 fields={visibleDefinitions}
                 values={values}
                 onChange={setValues}

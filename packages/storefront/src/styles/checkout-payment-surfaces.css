@@ -189,7 +189,7 @@
 }
 
 .price-summary .discount dd {
-    color: var(--accent-ink);
+    color: var(--savings-ink, var(--accent-ink));
 }
 
 .price-summary .summary-total {
@@ -203,7 +203,7 @@
 }
 
 .price-summary .summary-total dd {
-    color: var(--accent-ink);
+    color: var(--price-ink, var(--accent-ink));
     font-size: var(--type-section-size);
     line-height: var(--type-section-leading);
     font-weight: var(--font-weight-bold);

@@ -1572,7 +1572,7 @@ describe('unified storefront Admin API to Shop API', () => {
             for (const [state, background, accent] of [
                 ['explicit', 'rgb(32, 51, 70)', 'rgb(102, 84, 200)'],
                 ['inherited', 'rgb(14, 20, 33)', 'rgb(102, 84, 200)'],
-                ['classic', 'rgb(255, 255, 255)', 'rgb(37, 99, 235)'],
+                ['classic', 'rgb(255, 255, 255)', 'rgb(41, 45, 50)'],
             ]) {
                 if (state === 'inherited')
                     await adminClient.query(UPDATE, {
