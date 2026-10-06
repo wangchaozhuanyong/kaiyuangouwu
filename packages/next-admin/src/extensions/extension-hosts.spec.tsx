@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 
-import { act, lazy, useState, type ComponentType } from 'react';
+import { act, lazy, useState, type ComponentProps, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineNextAdminExtension, resetNextAdminExtensionsForTests } from './extension-api';
-import { NextAdminActions } from './extension-hosts';
+import { AdminPermissionsContext } from '../hooks/use-admin-permissions';
+import { hasAnyAdminPermission } from '../utils/admin-permissions';
+import {
+    defineNextAdminExtension,
+    resetNextAdminExtensionsForTests,
+    type NextAdminPageBlockContext,
+} from './extension-api';
+import { NextAdminActions, NextAdminPageBlocks } from './extension-hosts';
 
 const cleanups: Array<() => void> = [];
 beforeEach(() => {
@@ -27,6 +33,145 @@ async function renderActions() {
     });
     return container;
 }
+
+async function renderBlocks(props: ComponentProps<typeof NextAdminPageBlocks>, permissions: string[] = []) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () =>
+        root.render(
+            <AdminPermissionsContext.Provider
+                value={{
+                    permissions,
+                    hasAnyPermission: required => hasAnyAdminPermission(permissions, required),
+                }}
+            >
+                <NextAdminPageBlocks {...props} />
+            </AdminPermissionsContext.Provider>,
+        ),
+    );
+    cleanups.push(() => {
+        root.unmount();
+        container.remove();
+    });
+    return container;
+}
+
+describe('page block placement filters', () => {
+    it('renders only included blocks from the current page and passes the product context', async () => {
+        const unrelatedBlock = vi.fn(() => <div>供货资料</div>);
+        const otherPageBlock = vi.fn(() => <div>其他页面价格</div>);
+        defineNextAdminExtension({
+            id: 'product-sections',
+            pageBlocks: [
+                {
+                    id: 'currency-prices',
+                    pageId: 'product-detail',
+                    component: ({ context }: { context: NextAdminPageBlockContext }) => (
+                        <div>{`${context.pageId}：${context.entity?.id} 的币种价格`}</div>
+                    ),
+                },
+                { id: 'supply', pageId: 'product-detail', component: unrelatedBlock },
+                { id: 'other-prices', pageId: 'order-detail', component: otherPageBlock },
+            ],
+        });
+
+        const container = await renderBlocks({
+            pageId: 'product-detail',
+            entity: { id: 'product-6259' },
+            includeIds: ['currency-prices', 'other-prices'],
+        });
+
+        expect(container.textContent).toBe('product-detail：product-6259 的币种价格');
+        expect(unrelatedBlock).not.toHaveBeenCalled();
+        expect(otherPageBlock).not.toHaveBeenCalled();
+        expect(container.querySelector('[data-extension-location="product-detail:blocks"]')).not.toBeNull();
+    });
+
+    it('requires the original permissions even when a block is explicitly included', async () => {
+        const restrictedBlock = vi.fn(() => <div>库存管理</div>);
+        defineNextAdminExtension({
+            id: 'restricted-section',
+            pageBlocks: [
+                {
+                    id: 'inventory',
+                    pageId: 'product-detail',
+                    permissions: ['ReadStockLocation'],
+                    component: restrictedBlock,
+                },
+            ],
+        });
+        const props = {
+            pageId: 'product-detail',
+            includeIds: ['inventory'],
+            fallback: <div>当前无可用区块</div>,
+        };
+
+        const denied = await renderBlocks(props, ['ReadProduct']);
+        expect(denied.textContent).toBe('当前无可用区块');
+        expect(denied.querySelector('[data-extension-location]')).toBeNull();
+        expect(restrictedBlock).not.toHaveBeenCalled();
+
+        const allowed = await renderBlocks(props, ['ReadProduct', 'ReadStockLocation']);
+        expect(allowed.textContent).toBe('库存管理');
+        expect(restrictedBlock).toHaveBeenCalledOnce();
+    });
+
+    it('keeps conditional rendering and exclusions authoritative for included blocks', async () => {
+        const entity = { id: 'product-6259', fulfillmentType: 'digital' };
+        const physicalOnly = vi.fn(
+            (context: NextAdminPageBlockContext) => context.entity?.fulfillmentType === 'physical',
+        );
+        const hiddenBlock = vi.fn(() => <div>实物包装</div>);
+        const excludedBlock = vi.fn(() => <div>已在其他位置展示</div>);
+        defineNextAdminExtension({
+            id: 'conditional-sections',
+            pageBlocks: [
+                {
+                    id: 'packaging',
+                    pageId: 'product-detail',
+                    shouldRender: physicalOnly,
+                    component: hiddenBlock,
+                },
+                { id: 'supply', pageId: 'product-detail', component: excludedBlock },
+            ],
+        });
+
+        const container = await renderBlocks({
+            pageId: 'product-detail',
+            entity,
+            includeIds: ['packaging', 'supply'],
+            excludeIds: ['supply'],
+            fallback: <div>没有适用区块</div>,
+        });
+
+        expect(physicalOnly).toHaveBeenCalledWith({ pageId: 'product-detail', entity });
+        expect(hiddenBlock).not.toHaveBeenCalled();
+        expect(excludedBlock).not.toHaveBeenCalled();
+        expect(container.textContent).toBe('没有适用区块');
+    });
+
+    it('preserves default placement while an explicit empty inclusion list renders no blocks', async () => {
+        defineNextAdminExtension({
+            id: 'default-sections',
+            pageBlocks: [
+                { id: 'prices', pageId: 'product-detail', component: () => <div>币种价格</div> },
+                { id: 'supply', pageId: 'product-detail', component: () => <div>供货资料</div> },
+            ],
+        });
+
+        const original = await renderBlocks({ pageId: 'product-detail', excludeIds: ['supply'] });
+        expect(original.textContent).toBe('币种价格');
+
+        const empty = await renderBlocks({
+            pageId: 'product-detail',
+            includeIds: [],
+            fallback: <div>未选择扩展区块</div>,
+        });
+        expect(empty.textContent).toBe('未选择扩展区块');
+        expect(empty.querySelector('[data-extension-location]')).toBeNull();
+    });
+});
 
 describe('collapsible extension actions', () => {
     it('loads a lazy action in its own placeholder while preserving a sibling draft', async () => {

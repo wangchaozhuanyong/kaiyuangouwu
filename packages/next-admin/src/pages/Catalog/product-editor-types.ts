@@ -8,10 +8,12 @@ import type {
 import { stockPolicyForDeliveryMode, trackInventoryForDigitalVariant } from '../../utils/commerce-mode';
 import type { CollectionFilterValue } from '../../utils/product-collection-assignment';
 
-export type ProductEditorTab = 'BASIC' | 'VARIANTS' | 'FACETS_COLLECTIONS';
+export type ProductEditorTab = 'BASIC' | 'VARIANTS' | 'DELIVERY' | 'MORE' | 'FACETS_COLLECTIONS';
 export const PRODUCT_EDITOR_TABS = {
     basic: 'BASIC',
     variants: 'VARIANTS',
+    delivery: 'DELIVERY',
+    more: 'MORE',
     attributes: 'FACETS_COLLECTIONS',
 } as const;
 export const SOURCE_LANGUAGE_CODE = 'zh_Hans';

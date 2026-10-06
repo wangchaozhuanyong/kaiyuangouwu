@@ -407,7 +407,7 @@ export function useProductEditorSave({
                 manualDeliverySlaMinutes < 5 ||
                 manualDeliverySlaMinutes > 525600)
         ) {
-            setActiveTab('BASIC');
+            setActiveTab('DELIVERY');
             showError('人工交付预计时长必须是 5 到 525600 分钟之间的整数');
             return false;
         }
@@ -463,8 +463,10 @@ export function useProductEditorSave({
         }
 
         if (errors.variants) {
-            setActiveTab('VARIANTS');
-            const [indexText, firstError] = Object.entries(errors.variants)[0];
+            const variantErrorEntries = Object.entries(errors.variants);
+            const identityOrPriceError = variantErrorEntries.find(([, error]) => error.sku || error.price);
+            setActiveTab(identityOrPriceError ? 'VARIANTS' : 'DELIVERY');
+            const [indexText, firstError] = identityOrPriceError ?? variantErrorEntries[0];
             const index = Number(indexText);
             const variant = variants[index];
             const label = variant?.sku.trim() ? `SKU ${variant.sku.trim()}` : `第 ${index + 1} 行 SKU`;
@@ -553,7 +555,7 @@ export function useProductEditorSave({
                 dynamicCustomFieldValues,
             );
             if (Object.keys(customFieldErrors).length > 0) {
-                setActiveTab('BASIC');
+                setActiveTab('MORE');
                 showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
                 return;
             }

@@ -1,6 +1,8 @@
 import { Check, CornerDownRight, FolderTree, Search, Tag } from 'lucide-react';
+import type { Dispatch, SetStateAction } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
@@ -8,11 +10,20 @@ import { buildProductCollectionGroups, filterProductCollectionGroups } from './p
 import { type CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
 
-export function ProductFacetsCollectionsTab({ section }: { section?: 'category' | 'facets' }) {
+export function ProductFacetsCollectionsTab({
+    section,
+    collectionSelection,
+}: {
+    section?: 'category' | 'facets';
+    collectionSelection?: {
+        selectedIds: string[];
+        onChange: Dispatch<SetStateAction<string[]>>;
+    };
+}) {
     const {
         selectedFacetValueIds,
-        selectedCollectionIds,
-        setSelectedCollectionIds,
+        selectedCollectionIds: productCollectionIds,
+        setSelectedCollectionIds: setProductCollectionIds,
         facetSearch,
         setFacetSearch,
         facetPage,
@@ -37,6 +48,8 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
 
     if (!isCreateMode && !productData?.product) return null;
 
+    const selectedCollectionIds = collectionSelection?.selectedIds ?? productCollectionIds;
+    const setSelectedCollectionIds = collectionSelection?.onChange ?? setProductCollectionIds;
     const collectionGroups = buildProductCollectionGroups(collectionsData?.collections.items ?? []);
     const filteredCollectionGroups = filterProductCollectionGroups(collectionGroups, collectionSearch);
     const secondLevelCollectionCount = collectionGroups.reduce(
@@ -150,7 +163,7 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
             )}
             {/* 所属商品分类 */}
             {section !== 'facets' && (
-                <div className="min-w-0 space-y-3 border-t border-slate-100 pt-3">
+                <div className={`min-w-0 space-y-3 ${section ? '' : 'border-t border-slate-100 pt-3'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="flex shrink-0 items-center gap-2 text-sm font-bold text-slate-900">
                             商品分类
@@ -158,33 +171,38 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                         </h3>
                         <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <AdminInput
+                            <SearchInput
                                 aria-label="搜索商品分类或专辑"
                                 value={collectionSearch}
-                                onChange={event => setCollectionSearch(event.target.value)}
+                                onValueChange={setCollectionSearch}
                                 placeholder="搜索分类名称"
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
                             />
                         </div>
                     </div>
 
-                    {collectionsLoading && !collectionsData ? (
-                        <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
-                            正在读取商品分类…
-                        </div>
-                    ) : collectionsError ? (
+                    {collectionsError && (
                         <div
                             role="alert"
                             className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
                         >
-                            <span>{toUserFacingError(collectionsError, '商品分类读取失败，请稍后重试')}</span>
+                            <span>
+                                {collectionsData ? '商品分类更新失败：' : ''}
+                                {toUserFacingError(collectionsError, '商品分类读取失败，请稍后重试')}
+                            </span>
                             <AdminButton
                                 type="button"
+                                disabled={collectionsLoading}
                                 onClick={() => void refetchCollections()}
                                 className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
                             >
                                 重试
                             </AdminButton>
+                        </div>
+                    )}
+                    {collectionsLoading && !collectionsData ? (
+                        <div role="status" className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
+                            正在读取商品分类…
                         </div>
                     ) : collectionGroups.length > 0 ? (
                         <div className="space-y-3 pt-1">
@@ -260,11 +278,11 @@ export function ProductFacetsCollectionsTab({ section }: { section?: 'category' 
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : !collectionsError ? (
                         <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
                             当前店铺暂无分类专辑。
                         </div>
-                    )}
+                    ) : null}
                 </div>
             )}
         </div>

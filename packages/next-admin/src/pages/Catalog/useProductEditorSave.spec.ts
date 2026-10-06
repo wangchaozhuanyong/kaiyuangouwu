@@ -183,6 +183,93 @@ describe('product save orchestration', () => {
         expect(input.controls.showNotice).not.toHaveBeenCalled();
     });
 
+    it.each(['productName', 'description'] as const)(
+        'opens product information for an invalid %s before making writes',
+        async field => {
+            const input = fixture();
+            input.draft[field] = '';
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.setActiveTab).toHaveBeenCalledWith('BASIC');
+            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+            expect(mocks.mutate).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['digital', 'physical'] as const)(
+        'opens delivery for stock-only validation errors on %s products',
+        async fulfillmentType => {
+            const input = fixture();
+            input.draft.fulfillmentType = fulfillmentType;
+            input.draft.variants[0] = {
+                ...input.draft.variants[0],
+                stockOnHand: fulfillmentType === 'physical' ? -1 : 5,
+                digitalAvailableQuantity: fulfillmentType === 'digital' ? -1 : 5,
+            };
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.setActiveTab).toHaveBeenCalledWith('DELIVERY');
+            expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+                variants: {
+                    0: {
+                        stock:
+                            fulfillmentType === 'physical' ? '库存必须为非负整数' : '可售份数必须为非负整数',
+                    },
+                },
+            });
+            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+            expect(mocks.mutate).not.toHaveBeenCalled();
+        },
+    );
+
+    it('opens delivery for an invalid manual delivery duration', async () => {
+        const input = fixture();
+        input.draft.fulfillmentType = 'digital';
+        input.draft.manualDeliverySlaMinutes = 1;
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('DELIVERY');
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            '人工交付预计时长必须是 5 到 525600 分钟之间的整数',
+        );
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('opens more settings for invalid product extension fields', async () => {
+        const input = fixture();
+        input.productExtensionFields = [
+            {
+                name: 'sourceCode',
+                type: 'string',
+                list: false,
+                nullable: false,
+                label: [{ languageCode: 'zh_Hans', value: '来源编号' }],
+            },
+        ];
+        input.draft.dynamicCustomFields = { sourceCode: '' };
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('MORE');
+        expect(input.controls.showError).toHaveBeenCalledWith('来源编号不能为空');
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('reports an error in the selected price tab when an earlier SKU has a stock error', async () => {
+        const input = fixture();
+        input.draft.fulfillmentType = 'digital';
+        input.draft.variants[0].digitalAvailableQuantity = -1;
+        input.draft.variants.push({
+            ...input.draft.variants[0],
+            id: 'variant-2',
+            sku: 'SKU-2',
+            price: '',
+            digitalAvailableQuantity: 5,
+        });
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('VARIANTS');
+        expect(input.controls.showError).toHaveBeenCalledWith('SKU SKU-2：请输入有效的 MYR 非负金额');
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
     it('omits untouched English and saves SKU prices in minor units', async () => {
         const input = fixture();
         await useProductEditorSave(input).handleSave();

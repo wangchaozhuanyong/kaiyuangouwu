@@ -34,10 +34,10 @@ export function ProductEditor() {
 
     return (
         <ProductEditorProvider value={editor}>
-            <div className="admin-mobile-editor h-full grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] bg-slate-50 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_minmax(0,1fr)]">
+            <div className="product-editor-page admin-mobile-editor h-full grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] bg-slate-50 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_minmax(0,1fr)]">
                 {/* Top Header */}
                 <header className="relative md:col-start-1 md:col-span-2 md:row-start-1 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-md sm:px-8 md:pr-80">
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 w-full items-center gap-3">
                         <AdminButton
                             type="button"
                             onClick={leaveToProductList}
@@ -47,13 +47,17 @@ export function ProductEditor() {
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </AdminButton>
-                        <ProductEditorTitle isCreateMode={isCreateMode} />
+                        <ProductEditorTitle
+                            isCreateMode={isCreateMode}
+                            productName={editor.productName}
+                            enabled={productData?.product?.enabled}
+                        />
                     </div>
                 </header>
 
                 {/* Main Form Body */}
                 <div className="admin-mobile-editor-body w-full min-h-0 overflow-y-auto md:col-start-1 md:col-span-2 md:row-start-2">
-                    <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
+                    <div className="product-editor-body-content w-full min-w-0 space-y-4 p-3 sm:p-4">
                         {/* 成功通知 */}
                         {notification && (
                             <div
@@ -189,7 +193,10 @@ export function ProductEditor() {
                     </div>
                 </div>
 
-                <div className="admin-mobile-save-bar flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 md:col-start-2 md:row-start-1 md:z-40 md:self-center md:border-0 md:pr-8">
+                <div className="product-editor-save-bar admin-mobile-save-bar flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 md:col-start-2 md:row-start-1 md:z-40 md:self-center md:border-0 md:pr-8">
+                    <span className="product-editor-draft-label text-xs text-slate-500" aria-live="polite">
+                        {isDirty ? '有未保存修改' : '未修改'}
+                    </span>
                     <AdminButton
                         type="button"
                         onClick={leaveToProductList}

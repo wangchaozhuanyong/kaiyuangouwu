@@ -1,5 +1,5 @@
 import { useMutation } from '@apollo/client/react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -14,6 +14,7 @@ const inputClass =
 
 /** Shared specifications and pricing only. Stock and delivery belong to their domain workspaces. */
 export function ProductVariantsTab() {
+    const fieldId = useId();
     const {
         variants,
         setVariants,
@@ -118,6 +119,7 @@ export function ProductVariantsTab() {
                         ))}
                     <div className="grid min-w-0 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
                         <AdminField
+                            layout="stacked"
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={<>规格名称</>}
                         >
@@ -131,6 +133,7 @@ export function ProductVariantsTab() {
                             />
                         </AdminField>
                         <AdminField
+                            layout="stacked"
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={<>规格值</>}
                         >
@@ -186,9 +189,10 @@ export function ProductVariantsTab() {
                 {variants.map((variant, index) => (
                     <div
                         key={variant.id ?? index}
-                        className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-start gap-3 border-t border-slate-100 pt-3"
+                        className="product-editor-variant grid min-w-0 grid-cols-1 items-start gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2"
                     >
                         <AdminField
+                            layout="stacked"
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={<>{variants.length === 1 ? '规格名称' : `规格 ${index + 1}`}</>}
                         >
@@ -205,24 +209,36 @@ export function ProductVariantsTab() {
                             />
                         </AdminField>
                         <AdminField
+                            layout="stacked"
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={<>商品编码</>}
                         >
                             {' '}
                             <AdminInput
                                 aria-label={`规格 ${index + 1} 编码`}
+                                aria-invalid={Boolean(formErrors.variants?.[index]?.sku)}
+                                aria-describedby={
+                                    formErrors.variants?.[index]?.sku
+                                        ? `${fieldId}-${index}-sku-error`
+                                        : undefined
+                                }
                                 value={variant.sku}
                                 disabled={saving}
                                 onChange={event => handleVariantFieldChange(index, 'sku', event.target.value)}
                                 className={inputClass}
                             />
                             {formErrors.variants?.[index]?.sku && (
-                                <span role="alert" className="block text-rose-600">
+                                <span
+                                    id={`${fieldId}-${index}-sku-error`}
+                                    role="alert"
+                                    className="block text-rose-600"
+                                >
                                     {formErrors.variants[index].sku}
                                 </span>
                             )}
                         </AdminField>
                         <AdminField
+                            layout="stacked"
                             className="space-y-1.5 text-xs font-semibold text-slate-700"
                             label={
                                 <>
@@ -233,6 +249,12 @@ export function ProductVariantsTab() {
                             {' '}
                             <AdminInput
                                 aria-label={`规格 ${index + 1} 售价`}
+                                aria-invalid={Boolean(formErrors.variants?.[index]?.price)}
+                                aria-describedby={
+                                    formErrors.variants?.[index]?.price
+                                        ? `${fieldId}-${index}-price-error`
+                                        : undefined
+                                }
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -244,13 +266,18 @@ export function ProductVariantsTab() {
                                 className={inputClass}
                             />
                             {formErrors.variants?.[index]?.price && (
-                                <span role="alert" className="block text-rose-600">
+                                <span
+                                    id={`${fieldId}-${index}-price-error`}
+                                    role="alert"
+                                    className="block text-rose-600"
+                                >
                                     {formErrors.variants[index].price}
                                 </span>
                             )}
                         </AdminField>
                         <div className="min-w-0 space-y-2">
                             <AdminField
+                                layout="stacked"
                                 className="block space-y-1.5 text-xs font-semibold text-slate-700"
                                 label={<>成本 ({activeCurrencyCode})</>}
                             >

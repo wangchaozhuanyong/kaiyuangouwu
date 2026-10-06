@@ -6,7 +6,7 @@ import { useProductEditor } from './ProductEditorContext';
 
 /** Physical fulfillment configuration never writes digital quotas or delivery resources. */
 export function PhysicalProductWorkspace() {
-    const { variants, saving, handleVariantFieldChange } = useProductEditor();
+    const { variants, saving, formErrors, handleVariantFieldChange } = useProductEditor();
     return (
         <div className="space-y-4" data-product-domain="physical">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -25,6 +25,11 @@ export function PhysicalProductWorkspace() {
                             在库 {variant.stockOnHand || 0} · 已占用 {variant.stockAllocated}
                         </span>
                     </div>
+                    {formErrors.variants?.[index]?.stock && (
+                        <p role="alert" className="text-xs text-rose-600">
+                            {formErrors.variants[index].stock}，请到入库与库存管理中核对后刷新商品。
+                        </p>
+                    )}
                     <details>
                         <summary className="cursor-pointer text-xs font-semibold text-slate-700">
                             包装与效期高级设置
