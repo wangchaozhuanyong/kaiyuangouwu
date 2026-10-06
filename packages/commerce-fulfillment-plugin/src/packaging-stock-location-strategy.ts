@@ -14,6 +14,7 @@ import {
     StockLocation,
     UserInputError,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { DigitalVariantConfig } from './entities/digital-product.entity';
 import { PhysicalReturnReceipt } from './entities/physical-return-receipt.entity';
@@ -26,6 +27,54 @@ import { getOrderLineFulfillmentType } from './fulfillment-classification';
  * The physical stock transfer itself happens only during payment confirmation.
  */
 export class PackagingStockLocationStrategy extends MultiChannelStockLocationStrategy {
+    async supportsStockLocationsForDisplay(ctx: RequestContext, variant: ProductVariant): Promise<boolean> {
+        if (variant.product?.customFields.fulfillmentType === 'physical') return true;
+        return this.requestContextCache.load(
+            ctx,
+            `display-warehouse-capability:${ctx.channelId}`,
+            variant.id,
+            async ids => {
+                const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+                    where: { id: In([...ids]) },
+                    relations: ['product'],
+                    loadEagerRelations: false,
+                });
+                const digitalIds = variants
+                    .filter(item => item.product.customFields.fulfillmentType === 'digital')
+                    .map(item => item.id);
+                const [migrated, stocks] = digitalIds.length
+                    ? await Promise.all([
+                          this.connection.getRepository(ctx, DigitalVariantConfig).find({
+                              where: {
+                                  channelId: ctx.channelId,
+                                  productVariantId: In(digitalIds),
+                                  migrationState: 'ACTIVE',
+                              },
+                          }),
+                          this.connection
+                              .getRepository(ctx, StockLevel)
+                              .find({ where: { productVariantId: In(digitalIds) } }),
+                      ])
+                    : [[], []];
+                const migratedIds = new Set(migrated.map(item => String(item.productVariantId)));
+                const legacyStocks = new Set(
+                    stocks
+                        .filter(item => item.stockOnHand !== 0 || item.stockAllocated !== 0)
+                        .map(item => String(item.productVariantId)),
+                );
+                const byId = new Map(variants.map(item => [String(item.id), item]));
+                return ids.map(id => {
+                    const item = byId.get(id);
+                    if (!item) throw new UserInputError('商品规格不存在');
+                    return (
+                        item.product.customFields.fulfillmentType !== 'digital' ||
+                        (!migratedIds.has(id) && legacyStocks.has(id))
+                    );
+                });
+            },
+        );
+    }
+
     async supportsStockLocations(
         ctx: RequestContext,
         variant: ProductVariant,
@@ -91,31 +140,82 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         productVariantId: ID,
         stockLevels: StockLevel[],
     ): Promise<AvailableStock> {
-        const unitStock = await super.getAvailableStock(
+        return this.availableStock(ctx, productVariantId, stockLevels, false);
+    }
+
+    async getAvailableStockForDisplay(
+        ctx: RequestContext,
+        productVariantId: ID,
+        stockLevels: StockLevel[],
+    ): Promise<AvailableStock> {
+        return this.availableStock(ctx, productVariantId, stockLevels, true);
+    }
+
+    private async availableStock(
+        ctx: RequestContext,
+        productVariantId: ID,
+        stockLevels: StockLevel[],
+        forDisplay: boolean,
+    ): Promise<AvailableStock> {
+        const available = forDisplay
+            ? super.getChannelStockForDisplay.bind(this)
+            : super.getAvailableStock.bind(this);
+        const unitStock = await available(
             ctx,
             productVariantId,
-            await this.effectiveStockLevels(ctx, productVariantId, stockLevels),
+            await this.effectiveStockLevels(ctx, productVariantId, stockLevels, forDisplay),
         );
-        const rule = await this.connection.getRepository(ctx, ProductPackagingRule).findOne({
-            where: {
-                channelId: ctx.channelId,
-                unitVariantId: productVariantId,
-                enabled: true,
-                autoUnpack: true,
-            },
-            relations: ['packageVariant'],
-        });
+        const rule = forDisplay
+            ? await this.requestContextCache.load(
+                  ctx,
+                  `display-packaging-rule:${ctx.channelId}`,
+                  productVariantId,
+                  async ids => {
+                      const rules = await this.connection.getRepository(ctx, ProductPackagingRule).find({
+                          where: {
+                              channelId: ctx.channelId,
+                              unitVariantId: In([...ids]),
+                              enabled: true,
+                              autoUnpack: true,
+                          },
+                          relations: ['packageVariant'],
+                      });
+                      const byVariant = new Map(rules.map(item => [String(item.unitVariantId), item]));
+                      return ids.map(id => byVariant.get(id) ?? null);
+                  },
+              )
+            : await this.connection.getRepository(ctx, ProductPackagingRule).findOne({
+                  where: {
+                      channelId: ctx.channelId,
+                      unitVariantId: productVariantId,
+                      enabled: true,
+                      autoUnpack: true,
+                  },
+                  relations: ['packageVariant'],
+              });
         if (!rule) {
             return unitStock;
         }
 
-        const packageLevels = await this.connection.getRepository(ctx, StockLevel).find({
-            where: { productVariantId: rule.packageVariantId },
-        });
-        const packageStock = await super.getAvailableStock(
+        const packageLevels = forDisplay
+            ? await this.requestContextCache.load(
+                  ctx,
+                  `display-stock-levels:${ctx.channelId}`,
+                  rule.packageVariantId,
+                  async ids => {
+                      const levels = await this.connection
+                          .getRepository(ctx, StockLevel)
+                          .find({ where: { productVariantId: In([...ids]) } });
+                      return ids.map(id => levels.filter(item => String(item.productVariantId) === id));
+                  },
+              )
+            : await this.connection.getRepository(ctx, StockLevel).find({
+                  where: { productVariantId: rule.packageVariantId },
+              });
+        const packageStock = await available(
             ctx,
             rule.packageVariantId,
-            await this.effectiveStockLevels(ctx, rule.packageVariantId, packageLevels),
+            await this.effectiveStockLevels(ctx, rule.packageVariantId, packageLevels, forDisplay),
         );
         const settings = await this.globalSettingsService.getSettings(ctx);
         const packageThreshold = Math.max(
@@ -136,18 +236,28 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         ctx: RequestContext,
         variantId: ID,
         levels: StockLevel[],
+        forDisplay = false,
     ): Promise<StockLevel[]> {
         const repository = this.connection.getRepository(ctx, InventoryLot);
-        const lots =
-            repository.manager?.queryRunner?.isTransactionActive &&
-            !['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type)
-                ? await repository
-                      .createQueryBuilder('lot')
-                      .where('lot.variantId = :variantId', { variantId })
-                      .orderBy('lot.id', 'ASC')
-                      .setLock('pessimistic_write')
-                      .getMany()
-                : await repository.find({ where: { variantId } });
+        const lots = forDisplay
+            ? await this.requestContextCache.load(
+                  ctx,
+                  `display-inventory-lots:${ctx.channelId}`,
+                  variantId,
+                  async ids => {
+                      const rows = await repository.find({ where: { variantId: In([...ids]) } });
+                      return ids.map(id => rows.filter(item => String(item.variantId) === id));
+                  },
+              )
+            : repository.manager?.queryRunner?.isTransactionActive &&
+                !['sqljs', 'sqlite', 'better-sqlite3'].includes(repository.manager.connection.options.type)
+              ? await repository
+                    .createQueryBuilder('lot')
+                    .where('lot.variantId = :variantId', { variantId })
+                    .orderBy('lot.id', 'ASC')
+                    .setLock('pessimistic_write')
+                    .getMany()
+              : await repository.find({ where: { variantId } });
         const now = Date.now();
         return levels.map(level => {
             const local = lots.filter(lot => String(lot.stockLocationId) === String(level.stockLocationId));

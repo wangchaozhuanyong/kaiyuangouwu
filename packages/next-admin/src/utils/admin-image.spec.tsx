@@ -14,20 +14,16 @@ describe('getAdminThumbnailUrl', () => {
         const url = 'https://damatong.net/assets/preview/85/test-product__preview.png';
         const transformed = getAdminThumbnailUrl(url);
         expect(transformed).toContain('format=webp');
-        expect(transformed).toContain('preset=storefront-thumbnail-160');
-        expect(transformed).toContain('w=160');
-        expect(transformed).toContain('h=160');
-        expect(transformed).toContain('q=80');
+        expect(transformed).toContain('preset=storefront-thumbnail-320');
+        expect(transformed).toContain('q=90');
     });
 
     it('transforms relative asset path', () => {
         const url = '/assets/preview/17/cover__preview.jpg';
-        const transformed = getAdminThumbnailUrl(url, { width: 100, height: 100, quality: 75 });
+        const transformed = getAdminThumbnailUrl(url);
         expect(transformed).toContain('/assets/preview/17/cover__preview.jpg?');
         expect(transformed).toContain('format=webp');
-        expect(transformed).toContain('w=100');
-        expect(transformed).toContain('h=100');
-        expect(transformed).toContain('q=75');
+        expect(transformed).toContain('preset=storefront-thumbnail-320');
     });
 
     it('leaves non-asset URLs untouched', () => {
@@ -44,12 +40,24 @@ describe('AdminImage', () => {
             <AdminImage src="/assets/preview/10/img.png" alt="Test" className="test-class" />,
         );
         expect(markup).toContain(
-            'src="/assets/preview/10/img.png?preset=storefront-thumbnail-160&amp;format=webp&amp;w=160&amp;h=160&amp;q=80"',
+            'src="/assets/preview/10/img.png?preset=storefront-thumbnail-320&amp;format=webp&amp;q=90"',
         );
         expect(markup).toContain('loading="lazy"');
         expect(markup).toContain('decoding="async"');
         expect(markup).toContain('alt="Test"');
         expect(markup).toContain('class="test-class"');
+    });
+
+    it('shares canonical migrated versions and responsive candidates without a placeholder request', () => {
+        const markup = renderToStaticMarkup(
+            <AdminImage src="/assets/preview/10/img__webp_migrated_1.webp" sizes="40px" />,
+        );
+        expect(markup).toContain('v=webp-readable-1');
+        expect(markup).toContain('srcSet=');
+        expect(markup).toContain('sizes="40px"');
+        expect(markup).toContain('storefront-thumbnail-160');
+        expect(markup).not.toContain('placeholder');
+        expect(markup.match(/<img /g)).toHaveLength(1);
     });
 
     it('renders fallbackIcon when src is missing', () => {

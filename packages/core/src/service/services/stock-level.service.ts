@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { In } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
+import { RequestContextCacheService } from '../../cache/request-context-cache.service';
 import { UserInputError } from '../../common/error/errors';
 import { Instrument } from '../../common/instrument-decorator';
 import { AvailableStock } from '../../config/catalog/stock-location-strategy';
@@ -28,6 +30,7 @@ export class StockLevelService {
         private connection: TransactionalConnection,
         private stockLocationService: StockLocationService,
         private configService: ConfigService,
+        private requestCache: RequestContextCacheService = new RequestContextCacheService(),
     ) {}
 
     /**
@@ -91,6 +94,31 @@ export class StockLevelService {
             },
         });
         return stockLocationStrategy.getAvailableStock(ctx, productVariantId, stockLevels);
+    }
+
+    async getAvailableStockForDisplay(ctx: RequestContext, productVariantId: ID): Promise<AvailableStock> {
+        const { stockLocationStrategy } = this.configService.catalogOptions;
+        const stockLevels = await this.requestCache.load(
+            ctx,
+            `display-stock-levels:${ctx.channelId}`,
+            productVariantId,
+            async ids => {
+                const levels = await this.connection.getRepository(ctx, StockLevel).find({
+                    where: { productVariantId: In([...ids]) },
+                });
+                const grouped = new Map<string, StockLevel[]>();
+                for (const level of levels) {
+                    const key = String(level.productVariantId);
+                    const group = grouped.get(key) ?? [];
+                    group.push(level);
+                    grouped.set(key, group);
+                }
+                return ids.map(id => grouped.get(id) ?? []);
+            },
+        );
+        return stockLocationStrategy.getAvailableStockForDisplay
+            ? stockLocationStrategy.getAvailableStockForDisplay(ctx, productVariantId, stockLevels)
+            : stockLocationStrategy.getAvailableStock(ctx, productVariantId, stockLevels);
     }
 
     /**

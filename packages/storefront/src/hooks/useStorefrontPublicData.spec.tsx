@@ -32,6 +32,7 @@ it('loads public content and products without a customer and preserves them acro
                 description: 'Public store',
             }),
         ),
+        activeFlashSales: vi.fn(async () => []),
         storefrontContent: vi.fn(() => pendingContent),
         storefrontAccountContent: vi.fn(() => Promise.resolve(content)),
         products: vi.fn(() => Promise.resolve([{ id: '1', name: 'Published product' }])),
@@ -97,6 +98,7 @@ it('hides review navigation when a channel settings event invalidates the public
     let enabled = true;
     const api = {
         storefrontConfig: vi.fn(async () => ({})),
+        activeFlashSales: vi.fn(async () => []),
         storefrontContent: vi.fn(async () => ({
             blocks: [
                 {
@@ -167,6 +169,7 @@ it('refreshes guest configuration and toggles without reloading and stops in the
     let description = 'Old store branding';
     const api = {
         storefrontConfig: vi.fn(() => Promise.resolve({ description })),
+        activeFlashSales: vi.fn(async () => []),
         storefrontContent: vi.fn(() =>
             Promise.resolve({
                 blocks: published ? [{ id: 'core', title: 'Published core cards' }] : [],
@@ -244,14 +247,19 @@ it('refreshes guest configuration and toggles without reloading and stops in the
     }
 });
 
-it('rechecks freshly restored content on mount and isolates the two stores', async () => {
+it('rechecks stale restored content on mount and isolates the two stores', async () => {
     const marketA = enabledMarkets[0];
     const marketB = { ...marketA, code: 'moyao-audit' };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const key = [...storefrontQueryKeys.content(storefrontQueryKeys.market(marketA), 'zh_Hans'), 'public'];
-    client.setQueryData(key, { blocks: [{ title: 'Cached stale core' }], settings: {} });
+    client.setQueryData(
+        key,
+        { blocks: [{ title: 'Cached stale core' }], settings: {} },
+        { updatedAt: Date.now() - 31_000 },
+    );
     const apiFor = (title: string) => ({
         storefrontConfig: vi.fn(() => Promise.resolve({})),
+        activeFlashSales: vi.fn(async () => []),
         storefrontContent: vi.fn(() =>
             Promise.resolve({
                 blocks: [{ id: title, title }],
@@ -333,6 +341,7 @@ describe('resolved storefront requests', () => {
 
     function mockRequests() {
         return {
+            flashSales: vi.spyOn(ContentReviewsApi.prototype, 'activeFlashSales').mockResolvedValue([]),
             products: vi.spyOn(ShopApi.prototype, 'products').mockResolvedValue([product]),
             collections: vi.spyOn(ShopApi.prototype, 'collections').mockResolvedValue([]),
             content: vi.spyOn(ShopApi.prototype, 'storefrontContent').mockResolvedValue({

@@ -1,6 +1,11 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
-import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import {
+    LanguageCode,
+    PluginCommonModule,
+    PUBLIC_PRODUCT_SUMMARY_READER,
+    VendurePlugin,
+} from '@vendure/core';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { gql } from 'graphql-tag';
@@ -117,6 +122,7 @@ import { PhysicalReturnService } from './physical-return.service';
 import { ProductDomainCopyService } from './product-domain-copy.service';
 import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
 import { ProductPackagingService } from './product-packaging.service';
+import { PublicProductSummaryService } from './public-product-summary.service';
 import { QuoteOnlyOrderInterceptor } from './quote-only-order-interceptor';
 import { StoreCatalogStatusService } from './store-catalog-status.service';
 import { StoreNotificationReadResolver } from './store-notification-read.resolver';
@@ -159,6 +165,8 @@ import './types';
     ],
     controllers: [DigitalDeliveryController, AfterSalesEvidenceController],
     providers: [
+        PublicProductSummaryService,
+        { provide: PUBLIC_PRODUCT_SUMMARY_READER, useExisting: PublicProductSummaryService },
         DigitalReceiptService,
         PhysicalReturnService,
         ProductDomainCopyService,

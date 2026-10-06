@@ -3,7 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { copyAdminText } from '../utils/admin-clipboard';
+import { AdminOverlayHost } from './AdminOverlayHost';
 import { FeatureHelpButton, FeatureHelpProvider } from './FeatureHelp';
 
 vi.mock('../utils/admin-clipboard', () => ({ copyAdminText: vi.fn(async () => true) }));
@@ -68,6 +70,48 @@ describe('FeatureHelp interactions', () => {
         act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
         expect(document.querySelector('[data-feature-help-card="true"]')).toBeNull();
         expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('keeps help in the trigger page host and closes it when that page hides or closes', () => {
+        const render = (active: boolean, mounted = true) =>
+            act(() =>
+                root.render(
+                    <FeatureHelpProvider>
+                        {mounted && (
+                            <PageRuntimeContext.Provider value={{ page: '/assets', active }}>
+                                <AdminOverlayHost owner="/assets" active={active}>
+                                    <FeatureHelpButton title="素材" />
+                                </AdminOverlayHost>
+                            </PageRuntimeContext.Provider>
+                        )}
+                    </FeatureHelpProvider>,
+                ),
+            );
+        render(true);
+        act(() => container.querySelector('button')!.click());
+        const host = document.querySelector('[data-admin-overlay-owner="/assets"]')!;
+        expect(host.querySelector('[data-feature-help-card]')).not.toBeNull();
+        render(false);
+        expect(document.querySelector('[data-feature-help-card]')).toBeNull();
+        render(true);
+        act(() => container.querySelector('button')!.click());
+        render(true, false);
+        expect(document.querySelector('[data-feature-help-card]')).toBeNull();
+        expect(document.querySelector('[data-admin-overlay-owner="/assets"]')).toBeNull();
+    });
+
+    it('does not open a delayed hover card for an unmounted trigger', () => {
+        const trigger = container.querySelector('button')!;
+        act(() => trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
+        act(() =>
+            root.render(
+                <FeatureHelpProvider>
+                    <p>different page</p>
+                </FeatureHelpProvider>,
+            ),
+        );
+        act(() => vi.advanceTimersByTime(200));
+        expect(document.querySelector('[data-feature-help-card]')).toBeNull();
     });
 
     it('shows and copies each heading description without leaking it to another trigger', async () => {

@@ -23,6 +23,7 @@ import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { AdminVirtualGrid } from '../../components/AdminVirtualGrid';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -111,6 +112,8 @@ export function countUploadedAssets(results: CreateAssetResult[], requestedCount
     return results.slice(0, requestedCount).filter(result => result.__typename === 'Asset').length;
 }
 
+const assetKey = (asset: AssetItem) => asset.id;
+
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const SUPPORTED_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4']);
 
@@ -145,6 +148,7 @@ export function AssetsModule() {
     const [editTags, setEditTags] = useState('');
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [savingAsset, setSavingAsset] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const deferredSearch = useDeferredValue(searchTerm.trim());
     const assetFilter = {
@@ -457,7 +461,10 @@ export function AssetsModule() {
                     </AdminButton>
                 </div>
             </div>
-            <div className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <div
+                ref={scrollRef}
+                className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8"
+            >
                 {notification && (
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800">
                         <CheckCircle2 className="h-4 w-4" />
@@ -563,8 +570,11 @@ export function AssetsModule() {
                             <p>当前筛选条件下暂无真实素材</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-3 p-3 sm:gap-4 sm:p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
-                            {assets.map(asset => (
+                        <AdminVirtualGrid
+                            items={assets}
+                            itemKey={assetKey}
+                            scrollRef={scrollRef}
+                            renderItem={asset => (
                                 <div
                                     key={asset.id}
                                     className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
@@ -594,11 +604,8 @@ export function AssetsModule() {
                                                     src={asset.preview}
                                                     alt={asset.name}
                                                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                                    thumbnailOptions={{
-                                                        width: 240,
-                                                        height: 240,
-                                                        preset: 'storefront-card-square-320',
-                                                    }}
+                                                    mediaKind="card"
+                                                    sizes="(min-width: 1280px) 128px, (min-width: 768px) 140px, (min-width: 640px) 160px, calc(50vw - 48px)"
                                                 />
                                             ) : asset.type === 'VIDEO' ? (
                                                 <Video className="h-9 w-9 text-slate-400" />
@@ -624,8 +631,8 @@ export function AssetsModule() {
                                         </div>
                                     </AdminButton>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        />
                     )}
                     <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-3 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                         <span>

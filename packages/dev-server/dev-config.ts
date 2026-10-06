@@ -91,7 +91,9 @@ import {
 } from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
 import { storefrontAssetPresets } from './storefront-asset-presets';
+import { storefrontCachePlugins } from './storefront-cache-config';
 import { StorefrontGoogleAuthenticationStrategy as GoogleAuthStrategy } from './storefront-google-authentication-strategy';
+import { StorefrontMediaJobsPlugin } from './storefront-media-jobs.plugin';
 import { StorefrontNativeAuthenticationStrategy as NativeAuthStrategy } from './storefront-native-authentication-strategy';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -941,6 +943,7 @@ export const devConfig: VendureConfig = {
         importAssetsDir,
     },
     plugins: [
+        ...storefrontCachePlugins(),
         // MultivendorPlugin.init({
         //     platformFeePercent: 10,
         //     platformFeeSKU: 'FEE',
@@ -1020,6 +1023,7 @@ export const devConfig: VendureConfig = {
             cacheHeader: 'private, no-store',
             imageTransformStrategy: createCatalogImageTransformStrategies(BOOTSTRAP_BASE_SCHEMA),
         }),
+        ...(!BOOTSTRAP_BASE_SCHEMA ? [StorefrontMediaJobsPlugin] : []),
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
         // Enable if you need to debug the job queue
         // BullMQJobQueuePlugin.init({}),

@@ -26,6 +26,7 @@ export * from './helpers/password-cipher/password-cipher';
 export * from './helpers/payment-state-machine/payment-state';
 export { isPlatformAdminContext } from './helpers/platform-admin-context';
 export * from './helpers/product-price-applicator/product-price-applicator';
+export * from './helpers/public-product-summary';
 export * from './helpers/refund-state-machine/refund-state';
 export * from './helpers/request-context/request-context.service';
 export * from './helpers/settings-store/settings-store.service';

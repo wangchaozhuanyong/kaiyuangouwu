@@ -11,6 +11,7 @@ import {
     setInitialActiveChannel,
 } from './apollo';
 import { AdminButton } from './components/AdminControls';
+import { AdminOverlayHost } from './components/AdminOverlayHost';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
@@ -468,11 +469,13 @@ function AppRoutes() {
 
 function App() {
     return (
-        <ConfirmDialogProvider>
-            <BrowserRouter basename={import.meta.env.BASE_URL}>
-                <AppRoutes />
-            </BrowserRouter>
-        </ConfirmDialogProvider>
+        <AdminOverlayHost owner="@global">
+            <ConfirmDialogProvider>
+                <BrowserRouter basename={import.meta.env.BASE_URL}>
+                    <AppRoutes />
+                </BrowserRouter>
+            </ConfirmDialogProvider>
+        </AdminOverlayHost>
     );
 }
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,69 @@ import { fileURLToPath } from 'node:url';
 import { triggerSql, validateTriggerRows } from '../../../deploy/prepare-mysql-audit-triggers.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+
+void test('proxy subnets reject forged forwarded addresses and retain valid loopback forwarding', () => {
+    // GHSA-jqcg-44mw-7w3h: short IPv4-mapped IPv6 prefixes must not trust every IPv4 peer.
+    const proxyaddr = createRequire(import.meta.url)('proxy-addr');
+    const request = remoteAddress => ({
+        socket: { remoteAddress },
+        headers: { 'x-forwarded-for': '198.51.100.42' },
+    });
+    for (const trust of ['::ffff:10.0.0.0/8', '::/1', '10.0.0.0/8', '::ffff:10.0.0.0/104']) {
+        assert.equal(proxyaddr(request('203.0.113.10'), [trust]), '203.0.113.10', trust);
+    }
+    for (const remoteAddress of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+        assert.equal(proxyaddr(request(remoteAddress), ['loopback']), '198.51.100.42', remoteAddress);
+    }
+    for (const trust of ['10.0.0.0/8', '::ffff:10.0.0.0/104']) {
+        assert.equal(proxyaddr(request('10.0.0.5'), [trust]), '198.51.100.42', trust);
+    }
+});
+
+void test('GraphQL result merging keeps nested values without modifying built-in prototypes', () => {
+    const script = `
+const assert = require('node:assert/strict');
+const { mergeDeep } = require('@graphql-tools/utils');
+const payload = JSON.parse('{"constructor":{"__proto__":{"__releasePrototypeSentinel":"unsafe"}}}');
+mergeDeep([{}, payload]);
+assert.equal(Function.prototype.__releasePrototypeSentinel, undefined);
+assert.equal(Object.prototype.__releasePrototypeSentinel, undefined);
+assert.deepEqual(mergeDeep([{ nested: { first: 1 } }, { nested: { second: 2 } }]),
+    { nested: { first: 1, second: 2 } });
+`;
+    const result = spawnSync(process.execPath, ['-e', script], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        timeout: 5_000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+void test('indexed source maps reject unsafe offsets while preserving valid source positions', () => {
+    const { SourceMapConsumer } = createRequire(import.meta.url)('source-map-js');
+    const flatMap = { version: 3, sources: ['input.js'], names: [], mappings: 'AAAA' };
+    const indexed = (line, column, map = flatMap) => ({
+        version: 3,
+        sections: [{ offset: { line, column }, map }],
+    });
+    for (const [line, column] of [
+        [-1, 0],
+        [1.5, 0],
+        [1, Infinity],
+        [Number.MAX_SAFE_INTEGER, 0],
+    ]) {
+        assert.throws(() => new SourceMapConsumer(indexed(line, column)), /offset/iu);
+    }
+    assert.throws(() => new SourceMapConsumer(indexed(6_000_000, 0, indexed(5_000_000, 0))), /offset/iu);
+    const consumer = new SourceMapConsumer(indexed(3, 2));
+    // Use a position inside the section; 1.2.1 and 1.2.2 share the section-boundary lookup behavior.
+    assert.deepEqual(consumer.originalPositionFor({ line: 4, column: 3 }), {
+        source: 'input.js',
+        line: 1,
+        column: 0,
+        name: null,
+    });
+});
 
 void test('restore receipts published during health checks use the observation time without relaxing expiry', async () => {
     const source = await readFile(

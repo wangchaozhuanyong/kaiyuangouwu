@@ -20,7 +20,7 @@ export class StorefrontLcpPreloadController {
             res.status(204).send();
             return;
         }
-        const link = await this.preloadService.render(request.ctx);
+        const link = await this.preloadService.render(request.ctx, request.host);
         if (!link) {
             res.status(204).send();
             return;

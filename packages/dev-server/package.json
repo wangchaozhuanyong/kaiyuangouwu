@@ -21,6 +21,7 @@
         "dev:direct": "node ./scripts/dev-workflow.mjs direct",
         "dev:instrumented": "concurrently npm:dev:server:instrumented npm:dev:worker:instrumented",
         "dashboard:dev": "bun run --cwd ../next-admin dev",
+        "test": "vitest run --config vitest.config.mts catalog-asset-access-strategy.spec.ts storefront-cache-config.spec.ts storefront-media-jobs.plugin.spec.ts",
         "test:dev-workflow": "node --test ./scripts/*.spec.mjs",
         "test:migrations": "vitest run --config vitest.config.mts",
         "typecheck": "tsc --project tsconfig.server.json --noEmit && tsc --project tsconfig.worker.json --noEmit",

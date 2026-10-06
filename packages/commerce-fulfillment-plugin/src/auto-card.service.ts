@@ -15,8 +15,10 @@ import {
     OrderService,
     Permission,
     Product,
+    ProductVariant,
     ProductVariantService,
     RequestContext,
+    RequestContextCacheService,
     RequestContextService,
     TransactionalConnection,
     UserInputError,
@@ -32,6 +34,7 @@ import { In, IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
+import { autoCardDisplayStock } from './auto-card-display-stock';
 import {
     AutoCardFieldDefinition,
     autoCardFieldLabel,
@@ -127,6 +130,7 @@ export class AutoCardService {
         private readonly audit: GovernanceService,
         private readonly digitalProducts: DigitalProductService,
         private readonly receiptTokens: OrderConfirmationTokenService,
+        private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
     ) {}
 
     async configForVariant(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfigView | null> {
@@ -141,6 +145,20 @@ export class AutoCardService {
         return this.connection.getRepository(ctx, AutoCardPoolItem).count({
             where: { configId: config.id, state: 'AVAILABLE' },
         });
+    }
+
+    async availableStockForDisplay(ctx: RequestContext, variant: ProductVariant): Promise<number | null> {
+        // Both records must explicitly classify this as physical. Older records
+        // without the product relation retain the existing supply fallback.
+        if (
+            variant.customFields.fulfillmentType === 'physical' &&
+            variant.product?.customFields.fulfillmentType === 'physical'
+        )
+            return null;
+        const source = await this.supply.resolveForDisplay(ctx, variant.id);
+        return source
+            ? autoCardDisplayStock(ctx, source.config.id, this.connection, this.requestCache)
+            : null;
     }
 
     publicDeliveriesForOrder(ctx: RequestContext, orderId: ID): Promise<AutoCardDelivery[]> {

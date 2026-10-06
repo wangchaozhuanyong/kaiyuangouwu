@@ -60,6 +60,16 @@ export interface StockLocationStrategy extends InjectableStrategy {
         variant: ProductVariant,
         operation?: 'flow' | 'create' | 'adjust',
     ): boolean | Promise<boolean>;
+    /** Optional request-batched equivalent for display reads, never allocation. */
+    supportsStockLocationsForDisplay?(
+        ctx: RequestContext,
+        variant: ProductVariant,
+    ): boolean | Promise<boolean>;
+    getAvailableStockForDisplay?(
+        ctx: RequestContext,
+        productVariantId: ID,
+        stockLevels: StockLevel[],
+    ): AvailableStock | Promise<AvailableStock>;
     /**
      * @description
      * Returns the available stock for the given ProductVariant, taking into account

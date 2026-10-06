@@ -10,6 +10,9 @@ import {
     SENSITIVE_ACTION_PASSWORD_REQUIRED,
     sensitiveActionPasswordLink,
 } from '../apollo-sensitive-action';
+import { AccessibleDialogSurface } from './AccessibleDialogSurface';
+import { AdminOverlayHost, AdminOverlayPortal } from './AdminOverlayHost';
+import { useConfirmDialog } from './confirm-dialog-context';
 import { ConfirmDialogProvider } from './ConfirmDialog';
 
 const DELETE_MUTATION = gql`
@@ -38,6 +41,53 @@ afterEach(() => {
 });
 
 describe('ConfirmDialogProvider sensitive action bridge', () => {
+    it('returns focus to the visible page trigger after an auto-focused nested global confirmation closes', async () => {
+        function PageDialog() {
+            const confirm = useConfirmDialog();
+            return (
+                <AdminOverlayPortal>
+                    <AccessibleDialogSurface accessibleName="页面编辑" onRequestClose={() => {}}>
+                        <button
+                            data-open-confirm
+                            onClick={() => void confirm({ title: '全局确认', description: '本地模拟' })}
+                        >
+                            打开全局确认
+                        </button>
+                    </AccessibleDialogSurface>
+                </AdminOverlayPortal>
+            );
+        }
+        await act(async () =>
+            root.render(
+                <AdminOverlayHost owner="@global">
+                    <ConfirmDialogProvider>
+                        <AdminOverlayHost owner="/editor">
+                            <PageDialog />
+                        </AdminOverlayHost>
+                    </ConfirmDialogProvider>
+                </AdminOverlayHost>,
+            ),
+        );
+        const trigger = document.querySelector<HTMLButtonElement>('[data-open-confirm]')!;
+        await act(async () => {
+            trigger.focus();
+            trigger.click();
+        });
+        const globalDialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+        expect(globalDialog).not.toBeNull();
+        expect(document.activeElement).toBe(
+            [...globalDialog.querySelectorAll('button')].find(button => button.textContent === '取消'),
+        );
+        // Browser keyboard helpers may focus the dialog before sending Escape; this must not replace its trigger.
+        globalDialog.focus();
+        await act(async () =>
+            globalDialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+        );
+        expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+        expect(document.querySelector('[aria-label="页面编辑"]')).not.toBeNull();
+        expect(document.activeElement).toBe(trigger);
+        expect(document.body.style.overflow).toBe('hidden');
+    });
     it('renders a password field and resumes the challenged mutation', async () => {
         const requestHeaders: Array<Record<string, string> | undefined> = [];
         const client = new ApolloClient({
@@ -93,14 +143,14 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
             await Promise.resolve();
         });
 
-        expect(container.textContent).toContain('验证当前管理员密码');
-        const dialogForm = container.querySelector<HTMLFormElement>('section[role="alertdialog"] form');
+        expect(document.body.textContent).toContain('验证当前管理员密码');
+        const dialogForm = document.querySelector<HTMLFormElement>('section[role="alertdialog"] form');
         expect(dialogForm).not.toBeNull();
         const usernameInput = dialogForm?.querySelector<HTMLInputElement>('input[autoComplete="username"]');
         expect(usernameInput).not.toBeNull();
         expect(usernameInput?.readOnly).toBe(true);
 
-        const passwordInput = container.querySelector<HTMLInputElement>('input[type="password"]');
+        const passwordInput = document.querySelector<HTMLInputElement>('input[type="password"]');
         expect(passwordInput).not.toBeNull();
         expect(passwordInput?.form).toBe(dialogForm);
         expect(passwordInput?.placeholder).toBe('仅用于本次操作校验，不会保存');
@@ -110,7 +160,7 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
             passwordInput!.dispatchEvent(new Event('input', { bubbles: true }));
         });
         await act(async () => {
-            Array.from(container.querySelectorAll('button'))
+            Array.from(document.querySelectorAll('button'))
                 .find(button => button.textContent === '验证并继续')
                 ?.click();
             await mutationPromise;
@@ -118,7 +168,7 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
 
         expect(requestHeaders).toHaveLength(2);
         expect(requestHeaders[1]?.[SENSITIVE_ACTION_PASSWORD_HEADER]).toBe('Current123!');
-        expect(container.querySelector('input[type="password"]')).toBeNull();
+        expect(document.querySelector('input[type="password"]')).toBeNull();
     });
 
     it('isolates password prompt inside form and keeps external search input outside the dialog scope', async () => {
@@ -180,9 +230,9 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
             await Promise.resolve();
         });
 
-        const dialogForm = container.querySelector<HTMLFormElement>('section[role="alertdialog"] form')!;
+        const dialogForm = document.querySelector<HTMLFormElement>('section[role="alertdialog"] form')!;
         expect(dialogForm).not.toBeNull();
-        const passwordInput = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+        const passwordInput = document.querySelector<HTMLInputElement>('input[type="password"]')!;
         expect(passwordInput.form).toBe(dialogForm);
         expect(externalSearch.form).toBeNull();
         expect(externalSearch.value).toBe('');

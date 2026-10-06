@@ -4,6 +4,7 @@ import { registerSensitiveActionPasswordPrompt } from '../apollo-sensitive-actio
 import { useAccessibleDialog } from '../hooks/use-accessible-dialog';
 import { AdminButton, AdminInput } from './AdminControls';
 import { AdminField } from './AdminField';
+import { AdminOverlayPortal } from './AdminOverlayHost';
 import {
     ConfirmDialogContext,
     type ConfirmDialogOptions,
@@ -15,6 +16,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     const [options, setOptions] = useState<ConfirmDialogOptions | null>(null);
     const [currentPassword, setCurrentPassword] = useState('');
     const resolverRef = useRef<((result: ConfirmDialogResult) => void) | null>(null);
+    const returnFocusRef = useRef<HTMLElement | null>(null);
     const descriptionId = useId();
 
     const settle = useCallback((result: ConfirmDialogResult) => {
@@ -23,17 +25,23 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
         setCurrentPassword('');
         setOptions(null);
     }, []);
-    const { dialogRef, titleId } = useAccessibleDialog(() => settle(false), Boolean(options));
+    const { dialogRef, titleId } = useAccessibleDialog(() => settle(false), Boolean(options), {
+        returnFocusRef,
+    });
 
     const requestConfirmation = useCallback<RequestConfirmation>(
         nextOptions =>
             new Promise(resolve => {
+                // Capture the requester before the confirmation's autoFocus runs during commit.
+                const trigger = document.activeElement;
+                if (trigger instanceof HTMLElement && !dialogRef.current?.contains(trigger))
+                    returnFocusRef.current = trigger;
                 resolverRef.current?.(false);
                 resolverRef.current = resolve;
                 setCurrentPassword('');
                 setOptions(nextOptions);
             }),
-        [],
+        [dialogRef],
     );
 
     useEffect(
@@ -70,95 +78,97 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
         <ConfirmDialogContext.Provider value={requestConfirmation}>
             {children}
             {options && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
-                    onMouseDown={event => {
-                        if (event.target === event.currentTarget) settle(false);
-                    }}
-                >
-                    <section
-                        ref={dialogRef as React.RefObject<HTMLElement>}
-                        role="alertdialog"
-                        aria-modal="true"
-                        aria-labelledby={titleId}
-                        aria-describedby={descriptionId}
-                        tabIndex={-1}
-                        className="admin-dialog-surface w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"
-                        data-mobile-presentation="compact"
+                <AdminOverlayPortal>
+                    <div
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-xs"
+                        onMouseDown={event => {
+                            if (event.target === event.currentTarget) settle(false);
+                        }}
                     >
-                        <form
-                            onSubmit={event => {
-                                event.preventDefault();
-                                if (options.requireCurrentPassword && !currentPassword) return;
-                                settle({
-                                    currentPassword: options.requireCurrentPassword
-                                        ? currentPassword
-                                        : undefined,
-                                });
-                            }}
+                        <section
+                            ref={dialogRef as React.RefObject<HTMLElement>}
+                            role="alertdialog"
+                            aria-modal="true"
+                            aria-labelledby={titleId}
+                            aria-describedby={descriptionId}
+                            tabIndex={-1}
+                            className="admin-dialog-surface w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"
+                            data-mobile-presentation="compact"
                         >
-                            <div
-                                className={`flex h-11 w-11 items-center justify-center rounded-full ${iconClass}`}
+                            <form
+                                onSubmit={event => {
+                                    event.preventDefault();
+                                    if (options.requireCurrentPassword && !currentPassword) return;
+                                    settle({
+                                        currentPassword: options.requireCurrentPassword
+                                            ? currentPassword
+                                            : undefined,
+                                    });
+                                }}
                             >
-                                <Icon className="h-5 w-5" />
-                            </div>
-                            <h2 id={titleId} className="mt-4 text-base font-bold text-slate-900">
-                                {options.title}
-                            </h2>
-                            <p
-                                id={descriptionId}
-                                className="mt-2 whitespace-pre-line text-xs leading-5 text-slate-500"
-                            >
-                                {options.description}
-                            </p>
-                            {options.requireCurrentPassword && (
-                                <>
-                                    <AdminInput
-                                        type="text"
-                                        name="username"
-                                        autoComplete="username"
-                                        tabIndex={-1}
-                                        aria-hidden="true"
-                                        className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
-                                        readOnly
-                                    />
-                                    <AdminField
-                                        className="mt-5 block text-xs font-bold text-slate-700"
-                                        label="当前管理员密码"
-                                    >
+                                <div
+                                    className={`flex h-11 w-11 items-center justify-center rounded-full ${iconClass}`}
+                                >
+                                    <Icon className="h-5 w-5" />
+                                </div>
+                                <h2 id={titleId} className="mt-4 text-base font-bold text-slate-900">
+                                    {options.title}
+                                </h2>
+                                <p
+                                    id={descriptionId}
+                                    className="mt-2 whitespace-pre-line text-xs leading-5 text-slate-500"
+                                >
+                                    {options.description}
+                                </p>
+                                {options.requireCurrentPassword && (
+                                    <>
                                         <AdminInput
-                                            type="password"
-                                            name="current-password"
-                                            value={currentPassword}
-                                            onChange={event => setCurrentPassword(event.target.value)}
-                                            autoComplete="current-password"
-                                            autoFocus
-                                            placeholder="仅用于本次操作校验，不会保存"
-                                            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                                            type="text"
+                                            name="username"
+                                            autoComplete="username"
+                                            tabIndex={-1}
+                                            aria-hidden="true"
+                                            className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
+                                            readOnly
                                         />
-                                    </AdminField>
-                                </>
-                            )}
-                            <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => settle(false)}
-                                    autoFocus={!options.requireCurrentPassword}
-                                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100"
-                                >
-                                    {options.cancelLabel ?? '取消'}
-                                </AdminButton>
-                                <AdminButton
-                                    type="submit"
-                                    disabled={options.requireCurrentPassword && !currentPassword}
-                                    className={`rounded-lg px-4 py-2 text-xs font-bold text-white focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${confirmClass}`}
-                                >
-                                    {options.confirmLabel ?? '确认'}
-                                </AdminButton>
-                            </div>
-                        </form>
-                    </section>
-                </div>
+                                        <AdminField
+                                            className="mt-5 block text-xs font-bold text-slate-700"
+                                            label="当前管理员密码"
+                                        >
+                                            <AdminInput
+                                                type="password"
+                                                name="current-password"
+                                                value={currentPassword}
+                                                onChange={event => setCurrentPassword(event.target.value)}
+                                                autoComplete="current-password"
+                                                autoFocus
+                                                placeholder="仅用于本次操作校验，不会保存"
+                                                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                                            />
+                                        </AdminField>
+                                    </>
+                                )}
+                                <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => settle(false)}
+                                        autoFocus={!options.requireCurrentPassword}
+                                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100"
+                                    >
+                                        {options.cancelLabel ?? '取消'}
+                                    </AdminButton>
+                                    <AdminButton
+                                        type="submit"
+                                        disabled={options.requireCurrentPassword && !currentPassword}
+                                        className={`rounded-lg px-4 py-2 text-xs font-bold text-white focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${confirmClass}`}
+                                    >
+                                        {options.confirmLabel ?? '确认'}
+                                    </AdminButton>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                </AdminOverlayPortal>
             )}
         </ConfirmDialogContext.Provider>
     );

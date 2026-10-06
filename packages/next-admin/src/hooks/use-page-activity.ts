@@ -1,5 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { TabPageContext } from '../layouts/tab-page-context';
+import { PageRuntimeContext } from '../runtime/page-runtime-context';
 
 const subscribe = (listener: () => void) => {
     document.addEventListener('visibilitychange', listener);
@@ -14,8 +15,9 @@ const subscribe = (listener: () => void) => {
 const snapshot = () => document.visibilityState !== 'hidden' && navigator.onLine;
 export function usePageActivity() {
     const tab = useContext(TabPageContext);
+    const page = useContext(PageRuntimeContext);
     const available = useSyncExternalStore(subscribe, snapshot, () => true);
-    return (tab?.active ?? true) && available;
+    return (tab?.active ?? true) && (page?.active ?? true) && available;
 }
 
 /** All periodic page work shares visibility, connectivity and cleanup rules. */

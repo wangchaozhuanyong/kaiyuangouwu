@@ -126,12 +126,24 @@ describe('progressive page readiness', () => {
     });
 
     it('does not wait for a decorative preview once the full image is decoded', async () => {
-        render(<SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />);
+        const inlinePreview =
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aC3sAAAAASUVORK5CYII=';
+        render(
+            <SafeImage
+                src="/assets/preview/banner.jpg"
+                placeholderSrc={inlinePreview}
+                alt="Banner"
+                imageKind="hero"
+            />,
+        );
         const image = requiredImage(host);
-        expect(host.querySelector('.safe-image-preview')).not.toBeNull();
+        const preview = host.querySelector<HTMLImageElement>('.safe-image-preview');
+        expect(preview?.getAttribute('src')).toBe(inlinePreview);
+        expect(preview?.complete).toBe(false);
         await complete(image);
         await advance();
         expect(phase()).toBe('ready');
+        expect(preview?.complete).toBe(false);
     });
 
     it('does not wait for images or query placeholders outside the first viewport', async () => {

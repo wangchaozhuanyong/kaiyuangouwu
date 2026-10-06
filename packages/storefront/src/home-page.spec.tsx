@@ -788,7 +788,16 @@ describe('HomePage flash-sale product count', () => {
         );
 
         expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(0);
-        expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(10);
+        // Each card has one final image; its inline placeholder must not issue another request.
+        const images = markup.match(/<img\b[^>]*>/g) ?? [];
+        expect(images).toHaveLength(items.length);
+        expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(items.length);
+        for (const image of images) {
+            expect(image).toContain('loading="lazy"');
+            expect(image).toContain('preset=storefront-thumbnail-160');
+            expect(image).toContain('preset=storefront-thumbnail-320');
+        }
+        expect(markup).not.toContain('preset=storefront-placeholder');
         expect(markup).not.toContain('fetchPriority="high"');
         expect(markup).toContain('preset=storefront-thumbnail-160');
         expect(markup).toContain('sizes="(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw"');

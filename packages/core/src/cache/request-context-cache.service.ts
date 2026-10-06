@@ -1,4 +1,8 @@
+import DataLoader from 'dataloader';
+import { getOperationAST, OperationTypeNode, parse } from 'graphql';
+
 import { RequestContext } from '../api';
+import { TRANSACTION_MANAGER_KEY } from '../common/constants';
 
 /**
  * @description
@@ -14,6 +18,66 @@ import { RequestContext } from '../api';
  */
 export class RequestContextCacheService {
     private caches = new WeakMap<RequestContext, Map<any, any>>();
+    private loaders = new WeakMap<RequestContext, Map<string, DataLoader<string, unknown>>>();
+    private retainResults = new WeakMap<RequestContext, boolean>();
+
+    /** Start a fresh read generation when a surrounding snapshot retries after invalidation. */
+    clear(ctx: RequestContext): void {
+        this.caches.delete(ctx);
+        this.loaders.delete(ctx);
+        this.retainResults.delete(ctx);
+    }
+
+    /**
+     * Batch read-only entity fields resolved concurrently within one request. The
+     * scope must include any channel, language, currency or projection differences.
+     * Never use this for a write's authoritative stock/price/permission validation.
+     * Each batch is bounded, preserves caller order and shares in-flight promises.
+     */
+    load<V>(
+        ctx: RequestContext,
+        scope: string,
+        id: string | number,
+        batch: (ids: readonly string[]) => Promise<readonly V[]>,
+    ): Promise<V> {
+        let loaders = this.loaders.get(ctx);
+        if (!loaders) {
+            loaders = new Map();
+            this.loaders.set(ctx, loaders);
+        }
+        let loader = loaders.get(scope) as DataLoader<string, V> | undefined;
+        if (!loader) {
+            loader = new DataLoader<string, V>(batch, {
+                maxBatchSize: 200,
+                cache: this.canRetainResults(ctx),
+            });
+            loaders.set(scope, loader);
+        }
+        return loader.load(String(id));
+    }
+
+    private canRetainResults(ctx: RequestContext): boolean {
+        const previous = this.retainResults.get(ctx);
+        if (previous !== undefined) return previous;
+        // Mutation response fields can read after another serial mutation has
+        // changed the same entity. Coalesce those fields, but never retain their
+        // results across writes within the request or a transaction.
+        let retain = !Object.getOwnPropertySymbols(ctx).includes(TRANSACTION_MANAGER_KEY);
+        const body = ctx.req?.body;
+        if (Array.isArray(body)) retain = false;
+        if (typeof body?.query === 'string') {
+            try {
+                retain =
+                    retain &&
+                    getOperationAST(parse(body.query), body.operationName)?.operation ===
+                        OperationTypeNode.QUERY;
+            } catch {
+                retain = false;
+            }
+        }
+        this.retainResults.set(ctx, retain);
+        return retain;
+    }
 
     /**
      * @description

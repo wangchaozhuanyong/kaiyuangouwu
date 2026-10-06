@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     ConfigService,
     ID,
@@ -7,7 +7,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
-import { normalizeRequestHost, StoreDomain } from '@vendure/store-domain-plugin';
+import { normalizeRequestHost, StoreDomain, StoreDomainService } from '@vendure/store-domain-plugin';
 import type { Request } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -61,6 +61,7 @@ export interface StorefrontPromotionRequest {
 
 @Injectable()
 export class StorefrontPromotionAccessService {
+    private readonly requests = new WeakMap<Request, Promise<StorefrontPromotionRequest | null>>();
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly configService: ConfigService,
@@ -68,6 +69,7 @@ export class StorefrontPromotionAccessService {
         private readonly activationService: StorefrontActivationService,
         @Inject(STOREFRONT_PROMOTION_OPTIONS)
         private readonly options: Required<StorefrontPromotionPluginOptions>,
+        @Optional() private readonly domains?: StoreDomainService,
     ) {}
 
     get enabled(): boolean {
@@ -75,6 +77,14 @@ export class StorefrontPromotionAccessService {
     }
 
     async resolveRequest(req: Request): Promise<StorefrontPromotionRequest | null> {
+        const pending = this.requests.get(req);
+        if (pending) return pending;
+        const resolved = this.resolveAnonymousRequest(req);
+        this.requests.set(req, resolved);
+        return resolved;
+    }
+
+    private async resolveAnonymousRequest(req: Request): Promise<StorefrontPromotionRequest | null> {
         const forwardedHost = this.options.trustProxyHeaders
             ? this.headerValue(req.headers['x-forwarded-host'])
             : undefined;
@@ -82,6 +92,13 @@ export class StorefrontPromotionAccessService {
         if (!host) return null;
 
         const languageCode = storefrontLanguageCodeFromAcceptLanguage(req.headers['accept-language']);
+        // Keep host-derived media URLs without allowing cookies or session state into public snapshots.
+        const publicRequest = {
+            headers: { host, 'accept-language': req.headers['accept-language'] },
+            protocol: req.protocol || 'https',
+            query: {},
+            get: (name: string) => (name.toLowerCase() === 'host' ? host : undefined),
+        } as unknown as Request;
 
         if (this.options.bypassHosts.includes(host)) {
             const tokenKey = this.configService.apiOptions.channelTokenKey;
@@ -90,7 +107,7 @@ export class StorefrontPromotionAccessService {
             const channelToken =
                 (typeof queryToken === 'string' ? queryToken : undefined) ?? this.headerValue(headerToken);
             const bypassContext = await this.requestContextService.create({
-                req,
+                req: publicRequest,
                 apiType: 'shop',
                 channelOrToken: channelToken,
                 languageCode,
@@ -99,13 +116,27 @@ export class StorefrontPromotionAccessService {
             return { ctx: bypassContext, host, channelId: bypassContext.channelId };
         }
 
+        // Reuse the same bounded, invalidated domain routing cache as the Shop API.
+        // Store suspension still passes through the authoritative activation gate below.
+        if (this.domains) {
+            const route = await this.domains.resolveRoute(host);
+            if (route?.status !== 'ACTIVE' || !route.channelToken) return null;
+            const ctx = await this.requestContextService.create({
+                req: publicRequest,
+                apiType: 'shop',
+                channelOrToken: route.channelToken,
+                languageCode,
+            });
+            await this.activationService.assertActive(ctx);
+            return { ctx, host, channelId: ctx.channelId };
+        }
         const domain = await this.connection.rawConnection.getRepository(StoreDomain).findOne({
             where: { domain: host, status: 'ACTIVE' },
             relations: { channel: true },
         });
         if (!domain) return null;
         const domainContext = await this.requestContextService.create({
-            req,
+            req: publicRequest,
             apiType: 'shop',
             channelOrToken: domain.channel,
             languageCode,

@@ -3,6 +3,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         include: [
+            'catalog-asset-access-strategy.spec.ts',
+            'storefront-cache-config.spec.ts',
+            'storefront-media-jobs.plugin.spec.ts',
             'email-templates.spec.ts',
             'customer-image-config.spec.ts',
             'order-confirmation-email.spec.ts',

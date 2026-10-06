@@ -37,8 +37,8 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -2900,40 +2900,41 @@ function Modal({
     children: React.ReactNode;
 }) {
     const { dialogRef, titleId } = useAccessibleDialog(onClose);
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-2xs"
-            onMouseDown={event => {
-                if (event.target === event.currentTarget) onClose();
-            }}
-        >
+    return (
+        <AdminOverlayPortal>
             <div
-                ref={dialogRef as React.RefObject<HTMLDivElement>}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                tabIndex={-1}
-                className={`admin-dialog-surface w-full ${width} max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none`}
+                className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-2xs"
+                onMouseDown={event => {
+                    if (event.target === event.currentTarget) onClose();
+                }}
             >
-                <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-                    <div>
-                        <h2 id={titleId} className="text-base font-bold text-slate-900">
-                            {title}
-                        </h2>
-                        {description && <p className="mt-1 text-[11px] text-slate-500">{description}</p>}
+                <div
+                    ref={dialogRef as React.RefObject<HTMLDivElement>}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={titleId}
+                    tabIndex={-1}
+                    className={`admin-dialog-surface w-full ${width} max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none`}
+                >
+                    <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+                        <div>
+                            <h2 id={titleId} className="text-base font-bold text-slate-900">
+                                {title}
+                            </h2>
+                            {description && <p className="mt-1 text-[11px] text-slate-500">{description}</p>}
+                        </div>
+                        <AdminButton
+                            type="button"
+                            onClick={onClose}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100"
+                            aria-label="关闭"
+                        >
+                            <X className="h-5 w-5" />
+                        </AdminButton>
                     </div>
-                    <AdminButton
-                        type="button"
-                        onClick={onClose}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100"
-                        aria-label="关闭"
-                    >
-                        <X className="h-5 w-5" />
-                    </AdminButton>
+                    <div className="p-5">{children}</div>
                 </div>
-                <div className="p-5">{children}</div>
             </div>
-        </div>,
-        document.body,
+        </AdminOverlayPortal>
     );
 }

@@ -158,15 +158,11 @@ function SafeImageSource({
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
     const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
-    const automaticPlaceholder = imageKind
-        ? imageSources(src, imageKind, imageProps.sizes).placeholderSrc
-        : undefined;
     const placeholder =
         retainedSrc ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
-            : placeholderSrc) ||
-        automaticPlaceholder;
+            : placeholderSrc);
 
     useLayoutEffect(() => {
         const preview = previewRef.current;

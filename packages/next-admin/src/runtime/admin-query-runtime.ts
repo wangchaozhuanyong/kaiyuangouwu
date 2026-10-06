@@ -82,18 +82,44 @@ export function queryPolicy(document: DocumentNode, variables?: Record<string, a
 /** Metadata only: Apollo remains the sole shared server-data cache. */
 export class AdminQueryRuntime {
     private resources = new Map<string, Resource>();
-    private listeners = new Set<() => void>();
-    private version = 0;
+    private pageListeners = new Map<string, Set<() => void>>();
+    private resourceListeners = new Map<string, Set<() => void>>();
+    private pageVersions = new Map<string, number>();
+    private pageResources = new Map<string, Set<string>>();
     private pages = new Map<string, Promise<PromiseSettledResult<unknown>[]>>();
     private preparations = new Map<string, Set<() => void>>();
     constructor(private now: () => number = Date.now) {}
-    subscribe = (listener: () => void) => {
-        this.listeners.add(listener);
+    subscribePage = (page: string, listener: () => void) => {
+        const unsubscribe = this.subscribeTo(this.pageListeners, page, listener);
         return () => {
-            this.listeners.delete(listener);
+            unsubscribe();
+            if (!this.pageListeners.has(page) && !this.pageResources.has(page))
+                this.pageVersions.delete(page);
         };
     };
-    snapshot = () => this.version;
+    subscribeResource = (key: string, listener: () => void) =>
+        this.subscribeTo(this.resourceListeners, key, listener);
+    pageSnapshot = (page: string) => this.pageVersions.get(page) ?? 0;
+    private subscribeTo(subscriptions: Map<string, Set<() => void>>, key: string, listener: () => void) {
+        const listeners = subscriptions.get(key) ?? new Set();
+        listeners.add(listener);
+        subscriptions.set(key, listeners);
+        return () => {
+            listeners.delete(listener);
+            if (!listeners.size) subscriptions.delete(key);
+        };
+    }
+    private indexOwner(key: string, page: string) {
+        const keys = this.pageResources.get(page) ?? new Set();
+        keys.add(key);
+        this.pageResources.set(page, keys);
+    }
+    private unindexOwner(key: string, page: string) {
+        if ([...(this.resources.get(key)?.owners.values() ?? [])].some(owner => owner.page === page)) return;
+        const keys = this.pageResources.get(page);
+        keys?.delete(key);
+        if (!keys?.size) this.pageResources.delete(page);
+    }
     preparePage(page: string, callback: () => void) {
         const callbacks = this.preparations.get(page) ?? new Set();
         callbacks.add(callback);
@@ -103,9 +129,20 @@ export class AdminQueryRuntime {
             if (!callbacks.size) this.preparations.delete(page);
         };
     }
-    private publish() {
-        this.version++;
-        this.listeners.forEach(listener => listener());
+    private publish(keys: Iterable<string>, extraPages: string[] = []) {
+        const pages = new Set(extraPages);
+        for (const key of keys) {
+            this.resourceListeners.get(key)?.forEach(listener => listener());
+            this.resources.get(key)?.owners.forEach(owner => pages.add(owner.page));
+        }
+        if (pages.has('@shell')) {
+            for (const page of this.pageResources.keys()) pages.add(page);
+            for (const page of this.pageListeners.keys()) pages.add(page);
+        }
+        for (const page of pages) {
+            this.pageVersions.set(page, this.pageSnapshot(page) + 1);
+            this.pageListeners.get(page)?.forEach(listener => listener());
+        }
     }
 
     register(key: string, ownerId: string, owner: ResourceOwner, policy: ResourcePolicy) {
@@ -114,9 +151,12 @@ export class AdminQueryRuntime {
             resource = { owners: new Map(), policy, updatedAt: 0, invalidatedAt: 0 };
             this.resources.set(key, resource);
         }
+        const previousPage = resource.owners.get(ownerId)?.page;
         resource.owners.set(ownerId, owner);
+        if (previousPage && previousPage !== owner.page) this.unindexOwner(key, previousPage);
+        this.indexOwner(key, owner.page);
         resource.policy = policy;
-        this.publish();
+        this.publish([key], previousPage ? [previousPage] : []);
         // Bound inactive metadata without evicting an open page or its Apollo cache.
         if (this.resources.size > 512) {
             for (const [candidate, item] of this.resources) {
@@ -126,7 +166,10 @@ export class AdminQueryRuntime {
         }
         return () => {
             resource!.owners.delete(ownerId);
-            this.publish();
+            this.unindexOwner(key, owner.page);
+            this.publish([key], [owner.page]);
+            if (!this.pageResources.has(owner.page) && !this.pageListeners.has(owner.page))
+                this.pageVersions.delete(owner.page);
         };
     }
     update(key: string, ownerId: string, patch: Partial<ResourceOwner>, networkCompleted = false) {
@@ -136,11 +179,16 @@ export class AdminQueryRuntime {
         const changed = Object.entries(patch).some(
             ([field, value]) => owner[field as keyof ResourceOwner] !== value,
         );
+        const previousPage = owner.page;
         Object.assign(owner, patch);
+        if (previousPage !== owner.page) {
+            this.unindexOwner(key, previousPage);
+            this.indexOwner(key, owner.page);
+        }
         if (networkCompleted && !owner.error && owner.hasData) {
             resource.updatedAt = this.now();
         }
-        if (changed || networkCompleted) this.publish();
+        if (changed || networkCompleted) this.publish([key], [previousPage]);
     }
     isStale(key: string) {
         const item = this.resources.get(key);
@@ -152,12 +200,21 @@ export class AdminQueryRuntime {
         );
     }
     invalidate(predicate: (key: string) => boolean = () => true) {
-        for (const [key, item] of this.resources)
-            if (predicate(key)) item.invalidatedAt = Math.max(this.now() || 1, item.invalidatedAt + 1);
-        this.publish();
+        const changed: string[] = [];
+        for (const [key, item] of this.resources) {
+            if (!predicate(key)) continue;
+            item.invalidatedAt = Math.max(this.now() || 1, item.invalidatedAt + 1);
+            changed.push(key);
+        }
+        this.publish(changed);
     }
     state(page: string): PageQueryState {
-        const owners = [...this.resources.values()].flatMap(item => {
+        const keys = new Set([
+            ...(this.pageResources.get(page) ?? []),
+            ...(this.pageResources.get('@shell') ?? []),
+        ]);
+        const owners = [...keys].flatMap(key => {
+            const item = this.resources.get(key)!;
             const owner =
                 [...item.owners.values()].find(value => value.page === page && value.active) ??
                 [...item.owners.values()].find(value => value.page === '@shell' && value.active);
@@ -191,9 +248,9 @@ export class AdminQueryRuntime {
             })
             .finally(() => {
                 item.pending = undefined;
-                this.publish();
+                this.publish([key]);
             });
-        this.publish();
+        this.publish([key]);
         return item.pending;
     }
     refreshPage(page: string, reason: RefreshReason = 'manual'): Promise<PromiseSettledResult<unknown>[]> {
@@ -224,7 +281,7 @@ export class AdminQueryRuntime {
             return results;
         })().finally(() => {
             this.pages.delete(page);
-            this.publish();
+            this.publish([], [page]);
         });
         this.pages.set(page, work);
         return work;

@@ -1,5 +1,6 @@
 import {
     responsiveImageSources as assetImageSources,
+    mediaDescriptor,
     normalizeStorefrontAssetUrl as normalizeAssetUrl,
     type ResponsiveImageSources,
     type StorefrontImageKind,
@@ -9,22 +10,7 @@ import { DEFAULT_HERO_IMAGE, staticStorefrontImageSource } from './storefront-im
 
 export { type ResponsiveImageSources, type StorefrontImageKind };
 
-/** Refresh browser-cached 404s from the recovered WebP migration without changing other media URLs. */
-export function normalizeStorefrontAssetUrl(source: string): string {
-    const normalized = normalizeAssetUrl(source);
-    if (!/\/assets\/(?:preview|source)\/[^?#]*__webp_migrated_\d+\.webp(?:[?#]|$)/iu.test(normalized)) {
-        return normalized;
-    }
-    try {
-        const url = new URL(normalized, 'https://storefront.invalid');
-        url.searchParams.set('v', 'webp-readable-1');
-        return /^[a-z][a-z\d+.-]*:/iu.test(normalized) || normalized.startsWith('//')
-            ? url.toString()
-            : `${url.pathname}${url.search}${url.hash}`;
-    } catch {
-        return normalized;
-    }
-}
+export const normalizeStorefrontAssetUrl = normalizeAssetUrl;
 
 export function responsiveImageSources(
     source: string,
@@ -49,13 +35,8 @@ export function storefrontPlaceholderUrl(source: string, kind: StorefrontImageKi
 
 /** Shared descriptor for speculative preload and the image the browser renders. */
 export function imageSources(source: string, kind?: StorefrontImageKind, sizes?: string) {
-    const responsive = kind ? responsiveImageSources(source, kind) : null;
-    return {
-        src: responsive?.fallbackSrc ?? normalizeStorefrontAssetUrl(source),
-        srcSet: responsive?.fallbackSrcSet,
-        sizes: sizes ?? responsive?.sizes,
-        width: responsive?.width,
-        height: responsive?.height,
-        placeholderSrc: responsive?.placeholderSrc,
-    };
+    return mediaDescriptor(source, kind, {
+        sizes,
+        responsive: kind ? responsiveImageSources(source, kind) : null,
+    });
 }

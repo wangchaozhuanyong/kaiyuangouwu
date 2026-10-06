@@ -162,3 +162,13 @@ export { promotionAssetPaths } from './promotion/promotion-public-assets.js';
 
 export { CatalogGovernanceService } from './catalog-governance.service.js';
 export { managePlatformCatalogPermission } from './constants.js';
+
+export { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
+export { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
+
+export { couponCollectionsForVariant } from './promotion/store-coupon-collections.js';
+
+export { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
+
+export { StorefrontPublicCacheInvalidatedEvent } from './performance/storefront-cache-invalidation.service';
+export { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';

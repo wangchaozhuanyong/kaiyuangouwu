@@ -30,6 +30,7 @@ export class AssetServer {
     private cacheHeader: string;
     private presets: ImageTransformPreset[];
     private imageTransformStrategies: ImageTransformStrategy[];
+    private readonly preparing = new Map<string, Promise<void>>();
 
     constructor(
         @Inject(ASSET_SERVER_PLUGIN_INIT_OPTIONS) private options: AssetServerOptions,
@@ -37,6 +38,57 @@ export class AssetServer {
         private processContext: ProcessContext,
     ) {
         this.assetStorageStrategy = this.configService.assetOptions.assetStorageStrategy;
+        this.presets = options.presets ?? [];
+    }
+
+    /** Worker-only preparation. Callers must authorize source paths with the store's public manifest. */
+    async preparePublicDerivative(identifier: string, presetName: string, quality: number): Promise<void> {
+        if (!this.processContext.isWorker) throw new Error('Image preparation must run in the worker');
+        let decoded: string;
+        try {
+            decoded = decodeURIComponent(identifier);
+        } catch {
+            throw new Error('Invalid public media path');
+        }
+        if (
+            !/^(?:preview|source)\//u.test(decoded) ||
+            decoded.split(/[\\/]/u).includes('..') ||
+            decoded.includes('\\')
+        )
+            throw new Error('Invalid public media path');
+        const preset = this.presets.find(candidate => candidate.name === presetName);
+        if (!preset || !presetName.startsWith('storefront-') || ![75, 82, 90].includes(quality))
+            throw new Error('Image preparation preset is not allowed');
+        const parameters: ImageTransformParameters = {
+            preset: preset.name,
+            width: preset.width,
+            height: preset.height,
+            mode: preset.mode,
+            quality,
+            format: 'webp',
+            fpx: undefined,
+            fpy: undefined,
+        };
+        const key = this.getFileNameFromParameters(identifier, parameters);
+        const current = this.preparing.get(key);
+        if (current) return current;
+        const prepare = async () => {
+            if (await this.assetStorageStrategy.fileExists(key)) return;
+            const original = await this.assetStorageStrategy.readFileToBuffer(
+                this.sanitizeFilePath(identifier),
+            );
+            const image = await transformImage(original, parameters);
+            await this.assetStorageStrategy.writeFileFromBuffer(key, await image.toBuffer());
+        };
+        // Queue concurrency is one; this also protects direct internal callers from duplicate transforms.
+        if (this.preparing.size >= 8) throw new Error('Image preparation capacity exceeded');
+        const pending = prepare();
+        this.preparing.set(key, pending);
+        try {
+            await pending;
+        } finally {
+            this.preparing.delete(key);
+        }
     }
 
     /** @internal */

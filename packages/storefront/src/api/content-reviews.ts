@@ -417,21 +417,6 @@ googleEnabled
 googleClientId
 }
 }
-activeStorefrontFlashSales {
-id
-startsAt
-endsAt
-items {
-productId
-productVariantId
-productName
-variantName
-originalPrice
-salePrice
-currencyCode
-imageUrl
-}
-}
 activeSystemAnnouncements {
 id
 ${announcementCreatedAt ? 'createdAt' : ''}
@@ -551,7 +536,8 @@ description
         })();
         return {
             blocks: result.storefrontContent,
-            flashSales: result.activeStorefrontFlashSales ?? [],
+            flashSales: [],
+            flashSalesDeferred: true,
             systemAnnouncements: result.activeSystemAnnouncements ?? [],
             settings: {
                 heroAutoplayIntervalSeconds:
@@ -565,6 +551,19 @@ description
                 ),
             },
         };
+    }
+
+    async activeFlashSales(signal?: AbortSignal): Promise<StorefrontContentResponse['flashSales']> {
+        const result = await this.request<{
+            activeStorefrontFlashSales: StorefrontContentResponse['flashSales'];
+        }>(
+            `query StorefrontFlashSales { activeStorefrontFlashSales {
+                id startsAt endsAt items { productId productVariantId productName variantName originalPrice salePrice currencyCode imageUrl }
+            } }`,
+            undefined,
+            signal,
+        );
+        return result.activeStorefrontFlashSales;
     }
 
     async activeCouponCampaigns(signal?: AbortSignal): Promise<StorefrontCouponCampaign[]> {

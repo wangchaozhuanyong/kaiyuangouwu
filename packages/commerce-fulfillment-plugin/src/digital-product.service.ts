@@ -12,6 +12,7 @@ import {
     Product,
     ProductVariant,
     RequestContext,
+    RequestContextCacheService,
     StockLevel,
     TransactionalConnection,
     UserInputError,
@@ -19,6 +20,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { In, ObjectLiteral, ObjectType } from 'typeorm';
 
+import { autoCardDisplayStock } from './auto-card-display-stock';
 import { DigitalDeliveryMode } from './auto-card.constants';
 import {
     digitalStockPolicy,
@@ -52,6 +54,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
         private readonly connection: TransactionalConnection,
         private readonly orders: OrderService,
         private readonly catalog: CatalogOperationsService,
+        private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
     ) {}
 
     onApplicationBootstrap(): void {
@@ -99,6 +102,27 @@ export class DigitalProductService implements OnApplicationBootstrap {
         return this.connection.getRepository(ctx, DigitalVariantConfig).findOne({
             where: { channelId: ctx.channelId, productVariantId: variantId, migrationState: 'ACTIVE' },
         });
+    }
+
+    configForDisplay(ctx: RequestContext, variantId: ID) {
+        return this.requestCache.load(
+            ctx,
+            `digital-variant-config:${ctx.channelId}`,
+            variantId,
+            async ids => {
+                const configurations = await this.connection.getRepository(ctx, DigitalVariantConfig).find({
+                    where: {
+                        channelId: ctx.channelId,
+                        productVariantId: In([...ids]),
+                        migrationState: 'ACTIVE',
+                    },
+                });
+                const byVariant = new Map(
+                    configurations.map(config => [String(config.productVariantId), config]),
+                );
+                return ids.map(id => byVariant.get(id) ?? null);
+            },
+        );
     }
 
     async initialize(ctx: RequestContext, variant: ProductVariant) {
@@ -231,17 +255,55 @@ export class DigitalProductService implements OnApplicationBootstrap {
     }
 
     async available(ctx: RequestContext, variant: ProductVariant): Promise<number | null | undefined> {
+        return this.availableQuantity(ctx, variant, false);
+    }
+
+    async availableForDisplay(
+        ctx: RequestContext,
+        variant: ProductVariant,
+    ): Promise<number | null | undefined> {
+        return this.availableQuantity(ctx, variant, true);
+    }
+
+    private async availableQuantity(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        forDisplay: boolean,
+    ): Promise<number | null | undefined> {
         if (variant.customFields.fulfillmentType !== 'digital') return undefined;
-        const config = await this.config(ctx, variant.id);
+        const config = await (forDisplay
+            ? this.configForDisplay(ctx, variant.id)
+            : this.config(ctx, variant.id));
         if (!config) return undefined; // Explicit compatibility path until migration is activated.
         if (config.stockPolicy === 'pool_derived') {
-            const cards = await this.connection.getRepository(ctx, AutoCardConfig).findOne({
-                where: { channelId: ctx.channelId, productVariantId: variant.id, enabled: true },
-            });
+            const cards = forDisplay
+                ? await this.requestCache.load(
+                      ctx,
+                      `digital-local-card-config:${ctx.channelId}`,
+                      variant.id,
+                      async ids => {
+                          const configs = await this.connection.getRepository(ctx, AutoCardConfig).find({
+                              where: {
+                                  channelId: ctx.channelId,
+                                  productVariantId: In([...ids]),
+                                  enabled: true,
+                              },
+                          });
+                          const byVariant = new Map(
+                              configs.map(item => [String(item.productVariantId), item]),
+                          );
+                          return ids.map(id => byVariant.get(id) ?? null);
+                      },
+                  )
+                : await this.connection.getRepository(ctx, AutoCardConfig).findOne({
+                      where: { channelId: ctx.channelId, productVariantId: variant.id, enabled: true },
+                  });
             return cards
-                ? this.connection.getRepository(ctx, AutoCardPoolItem).count({
-                      where: { configId: cards.id, state: 'AVAILABLE' },
-                  })
+                ? forDisplay
+                    ? autoCardDisplayStock(ctx, cards.id, this.connection, this.requestCache)
+                    : this.connection.getRepository(ctx, AutoCardPoolItem).count({
+                          where: { configId: cards.id, state: 'AVAILABLE' },
+                      })
                 : 0;
         }
         return config.stockPolicy === 'unlimited' ? null : config.availableQuantity;

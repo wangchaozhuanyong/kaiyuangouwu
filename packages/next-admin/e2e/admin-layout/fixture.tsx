@@ -7,8 +7,10 @@ import { Link, MemoryRouter, Navigate, Route, Routes, useLocation, useNavigate }
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { AdminButton, PAGE_REFRESH_EVENT } from '../../src/components/AdminControls';
+import { AdminOverlayHost } from '../../src/components/AdminOverlayHost';
 import { AdminPageWorkspace } from '../../src/components/AdminPageWorkspace';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
+import { ConfirmDialogProvider } from '../../src/components/ConfirmDialog';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { CustomFieldsContext } from '../../src/custom-fields/custom-fields-context';
 import {
@@ -50,6 +52,7 @@ import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
 import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 import { FieldLayoutFixture } from './field-layout-fixture';
+import { PerformanceFixture } from './performance-fixture';
 
 // Synthetic local data only. No HTTP link. Mutations are blocked unless an explicit mockWrites flag enables the small local-only whitelist below.
 const params = new URLSearchParams(location.search);
@@ -706,15 +709,15 @@ const data: Record<string, unknown> = {
     },
     platformCatalogResources: [],
     myStoreCatalogStatus: {
-        authorized: params.has('empty') ? 0 : params.has('many') ? 60 : 1,
-        listed: params.has('empty') ? 0 : params.has('many') ? 60 : 1,
+        authorized: params.has('empty') ? 0 : params.has('large') ? 100 : params.has('many') ? 60 : 1,
+        listed: params.has('empty') ? 0 : params.has('large') ? 100 : params.has('many') ? 60 : 1,
         paused: 0,
         pending: 0,
         outOfStock: 0,
         items: params.has('empty')
             ? []
-            : Array.from({ length: params.has('many') ? 60 : 1 }, (_, i) => ({
-                  productId: params.has('many') ? `layout-many-${i}` : product.id,
+            : Array.from({ length: params.has('large') ? 100 : params.has('many') ? 60 : 1 }, (_, i) => ({
+                  productId: params.has('many') || params.has('large') ? `layout-many-${i}` : product.id,
                   listed: true,
                   pending: false,
                   paused: false,
@@ -1191,6 +1194,47 @@ const client = new ApolloClient({
                           afterSalesRequests: empty,
                       }
                     : data;
+                if (params.has('large')) {
+                    const skip = Number(operation.variables.options?.skip ?? 0);
+                    const take = Math.max(
+                        0,
+                        Math.min(Number(operation.variables.options?.take ?? 20), 100 - skip),
+                    );
+                    responseData = {
+                        ...responseData,
+                        products: {
+                            totalItems: 100,
+                            items: Array.from({ length: take }, (_, index) => ({
+                                ...product,
+                                id: `layout-many-${skip + index}`,
+                                name: `窗口化验收商品 ${skip + index + 1}`,
+                            })),
+                        },
+                        assets: {
+                            totalItems: 100,
+                            items: Array.from({ length: take }, (_, index) => ({
+                                __typename: 'Asset',
+                                id: `layout-asset-${skip + index}`,
+                                name: `窗口化验收素材 ${skip + index + 1}`,
+                                type: 'IMAGE',
+                                mimeType: 'image/svg+xml',
+                                fileSize: 1024,
+                                width: 320,
+                                height: 320,
+                                preview: '/assets/fixture-auth.svg',
+                                source: '/assets/fixture-auth.svg',
+                                tags: [],
+                                translations: [
+                                    {
+                                        id: `asset-name-${skip + index}`,
+                                        languageCode: 'zh_Hans',
+                                        name: `窗口化验收素材 ${skip + index + 1}`,
+                                    },
+                                ],
+                            })),
+                        },
+                    };
+                }
                 if (params.has('many')) {
                     responseData = {
                         ...responseData,
@@ -1564,7 +1608,23 @@ const modules: Record<string, React.ReactNode> = {
     purchases: <PurchaseOrdersModule />,
     stores: <StoreManagementFixture />,
 };
-if (view === 'tabs' || view === 'split') {
+if (view === 'performance') {
+    createRoot(document.getElementById('root')!).render(
+        <ThemeProvider>
+            <ApolloProvider client={client}>
+                <AdminOverlayHost owner="@global">
+                    <ConfirmDialogProvider>
+                        <FeatureHelpProvider>
+                            <MemoryRouter initialEntries={['/performance/page/1']}>
+                                <PerformanceFixture />
+                            </MemoryRouter>
+                        </FeatureHelpProvider>
+                    </ConfirmDialogProvider>
+                </AdminOverlayHost>
+            </ApolloProvider>
+        </ThemeProvider>,
+    );
+} else if (view === 'tabs' || view === 'split') {
     createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
             <ApolloProvider client={client}>

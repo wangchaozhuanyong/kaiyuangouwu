@@ -12,6 +12,7 @@ import {
 } from './query-client';
 import { router } from './router';
 import { restoreStorefrontIcons } from './storefront-icons';
+import { readInitialPublicPage, seedPublicPage } from './storefront-page-data';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './storefront-styles';
 
@@ -25,6 +26,8 @@ const appRootElement = rootElement;
 restoreStorefrontIcons();
 try {
     restorePublicQueryCache(storefrontQueryClient);
+    const initialPage = readInitialPublicPage();
+    if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
     watchPublicQueryCache(storefrontQueryClient);
     window.addEventListener('pagehide', () => {
         try {

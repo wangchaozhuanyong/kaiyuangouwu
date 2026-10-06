@@ -360,3 +360,16 @@ describe('storefront realtime query targeting', () => {
         ).toBe(true);
     });
 });
+
+it('refreshes independently loaded flash sales only in the matching store scope', () => {
+    const query = { queryKey: storefrontQueryKeys.flashSales('store-a', 'zh_Hans') };
+    expect(storefrontRealtimeQueryMatches(query, event({ topics: ['content'] }), scope)).toBe(true);
+    expect(storefrontRealtimeQueryMatches(query, event({ topics: ['catalog'] }), scope)).toBe(true);
+    expect(storefrontRealtimeQueryMatches(query, event({ topics: ['orders'] }), scope)).toBe(false);
+    expect(
+        storefrontRealtimeQueryMatches(query, event({ topics: ['content'] }), {
+            ...scope,
+            marketCode: 'store-b',
+        }),
+    ).toBe(false);
+});

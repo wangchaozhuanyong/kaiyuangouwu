@@ -23,6 +23,9 @@ export const productFields = `
     }
 `;
 
+/** Legacy GraphQL deployments need the body to derive card text; the public aggregate sends compact fields. */
+export const productSummaryFields = productFields.replace(/\n    assets \{ id preview \}\n/u, '\n');
+
 export const productPackagingFields = `
     packaging {
         id

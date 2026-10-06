@@ -14,6 +14,7 @@ import { ResolvedStoreDomainPluginOptions, StoreDomainPluginOptions } from './ty
 @VendurePlugin({
     imports: [PluginCommonModule],
     entities: [StoreDomain],
+    exports: [StoreDomainService],
     providers: [
         StoreDomainService,
         StoreDomainMiddleware,

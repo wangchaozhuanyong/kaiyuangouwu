@@ -220,6 +220,7 @@ export function storefrontRealtimeQueryMatches(
     }
     if (!matchesPrefix(key, ['storefront', scope.marketCode, scope.languageCode])) return false;
     const section = key[3];
+    if (section === 'flash-sales' && (topics.has('catalog') || topics.has('content'))) return true;
     if (section === 'daily-recommendations' && (topics.has('catalog') || topics.has('orders'))) return true;
 
     if (topics.has('config') && (section === 'config' || section === 'review-settings')) return true;

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ReactNode } from 'react';
 
+import { sanitizeProductSubtitle, trimProductText } from '../../../common/src/product-description-summary';
 import { decodeImageElement } from '../image-readiness';
 import { formatDisplayMoney } from '../money-display';
 import { productImage } from '../product-media';
@@ -21,6 +22,7 @@ import { imageSources, StorefrontImageKind } from '../responsive-image';
 import { SafeImage } from '../safe-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant, StorefrontLanguage } from '../types';
 
+export { sanitizeProductSubtitle } from '../../../common/src/product-description-summary';
 export { productImage } from '../product-media';
 export { minimumProductPrice } from '../product-pricing';
 
@@ -397,42 +399,7 @@ export function collectionImage(collection: CollectionSummary, products: Product
 }
 
 export function trimText(value: string | undefined, length: number): string {
-    if (!value) return '';
-    const clean = value
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    return clean.length > length ? `${clean.slice(0, length)}…` : clean;
-}
-
-export function sanitizeProductSubtitle(
-    description: string | null | undefined,
-    productName: string,
-    maxLength = 26,
-): string | null {
-    if (!description) return null;
-    const clean = description
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    if (!clean) return null;
-
-    // Filter out useless/dirty values (e.g. single digit "1", pure numbers, punctuation)
-    if (clean.length < 3 || /^[\d\s.,\-:;/]+$/u.test(clean)) {
-        return null;
-    }
-
-    const cleanName = productName
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    // Prevent duplicate title or descriptions that just prefix the title
-    if (clean === cleanName || clean.toLowerCase().startsWith(cleanName.toLowerCase())) {
-        return null;
-    }
-
-    return clean.length > maxLength ? `${clean.slice(0, maxLength)}…` : clean;
+    return trimProductText(value, length);
 }
 
 export function resolveProductSubtitle(
@@ -440,7 +407,12 @@ export function resolveProductSubtitle(
     maxLength = 26,
     preferCompleteClause = false,
 ): string | null {
-    const description = sanitizeProductSubtitle(product.description, product.name, maxLength);
+    const description =
+        product.descriptionSubtitle !== undefined
+            ? product.descriptionSubtitle === null
+                ? null
+                : trimProductText(product.descriptionSubtitle, maxLength)
+            : sanitizeProductSubtitle(product.description, product.name, maxLength);
     if (description) {
         if (preferCompleteClause) {
             const clause = description.match(/^(.{8,24}?)[，,。；;！？!?]/u)?.[1];
