@@ -207,6 +207,15 @@
         white-space: nowrap;
     }
 
+    /* Center the group when it fits; overflowing labels keep their scrollable start. */
+    .home-page .hero .hero-service-overlay .home-trust-item:first-child {
+        margin-inline-start: auto;
+    }
+
+    .home-page .hero .hero-service-overlay .home-trust-item:last-child {
+        margin-inline-end: auto;
+    }
+
     .home-page .hero .hero-service-overlay .home-trust-label {
         max-width: 100%;
         text-align: center;
