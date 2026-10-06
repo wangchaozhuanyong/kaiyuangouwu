@@ -116,7 +116,7 @@
 
 .product-row-price {
     margin: 0;
-    color: var(--accent-ink);
+    color: var(--price-ink, var(--accent-ink));
     font-family: var(--font-numeric);
     font-variant-numeric: tabular-nums;
 }

@@ -74,14 +74,136 @@ describe('storefront semantic palette', () => {
         },
     );
 
-    it('uses the existing classic blue action color for primary, hover and focus roles', () => {
+    it('uses graphite actions and champagne interaction roles without changing the classic foundations', () => {
         const palette = resolveStorefrontSemanticPalette('classic');
-        expect(palette.brand).toBe('#2563eb');
-        expect(palette.accent).toBe('#2563eb');
-        expect(palette.onAccent).toBe('#ffffff');
-        expect(palette.accentHover).not.toBe(palette.accent);
+        expect(palette).toMatchObject({
+            page: '#f1f5f9',
+            surface: '#ffffff',
+            elevated: '#ffffff',
+            subtle: '#f2f2f3',
+            text: '#25292d',
+            muted: '#626b75',
+            brand: '#292d32',
+            accent: '#292d32',
+            accentHover: '#161a1e',
+            accentSoft: '#f4f2ed',
+            onAccent: '#ffffff',
+            selection: '#735b36',
+            selectionSoft: '#f4f2ed',
+            focus: '#735b36',
+        });
+        const variables = semanticPaletteCssVariables(palette);
+        expect(variables['--store-primary']).toBe(palette.accent);
+        expect(variables['--brand-primary']).toBe(palette.accent);
+        expect(variables['--brand-accent']).toBe(palette.accent);
+        expect(variables['--brand-highlight']).toBe(palette.accentHover);
         expect(storefrontContrastRatio(palette.onAccent, palette.accentHover)).toBeGreaterThanOrEqual(4.5);
         expect(storefrontContrastRatio(palette.focus, palette.surface)).toBeGreaterThanOrEqual(3);
+    });
+
+    it('keeps each classic feature surface and action state readable without dark hero panels', () => {
+        const palette = resolveStorefrontSemanticPalette('classic');
+        const variables = storefrontSkinCssVariables('classic');
+        expect(variables['--skin-primary-hover']).toBe('#161a1e');
+        const checks = [
+            ['--skin-account-ink', '--skin-account-surface'],
+            ['--skin-account-muted', '--skin-account-surface'],
+            ['--skin-account-emphasis', '--skin-account-surface'],
+            ['--skin-account-ink', '--skin-account-hover'],
+            ['--skin-account-action-ink', '--skin-account-action-surface'],
+            ['--skin-account-action-hover-ink', '--skin-account-action-hover'],
+            ['--skin-account-action-hover-ink', '--skin-account-action-pressed'],
+            ['--skin-referral-ink', '--skin-referral-surface'],
+            ['--skin-referral-muted', '--skin-referral-surface'],
+            ['--skin-referral-ink', '--skin-referral-hover'],
+            ['--skin-referral-ink', '--skin-referral-pressed'],
+            ['--skin-referral-link-ink', '--skin-referral-link-surface'],
+            ['--skin-coupon-action-ink', '--skin-coupon-tint'],
+            ['--skin-coupon-action-ink', '--skin-coupon-action-surface'],
+            ['--skin-coupon-action-ink', '--skin-coupon-action-hover'],
+            ['--skin-coupon-action-ink', '--skin-coupon-action-pressed'],
+            ['--skin-coupon-inactive-ink', '--skin-coupon-inactive-surface'],
+            ['--skin-coupon-pending-ink', '--skin-coupon-pending-surface'],
+            ['--navigation-foreground', '--navigation-surface'],
+            ['--navigation-foreground', '--navigation-hover'],
+        ];
+        for (const [foreground, background] of checks) {
+            expect(
+                storefrontContrastRatio(variables[foreground], variables[background]),
+                `${foreground} on ${background}`,
+            ).toBeGreaterThanOrEqual(4.5);
+        }
+        for (const name of ['--skin-account-surface', '--skin-referral-surface', '--skin-coupon-tint']) {
+            expect(storefrontContrastRatio(variables[name], palette.surface), name).toBeLessThan(1.3);
+        }
+        expect(
+            storefrontContrastRatio(palette.onAccent, variables['--accent-pressed']),
+        ).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('preserves the existing dark palette and each owner-specific feature fallback', () => {
+        const palette = resolveStorefrontSemanticPalette('neo-minimalist');
+        expect(palette).toEqual({
+            page: '#070b14',
+            surface: '#0e1421',
+            elevated: '#151d2d',
+            subtle: '#1b2435',
+            text: '#f4f7fb',
+            muted: '#a9b6c8',
+            brand: '#8b5cf6',
+            accent: '#6654c8',
+            accentHover: '#5745b6',
+            accentSoft: '#251b3b',
+            accentInk: '#c4b5fd',
+            onAccent: '#ffffff',
+            selection: '#b9e3d7',
+            selectionHover: '#d2efe6',
+            onSelection: '#173e36',
+            interactionHover: '#223c3c',
+            interactionPressed: '#2c4d48',
+            interactionInk: '#b9e3d7',
+            border: '#65748a',
+            borderStrong: '#8897aa',
+            focus: '#a78bfa',
+            success: '#41d99c',
+            warning: '#f4bf63',
+            danger: '#ff7d86',
+        });
+        const variables = storefrontSkinCssVariables('neo-minimalist');
+        expect(variables).toMatchObject({
+            '--skin-account-surface': palette.accent,
+            '--skin-account-ink': palette.onAccent,
+            '--skin-account-action-surface': palette.onAccent,
+            '--skin-account-action-ink': palette.accent,
+            '--skin-referral-surface': palette.accent,
+            '--skin-referral-link-surface': palette.surface,
+            '--skin-referral-link-ink': palette.text,
+            '--navigation-surface': palette.selection,
+            '--navigation-foreground': palette.onSelection,
+            '--navigation-hover': palette.selectionHover,
+            '--coupon-rose-ink': '#e99084',
+            '--coupon-gold-ink': '#d8bc80',
+            '--coupon-blue-ink': '#91bfc9',
+            '--coupon-emerald-ink': '#88c8b1',
+        });
+        for (const token of [
+            '--accent-pressed',
+            '--skin-primary-hover',
+            '--control-border',
+            '--savings-ink',
+            '--skin-coupon-tint',
+            '--skin-coupon-action-surface',
+            '--skin-coupon-action-hover',
+            '--skin-coupon-action-pressed',
+            '--skin-coupon-action-ink',
+            '--skin-coupon-opacity',
+            '--skin-coupon-inactive-surface',
+            '--skin-coupon-inactive-ink',
+            '--skin-coupon-pending-surface',
+            '--skin-coupon-pending-ink',
+            '--skin-coupon-focus',
+        ])
+            expect(variables[token], token).toBe('initial');
     });
 
     it('normalizes content colors without making them preset controls', () => {
@@ -129,8 +251,8 @@ describe('storefront semantic palette', () => {
     it('separates classic module outlines from control contrast and resets opt-in decoration in the dark skin', () => {
         const classicPalette = resolveStorefrontSemanticPalette('classic');
         const classic = storefrontSkinCssVariables('classic', classicPalette);
-        expect(classic['--skin-card-outline']).toBe('1px solid #d2ddea');
-        expect(storefrontContrastRatio('#d2ddea', classicPalette.surface)).toBeLessThan(1.5);
+        expect(classic['--skin-card-outline']).toBe('1px solid #dfe3e8');
+        expect(storefrontContrastRatio('#dfe3e8', classicPalette.surface)).toBeLessThan(1.5);
         expect(storefrontContrastRatio(classicPalette.border, classicPalette.surface)).toBeGreaterThanOrEqual(
             3,
         );

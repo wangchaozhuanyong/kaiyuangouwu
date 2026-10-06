@@ -322,14 +322,14 @@
     }
     .desktop-store-nav [aria-current='page'],
     .desktop-store-nav [aria-pressed='true'] {
-        color: var(--selection-foreground);
-        background: var(--selection);
+        color: var(--navigation-foreground, var(--selection-foreground));
+        background: var(--navigation-surface, var(--selection));
         font-weight: var(--font-weight-semibold);
     }
     .desktop-store-nav [aria-current='page']:hover:not(:disabled),
     .desktop-store-nav [aria-pressed='true']:hover:not(:disabled) {
-        background: var(--selection-hover);
-        color: var(--selection-foreground);
+        background: var(--navigation-hover, var(--selection-hover));
+        color: var(--navigation-foreground, var(--selection-foreground));
     }
     .desktop-nav-divider {
         display: none;
@@ -561,12 +561,12 @@
         min-width: 0;
     }
     .desktop-account-navigation [aria-current='page'] {
-        color: var(--selection-foreground);
-        background: var(--selection);
+        color: var(--navigation-foreground, var(--selection-foreground));
+        background: var(--navigation-surface, var(--selection));
     }
     .desktop-account-navigation [aria-current='page']:hover:not(:disabled) {
-        background: var(--selection-hover);
-        color: var(--selection-foreground);
+        background: var(--navigation-hover, var(--selection-hover));
+        color: var(--navigation-foreground, var(--selection-foreground));
     }
     .desktop-account-page {
         display: flex;

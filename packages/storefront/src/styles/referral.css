@@ -1,14 +1,12 @@
-/* REFERRAL_SKIN_20261004 supersedes the independent red/gold campaign palette.
- * Share the active skin and the AccountIdentity accent surface across all stores.
- */
+/* Referral surface roles are shared by both viewports and remain separate from primary actions. */
 .referral-invite {
     min-width: 0;
     display: flex;
     flex-direction: column;
     padding: var(--space-24) var(--space-16) var(--space-16);
     border-radius: var(--skin-card-radius);
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--skin-referral-surface, var(--accent));
+    color: var(--skin-referral-ink, var(--accent-foreground));
     box-shadow: var(--skin-card-shadow);
 }
 .referral-invite-kicker {
@@ -37,7 +35,7 @@
 }
 .referral-invite-description {
     margin: var(--space-8) 0 0;
-    color: inherit;
+    color: var(--skin-referral-muted, inherit);
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
 }
@@ -49,6 +47,7 @@
     margin-top: var(--space-16);
 }
 .referral-invite-code-label {
+    color: var(--skin-referral-muted, inherit);
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
 }
@@ -68,8 +67,8 @@
     margin-top: var(--space-16);
     padding: var(--space-16);
     border-radius: var(--skin-control-radius);
-    background: var(--surface);
-    color: var(--text);
+    background: var(--skin-referral-link-surface, var(--surface));
+    color: var(--skin-referral-link-ink, var(--text));
 }
 .referral-invite-link-label {
     display: flex;
@@ -117,6 +116,12 @@
 .referral-invite-copy:hover {
     background: var(--accent-hover);
 }
+.referral-invite-copy:active {
+    background: var(--accent-pressed, var(--accent));
+}
+.referral-invite-copy:hover:active {
+    background: var(--accent-pressed, var(--accent-hover));
+}
 .referral-invite-actions {
     display: flex;
     flex-wrap: wrap;
@@ -126,18 +131,21 @@
 }
 .referral-invite-actions button {
     flex: 1;
-    border: 1px solid var(--accent-foreground);
+    border: 1px solid var(--skin-referral-secondary-border, var(--accent-foreground));
     background: transparent;
     color: inherit;
 }
 .referral-invite-actions button:hover {
-    background: var(--accent-hover);
+    background: var(--skin-referral-hover, var(--accent-hover));
+}
+.referral-invite-actions button:hover:active {
+    background: var(--skin-referral-pressed, var(--accent-hover));
 }
 .referral-invite :is(button, label) svg {
     flex-shrink: 0;
 }
 .referral-invite button:focus-visible {
-    outline: var(--experience-focus-width) solid var(--accent-foreground);
+    outline: var(--experience-focus-width) solid var(--skin-referral-focus, var(--accent-foreground));
     outline-offset: var(--experience-focus-offset);
 }
 .referral-invite-link :is(button, input):focus-visible {
@@ -342,8 +350,8 @@
     background: var(--control-surface-hover);
 }
 .referral-record-tabs button[aria-selected='true'] {
-    background: var(--selection);
-    color: var(--selection-foreground);
+    background: var(--navigation-surface, var(--selection));
+    color: var(--navigation-foreground, var(--selection-foreground));
     font-weight: var(--font-weight-semibold);
 }
 .referral-record-tabs span {

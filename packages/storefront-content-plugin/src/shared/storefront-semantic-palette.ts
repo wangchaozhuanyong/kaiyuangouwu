@@ -23,6 +23,7 @@ export interface StorefrontSemanticPalette {
     selection: string;
     selectionHover: string;
     onSelection: string;
+    selectionSoft?: string;
     interactionHover: string;
     interactionPressed: string;
     interactionInk: string;
@@ -187,47 +188,39 @@ function resolveClassicPalette(): StorefrontSemanticPalette {
     // Saved merchant colors remain content data and must not recolor shared controls.
     const page = '#f1f5f9';
     const surface = '#ffffff';
-    const surfaceText = '#0f172a';
-    const brandColor = '#2563eb';
+    const surfaceText = '#25292d';
+    const brandColor = '#292d32';
     const accentSource = brandColor;
     // Legacy primary controls use white labels, so the derived UI accent must always support them.
     const accentForeground = '#ffffff';
     const accent = makeAccessibleAgainst(accentSource, accentForeground, 4.5, 'dark');
 
-    const accentSoft = mixColors(surface, accent, 0.08);
-    const accentInk = makeAccessibleAgainstAll(accent, [page, surface, accentSoft], 4.5, 'dark');
+    const accentSoft = '#f4f2ed';
+    const accentInk = surfaceText;
     return {
         page,
         surface,
         elevated: '#ffffff',
-        subtle: mixColors(surface, surfaceText, 0.055),
+        // Existing white and gray foundations remain unchanged by the accent redesign.
+        subtle: '#f2f2f3',
         text: surfaceText,
-        muted: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.42),
-            [page, surface, accentSoft],
-            4.5,
-            'dark',
-        ),
+        muted: '#626b75',
         brand: brandColor,
         accent,
-        accentHover: makeAccessibleAgainst(mixColors(accent, '#000000', 0.14), accentForeground, 4.5, 'dark'),
+        accentHover: '#161a1e',
         accentSoft,
         accentInk,
         onAccent: accentForeground,
-        selection: '#24455d',
-        selectionHover: '#183447',
+        selection: '#735b36',
+        selectionHover: '#604b2c',
         onSelection: '#ffffff',
-        interactionHover: '#dee9f0',
-        interactionPressed: '#c6d8e4',
-        interactionInk: '#24455d',
-        border: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.58), [page, surface], 3, 'dark'),
-        borderStrong: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.42),
-            [page, surface],
-            3,
-            'dark',
-        ),
-        focus: makeAccessibleAgainstAll(accent, [page, surface], 3, 'dark'),
+        selectionSoft: accentSoft,
+        interactionHover: '#f4f2ed',
+        interactionPressed: '#eae5dc',
+        interactionInk: '#735b36',
+        border: '#7c8288',
+        borderStrong: '#7c8288',
+        focus: '#735b36',
         success: makeAccessibleAgainst('#047857', surface, 4.5),
         warning: makeAccessibleAgainst('#92400e', surface, 4.5),
         danger: makeAccessibleAgainst('#b91c1c', surface, 4.5),
@@ -265,19 +258,19 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
 
 const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment> = {
     classic: {
-        divider: '#e4ebf3',
-        cardOutline: '1px solid #d2ddea',
-        cardOutlineHover: '#c5d3e4',
+        divider: '#dfe3e8',
+        cardOutline: '1px solid #dfe3e8',
+        cardOutlineHover: '#cbd1d8',
         displayFont:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
         cardRadius: '16px',
         heroRadius: '20px',
         controlRadius: '10px',
         mediaRadius: '12px',
-        cardShadow: '0 2px 8px rgba(34, 65, 102, 0.04)',
-        cardHoverShadow: '0 4px 12px rgba(34, 65, 102, 0.07)',
-        heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
-        headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
+        cardShadow: '0 2px 8px rgba(37, 41, 45, 0.04)',
+        cardHoverShadow: '0 4px 12px rgba(37, 41, 45, 0.07)',
+        heroShadow: '0 6px 24px rgba(37, 41, 45, 0.06)',
+        headerShadow: '0 2px 10px rgba(37, 41, 45, 0.04)',
     },
 
     'neo-minimalist': {
@@ -368,6 +361,7 @@ export function storefrontSkinCssVariables(
     palette: StorefrontSemanticPalette = resolveStorefrontSemanticPalette(presetId),
 ): Record<string, string> {
     const treatment = resolveStorefrontSkinTreatment(presetId);
+    const classic = presetId === 'classic';
     const variables: Record<string, string> = {
         ...storefrontServiceCardCssVariables(palette),
         '--skin-divider': treatment.divider,
@@ -384,6 +378,60 @@ export function storefrontSkinCssVariables(
         '--skin-card-hover-shadow': treatment.cardHoverShadow,
         '--skin-hero-shadow': treatment.heroShadow,
         '--skin-header-shadow': treatment.headerShadow,
+        // Module colors belong to the shared skin, never a merchant or route override.
+        // Explicit dark values retain existing rendering; initial preserves owner-specific fallbacks.
+        '--accent-pressed': classic ? '#0f1215' : 'initial',
+        '--skin-primary-hover': classic ? '#161a1e' : 'initial',
+        '--control-border': classic ? '#7c8288' : 'initial',
+        '--accent-disabled-bg': classic ? '#f0f1f2' : palette.subtle,
+        '--accent-disabled-text': palette.muted,
+        '--price-ink': classic ? '#25292d' : palette.accentInk,
+        '--savings-ink': classic ? '#9b432c' : 'initial',
+        '--savings-surface': classic ? '#fff2e8' : palette.accentSoft,
+        '--navigation-surface': classic ? '#f4f2ed' : palette.selection,
+        '--navigation-foreground': classic ? '#735b36' : palette.onSelection,
+        '--navigation-hover': classic ? '#eae5dc' : palette.selectionHover,
+        '--skin-account-surface': classic ? '#f5eee3' : palette.accent,
+        '--skin-account-ink': classic ? '#25292d' : palette.onAccent,
+        '--skin-account-muted': classic ? '#696052' : palette.onAccent,
+        '--skin-account-emphasis': classic ? '#735b36' : palette.onAccent,
+        '--skin-account-divider': classic
+            ? '#d8cbbb'
+            : 'color-mix(in srgb, var(--accent-foreground) 24%, transparent)',
+        '--skin-account-hover': classic ? '#eee3d3' : palette.accentHover,
+        '--skin-account-focus': classic ? '#735b36' : palette.onAccent,
+        '--skin-account-avatar-ink': classic ? '#735b36' : palette.accent,
+        '--skin-account-action-surface': classic ? '#292d32' : palette.onAccent,
+        '--skin-account-action-ink': classic ? '#ffffff' : palette.accent,
+        '--skin-account-action-hover': classic ? '#161a1e' : palette.onAccent,
+        '--skin-account-action-pressed': classic ? '#0f1215' : palette.onAccent,
+        '--skin-account-action-hover-ink': classic ? '#ffffff' : palette.accentHover,
+        '--skin-account-secondary-border': classic ? '#7c8288' : palette.onAccent,
+        '--skin-account-secondary-hover-ink': classic ? '#25292d' : palette.onAccent,
+        '--skin-referral-surface': classic ? '#eef3ee' : palette.accent,
+        '--skin-referral-ink': classic ? '#314c3b' : palette.onAccent,
+        '--skin-referral-muted': classic ? '#58655c' : palette.onAccent,
+        '--skin-referral-hover': classic ? '#dfe9df' : palette.accentHover,
+        '--skin-referral-pressed': classic ? '#d6e2d6' : palette.accentHover,
+        '--skin-referral-secondary-border': classic ? '#7c8288' : palette.onAccent,
+        '--skin-referral-focus': classic ? '#735b36' : palette.onAccent,
+        '--skin-referral-link-surface': classic ? '#eef3ee' : palette.surface,
+        '--skin-referral-link-ink': classic ? '#314c3b' : palette.text,
+        '--skin-coupon-tint': classic ? '#fff2e8' : 'initial',
+        '--skin-coupon-action-surface': classic ? '#fbede5' : 'initial',
+        '--skin-coupon-action-hover': classic ? '#f4dcd0' : 'initial',
+        '--skin-coupon-action-pressed': classic ? '#efd6c8' : 'initial',
+        '--skin-coupon-action-ink': classic ? '#9b432c' : 'initial',
+        '--skin-coupon-opacity': classic ? '1' : 'initial',
+        '--skin-coupon-inactive-surface': classic ? '#f0f1f2' : 'initial',
+        '--skin-coupon-inactive-ink': classic ? '#626b75' : 'initial',
+        '--skin-coupon-pending-surface': classic ? '#fff5df' : 'initial',
+        '--skin-coupon-pending-ink': classic ? '#92400e' : 'initial',
+        '--skin-coupon-focus': classic ? '#735b36' : 'initial',
+        '--coupon-rose-ink': classic ? '#9b432c' : '#e99084',
+        '--coupon-gold-ink': classic ? '#9b432c' : '#d8bc80',
+        '--coupon-blue-ink': classic ? '#9b432c' : '#91bfc9',
+        '--coupon-emerald-ink': classic ? '#9b432c' : '#88c8b1',
     };
     // Transparent icons sit directly on the shared surfaces, including hover states.
     // Derive their contrast from the resolved palette rather than a former icon tile.
@@ -443,7 +491,8 @@ export function semanticPaletteCssVariables(palette: StorefrontSemanticPalette):
         '--selection': palette.selection,
         '--selection-hover': palette.selectionHover,
         '--selection-foreground': palette.onSelection,
-        '--selection-soft': mixColors(palette.surface, palette.interactionHover, 0.5),
+        '--selection-soft':
+            palette.selectionSoft ?? mixColors(palette.surface, palette.interactionHover, 0.5),
         '--interaction-hover': palette.interactionHover,
         '--interaction-pressed': palette.interactionPressed,
         '--interaction-ink': palette.interactionInk,

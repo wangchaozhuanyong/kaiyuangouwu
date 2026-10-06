@@ -11,6 +11,7 @@ export function DesktopCouponTicket({
     scope,
     selected = false,
     unavailable = false,
+    historical = false,
     role,
 }: {
     card: StorefrontCouponCard;
@@ -19,11 +20,14 @@ export function DesktopCouponTicket({
     scope?: string;
     selected?: boolean;
     unavailable?: boolean;
+    historical?: boolean;
     role?: 'listitem';
 }) {
     return (
         <article
-            className={`desktop-coupon-ticket coupon-face-${card.theme}${selected ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}`}
+            className={`desktop-coupon-ticket coupon-face-${card.theme}${selected ? ' is-selected' : ''}${
+                unavailable ? ' is-unavailable' : ''
+            }${historical ? ' is-history' : ''}`}
             role={role}
         >
             <div className="desktop-coupon-value">

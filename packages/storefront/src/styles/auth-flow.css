@@ -2224,6 +2224,14 @@
     box-shadow: none;
 }
 
+.page.auth-page .wide-action:hover:not(:disabled) {
+    background: var(--skin-primary-hover, var(--accent));
+}
+
+.page.auth-page .wide-action:active:not(:disabled) {
+    background: var(--accent-pressed, var(--accent));
+}
+
 @media (min-width: 1024px) {
     .auth-page .auth-hero-message-managed p,
     .auth-page .auth-hero-message-managed .auth-hero-tags > span {
@@ -2467,7 +2475,7 @@
 .auth-page .login-content .auth-account-form .auth-input-shell {
     min-height: 48px;
     background: var(--surface);
-    border: 1px solid var(--line-subtle);
+    border: 1px solid var(--control-border, var(--line-subtle));
     border-radius: var(--skin-control-radius);
     box-shadow: none;
 }

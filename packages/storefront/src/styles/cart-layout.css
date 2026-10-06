@@ -493,7 +493,12 @@
     box-shadow: var(--accent-shadow);
 }
 
+.cart-checkout-bar > button:hover:active:not(:disabled) {
+    background: var(--accent-pressed, var(--accent-hover));
+}
+
 .cart-checkout-bar > button:active:not(:disabled) {
+    background: var(--accent-pressed, var(--accent));
     transform: scale(0.98);
 }
 
