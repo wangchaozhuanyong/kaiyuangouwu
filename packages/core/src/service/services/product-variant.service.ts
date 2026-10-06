@@ -249,17 +249,23 @@ export class ProductVariantService {
         return this.requestCache.load(ctx, scope, productId, async ids => {
             // Read one bounded page of product IDs together. Preserve the existing
             // per-product API limit; a global SQL take would starve later products.
-            const variants = await this.connection.getRepository(ctx, ProductVariant).find({
-                where: {
-                    productId: In([...ids]),
-                    deletedAt: IsNull(),
-                    channels: { id: ctx.channelId },
-                    ...(ctx.apiType === 'shop' ? { enabled: true } : {}),
-                },
-                relations: selectedRelations,
-                relationLoadStrategy: 'query',
-                order: { id: 'ASC' },
-            });
+            const variants = await this.connection
+                .getRepository(ctx, ProductVariant)
+                .createQueryBuilder('productvariant')
+                .setFindOptions({
+                    where: {
+                        productId: In([...ids]),
+                        deletedAt: IsNull(),
+                        channels: { id: ctx.channelId },
+                        ...(ctx.apiType === 'shop' ? { enabled: true } : {}),
+                    },
+                    relations: selectedRelations,
+                    relationLoadStrategy: 'query',
+                })
+                // Query-strategy relation loading reads embedded paths from FindOptions.order.
+                // Keep the variant order on the query builder, as the paginated path does.
+                .orderBy('productvariant.id', 'ASC')
+                .getMany();
             const limit =
                 ctx.apiType === 'shop'
                     ? this.configService.apiOptions.shopListQueryLimit

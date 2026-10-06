@@ -52,6 +52,131 @@ const translation = new EntitySchema<any>({
 });
 
 describe('catalog display SQL batches', () => {
+    it.each([
+        'customFields.cfRelatedProducts.featuredAsset',
+        'product.customFields.cfRelatedProducts.featuredAsset',
+    ])('hydrates relation-only embedded custom fields and nested assets for %s', async relationPath => {
+        const relatedAsset = new EntitySchema({ name: 'RelationAsset', columns: { id } });
+        const relatedProduct = new EntitySchema({
+            name: 'RelationRelatedProduct',
+            columns: { id, featuredAssetId: { type: String } },
+            relations: {
+                featuredAsset: {
+                    type: 'many-to-one',
+                    target: 'RelationAsset',
+                    joinColumn: { name: 'featuredAssetId' },
+                },
+            },
+        });
+        const relatedProducts = {
+            type: 'many-to-many',
+            target: 'RelationRelatedProduct',
+            joinTable: true,
+        } as const;
+        const productFields = new EntitySchema({
+            name: 'RelationProductFields',
+            columns: {},
+            relations: { cfRelatedProducts: relatedProducts },
+        });
+        const variantFields = new EntitySchema({
+            name: 'RelationVariantFields',
+            columns: {},
+            relations: { cfRelatedProducts: relatedProducts },
+        });
+        const relationProduct = new EntitySchema({
+            name: 'RelationProduct',
+            columns: { id },
+            embeddeds: { customFields: { schema: productFields } },
+        });
+        const relationVariant = new EntitySchema({
+            name: 'RelationVariant',
+            columns: {
+                id,
+                productId: { type: String },
+                taxCategoryId: { type: String },
+                enabled: { type: Boolean },
+                deletedAt: { type: Date, nullable: true },
+            },
+            embeddeds: { customFields: { schema: variantFields } },
+            relations: {
+                product: {
+                    type: 'many-to-one',
+                    target: 'RelationProduct',
+                    joinColumn: { name: 'productId' },
+                },
+                taxCategory: {
+                    type: 'many-to-one',
+                    target: 'DisplayTax',
+                    joinColumn: { name: 'taxCategoryId' },
+                },
+                channels: { type: 'many-to-many', target: 'DisplayChannel', joinTable: true },
+            },
+        });
+        const db = await new DataSource({
+            type: 'sqljs',
+            entities: [channel, tax, relatedAsset, relatedProduct, relationProduct, relationVariant],
+            synchronize: true,
+        }).initialize();
+        try {
+            await db.getRepository(channel).insert([{ id: 'A' }, { id: 'B' }]);
+            await db.getRepository(tax).insert({ id: 'tax' });
+            await db.getRepository(relatedAsset).insert({ id: 'asset' });
+            await db.getRepository(relatedProduct).insert({ id: 'related', featuredAssetId: 'asset' });
+            await db.getRepository(relationProduct).insert([{ id: 'p1' }, { id: 'p2' }]);
+            await db.getRepository(relationVariant).insert([
+                { id: 'v2', productId: 'p1', taxCategoryId: 'tax', enabled: true },
+                { id: 'v1', productId: 'p1', taxCategoryId: 'tax', enabled: true },
+                { id: 'v3', productId: 'p2', taxCategoryId: 'tax', enabled: true },
+            ]);
+            for (const variantId of ['v1', 'v2', 'v3']) {
+                await db
+                    .createQueryBuilder()
+                    .relation(relationVariant, 'channels')
+                    .of(variantId)
+                    .add(variantId === 'v3' ? 'B' : 'A');
+                await db
+                    .createQueryBuilder()
+                    .relation(relationVariant, 'customFields.cfRelatedProducts')
+                    .of(variantId)
+                    .add('related');
+            }
+            for (const productId of ['p1', 'p2']) {
+                await db
+                    .createQueryBuilder()
+                    .relation(relationProduct, 'customFields.cfRelatedProducts')
+                    .of(productId)
+                    .add('related');
+            }
+            const service = Object.assign(Object.create(ProductVariantService.prototype), {
+                connection: { getRepository: () => db.getRepository(relationVariant) },
+                requestCache: new RequestContextCacheService(),
+                configService: { apiOptions: { shopListQueryLimit: 100, adminListQueryLimit: 1000 } },
+                applyChannelPriceAndTax: (value: ProductVariant) => Promise.resolve(value),
+                translator: { translate: (value: unknown) => value },
+            }) as ProductVariantService;
+            const ctx = {
+                apiType: 'shop',
+                channelId: 'A',
+                languageCode: 'en',
+                currencyCode: 'USD',
+            } as RequestContext;
+            const [visible, foreign] = await Promise.all([
+                service.getVariantsForProduct(ctx, 'p1', [relationPath]),
+                service.getVariantsForProduct(ctx, 'p2', [relationPath]),
+            ]);
+            expect(visible.map(value => value.id)).toEqual(['v1', 'v2']);
+            expect(foreign).toEqual([]);
+            const customFields = { cfRelatedProducts: [{ id: 'related', featuredAsset: { id: 'asset' } }] };
+            for (const row of visible) {
+                expect(row).toMatchObject(
+                    relationPath.startsWith('product.') ? { product: { customFields } } : { customFields },
+                );
+            }
+        } finally {
+            await db.destroy();
+        }
+    });
+
     it('12 and 48 products with three variants use equal SELECT counts and return only the active public collections', async () => {
         const queries: string[] = [];
         const db = await new DataSource({

@@ -64,7 +64,12 @@ describe('catalog display read batches', () => {
                     listPrice: 0,
                 })),
             ).flat();
-            const find = vi.fn().mockResolvedValue(rows);
+            const getMany = vi.fn().mockResolvedValue(rows);
+            const qb = {
+                setFindOptions: vi.fn().mockReturnThis(),
+                orderBy: vi.fn().mockReturnThis(),
+                getMany,
+            };
             const apply = vi.fn((variant: ProductVariant) =>
                 Promise.resolve({
                     ...variant,
@@ -72,7 +77,7 @@ describe('catalog display read batches', () => {
                 }),
             );
             const service = Object.assign(Object.create(ProductVariantService.prototype), {
-                connection: { getRepository: () => ({ find }) },
+                connection: { getRepository: () => ({ createQueryBuilder: () => qb }) },
                 configService: { apiOptions: { shopListQueryLimit: 100, adminListQueryLimit: 1000 } },
                 requestCache: new RequestContextCacheService(),
                 applyChannelPriceAndTax: apply,
@@ -84,29 +89,44 @@ describe('catalog display read batches', () => {
                     service.getVariantsForProduct(request, id, ['featuredAsset']),
                 ),
             );
-            expect(find).toHaveBeenCalledTimes(1);
+            expect(getMany).toHaveBeenCalledTimes(1);
             expect(result.map(items => items.length)).toEqual(Array(size).fill(3));
             expect(result[11][2].listPrice).toBe(111);
             expect(apply).toHaveBeenCalledTimes(size * 3);
-            expect(find.mock.calls[0][0]).toMatchObject({
-                where: { channels: { id: 'A' }, enabled: true },
-                relations: ['featuredAsset', 'product', 'taxCategory'],
-            });
+            expect(qb.setFindOptions).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        channels: { id: 'A' },
+                        enabled: true,
+                        productId: expect.anything(),
+                        deletedAt: expect.anything(),
+                    },
+                    relations: ['featuredAsset', 'product', 'taxCategory'],
+                    relationLoadStrategy: 'query',
+                }),
+            );
+            expect(qb.setFindOptions.mock.calls[0][0]).not.toHaveProperty('order');
+            expect(qb.orderBy).toHaveBeenCalledWith('productvariant.id', 'ASC');
             await service.getVariantsForProduct(request, 0, ['featuredAsset']);
-            expect(find).toHaveBeenCalledTimes(1);
+            expect(getMany).toHaveBeenCalledTimes(1);
         },
     );
 
     it('keeps the variant limit per product and separates projections and channels', async () => {
-        const find = vi.fn().mockResolvedValue([
+        const getMany = vi.fn().mockResolvedValue([
             { id: 'a1', productId: 'a' },
             { id: 'a2', productId: 'a' },
             { id: 'a3', productId: 'a' },
             { id: 'b1', productId: 'b' },
             { id: 'b2', productId: 'b' },
         ]);
+        const qb = {
+            setFindOptions: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            getMany,
+        };
         const service = Object.assign(Object.create(ProductVariantService.prototype), {
-            connection: { getRepository: () => ({ find }) },
+            connection: { getRepository: () => ({ createQueryBuilder: () => qb }) },
             configService: { apiOptions: { shopListQueryLimit: 2, adminListQueryLimit: 100 } },
             requestCache: new RequestContextCacheService(),
             applyChannelPriceAndTax: (value: unknown) => Promise.resolve(value),
@@ -120,7 +140,17 @@ describe('catalog display read batches', () => {
         expect(b.map(row => row.id)).toEqual(['b1', 'b2']);
         await service.getVariantsForProduct(request, 'a', ['options']);
         await service.getVariantsForProduct({ ...request, channelId: 'B' } as RequestContext, 'a', []);
-        expect(find).toHaveBeenCalledTimes(3);
+        expect(getMany).toHaveBeenCalledTimes(3);
+        expect(qb.setFindOptions).toHaveBeenNthCalledWith(
+            3,
+            expect.objectContaining({ where: expect.objectContaining({ channels: { id: 'B' } }) }),
+        );
+        expect(qb.setFindOptions).not.toHaveBeenCalledWith(
+            expect.objectContaining({ take: expect.anything() }),
+        );
+        expect(qb.setFindOptions).not.toHaveBeenCalledWith(
+            expect.objectContaining({ skip: expect.anything() }),
+        );
     });
 
     it.each([12, 48])(
