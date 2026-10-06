@@ -104,3 +104,76 @@ describe('StorefrontPromotionAccessService', () => {
         expect(storefrontLanguageCodeFromAcceptLanguage(header)).toBe(languageCode);
     });
 });
+
+describe('anonymous public request resolution', () => {
+    it('reuses resolution inside one request but strips cookies, authorization, session and account query state', async () => {
+        const ctx = { channelId: 'a' } as RequestContext;
+        const create = vi.fn(() => Promise.resolve(ctx));
+        const assertActive = vi.fn(() => Promise.resolve(undefined));
+        const resolveRoute = vi.fn(() => Promise.resolve({ status: 'ACTIVE', channelToken: 'channel-a' }));
+        const service = new StorefrontPromotionAccessService(
+            undefined as never,
+            undefined as never,
+            { create } as never,
+            { assertActive } as never,
+            {
+                enabled: true,
+                signingSecret: 'fixture-secret-placeholder',
+                secureCookie: true,
+                trustProxyHeaders: false,
+                bypassHosts: [],
+            },
+            { resolveRoute } as never,
+        );
+        const req = {
+            headers: {
+                host: 'shop.example',
+                cookie: 'private-session=fixture',
+                authorization: 'Bearer fixture',
+                'accept-language': 'en',
+            },
+            protocol: 'https',
+            query: { account: 'private' },
+            session: { user: 'private' },
+        } as unknown as Request;
+        await Promise.all([service.resolveRequest(req), service.resolveRequest(req)]);
+        expect(resolveRoute).toHaveBeenCalledTimes(1);
+        expect(create).toHaveBeenCalledTimes(1);
+        const options = (create.mock.calls[0] as any)[0];
+        expect(options.apiType).toBe('shop');
+        expect(options.channelOrToken).toBe('channel-a');
+        expect(options.req).not.toBe(req);
+        expect(options.req.headers).toEqual({ host: 'shop.example', 'accept-language': 'en' });
+        expect(options.req.query).toEqual({});
+        expect(options.req.session).toBeUndefined();
+        expect(options.req.user).toBeUndefined();
+        expect(assertActive).toHaveBeenCalledWith(ctx);
+        await service.resolveRequest({ ...req } as Request);
+        expect(resolveRoute).toHaveBeenCalledTimes(2);
+    });
+    it('denies inactive host routes before loading public data and always honors the activation gate', async () => {
+        const create = vi.fn(() => Promise.resolve({ channelId: 'a' }));
+        const assertActive = vi.fn().mockRejectedValue(new Error('inactive storefront'));
+        const resolveRoute = vi.fn(() => Promise.resolve({ status: 'PENDING', channelToken: 'channel-a' }));
+        const service = new StorefrontPromotionAccessService(
+            undefined as never,
+            undefined as never,
+            { create } as never,
+            { assertActive } as never,
+            {
+                enabled: true,
+                signingSecret: 'fixture-secret-placeholder',
+                secureCookie: true,
+                trustProxyHeaders: false,
+                bypassHosts: [],
+            },
+            { resolveRoute } as never,
+        );
+        expect(await service.resolveRequest({ headers: { host: 'shop.example' } } as Request)).toBeNull();
+        expect(create).not.toHaveBeenCalled();
+        resolveRoute.mockResolvedValue({ status: 'ACTIVE', channelToken: 'channel-a' });
+        await expect(
+            service.resolveRequest({ headers: { host: 'shop.example' } } as Request),
+        ).rejects.toThrow('inactive storefront');
+    });
+});

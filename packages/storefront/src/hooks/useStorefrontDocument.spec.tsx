@@ -150,10 +150,10 @@ describe('runtime channel branding', () => {
         const migratedLogo = '/assets/preview/6e/store-icon__preview__webp_migrated_502.webp';
         act(() => root.render(<Fixture logo={migratedLogo} />));
         expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?preset=storefront-icon-96&format=png&q=82&v=webp-readable-1&storefront-icon=2&iv=3`,
+            `${migratedLogo}?v=webp-readable-1&preset=storefront-icon-96&format=png&q=82&storefront-icon=2&iv=3`,
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?preset=storefront-thumbnail-fit-320&format=png&q=82&v=webp-readable-1&storefront-icon=2&iv=3`,
+            `${migratedLogo}?v=webp-readable-1&preset=storefront-thumbnail-fit-320&format=png&q=82&storefront-icon=2&iv=3`,
         );
         act(() => root.render(<Fixture logo={null} />));
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(

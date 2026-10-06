@@ -7,7 +7,7 @@ import { fixtureData } from '../visual-presets/fixtures.mjs';
 
 // Local manual acceptance only: serves the already verified build and read-only sample data.
 const root = path.resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
-const port = 5326;
+const port = Number(process.env.STOREFRONT_TEST_PORT ?? 5326);
 const data = fixtureData('classic', true, 'normal');
 data.myCustomerProductActivity = { favoriteProductIds: [], recentProductVisits: [] };
 data.storefrontDailyRecommendations = {
@@ -15,7 +15,7 @@ data.storefrontDailyRecommendations = {
     expiresAt: '2026-10-04T00:00:00Z',
     items: [],
 };
-const state = { mode: 'normal', contentReads: 0 };
+const state = { mode: 'normal', contentReads: 0, aggregateReads: 0, graphqlReads: {}, snapshotWarm: false };
 const types = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'application/javascript',
@@ -93,6 +93,53 @@ async function updateCounter(){
 void updateCounter();
 </script></body></html>`;
 
+function publicPage(url, host) {
+    const languageCode = url.searchParams.get('languageCode') ?? 'en';
+    const currencyCode = url.searchParams.get('currencyCode') ?? data.activeChannel.defaultCurrencyCode;
+    const branding = data.storefrontBranding ?? {};
+    const page = {
+        schemaVersion: 1,
+        version: 'local-fixture-v1',
+        generatedAt: Date.now(),
+        route: '/',
+        scope: {
+            host,
+            channelCode: data.activeChannel.code,
+            languageCode,
+            currencyCode,
+            priceContext: 'public',
+        },
+        config: {
+            ...data.activeChannel,
+            ...branding,
+            brandBackgroundColor: branding.backgroundColor,
+            brandPrimaryColor: branding.primaryColor,
+            brandAccentColor: branding.accentColor,
+            brandHighlightColor: branding.highlightColor,
+            availableCountries: data.availableCountries,
+            availableProvinces: data.availableStorefrontProvinces ?? [],
+            currencyConfiguration: data.storefrontCurrencyConfiguration,
+        },
+        content: {
+            blocks: data.storefrontContent,
+            flashSales: [],
+            flashSalesDeferred: true,
+            systemAnnouncements: data.activeSystemAnnouncements ?? [],
+            settings: data.storefrontContentSettings,
+        },
+        flashSales: data.activeStorefrontFlashSales ?? [],
+        products: data.products.items,
+        collections: data.collections.items,
+        visualPreset: data.storefrontVisualPreset,
+        media: [],
+        failures: [],
+    };
+    if (url.searchParams.get('kind') === 'catalog') page.catalog = data.storefrontCatalog ?? data.products;
+    if (url.searchParams.get('kind') === 'product')
+        page.product = data.product ?? data.products.items[0] ?? null;
+    return page;
+}
+
 const server = http.createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     try {
@@ -112,9 +159,22 @@ const server = http.createServer(async (req, res) => {
             }
             return json(res, state);
         }
+        if (url.pathname === '/_storefront/page-data') {
+            state.aggregateReads++;
+            const page = publicPage(url, req.headers.host);
+            if (state.mode === 'slow') await new Promise(resolve => setTimeout(resolve, 3000));
+            if (state.mode === 'error') {
+                delete page.content;
+                page.failures.push('content');
+            }
+            state.snapshotWarm = state.mode === 'normal';
+            return json(res, page);
+        }
         if (url.pathname === '/shop-api') {
             const body = await requestBody(req);
             const query = String(body.query ?? '');
+            const operation = query.match(/query\s+(\w+)/u)?.[1] ?? 'unnamed';
+            state.graphqlReads[operation] = (state.graphqlReads[operation] ?? 0) + 1;
             if (/^\s*mutation\b/u.test(query))
                 return json(res, {
                     errors: [
@@ -166,6 +226,21 @@ const server = http.createServer(async (req, res) => {
         }
         if (path.extname(url.pathname)) return json(res, { error: 'Not found' }, 404);
         let html = await readFile(path.join(root, 'index.html'), 'utf8');
+        if (state.snapshotWarm && state.mode === 'normal') {
+            const page = publicPage(
+                new URL(
+                    '/?languageCode=' +
+                        (/^zh/iu.test(req.headers['accept-language'] ?? '') ? 'zh_Hans' : 'en'),
+                    url,
+                ),
+                req.headers.host,
+            );
+            const serialized = JSON.stringify(page).replace(/</gu, '\\u003c');
+            html = html.replace(
+                '<!--# include virtual="/_storefront/lcp-preload" -->',
+                `<script id="storefront-public-page-data" type="application/json">${serialized}</script>`,
+            );
+        }
         if (url.searchParams.get('__interactionReset') === '1')
             html = html.replace(
                 '<head>',

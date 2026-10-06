@@ -1,5 +1,9 @@
 import { ChevronRight } from 'lucide-react';
 
+import {
+    productWarrantyDuration,
+    productWarrantyLabel,
+} from '../../../../common/src/product-description-summary';
 import { productListingAvailability } from '../../product-availability';
 import { lowestPricedProductVariant } from '../../product-pricing';
 import { PriceDisplay, ProductImage, resolveProductSubtitle } from '../../storefront-ui/product-display';
@@ -36,7 +40,12 @@ export function buildProductRowSmartInfo(
         : isZh
           ? '需要配送'
           : 'Physical delivery';
-    const warrantyLabel = extractWarrantyLabel(product.description, language);
+    const warrantyLabel = productWarrantyLabel(
+        product.warrantyDuration !== undefined
+            ? product.warrantyDuration
+            : productWarrantyDuration(product.description),
+        language,
+    );
 
     return {
         primary:
@@ -56,30 +65,6 @@ export function buildProductRowSmartInfo(
                 .join(' · ') || (isZh ? '商品信息' : 'Product information'),
         secondary: warrantyLabel,
     };
-}
-
-function extractWarrantyLabel(description: string, language: StorefrontLanguage): string | null {
-    const plainText = description
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    if (!plainText) return null;
-
-    const chineseMatch = plainText.match(
-        /(?:质保|保修|保障)\s*[:：]?\s*([0-9一二三四五六七八九十百]+(?:天|日|个月|月|年))/i,
-    );
-    if (chineseMatch?.[1]) {
-        return language === 'zh' ? `质保${chineseMatch[1]}` : `Warranty ${chineseMatch[1]}`;
-    }
-
-    const englishMatch = plainText.match(
-        /(?:warranty|guarantee)\s*(?:of|for|:)?\s*(\d+\s*(?:days?|months?|years?))/i,
-    );
-    if (englishMatch?.[1]) {
-        return language === 'zh' ? `质保${englishMatch[1]}` : `Warranty ${englishMatch[1]}`;
-    }
-
-    return null;
 }
 
 export function ProductRow({

@@ -9,10 +9,12 @@ import {
     ProductSalesAuthorization,
     ProductVariant,
     RequestContext,
+    RequestContextCacheService,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
 import { CatalogGovernanceService, StorefrontDataChangedEvent } from '@vendure/store-management-plugin';
+import { In } from 'typeorm';
 
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
@@ -25,6 +27,7 @@ export class AutoCardSupplyService {
         private readonly connection: TransactionalConnection,
         private readonly governance: CatalogGovernanceService,
         private readonly eventBus: EventBus,
+        private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
     ) {}
 
     async supplierSummary(ctx: RequestContext, variantId: ID) {
@@ -32,20 +35,24 @@ export class AutoCardSupplyService {
         const grants = await this.connection
             .getRepository(ctx, AutoCardSupplyGrant)
             .find({ where: { sourceChannelId: ctx.channelId, productVariantId: variantId } });
-        const result = [];
-        for (const grant of grants) {
-            const rows = await this.connection
-                .getRepository(ctx, AutoCardDelivery)
-                .createQueryBuilder('delivery')
-                .select('delivery.state', 'state')
-                .addSelect('SUM(delivery.quantity)', 'quantity')
-                .where('delivery.sourceChannelId = :source AND delivery.supplyGrantId = :grant', {
-                    source: ctx.channelId,
-                    grant: grant.id,
-                })
-                .groupBy('delivery.state')
-                .getRawMany();
-            result.push({
+        const totals = grants.length
+            ? await this.connection
+                  .getRepository(ctx, AutoCardDelivery)
+                  .createQueryBuilder('delivery')
+                  .select('delivery.supplyGrantId', 'grantId')
+                  .addSelect('delivery.state', 'state')
+                  .addSelect('SUM(delivery.quantity)', 'quantity')
+                  .where('delivery.sourceChannelId = :source AND delivery.supplyGrantId IN (:...grantIds)', {
+                      source: ctx.channelId,
+                      grantIds: grants.map(grant => grant.id),
+                  })
+                  .groupBy('delivery.supplyGrantId')
+                  .addGroupBy('delivery.state')
+                  .getRawMany<{ grantId: ID; state: string; quantity: string | number }>()
+            : [];
+        const result = grants.map(grant => {
+            const rows = totals.filter(row => String(row.grantId) === String(grant.id));
+            return {
                 grantId: String(grant.id),
                 channelId: String(grant.channelId),
                 enabled: grant.enabled,
@@ -58,8 +65,8 @@ export class AutoCardSupplyService {
                 allocatedQuantity: rows
                     .filter(r => ['ALLOCATED', 'RETRYING', 'MANUAL_REVIEW'].includes(r.state))
                     .reduce((n, r) => n + Number(r.quantity), 0),
-            });
-        }
+            };
+        });
         // Source-store receipts contain quantities only: no buyer, order code, selling price or credentials.
         return result;
     }
@@ -74,21 +81,27 @@ export class AutoCardSupplyService {
             .getRepository(ctx, ProductVariant)
             .find({ where: { productId }, relations: ['translations'] });
         const ids = variants.map(v => v.id);
-        const configurations = [];
-        for (const variant of variants) {
-            const config = await this.connection
-                .getRepository(ctx, AutoCardConfig)
-                .findOne({ where: { productVariantId: variant.id, channelId: owner.ownerChannelId } });
-            if (config)
-                configurations.push({
-                    configId: String(config.id),
-                    productVariantId: String(variant.id),
-                    name:
-                        variant.translations.find(t => t.languageCode === ctx.languageCode)?.name ??
-                        variant.translations[0]?.name,
-                    enabled: config.enabled,
-                });
-        }
+        const configs = ids.length
+            ? await this.connection.getRepository(ctx, AutoCardConfig).find({
+                  where: { productVariantId: In(ids), channelId: owner.ownerChannelId },
+              })
+            : [];
+        const configByVariant = new Map(configs.map(config => [String(config.productVariantId), config]));
+        const configurations = variants.flatMap(variant => {
+            const config = configByVariant.get(String(variant.id));
+            return config
+                ? [
+                      {
+                          configId: String(config.id),
+                          productVariantId: String(variant.id),
+                          name:
+                              variant.translations.find(t => t.languageCode === ctx.languageCode)?.name ??
+                              variant.translations[0]?.name,
+                          enabled: config.enabled,
+                      },
+                  ]
+                : [];
+        });
         const grants = ids.length
             ? await this.connection
                   .getRepository(ctx, AutoCardSupplyGrant)
@@ -178,51 +191,130 @@ export class AutoCardSupplyService {
         };
     }
 
+    /** Display-only batch; checkout and delivery always resolve fresh data. */
+    resolveForDisplay(ctx: RequestContext, variantId: ID) {
+        return this.requestCache.load(ctx, `auto-card-supply:${ctx.channelId}`, variantId, ids =>
+            this.resolveSources(ctx, ids),
+        );
+    }
+
     async resolve(ctx: RequestContext, variantId: ID) {
-        const variant = await this.connection
-            .getRepository(ctx, ProductVariant)
-            .findOne({ where: { id: variantId, channels: { id: ctx.channelId } } });
-        if (!variant) return null;
-        const owner = await this.connection
-            .getRepository(ctx, CatalogResourceOwnership)
-            .findOne({ where: { resourceType: 'Product', resourceId: variant.productId } });
-        const sale = await this.connection
-            .getRepository(ctx, ProductSalesAuthorization)
-            .findOne({ where: { productId: variant.productId, channelId: ctx.channelId } });
-        if (
-            sale &&
-            (sale.state !== 'ACTIVE' ||
-                !sale.variantIds.includes(String(variantId)) ||
-                sale.pendingVariantIds?.includes(String(variantId)))
-        )
-            return null;
-        if (!owner) {
-            const product = await this.connection
-                .getRepository(ctx, ProductVariant)
-                .manager.getRepository(ProductVariant)
-                .findOne({ where: { id: variantId }, relations: ['product', 'product.channels'] });
-            const operating = product?.product.channels.filter(c => c.code !== DEFAULT_CHANNEL_CODE) ?? [];
-            if (operating.length !== 1 || String(operating[0].id) !== String(ctx.channelId)) return null;
-            const localConfig = await this.connection
-                .getRepository(ctx, AutoCardConfig)
-                .findOne({ where: { channelId: ctx.channelId, productVariantId: variantId } });
-            return localConfig?.enabled ? { config: localConfig, grant: null } : null;
-        }
-        if (String(owner.ownerChannelId) === String(ctx.channelId)) {
-            const localConfig = await this.connection
-                .getRepository(ctx, AutoCardConfig)
-                .findOne({ where: { channelId: ctx.channelId, productVariantId: variantId } });
-            return localConfig?.enabled ? { config: localConfig, grant: null } : null;
-        }
-        if (!sale) return null;
-        const grant = await this.connection
-            .getRepository(ctx, AutoCardSupplyGrant)
-            .findOne({ where: { channelId: ctx.channelId, productVariantId: variantId, enabled: true } });
-        if (!grant || String(grant.sourceChannelId) !== String(owner.ownerChannelId)) return null;
-        const config = await this.connection.getRepository(ctx, AutoCardConfig).findOne({
-            where: { id: grant.configId, channelId: grant.sourceChannelId, productVariantId: variantId },
+        const [source] = await this.resolveSources(ctx, [String(variantId)]);
+        return source;
+    }
+
+    private async resolveSources(ctx: RequestContext, ids: readonly string[]) {
+        const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+            where: { id: In([...ids]), channels: { id: ctx.channelId } },
+            loadEagerRelations: false,
         });
-        return config?.enabled ? { config, grant } : null;
+        if (!variants.length) return ids.map(() => null);
+        const productIds = [...new Set(variants.map(variant => variant.productId))];
+        const [owners, sales] = await Promise.all([
+            this.connection.getRepository(ctx, CatalogResourceOwnership).find({
+                where: { resourceType: 'Product', resourceId: In(productIds) },
+            }),
+            this.connection.getRepository(ctx, ProductSalesAuthorization).find({
+                where: { productId: In(productIds), channelId: ctx.channelId },
+            }),
+        ]);
+        const ownerByProduct = new Map(owners.map(owner => [String(owner.resourceId), owner]));
+        const saleByProduct = new Map(sales.map(sale => [String(sale.productId), sale]));
+        const eligible = variants.filter(variant => {
+            const sale = saleByProduct.get(String(variant.productId));
+            return (
+                !sale ||
+                (sale.state === 'ACTIVE' &&
+                    sale.variantIds.includes(String(variant.id)) &&
+                    !sale.pendingVariantIds?.includes(String(variant.id)))
+            );
+        });
+        const legacyIds = eligible
+            .filter(variant => !ownerByProduct.has(String(variant.productId)))
+            .map(variant => variant.id);
+        const legacy = legacyIds.length
+            ? // The parent IDs were authorized above. Keep the legacy cardinality
+              // check on the transaction manager so scoped relation filters cannot
+              // make a product shared by two operating stores appear single-store.
+              await this.connection
+                  .getRepository(ctx, ProductVariant)
+                  .manager.getRepository(ProductVariant)
+                  .find({
+                      where: { id: In(legacyIds) },
+                      relations: ['product', 'product.channels'],
+                      loadEagerRelations: false,
+                  })
+            : [];
+        const legacyLocal = new Set(
+            legacy
+                .filter(variant => {
+                    const operating = variant.product.channels.filter(
+                        channel => channel.code !== DEFAULT_CHANNEL_CODE,
+                    );
+                    return operating.length === 1 && String(operating[0].id) === String(ctx.channelId);
+                })
+                .map(variant => String(variant.id)),
+        );
+        const localIds = eligible
+            .filter(variant => {
+                const owner = ownerByProduct.get(String(variant.productId));
+                return owner
+                    ? String(owner.ownerChannelId) === String(ctx.channelId)
+                    : legacyLocal.has(String(variant.id));
+            })
+            .map(variant => variant.id);
+        const foreign = eligible.filter(variant => {
+            const owner = ownerByProduct.get(String(variant.productId));
+            return (
+                owner &&
+                String(owner.ownerChannelId) !== String(ctx.channelId) &&
+                saleByProduct.has(String(variant.productId))
+            );
+        });
+        const grants = foreign.length
+            ? await this.connection.getRepository(ctx, AutoCardSupplyGrant).find({
+                  where: {
+                      channelId: ctx.channelId,
+                      productVariantId: In(foreign.map(variant => variant.id)),
+                      enabled: true,
+                  },
+              })
+            : [];
+        const where = [
+            ...(localIds.length
+                ? [{ channelId: ctx.channelId, productVariantId: In(localIds), enabled: true }]
+                : []),
+            ...(grants.length ? [{ id: In(grants.map(grant => grant.configId)), enabled: true }] : []),
+        ];
+        const configs = where.length
+            ? await this.connection.getRepository(ctx, AutoCardConfig).find({ where })
+            : [];
+        const local = new Set(localIds.map(String));
+        const variantById = new Map(eligible.map(variant => [String(variant.id), variant]));
+        const grantByVariant = new Map(grants.map(grant => [String(grant.productVariantId), grant]));
+        return ids.map(id => {
+            const variant = variantById.get(id);
+            if (!variant) return null;
+            if (local.has(id)) {
+                const localConfig = configs.find(
+                    item =>
+                        String(item.productVariantId) === id &&
+                        String(item.channelId) === String(ctx.channelId),
+                );
+                return localConfig ? { config: localConfig, grant: null } : null;
+            }
+            const owner = ownerByProduct.get(String(variant.productId));
+            const grant = grantByVariant.get(id);
+            if (!owner || !grant || String(grant.sourceChannelId) !== String(owner.ownerChannelId))
+                return null;
+            const config = configs.find(
+                item =>
+                    String(item.id) === String(grant.configId) &&
+                    String(item.channelId) === String(grant.sourceChannelId) &&
+                    String(item.productVariantId) === id,
+            );
+            return config ? { config, grant } : null;
+        });
     }
 
     async snapshotForPayment(ctx: RequestContext, order: Order, line: OrderLine) {

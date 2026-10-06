@@ -19,6 +19,10 @@ export function useAdminReadResource<T>(
     const page = context?.page ?? tab?.path ?? '@shell';
     const active = usePageActivity();
     const ownerId = useId();
+    const activeRef = useRef(active);
+    useLayoutEffect(() => {
+        activeRef.current = active;
+    }, [active]);
     const key = `${getAdminQueryScope()}|read:${id}`;
     const latest = useRef(read);
     useLayoutEffect(() => {
@@ -42,12 +46,15 @@ export function useAdminReadResource<T>(
             }));
             try {
                 const data = await latest.current(request.signal);
-                if (!request.signal.aborted) setState({ key, data, loading: false });
+                if (request.signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
+                setState({ key, data, loading: false });
                 return data;
             } catch (error) {
                 if (!request.signal.aborted)
                     setState(previous => ({ ...previous, key, error, loading: false }));
                 throw error;
+            } finally {
+                if (controller.current === request) controller.current = null;
             }
         },
         [key],
@@ -57,14 +64,14 @@ export function useAdminReadResource<T>(
             runtime.register(
                 key,
                 ownerId,
-                { page, active, fetch, loading: false, hasData: false },
+                { page, active: activeRef.current, fetch, loading: false, hasData: false },
                 {
                     staleTime: pollInterval || 30_000,
                     pollInterval,
                     stage: 0,
                 },
             ),
-        [runtime, key, ownerId, page, fetch, active, pollInterval],
+        [runtime, key, ownerId, page, fetch, pollInterval],
     );
     const previousLoading = useRef(false);
     useEffect(() => {
@@ -78,7 +85,12 @@ export function useAdminReadResource<T>(
     }, [runtime, key, ownerId, active, state.loading, state.error, state.data]);
     useEffect(() => {
         if (active && runtime.isStale(key)) void runtime.refreshResource(key).catch(() => {});
-        return () => controller.current?.abort();
+        return () => {
+            if (controller.current && !controller.current.signal.aborted) {
+                controller.current.abort();
+                runtime.invalidate(candidate => candidate === key);
+            }
+        };
     }, [runtime, key, active]);
     useActiveInterval(() => {
         void runtime.refreshResource(key).catch(() => {});

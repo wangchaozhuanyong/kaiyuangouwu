@@ -27,12 +27,12 @@ describe('public product availability resolver', () => {
     });
 
     it('uses Vendure saleable stock for non-auto-card variants', async () => {
-        const productVariantService = { getSaleableStockLevel: vi.fn().mockResolvedValue(7) };
-        const autoCardService = { availableStockForVariant: vi.fn() };
+        const productVariantService = { getSaleableStockLevelForDisplay: vi.fn().mockResolvedValue(7) };
+        const autoCardService = { availableStockForDisplay: vi.fn() };
         const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
-            { available: vi.fn().mockResolvedValue(undefined) } as never,
+            { availableForDisplay: vi.fn().mockResolvedValue(undefined) } as never,
         );
 
         await expect(
@@ -44,20 +44,20 @@ describe('public product availability resolver', () => {
                 } as never,
             ),
         ).resolves.toBe(7);
-        expect(productVariantService.getSaleableStockLevel).toHaveBeenCalledWith(
+        expect(productVariantService.getSaleableStockLevelForDisplay).toHaveBeenCalledWith(
             expect.any(Object),
             expect.objectContaining({ id: 'variant-1' }),
         );
-        expect(autoCardService.availableStockForVariant).not.toHaveBeenCalled();
+        expect(autoCardService.availableStockForDisplay).not.toHaveBeenCalled();
     });
 
     it('uses the available card pool for auto-card variants', async () => {
-        const autoCardService = { availableStockForVariant: vi.fn().mockResolvedValue(4) };
-        const productVariantService = { getSaleableStockLevel: vi.fn() };
+        const autoCardService = { availableStockForDisplay: vi.fn().mockResolvedValue(4) };
+        const productVariantService = { getSaleableStockLevelForDisplay: vi.fn() };
         const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
-            { available: vi.fn().mockResolvedValue(undefined) } as never,
+            { availableForDisplay: vi.fn().mockResolvedValue(undefined) } as never,
         );
 
         await expect(
@@ -69,10 +69,10 @@ describe('public product availability resolver', () => {
                 } as never,
             ),
         ).resolves.toBe(4);
-        expect(autoCardService.availableStockForVariant).toHaveBeenCalledWith(
+        expect(autoCardService.availableStockForDisplay).toHaveBeenCalledWith(
             expect.any(Object),
-            'variant-2',
+            expect.objectContaining({ id: 'variant-2' }),
         );
-        expect(productVariantService.getSaleableStockLevel).not.toHaveBeenCalled();
+        expect(productVariantService.getSaleableStockLevelForDisplay).not.toHaveBeenCalled();
     });
 });

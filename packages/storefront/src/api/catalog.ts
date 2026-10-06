@@ -7,6 +7,7 @@ import type {
     StorefrontCatalogInput,
 } from '../types';
 
+import { asListProduct } from '../product-summary';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -16,7 +17,7 @@ import {
 } from '../query-client';
 
 import { BaseDomainApi } from './base-domain-api';
-import { productFields, productPackagingFields } from './fragments';
+import { productFields, productPackagingFields, productSummaryFields } from './fragments';
 import {
     isMissingStorefrontCatalogSchema,
     matchesCatalogFilters,
@@ -67,17 +68,33 @@ export class CatalogApi extends BaseDomainApi {
             `
             query StorefrontProducts($options: ProductListOptions) {
                 products(options: $options) {
-                    items { ${productFields} }
+                    items { ${productSummaryFields} }
                 }
             }
         `,
             { options: { take, sort: { name: 'ASC' } } },
             signal,
         );
-        return result.products.items;
+        return result.products.items.map(asListProduct);
     }
 
     async product(id: string, signal?: AbortSignal): Promise<Product | null> {
+        const { fetchPublicPage, seedPublicPage } = await import('../storefront-page-data');
+        const page = await fetchPublicPage(
+            this.languageCode,
+            this.market.currencyCode,
+            signal,
+            {
+                kind: 'product',
+                id,
+            },
+            this.market.code,
+        );
+        if (page) {
+            seedPublicPage(storefrontQueryClient, page);
+            if (page.product === undefined) throw new Error('Public product response is missing its detail');
+            return page.product;
+        }
         const result = await this.request<{ product: Product | null }>(
             `
                 query StorefrontProduct($id: ID!) {
@@ -143,13 +160,34 @@ export class CatalogApi extends BaseDomainApi {
             'price-asc': 'PRICE_ASC',
             'price-desc': 'PRICE_DESC',
         };
+        const { fetchPublicPage, seedPublicPage } = await import('../storefront-page-data');
+        const pageData = await fetchPublicPage(
+            this.languageCode,
+            this.market.currencyCode,
+            signal,
+            {
+                kind: 'catalog',
+                input: {
+                    ...input,
+                    sort: sortMap[input.sort ?? 'recommended'] as 'RECOMMENDED',
+                    fulfillmentType: input.fulfillmentType?.toUpperCase() as
+                        'PHYSICAL' | 'DIGITAL' | undefined,
+                },
+            },
+            this.market.code,
+        );
+        if (pageData) {
+            seedPublicPage(storefrontQueryClient, pageData);
+            if (!pageData.catalog) throw new Error('Public catalog response is missing its results');
+            return { ...pageData.catalog, items: pageData.catalog.items.map(asListProduct) };
+        }
         try {
             const result = await this.request<{ storefrontCatalog: ProductSearchPage }>(
                 `
                     query StorefrontCatalog($input: StorefrontCatalogInput!) {
                         storefrontCatalog(input: $input) {
                             totalItems
-                            items { ${productFields} }
+                            items { ${productSummaryFields} }
                         }
                     }
                 `,
@@ -175,7 +213,7 @@ export class CatalogApi extends BaseDomainApi {
                 throw new Error('Shop API returned an invalid storefront catalog response');
             }
             this.storefrontCatalogAvailable = true;
-            return page;
+            return { ...page, items: page.items.map(asListProduct) };
         } catch (error) {
             if (!isMissingStorefrontCatalogSchema(error)) throw error;
             this.storefrontCatalogAvailable = false;
@@ -300,12 +338,15 @@ export class CatalogApi extends BaseDomainApi {
     async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {
         const result = await this.request<{ storefrontDailyRecommendations: DailyRecommendations }>(
             `query StorefrontDailyRecommendations {
-                storefrontDailyRecommendations { businessDate expiresAt items { ${productFields} } }
+                storefrontDailyRecommendations { businessDate expiresAt items { ${productSummaryFields} } }
             }`,
             undefined,
             signal,
         );
-        return result.storefrontDailyRecommendations;
+        return {
+            ...result.storefrontDailyRecommendations,
+            items: result.storefrontDailyRecommendations.items.map(asListProduct),
+        };
     }
 
     async productSales(productIds: string[], signal?: AbortSignal): Promise<Record<string, number>> {

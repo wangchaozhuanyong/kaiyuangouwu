@@ -132,6 +132,10 @@ function useManagedResult(document: any, options: any, result: any, active: bool
     const wasLoading = useRef({ key, value: result.loading });
     const fetch = useCallback(() => waitForQuery(latest.current.observable), []);
     const hasData = Boolean(data);
+    const ownerState = useRef({ active, loading: result.loading, hasData, error: result.error });
+    useLayoutEffect(() => {
+        ownerState.current = { active, loading: result.loading, hasData, error: result.error };
+    }, [active, result.loading, hasData, result.error]);
     useEffect(() => {
         if (!enabled) return;
         return runtime.register(
@@ -139,29 +143,12 @@ function useManagedResult(document: any, options: any, result: any, active: bool
             ownerId,
             {
                 page,
-                active,
                 fetch,
-                loading: result.loading,
-                hasData,
-                error: result.error,
+                ...ownerState.current,
             },
             { staleTime, pollInterval, stage },
         );
-    }, [
-        runtime,
-        key,
-        ownerId,
-        page,
-        enabled,
-        fetch,
-        active,
-        result.loading,
-        result.error,
-        hasData,
-        staleTime,
-        pollInterval,
-        stage,
-    ]);
+    }, [runtime, key, ownerId, page, enabled, fetch, staleTime, pollInterval, stage]);
     useEffect(() => {
         const completed = wasLoading.current.key === key && wasLoading.current.value && !result.loading;
         wasLoading.current = { key, value: result.loading };

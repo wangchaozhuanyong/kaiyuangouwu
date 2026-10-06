@@ -538,6 +538,7 @@ describe('ShopApi storefront mutations', () => {
         await expect(new ShopApi(market, 'en').storefrontContent()).resolves.toEqual({
             blocks: [],
             flashSales: [],
+            flashSalesDeferred: true,
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 8,
@@ -562,7 +563,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('storefrontContentSettings');
         expect(request.query).toContain('personalDataExportEnabled');
         expect(request.query).not.toContain('activeStorefrontCoupons');
-        expect(request.query).toContain('activeStorefrontFlashSales');
+        expect(request.query).not.toContain('activeStorefrontFlashSales');
         expect(request.query).not.toMatch(/activeStorefrontFlashSales\s*\{\s*id\s+name\b/u);
         expect(request.query).toContain('activeSystemAnnouncements');
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
@@ -859,6 +860,7 @@ describe('ShopApi storefront mutations', () => {
         await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
             blocks: [],
             flashSales: [],
+            flashSalesDeferred: true,
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 5,
@@ -870,7 +872,7 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
-    it('keeps flash sales and announcements when an older Shop API lacks announcement createdAt', async () => {
+    it('keeps announcements independent from flash sales when an older Shop API lacks announcement createdAt', async () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
@@ -917,7 +919,8 @@ describe('ShopApi storefront mutations', () => {
         vi.stubGlobal('fetch', fetchMock);
 
         const result = await new ShopApi(market).storefrontContent();
-        expect(result.flashSales).toHaveLength(1);
+        expect(result.flashSales).toEqual([]);
+        expect(result.flashSalesDeferred).toBe(true);
         expect(result.systemAnnouncements).toHaveLength(1);
         expect(result.settings.configuredBlockTypes).toEqual(['HERO']);
         expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -925,11 +928,11 @@ describe('ShopApi storefront mutations', () => {
         const retryRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
         expect(modernRequest.query).toContain('createdAt');
         expect(retryRequest.query).not.toContain('createdAt');
-        expect(retryRequest.query).toContain('activeStorefrontFlashSales');
+        expect(retryRequest.query).not.toContain('activeStorefrontFlashSales');
         expect(retryRequest.query).toContain('activeSystemAnnouncements');
     });
 
-    it('falls back to the legacy storefront content query when optional commerce fields are unavailable', async () => {
+    it('falls back to the legacy storefront content query when optional announcement fields are unavailable', async () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
@@ -937,7 +940,7 @@ describe('ShopApi storefront mutations', () => {
                     JSON.stringify({
                         errors: [
                             {
-                                message: 'Cannot query field "activeStorefrontFlashSales" on type "Query".',
+                                message: 'Cannot query field "activeSystemAnnouncements" on type "Query".',
                             },
                         ],
                     }),
@@ -960,6 +963,7 @@ describe('ShopApi storefront mutations', () => {
         await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
             blocks: [],
             flashSales: [],
+            flashSalesDeferred: true,
             systemAnnouncements: [],
             settings: {
                 heroAutoplayIntervalSeconds: 7,
@@ -973,7 +977,7 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
         const modernRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
         const legacyRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
-        expect(modernRequest.query).toContain('activeStorefrontFlashSales');
+        expect(modernRequest.query).toContain('activeSystemAnnouncements');
         expect(legacyRequest.query).toContain('query StorefrontContentLegacy');
         expect(legacyRequest.query).not.toContain('activeStorefrontCoupons');
         expect(legacyRequest.query).not.toContain('configuredBlockTypes');
@@ -1044,7 +1048,7 @@ describe('ShopApi storefront mutations', () => {
             new Response(
                 JSON.stringify({
                     errors: [
-                        { message: 'Cannot query field "activeStorefrontFlashSales" on type "Query".' },
+                        { message: 'Cannot query field "activeSystemAnnouncements" on type "Query".' },
                         { message: 'Forbidden' },
                     ],
                 }),
@@ -1052,7 +1056,7 @@ describe('ShopApi storefront mutations', () => {
             ),
         );
         vi.stubGlobal('fetch', fetchMock);
-        await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('activeStorefrontFlashSales');
+        await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('activeSystemAnnouncements');
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 

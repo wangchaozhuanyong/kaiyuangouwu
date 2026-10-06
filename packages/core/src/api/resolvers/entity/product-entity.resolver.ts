@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Args, Info, Parent, ResolveField, Resolver } from '@nestjs/graphql';
 import { ProductVariantListOptions } from '@vendure/common/lib/generated-types';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
@@ -63,13 +64,7 @@ export class ProductEntityResolver {
         @Parent() product: Product,
         @Relations({ entity: ProductVariant, omit: ['assets'] }) relations: RelationPaths<ProductVariant>,
     ): Promise<Array<Translated<ProductVariant>>> {
-        const { items: variants } = await this.productVariantService.getVariantsByProductId(
-            ctx,
-            product.id,
-            {},
-            relations,
-        );
-        return variants;
+        return this.productVariantService.getVariantsForProduct(ctx, product.id, relations);
     }
 
     @ResolveField()

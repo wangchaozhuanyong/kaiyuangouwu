@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { SEND_CLIENT_CHANNEL_TOKEN } from '../api/helpers';
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
@@ -12,6 +12,7 @@ import {
     storefrontQueryKeys,
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
+import { fetchPublicPage, seedPublicPage } from '../storefront-page-data';
 import { contentStringArraySetting } from '../storefront-utils';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
@@ -24,6 +25,7 @@ export function useStorefrontPublicData({
     storefrontContextResolved,
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
+    const queryClient = useQueryClient();
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 12),
         queryFn: ({ signal }) => api.products(12, signal),
@@ -47,10 +49,21 @@ export function useStorefrontPublicData({
             ...storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
             'public',
         ],
-        queryFn: ({ signal }) => api.storefrontConfig(signal),
+        queryFn: async ({ signal }) => {
+            const page = await fetchPublicPage(
+                vendureLanguageCode,
+                storefrontContextResolved ? market.currencyCode : undefined,
+                signal,
+                { kind: 'home' },
+                storefrontContextResolved ? market.code : undefined,
+            );
+            if (!page) return api.storefrontConfig(signal);
+            seedPublicPage(queryClient, page, false);
+            return page.config;
+        },
         // The bootstrap copies the just-received config to the resolved market key.
         // Avoid immediately repeating the same request when the server owns Channel routing.
-        staleTime: SEND_CLIENT_CHANNEL_TOKEN ? 0 : 5_000,
+        staleTime: SEND_CLIENT_CHANNEL_TOKEN ? 0 : 30_000,
         refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
@@ -62,7 +75,17 @@ export function useStorefrontPublicData({
         ],
         queryFn: ({ signal }) => api.storefrontContent(signal),
         enabled: storefrontContextResolved,
-        staleTime: 0,
+        staleTime: 30_000,
+        refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+
+    const flashSalesQuery = useQuery({
+        queryKey: storefrontQueryKeys.flashSales(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryFn: ({ signal }) => api.activeFlashSales(signal),
+        enabled: storefrontContextResolved,
+        staleTime: 30_000,
         refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -112,7 +135,9 @@ export function useStorefrontPublicData({
               }
             : configuredNavigationBlock;
 
-    const activeFlashSales = contentQuery.data?.flashSales ?? [];
+    const activeFlashSales =
+        flashSalesQuery.data ??
+        (contentQuery.data?.flashSalesDeferred ? [] : (contentQuery.data?.flashSales ?? []));
 
     const systemAnnouncements = contentQuery.data?.systemAnnouncements ?? [];
 
@@ -151,7 +176,8 @@ export function useStorefrontPublicData({
         googleClientId: null,
     };
 
-    const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery, contentQuery];
+    // Catalog/recommendation reads have their own section state and cannot hide published home content.
+    const criticalPublicQueries = [configQuery, contentQuery];
 
     const presentations = criticalPublicQueries.map(storefrontQueryPresentation);
     const initialFailure = criticalPublicQueries.find(query => query.data === undefined && query.isError);

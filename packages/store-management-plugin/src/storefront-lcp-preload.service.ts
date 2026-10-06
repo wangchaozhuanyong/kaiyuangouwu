@@ -1,15 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { CacheService, ConfigService, ID, RequestContext, TransactionalConnection } from '@vendure/core';
+import { ID, RequestContext } from '@vendure/core';
 import {
-    normalizeStorefrontAssetUrl,
-    responsiveImageSources,
-    StorefrontContentService,
+    mediaDescriptor,
+    serializeStorefrontPageData,
+    STOREFRONT_PAGE_DATA_ELEMENT_ID,
     storefrontIcon,
 } from '@vendure/storefront-content-plugin';
 
-import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
-
-const PRELOAD_CACHE_TTL_MS = 5 * 60 * 1000;
+import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
+import { StorefrontPublicPageService } from './storefront-public-page.service';
 
 function escapeHtmlAttribute(value: string): string {
     return value
@@ -34,17 +33,12 @@ export function renderStorefrontIconLinks(source: string | null): string {
 }
 
 export function renderHeroPreloadLink(source: string): string {
-    const normalized = normalizeStorefrontAssetUrl(source);
-    const responsive = responsiveImageSources(normalized, 'hero');
-    const attributes = [
-        'rel="preload"',
-        'as="image"',
-        `href="${escapeHtmlAttribute(responsive?.fallbackSrc ?? normalized)}"`,
-    ];
-    if (responsive) {
+    const media = mediaDescriptor(source, 'hero');
+    const attributes = ['rel="preload"', 'as="image"', `href="${escapeHtmlAttribute(media.src)}"`];
+    if (media.srcSet) {
         attributes.push('type="image/webp"');
-        attributes.push(`imagesrcset="${escapeHtmlAttribute(responsive.webpSrcSet)}"`);
-        attributes.push(`imagesizes="${escapeHtmlAttribute(responsive.sizes)}"`);
+        attributes.push(`imagesrcset="${escapeHtmlAttribute(media.srcSet)}"`);
+        attributes.push(`imagesizes="${escapeHtmlAttribute(media.sizes ?? '')}"`);
     }
     attributes.push('fetchpriority="high"');
     return `<link ${attributes.join(' ')} />`;
@@ -53,39 +47,34 @@ export function renderHeroPreloadLink(source: string): string {
 @Injectable()
 export class StorefrontLcpPreloadService {
     constructor(
-        private readonly cacheService: CacheService,
-        private readonly contentService: StorefrontContentService,
-        private readonly connection: TransactionalConnection,
-        private readonly configService: ConfigService,
+        private readonly pages: StorefrontPublicPageService,
+        private readonly cache: StorefrontPublicCacheService,
     ) {}
 
-    async render(ctx: RequestContext): Promise<string> {
-        const [hero, branding] = await Promise.all([
-            this.renderHero(ctx),
-            new StorefrontBrandingShopResolver(this.connection, this.configService).loadBranding(ctx),
-        ]);
-        // Brand edits must not wait for the independent, cached hero preload.
-        return `${renderStorefrontIconLinks(branding.logoUrl)}\n${hero}`;
-    }
-
-    private async renderHero(ctx: RequestContext): Promise<string> {
-        const cacheKey = `StorefrontLcpPreload:${String(ctx.channelId)}:${String(ctx.languageCode)}`;
-        const cached = await this.cacheService.get<string>(cacheKey);
-        if (cached !== undefined) return cached;
-
-        const blocks = await this.contentService.findPublished(ctx);
-        const source = blocks
-            .find(block => block.type === 'HERO' && block.imageUrl?.trim())
-            ?.imageUrl?.trim();
-        const html = source ? renderHeroPreloadLink(source) : '';
-        await this.cacheService.set(cacheKey, html, {
-            ttl: PRELOAD_CACHE_TTL_MS,
-            tags: [storefrontContentCacheTag(ctx.channelId)],
-        });
-        return html;
+    async render(ctx: RequestContext, host: string): Promise<string> {
+        // SSI has a 500ms upstream budget: a cache miss must not start database assembly.
+        const page = await this.pages.peek(ctx, host);
+        if (!page) return '';
+        const config = page.config as { logoUrl?: string | null };
+        const content = page.content as
+            { blocks?: Array<{ type: string; enabled?: boolean; imageUrl?: string }> } | undefined;
+        const firstHero = content?.blocks?.find(
+            block => block.type === 'HERO' && block.enabled !== false && block.imageUrl,
+        );
+        const identity = firstHero?.imageUrl
+            ? mediaDescriptor(firstHero.imageUrl, 'hero').identity
+            : undefined;
+        const hero = identity && page.media.find(item => item.kind === 'hero' && item.identity === identity);
+        return [
+            renderStorefrontIconLinks(config.logoUrl ?? null),
+            hero ? renderHeroPreloadLink(hero.identity) : '',
+            `<script id="${STOREFRONT_PAGE_DATA_ELEMENT_ID}" type="application/json">${serializeStorefrontPageData(page)}</script>`,
+        ]
+            .filter(Boolean)
+            .join('\n');
     }
 
     invalidate(channelId: ID): Promise<void> {
-        return this.cacheService.invalidateTags([storefrontContentCacheTag(channelId)]);
+        return this.cache.invalidate(channelId);
     }
 }

@@ -1,8 +1,10 @@
+// organize-imports-ignore
 import type { GlobalSettingsService } from '../../service/index';
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import ms from 'ms';
 import { filter } from 'rxjs/operators';
+import { In } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Cache, CacheService, RequestContextCacheService } from '../../cache/index';
@@ -12,6 +14,7 @@ import { OrderLine } from '../../entity/order-line/order-line.entity';
 import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { StockLocation } from '../../entity/stock-location/stock-location.entity';
 import { EventBus, StockLocationEvent } from '../../event-bus/index';
+import { Logger } from '../logger/vendure-logger';
 
 import { BaseStockLocationStrategy } from './default-stock-location-strategy';
 import { AvailableStock, LocationWithQuantity, StockLocationStrategy } from './stock-location-strategy';
@@ -43,7 +46,7 @@ export class MultiChannelStockLocationStrategy extends BaseStockLocationStrategy
 
     /** @internal */
     async init(injector: Injector) {
-        super.init(injector);
+        await super.init(injector);
         this.eventBus = injector.get(EventBus);
         this.cacheService = injector.get(CacheService);
         this.requestContextCache = injector.get(RequestContextCacheService);
@@ -63,7 +66,14 @@ export class MultiChannelStockLocationStrategy extends BaseStockLocationStrategy
         this.eventBus
             .ofType(StockLocationEvent)
             .pipe(filter(event => event.type !== 'created'))
-            .subscribe(({ entity }) => this.channelIdCache.delete(this.getCacheKey(entity.id)));
+            .subscribe(({ entity }) => {
+                void this.channelIdCache.delete(this.getCacheKey(entity.id)).catch(() => {
+                    Logger.warn(
+                        'Failed to invalidate stock location channel cache',
+                        'MultiChannelStockLocationStrategy',
+                    );
+                });
+            });
     }
 
     /**
@@ -85,6 +95,56 @@ export class MultiChannelStockLocationStrategy extends BaseStockLocationStrategy
             }
         }
         return { stockOnHand, stockAllocated };
+    }
+
+    async getAvailableStockForDisplay(
+        ctx: RequestContext,
+        productVariantId: ID,
+        stockLevels: StockLevel[],
+    ): Promise<AvailableStock> {
+        // Existing custom subclasses may override stock rules. They must opt in
+        // explicitly before their calculations can use the display batch helper.
+        if (this.getAvailableStock !== MultiChannelStockLocationStrategy.prototype.getAvailableStock) {
+            return this.getAvailableStock(ctx, productVariantId, stockLevels);
+        }
+        return this.getChannelStockForDisplay(ctx, productVariantId, stockLevels);
+    }
+
+    protected async getChannelStockForDisplay(
+        ctx: RequestContext,
+        productVariantId: ID,
+        stockLevels: StockLevel[],
+    ): Promise<AvailableStock> {
+        const applicable = await Promise.all(
+            stockLevels.map(async level => {
+                const channelIds = await this.requestContextCache.load(
+                    ctx,
+                    `display-stock-location-channels:${ctx.channelId}`,
+                    level.stockLocationId,
+                    async ids => {
+                        const locations = await this.connection.getRepository(ctx, StockLocation).find({
+                            where: { id: In([...ids]) },
+                            relations: ['channels'],
+                        });
+                        const channels = new Map(
+                            locations.map(location => [
+                                String(location.id),
+                                location.channels.map(channel => String(channel.id)),
+                            ]),
+                        );
+                        return ids.map(id => channels.get(id) ?? []);
+                    },
+                );
+                return channelIds.includes(String(ctx.channelId)) ? level : undefined;
+            }),
+        );
+        return applicable.reduce(
+            (total, level) => ({
+                stockOnHand: total.stockOnHand + (level?.stockOnHand ?? 0),
+                stockAllocated: total.stockAllocated + (level?.stockAllocated ?? 0),
+            }),
+            { stockOnHand: 0, stockAllocated: 0 },
+        );
     }
 
     /**

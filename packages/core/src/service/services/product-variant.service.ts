@@ -234,6 +234,49 @@ export class ProductVariantService {
         });
     }
 
+    /** Read-only GraphQL/list projection. Paginated variantList keeps its own query. */
+    getVariantsForProduct(
+        ctx: RequestContext,
+        productId: ID,
+        relations?: RelationPaths<ProductVariant>,
+    ): Promise<Array<Translated<ProductVariant>>> {
+        const selectedRelations = unique([
+            ...(relations ?? ['options', 'facetValues', 'facetValues.facet', 'assets', 'featuredAsset']),
+            'taxCategory',
+            'product',
+        ]).sort();
+        const scope = `product-variants:${ctx.apiType}:${ctx.channelId}:${ctx.languageCode}:${ctx.currencyCode}:${selectedRelations.join(',')}`;
+        return this.requestCache.load(ctx, scope, productId, async ids => {
+            // Read one bounded page of product IDs together. Preserve the existing
+            // per-product API limit; a global SQL take would starve later products.
+            const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+                where: {
+                    productId: In([...ids]),
+                    deletedAt: IsNull(),
+                    channels: { id: ctx.channelId },
+                    ...(ctx.apiType === 'shop' ? { enabled: true } : {}),
+                },
+                relations: selectedRelations,
+                relationLoadStrategy: 'query',
+                order: { id: 'ASC' },
+            });
+            const limit =
+                ctx.apiType === 'shop'
+                    ? this.configService.apiOptions.shopListQueryLimit
+                    : this.configService.apiOptions.adminListQueryLimit;
+            const grouped = new Map<string, ProductVariant[]>();
+            for (const variant of variants) {
+                const key = String(variant.productId);
+                const group = grouped.get(key) ?? [];
+                if (group.length < limit) group.push(variant);
+                grouped.set(key, group);
+            }
+            return Promise.all(
+                ids.map(id => this.applyPricesAndTranslateVariants(ctx, grouped.get(id) ?? [])),
+            );
+        });
+    }
+
     /**
      * @description
      * Returns a {@link PaginatedList} of all ProductVariants associated with the given Collection.
@@ -366,9 +409,24 @@ export class ProductVariantService {
      * as well as the local and global `outOfStockThreshold` settings.
      */
     async getSaleableStockLevel(ctx: RequestContext, variant: ProductVariant): Promise<number> {
+        return this.saleableStockLevel(ctx, variant, false);
+    }
+
+    async getSaleableStockLevelForDisplay(ctx: RequestContext, variant: ProductVariant): Promise<number> {
+        return this.saleableStockLevel(ctx, variant, true);
+    }
+
+    private async saleableStockLevel(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        forDisplay: boolean,
+    ): Promise<number> {
         const strategy = this.configService.catalogOptions.stockLocationStrategy;
-        if ((await strategy.supportsStockLocations?.(ctx, variant, 'flow')) === false)
-            return Number.MAX_SAFE_INTEGER;
+        const supports =
+            forDisplay && strategy.supportsStockLocationsForDisplay
+                ? strategy.supportsStockLocationsForDisplay(ctx, variant)
+                : strategy.supportsStockLocations?.(ctx, variant, 'flow');
+        if ((await supports) === false) return Number.MAX_SAFE_INTEGER;
         const { outOfStockThreshold, trackInventory } = await this.globalSettingsService.getSettings(ctx);
 
         const inventoryNotTracked =
@@ -377,10 +435,9 @@ export class ProductVariantService {
         if (inventoryNotTracked) {
             return Number.MAX_SAFE_INTEGER;
         }
-        const { stockOnHand, stockAllocated } = await this.stockLevelService.getAvailableStock(
-            ctx,
-            variant.id,
-        );
+        const { stockOnHand, stockAllocated } = await (forDisplay
+            ? this.stockLevelService.getAvailableStockForDisplay(ctx, variant.id)
+            : this.stockLevelService.getAvailableStock(ctx, variant.id));
         const effectiveOutOfStockThreshold = variant.useGlobalOutOfStockThreshold
             ? outOfStockThreshold
             : variant.outOfStockThreshold;
@@ -408,7 +465,7 @@ export class ProductVariantService {
      */
     async getDisplayStockLevel(ctx: RequestContext, variant: ProductVariant): Promise<string> {
         const { stockDisplayStrategy } = this.configService.catalogOptions;
-        const saleableStockLevel = await this.getSaleableStockLevel(ctx, variant);
+        const saleableStockLevel = await this.getSaleableStockLevelForDisplay(ctx, variant);
         return stockDisplayStrategy.getStockLevel(ctx, variant, saleableStockLevel);
     }
 
@@ -919,6 +976,7 @@ export class ProductVariantService {
             variants.map(async variant => {
                 const variantWithPrices = await this.applyChannelPriceAndTax(variant, ctx);
                 return this.translator.translate(variantWithPrices, ctx, [
+                    'product',
                     'options',
                     'facetValues',
                     ['facetValues', 'facet'],

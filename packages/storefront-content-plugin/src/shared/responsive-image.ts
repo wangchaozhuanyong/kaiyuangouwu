@@ -24,12 +24,76 @@ export interface ResponsiveImageSources {
     width: number;
 }
 
+/** One canonical asset identity for HTML preloads, both clients and queued derivatives. */
 export function normalizeStorefrontAssetUrl(source: string): string {
-    const normalized = source.trim();
-    if (/^(?:preview|source)\//i.test(normalized)) {
-        return `/assets/${normalized}`;
+    const trimmed = source.trim();
+    const normalized = /^(?:preview|source)\//i.test(trimmed) ? `/assets/${trimmed}` : trimmed;
+    if (!/\/assets\/(?:preview|source)\/[^?#]*__webp_migrated_\d+\.webp(?:[?#]|$)/iu.test(normalized)) {
+        return normalized;
     }
-    return normalized;
+    try {
+        const url = new URL(normalized, 'https://storefront.invalid');
+        // Preserve a newer explicit content version; only repair the historical unversioned URLs.
+        if (!url.searchParams.has('v')) url.searchParams.set('v', 'webp-readable-1');
+        return /^[a-z][a-z\d+.-]*:/iu.test(normalized) || normalized.startsWith('//')
+            ? url.toString()
+            : `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+        return normalized;
+    }
+}
+
+export interface MediaDescriptor {
+    identity: string;
+    version: string | null;
+    kind?: StorefrontImageKind;
+    src: string;
+    srcSet?: string;
+    sizes?: string;
+    width?: number;
+    height?: number;
+    /** Inline only: rendering a placeholder must never compete with its final image. */
+    placeholder?: { inlineData: string };
+}
+
+export function mediaDescriptor(
+    source: string,
+    kind?: StorefrontImageKind,
+    options: {
+        sizes?: string;
+        width?: number;
+        height?: number;
+        inlinePreview?: string;
+        responsive?: ResponsiveImageSources | null;
+    } = {},
+): MediaDescriptor {
+    const normalized = normalizeStorefrontAssetUrl(source);
+    const responsive =
+        options.responsive === undefined && kind
+            ? responsiveImageSources(normalized, kind)
+            : options.responsive;
+    let version: string | null = null;
+    try {
+        version = new URL(normalized, 'https://storefront.invalid').searchParams.get('v');
+    } catch {
+        /* external opaque sources */
+    }
+    const inlineData = options.inlinePreview;
+    return {
+        identity: normalized,
+        version,
+        kind,
+        src: responsive?.fallbackSrc ?? normalized,
+        srcSet: responsive?.fallbackSrcSet,
+        sizes: options.sizes ?? responsive?.sizes,
+        width: options.width ?? responsive?.width,
+        height: options.height ?? responsive?.height,
+        ...(inlineData &&
+        /^data:image\/(?:webp|png|jpeg);base64,[a-z0-9+/=]+$/iu.test(inlineData) &&
+        inlineData.length <= 8192
+            ? { placeholder: { inlineData } }
+            : {}),
+    };
 }
 
 const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {

@@ -6,6 +6,7 @@ import {
     RequestContextCacheService,
     TransactionalConnection,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 export async function couponCollectionsForVariant(
     ctx: RequestContext,
@@ -13,10 +14,20 @@ export async function couponCollectionsForVariant(
     connection: TransactionalConnection,
     requestCache: RequestContextCacheService,
 ): Promise<string[]> {
-    const variant = await connection.getRepository(ctx, ProductVariant).findOne({
-        where: { id: variantId, channels: { id: ctx.channelId } },
-        relations: { collections: true },
-    });
+    const variant = await requestCache.load(
+        ctx,
+        `coupon-variant-collections:${ctx.channelId}`,
+        variantId,
+        async ids => {
+            const variants = await connection.getRepository(ctx, ProductVariant).find({
+                where: { id: In([...ids]), channels: { id: ctx.channelId } },
+                relations: { collections: true },
+                loadEagerRelations: false,
+            });
+            const byId = new Map(variants.map(item => [String(item.id), item]));
+            return ids.map(id => byId.get(id));
+        },
+    );
     if (!variant?.collections.length) return [];
 
     // Resolve the current hierarchy once per request, so new or moved descendants

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -15,6 +15,7 @@ import {
 import { configureMoneyDisplay } from '../money-display';
 import { refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
+import { readInitialPublicPage } from '../storefront-page-data';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
@@ -44,12 +45,14 @@ function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
 
 export function useStorefrontBootstrap() {
     const queryClient = useQueryClient();
+    const [initialPage] = useState(readInitialPublicPage);
+    const initializedPreferenceScope = useRef('');
 
     const [{ market, language }, setStorefrontContext] = useState<{
         market: MarketConfig;
         language: StorefrontLanguage;
     }>(() => {
-        const initialMarket = enabledMarkets[0];
+        const initialMarket = initialPage ? marketForStorefrontConfig(initialPage.config) : enabledMarkets[0];
         const currencyCode = readStoredSettlementCurrency(initialMarket);
         return {
             market: { ...initialMarket, currencyCode },
@@ -59,7 +62,7 @@ export function useStorefrontBootstrap() {
     const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
         readStoredCurrency(enabledMarkets[0]),
     );
-    const [storefrontContextResolved, setStorefrontContextResolved] = useState(false);
+    const [storefrontContextResolved, setStorefrontContextResolved] = useState(Boolean(initialPage));
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [storefrontNames, setStorefrontNames] =
@@ -205,18 +208,22 @@ export function useStorefrontBootstrap() {
         }
         setStorefrontContextResolved(true);
         setStorefrontCode(nextStorefrontCode);
-        setFavoriteProductIds(
-            readStoredStrings(
-                scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
-                FAVORITE_PRODUCT_LIMIT,
-            ),
-        );
-        setRecentProductIds(
-            readStoredStrings(
-                scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
-                RECENT_PRODUCT_LIMIT,
-            ),
-        );
+        const preferenceScope = `${nextStorefrontCode}:${customerAuthenticated}`;
+        if (initializedPreferenceScope.current !== preferenceScope) {
+            initializedPreferenceScope.current = preferenceScope;
+            setFavoriteProductIds(
+                readStoredStrings(
+                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                    FAVORITE_PRODUCT_LIMIT,
+                ),
+            );
+            setRecentProductIds(
+                readStoredStrings(
+                    scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                    RECENT_PRODUCT_LIMIT,
+                ),
+            );
+        }
         setStorefrontNames({
             zh: normalizeStorefrontName(config.customFields.storefrontNameZh, DEFAULT_STOREFRONT_NAMES.zh),
             en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),

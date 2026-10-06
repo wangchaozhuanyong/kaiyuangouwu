@@ -362,8 +362,8 @@ describe('SafeImage', () => {
             decode.mockRestore();
         }
     });
-    it.each(['card', 'detail', 'thumbnail'] as const)(
-        'loads %s images with a lazy same-image preview and a full-quality final candidate',
+    it.each(['card', 'detail', 'thumbnail', 'icon', 'hero'] as const)(
+        'loads %s with a stable local placeholder and only the final image request',
         imageKind => {
             const markup = renderToStaticMarkup(
                 <SafeImage
@@ -375,24 +375,24 @@ describe('SafeImage', () => {
             );
 
             expect(markup).toContain('safe-image-frame');
-            expect(markup).toContain('has-placeholder');
+            expect(markup).not.toContain('has-placeholder');
             expect(markup).not.toContain('background-image');
-            expect(markup).toContain('storefront-placeholder');
-            expect(markup).toContain('safe-image-preview');
+            expect(markup).not.toContain('storefront-placeholder');
+            expect(markup).not.toContain('safe-image-preview');
+            expect((markup.match(/<img /gu) ?? []).length).toBe(1);
             expect(markup).toContain('loading="lazy"');
-            expect(markup).toContain('fetchPriority="auto"');
-            expect(markup).toContain('safe-image-preview-loading');
+            expect(markup).not.toContain('safe-image-preview-loading');
             expect(markup).toContain('srcSet=');
-            expect(markup).toContain('q=90');
+            expect(markup).toContain(imageKind === 'icon' ? 'q=82' : 'q=90');
             expect(markup).not.toContain('safe-image is-loaded');
         },
     );
 
-    it('preserves automatic hero and explicitly requested placeholders', () => {
+    it('keeps explicit placeholders compatible without automatically requesting a hero preview', () => {
         const hero = renderToStaticMarkup(
             <SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />,
         );
-        expect(hero).toContain('storefront-placeholder-wide-64');
+        expect(hero).not.toContain('storefront-placeholder-wide-64');
 
         const markup = renderToStaticMarkup(
             <SafeImage
@@ -412,7 +412,14 @@ describe('SafeImage', () => {
         const root = createRoot(host);
         try {
             act(() =>
-                root.render(<SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />),
+                root.render(
+                    <SafeImage
+                        src="/assets/preview/banner.jpg"
+                        placeholderSrc="data:image/webp;base64,AAAA"
+                        alt="Banner"
+                        imageKind="hero"
+                    />,
+                ),
             );
             const image = requiredImage(host);
             act(() => {
@@ -420,7 +427,7 @@ describe('SafeImage', () => {
             });
             expect(image.getAttribute('srcset')).toBeNull();
             expect(host.querySelector<HTMLImageElement>('.safe-image-preview')?.src).toContain(
-                'storefront-placeholder-wide-64',
+                'data:image/webp;base64,AAAA',
             );
             expect(host.querySelector('.safe-image-fallback svg')).toBeNull();
             act(() => {

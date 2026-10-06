@@ -24,6 +24,7 @@ import { In, IsNull } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
+import { RequestContextCacheService } from '../../cache/request-context-cache.service';
 import { ForbiddenError, IllegalOperationError, UserInputError } from '../../common/error/errors';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
@@ -99,6 +100,7 @@ export class CollectionService implements OnModuleInit {
         private translator: TranslatorService,
         private roleService: RoleService,
         private requestContextService: RequestContextService,
+        private requestCache: RequestContextCacheService,
     ) {}
 
     /**
@@ -396,21 +398,43 @@ export class CollectionService implements OnModuleInit {
         productId: ID,
         publicOnly: boolean,
     ): Promise<Array<Translated<Collection>>> {
-        const qb = this.connection
-            .getRepository(ctx, Collection)
-            .createQueryBuilder('collection')
-            .leftJoinAndSelect('collection.translations', 'translation')
-            .leftJoin('collection.productVariants', 'variant')
-            .where('variant.product = :productId', { productId })
-            .groupBy('collection.id, translation.id')
-            .orderBy('collection.id', 'ASC');
-
-        if (publicOnly) {
-            qb.andWhere('collection.isPrivate = :isPrivate', { isPrivate: false });
-        }
-        const result = await qb.getMany();
-
-        return result.map(collection => this.translator.translate(collection, ctx));
+        return this.requestCache.load(
+            ctx,
+            `product-collections:${ctx.channelId}:${ctx.languageCode}:${publicOnly}`,
+            productId,
+            async ids => {
+                const qb = this.connection
+                    .getRepository(ctx, Collection)
+                    .createQueryBuilder('collection')
+                    .leftJoinAndSelect('collection.translations', 'translation')
+                    .innerJoin('collection.productVariants', 'variant')
+                    .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
+                        channelId: ctx.channelId,
+                    })
+                    .innerJoin('variant.channels', 'variantChannel', 'variantChannel.id = :channelId')
+                    .addSelect('variant.productId', 'productId')
+                    .where('variant.productId IN (:...ids)', { ids })
+                    .orderBy('collection.id', 'ASC');
+                if (publicOnly) qb.andWhere('collection.isPrivate = :isPrivate', { isPrivate: false });
+                const { entities, raw } = await qb.getRawAndEntities();
+                const collections = new Map(
+                    entities.map(collection => [
+                        String(collection.id),
+                        this.translator.translate(collection, ctx),
+                    ]),
+                );
+                const grouped = new Map<string, Map<string, Translated<Collection>>>();
+                for (const row of raw) {
+                    const key = String(row.productId);
+                    const collection = collections.get(String(row.collection_id));
+                    if (!collection) continue;
+                    const group = grouped.get(key) ?? new Map();
+                    group.set(String(collection.id), collection);
+                    grouped.set(key, group);
+                }
+                return ids.map(id => [...(grouped.get(id)?.values() ?? [])]);
+            },
+        );
     }
 
     /**

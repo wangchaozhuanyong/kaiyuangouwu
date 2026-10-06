@@ -1,5 +1,6 @@
 import type { ShopApiContext } from './api/client-context';
 import type { ImageStudioApi } from './api/image-studio';
+import type { IcloudMailItem, IcloudQueryResult, MailQueryApi } from './api/mail-query';
 import type { RealtimeApi } from './api/realtime';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
@@ -63,7 +64,6 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
-import { MailQueryApi, type IcloudMailItem, type IcloudQueryResult } from './api/mail-query';
 import { ReferralsApi } from './api/referrals';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
@@ -85,7 +85,7 @@ export class ShopApi {
     private readonly accountApi: AccountApi;
     private readonly referralsApi: ReferralsApi;
     private readonly createImageStudioApi: () => Promise<ImageStudioApi>;
-    private readonly mailQueryApi: MailQueryApi;
+    private readonly createMailQueryApi: () => Promise<MailQueryApi>;
     readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
     private readonly createRealtimeApi: () => Promise<RealtimeApi>;
@@ -120,8 +120,16 @@ export class ShopApi {
             const { ImageStudioApi } = await import('./api/image-studio');
             return new ImageStudioApi(ctx);
         };
-        this.mailQueryApi = new MailQueryApi(ctx);
-        this.watchMailEvents = this.mailQueryApi.watchMailEvents.bind(this.mailQueryApi);
+        this.createMailQueryApi = async () => {
+            const { MailQueryApi } = await import('./api/mail-query');
+            return new MailQueryApi(ctx);
+        };
+        this.watchMailEvents = async (code, callbacks, signal) => {
+            if (signal.aborted) return;
+            const mail = await this.createMailQueryApi();
+            if (signal.aborted) return;
+            return mail.watchMailEvents(code, callbacks, signal);
+        };
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
         this.createRealtimeApi = async () => {
             const { RealtimeApi } = await import('./api/realtime');
@@ -148,6 +156,8 @@ export class ShopApi {
     async storefrontAccountContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         return this.contentReviewsApi.storefrontAccountContent(signal);
     }
+
+    activeFlashSales = (signal?: AbortSignal) => this.contentReviewsApi.activeFlashSales(signal);
 
     async activeCouponCampaigns(signal?: AbortSignal): Promise<StorefrontCouponCampaign[]> {
         return this.contentReviewsApi.activeCouponCampaigns(signal);
@@ -684,7 +694,9 @@ export class ShopApi {
     }
 
     async queryMails(code: string, signal?: AbortSignal): Promise<IcloudQueryResult> {
-        return this.mailQueryApi.queryMails(code, signal);
+        const mail = await this.createMailQueryApi();
+        signal?.throwIfAborted();
+        return mail.queryMails(code, signal);
     }
 
     private assertNoError(result: ErrorResult): void {

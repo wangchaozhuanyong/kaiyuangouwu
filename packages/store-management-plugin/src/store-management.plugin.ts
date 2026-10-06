@@ -17,8 +17,9 @@ import {
     VendurePlugin,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
-import { StorefrontContentChangedEvent, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
+import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
 
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
@@ -139,6 +140,10 @@ import {
 import { StorefrontPresenceService } from './notifications/storefront-presence.service';
 import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { StorefrontCacheInvalidationService } from './performance/storefront-cache-invalidation.service';
+import { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';
+import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
+import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { PermissionPolicyRegistry } from './permission-policy';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
@@ -211,6 +216,8 @@ import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.
 import { StorefrontLcpPreloadController } from './storefront-lcp-preload.controller';
 import { StorefrontLcpPreloadService } from './storefront-lcp-preload.service';
 import { StorefrontPaymentCurrencyInterceptor } from './storefront-payment-currency.interceptor';
+import { StorefrontPublicPageController } from './storefront-public-page.controller';
+import { StorefrontPublicPageService } from './storefront-public-page.service';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
     SystemAnnouncementAdminResolver,
@@ -249,6 +256,7 @@ import {
         ContentTranslationPlugin,
         StorefrontCartPlugin,
         StorefrontContentPlugin,
+        StoreDomainPlugin,
     ],
     entities: [
         AdministratorAccessProfile,
@@ -305,6 +313,7 @@ import {
         StorefrontPromotionController,
         StorefrontRealtimeController,
         StorefrontLcpPreloadController,
+        StorefrontPublicPageController,
     ],
     providers: [
         CatalogOwnershipSubscriber,
@@ -351,6 +360,11 @@ import {
         SystemAnnouncementService,
         StorefrontRealtimeService,
         StorefrontLcpPreloadService,
+        StorefrontCacheInvalidationService,
+        StorefrontMediaDeliveryService,
+        StorefrontPublicPageService,
+        StorefrontPublicCacheService,
+        StorefrontMediaManifestService,
         CustomerAvatarService,
         DataConsentService,
         { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
@@ -391,6 +405,10 @@ import {
         },
     ],
     exports: [
+        StorefrontMediaDeliveryService,
+        StorefrontPublicCacheService,
+        StorefrontMediaManifestService,
+        StorefrontPublicPageService,
         StoreCurrencySettingsService,
         GovernanceService,
         CatalogGovernanceService,
@@ -567,7 +585,6 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         private readonly paymentMethodService: PaymentMethodService,
         private readonly channelService: ChannelService,
         private readonly eventBus: EventBus,
-        private readonly storefrontLcpPreload: StorefrontLcpPreloadService,
         private readonly usdtWalletConfiguration: UsdtWalletConfigurationService,
         private readonly storeUsdtWallets: StoreUsdtWalletService,
     ) {}
@@ -611,9 +628,6 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
     }
 
     async onApplicationBootstrap(): Promise<void> {
-        this.eventBus.ofType(StorefrontContentChangedEvent).subscribe(event => {
-            void this.storefrontLcpPreload.invalidate(event.ctx.channelId);
-        });
         await this.ensureReferralPaymentMethod();
         await this.ensureUsdtPaymentMethod();
         await this.ensurePrimaryStoreAdminPermissions();

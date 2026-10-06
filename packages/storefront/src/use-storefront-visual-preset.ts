@@ -49,7 +49,7 @@ export function useStorefrontVisualPreset(
         ],
         queryFn: ({ signal }) => api.storefrontVisualPreset(signal),
         enabled: enabled && !previewPreset,
-        staleTime: 0,
+        staleTime: 30_000,
         refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         // Do not persist a style selection under an unverified store context.
     });

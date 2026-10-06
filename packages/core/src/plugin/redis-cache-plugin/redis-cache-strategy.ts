@@ -1,4 +1,5 @@
 import { JsonCompatible } from '@vendure/common/lib/shared-types';
+import { randomUUID } from 'node:crypto';
 
 import { Logger } from '../../config/logger/vendure-logger';
 import { CacheStrategy, SetCacheKeyOptions } from '../../config/system/cache-strategy';
@@ -32,6 +33,45 @@ export class RedisCacheStrategy implements CacheStrategy {
     }
     async destroy() {
         await this.client.quit();
+    }
+
+    /** Atomic generations prevent a slow public snapshot build from undoing invalidation. */
+    async getOrCreateVersion(key: string): Promise<string> {
+        const namespaced = this.namespace(key);
+        const existing = await this.client.get(namespaced);
+        if (existing) return existing;
+        await this.client.set(namespaced, randomUUID(), 'EX', 86_400, 'NX');
+        const version = await this.client.get(namespaced);
+        if (!version) throw new Error('Cache version unavailable');
+        return version;
+    }
+
+    async rotateVersion(key: string): Promise<string> {
+        const version = randomUUID();
+        await this.client.set(this.namespace(key), version, 'EX', 86_400);
+        return version;
+    }
+
+    async addToBoundedSet(key: string, value: string, limit: number, ttlSeconds: number): Promise<boolean> {
+        const result = await this.client.eval(
+            [
+                "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', tonumber(ARGV[4]) - tonumber(ARGV[3]) * 1000);",
+                "if not redis.call('ZSCORE', KEYS[1], ARGV[1]) and redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 0 end",
+                "redis.call('ZADD', KEYS[1], ARGV[4], ARGV[1]);",
+                "redis.call('EXPIRE', KEYS[1], ARGV[3]); return 1",
+            ].join(' '),
+            1,
+            this.namespace(key),
+            value,
+            limit,
+            ttlSeconds,
+            Date.now(),
+        );
+        return result === 1;
+    }
+
+    async boundedSetMembers(key: string): Promise<string[]> {
+        return this.client.zrange(this.namespace(key), 0, -1);
     }
 
     async get<T extends JsonCompatible<T>>(key: string): Promise<T | undefined> {
@@ -84,9 +124,8 @@ export class RedisCacheStrategy implements CacheStrategy {
             }
             const results = await multi.exec();
             const resultWithError = results?.find(([err, _]) => err);
-            if (resultWithError) {
-                throw resultWithError[0];
-            }
+            const error = resultWithError?.[0];
+            if (error) throw error;
         } catch (e: any) {
             Logger.error(`Could not set cache item ${key}: ${e.message as string}`, loggerCtx);
         }
@@ -118,7 +157,7 @@ export class RedisCacheStrategy implements CacheStrategy {
 
             await pipeline.exec();
         } catch (err) {
-            return Promise.reject(err);
+            throw err instanceof Error ? err : new Error(String(err));
         }
     }
 

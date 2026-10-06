@@ -219,6 +219,8 @@ export const storefrontQueryKeys = {
     commerceMode: (marketCode: string) => ['storefront', marketCode, 'commerce-mode'] as const,
     content: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'content'] as const,
+    flashSales: (marketCode: string, languageCode: string) =>
+        [...storefrontQueryKeys.scope(marketCode, languageCode), 'flash-sales'] as const,
     collections: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'collections'] as const,
     products: (marketCode: string, languageCode: string, take: number) =>

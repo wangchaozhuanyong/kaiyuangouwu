@@ -1,4 +1,5 @@
 import { getStandaloneAdminPage } from './navigation/admin-navigation';
+import { scheduleRoutePreloads } from './runtime/route-preload-queue';
 
 export const routeModuleLoaders = {
     profile: () => import('./pages/Auth/ProfileModule'),
@@ -99,17 +100,26 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     return null;
 }
 
-export function preloadRoute(target: string) {
+const preloads = new Map<RouteModuleKey, Promise<unknown>>();
+export function preloadRoute(target: string): Promise<unknown> {
     const moduleKey = getRouteModuleKey(target);
-    if (!moduleKey) return;
-    void routeModuleLoaders[moduleKey]().catch(() => undefined);
+    if (!moduleKey) return Promise.resolve();
+    let pending = preloads.get(moduleKey);
+    if (!pending) {
+        pending = routeModuleLoaders[moduleKey]().catch(() => {
+            preloads.delete(moduleKey);
+        });
+        preloads.set(moduleKey, pending);
+    }
+    return pending;
 }
 
-export function preloadCommonRoutes() {
-    preloadRoute('/dashboard');
-    preloadRoute('/catalog/list');
-    preloadRoute('/sales/orders');
-    preloadRoute('/customers/list');
+export function preloadCommonRoutes(canStart: () => boolean = () => true) {
+    return scheduleRoutePreloads(
+        ['/dashboard', '/catalog/list', '/sales/orders', '/customers/list'],
+        preloadRoute,
+        canStart,
+    );
 }
 
 export const SETTINGS_ROUTE_PRELOAD_TARGETS = [
@@ -120,7 +130,7 @@ export const SETTINGS_ROUTE_PRELOAD_TARGETS = [
     '/settings/usdt-payments',
 ] as const;
 
-export function preloadSettingsRoutes() {
-    SETTINGS_ROUTE_PRELOAD_TARGETS.forEach(preloadRoute);
+export function preloadSettingsRoutes(canStart: () => boolean = () => true) {
+    return scheduleRoutePreloads(SETTINGS_ROUTE_PRELOAD_TARGETS, preloadRoute, canStart);
 }
 export const loadInstalledExtensions = () => import('./extensions/installed-extensions');

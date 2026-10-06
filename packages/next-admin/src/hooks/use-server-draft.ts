@@ -1,4 +1,4 @@
-import { useCallback, useState, type SetStateAction } from 'react';
+import { useCallback, useMemo, useState, type SetStateAction } from 'react';
 import { useUnsavedChangesWarning } from './use-unsaved-changes-warning';
 
 interface DraftState<T> {
@@ -7,7 +7,8 @@ interface DraftState<T> {
     baseline: T | null;
     draft: T | null;
 }
-const sameDraft = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+const sameDraft = (left: unknown, right: unknown) =>
+    left === right || JSON.stringify(left) === JSON.stringify(right);
 
 /** A new server version rebases clean forms only. Dirty drafts stay attached to their loaded version. */
 export function useServerDraft<T>(identity: string, version: string, source: T | null) {
@@ -18,12 +19,15 @@ export function useServerDraft<T>(identity: string, version: string, source: T |
         draft: source,
     });
     let state = stored;
-    const storedDirty = !sameDraft(stored.draft, stored.baseline);
+    const storedDirty = useMemo(
+        () => !sameDraft(stored.draft, stored.baseline),
+        [stored.draft, stored.baseline],
+    );
     if (identity !== stored.identity || (!storedDirty && version !== stored.version)) {
         state = { identity, version, baseline: source, draft: source };
         setStored(state);
     }
-    const dirty = !sameDraft(state.draft, state.baseline);
+    const dirty = state === stored ? storedDirty : false;
     const sourceChanged = Boolean(version && state.version && version !== state.version && dirty);
     useUnsavedChangesWarning(dirty, '当前页面还有未保存的修改，确定放弃吗？');
     const setDraft = useCallback(

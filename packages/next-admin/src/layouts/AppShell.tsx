@@ -11,7 +11,7 @@ import {
 import { getAdminDisplayLanguage } from '../utils/admin-language';
 import { getChannelDisplayName } from '../utils/channel-display';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
-import { useQuery } from '@apollo/client/react';
+import { useApolloClient, useQuery } from '@apollo/client/react';
 import {
     Blocks,
     Boxes,
@@ -80,6 +80,7 @@ import {
 import { useMobileLayout } from '../hooks/use-mobile-layout';
 import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
+import { getQueryRuntime } from '../runtime/admin-query-runtime';
 import { pendingAdminWrites } from '../runtime/admin-resource-events';
 import { useTheme } from '../theme/theme-context';
 import {
@@ -213,6 +214,7 @@ function RouteLoadingFallback() {
 }
 
 export function AppShell() {
+    const queryClient = useApolloClient();
     const isMobileLayout = useMobileLayout();
     const location = useLocation();
     const routerNavigate = useNavigate();
@@ -336,28 +338,30 @@ export function AppShell() {
     const profileLoading = isAppShellPermissionLoading(channelData, appShellLoading);
     const refetchProfile = refetchAppShell;
 
-    useEffect(() => {
-        const connection = (
-            navigator as Navigator & {
-                connection?: { effectiveType?: string; saveData?: boolean };
-            }
-        ).connection;
-        if (!allowsBackgroundRoutePreload(connection)) return;
-
-        const idleWindow = window as Window & {
-            cancelIdleCallback?: (handle: number) => void;
-            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
-        };
-        const warmCommonRoutes = () => {
-            if (document.visibilityState === 'visible') preloadCommonRoutes();
-        };
-        if (idleWindow.requestIdleCallback) {
-            const idle = idleWindow.requestIdleCallback(warmCommonRoutes, { timeout: 5_000 });
-            return () => idleWindow.cancelIdleCallback?.(idle);
-        }
-        const timer = window.setTimeout(warmCommonRoutes, 2_500);
-        return () => window.clearTimeout(timer);
-    }, []);
+    const preloadState = useRef({ path: location.pathname, loading: appShellLoading });
+    useLayoutEffect(() => {
+        preloadState.current = { path: location.pathname, loading: appShellLoading };
+    }, [location.pathname, appShellLoading]);
+    useEffect(
+        () =>
+            preloadCommonRoutes(() => {
+                const connection = (
+                    navigator as Navigator & {
+                        connection?: { effectiveType?: string; saveData?: boolean };
+                    }
+                ).connection;
+                const page = getQueryRuntime(queryClient).state(preloadState.current.path);
+                return (
+                    document.visibilityState === 'visible' &&
+                    navigator.onLine &&
+                    allowsBackgroundRoutePreload(connection) &&
+                    !preloadState.current.loading &&
+                    !page.loading &&
+                    !page.refreshing
+                );
+            }),
+        [queryClient],
+    );
 
     useEffect(() => {
         if (!isPlatformContext || !isPlatformBusinessPath(location.pathname)) return;

@@ -3,29 +3,15 @@ import {
     type ImageTransformStrategy,
     PresetOnlyStrategy,
 } from '@vendure/asset-server-plugin';
-import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { ConfigService, extractSessionToken, Injector, SessionService } from '@vendure/core';
 import {
-    Collection,
-    ConfigService,
-    extractSessionToken,
-    Injector,
-    Product,
-    ProductVariant,
-    type RequestContext,
-    SessionService,
-    TransactionalConnection,
-} from '@vendure/core';
-import {
-    promotionAssetPaths,
+    StorefrontMediaDeliveryService,
+    StorefrontMediaManifestService,
     StorefrontPromotionAccessService,
-    StorefrontPromotionService,
 } from '@vendure/store-management-plugin';
-import { StorefrontContentService } from '@vendure/storefront-content-plugin';
-import { IsNull } from 'typeorm';
 
 export const PUBLIC_CATALOG_ASSET_CACHE_CONTROL = 'public, max-age=300, s-maxage=300, must-revalidate';
-export const PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
-const PUBLIC_CATALOG_ASSET_AUTHORIZATION_LIMIT = 4096;
+export const PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS = 30_000;
 
 class StorefrontIconPresetStrategy extends PresetOnlyStrategy {
     private readonly pngStrategy = new PresetOnlyStrategy({
@@ -61,7 +47,6 @@ export function createCatalogImageTransformStrategies(
 // before originals, previews and transformed cache files can be returned.
 export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
     private injector: Injector;
-    private readonly publicAuthorizations = new Map<string, number>();
 
     init(injector: Injector) {
         this.injector = injector;
@@ -93,99 +78,29 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
         } catch {
             throw new Error('Asset access denied');
         }
-        const origin = `https://${request.host}`;
-        const authorizationKey = `${request.ctx.channelId}\u0000${identifier}`;
-        const allowPublicImage = () => {
+        const allowPublicImage = async () => {
             // Authorization is channel-scoped and shared caches key by origin/host. A short public
             // lifetime therefore reuses the same published variant without crossing stores.
-            req.res?.setHeader('Cache-Control', PUBLIC_CATALOG_ASSET_CACHE_CONTROL);
+            // If exact-purge tracking is configured but unavailable, serve the image privately.
+            // This avoids adding an untracked shared-cache entry during an outage.
+            const tracked = await this.injector
+                .get(StorefrontMediaDeliveryService)
+                .record(request.ctx.channelId, request.host, req.originalUrl ?? `/assets/${identifier}`);
+            if (tracked) req.res?.setHeader('Cache-Control', PUBLIC_CATALOG_ASSET_CACHE_CONTROL);
             return input;
         };
-        if (this.hasPublicAuthorization(authorizationKey)) return allowPublicImage();
         try {
-            const blocks = await this.injector
-                .get(StorefrontContentService)
-                .findPublished(request.ctx, false, LanguageCode.zh_Hans);
-            // Only the exact image URLs emitted by published store content are public.
-            // Images are shared between translations. Check source-language publication so
-            // an English browser header cannot hide a visual on a published Chinese page.
-            for (const block of blocks) {
-                for (const image of [block, ...block.items]) {
-                    if (!image.imageUrl) continue;
-                    try {
-                        const url = new URL(image.imageUrl, origin);
-                        if (
-                            url.origin === origin &&
-                            url.pathname.startsWith('/assets/') &&
-                            decodeURIComponent(url.pathname).slice('/assets/'.length) === identifier
-                        )
-                            return this.rememberPublicAuthorization(authorizationKey, allowPublicImage);
-                    } catch {
-                        /* Invalid URLs do not grant access. */
-                    }
-                }
-            }
-            const html = await this.injector.get(StorefrontPromotionService).renderPublished(request.ctx, '');
-            const paths = promotionAssetPaths(html, origin);
-            if (paths.has(identifier) || (await this.isPublishedCatalogImage(request.ctx, identifier))) {
-                return this.rememberPublicAuthorization(authorizationKey, allowPublicImage);
-            }
+            if (
+                await this.injector
+                    .get(StorefrontMediaManifestService)
+                    .isPublic(request.ctx, request.host, identifier)
+            )
+                return allowPublicImage();
         } catch (error) {
             // Preserve existing authenticated media access if a public lookup is unavailable.
             if (!(await getSession())?.user?.id) throw error;
         }
         if ((await getSession())?.user?.id) return input;
         throw new Error('Asset access denied');
-    }
-
-    private hasPublicAuthorization(key: string): boolean {
-        const expiresAt = this.publicAuthorizations.get(key);
-        if (!expiresAt) return false;
-        if (expiresAt <= Date.now()) {
-            this.publicAuthorizations.delete(key);
-            return false;
-        }
-        return true;
-    }
-
-    private rememberPublicAuthorization(key: string, allow: () => GetImageTransformParametersArgs['input']) {
-        if (this.publicAuthorizations.size >= PUBLIC_CATALOG_ASSET_AUTHORIZATION_LIMIT) {
-            const oldest = this.publicAuthorizations.keys().next().value;
-            if (oldest) this.publicAuthorizations.delete(oldest);
-        }
-        this.publicAuthorizations.delete(key);
-        this.publicAuthorizations.set(key, Date.now() + PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS);
-        return allow();
-    }
-
-    private async isPublishedCatalogImage(ctx: RequestContext, identifier: string): Promise<boolean> {
-        if (!/^(?:preview|source)\//u.test(identifier)) return false;
-        const connection = this.injector.get(TransactionalConnection);
-        const imagePaths = [{ preview: identifier }, { source: identifier }];
-        const productScope = { enabled: true, deletedAt: IsNull(), channels: { id: ctx.channelId } };
-        const [product, variant, collection] = await Promise.all([
-            connection.getRepository(ctx, Product).findOne({
-                select: { id: true },
-                where: imagePaths.flatMap(asset => [
-                    { ...productScope, featuredAsset: asset },
-                    { ...productScope, assets: { asset } },
-                ]),
-            }),
-            connection.getRepository(ctx, ProductVariant).findOne({
-                select: { id: true },
-                where: imagePaths.flatMap(asset => [
-                    { ...productScope, product: productScope, featuredAsset: asset },
-                    { ...productScope, product: productScope, assets: { asset } },
-                ]),
-            }),
-            connection.getRepository(ctx, Collection).findOne({
-                select: { id: true },
-                where: imagePaths.flatMap(asset => [
-                    { isPrivate: false, channels: { id: ctx.channelId }, featuredAsset: asset },
-                    { isPrivate: false, channels: { id: ctx.channelId }, assets: { asset } },
-                ]),
-            }),
-        ]);
-        return Boolean(product || variant || collection);
     }
 }

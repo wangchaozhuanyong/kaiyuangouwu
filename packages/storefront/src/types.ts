@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import type { PosterDesign } from './referral-poster-layout';
 import type { AccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
 export type { AccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
@@ -73,6 +74,10 @@ export interface Product {
     name: string;
     slug: string;
     description: string;
+    /** Present on compact public snapshots; older GraphQL responses retain the full description. */
+    descriptionSummary?: string;
+    descriptionSubtitle?: string | null;
+    warrantyDuration?: string | null;
     featuredAsset: Asset | null;
     assets: Asset[];
     collections: Array<
@@ -1119,6 +1124,7 @@ export interface StorefrontContentResponse {
     blocks: StorefrontContentBlock[];
     settings: StorefrontContentSettings;
     flashSales: StorefrontFlashSale[];
+    flashSalesDeferred?: boolean;
     systemAnnouncements: StorefrontSystemAnnouncement[];
 }
 

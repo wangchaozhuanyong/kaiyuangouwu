@@ -1,6 +1,6 @@
 import { useApolloClient } from '@apollo/client/react';
 import { RefreshCw, WifiOff } from 'lucide-react';
-import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
 import {
     RESOURCE_INVALIDATION_EVENT,
@@ -9,6 +9,7 @@ import {
 } from '../runtime/admin-resource-events';
 import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { AdminButton, PAGE_REFRESH_EVENT, type PageRefreshRequest } from './AdminControls';
+import { AdminOverlayHost } from './AdminOverlayHost';
 import { PageErrorBoundary } from './PageErrorBoundary';
 
 export function PageSkeleton() {
@@ -35,7 +36,12 @@ export function AdminPageWorkspace({
 }) {
     const client = useApolloClient();
     const runtime = getQueryRuntime(client);
-    useSyncExternalStore(runtime.subscribe, runtime.snapshot, runtime.snapshot);
+    const subscribe = useCallback(
+        (listener: () => void) => (active ? runtime.subscribePage(page, listener) : () => {}),
+        [runtime, page, active],
+    );
+    const snapshot = useCallback(() => runtime.pageSnapshot(page), [runtime, page]);
+    useSyncExternalStore(subscribe, snapshot, snapshot);
     const online = useSyncExternalStore(
         listener => {
             window.addEventListener('online', listener);
@@ -96,47 +102,53 @@ export function AdminPageWorkspace({
     const showStatus = !online || state.refreshing || state.failed > 0;
     return (
         <PageRuntimeContext.Provider value={{ page, active }}>
-            <div
-                className="admin-workspace"
-                data-admin-page={page}
-                data-refreshing={state.refreshing || undefined}
-            >
-                {showStatus && (
-                    <div
-                        className="admin-page-status"
-                        data-failed={state.failed > 0 || undefined}
-                        role="status"
-                        aria-live="polite"
-                    >
-                        {!online ? (
-                            <WifiOff className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                            <RefreshCw
-                                className={`h-3.5 w-3.5 shrink-0 ${state.refreshing ? 'animate-spin' : ''}`}
-                            />
-                        )}
-                        <span>
-                            {!online
-                                ? '网络已断开，已加载的内容仍可查看'
-                                : state.refreshing
-                                  ? state.hasData
-                                      ? '正在更新本页数据…'
-                                      : '正在读取本页数据…'
-                                  : state.hasData
-                                    ? `${state.failed} 项数据更新失败，已保留可用内容`
-                                    : '部分数据暂时无法读取'}
-                        </span>
-                        {online && state.failed > 0 && !state.refreshing && (
-                            <AdminButton type="button" refreshPage className="ml-auto shrink-0 text-blue-600">
-                                重试本页
-                            </AdminButton>
-                        )}
+            <AdminOverlayHost owner={page} active={active}>
+                <div
+                    className="admin-workspace"
+                    data-admin-page={page}
+                    data-refreshing={state.refreshing || undefined}
+                >
+                    {showStatus && (
+                        <div
+                            className="admin-page-status"
+                            data-failed={state.failed > 0 || undefined}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            {!online ? (
+                                <WifiOff className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                                <RefreshCw
+                                    className={`h-3.5 w-3.5 shrink-0 ${state.refreshing ? 'animate-spin' : ''}`}
+                                />
+                            )}
+                            <span>
+                                {!online
+                                    ? '网络已断开，已加载的内容仍可查看'
+                                    : state.refreshing
+                                      ? state.hasData
+                                          ? '正在更新本页数据…'
+                                          : '正在读取本页数据…'
+                                      : state.hasData
+                                        ? `${state.failed} 项数据更新失败，已保留可用内容`
+                                        : '部分数据暂时无法读取'}
+                            </span>
+                            {online && state.failed > 0 && !state.refreshing && (
+                                <AdminButton
+                                    type="button"
+                                    refreshPage
+                                    className="ml-auto shrink-0 text-blue-600"
+                                >
+                                    重试本页
+                                </AdminButton>
+                            )}
+                        </div>
+                    )}
+                    <div className="admin-workspace-content">
+                        <PageErrorBoundary key={page}>{children}</PageErrorBoundary>
                     </div>
-                )}
-                <div className="admin-workspace-content">
-                    <PageErrorBoundary key={page}>{children}</PageErrorBoundary>
                 </div>
-            </div>
+            </AdminOverlayHost>
         </PageRuntimeContext.Provider>
     );
 }

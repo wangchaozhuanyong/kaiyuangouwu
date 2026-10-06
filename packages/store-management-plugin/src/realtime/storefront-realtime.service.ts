@@ -2,13 +2,6 @@ import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nest
 import type { ID } from '@vendure/common/lib/shared-types';
 import { TranslationProviderState } from '@vendure/content-translation-plugin';
 import {
-    Asset,
-    AssetChannelEvent,
-    AssetEvent,
-    ChannelEvent,
-    Collection,
-    CollectionEvent,
-    CollectionModificationEvent,
     Customer,
     CustomerEvent,
     EventBus,
@@ -16,20 +9,14 @@ import {
     Order,
     OrderEvent,
     OrderStateTransitionEvent,
-    Product,
-    ProductChannelEvent,
-    ProductEvent,
-    ProductVariantChannelEvent,
-    ProductVariantEvent,
-    ProductVariantPriceEvent,
-    Promotion,
-    PromotionEvent,
     RequestContext,
     TransactionalConnection,
     VendureEvent,
 } from '@vendure/core';
 import { randomUUID } from 'node:crypto';
 import { Subscription } from 'rxjs';
+
+import { StorefrontTranslationChangedEvent } from '../performance/storefront-translation-changed.event';
 
 import { StorefrontDataChangedEvent, StorefrontRealtimeTopic } from './storefront-data-changed.event';
 
@@ -78,84 +65,8 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
             void this.pollTranslationChanges();
         }, 3000);
         this.translationPoll.unref();
-        this.subscribe(ProductEvent, event =>
-            this.publishEntityChange('Product', Product, event.entity.id, event.ctx.channelId, ['catalog']),
-        );
-        this.subscribe(ProductVariantEvent, event => {
-            const productIds = uniqueStrings(event.entity.map(variant => variant.productId));
-            const channelIds = uniqueStrings(
-                event.entity.flatMap(variant => variant.channels?.map(channel => channel.id) ?? []),
-            );
-            this.publish({
-                topics: ['catalog'],
-                channelIds: channelIds.length ? channelIds : [event.ctx.channelId],
-                entityType: 'Product',
-                entityIds: productIds,
-            });
-        });
-        this.subscribe(ProductVariantPriceEvent, event => {
-            const channelIds = uniqueStrings(event.entity.map(price => price.channelId));
-            this.publish({
-                topics: ['catalog', 'cart'],
-                channelIds: channelIds.length ? channelIds : [event.ctx.channelId],
-                entityType: 'ProductVariantPrice',
-            });
-        });
-        this.subscribe(ProductChannelEvent, event =>
-            this.publish({
-                topics: ['catalog'],
-                channelIds: [event.channelId],
-                entityType: 'Product',
-                entityIds: [event.product.id],
-            }),
-        );
-        this.subscribe(ProductVariantChannelEvent, event =>
-            this.publish({
-                topics: ['catalog'],
-                channelIds: [event.channelId],
-                entityType: 'Product',
-                entityIds: event.productVariant.productId ? [event.productVariant.productId] : undefined,
-            }),
-        );
-        this.subscribe(CollectionEvent, event =>
-            this.publishEntityChange('Collection', Collection, event.entity.id, event.ctx.channelId, [
-                'catalog',
-            ]),
-        );
-        this.subscribe(CollectionModificationEvent, event =>
-            this.publishEntityChange('Collection', Collection, event.collection.id, event.ctx.channelId, [
-                'catalog',
-            ]),
-        );
-        this.subscribe(AssetEvent, event =>
-            this.publishEntityChange('Asset', Asset, event.entity.id, event.ctx.channelId, [
-                'catalog',
-                'content',
-                'config',
-            ]),
-        );
-        this.subscribe(AssetChannelEvent, event =>
-            this.publish({
-                topics: ['catalog', 'content', 'config'],
-                channelIds: [event.channelId],
-                entityType: 'Asset',
-                entityIds: [event.asset.id],
-            }),
-        );
-        this.subscribe(ChannelEvent, event =>
-            this.publish({
-                topics: ['config', 'catalog'],
-                channelIds: [event.entity.id],
-                entityType: 'Channel',
-                entityIds: [event.entity.id],
-            }),
-        );
-        this.subscribe(PromotionEvent, event =>
-            this.publishEntityChange('Promotion', Promotion, event.entity.id, event.ctx.channelId, [
-                'content',
-                'cart',
-            ]),
-        );
+        // Public catalog/content events are handled once by StorefrontCacheInvalidationService,
+        // which rotates the public generation after commit before it broadcasts refresh.
         this.subscribe(OrderEvent, event => this.publishOrderChange(event.entity.id, event.ctx.channelId));
         this.subscribe(OrderStateTransitionEvent, event =>
             this.publishOrderChange(event.order.id, event.ctx.channelId),
@@ -171,30 +82,18 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
                 entityIds: [event.entity.id],
             });
         });
-        this.subscribeFiltered<StorefrontContentChangedLike>(
-            event => event.realtimeEventKind === 'storefront-content-changed',
-            event =>
-                this.publish({
-                    topics: ['content'],
-                    channelIds: [event.ctx.channelId],
-                    entityType: 'StorefrontContent',
-                    entityIds: event.entityIds,
-                }),
-        );
         this.subscribeFiltered<StorefrontReviewChangedLike>(
             event => event.realtimeEventKind === 'storefront-review-changed',
             event => this.publishReviewChange(event),
         );
-        this.subscribeFiltered<StorefrontReviewSettingsChangedLike>(
-            event => event.realtimeEventKind === 'storefront-review-settings-changed',
-            event =>
-                this.publish({
-                    topics: ['config'],
-                    channelIds: [event.ctx.channelId],
-                    entityType: 'StorefrontReviewSettings',
-                }),
-        );
-        this.subscribe(StorefrontDataChangedEvent, event =>
+        this.subscribe(StorefrontDataChangedEvent, event => {
+            const publicTopics = ['catalog', 'content', 'config', 'reviews', 'referral', 'coupons'];
+            if (
+                !event.options.userIds?.length &&
+                !event.options.orderIds?.length &&
+                event.topics.some(topic => publicTopics.includes(topic))
+            )
+                return;
             this.publish({
                 topics: event.topics,
                 channelIds: event.options.channelIds ?? [event.ctx.channelId],
@@ -203,8 +102,8 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
                 orderIds: event.options.orderIds,
                 entityType: event.options.entityType,
                 entityIds: event.options.entityIds,
-            }),
-        );
+            });
+        });
     }
 
     onApplicationShutdown(): void {
@@ -223,10 +122,7 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
             });
             const version = JSON.stringify(states);
             if (version !== this.translationVersion) {
-                this.publish({
-                    allChannels: true,
-                    topics: ['catalog', 'content', 'config', 'reviews', 'referral'],
-                });
+                await this.eventBus.publish(new StorefrontTranslationChangedEvent());
                 this.translationVersion = version;
             }
         } catch {
@@ -303,36 +199,6 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
         );
     }
 
-    private async publishEntityChange(
-        entityType: string,
-        entityClass: typeof Product | typeof Collection | typeof Asset | typeof Promotion,
-        entityId: ID,
-        fallbackChannelId: ID,
-        topics: StorefrontRealtimeTopic[],
-    ): Promise<void> {
-        const channelIds = await this.findEntityChannelIds(entityClass, entityId);
-        this.publish({
-            topics,
-            channelIds: channelIds.length ? channelIds : [fallbackChannelId],
-            entityType,
-            entityIds: [entityId],
-        });
-    }
-
-    private async findEntityChannelIds(
-        entityClass: typeof Product | typeof Collection | typeof Asset | typeof Promotion,
-        entityId: ID,
-    ): Promise<string[]> {
-        const repository = this.connection.rawConnection.getRepository(entityClass);
-        const entity = await repository.findOne({
-            where: { id: entityId },
-            relations: { channels: true },
-        });
-        return uniqueStrings(
-            (entity as { channels?: Array<{ id: ID }> } | null)?.channels?.map(c => c.id) ?? [],
-        );
-    }
-
     private async publishOrderChange(orderId: ID, _fallbackChannelId: ID): Promise<void> {
         const order = await this.connection.rawConnection.getRepository(Order).findOne({
             where: { id: orderId },
@@ -352,14 +218,6 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
     }
 
     private async publishReviewChange(event: StorefrontReviewChangedLike): Promise<void> {
-        if (event.publicListingChanged) {
-            this.publish({
-                topics: ['reviews'],
-                channelIds: [event.ctx.channelId],
-                entityType: 'Product',
-                entityIds: [event.productId],
-            });
-        }
         const customer = await this.connection.rawConnection.getRepository(Customer).findOne({
             where: { id: event.customerId },
         });
@@ -382,12 +240,6 @@ function uniqueTopics(values: readonly StorefrontRealtimeTopic[]): StorefrontRea
     return Array.from(new Set(values));
 }
 
-type StorefrontContentChangedLike = VendureEvent & {
-    realtimeEventKind: 'storefront-content-changed';
-    ctx: RequestContext;
-    entityIds: ID[];
-};
-
 type StorefrontReviewChangedLike = VendureEvent & {
     realtimeEventKind: 'storefront-review-changed';
     ctx: RequestContext;
@@ -395,9 +247,4 @@ type StorefrontReviewChangedLike = VendureEvent & {
     customerId: ID;
     reviewId: ID;
     publicListingChanged: boolean;
-};
-
-type StorefrontReviewSettingsChangedLike = VendureEvent & {
-    realtimeEventKind: 'storefront-review-settings-changed';
-    ctx: RequestContext;
 };

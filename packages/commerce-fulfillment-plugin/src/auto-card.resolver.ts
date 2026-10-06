@@ -157,7 +157,7 @@ export class AutoCardProductVariantResolver {
     @ResolveField()
     @Allow(Permission.Public)
     autoCardAvailableStock(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
-        return this.autoCardService.availableStockForVariant(ctx, variant.id);
+        return this.autoCardService.availableStockForDisplay(ctx, variant);
     }
 }
 
@@ -172,16 +172,16 @@ export class AutoCardShopProductVariantResolver {
     @ResolveField()
     @Allow(Permission.Public)
     async saleableStockLevel(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
-        const digital = await this.digitalProducts.available(ctx, variant);
+        const digital = await this.digitalProducts.availableForDisplay(ctx, variant);
         if (digital !== undefined) return digital;
         const isAutoCard =
             variant.customFields.fulfillmentType === 'digital' &&
             variant.customFields.digitalDeliveryMode === 'auto_card';
         if (isAutoCard) {
-            const autoCardStockLevel = await this.autoCardService.availableStockForVariant(ctx, variant.id);
+            const autoCardStockLevel = await this.autoCardService.availableStockForDisplay(ctx, variant);
             return normalizePublicSaleableStockLevel(autoCardStockLevel ?? 0);
         }
-        const stockLevel = await this.productVariantService.getSaleableStockLevel(ctx, variant);
+        const stockLevel = await this.productVariantService.getSaleableStockLevelForDisplay(ctx, variant);
         return normalizePublicSaleableStockLevel(stockLevel);
     }
 }
@@ -194,7 +194,7 @@ export class DigitalProductVariantMetadataResolver {
     async customFields(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
         const config =
             variant.customFields.fulfillmentType === 'digital'
-                ? await this.digitalProducts.config(ctx, variant.id)
+                ? await this.digitalProducts.configForDisplay(ctx, variant.id)
                 : null;
         return config
             ? {

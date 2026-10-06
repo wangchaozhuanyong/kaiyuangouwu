@@ -157,7 +157,6 @@ describe('StoreManagementPlugin promotion options', () => {
                 removeFromChannels,
             } as any,
             { ofType: vi.fn().mockReturnValue({ subscribe: vi.fn() }) } as any,
-            { invalidate: vi.fn() } as any,
             { get: vi.fn().mockReturnValue({ enabled: false }) } as any,
             {
                 rotateEncryptionKey: vi.fn().mockResolvedValue(0),
@@ -232,7 +231,6 @@ describe('StoreManagementPlugin promotion options', () => {
                 removeFromChannels: vi.fn().mockResolvedValue(undefined),
             } as any,
             { ofType: vi.fn().mockReturnValue({ subscribe: vi.fn() }) } as any,
-            { invalidate: vi.fn() } as any,
             { get: vi.fn().mockReturnValue({ enabled: false }) } as any,
             {
                 rotateEncryptionKey: vi.fn().mockResolvedValue(0),

@@ -12,6 +12,50 @@ const owner = (fetch: () => Promise<unknown>, active = true) => ({
 });
 
 describe('shared admin query runtime', () => {
+    it('only notifies owners of a changed resource, including shared and shell owners', () => {
+        const runtime = new AdminQueryRuntime();
+        const fetch = async () => null;
+        runtime.register('products', 'catalog', owner(fetch), policy);
+        runtime.register('orders', 'orders', { ...owner(fetch), page: '/orders' }, policy);
+        runtime.register('products', 'dashboard', { ...owner(fetch), page: '/dashboard' }, policy);
+        runtime.register('channel', 'shell', { ...owner(fetch), page: '@shell' }, policy);
+        const catalog = vi.fn(),
+            orders = vi.fn(),
+            dashboard = vi.fn(),
+            resource = vi.fn();
+        runtime.subscribePage('/catalog/list', catalog);
+        const unsubscribe = runtime.subscribePage('/orders', orders);
+        runtime.subscribePage('/dashboard', dashboard);
+        runtime.subscribeResource('products', resource);
+        const orderVersion = runtime.pageSnapshot('/orders');
+        runtime.update('products', 'catalog', { loading: true });
+        expect(catalog).toHaveBeenCalledTimes(1);
+        expect(dashboard).toHaveBeenCalledTimes(1);
+        expect(resource).toHaveBeenCalledTimes(1);
+        expect(orders).not.toHaveBeenCalled();
+        expect(runtime.pageSnapshot('/orders')).toBe(orderVersion);
+        runtime.update('channel', 'shell', { loading: true });
+        expect(orders).toHaveBeenCalledTimes(1);
+        expect(runtime.state('/orders').refreshing).toBe(true);
+        unsubscribe();
+        runtime.invalidate(key => key === 'orders');
+        expect(orders).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves resource ownership without leaving the previous page subscribed to its state', () => {
+        const runtime = new AdminQueryRuntime();
+        const remove = runtime.register(
+            'product',
+            'editor',
+            owner(async () => null),
+            policy,
+        );
+        runtime.update('product', 'editor', { page: '/catalog/products/1' });
+        expect(runtime.state('/catalog/list').resources).toBe(0);
+        expect(runtime.state('/catalog/products/1').resources).toBe(1);
+        remove();
+        expect(runtime.state('/catalog/products/1').resources).toBe(0);
+    });
     it('keys by document, variables, request context and scope rather than operation name', () => {
         const first = gql`
             query Product($id: ID!) {

@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@vendure/storefront-content-plugin', async () => {
     const responsiveImage = await import('../../storefront-content-plugin/src/shared/responsive-image.js');
     const icons = await import('../../storefront-content-plugin/src/shared/storefront-icons.js');
+    const pageData = await import('../../storefront-content-plugin/src/shared/public-page-data.js');
     const { storefrontContentPermission } = await import('../../storefront-content-plugin/src/constants.js');
     return {
         ...responsiveImage,
         ...icons,
+        ...pageData,
         storefrontContentPermission,
         StorefrontContentService: class StorefrontContentService {},
     };
@@ -16,7 +18,6 @@ import { StorefrontLcpPreloadController } from './storefront-lcp-preload.control
 import {
     renderHeroPreloadLink,
     renderStorefrontIconLinks,
-    storefrontContentCacheTag,
     StorefrontLcpPreloadService,
 } from './storefront-lcp-preload.service';
 
@@ -52,73 +53,78 @@ describe('storefront LCP preload', () => {
         expect(link).not.toContain('imagesrcset=');
     });
 
-    it('caches one resolved fragment per Channel and language and supports tag invalidation', async () => {
-        const cache = {
-            get: vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce('<link cached />'),
-            set: vi.fn().mockResolvedValue(undefined),
-            invalidateTags: vi.fn().mockResolvedValue(undefined),
-        };
-        const content = {
-            findPublished: vi
-                .fn()
-                .mockResolvedValue([{ type: 'HERO', imageUrl: '/assets/preview/store-a.png' }]),
-        };
-        const profile = { logoAsset: { preview: 'preview/store-a.webp' } };
-        const findOne = vi.fn().mockResolvedValue(profile);
-        const connection = { getRepository: vi.fn().mockReturnValue({ findOne }) };
-        const config = { assetOptions: { assetStorageStrategy: {} } };
-        const service = new StorefrontLcpPreloadService(
-            cache as never,
-            content as never,
-            connection as never,
-            config as never,
-        );
-        const ctx = { channelId: 'store-a', languageCode: 'zh_Hans', channel: { customFields: {} } } as never;
-
-        const first = await service.render(ctx);
-        profile.logoAsset.preview = 'preview/store-a-new.webp';
-        const second = await service.render(ctx);
+    it('only reads a fast snapshot and never starts assembly on an SSI miss', async () => {
+        const pages = { peek: vi.fn().mockResolvedValue(undefined), read: vi.fn() };
+        const cache = { invalidate: vi.fn().mockResolvedValue(undefined) };
+        const service = new StorefrontLcpPreloadService(pages as never, cache as never);
+        expect(await service.render({ channelId: 'store-a' } as never, 'store-a.test')).toBe('');
+        expect(pages.read).not.toHaveBeenCalled();
         await service.invalidate('store-a');
-
-        expect(first).toContain('storefront-hero-fit-480');
-        expect(first).toContain('/assets/preview/store-a.webp?');
-        expect(second).toContain('/assets/preview/store-a-new.webp?');
-        expect(second).not.toContain('/assets/preview/store-a.webp?');
-        expect(second).toContain('<link cached />');
-        expect(findOne).toHaveBeenCalledTimes(2);
-        expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { channelId: 'store-a' } }));
-        expect(content.findPublished).toHaveBeenCalledTimes(1);
-        expect(cache.set).toHaveBeenCalledWith(
-            'StorefrontLcpPreload:store-a:zh_Hans',
-            expect.stringContaining('storefront-hero-fit-1600'),
-            expect.objectContaining({ tags: [storefrontContentCacheTag('store-a')] }),
-        );
-        expect(cache.invalidateTags).toHaveBeenCalledWith([storefrontContentCacheTag('store-a')]);
+        expect(cache.invalidate).toHaveBeenCalledWith('store-a');
     });
 
-    it('renders separate Channel logos even when there is no published hero', async () => {
-        const service = new StorefrontLcpPreloadService(
-            { get: vi.fn(), set: vi.fn() } as never,
-            { findPublished: vi.fn().mockResolvedValue([]) } as never,
-            {
-                getRepository: (ctx: { channelId: string }) => ({
-                    findOne: () =>
-                        Promise.resolve({ logoAsset: { preview: `preview/${ctx.channelId}.webp` } }),
+    it('renders only the host-scoped snapshot and inert escaped JSON', async () => {
+        const pages = {
+            peek: vi.fn((ctx: { channelId: string }, host: string) =>
+                Promise.resolve({
+                    schemaVersion: 1,
+                    version: 'v1',
+                    generatedAt: 1,
+                    scope: {
+                        host,
+                        channelCode: ctx.channelId,
+                        languageCode: 'en',
+                        currencyCode: 'MYR',
+                        priceContext: 'public',
+                    },
+                    route: '/',
+                    config: {
+                        logoUrl: `/assets/preview/${ctx.channelId}.webp`,
+                        description: '</script><script>alert(1)</script>',
+                    },
+                    content: {
+                        blocks: [
+                            {
+                                type: 'HERO',
+                                enabled: true,
+                                imageUrl: '/assets/preview/hero__webp_migrated_1.webp',
+                            },
+                        ],
+                    },
+                    media: [
+                        {
+                            kind: 'hero',
+                            identity: '/assets/preview/hero__webp_migrated_1.webp?v=webp-readable-1',
+                        },
+                    ],
+                    failures: [],
                 }),
-            } as never,
-            { assetOptions: { assetStorageStrategy: {} } } as never,
+            ),
+        };
+        const service = new StorefrontLcpPreloadService(pages as never, {} as never);
+        const fragment = await service.render({ channelId: 'store-a' } as never, 'store-a.test');
+        expect(pages.peek).toHaveBeenCalledWith({ channelId: 'store-a' }, 'store-a.test');
+        expect(fragment).toContain('storefront-public-page-data');
+        expect(fragment).toContain('v=webp-readable-1');
+        expect(fragment).not.toContain('<script>alert');
+        expect(fragment).not.toContain('store-b');
+        const serialized = fragment.match(/type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+        expect(JSON.parse(serialized ?? '').config.description).toBe('</script><script>alert(1)</script>');
+    });
+
+    it('does not preload support banners when there is no published home hero', async () => {
+        const page = {
+            config: {},
+            content: { blocks: [{ type: 'SUPPORT', imageUrl: '/assets/preview/support.webp' }] },
+            media: [{ kind: 'hero', identity: '/assets/preview/support.webp' }],
+        };
+        const service = new StorefrontLcpPreloadService(
+            { peek: vi.fn().mockResolvedValue(page) } as never,
+            {} as never,
         );
-        for (const channelId of ['store-a', 'store-b']) {
-            const fragment = await service.render({
-                channelId,
-                channel: { customFields: {} },
-                languageCode: 'en',
-            } as never);
-            expect(fragment).toContain(`/assets/preview/${channelId}.webp?`);
-            expect(fragment).toContain('format=png');
-            expect(fragment).not.toContain('rel="preload"');
-            expect(fragment).not.toContain(channelId === 'store-a' ? 'store-b' : 'store-a');
-        }
+        expect(await service.render({ channelId: 'store-a' } as never, 'store-a.test')).not.toContain(
+            'rel="preload"',
+        );
     });
 
     it('uses a neutral icon for an unconfigured store and escapes URL attributes', () => {

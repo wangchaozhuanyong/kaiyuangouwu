@@ -27,6 +27,10 @@ export default defineConfig(({ mode }) => {
             strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
+                '/_storefront/page-data': {
+                    target: apiProxyTarget,
+                    rewrite: path => path.replace('/_storefront/', '/storefront/'),
+                },
                 '/storefront-realtime': apiProxyTarget,
                 '/assets': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
@@ -38,6 +42,10 @@ export default defineConfig(({ mode }) => {
             strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
+                '/_storefront/page-data': {
+                    target: apiProxyTarget,
+                    rewrite: path => path.replace('/_storefront/', '/storefront/'),
+                },
                 '/storefront-realtime': apiProxyTarget,
                 '/assets/preview': apiProxyTarget,
                 '/image-generation': apiProxyTarget,

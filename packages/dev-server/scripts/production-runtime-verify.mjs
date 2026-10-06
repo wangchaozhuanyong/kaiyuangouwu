@@ -419,8 +419,13 @@ export function verifyGovernanceReleaseInputs(root) {
     // its plan/apply entry point, opening a database connection or stopping writers.
     const probe = [
         "import { createRequire } from 'node:module'",
+        "import path from 'node:path'",
         "await import('./packages/dev-server/scripts/platform-governance-reconciliation.mjs')",
-        "createRequire(process.cwd() + '/package.json').resolve('mysql2/promise')",
+        'const root = process.cwd()',
+        "const driver = createRequire(root + '/package.json').resolve('mysql2/promise')",
+        'const relative = path.relative(root, driver)',
+        // A parent checkout must not supply a driver missing from the immutable artifact.
+        "if (relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error(\"Cannot find module 'mysql2/promise' inside runtime artifact\")",
     ].join(';');
     runNode(root, ['--input-type=module', '-e', probe]);
 }
