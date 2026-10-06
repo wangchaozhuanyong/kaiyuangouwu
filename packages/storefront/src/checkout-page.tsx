@@ -17,6 +17,7 @@ import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
 import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { QuantityControl } from './components/common/quantity-control';
+import { useCheckoutViewport } from './hooks/useCheckoutViewport';
 import { compactUiCopy } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
@@ -154,6 +155,10 @@ export function CheckoutPage({
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
+    const hasCheckoutContent = Boolean(
+        order && cart && (cartPending || (order.totalQuantity > 0 && order.lines.length > 0)),
+    );
+    const { pageRef, actionBarRef } = useCheckoutViewport(hasCheckoutContent);
     const activeAddress = checkoutAddress(customer, selectedAddressId);
     const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
@@ -539,7 +544,7 @@ export function CheckoutPage({
         }
     };
 
-    if (!order || !cart || (!cartPending && (order.totalQuantity <= 0 || order.lines.length === 0))) {
+    if (!order || !cart || !hasCheckoutContent) {
         return (
             <Subpage
                 title={
@@ -633,6 +638,7 @@ export function CheckoutPage({
 
     return (
         <main
+            ref={pageRef}
             className={checkoutPageClassName(
                 `page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`,
             )}
@@ -937,7 +943,7 @@ export function CheckoutPage({
                             {compactCopy.orders.returns}
                         </span>
                     </section>
-                    <div className={checkoutPageClassName('submit-order-bar')}>
+                    <div ref={actionBarRef} className={checkoutPageClassName('submit-order-bar')}>
                         <button
                             type={requiresShipping && !addressComplete ? 'button' : 'submit'}
                             onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
