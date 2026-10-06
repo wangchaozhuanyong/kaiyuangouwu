@@ -2,6 +2,7 @@
 @import './styles/auth-flow.css';
 @import './styles/state-surfaces.css';
 @import './styles/brand-shell.css';
+@import './styles/count-badge.css';
 @import './styles/skeletons.css';
 @import './styles/traffic-consent.css';
 @import './styles/home-layout-base.css';
@@ -152,8 +153,7 @@ h6 {
 .product-price,
 .summary-price,
 .coupon-discount strong,
-.account-metrics-bar b,
-.badge-count {
+.account-metrics-bar b {
     font-family: var(--font-numeric);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-numeric);

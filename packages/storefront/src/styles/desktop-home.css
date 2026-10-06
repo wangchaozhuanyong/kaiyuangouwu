@@ -869,22 +869,6 @@
         outline: 2px solid var(--focus, var(--accent));
         outline-offset: 2px;
     }
-    .proto-cart-badge {
-        background: var(--accent, #9333ea);
-        color: var(--accent-foreground, #fff);
-        font-size: var(--type-badge-size);
-        font-weight: var(--font-weight-bold);
-        min-width: 18px;
-        height: 18px;
-        padding: 0 4px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        line-height: var(--type-badge-leading);
-        font-variant-numeric: tabular-nums;
-    }
     @media (max-width: 1180px) {
         .proto-nav-links {
             gap: 8px;
@@ -912,7 +896,7 @@
             min-width: 180px;
             width: 200px;
         }
-        .proto-header-right .proto-header-action > span:not(.proto-cart-badge),
+        .proto-header-right .proto-header-action > span:not(.count-badge),
         .proto-header-right .proto-cart-text {
             display: none;
         }

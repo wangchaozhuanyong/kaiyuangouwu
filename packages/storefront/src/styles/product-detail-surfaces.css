@@ -789,12 +789,13 @@
     position: relative;
 }
 
-.detail-action-bar button > svg {
+.detail-action-bar button > svg,
+.detail-action-bar .count-badge-anchor > svg {
     width: 20px;
     height: 20px;
 }
 
-.detail-action-bar button span {
+.detail-action-bar button > span:not(.count-badge-anchor) {
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
     white-space: nowrap;
@@ -804,19 +805,6 @@
     color: var(--accent);
 }
 
-.detail-action-bar button b {
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    position: absolute;
-    top: 0;
-    right: 0;
-    border-radius: 8px;
-    background: var(--accent);
-    color: white;
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-}
 
 .detail-action-bar button:nth-last-child(2) {
     height: 44px;

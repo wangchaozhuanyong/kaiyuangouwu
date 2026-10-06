@@ -15,6 +15,7 @@ import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
+import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
@@ -570,10 +571,16 @@ export function ProductDetailPage() {
                 <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
             </button>
             {!quoteOnly && (
-                <button type="button" onClick={() => navigateTo({ name: 'cart' })}>
-                    <ShoppingCart />
+                <button
+                    type="button"
+                    onClick={() => navigateTo({ name: 'cart' })}
+                    aria-label={countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)}
+                >
+                    <span className="count-badge-anchor">
+                        <ShoppingCart aria-hidden="true" />
+                        <CountBadge count={cartQuantity} overlay />
+                    </span>
                     <span>{isZh ? '购物车' : 'Cart'}</span>
-                    {cartQuantity > 0 && <b>{cartQuantity}</b>}
                 </button>
             )}
             {quoteOnly ? (

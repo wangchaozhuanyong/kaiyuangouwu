@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { BrandLoadingIndicator } from '../brand-loading';
+import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { PageBackButton } from '../components/common/page-back-button';
 import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
@@ -365,10 +366,15 @@ export function AccountShortcut({
                   ? 'mail'
                   : 'support';
     return (
-        <button type="button" onClick={onClick} data-order-status={tone}>
+        <button
+            type="button"
+            onClick={onClick}
+            data-order-status={tone}
+            aria-label={inlineCount ? undefined : countBadgeLabel(label, count)}
+        >
             <span data-icon-tone={iconTone}>
                 {icon}
-                {!inlineCount && count != null && count > 0 && <b>{count}</b>}
+                {!inlineCount && <CountBadge count={count} overlay />}
             </span>
             <small>{label}</small>
             {inlineCount && <b className="desktop-shortcut-count">{count ?? '—'}</b>}
@@ -385,15 +391,20 @@ export function ServiceButton({
 }: {
     icon: ReactNode;
     label: string;
-    badge?: string;
+    badge?: number;
     tone?: 'security' | 'mail' | 'studio' | 'coupon' | 'support';
     onClick: () => void;
 }) {
     return (
-        <button type="button" onClick={onClick} data-icon-tone={tone}>
+        <button
+            type="button"
+            onClick={onClick}
+            data-icon-tone={tone}
+            aria-label={countBadgeLabel(label, badge)}
+        >
             <span>
                 {icon}
-                {badge && <em>{badge}</em>}
+                <CountBadge count={badge} overlay />
             </span>
             <b>{label}</b>
         </button>

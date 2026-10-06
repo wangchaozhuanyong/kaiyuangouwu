@@ -7,6 +7,7 @@ import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
+import { CountBadge, countBadgeLabel } from './count-badge';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
 
 const DesktopSearch = lazy(() => import('./desktop-search'));
@@ -111,15 +112,11 @@ export function DesktopHeader({
                         to="/cart"
                         className="proto-cart-link proto-header-action"
                         current={activeRoute === 'cart'}
-                        aria-label={isZh ? '购物车' : 'Cart'}
+                        aria-label={countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)}
                     >
                         <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
                         <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
-                        {cartQuantity > 0 && (
-                            <span className="proto-cart-badge">
-                                {cartQuantity > 99 ? '99+' : cartQuantity}
-                            </span>
-                        )}
+                        <CountBadge count={cartQuantity} />
                     </DesktopNavigationLink>
                     <DesktopNavigationLink
                         to={context.customer ? '/account' : '/login'}
