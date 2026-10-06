@@ -597,6 +597,9 @@ describe('HomePage localized trust bar layout', () => {
         expect(markup).toContain('class="home-trust-label">Pricing</span>');
         expect(markup).toContain('class="home-trust-label">Security</span>');
         expect(markup).toContain('class="home-trust-label">Support</span>');
+        expect(readStorefrontStylesheet()).not.toContain(
+            "html[lang='en'] .home-page .hero .hero-service-overlay .home-trust-item",
+        );
     });
 
     it('uses a wrapping layout for long merchant-managed labels in any language', () => {

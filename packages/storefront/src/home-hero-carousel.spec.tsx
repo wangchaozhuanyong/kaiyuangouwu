@@ -317,6 +317,50 @@ describe('HomePage carousel pointer interactions', () => {
         await advance();
         expect(activeSlide().textContent).toContain('Second slide');
     });
+    it.each(['.hero-rich-copy-region', '.hero-rich-copy-surface', '.hero-rich-stats-row', '.home-trust-bar'])(
+        'stops mobile autoplay while reading the scrolling %s',
+        async selector => {
+            await render(false, [
+                {
+                    ...heroes[0],
+                    items: [
+                        {
+                            id: 'selling-point',
+                            enabled: true,
+                            position: 0,
+                            imageUrl: null,
+                            targetType: 'NONE',
+                            targetValue: null,
+                            label: 'Long selling point',
+                            description: 'Managed detail',
+                        },
+                    ],
+                },
+                heroes[1],
+                {
+                    ...heroBlock,
+                    id: 'service-information',
+                    type: 'TRUST_BAR',
+                    items: [
+                        {
+                            id: 'support',
+                            enabled: true,
+                            position: 0,
+                            imageUrl: null,
+                            targetType: 'NONE',
+                            targetValue: null,
+                            label: 'Malaysia customer support',
+                            description: '',
+                        },
+                    ],
+                },
+            ]);
+            await interact(() => requiredElement(activeSlide(), selector).dispatchEvent(new Event('scroll')));
+            await advance(10_000);
+            expect(activeSlide().textContent).toContain('First slide');
+            expect(host.querySelector('.is-neighbor')).toBeNull();
+        },
+    );
     it('preserves numbered selection and recovers when decoding a slide fails', async () => {
         await render(true);
         vi.mocked(productDisplay.decodeStorefrontImage).mockRejectedValue(new Error('Image unavailable'));
@@ -397,11 +441,36 @@ describe('HomePage carousel pointer interactions', () => {
         expect(activeSlide().textContent).toContain('First slide');
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
-    it('makes room for taller copy before entrance, then shrinks after the shorter scene settles', async () => {
+    it.each([
+        { desktop: false, expectedHeight: 206 },
+        { desktop: true, expectedHeight: 520 },
+    ])(
+        'uses the artwork height on mobile and copy height on desktop ($desktop)',
+        async ({ desktop, expectedHeight }) => {
+            boundsMock.mockImplementation(function (this: Element) {
+                const height = this.matches('.hero-rich-content') ? 520 : 206;
+                return {
+                    x: 0,
+                    y: 0,
+                    top: 0,
+                    left: 0,
+                    right: 366,
+                    bottom: height,
+                    width: 366,
+                    height,
+                    toJSON: () => ({}),
+                };
+            });
+            await render(desktop, [heroes[0]]);
+            expect(requiredElement(host, '.hero-carousel-stage').style.height).toBe(`${expectedHeight}px`);
+        },
+    );
+
+    it('measures the intrinsic mobile artwork scene before entrance, then shrinks after settling', async () => {
         let tallHeight = 520;
         boundsMock.mockImplementation(function (this: Element) {
             const height =
-                this.matches('.hero-rich-content') && this.textContent?.includes('Tall copy')
+                this.matches('.hero-scene-wrapper') && this.textContent?.includes('Tall copy')
                     ? tallHeight
                     : 320;
             return {
@@ -429,10 +498,10 @@ describe('HomePage carousel pointer interactions', () => {
         await advance();
         expect(activeSlide().textContent).toContain('Tall copy');
         expect(stage.style.height).toBe('520px');
-        // Responsive wrapping and late font sizing trigger the actual content observer.
+        // Late image readiness or a responsive artwork size change triggers the scene observer.
         tallHeight = 580;
-        const copy = requiredElement(activeSlide(), '.hero-rich-content');
-        const observer = resizeObservers.find(candidate => candidate.elements.has(copy));
+        const scene = requiredElement(activeSlide(), '.hero-scene-wrapper');
+        const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
         expect(observer).toBeDefined();
         if (!observer) throw new Error('Expected the current slide resize observer');
         await interact(() => observer.notify());

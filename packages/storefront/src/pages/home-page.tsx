@@ -743,14 +743,16 @@ export function HomePage() {
         const stage = heroStageRef.current;
         const viewport = heroViewportRef.current;
         if (!stage || !viewport) return;
-        const copySurfaces = Array.from(stage.querySelectorAll<HTMLElement>('.hero-rich-content'));
+        const heightSurfaces = Array.from(
+            stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
+        );
         const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
         const measure = () => {
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
                 Math.max(
                     minimum,
-                    ...copySurfaces.map(copy => copy.getBoundingClientRect().height),
+                    ...heightSurfaces.map(surface => surface.getBoundingClientRect().height),
                     gallery?.getBoundingClientRect().height ?? 0,
                 ),
             );
@@ -765,7 +767,7 @@ export function HomePage() {
             setHeroStageHeight(height);
         };
         const observer = new ResizeObserver(measure);
-        copySurfaces.forEach(copy => observer.observe(copy));
+        heightSurfaces.forEach(surface => observer.observe(surface));
         observer.observe(viewport);
         if (gallery) observer.observe(gallery);
         window.addEventListener('resize', measure);
@@ -1055,6 +1057,7 @@ export function HomePage() {
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                 style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
+                tabIndex={!desktop && trustBarHasLongCopy ? 0 : undefined}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
@@ -1217,6 +1220,16 @@ export function HomePage() {
                                         role="region"
                                         aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                         aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                        onScrollCapture={event => {
+                                            if (
+                                                !desktop &&
+                                                event.target instanceof HTMLElement &&
+                                                event.target.matches(
+                                                    '.hero-rich-copy-region, .hero-rich-copy-surface, .hero-rich-stats-row, .home-trust-bar',
+                                                )
+                                            )
+                                                setHeroAutoplayStopped(true);
+                                        }}
                                         onPointerDown={beginHeroSwipe}
                                         onPointerMove={moveHeroSwipe}
                                         onPointerUp={event => finishHeroSwipe(event)}
