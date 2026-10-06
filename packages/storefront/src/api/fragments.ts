@@ -247,8 +247,6 @@ export const orderSummaryFields = `
             sku
             priceWithTax
             currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
             customFields { fulfillmentType digitalDeliveryMode }
