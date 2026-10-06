@@ -1,19 +1,25 @@
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 
 export const DesktopLayoutContext = createContext(false);
 export const useDesktopLayout = () => useContext(DesktopLayoutContext);
 
 const desktopQuery = '(min-width: 1024px)';
-function subscribeToViewport(onChange: () => void) {
-    const query = window.matchMedia(desktopQuery);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
+export function viewportMatches(mediaQuery = desktopQuery) {
+    return typeof window !== 'undefined' && window.matchMedia?.(mediaQuery).matches === true;
 }
 
-export function useDesktopViewport() {
+export function useDesktopViewport(mediaQuery = desktopQuery) {
+    const subscribeToViewport = useCallback(
+        (onChange: () => void) => {
+            const query = window.matchMedia(mediaQuery);
+            query.addEventListener('change', onChange);
+            return () => query.removeEventListener('change', onChange);
+        },
+        [mediaQuery],
+    );
     return useSyncExternalStore(
         subscribeToViewport,
-        () => window.matchMedia(desktopQuery).matches,
+        () => viewportMatches(mediaQuery),
         () => false,
     );
 }

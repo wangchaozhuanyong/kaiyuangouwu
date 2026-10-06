@@ -36,6 +36,69 @@ describe('merchant image ownership', () => {
             ),
         ).toEqual([]);
     });
+    it('allows adding the first mobile hero image without authorizing a desktop replacement', () => {
+        expect(
+            imageReplacements(previous, {
+                settings: { mobileImageAssetId: 'first-mobile', mobileImageUrl: '/assets/mobile.webp' },
+            }),
+        ).toEqual([]);
+        expect(
+            imageReplacements(previous, {
+                imageAssetId: 'new-desktop',
+                settings: { mobileImageAssetId: 'first-mobile' },
+            }),
+        ).toEqual([{ slot: 'main', before: 'asset:hero', after: 'asset:new-desktop' }]);
+    });
+    it('preserves mobile hero ownership across copy, color and metadata edits', () => {
+        const withMobile = {
+            ...previous,
+            settings: {
+                mobileImageAssetId: 'mobile',
+                mobileImageUrl: '/assets/mobile.webp',
+                mobileImageWidth: 1098,
+                mobileImageHeight: 840,
+            },
+        };
+        expect(
+            imageReplacements(withMobile, {
+                settings: {
+                    ...withMobile.settings,
+                    title: '新文案',
+                    accentColor: '#292d32',
+                    mobileImageWidth: 2196,
+                },
+            }),
+        ).toEqual([]);
+        expect(imageReplacements(withMobile, {})).toEqual([]);
+    });
+    it('reviews replacement, explicit clearing and omitted mobile bindings in replaced settings', () => {
+        const withMobile = {
+            ...previous,
+            settings: { mobileImageAssetId: 'mobile', mobileImageUrl: '/assets/mobile.webp' },
+        };
+        expect(imageReplacements(withMobile, { settings: { mobileImageAssetId: 'new-mobile' } })).toEqual([
+            { slot: 'mobile-hero', before: 'asset:mobile', after: 'asset:new-mobile' },
+        ]);
+        for (const settings of [
+            null,
+            {},
+            { accentColor: '#292d32' },
+            { mobileImageAssetId: null, mobileImageUrl: null },
+        ]) {
+            expect(imageReplacements(withMobile, { settings })).toEqual([
+                { slot: 'mobile-hero', before: 'asset:mobile', after: null },
+            ]);
+        }
+    });
+    it('also protects a mobile hero image bound only by its URL', () => {
+        const withMobile = { ...previous, settings: { mobileImageUrl: '/assets/mobile.webp' } };
+        expect(
+            imageReplacements(withMobile, { settings: { mobileImageUrl: '/assets/new-mobile.webp' } }),
+        ).toEqual([{ slot: 'mobile-hero', before: '/assets/mobile.webp', after: '/assets/new-mobile.webp' }]);
+        expect(imageReplacements(withMobile, { settings: {} })).toEqual([
+            { slot: 'mobile-hero', before: '/assets/mobile.webp', after: null },
+        ]);
+    });
 });
 
 describe('promotion source image ownership', () => {

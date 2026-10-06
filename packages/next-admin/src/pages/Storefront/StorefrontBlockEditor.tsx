@@ -3,6 +3,7 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { Check, Plus, Search, X } from 'lucide-react';
 import { useDeferredValue, useLayoutEffect, useState } from 'react';
+import { storefrontAssetUrl } from '../../../../storefront-content-plugin/src/content-image';
 import {
     heroThemePresets,
     homepageVisualStyles,
@@ -98,8 +99,12 @@ export function StorefrontBlockEditor({
     const imageName = (
         binding: StorefrontContentBlock | StorefrontContentBlock['items'][number] | undefined,
     ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
+    const mobileImageName = (block: StorefrontContentBlock) =>
+        stringSetting(block.settings?.mobileImageUrl, '').split('/').pop() || '清除图片';
     const imageChangeDescriptions = imageChanges.map(change => {
         if (change.slot === 'main') return `主图：${imageName(value)} → ${imageName(draft)}`;
+        if (change.slot === 'mobile-hero')
+            return `手机轮播图：${mobileImageName(value)} → ${mobileImageName(draft)}`;
         if (change.slot === 'mobile-decoration') return '手机底部装饰图已替换或清除';
         const itemId = change.slot.slice('item:'.length);
         const previous = value.items.find(item => String(item.id) === itemId);
@@ -440,6 +445,31 @@ export function StorefrontBlockEditor({
                                                     })
                                                 }
                                             />
+                                        </div>
+                                    )}
+                                    {draft.type === 'HERO' && (
+                                        <div className="sm:col-span-2">
+                                            <AssetPicker
+                                                label="手机轮播图（可选）"
+                                                value={null}
+                                                fallbackUrl={
+                                                    stringSetting(draft.settings?.mobileImageUrl, '') || null
+                                                }
+                                                onChange={asset =>
+                                                    updateSettings({
+                                                        mobileImageUrl: asset
+                                                            ? storefrontAssetUrl(asset) || null
+                                                            : null,
+                                                        mobileImageAssetId: asset?.id ?? null,
+                                                        mobileImageWidth: asset?.width ?? null,
+                                                        mobileImageHeight: asset?.height ?? null,
+                                                    })
+                                                }
+                                            />
+                                            <p className="mt-2 text-xs text-slate-500">
+                                                建议使用约 4:3
+                                                的手机专用图片，主体和留白适配手机容器；留空沿用主图。平板及电脑宽屏继续使用主图。
+                                            </p>
                                         </div>
                                     )}
                                     {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (

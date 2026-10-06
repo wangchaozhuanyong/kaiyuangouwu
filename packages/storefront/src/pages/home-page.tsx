@@ -32,12 +32,13 @@ import {
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
-import { useDesktopLayout } from '../desktop-layout';
+import { useDesktopLayout, useDesktopViewport } from '../desktop-layout';
 import {
     HERO_HEIGHT_TRANSITION_MS,
     HERO_TRANSITION_MS,
@@ -453,6 +454,8 @@ export interface HomePageProps {
 export function HomePage() {
     const navigate = useNavigate();
     const desktop = useDesktopLayout();
+    const wideHeroViewport = useDesktopViewport('(min-width: 600px)');
+    const wideHeroImage = desktop || wideHeroViewport;
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         products,
@@ -501,8 +504,12 @@ export function HomePage() {
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
-        () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
-        [contentBlocks],
+        () =>
+            contentBlocks.filter(
+                block =>
+                    block.type === 'HERO' && Boolean(heroImageForViewport(block, wideHeroImage).imageUrl),
+            ),
+        [contentBlocks, wideHeroImage],
     );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
@@ -585,7 +592,7 @@ export function HomePage() {
             ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
             : undefined;
     const hero = managedHeroProduct;
-    const heroImage = managedHero?.imageUrl ?? '';
+    const heroImage = heroImageForViewport(managedHero, wideHeroImage).imageUrl;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -673,7 +680,7 @@ export function HomePage() {
             const transitionId = ++heroTransitionRef.current;
             clearHeroMotionSchedule();
             if (nextIndex === heroIndex) return;
-            const nextImage = nextHero.imageUrl ?? '';
+            const nextImage = heroImageForViewport(nextHero, wideHeroImage).imageUrl;
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
             } catch {
@@ -717,7 +724,14 @@ export function HomePage() {
                 });
             });
         },
-        [clearHeroMotionSchedule, heroIndex, managedHeroes, settleHeroMotion, updateHeroMotion],
+        [
+            clearHeroMotionSchedule,
+            wideHeroImage,
+            heroIndex,
+            managedHeroes,
+            settleHeroMotion,
+            updateHeroMotion,
+        ],
     );
 
     useEffect(() => {
@@ -871,9 +885,9 @@ export function HomePage() {
         const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
         const nextHero = managedHeroes[nextIndex];
         if (!nextHero) return;
-        const nextImage = nextHero.imageUrl ?? '';
+        const nextImage = heroImageForViewport(nextHero, wideHeroImage).imageUrl;
         void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
-    }, [heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
+    }, [wideHeroImage, heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -1271,7 +1285,11 @@ export function HomePage() {
                                                         : neighbor
                                                           ? `calc(${direction * 100}% + ${offset}px)`
                                                           : `${offset}px`;
-                                                    const slideImage = slide.imageUrl ?? '';
+                                                    const slideMedia = heroImageForViewport(
+                                                        slide,
+                                                        wideHeroImage,
+                                                    );
+                                                    const slideImage = slideMedia.imageUrl;
                                                     return (
                                                         <div
                                                             key={slide.id}
@@ -1283,7 +1301,7 @@ export function HomePage() {
                                                             inert={neighbor || undefined}
                                                         >
                                                             <HeroScene
-                                                                content={slide}
+                                                                content={{ ...slide, imageUrl: slideImage }}
                                                                 mediaOverlay={
                                                                     <div className="hero-overlay-controls">
                                                                         {overlayTrustBar && (
@@ -1348,11 +1366,11 @@ export function HomePage() {
                                                                         className="hero-rich-backdrop"
                                                                         imageKind="hero"
                                                                         width={
-                                                                            slide.imageAsset?.width ||
+                                                                            slideMedia.imageAsset?.width ||
                                                                             undefined
                                                                         }
                                                                         height={
-                                                                            slide.imageAsset?.height ||
+                                                                            slideMedia.imageAsset?.height ||
                                                                             undefined
                                                                         }
                                                                         loading="eager"

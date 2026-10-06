@@ -16,7 +16,14 @@ vi.mock('./storefront-asset-picker', () => ({
         <>
             <button
                 onClick={() =>
-                    onChange({ id: 'replacement', name: 'replacement.png', preview: '/replacement.png' })
+                    onChange({
+                        id: 'replacement',
+                        name: 'replacement.png',
+                        preview: '/replacement.png',
+                        source: '/replacement-original.png',
+                        width: 1280,
+                        height: 960,
+                    })
                 }
             >
                 {label}换图
@@ -190,6 +197,109 @@ it('saves shared auth presentation settings while retaining merchant artwork and
         host.remove();
     }
 });
+
+it.each([false, true])(
+    'selects phone hero artwork, preserves desktop artwork and reviews existing phone changes: %s',
+    async hasPhoneImage => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const onSave = vi.fn(async () => undefined);
+        const desktopImage = {
+            id: 'desktop',
+            name: 'desktop.png',
+            preview: '/assets/desktop.png',
+            source: '/assets/desktop-original.png',
+            width: 1600,
+            height: 650,
+        };
+        const value = {
+            ...newContentBlock('HERO', 0),
+            id: 'hero-saved',
+            imageAsset: desktopImage,
+            imageAssetId: desktopImage.id,
+            imageUrl: desktopImage.preview,
+            settings: {
+                themePreset: 'bright',
+                ...(hasPhoneImage
+                    ? {
+                          mobileImageAssetId: 'phone',
+                          mobileImageUrl: '/assets/phone.png',
+                          mobileImageWidth: 1200,
+                          mobileImageHeight: 900,
+                      }
+                    : {}),
+            },
+        };
+        value.translations[0].title = '首页轮播';
+        const button = (name: string) =>
+            Array.from(host.querySelectorAll('button')).find(item => item.textContent === name)!;
+        const checkbox = () =>
+            Array.from(host.querySelectorAll('label'))
+                .find(label => label.textContent?.includes('我确认替换或清除以上图片'))!
+                .querySelector('input')!;
+        try {
+            await act(async () =>
+                root.render(
+                    <StorefrontBlockEditor
+                        value={value}
+                        saving={false}
+                        onClose={() => undefined}
+                        onSave={onSave}
+                    />,
+                ),
+            );
+            await act(async () => button('手机轮播图（可选）换图').click());
+            expect(button('保存并核对').disabled).toBe(hasPhoneImage);
+            if (hasPhoneImage) {
+                expect(host.textContent).toContain('手机轮播图：phone.png → replacement.png');
+                await act(async () => checkbox().click());
+            }
+            await act(async () => button('保存并核对').click());
+            expect(onSave).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    imageAsset: desktopImage,
+                    imageAssetId: 'desktop',
+                    imageUrl: '/assets/desktop.png',
+                    settings: {
+                        themePreset: 'bright',
+                        mobileImageAssetId: 'replacement',
+                        mobileImageUrl: '/assets/replacement.png',
+                        mobileImageWidth: 1280,
+                        mobileImageHeight: 960,
+                    },
+                }),
+                hasPhoneImage,
+            );
+            await act(async () => button('手机轮播图（可选）清除').click());
+            expect(button('保存并核对').disabled).toBe(hasPhoneImage);
+            if (hasPhoneImage) {
+                expect(checkbox().checked).toBe(false);
+                expect(host.textContent).toContain('手机轮播图：phone.png → 清除图片');
+                await act(async () => checkbox().click());
+            }
+            await act(async () => button('保存并核对').click());
+            expect(onSave).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    imageAsset: desktopImage,
+                    imageAssetId: 'desktop',
+                    imageUrl: '/assets/desktop.png',
+                    settings: {
+                        themePreset: 'bright',
+                        mobileImageAssetId: null,
+                        mobileImageUrl: null,
+                        mobileImageWidth: null,
+                        mobileImageHeight: null,
+                    },
+                }),
+                hasPhoneImage,
+            );
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    },
+);
 
 // The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
 vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));
