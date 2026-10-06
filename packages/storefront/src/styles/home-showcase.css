@@ -204,8 +204,7 @@
         text-align: center;
     }
 
-    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy .home-trust-item,
-    html[lang='en'] .home-page .hero .hero-service-overlay .home-trust-item {
+    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy .home-trust-item {
         flex-direction: column;
         justify-content: flex-start;
     }

@@ -1219,6 +1219,16 @@ export function HomePage() {
                                         role="region"
                                         aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                         aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                        onScrollCapture={event => {
+                                            if (
+                                                !desktop &&
+                                                event.target instanceof HTMLElement &&
+                                                event.target.matches(
+                                                    '.hero-rich-copy-surface, .hero-rich-stats-row',
+                                                )
+                                            )
+                                                setHeroAutoplayStopped(true);
+                                        }}
                                         onPointerDown={beginHeroSwipe}
                                         onPointerMove={moveHeroSwipe}
                                         onPointerUp={event => finishHeroSwipe(event)}

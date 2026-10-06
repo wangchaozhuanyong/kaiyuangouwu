@@ -1036,7 +1036,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('preserves desktop artwork overlays and displays the whole same artwork above mobile copy', () => {
+    it('preserves desktop overlays and places mobile copy over the whole same artwork', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1059,16 +1059,24 @@ describe('storefront skin system', () => {
             /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
         const mobile = postcss.parse(stylesheet('./styles/hero-mobile-overlay.css'));
-        expect(mobile.nodes).toHaveLength(2);
-        const responsive = mobile.nodes[1];
-        expect(responsive.type).toBe('atrule');
-        if (responsive.type !== 'atrule') throw new Error('Expected a responsive composition');
+        const responsive = mobile.nodes.find(
+            node => node.type === 'atrule' && node.params === '(max-width: 1023px)',
+        );
+        if (!responsive || responsive.type !== 'atrule') throw new Error('Expected a responsive composition');
         expect(responsive.params).toBe('(max-width: 1023px)');
         const mobileSource = responsive.toString();
         expect(mobileSource).toMatch(/\.hero-rich-backdrop[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/);
-        expect(mobileSource).toContain('color: var(--text);');
-        expect(mobileSource).toContain('color: var(--muted);');
-        expect(mobileSource).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl/i);
+        expect(mobileSource).toMatch(/\.hero-rich-content[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
+        expect(mobileSource).toMatch(/\.hero-rich-content[^}]*background:\s*transparent;/);
+        expect(mobileSource).toMatch(/\.hero-rich-copy-surface[^}]*overflow-y:\s*auto;/);
+        expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/);
+        expect(mobileSource).toMatch(/\.hero-rich-cta-btn[^}]*flex-shrink:\s*0;/);
+        expect(mobileSource).not.toMatch(
+            /#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i,
+        );
+        expect(
+            mobile.nodes.some(node => node.type === 'atrule' && node.params === '(max-width: 359px)'),
+        ).toBe(true);
     });
 
     it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {
