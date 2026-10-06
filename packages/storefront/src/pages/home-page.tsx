@@ -313,7 +313,7 @@ function HomepageCouponHub({
             ) : null}
             {queryLoading && coupons.length === 0 ? (
                 <div className="coupon-hub-query-state">
-                    <PageSkeleton label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
+                    <PageSkeleton compact label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
                 </div>
             ) : (
                 <div className="coupon-hub-scroll" role="list">
@@ -1572,6 +1572,7 @@ export function HomePage() {
                             >
                                 {catalogLoading ? (
                                     <PageSkeleton
+                                        compact
                                         variant="catalog"
                                         label={isZh ? '正在加载商品' : 'Loading products'}
                                     />

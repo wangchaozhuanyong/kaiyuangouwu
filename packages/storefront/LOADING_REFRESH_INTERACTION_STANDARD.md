@@ -62,3 +62,9 @@
 - 新增功能先运行 `bun run check:interaction`，受影响 tests 和 `bun run build`。`interaction-standard.spec.ts` 随现有 tests 自动拒绝常见回退。门禁只能覆盖声明的模式，不能代替人工核对 query key、表单草稿和业务正确性。
 
 参考：[TanStack 后台读取状态](https://tanstack.com/query/v5/docs/framework/react/guides/background-fetching-indicators)、[查询取消](https://tanstack.com/query/v5/docs/framework/react/guides/query-cancellation)、[恢复窗口时刷新](https://tanstack.com/query/v5/docs/framework/react/guides/window-focus-refetching)。
+
+## 2026-10-07 品牌加载视觉补充
+
+按用户确认的手机刷新反馈，页面首载与路由模块等待复用 `PageSkeleton` 的品牌呈现：读取当前店铺配置的 Logo 和名称，底下使用轻微呼吸点；不再显示中心通用转圈文案，也不加卡片、遮罩或品牌专属布局。保留 pending、status、busy 与中英文无障碍名称。首页优惠和商品等局部等待使用 compact 轻提示，不能在同一页重复堆放大 Logo；列表首载复用品牌呈现。无 Provider 的根路由仅复用已校验 host/channel/language/currency 的服务端首屏数据；缺少品牌或图片失败时使用中性标记，不读另一店铺的旧 Logo 缓存，不发起新品牌请求。
+
+移除网站自己绘制的顶部进度线，避免与浏览器地址栏进度条叠加。就绪观察器保持原有数据、图片、超时和恢复逻辑；普通就绪等待只提供无障碍播报，商品准备保留页面并显示紧凑品牌提示。商品准备与后台更新并发时，由更新／错误提示优先占用共享提示区，不能遮挡重试操作。已有内容的后台刷新仍由 `StorefrontQueryFeedback` 唯一负责，不回到整页品牌首载。减少动态效果时 Logo 和呼吸点均静止。

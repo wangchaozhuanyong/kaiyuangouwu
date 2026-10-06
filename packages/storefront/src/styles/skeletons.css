@@ -11,6 +11,10 @@
     min-height: 65vh;
 }
 
+.page-skeleton--compact {
+    min-height: 100px;
+}
+
 .list-skeleton {
     min-height: 220px;
 }
@@ -41,5 +45,81 @@
 @media (prefers-reduced-motion: reduce) {
     .page-loading-spinner {
         animation: none;
+    }
+}
+
+/* The same store identity owns first-load and route-module placeholders. No panel or page mask. */
+.brand-loading {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: var(--space-16);
+    max-width: min(100%, 280px);
+    color: var(--text);
+}
+.brand-loading .route-transition-mark {
+    width: 80px;
+    height: 80px;
+}
+.brand-loading .route-transition-mark img,
+.brand-loading .route-transition-placeholder {
+    width: 72px;
+    height: 72px;
+}
+.brand-loading .is-logo-ready img {
+    animation: brand-loading-breathe 1.8s ease-in-out infinite;
+}
+.brand-loading-name {
+    max-width: 100%;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.brand-loading-dots {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    height: 8px;
+    color: var(--muted);
+}
+.brand-loading-dots > i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: brand-loading-breathe 1.8s ease-in-out infinite;
+}
+.brand-loading-dots > i:nth-child(2) {
+    animation-delay: 150ms;
+}
+.brand-loading-dots > i:nth-child(3) {
+    animation-delay: 300ms;
+}
+@keyframes brand-loading-breathe {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+.brand-loading--compact {
+    display: flex;
+    gap: var(--space-8);
+}
+.brand-loading--compact .route-transition-mark,
+.brand-loading--compact .route-transition-mark img,
+.brand-loading--compact .route-transition-placeholder {
+    width: 24px;
+    height: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .brand-loading .is-logo-ready img,
+    .brand-loading-dots > i {
+        animation: none;
+        opacity: 1;
     }
 }

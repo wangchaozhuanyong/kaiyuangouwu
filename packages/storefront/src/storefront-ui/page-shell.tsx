@@ -22,6 +22,7 @@ import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useEffect, useId, u
 import { createPortal } from 'react-dom';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { BrandLoadingIndicator } from '../brand-loading';
 import { PageBackButton } from '../components/common/page-back-button';
 import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
@@ -529,10 +530,7 @@ export function ListSkeleton({
             role="status"
             aria-label={label}
         >
-            <span className="page-loading-indicator">
-                <span className="page-loading-spinner" aria-hidden="true" />
-                <span>{label}</span>
-            </span>
+            <BrandLoadingIndicator />
         </div>
     );
 }
