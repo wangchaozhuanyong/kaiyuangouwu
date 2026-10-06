@@ -442,10 +442,10 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
     it.each([
-        { desktop: false, expectedHeight: 206 },
-        { desktop: true, expectedHeight: 520 },
+        { desktop: false, expectedHeight: '' },
+        { desktop: true, expectedHeight: '520px' },
     ])(
-        'uses the artwork height on mobile and copy height on desktop ($desktop)',
+        'lets the shared phone canvas own its height while desktop copy still grows ($desktop)',
         async ({ desktop, expectedHeight }) => {
             boundsMock.mockImplementation(function (this: Element) {
                 const height = this.matches('.hero-rich-content') ? 520 : 206;
@@ -462,15 +462,15 @@ describe('HomePage carousel pointer interactions', () => {
                 };
             });
             await render(desktop, [heroes[0]]);
-            expect(requiredElement(host, '.hero-carousel-stage').style.height).toBe(`${expectedHeight}px`);
+            expect(requiredElement(host, '.hero-carousel-stage').style.height).toBe(expectedHeight);
         },
     );
 
-    it('measures the intrinsic mobile artwork scene before entrance, then shrinks after settling', async () => {
+    it('measures desktop copy before entrance, then shrinks after settling', async () => {
         let tallHeight = 520;
         boundsMock.mockImplementation(function (this: Element) {
             const height =
-                this.matches('.hero-scene-wrapper') && this.textContent?.includes('Tall copy')
+                this.matches('.hero-rich-content') && this.textContent?.includes('Tall copy')
                     ? tallHeight
                     : 320;
             return {
@@ -485,7 +485,7 @@ describe('HomePage carousel pointer interactions', () => {
                 toJSON: () => ({}),
             };
         });
-        await render(false, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
+        await render(true, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
         const stage = requiredElement(host, '.hero-carousel-stage');
         expect(stage.style.height).toBe('320px');
         await pointer('pointerdown', 250);
@@ -498,9 +498,9 @@ describe('HomePage carousel pointer interactions', () => {
         await advance();
         expect(activeSlide().textContent).toContain('Tall copy');
         expect(stage.style.height).toBe('520px');
-        // Late image readiness or a responsive artwork size change triggers the scene observer.
+        // Responsive desktop copy changes keep the existing scene observer behavior.
         tallHeight = 580;
-        const scene = requiredElement(activeSlide(), '.hero-scene-wrapper');
+        const scene = requiredElement(activeSlide(), '.hero-rich-content');
         const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
         expect(observer).toBeDefined();
         if (!observer) throw new Error('Expected the current slide resize observer');

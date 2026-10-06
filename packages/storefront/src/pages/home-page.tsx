@@ -740,13 +740,17 @@ export function HomePage() {
     }, [managedHeroes, clearHeroMotionSchedule, updateHeroMotion]);
 
     useLayoutEffect(() => {
+        if (!desktop) {
+            heroStageHeightRef.current = undefined;
+            heroHeightGrowthDeadlineRef.current = 0;
+            setHeroStageHeight(undefined);
+            return;
+        }
         const stage = heroStageRef.current;
         const viewport = heroViewportRef.current;
         if (!stage || !viewport) return;
-        const heightSurfaces = Array.from(
-            stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
-        );
-        const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
+        const heightSurfaces = Array.from(stage.querySelectorAll<HTMLElement>('.hero-rich-content'));
+        const gallery = viewport.closest('.home-intro-grid')?.querySelector('.quick-grid');
         const measure = () => {
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
@@ -1057,7 +1061,7 @@ export function HomePage() {
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                 style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
-                tabIndex={!desktop && trustBarHasLongCopy ? 0 : undefined}
+                tabIndex={!desktop && (trustBarHasLongCopy || heroCount > 0) ? 0 : undefined}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
@@ -1267,7 +1271,11 @@ export function HomePage() {
                                         <div
                                             ref={heroStageRef}
                                             className={`hero-carousel-stage${heroMotion?.phase === 'settling' ? ' is-settling' : ''}`}
-                                            style={heroStageHeight ? { height: heroStageHeight } : undefined}
+                                            style={
+                                                desktop && heroStageHeight
+                                                    ? { height: heroStageHeight }
+                                                    : undefined
+                                            }
                                         >
                                             {[heroIndex, ...(heroMotion ? [heroMotion.nextIndex] : [])].map(
                                                 (slideIndex, position) => {
@@ -1297,6 +1305,7 @@ export function HomePage() {
                                                         >
                                                             <HeroScene
                                                                 content={slide}
+                                                                copyScrollable={!desktop}
                                                                 mediaOverlay={
                                                                     <div className="hero-overlay-controls">
                                                                         {overlayTrustBar && (
