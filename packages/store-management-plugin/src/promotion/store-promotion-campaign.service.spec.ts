@@ -16,6 +16,112 @@ const ctx = {
 } as any;
 
 describe('StorePromotionCampaignService', () => {
+    it.each(['MYR', 'USD'])(
+        'keeps an unconvertible percentage coupon editable in source currency but inactive in %s',
+        async currencyCode => {
+            const promotion = {
+                id: 'coupon-1',
+                name: '跨币种满额折扣',
+                couponCode: 'FIXTURE',
+                enabled: true,
+                startsAt: null,
+                endsAt: null,
+                actions: [{ code: 'order_percentage_discount', args: { discount: 20 } }],
+                conditions: [
+                    {
+                        code: 'store_currency_minimum_order_amount',
+                        args: { amount: 10_000, currencyCode: 'CNY' },
+                    },
+                ],
+            };
+            const harness = createHarness({ promotions: [promotion] });
+            vi.spyOn(harness.service as any, 'couponAllocationRows').mockResolvedValue([
+                {
+                    promotionId: 'coupon-1',
+                    currencyCode: 'CNY',
+                    redeemedOrderCount: '1',
+                    refundedOrderCount: '0',
+                    discountAmountTotal: '500',
+                    assistedRevenueTotal: '2000',
+                },
+                {
+                    promotionId: 'coupon-1',
+                    currencyCode: 'MYR',
+                    redeemedOrderCount: '1',
+                    refundedOrderCount: '0',
+                    discountAmountTotal: '300',
+                    assistedRevenueTotal: '1200',
+                },
+            ]);
+            const foreignContext = { ...ctx, currencyCode };
+            await expect(harness.service.findCoupons(foreignContext)).resolves.toEqual([
+                expect.objectContaining({
+                    minimumSpend: 10_000,
+                    currencyCode: 'CNY',
+                    enabled: false,
+                    claimable: false,
+                    discountRate: 8,
+                    discountAmountTotal: 500,
+                    assistedRevenueTotal: 2_000,
+                }),
+            ]);
+            await expect(harness.service.findActiveCoupons(foreignContext)).resolves.toEqual([]);
+            await expect(harness.service.findCoupons(ctx)).resolves.toEqual([
+                expect.objectContaining({
+                    minimumSpend: 10_000,
+                    currencyCode: 'CNY',
+                    enabled: true,
+                    claimable: true,
+                }),
+            ]);
+        },
+    );
+
+    it.each(['MYR', 'USD'])(
+        'does not advertise a fallback percentage when an exact flash-sale price cannot convert into %s',
+        async currencyCode => {
+            const harness = createHarness({
+                variants: [
+                    productVariant('variant-1', 2_000, currencyCode),
+                    productVariant('variant-2', 2_000, currencyCode),
+                ],
+                promotions: [
+                    {
+                        id: 'flash-1',
+                        enabled: true,
+                        actions: [
+                            {
+                                code: 'store_flash_sale_price',
+                                args: {
+                                    variantRules: JSON.stringify([
+                                        {
+                                            variantId: 'variant-1',
+                                            salePrice: 1_000,
+                                            percentageOff: 20,
+                                            currencyCode: 'CNY',
+                                        },
+                                        { variantId: 'variant-2', percentageOff: 20 },
+                                    ]),
+                                },
+                            },
+                        ],
+                    },
+                ],
+            });
+            await expect(harness.service.findFlashSales({ ...ctx, currencyCode }, true)).resolves.toEqual([
+                expect.objectContaining({
+                    items: [
+                        expect.objectContaining({
+                            productVariantId: 'variant-2',
+                            salePrice: 1_600,
+                            currencyCode,
+                        }),
+                    ],
+                }),
+            ]);
+        },
+    );
+
     it('creates a full-reduction coupon as a real Vendure promotion', async () => {
         const harness = createHarness();
 

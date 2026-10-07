@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { physicalSubtotalShippingCalculator } from '../../commerce-fulfillment-plugin/src/commerce-shipping-options';
+
 import {
     evaluateStoreActivationReadiness,
     hasCompleteStoreProfile,
@@ -23,9 +25,25 @@ const completeSnapshot = {
 describe('shipping activation readiness', () => {
     const channel = {
         code: 'store-a',
-        defaultShippingZone: { name: 'store-a-shipping', members: [{ enabled: true }] },
+        defaultCurrencyCode: 'MYR',
+        customFields: {},
+        defaultShippingZone: { name: 'store-a-shipping', members: [{ code: 'MY', enabled: true }] },
     } as any;
-    const shared = { checker: { code: 'store-shipping-zone-eligibility-checker' } } as any;
+    const shared = {
+        checker: { code: 'store-shipping-zone-eligibility-checker' },
+        calculator: { code: 'default-shipping-calculator', args: [{ name: 'rate', value: '0' }] },
+    } as any;
+    const physical = (sourceCurrency: string, baseRate = '1200', freeAbove = '0') => ({
+        ...shared,
+        calculator: {
+            code: 'physical-subtotal-shipping-calculator',
+            args: [
+                { name: 'baseRate', value: baseRate },
+                { name: 'freeAbove', value: freeAbove },
+                { name: 'sourceCurrencyCode', value: sourceCurrency },
+            ],
+        },
+    });
     it('accepts enabled public or owned regional templates without a required legacy code', () => {
         expect(hasReadyShippingMethod(channel, [shared])).toBe(true);
         expect(hasReadyShippingMethod(channel, [])).toBe(false);
@@ -40,6 +58,81 @@ describe('shipping activation readiness', () => {
                 shared,
             ]),
         ).toBe(false);
+    });
+    it('requires the template destination list to overlap an enabled store country', () => {
+        const restricted = (value: string) => ({
+            ...shared,
+            checker: {
+                code: 'store-shipping-zone-eligibility-checker',
+                args: [{ name: 'allowedCountryCodes', value }],
+            },
+        });
+        expect(hasReadyShippingMethod(channel, [restricted('US')])).toBe(false);
+        expect(hasReadyShippingMethod(channel, [restricted('US, my')])).toBe(true);
+        expect(hasReadyShippingMethod(channel, [restricted(JSON.stringify('MY'))])).toBe(true);
+        expect(hasReadyShippingMethod(channel, [restricted('')])).toBe(true);
+        expect(hasReadyShippingMethod(channel, [restricted('US'), shared])).toBe(true);
+        expect(
+            hasReadyShippingMethod(
+                {
+                    ...channel,
+                    defaultShippingZone: {
+                        members: [
+                            { code: 'MY', enabled: true },
+                            { code: 'SG', enabled: false },
+                        ],
+                    },
+                },
+                [restricted('SG')],
+            ),
+        ).toBe(false);
+    });
+    it('rejects a private shipping amount without a supported source-to-store currency path', () => {
+        const unsupported = physical('USD');
+        expect(hasReadyShippingMethod(channel, [unsupported])).toBe(false);
+        expect(() =>
+            physicalSubtotalShippingCalculator.calculate(
+                { channel, currencyCode: channel.defaultCurrencyCode } as any,
+                { lines: [] } as any,
+                unsupported.calculator.args,
+                unsupported,
+            ),
+        ).toThrow('运费币种汇率配置无效');
+        expect(
+            hasReadyShippingMethod({ ...channel, customFields: { cnyToMyrRate: 0.6 } }, [physical('USD')]),
+        ).toBe(false);
+    });
+    it('requires the existing exchange rate for both fixed shipping and its free-shipping threshold', () => {
+        expect(hasReadyShippingMethod(channel, [physical('CNY')])).toBe(false);
+        expect(hasReadyShippingMethod(channel, [physical('CNY', '0', '9900')])).toBe(false);
+        expect(
+            hasReadyShippingMethod({ ...channel, customFields: { cnyToMyrRate: 0.6 } }, [
+                physical('CNY', '1200', '9900'),
+            ]),
+        ).toBe(true);
+    });
+    it('keeps same-currency and legacy currency arguments usable without an exchange rate', () => {
+        expect(hasReadyShippingMethod(channel, [physical('MYR')])).toBe(true);
+        expect(hasReadyShippingMethod({ ...channel, defaultCurrencyCode: 'USD' }, [physical('USD')])).toBe(
+            true,
+        );
+        const legacy = physical('');
+        legacy.calculator.args.push({ name: 'currencyCode', value: 'CNY' });
+        expect(hasReadyShippingMethod(channel, [legacy])).toBe(false);
+        expect(hasReadyShippingMethod({ ...channel, customFields: { cnyToMyrRate: 0.6 } }, [legacy])).toBe(
+            true,
+        );
+        expect(hasReadyShippingMethod(channel, [physical('')])).toBe(true);
+    });
+    it('keeps public zero-rate shipping ready even when another private template cannot convert', () => {
+        expect(hasReadyShippingMethod(channel, [shared])).toBe(true);
+        expect(hasReadyShippingMethod(channel, [physical('USD'), shared])).toBe(true);
+    });
+    it('does not accept absent or invalid fixed shipping amounts', () => {
+        for (const amount of ['', '-1', 'invalid']) {
+            expect(hasReadyShippingMethod(channel, [physical('MYR', amount)])).toBe(false);
+            expect(hasReadyShippingMethod(channel, [physical('MYR', '1200', amount)])).toBe(false);
+        }
     });
 });
 

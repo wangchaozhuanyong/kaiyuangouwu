@@ -25,6 +25,19 @@ vi.mock('@apollo/client/react', () => ({
 vi.mock('../../apollo', () => ({
     client: { query: mocks.query, mutate: mocks.mutate },
     sensitiveActionContext: vi.fn(),
+    getAdminQueryScope: () => 'scope-a',
+    getActiveChannelToken: () => null,
+    channelRequestContext: vi.fn(),
+}));
+vi.mock('../../hooks/use-admin-capabilities', () => ({
+    useAdminCapabilities: () => ({ canUseCapability: () => true }),
+}));
+vi.mock('react', async importOriginal => ({
+    ...(await importOriginal<typeof import('react')>()),
+    useRef: (current: unknown) => ({ current }),
+    useLayoutEffect: (effect: () => unknown) => {
+        effect();
+    },
 }));
 
 type SaveInput = Parameters<typeof useProductEditorSave>[0];

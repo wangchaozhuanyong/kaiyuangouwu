@@ -19,6 +19,69 @@ import {
 } from './store-commerce-promotion-actions';
 
 describe('store commerce promotion actions', () => {
+    it.each(['MYR', 'USD'])('fails closed on unavailable CNY conversion into %s', async currencyCode => {
+        const context = {
+            currencyCode,
+            channel: { defaultCurrencyCode: 'CNY', pricesIncludeTax: true, customFields: {} },
+        } as any;
+        const order = { subTotal: 20_000, subTotalWithTax: 20_000 } as any;
+        const line = {
+            unitPrice: 2_000,
+            unitPriceWithTax: 2_000,
+            productVariant: { id: 'variant-1' },
+        } as any;
+        await expect(
+            currencyMinimumOrderAmount.check(
+                context,
+                order,
+                actionArgs({ amount: 10_000, currencyCode: 'CNY', taxInclusive: 'true' }),
+                {} as any,
+            ),
+        ).resolves.toBe(false);
+        expect(
+            currencyOrderFixedDiscount.execute(
+                context,
+                order,
+                actionArgs({ discount: 2_000, currencyCode: 'CNY' }),
+                {} as any,
+                {} as any,
+            ),
+        ).toBe(0);
+        expect(
+            flashSalePriceAction.execute(
+                context,
+                line,
+                actionArgs({
+                    variantRules: JSON.stringify([
+                        { variantId: 'variant-1', salePrice: 1_000, percentageOff: 20 },
+                    ]),
+                }),
+                {} as any,
+                {} as any,
+            ),
+        ).toBe(0);
+        expect(
+            flashSalePriceAction.execute(
+                context,
+                line,
+                actionArgs({ variantRules: JSON.stringify([{ variantId: 'variant-1', percentageOff: 20 }]) }),
+                {} as any,
+                {} as any,
+            ),
+        ).toBe(-400);
+    });
+
+    it('preserves a genuine same-currency zero threshold without an exchange rate', async () => {
+        await expect(
+            currencyMinimumOrderAmount.check(
+                { currencyCode: 'USD', channel: { customFields: {} } } as any,
+                { subTotal: 0, subTotalWithTax: 0 } as any,
+                actionArgs({ amount: 0, currencyCode: 'USD', taxInclusive: 'true' }),
+                {} as any,
+            ),
+        ).resolves.toBe(true);
+    });
+
     it('exposes Chinese business labels for currency-aware promotion fields', () => {
         const context = {
             languageCode: LanguageCode.zh_Hans,

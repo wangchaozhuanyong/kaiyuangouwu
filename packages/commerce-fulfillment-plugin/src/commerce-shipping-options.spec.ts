@@ -57,10 +57,10 @@ describe('physicalSubtotalShippingCalculator', () => {
 
     it('applies free shipping only when physical products reach the threshold', async () => {
         const quote = await physicalSubtotalShippingCalculator.calculate(
-            {} as any,
+            ctx,
             { ...order, lines: [line('physical', 1, 10_000), line('digital', 1, 1_000)] },
             calculatorArgs,
-            {} as any,
+            ctx,
         );
 
         expect(quote).toMatchObject({ price: 0, metadata: { freeShippingApplied: true } });
@@ -112,6 +112,17 @@ describe('physicalSubtotalShippingCalculator', () => {
             {} as any,
         );
         expect(quote).toMatchObject({ price: 720, metadata: { freeShippingThreshold: 6000 } });
+    });
+
+    it('rejects shipping quotes without a supported exchange path or required rate', () => {
+        const unsupported = { ...ctx, currencyCode: 'USD' };
+        expect(() =>
+            physicalSubtotalShippingCalculator.calculate(unsupported, order, calculatorArgs, unsupported),
+        ).toThrow('运费币种汇率配置无效');
+        const missingRate = { ...ctx, currencyCode: 'MYR' };
+        expect(() =>
+            physicalSubtotalShippingCalculator.calculate(missingRate, order, calculatorArgs, missingRate),
+        ).toThrow('运费币种汇率配置无效');
     });
 
     it('uses discounted tax-inclusive physical subtotal instead of undiscounted or digital totals', async () => {

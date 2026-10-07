@@ -62,8 +62,8 @@ export function convertChannelAmount(
     sourceCurrencyCode: CurrencyCode,
     targetCurrencyCode: CurrencyCode,
 ): number | null {
-    if (!isManagedCurrency(sourceCurrencyCode) || !isManagedCurrency(targetCurrencyCode)) return price;
     if (sourceCurrencyCode === targetCurrencyCode) return price;
+    if (!isManagedCurrency(sourceCurrencyCode) || !isManagedCurrency(targetCurrencyCode)) return null;
 
     const customFields = ctx.channel.customFields as CurrencyChannelFields;
     const cnyToMyrRate = Number(customFields.cnyToMyrRate);

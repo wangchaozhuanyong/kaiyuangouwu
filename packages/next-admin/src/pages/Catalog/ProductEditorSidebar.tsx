@@ -6,6 +6,7 @@ import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { COPY_PRODUCT_DOMAIN, PRODUCT_TYPE_CHANGE_ALLOWED } from '../../graphql/product-domains.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { getChannelDisplayName } from '../../utils/channel-display';
@@ -16,8 +17,28 @@ import { useProductEditor } from './ProductEditorContext';
 /** Identity fields belong to the wide information panel; the media/status sidebar stays across tabs. */
 export function ProductEditorIdentityFields() {
     const fieldId = useId();
-    const { productName, setProductName, slug, setSlug, formErrors, setFormErrors, saving } =
+    const { isCreateMode, productName, setProductName, slug, setSlug, formErrors, setFormErrors, saving } =
         useProductEditor();
+    const { canUseCapability } = useAdminCapabilities();
+    const canEditProduct = canUseCapability(
+        isCreateMode ? '/catalog/products/new' : '/catalog/products',
+        'write',
+    );
+
+    if (!canEditProduct) {
+        return (
+            <dl className="min-w-0 space-y-4 text-sm">
+                <div>
+                    <dt className="text-slate-500">商品名称</dt>
+                    <dd className="break-words">{productName}</dd>
+                </div>
+                <div>
+                    <dt className="text-slate-500">网址标识</dt>
+                    <dd className="break-all">{slug || '未设置'}</dd>
+                </div>
+            </dl>
+        );
+    }
 
     return (
         <div className="product-editor-identity min-w-0 space-y-4">
@@ -39,7 +60,7 @@ export function ProductEditorIdentityFields() {
             >
                 <AdminInput
                     type="text"
-                    disabled={saving}
+                    disabled={saving || !canEditProduct}
                     id={`${fieldId}-name`}
                     value={productName}
                     onChange={event => {
@@ -70,7 +91,7 @@ export function ProductEditorIdentityFields() {
             >
                 <AdminInput
                     type="text"
-                    disabled={saving}
+                    disabled={saving || !canEditProduct}
                     id={`${fieldId}-slug`}
                     value={slug}
                     onChange={event => setSlug(event.target.value)}
@@ -85,14 +106,8 @@ export function ProductEditorIdentityFields() {
 export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
     const [aiDialogOpen, setAiDialogOpen] = useState(false);
     const { hasAnyPermission } = useAdminPermissions();
-    const canEditProduct = hasAnyPermission([
-        'SuperAdmin',
-        'CreateProduct',
-        'UpdateProduct',
-        'CreateCatalog',
-        'UpdateCatalog',
-    ]);
-    const canCreateAsset = hasAnyPermission(['SuperAdmin', 'CreateAsset', 'CreateCatalog']);
+    const { canUseCapability } = useAdminCapabilities();
+    const canCreateAsset = hasAnyPermission(['CreateAsset', 'CreateCatalog']);
     const {
         isCreateMode,
         productData,
@@ -116,6 +131,11 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
         dynamicCustomFieldValues,
         saving,
     } = useProductEditor();
+    const canEditProduct = canUseCapability(
+        isCreateMode ? '/catalog/products/new' : '/catalog/products',
+        'write',
+    );
+    const canCopyProduct = canEditProduct && canUseCapability('/catalog/products/new', 'write');
     const [copy, { loading: copying }] = useMutation<{ copyProductBasicsAsType: { id: string } }>(
         COPY_PRODUCT_DOMAIN,
     );
@@ -129,7 +149,7 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
         dynamicCustomFieldValues.pricingMode ?? productData?.product?.customFields?.pricingMode;
 
     const copyBasics = async () => {
-        if (!productData?.product) return;
+        if (!canCopyProduct || saving || copying || !productData?.product) return;
         try {
             const result = await copy({
                 variables: {
@@ -179,7 +199,7 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                             className="h-full w-full object-contain"
                         />
                     </div>
-                ) : (
+                ) : canEditProduct ? (
                     <AdminButton
                         type="button"
                         disabled={saving}
@@ -189,52 +209,56 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                         <ImageIcon className="h-7 w-7 text-slate-300" />
                         <span className="text-xs font-bold text-slate-600">选择商品主图</span>
                     </AdminButton>
+                ) : (
+                    <p className="text-xs text-slate-500">尚未设置商品主图</p>
                 )}
-                <div className="space-y-2">
-                    <div className="product-editor-media-actions flex flex-wrap items-start gap-2">
-                        <ImageAssetUploadButton
-                            ariaLabel="上传商品主图"
-                            label="上传"
-                            disabled={saving}
-                            onUploaded={setUploadedFeaturedAsset}
-                            className="product-editor-media-upload min-w-0 flex-1"
-                        />
-                        <AdminButton
-                            type="button"
-                            disabled={saving}
-                            onClick={openFeaturedAssetPicker}
-                            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {featuredAssetId ? '更换主图' : '素材库'}
-                        </AdminButton>
-                        {featuredAssetId && (
+                {canEditProduct && (
+                    <div className="space-y-2">
+                        <div className="product-editor-media-actions flex flex-wrap items-start gap-2">
+                            <ImageAssetUploadButton
+                                ariaLabel="上传商品主图"
+                                label="上传"
+                                disabled={saving}
+                                onUploaded={setUploadedFeaturedAsset}
+                                className="product-editor-media-upload min-w-0 flex-1"
+                            />
                             <AdminButton
                                 type="button"
                                 disabled={saving}
-                                onClick={() => {
-                                    setFeaturedAssetId(null);
-                                    setFeaturedAssetPreview(null);
-                                }}
-                                className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                title="移除主图"
-                                aria-label="移除商品主图"
+                                onClick={openFeaturedAssetPicker}
+                                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <X className="h-4 w-4" />
+                                {featuredAssetId ? '更换主图' : '素材库'}
+                            </AdminButton>
+                            {featuredAssetId && (
+                                <AdminButton
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => {
+                                        setFeaturedAssetId(null);
+                                        setFeaturedAssetPreview(null);
+                                    }}
+                                    className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                    title="移除主图"
+                                    aria-label="移除商品主图"
+                                >
+                                    <X className="h-4 w-4" />
+                                </AdminButton>
+                            )}
+                        </div>
+                        {canEditProduct && canCreateAsset && (
+                            <AdminButton
+                                type="button"
+                                disabled={saving}
+                                onClick={() => setAiDialogOpen(true)}
+                                className="product-editor-ai-action flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                AI 生成主图
                             </AdminButton>
                         )}
                     </div>
-                    {canEditProduct && canCreateAsset && (
-                        <AdminButton
-                            type="button"
-                            disabled={saving}
-                            onClick={() => setAiDialogOpen(true)}
-                            className="product-editor-ai-action flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            AI 生成主图
-                        </AdminButton>
-                    )}
-                </div>
+                )}
             </section>
 
             <section className="product-editor-panel space-y-4 rounded-xl bg-white p-5">
@@ -243,21 +267,25 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                         商品状态
                         <FeatureHelpButton topic="catalog.spu-core" title="商品状态" />
                     </h3>
-                    <AdminButton
-                        type="button"
-                        role="switch"
-                        aria-label="启用商品"
-                        aria-checked={enabled}
-                        disabled={saving}
-                        onClick={() => setEnabled(!enabled)}
-                        className="product-editor-enabled-switch shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
-                        data-enabled={enabled}
-                        title={enabled ? '当前商品已启用' : '当前商品已禁用'}
-                    >
-                        <span className="product-editor-switch-track" aria-hidden="true">
-                            <span />
-                        </span>
-                    </AdminButton>
+                    {canEditProduct ? (
+                        <AdminButton
+                            type="button"
+                            role="switch"
+                            aria-label="启用商品"
+                            aria-checked={enabled}
+                            disabled={saving}
+                            onClick={() => setEnabled(!enabled)}
+                            className="product-editor-enabled-switch shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+                            data-enabled={enabled}
+                            title={enabled ? '当前商品已启用' : '当前商品已禁用'}
+                        >
+                            <span className="product-editor-switch-track" aria-hidden="true">
+                                <span />
+                            </span>
+                        </AdminButton>
+                    ) : (
+                        <span className="text-xs text-slate-600">{enabled ? '已启用' : '已停用'}</span>
+                    )}
                 </div>
                 <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -265,7 +293,7 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                             商品类型
                             <FeatureHelpButton topic="catalog.product-editor" title="商品类型" />
                         </span>
-                        {typeLocked || fixedFulfillmentType ? (
+                        {!canEditProduct || typeLocked || fixedFulfillmentType ? (
                             <span className="flex items-center gap-1.5 font-semibold text-slate-700">
                                 {fulfillmentType === 'physical' ? '实物商品' : '数字商品'}
                                 <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">
@@ -308,7 +336,7 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                               : '已有业务数据，商品类型不可直接更改。'}
                     </p>
                 )}
-                {!isCreateMode && (
+                {!isCreateMode && canCopyProduct && (
                     <AdminButton
                         type="button"
                         disabled={saving || copying || isDirty}
@@ -323,7 +351,13 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                 )}
             </section>
 
-            {children}
+            <fieldset
+                key={String(canEditProduct)}
+                disabled={!canEditProduct}
+                className="min-w-0 border-0 p-0"
+            >
+                {children}
+            </fieldset>
 
             <div className="space-y-1 px-1 text-xs text-slate-500">
                 <p className="flex items-center gap-1.5">
@@ -342,7 +376,7 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
                 <p className="text-[11px]">单店独立商品</p>
             </div>
 
-            {aiDialogOpen && (
+            {aiDialogOpen && canEditProduct && canCreateAsset && (
                 <ProductAiImageDialog
                     open
                     productName={productName}

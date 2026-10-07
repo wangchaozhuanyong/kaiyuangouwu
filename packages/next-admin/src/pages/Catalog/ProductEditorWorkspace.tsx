@@ -4,6 +4,7 @@ import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import type { RefundPolicy } from '../../graphql/commerce.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { ProductPackagingBlock } from './CatalogOperationsBlocks';
 import { DigitalProductWorkspace } from './DigitalProductWorkspace';
 import { PhysicalProductWorkspace } from './PhysicalProductWorkspace';
@@ -40,9 +41,15 @@ export function ProductEditorWorkspace() {
         manualDeliverySlaMinutes,
         setManualDeliverySlaMinutes,
         variants,
+        description,
         saving,
         errorMessage,
     } = useProductEditor();
+    const { canUseCapability } = useAdminCapabilities();
+    const canWriteProduct = canUseCapability(
+        isCreateMode ? '/catalog/products/new' : '/catalog/products',
+        'write',
+    );
     // Keep the old attributes URL usable, while all new links use the four task tabs.
     const selectedTab = activeTab === 'FACETS_COLLECTIONS' ? 'BASIC' : activeTab;
     const hasMigration =
@@ -113,16 +120,53 @@ export function ProductEditorWorkspace() {
                         hidden={selectedTab !== 'BASIC'}
                         className="product-editor-tab-panel"
                     >
-                        <section className="product-editor-panel">
-                            <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                基本信息
-                            </h2>
-                            <ProductEditorIdentityFields />
-                        </section>
-                        <ProductBasicTab />
-                        <section className="product-editor-panel">
-                            <ProductFacetsCollectionsTab section="facets" />
-                        </section>
+                        <fieldset
+                            key={String(canWriteProduct)}
+                            disabled={!canWriteProduct}
+                            className="contents"
+                        >
+                            <section className="product-editor-panel">
+                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                    基本信息
+                                </h2>
+                                <ProductEditorIdentityFields />
+                            </section>
+                            {canWriteProduct ? (
+                                <ProductBasicTab />
+                            ) : (
+                                <div className="space-y-5">
+                                    <section className="product-editor-panel">
+                                        <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                            商品描述
+                                        </h2>
+                                        <div
+                                            className="product-editor-description-reader"
+                                            aria-label="商品描述阅读"
+                                        >
+                                            {description || '尚未填写商品描述'}
+                                        </div>
+                                    </section>
+                                    <section className="product-editor-panel">
+                                        <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                            商品详情图
+                                        </h2>
+                                        <div className="product-editor-gallery">
+                                            {productData?.product?.assets.map(asset => (
+                                                <img
+                                                    key={asset.id}
+                                                    src={asset.preview}
+                                                    alt={asset.name}
+                                                    className="aspect-square w-full object-contain"
+                                                />
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+                            )}
+                            <section className="product-editor-panel">
+                                <ProductFacetsCollectionsTab section="facets" />
+                            </section>
+                        </fieldset>
                     </section>
                     <section
                         role="tabpanel"
@@ -132,22 +176,29 @@ export function ProductEditorWorkspace() {
                         hidden={selectedTab !== 'VARIANTS'}
                         className="product-editor-tab-panel"
                     >
-                        <section className="product-editor-panel">
-                            <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                规格与价格 <FeatureHelpButton topic="catalog.variants" title="规格与价格" />
-                            </h2>
-                            <ProductVariantsTab />
-                        </section>
-                        <div className="product-editor-independent-fields">
-                            <p className="mb-3 text-xs text-slate-500">
-                                其他币种价格和规格补充资料请分别保存。
-                            </p>
-                            <NextAdminPageBlocks
-                                pageId="product-detail"
-                                entity={productData?.product as unknown as Record<string, unknown>}
-                                includeIds={pricingBlocks}
-                            />
-                        </div>
+                        <fieldset
+                            key={String(canWriteProduct)}
+                            disabled={!canWriteProduct}
+                            className="contents"
+                        >
+                            <section className="product-editor-panel">
+                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                    规格与价格{' '}
+                                    <FeatureHelpButton topic="catalog.variants" title="规格与价格" />
+                                </h2>
+                                <ProductVariantsTab />
+                            </section>
+                            <div className="product-editor-independent-fields">
+                                <p className="mb-3 text-xs text-slate-500">
+                                    其他币种价格和规格补充资料请分别保存。
+                                </p>
+                                <NextAdminPageBlocks
+                                    pageId="product-detail"
+                                    entity={productData?.product as unknown as Record<string, unknown>}
+                                    includeIds={pricingBlocks}
+                                />
+                            </div>
+                        </fieldset>
                     </section>
                     <section
                         role="tabpanel"
@@ -157,80 +208,90 @@ export function ProductEditorWorkspace() {
                         hidden={selectedTab !== 'DELIVERY'}
                         className="product-editor-tab-panel"
                     >
-                        <section className="product-editor-panel">
-                            <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                {effectiveFulfillmentType === 'digital' ? '数字商品交付' : '实物库存与交付'}{' '}
-                                <FeatureHelpButton topic="catalog.product-editor" title="交付与售后" />
-                            </h2>
-                            {effectiveFulfillmentType === 'digital' ? (
-                                <DigitalProductWorkspace />
-                            ) : (
-                                <PhysicalProductWorkspace />
-                            )}
-                        </section>
-                        <section className="product-editor-panel">
-                            <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                售后规则
-                            </h2>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <AdminField
-                                    layout="stacked"
-                                    label={
-                                        <span className="flex items-center gap-2">
-                                            退款规则{' '}
-                                            <FeatureHelpButton
-                                                topic="catalog.product-editor"
-                                                title="退款规则"
-                                            />
-                                        </span>
-                                    }
-                                >
-                                    <AdminSelect
-                                        aria-label="退款规则"
-                                        value={refundPolicy}
-                                        disabled={saving}
-                                        onChange={event =>
-                                            setRefundPolicy(event.target.value as RefundPolicy)
-                                        }
-                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
-                                    >
-                                        <option value="MERCHANT_REVIEW">可申请退款（商家审核）</option>
-                                        <option value="NON_REFUNDABLE">不支持退款申请</option>
-                                        {effectiveFulfillmentType === 'physical' && (
-                                            <option value="SEVEN_DAY_NO_REASON">七天无理由退货</option>
-                                        )}
-                                    </AdminSelect>
-                                </AdminField>
-                                {effectiveFulfillmentType === 'digital' &&
-                                    variants.some(v => v.digitalDeliveryMode === 'manual_service') && (
-                                        <AdminField layout="stacked" label="预计人工处理时长（分钟）">
-                                            <AdminInput
-                                                aria-label="预计人工处理时长"
-                                                type="number"
-                                                min="5"
-                                                max="525600"
-                                                step="5"
-                                                value={manualDeliverySlaMinutes}
-                                                disabled={saving}
-                                                onChange={event =>
-                                                    setManualDeliverySlaMinutes(Number(event.target.value))
-                                                }
-                                                className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
-                                            />
-                                        </AdminField>
-                                    )}
-                            </div>
-                        </section>
-                        {effectiveFulfillmentType === 'physical' && productData?.product && (
+                        <fieldset
+                            key={String(canWriteProduct)}
+                            disabled={!canWriteProduct}
+                            className="contents"
+                        >
                             <section className="product-editor-panel">
-                                <ProductPackagingBlock
-                                    context={{
-                                        pageId: 'product-detail',
-                                        entity: productData.product as unknown as Record<string, unknown>,
-                                    }}
-                                />
+                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                    {effectiveFulfillmentType === 'digital'
+                                        ? '数字商品交付'
+                                        : '实物库存与交付'}{' '}
+                                    <FeatureHelpButton topic="catalog.product-editor" title="交付与售后" />
+                                </h2>
+                                {effectiveFulfillmentType === 'digital' ? (
+                                    <DigitalProductWorkspace />
+                                ) : (
+                                    <PhysicalProductWorkspace />
+                                )}
                             </section>
-                        )}
+                            <section className="product-editor-panel">
+                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
+                                    售后规则
+                                </h2>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <AdminField
+                                        layout="stacked"
+                                        label={
+                                            <span className="flex items-center gap-2">
+                                                退款规则{' '}
+                                                <FeatureHelpButton
+                                                    topic="catalog.product-editor"
+                                                    title="退款规则"
+                                                />
+                                            </span>
+                                        }
+                                    >
+                                        <AdminSelect
+                                            aria-label="退款规则"
+                                            value={refundPolicy}
+                                            disabled={saving}
+                                            onChange={event =>
+                                                setRefundPolicy(event.target.value as RefundPolicy)
+                                            }
+                                            className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
+                                        >
+                                            <option value="MERCHANT_REVIEW">可申请退款（商家审核）</option>
+                                            <option value="NON_REFUNDABLE">不支持退款申请</option>
+                                            {effectiveFulfillmentType === 'physical' && (
+                                                <option value="SEVEN_DAY_NO_REASON">七天无理由退货</option>
+                                            )}
+                                        </AdminSelect>
+                                    </AdminField>
+                                    {effectiveFulfillmentType === 'digital' &&
+                                        variants.some(v => v.digitalDeliveryMode === 'manual_service') && (
+                                            <AdminField layout="stacked" label="预计人工处理时长（分钟）">
+                                                <AdminInput
+                                                    aria-label="预计人工处理时长"
+                                                    type="number"
+                                                    min="5"
+                                                    max="525600"
+                                                    step="5"
+                                                    value={manualDeliverySlaMinutes}
+                                                    disabled={saving}
+                                                    onChange={event =>
+                                                        setManualDeliverySlaMinutes(
+                                                            Number(event.target.value),
+                                                        )
+                                                    }
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
+                                                />
+                                            </AdminField>
+                                        )}
+                                </div>
+                            </section>
+                            {effectiveFulfillmentType === 'physical' && productData?.product && (
+                                <section className="product-editor-panel">
+                                    <ProductPackagingBlock
+                                        context={{
+                                            pageId: 'product-detail',
+                                            entity: productData.product as unknown as Record<string, unknown>,
+                                        }}
+                                    />
+                                </section>
+                            )}
+                        </fieldset>
                     </section>
                     <section
                         role="tabpanel"
@@ -240,17 +301,27 @@ export function ProductEditorWorkspace() {
                         hidden={selectedTab !== 'MORE'}
                         className="product-editor-tab-panel"
                     >
-                        <section className="product-editor-panel">
-                            <ProductMoreSettings />
-                        </section>
-                        <section className="product-editor-panel">
-                            <ProductSupplySettings />
-                        </section>
-                        <NextAdminPageBlocks
-                            pageId="product-detail"
-                            entity={productData?.product as unknown as Record<string, unknown>}
-                            excludeIds={['catalog-product-operations', 'product-packaging', ...pricingBlocks]}
-                        />
+                        <fieldset
+                            key={String(canWriteProduct)}
+                            disabled={!canWriteProduct}
+                            className="contents"
+                        >
+                            <section className="product-editor-panel">
+                                <ProductMoreSettings />
+                            </section>
+                            <section className="product-editor-panel">
+                                <ProductSupplySettings />
+                            </section>
+                            <NextAdminPageBlocks
+                                pageId="product-detail"
+                                entity={productData?.product as unknown as Record<string, unknown>}
+                                excludeIds={[
+                                    'catalog-product-operations',
+                                    'product-packaging',
+                                    ...pricingBlocks,
+                                ]}
+                            />
+                        </fieldset>
                     </section>
                 </div>
                 <ProductEditorSidebar>

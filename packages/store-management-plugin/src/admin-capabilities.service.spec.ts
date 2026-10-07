@@ -4,6 +4,8 @@ import { RequestContext } from '@vendure/core';
 import { buildSchema, graphql, print } from 'graphql';
 import { describe, expect, it, vi } from 'vitest';
 
+import { StorefrontReviewAdminResolver } from '../../storefront-review-plugin/src/storefront-review.resolver';
+
 import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
@@ -17,7 +19,7 @@ function fixture(
         id: code === DEFAULT_CHANNEL_CODE ? '1' : '2',
         code,
         customFields: { commerceMode: mode },
-        defaultShippingZone: { members: [{ enabled: true }] },
+        defaultShippingZone: { members: [{ enabled: true, code: 'CN' }] },
     };
     const ctx = {
         apiType: 'admin',
@@ -63,6 +65,32 @@ async function status(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('current administrator capabilities', () => {
+    it('keeps review navigation aligned with the actual review API permissions', async () => {
+        const readPermissions = Reflect.getMetadata(
+            '__permissions__',
+            Reflect.get(StorefrontReviewAdminResolver.prototype, 'storefrontReviews'),
+        ) as string[];
+        const writePermissions = Reflect.getMetadata(
+            '__permissions__',
+            Reflect.get(StorefrontReviewAdminResolver.prototype, 'moderateStorefrontReview'),
+        ) as string[];
+        expect(readPermissions).toHaveLength(1);
+        expect(writePermissions).toHaveLength(1);
+        expect(await status(fixture(readPermissions), '/sales/reviews')).toMatchObject({
+            state: 'READY',
+            canRead: true,
+            canWrite: false,
+        });
+        expect(await status(fixture([Permission.ReadOrder]), '/sales/reviews')).toMatchObject({
+            state: 'FORBIDDEN',
+            canRead: false,
+            canWrite: false,
+        });
+        expect(
+            await status(fixture([...readPermissions, ...writePermissions]), '/sales/reviews'),
+        ).toMatchObject({ state: 'READY', canRead: true, canWrite: true });
+    });
+
     it('exposes a read-only authenticated GraphQL field with serializable bootstrap types', async () => {
         const f = fixture([]);
         const resolver = new AdminCapabilitiesResolver(f.service);

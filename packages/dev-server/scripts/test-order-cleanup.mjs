@@ -141,6 +141,12 @@ function references(table) {
     for (const [column, target] of Object.entries(implicit))
         if (table.columns.includes(column) && !refs.some(ref => ref.columns.includes(column)))
             refs.push({ columns: [column], target, targetColumns: ['id'] });
+    if (
+        table.name === 'store_usdt_reconciliation_action' &&
+        table.columns.includes('intentId') &&
+        !refs.some(ref => ref.columns.includes('intentId'))
+    )
+        refs.push({ columns: ['intentId'], target: 'storefront_usdt_payment_intent', targetColumns: ['id'] });
     if (table.columns.includes('deliveryId') && !refs.some(ref => ref.columns.includes('deliveryId'))) {
         const known = {
             manual_digital_delivery_event: 'manual_digital_delivery',
@@ -167,6 +173,14 @@ function safeNumber(value, label) {
     assert.ok(Number.isSafeInteger(number), `${label} is not a safe integer`);
     return number;
 }
+function utcTimestamp(value) {
+    // MySQL CAST datetime strings have no offset; Vendure stores these values in UTC.
+    const normalized =
+        typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/u.test(value)
+            ? `${value.replace(' ', 'T')}Z`
+            : value;
+    return Date.parse(normalized);
+}
 function tracked(freeze, variantId) {
     const map = freeze.trackingByVariant ?? {};
     return typeof map[valueKey(variantId)] === 'boolean' ? map[valueKey(variantId)] : undefined;
@@ -176,7 +190,7 @@ function tracked(freeze, variantId) {
 export function buildCleanupPlan(snapshot, freeze) {
     assert.equal(freeze.version, 1);
     assert.match(freeze.targetFingerprint, /^[a-f0-9]{64}$/u);
-    assert.ok(Number.isFinite(Date.parse(freeze.cutoff)));
+    assert.ok(Number.isFinite(utcTimestamp(freeze.cutoff)));
     assert.ok(Array.isArray(freeze.orderIds) && freeze.orderIds.length > 0);
     assert.equal(snapshot.targetFingerprint, freeze.targetFingerprint, 'Wrong database instance');
     const schemas = new Map(snapshot.tables.map(table => [table.name, table]));
@@ -203,9 +217,9 @@ export function buildCleanupPlan(snapshot, freeze) {
                 id,
                 'Order missing; only a matching committed post-state can be treated as idempotent',
             );
-    const cutoff = Date.parse(freeze.cutoff);
+    const cutoff = utcTimestamp(freeze.cutoff);
     for (const row of rows.order ?? []) {
-        if (ids.has(valueKey(row.id)) && Date.parse(row.createdAt) > cutoff)
+        if (ids.has(valueKey(row.id)) && utcTimestamp(row.createdAt) > cutoff)
             addBlock('ORDER_AFTER_CUTOFF', 'order', row.id, 'Order was not present at the frozen cutoff');
         if (!ids.has(valueKey(row.id)))
             addBlock(
@@ -281,7 +295,7 @@ export function buildCleanupPlan(snapshot, freeze) {
                             parent => valueKey(parent.id) === sourceId,
                         )
                     ) {
-                        if (!Number.isFinite(Date.parse(version)))
+                        if (!Number.isFinite(utcTimestamp(version)))
                             addBlock(
                                 'NOTIFICATION_REFERENCE_UNKNOWN',
                                 table.name,
@@ -627,7 +641,7 @@ export function buildCleanupPlan(snapshot, freeze) {
         }
     for (const coupon of chosen('customer_coupon')) {
         const status =
-            coupon.validUntil && Date.parse(coupon.validUntil) <= cutoff
+            coupon.validUntil && utcTimestamp(coupon.validUntil) <= cutoff
                 ? 'EXPIRED'
                 : ['REVOKED', 'EXPIRED'].includes(coupon.status)
                   ? coupon.status
@@ -652,10 +666,11 @@ export function buildCleanupPlan(snapshot, freeze) {
         const other = (rows.referral_ledger_entry ?? []).filter(
             row => valueKey(row.walletId) === walletId && !isChosen('referral_ledger_entry', row),
         );
-        const earliest = Math.min(...entries.map(row => Date.parse(row.createdAt)));
+        const earliest = Math.min(...entries.map(row => utcTimestamp(row.createdAt)));
         if (
             other.some(
-                row => !Number.isFinite(Date.parse(row.createdAt)) || Date.parse(row.createdAt) >= earliest,
+                row =>
+                    !Number.isFinite(utcTimestamp(row.createdAt)) || utcTimestamp(row.createdAt) >= earliest,
             )
         )
             addBlock(
@@ -676,8 +691,8 @@ export function buildCleanupPlan(snapshot, freeze) {
             continue;
         }
         const ledger = (rows.referral_ledger_entry ?? []).filter(row => valueKey(row.walletId) === walletId);
-        const latestTime = Math.max(...ledger.map(row => Date.parse(row.createdAt)));
-        const latest = ledger.filter(row => Date.parse(row.createdAt) === latestTime);
+        const latestTime = Math.max(...ledger.map(row => utcTimestamp(row.createdAt)));
+        const latest = ledger.filter(row => utcTimestamp(row.createdAt) === latestTime);
         const last = latest
             .sort((a, b) => safeNumber(a.id, 'ledgerId') - safeNumber(b.id, 'ledgerId'))
             .at(-1);
@@ -723,9 +738,18 @@ export function buildCleanupPlan(snapshot, freeze) {
                 'Reverse only the sum of frozen order ledger deltas; keep account and unrelated starting balance',
             );
     }
-    for (const name of ['storefront_usdt_payment_intent', 'store_usdt_manual_refund'])
+    for (const name of [
+        'storefront_usdt_payment_intent',
+        'store_usdt_manual_refund',
+        'store_usdt_reconciliation_action',
+    ])
         for (const row of chosen(name))
-            if (row.transactionId || Number(row.blockNumber) > 0 || row.matchedTransactionId)
+            if (
+                row.transactionId ||
+                Number(row.blockNumber) > 0 ||
+                row.matchedTransactionId ||
+                (name === 'store_usdt_reconciliation_action' && row.action === 'CONFIRM_EXTERNAL_REFUND')
+            )
                 addBlock(
                     'EXTERNAL_CHAIN_EVIDENCE',
                     name,
@@ -1035,7 +1059,13 @@ async function semanticReferenceQueries(runner, table, rows) {
     return queries;
 }
 
+async function ensureUtcSession(runner) {
+    if (['mysql', 'mariadb'].includes(runner.connection.options.type))
+        await runner.query("SET SESSION time_zone = '+00:00'");
+}
+
 export async function collectCleanupSnapshot(runner, freeze, original) {
+    await ensureUtcSession(runner);
     const targetFingerprint = await databaseFingerprint(runner);
     assert.equal(targetFingerprint, freeze.targetFingerprint, 'Wrong database instance');
     const tables = (await runner.getTables())
@@ -1466,12 +1496,13 @@ async function main(argv, environment) {
     await database.initialize();
     const runner = database.createQueryRunner();
     try {
+        await ensureUtcSession(runner);
         if (args['--mode'] === 'freeze') {
             assert.ok(args['--cutoff'] && args['--out']);
-            assert.ok(Number.isFinite(Date.parse(args['--cutoff'])), 'Explicit valid cutoff required');
+            assert.ok(Number.isFinite(utcTimestamp(args['--cutoff'])), 'Explicit valid cutoff required');
             const orderIds = (
                 await runner.query('SELECT id FROM `order` WHERE createdAt <= ? ORDER BY id', [
-                    new Date(args['--cutoff']),
+                    new Date(utcTimestamp(args['--cutoff'])),
                 ])
             ).map(row => String(row.id));
             const recordedScope = createFrozenCandidate(

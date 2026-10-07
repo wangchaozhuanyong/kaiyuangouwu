@@ -259,6 +259,7 @@ export const flashSalePriceAction = new PromotionItemAction({
                       ctx.currencyCode,
                   )
                 : null;
+        if (rule.salePrice != null && configuredSalePrice == null) return 0;
         const targetPrice =
             configuredSalePrice != null
                 ? ctx.channel.pricesIncludeTax || orderLine.unitPriceWithTax <= 0
