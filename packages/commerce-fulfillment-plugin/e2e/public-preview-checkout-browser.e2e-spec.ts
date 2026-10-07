@@ -33,7 +33,7 @@ import {
 } from '../src/entities/digital-product.entity';
 import { ManualDigitalDelivery } from '../src/entities/manual-digital-delivery.entity';
 
-// Importing this fixture registers its existing three native simulations and shared Nest setup.
+// Importing this fixture registers its existing native simulations and shared Nest setup.
 import { previewSimulationFixture } from './public-preview-simulation.e2e-spec';
 
 const reportPath = resolve(
@@ -120,6 +120,25 @@ it(
                 blockedPostalPrefixes: '',
             }),
         );
+        // Existing native receipt cases deliberately retain resources. Assert only this checkout's delta.
+        const [baselineStock, baselineDigital] = await Promise.all([
+            connection.getRepository(ctx, StockLevel).findOneByOrFail({ productVariantId: physicalId }),
+            connection.getRepository(ctx, DigitalVariantConfig).findOneByOrFail({
+                id: digitalConfigId,
+                channelId: ctx.channelId,
+                productVariantId: digitalId,
+            }),
+        ]);
+        const resourceBaseline = {
+            stockLevelId: baselineStock.id,
+            stockLocationId: baselineStock.stockLocationId,
+            digitalConfigId: baselineDigital.id,
+            channelId: baselineDigital.channelId,
+            digitalVariantId: baselineDigital.productVariantId,
+            stockAllocated: baselineStock.stockAllocated,
+            digitalAvailable: baselineDigital.availableQuantity,
+        };
+        expect(resourceBaseline.digitalAvailable).toBeGreaterThanOrEqual(1);
         let preparedProof: { phase: Order['state']; orderId: string } | undefined;
         let settlementVerified = false;
         let finish!: () => void;
@@ -155,10 +174,13 @@ it(
                 : null;
             const stock = await connection
                 .getRepository(ctx, StockLevel)
-                .findOneByOrFail({ productVariantId: physicalId });
-            const digitalConfig = await connection
-                .getRepository(ctx, DigitalVariantConfig)
-                .findOneByOrFail({ id: digitalConfigId });
+                .findOneByOrFail({ id: resourceBaseline.stockLevelId, productVariantId: physicalId });
+            expect(stock.stockLocationId).toBe(resourceBaseline.stockLocationId);
+            const digitalConfig = await connection.getRepository(ctx, DigitalVariantConfig).findOneByOrFail({
+                id: resourceBaseline.digitalConfigId,
+                channelId: resourceBaseline.channelId,
+                productVariantId: resourceBaseline.digitalVariantId,
+            });
             const cart = await connection.getRepository(ctx, StorefrontCart).findOne({
                 where: {
                     channelId: ctx.channelId,
@@ -231,8 +253,8 @@ it(
                 shippingLineCount: 1,
                 holdState: 'HELD',
                 outstandingPhysical: 1,
-                stockAllocated: 1,
-                digitalAvailable: 2,
+                stockAllocated: resourceBaseline.stockAllocated + 1,
+                digitalAvailable: resourceBaseline.digitalAvailable - 1,
                 digitalReservation: { state: 'HELD', consumed: 0, released: 0 },
                 coupon: { status: 'LOCKED', usedAt: null },
                 couponAllocation: { status: 'LOCKED', usedAt: null },
@@ -257,8 +279,8 @@ it(
                 quantity: 2,
                 holdState: 'RELEASED',
                 outstandingPhysical: 0,
-                stockAllocated: 0,
-                digitalAvailable: 3,
+                stockAllocated: resourceBaseline.stockAllocated,
+                digitalAvailable: resourceBaseline.digitalAvailable,
                 digitalReservation: { state: 'RELEASED', consumed: 0, released: 1 },
                 coupon: { status: 'AVAILABLE', lockedOrderId: null, usedAt: null },
                 couponAllocation: { status: 'RELEASED', usedAt: null },
@@ -308,6 +330,7 @@ it(
             ).toBe(0);
             const report = {
                 environment: mysql ? 'disposable-local-mysql' : 'disposable-local-sqljs',
+                resourceBaseline,
                 naturalCheckoutPreparation: preparedProof,
                 controlledPaymentSettlement: settled,
                 externalCharge: false,

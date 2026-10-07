@@ -38,6 +38,7 @@ import {
 } from '@vendure/core';
 import { EmailSendEvent } from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { SimpleGraphQLClient, createTestEnvironment } from '@vendure/testing';
 import { print } from 'graphql';
@@ -215,6 +216,7 @@ const config = mergeConfig(testConfig(), {
         OperationsDashboardPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
+        StoreDomainPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'synthetic-no-network',
@@ -462,9 +464,9 @@ beforeAll(async () => {
         user: currentUser,
         channelOrToken: foreign.channel.token,
     });
-    // An actual public store requires an ACTIVE profile. Seed that business precondition;
+    // An actual public store requires an ACTIVE profile and verified primary domain. Seed both;
     // keep StorefrontActivationInterceptor and all permission checks enabled.
-    for (const context of [own, foreign])
+    for (const context of [own, foreign]) {
         await connection.getRepository(platform, StoreProfile).save(
             new StoreProfile({
                 channelId: context.channelId,
@@ -474,6 +476,18 @@ beforeAll(async () => {
                 descriptionEn: 'Synthetic local API acceptance store',
             }),
         );
+        await connection.getRepository(platform, StoreDomain).save(
+            new StoreDomain({
+                channelId: context.channelId,
+                domain: `${context.channel.code}.example.invalid`,
+                status: 'ACTIVE',
+                isPrimary: true,
+                primaryChannelId: context.channelId,
+                verifiedAt: new Date(),
+                verificationToken: randomUUID(),
+            }),
+        );
+    }
     locationId = (
         await server.app
             .get(StockLocationService)

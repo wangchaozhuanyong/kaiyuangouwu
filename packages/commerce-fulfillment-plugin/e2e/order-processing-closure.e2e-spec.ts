@@ -27,6 +27,7 @@ import {
     User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -37,6 +38,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../../store-management-plugin/src/store-management.plugin';
 import { CommerceFulfillmentPlugin } from '../src/commerce-fulfillment.plugin';
 import { CommerceModeService } from '../src/commerce-mode.service';
@@ -119,6 +121,7 @@ const config = mergeConfig(testConfig(), {
         OperationsDashboardPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
+        StoreDomainPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'local-no-network',
@@ -309,6 +312,28 @@ beforeAll(async () => {
     };
     own = await createChannel('closure-own-local');
     foreign = await createChannel('closure-foreign-local');
+    for (const context of [own, foreign]) {
+        await connection.getRepository(platform, StoreProfile).save(
+            new StoreProfile({
+                channelId: context.channelId,
+                status: 'ACTIVE',
+                isPublished: true,
+                descriptionZh: '合成本地验收店铺',
+                descriptionEn: 'Synthetic local API acceptance store',
+            }),
+        );
+        await connection.getRepository(platform, StoreDomain).save(
+            new StoreDomain({
+                channelId: context.channelId,
+                domain: `${context.channel.code}.example.invalid`,
+                status: 'ACTIVE',
+                isPrimary: true,
+                primaryChannelId: context.channelId,
+                verifiedAt: new Date(),
+                verificationToken: randomUUID(),
+            }),
+        );
+    }
     ownToken = own.channel.token;
     foreignToken = foreign.channel.token;
     const location = await server.app
