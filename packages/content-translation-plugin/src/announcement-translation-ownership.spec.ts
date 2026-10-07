@@ -4,26 +4,32 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ContentTranslationBackfillService } from './content-translation-backfill.service';
 import { TranslationContentAdapter } from './translation-content-adapter';
 
+const channelSchema = new EntitySchema({ name: 'Channel', columns: { id: { type: String, primary: true } } });
 const schema = new EntitySchema({
     name: 'SystemAnnouncement',
     columns: {
         id: { type: Number, primary: true },
         ownerChannelId: { type: String, nullable: true },
+        targetMode: { type: String },
         titleZh: { type: String },
         titleEn: { type: String },
         contentZh: { type: String },
         contentEn: { type: String },
     },
+    relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
 });
-const database = new DataSource({ type: 'sqljs', entities: [schema], synchronize: true });
+const database = new DataSource({ type: 'sqljs', entities: [channelSchema, schema], synchronize: true });
 describe('announcement translation publication ownership', () => {
     let adapter: TranslationContentAdapter;
     beforeAll(async () => {
         await database.initialize();
+        await database.getRepository(channelSchema).save({ id: 'store-a' });
         await database.getRepository(schema).save([
             {
                 id: 1,
                 ownerChannelId: null,
+                targetMode: 'ALL',
+                channels: [],
                 titleZh: '平台',
                 titleEn: '',
                 contentZh: '平台内容',
@@ -32,6 +38,8 @@ describe('announcement translation publication ownership', () => {
             {
                 id: 2,
                 ownerChannelId: 'store-a',
+                targetMode: 'SINGLE',
+                channels: [{ id: 'store-a' }],
                 titleZh: '本店',
                 titleEn: '',
                 contentZh: '店铺内容',
