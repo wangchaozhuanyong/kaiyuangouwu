@@ -196,9 +196,9 @@ export function UsdtPaymentManagementModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
                 <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
-                    <div>
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <WalletCards className="h-5 w-5 text-emerald-600" />
                             {standalonePage?.title ?? '支付与 USDT 收款管理'}
@@ -208,6 +208,7 @@ export function UsdtPaymentManagementModule() {
                                 description={'平台级钱包审核、全部支付流水、链上意向和人工退款审计'}
                             />
                         </h1>
+                        <p className="text-xs text-slate-500">支付流水、链上对账与退款证据</p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -223,7 +224,7 @@ export function UsdtPaymentManagementModule() {
                     </AdminButton>
                 </div>
             </header>
-            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 min-w-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                 {notice && <Notice tone="success" message={notice} />}
                 {error && !action && <Notice tone="error" message={error} />}
                 {query.error && !query.data ? (
@@ -445,7 +446,7 @@ export function UsdtPaymentManagementModule() {
                                     className="admin-comparison-scroll mt-4 overflow-x-auto rounded-lg border border-slate-200"
                                 >
                                     <p className="admin-mobile-table-hint">左右滑动查看完整支付流水明细</p>
-                                    <table className="min-w-[1060px] w-full text-left text-xs">
+                                    <table className="admin-compact-table min-w-[1060px] w-full text-left text-xs">
                                         <thead className="bg-slate-50 text-slate-500">
                                             <tr>
                                                 {[
@@ -1082,11 +1083,12 @@ function Pager({
 }
 function Heading({ title, detail }: { title: string; detail: string }) {
     return (
-        <div>
+        <div className="admin-section-title-line">
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {title}
                 <FeatureHelpButton topic="settings.usdt" title={title} description={detail} />
             </h2>
+            <p className="text-xs text-slate-500">{detail}</p>
         </div>
     );
 }

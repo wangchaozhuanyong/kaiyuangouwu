@@ -60,23 +60,21 @@ export function Modal({
 }) {
     const { dialogRef, titleId } = useAccessibleDialog(onClose);
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 p-3 sm:p-4">
             <div
                 ref={dialogRef as React.RefObject<HTMLDivElement>}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`max-h-[94vh] w-full ${width} overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none`}
+                className={`admin-dialog-surface min-w-0 max-h-[94vh] w-full ${width} overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl outline-none`}
             >
                 <div className="mb-5 flex items-start justify-between gap-4">
-                    <div>
+                    <div className="admin-section-title-line">
                         <h2 id={titleId} className="font-bold text-slate-900">
                             {title}
                         </h2>
-                        {description && (
-                            <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-                        )}
+                        {description && <p className="text-xs leading-5 text-slate-400">{description}</p>}
                     </div>
                     <AdminButton
                         type="button"

@@ -230,8 +230,8 @@ export function UsdtPaymentSetupPanel({
 
     return (
         <section className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50 p-5 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <div className="flex flex-col gap-3 border-b border-emerald-100 bg-white p-4 sm:p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="admin-section-title-line">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <WalletCards className="h-4 w-4 text-emerald-600" /> USDT-TRC20 收款
                         <FeatureHelpButton
@@ -242,6 +242,7 @@ export function UsdtPaymentSetupPanel({
                             }
                         />
                     </h2>
+                    <p className="text-xs text-slate-500">平台统一地址，本店独立启用</p>
                 </div>
                 {wallet && <WalletStatusBadge status={wallet.reviewStatus} />}
             </div>
@@ -265,7 +266,7 @@ export function UsdtPaymentSetupPanel({
                     </AdminButton>
                 </div>
             ) : configuration && wallet && draft ? (
-                <div className="space-y-6 p-5">
+                <div className="space-y-4 p-4 sm:p-5">
                     {owner.sourceChanged && <DraftUpdateNotice onReload={owner.reload} />}
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <Metric label="当前店铺" value={configuration.channelCode} />

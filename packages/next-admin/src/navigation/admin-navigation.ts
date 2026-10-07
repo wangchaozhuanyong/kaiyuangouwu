@@ -339,7 +339,7 @@ export function standalonePageScopeAllows(path: string, platformContext: boolean
         return platformContext;
     if (
         (page.sourcePath === '/settings/system-ops' &&
-            ['health', 'jobs', 'schedules', 'telegram'].includes(page.key)) ||
+            ['health', 'jobs', 'schedules', 'telegram', 'settings'].includes(page.key)) ||
         page.sourcePath === '/settings/usdt-payments' ||
         page.sourcePath === '/settings/governance-risk' ||
         page.sourcePath === '/settings/data-management'

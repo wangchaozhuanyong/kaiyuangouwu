@@ -9,8 +9,9 @@ import type { SettingsStoreFieldRecord } from '../../graphql/management.graphql'
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { SystemSettingsPanel } from './SystemSettingsPanel';
 
-const mocks = vi.hoisted(() => ({ useMutation: vi.fn() }));
-vi.mock('@apollo/client/react', () => mocks);
+const mocks = vi.hoisted(() => ({ useMutation: vi.fn(), useAdminQuery: vi.fn() }));
+vi.mock('@apollo/client/react', () => ({ useMutation: mocks.useMutation }));
+vi.mock('../../hooks/use-admin-query', () => ({ useAdminQuery: mocks.useAdminQuery }));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 
 const field = (key: string, currentValue: unknown, readonly = false): SettingsStoreFieldRecord => ({
@@ -43,6 +44,7 @@ beforeEach(() => {
     onError = vi.fn<(message: string) => void>();
     confirm = vi.fn<RequestConfirmation>().mockResolvedValue(false);
     mocks.useMutation.mockReturnValue([save, { loading: false }]);
+    mocks.useAdminQuery.mockReturnValue({ data: undefined });
 });
 afterEach(() => {
     act(() => root.unmount());
@@ -51,7 +53,11 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-function render(fields = [technicalField], channelCode = 'shop-a', permissions = ['SuperAdmin']) {
+function render(
+    fields = [technicalField],
+    channelCode: string | null = 'shop-a',
+    permissions = ['SuperAdmin'],
+) {
     act(() =>
         root.render(
             <MemoryRouter>
@@ -59,7 +65,7 @@ function render(fields = [technicalField], channelCode = 'shop-a', permissions =
                     <ConfirmDialogContext.Provider value={confirm}>
                         <SystemSettingsPanel
                             fields={fields}
-                            channelCode={channelCode}
+                            channelCode={channelCode ?? undefined}
                             onChanged={onChanged}
                             onError={onError}
                         />
@@ -108,6 +114,21 @@ describe('advanced settings for business administrators', () => {
         expect(save).not.toHaveBeenCalled();
     });
 
+    it('renders one dynamic business field per table row without inserting catalogue defaults', () => {
+        render([businessFields[0], technicalField]);
+        const table = container.querySelector('section table')!;
+        expect(Array.from(table.querySelectorAll('th')).map(node => node.textContent)).toEqual([
+            '配置名称',
+            '已保存摘要',
+            '定义范围',
+            '用途',
+        ]);
+        expect(table.querySelectorAll('tbody tr')).toHaveLength(1);
+        expect(table.querySelectorAll('tbody td')).toHaveLength(4);
+        expect(container.textContent).not.toContain('客户端商品评价');
+        expect(save).not.toHaveBeenCalled();
+    });
+
     it('guides platform users to select a store and does not link to blocked store pages', () => {
         render(businessFields, '__default_channel__');
         expect(container.textContent).toContain('请先在顶部选择需要管理的经营店铺');
@@ -115,6 +136,41 @@ describe('advanced settings for business administrators', () => {
         render(businessFields, 'shop-a', ['ReadSystem']);
         expect(container.querySelectorAll('a')).toHaveLength(0);
         expect(container.textContent).toContain('具有对应管理权限');
+    });
+
+    it('shows store entries only while the fallback context identifies an operating store', () => {
+        render(businessFields, null);
+        expect(container.querySelectorAll('a')).toHaveLength(0);
+
+        mocks.useAdminQuery.mockReturnValue({ data: { activeChannel: { code: 'shop-a' } } });
+        render(businessFields, null);
+        expect(container.querySelectorAll('a')).toHaveLength(3);
+
+        mocks.useAdminQuery.mockReturnValue({ data: undefined });
+        render(businessFields, null);
+        expect(container.querySelectorAll('a')).toHaveLength(0);
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it('keeps an explicit platform context authoritative over a store bootstrap result', () => {
+        mocks.useAdminQuery.mockReturnValue({ data: { activeChannel: { code: 'shop-a' } } });
+        render(businessFields, '__default_channel__');
+        expect(container.textContent).toContain('请先在顶部选择需要管理的经营店铺');
+        expect(container.querySelectorAll('a')).toHaveLength(0);
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it('keeps explicit store entries subject to the current management permissions', () => {
+        mocks.useAdminQuery.mockReturnValue({
+            data: { activeChannel: { code: '__default_channel__' } },
+        });
+        render(businessFields, 'shop-a');
+        expect(container.querySelectorAll('a')).toHaveLength(3);
+
+        render(businessFields, 'shop-a', ['ReadSystem']);
+        expect(container.querySelectorAll('a')).toHaveLength(0);
+        expect(container.textContent).toContain('具有对应管理权限');
+        expect(save).not.toHaveBeenCalled();
     });
 
     it('searches by Chinese usage and keeps extension settings available for maintenance', async () => {
@@ -151,7 +207,6 @@ describe('advanced settings for business administrators', () => {
     });
 
     it.each([
-        ['null', null],
         ['false', false],
         ['12', 12],
         ['"文本"', '文本'],
@@ -166,6 +221,16 @@ describe('advanced settings for business administrators', () => {
         });
         expect(onChanged).toHaveBeenCalledOnce();
         expect(document.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('rejects top-level null before calling the non-null GraphQL input', async () => {
+        render([field('extension.example', true)]);
+        const editor = await openEditor();
+        input(editor, 'null');
+        await click(button('保存配置'));
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain('不接受顶层 null');
+        expect(save).not.toHaveBeenCalled();
+        expect(editor.value).toBe('null');
     });
 
     it('preserves drafts across refresh and requires the latest value before another save', async () => {

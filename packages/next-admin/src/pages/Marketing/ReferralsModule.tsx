@@ -152,9 +152,18 @@ function ReferralManagement() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-4 sm:px-6">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <ReferralHeading title={standalonePage?.title} />
+                    <ReferralHeading
+                        title={standalonePage?.title}
+                        subtitle={
+                            activeTab === 'LEDGER'
+                                ? '奖励、消费、提款与人工调整'
+                                : activeTab === 'WITHDRAWALS'
+                                  ? '审批与线下打款登记'
+                                  : undefined
+                        }
+                    />
                     <div className="flex flex-wrap gap-2">
                         <Link
                             to="/marketing/sharing"
@@ -212,7 +221,7 @@ function ReferralManagement() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-none min-w-0 flex-1 space-y-4 overflow-y-auto p-3 sm:p-6">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}

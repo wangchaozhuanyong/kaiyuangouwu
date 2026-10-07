@@ -938,10 +938,10 @@ export function AppShell() {
                         <AdminField
                             className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600"
                             label={
-                                <>
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                                     <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
                                     <span className="sr-only lg:not-sr-only">当前店铺</span>
-                                </>
+                                </span>
                             }
                         >
                             {' '}

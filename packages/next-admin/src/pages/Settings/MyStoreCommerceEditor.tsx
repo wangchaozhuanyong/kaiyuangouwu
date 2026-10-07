@@ -60,9 +60,9 @@ export function MyStoreCommerceEditor({
         }
     };
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
             {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
-            <div className="mb-4">
+            <div className="admin-section-title-line mb-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     {standalonePage?.title ?? '本店税务与经营地区'}
                     <FeatureHelpButton
@@ -71,6 +71,9 @@ export function MyStoreCommerceEditor({
                         description="只修改当前店铺的商品税务与经营地区；配送方式请使用本店配送设置。"
                     />
                 </h2>
+                <p className="text-xs text-slate-500">
+                    {taxes ? '商品税率与含税口径' : '本店经营国家或地区'}
+                </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {regions && (

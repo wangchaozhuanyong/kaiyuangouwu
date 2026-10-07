@@ -173,7 +173,7 @@ export function AiImageSettingsModule() {
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-blue-600" />
                             {standalonePage?.title ?? 'AI 图片工坊管理'}
@@ -183,6 +183,15 @@ export function AiImageSettingsModule() {
                                 description={'店铺配置、生图任务、供应商费用和提示词规则包'}
                             />
                         </h1>
+                        <p className="text-xs text-slate-500">
+                            {tab === 'CONFIG'
+                                ? '服务开关、条款与模型定价'
+                                : tab === 'JOBS'
+                                  ? '任务记录与输出售后'
+                                  : tab === 'SKILLS'
+                                    ? '已校验版本与全平台激活'
+                                    : '客户收费与供应商费用'}
+                        </p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -408,7 +417,7 @@ function ConfigPanel({
         <>
             <div className="w-full space-y-4">
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
+                    <div className="admin-section-title-line border-b border-slate-100 px-4 py-3.5 sm:px-5">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             基础设置
                             <FeatureHelpButton
@@ -417,8 +426,9 @@ function ConfigPanel({
                                 description={'先查看当前状态，需要调整时再从右侧打开设置。'}
                             />
                         </h2>
+                        <p className="text-xs text-slate-500">服务与条款</p>
                     </div>
-                    <div className="grid gap-px bg-slate-100 xl:grid-cols-2">
+                    <div className="divide-y divide-slate-100">
                         <ConfigSettingRow
                             icon={Power}
                             title="店铺服务开关"
@@ -435,6 +445,9 @@ function ConfigPanel({
                             <StatusPill tone={value.promptOptimizationEnabled ? 'info' : 'neutral'}>
                                 提示词优化{value.promptOptimizationEnabled ? '已开启' : '已关闭'}
                             </StatusPill>
+                            <span className="text-xs text-slate-500">
+                                默认模型：{defaultModel?.displayNameZh || value.defaultModelCode || '未设置'}
+                            </span>
                             {!value.credentialEnabled && (
                                 <StatusPill tone="warning">服务凭据未启用</StatusPill>
                             )}
@@ -473,35 +486,91 @@ function ConfigPanel({
                             {value.models.length} 个模型
                         </span>
                     </div>
-                    <div className="grid gap-px bg-slate-100 xl:grid-cols-2">
-                        {value.models.map(model => (
-                            <ConfigSettingRow
-                                key={model.id}
-                                icon={ImageIcon}
-                                title={model.displayNameZh}
-                                description={
-                                    '官方标识 ' +
-                                    model.officialModelId +
-                                    ' · ' +
-                                    formatMoney(model.unitPrice, model.currencyCode || currencyCode) +
-                                    ' / 张'
-                                }
-                                onOpen={() => openEditor({ kind: 'MODEL', modelId: model.id })}
-                            >
-                                {model.isDefault && <StatusPill tone="info">默认模型</StatusPill>}
-                                <StatusPill tone={model.enabled ? 'success' : 'neutral'}>
-                                    {model.enabled ? '已开放' : '已停用'}
-                                </StatusPill>
-                                <HealthBadge status={model.healthStatus} />
-                                <span className="font-mono text-[10px] text-slate-400">{model.code}</span>
-                            </ConfigSettingRow>
-                        ))}
-                        {!value.models.length && (
-                            <div className="col-span-full bg-white p-8 text-center text-xs text-slate-400">
-                                当前没有可配置模型
-                            </div>
-                        )}
+                    <div
+                        className="admin-comparison-scroll"
+                        role="region"
+                        aria-label="生图模型，可横向滚动"
+                        tabIndex={0}
+                    >
+                        <table className="admin-compact-table w-full min-w-[960px] text-left text-xs">
+                            <thead className="bg-slate-50 text-slate-500">
+                                <tr>
+                                    {[
+                                        '模型名称',
+                                        '模型编码',
+                                        '默认模型',
+                                        '开放状态',
+                                        '健康状态',
+                                        '单张价格',
+                                        '操作',
+                                    ].map(label => (
+                                        <th key={label} scope="col" className="whitespace-nowrap px-4 py-3">
+                                            {label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {value.models.map(model => (
+                                    <tr key={model.id} className="hover:bg-slate-50">
+                                        <td
+                                            data-label="模型名称"
+                                            className="max-w-56 px-4 py-2 font-semibold text-slate-900"
+                                        >
+                                            <span
+                                                className="block truncate"
+                                                title={`${model.displayNameZh} · ${model.officialModelId}`}
+                                            >
+                                                {model.displayNameZh}
+                                            </span>
+                                        </td>
+                                        <td
+                                            data-label="模型编码"
+                                            className="whitespace-nowrap px-4 py-2 font-mono text-slate-600"
+                                        >
+                                            {model.code}
+                                        </td>
+                                        <td data-label="默认模型" className="whitespace-nowrap px-4 py-2">
+                                            {model.isDefault ? (
+                                                <StatusPill tone="info">默认</StatusPill>
+                                            ) : (
+                                                '否'
+                                            )}
+                                        </td>
+                                        <td data-label="开放状态" className="whitespace-nowrap px-4 py-2">
+                                            <StatusPill tone={model.enabled ? 'success' : 'neutral'}>
+                                                {model.enabled ? '已开放' : '已停用'}
+                                            </StatusPill>
+                                        </td>
+                                        <td data-label="健康状态" className="whitespace-nowrap px-4 py-2">
+                                            <HealthBadge status={model.healthStatus} />
+                                        </td>
+                                        <td
+                                            data-label="单张价格"
+                                            className="whitespace-nowrap px-4 py-2 font-mono font-semibold text-slate-800"
+                                        >
+                                            {formatMoney(model.unitPrice, model.currencyCode || currencyCode)}{' '}
+                                            / 张
+                                        </td>
+                                        <td data-label="操作" className="whitespace-nowrap px-4 py-2">
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() =>
+                                                    openEditor({ kind: 'MODEL', modelId: model.id })
+                                                }
+                                                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700"
+                                            >
+                                                设置修改
+                                            </AdminButton>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                    {!value.models.length && (
+                        <p className="p-8 text-center text-xs text-slate-400">当前没有可配置模型</p>
+                    )}
                 </section>
             </div>
 
@@ -921,12 +990,12 @@ function ConfigSettingRow({
 }) {
     return (
         <article className="flex min-w-0 flex-col gap-2 bg-white px-4 py-3 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                     <Icon className="h-4 w-4" />
                 </span>
-                <div className="min-w-0">
-                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2">
+                    <h3 className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-900">
                         {title}
                         {helpTitle && (
                             <FeatureHelpButton
@@ -937,7 +1006,7 @@ function ConfigSettingRow({
                         )}
                     </h3>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">{children}</div>
+                    <div className="flex flex-wrap items-center gap-2">{children}</div>
                 </div>
             </div>
             <AdminButton
@@ -1152,8 +1221,13 @@ function JobsPanel({
             )}
             {jobs.length > 0 && (
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-                    <div className="overflow-x-auto">
-                        <table className="admin-mobile-record-table w-full min-w-[1480px] border-collapse text-left text-xs">
+                    <div
+                        className="admin-comparison-scroll"
+                        role="region"
+                        aria-label="生图任务，可横向滚动"
+                        tabIndex={0}
+                    >
+                        <table className="admin-compact-table w-full min-w-[1320px] border-collapse text-left text-xs">
                             <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                     <th
@@ -1383,12 +1457,12 @@ function JobOutputsDialog({
                 onClick={event => event.stopPropagation()}
             >
                 <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
-                    <div className="min-w-0">
+                    <div className="admin-section-title-line min-w-0">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             任务输出明细
                             <FeatureHelpButton topic="plugins.ai-settings" title="任务输出明细" />
                         </h2>
-                        <p className="mt-1 truncate font-mono text-[10px] text-slate-400" title={job.id}>
+                        <p className="truncate font-mono text-[10px] text-slate-400" title={job.id}>
                             {job.id}
                         </p>
                     </div>
@@ -1403,8 +1477,13 @@ function JobOutputsDialog({
                 </div>
                 <div className="overflow-auto p-4">
                     <div className="overflow-hidden rounded-xl border border-slate-200">
-                        <div className="overflow-x-auto">
-                            <table className="admin-mobile-record-table w-full min-w-[820px] border-collapse text-left text-xs">
+                        <div
+                            className="admin-comparison-scroll"
+                            role="region"
+                            aria-label="任务输出，可横向滚动"
+                            tabIndex={0}
+                        >
+                            <table className="admin-compact-table w-full min-w-[820px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
                                         <th scope="col" className="whitespace-nowrap px-3 py-3">
@@ -1515,19 +1594,14 @@ function JobOutputsDialog({
                                             </td>
                                         </tr>
                                     ))}
-                                    {!job.outputs.length && (
-                                        <tr>
-                                            <td
-                                                colSpan={6}
-                                                className="p-10 text-center text-xs text-slate-400"
-                                            >
-                                                当前任务还没有输出记录
-                                            </td>
-                                        </tr>
-                                    )}
                                 </tbody>
                             </table>
                         </div>
+                        {!job.outputs.length && (
+                            <div className="p-10 text-center text-xs text-slate-400">
+                                当前任务还没有输出记录
+                            </div>
+                        )}
                     </div>
                 </div>
             </AccessibleDialogSurface>
@@ -1546,15 +1620,9 @@ function SkillPanel({
     canActivate: boolean;
     onActivate: (release: ImageGenerationAdminResult['imagePromptSkillReleases'][number]) => void;
 }) {
-    if (!releases.length)
-        return (
-            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-xs text-slate-400">
-                后端尚未发布提示词规则包
-            </div>
-        );
     return (
-        <section className="rounded-xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 p-4">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="admin-section-title-line border-b border-slate-100 p-4">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     提示词编译规则发布
                     <FeatureHelpButton
@@ -1563,51 +1631,88 @@ function SkillPanel({
                         description={'规则包由后端构建发布，本页只允许激活已经过校验的版本'}
                     />
                 </h2>
+                <p className="text-xs text-slate-500">{releases.length} 个版本</p>
             </div>
-            <div className="divide-y divide-slate-100">
-                {releases.map(release => {
-                    const active = release.status === 'ACTIVE' || release.sourceHash === activeHash;
-                    return (
-                        <article
-                            key={release.id}
-                            className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"
-                        >
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-xs font-bold text-slate-900">
-                                        规则包 v{release.bundleVersion}
-                                    </h3>
-                                    <span
-                                        className={`rounded px-2 py-0.5 text-[9px] font-bold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+            <div
+                className="admin-comparison-scroll"
+                role="region"
+                aria-label="提示词规则包，可横向滚动"
+                tabIndex={0}
+            >
+                <table className="admin-compact-table w-full min-w-[1240px] text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                            {['版本', '状态', '来源哈希', '发布时间', '激活时间', '操作'].map(label => (
+                                <th key={label} scope="col" className="whitespace-nowrap px-4 py-3">
+                                    {label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {releases.map(release => {
+                            const active = release.status === 'ACTIVE' || release.sourceHash === activeHash;
+                            return (
+                                <tr key={release.id} className="hover:bg-slate-50">
+                                    <td
+                                        data-label="版本"
+                                        className="whitespace-nowrap px-4 py-2 font-semibold text-slate-900"
                                     >
-                                        {active ? '当前激活' : getStatusLabel(release.status)}
-                                    </span>
-                                </div>
-                                <p className="mt-1 truncate font-mono text-[9px] text-slate-400">
-                                    {release.sourceHash}
-                                </p>
-                                <p className="mt-1 text-[9px] text-slate-400">
-                                    发布 {formatDateTime(release.createdAt)}
-                                    {release.activatedAt
-                                        ? ` · 激活 ${formatDateTime(release.activatedAt)}`
-                                        : ''}
-                                </p>
-                            </div>
-                            {!active && (
-                                <AdminButton
-                                    type="button"
-                                    disabled={!canActivate}
-                                    title={canActivate ? undefined : '仅平台超级管理员可以激活全局规则'}
-                                    onClick={() => onActivate(release)}
-                                    className="self-start rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-bold text-white"
-                                >
-                                    激活此版本
-                                </AdminButton>
-                            )}
-                        </article>
-                    );
-                })}
+                                        规则包 v{release.bundleVersion}
+                                    </td>
+                                    <td data-label="状态" className="whitespace-nowrap px-4 py-2">
+                                        <span
+                                            className={`rounded px-2 py-0.5 font-bold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                        >
+                                            {active ? '当前激活' : getStatusLabel(release.status)}
+                                        </span>
+                                    </td>
+                                    <td
+                                        data-label="来源哈希"
+                                        className="whitespace-nowrap px-4 py-2 font-mono text-[10px] text-slate-600"
+                                    >
+                                        {release.sourceHash}
+                                    </td>
+                                    <td
+                                        data-label="发布时间"
+                                        className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                    >
+                                        {formatDateTime(release.createdAt)}
+                                    </td>
+                                    <td
+                                        data-label="激活时间"
+                                        className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                    >
+                                        {release.activatedAt ? formatDateTime(release.activatedAt) : '-'}
+                                    </td>
+                                    <td data-label="操作" className="whitespace-nowrap px-4 py-2">
+                                        {!active ? (
+                                            <AdminButton
+                                                type="button"
+                                                disabled={!canActivate}
+                                                title={
+                                                    canActivate
+                                                        ? undefined
+                                                        : '仅平台超级管理员可以激活全局规则'
+                                                }
+                                                onClick={() => onActivate(release)}
+                                                className="rounded-lg border border-slate-300 px-3 py-1.5 font-bold text-slate-700"
+                                            >
+                                                激活此版本
+                                            </AdminButton>
+                                        ) : (
+                                            <span className="text-slate-400">-</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
+            {!releases.length && (
+                <p className="p-10 text-center text-xs text-slate-400">后端尚未发布提示词规则包</p>
+            )}
         </section>
     );
 }
