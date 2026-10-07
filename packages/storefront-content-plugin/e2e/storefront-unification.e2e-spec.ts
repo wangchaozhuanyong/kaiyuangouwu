@@ -1270,6 +1270,29 @@ describe('unified storefront Admin API to Shop API', () => {
             }
         `;
         try {
+            // This case owns its native saved-skin prerequisites when run alone.
+            for (const store of stores.slice(0, 2)) {
+                adminClient.setChannelToken(store.token);
+                const existing = (await adminClient.query(READ_VISUAL)).storefrontVisualPreset;
+                await adminClient.query(
+                    gql`
+                        mutation ($input: UpdateStorefrontVisualPresetInput!) {
+                            updateStorefrontVisualPreset(input: $input) {
+                                revision
+                            }
+                        }
+                    `,
+                    {
+                        input: {
+                            channelId: store.id,
+                            expectedRevision: existing.revision,
+                            presetId: 'neo-minimalist',
+                            desktopLayout: 'catalog',
+                        },
+                    },
+                );
+            }
+            adminClient.setChannelToken(stores[0].token);
             await vite.listen();
             const first = await context.newPage();
             const stale = await context.newPage();

@@ -1369,40 +1369,60 @@ describe('platform governance real database and API boundaries', () => {
         }
     });
 
-    it('returns the dedicated closed response through every native public HTTP entry', async () => {
+    it.each([
+        '/storefront-realtime/events',
+        '/storefront/lcp-preload',
+        '/promo/access',
+        '/storefront/page-data',
+        '/shop-api',
+    ])('returns the dedicated closed response through native public entry %s', async entry => {
         const profiles = connection.getRepository(platform, StoreProfile);
         const existing = await profiles.findOneOrFail({ where: { channelId: a.channelId } });
+        const originalEnabled = StoreManagementPlugin.promotionOptions.enabled;
         await profiles.update(existing.id, { status: 'DRAFT', isPublished: false });
+        const graphQl = entry === '/shop-api';
+        const request = () =>
+            fetch(`http://127.0.0.1:3477${entry}`, {
+                method: graphQl ? 'POST' : 'GET',
+                headers: {
+                    'vendure-token': a.channel.token,
+                    ...(graphQl ? { 'content-type': 'application/json' } : {}),
+                },
+                ...(graphQl
+                    ? { body: JSON.stringify({ query: '{ storefrontBranding { name accessMode } }' }) }
+                    : {}),
+                signal: AbortSignal.timeout(10000),
+            });
         try {
-            const entries = [
-                '/storefront-realtime/events',
-                '/storefront/lcp-preload',
-                '/promo/access',
-                '/storefront/page-data',
-                '/shop-api',
-            ];
-            for (const entry of entries) {
-                const graphQl = entry === '/shop-api';
-                const response = await fetch(`http://127.0.0.1:3477${entry}`, {
-                    method: graphQl ? 'POST' : 'GET',
-                    headers: {
-                        'vendure-token': a.channel.token,
-                        ...(graphQl ? { 'content-type': 'application/json' } : {}),
-                    },
-                    ...(graphQl
-                        ? { body: JSON.stringify({ query: '{ storefrontBranding { name accessMode } }' }) }
-                        : {}),
-                    signal: AbortSignal.timeout(10000),
-                });
-                expect(response.status, entry).toBe(403);
-                expect(response.headers.get('cache-control'), entry).toContain('no-store');
-                const body = await response.json();
-                expect(body.errorCode, entry).toBe('STOREFRONT_CLOSED');
-                if (graphQl) {
-                    expect(body.errors[0].extensions.code, entry).toBe('STOREFRONT_CLOSED');
-                }
+            if (graphQl) {
+                const interceptorResponse = await request();
+                const interceptorBody = await interceptorResponse.json();
+                const summary = {
+                    status: interceptorResponse.status,
+                    dataPresent: interceptorBody.data != null,
+                    errorExtensionsCodes:
+                        interceptorBody.errors?.map(
+                            (error: { extensions?: { code?: string } }) => error.extensions?.code,
+                        ) ?? [],
+                };
+                process.stdout.write(`native-closed-shop-interceptor ${JSON.stringify(summary)}\n`);
+                expect(summary.status).toBe(200);
+                expect(summary.dataPresent).toBe(false);
+                expect(summary.errorExtensionsCodes).toContain('STOREFRONT_CLOSED');
+                // Enable the same native options object used by the real middleware.
+                // Other governance tests retain their original fixture configuration.
+                StoreManagementPlugin.promotionOptions.enabled = true;
+            }
+            const response = await request();
+            expect(response.status, entry).toBe(403);
+            expect(response.headers.get('cache-control'), entry).toContain('no-store');
+            const body = await response.json();
+            expect(body.errorCode, entry).toBe('STOREFRONT_CLOSED');
+            if (graphQl) {
+                expect(body.errors[0].extensions.code, entry).toBe('STOREFRONT_CLOSED');
             }
         } finally {
+            StoreManagementPlugin.promotionOptions.enabled = originalEnabled;
             await profiles.update(existing.id, {
                 status: existing.status,
                 isPublished: existing.isPublished,
