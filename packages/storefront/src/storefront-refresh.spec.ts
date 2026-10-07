@@ -41,6 +41,8 @@ describe('shared storefront refresh lifecycle', () => {
         try {
             const first = refreshStorefrontQueries(client, scope);
             const repeated = refreshStorefrontQueries(client, scope);
+            expect(repeated).toBe(first);
+            await Promise.resolve();
             expect(reads.map(fn => fn.mock.calls.length)).toEqual([1, 1, 1, 0, 0, 0]);
             release();
             await Promise.all([first, repeated]);
@@ -66,16 +68,17 @@ describe('shared storefront refresh lifecycle', () => {
         stop();
         client.clear();
     });
-    it('retains placeholders for a filter change but clears them across store, currency or language switches', () => {
+    it('retains placeholders only for identical keys and clears them on filter, store, currency or language changes', () => {
         const previous = { pages: [{ items: [{ id: 'old' }] }] };
         const key = storefrontQueryKeys.catalog('shop:MYR', 'zh_Hans', { term: 'old' });
+        expect(storefrontPlaceholderData(previous, key, key)).toBe(previous);
         expect(
             storefrontPlaceholderData(
                 previous,
                 key,
                 storefrontQueryKeys.catalog('shop:MYR', 'zh_Hans', { term: 'new' }),
             ),
-        ).toBe(previous);
+        ).toBeUndefined();
         for (const next of [
             storefrontQueryKeys.catalog('other:MYR', 'zh_Hans', {}),
             storefrontQueryKeys.catalog('shop:CNY', 'zh_Hans', {}),

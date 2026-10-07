@@ -22,6 +22,10 @@ export default defineConfig({
     resolve: {
         alias: [
             {
+                find: '@vendure/common/lib/controlled-test-payment',
+                replacement: path.join(root, 'packages/common/src/controlled-test-payment.ts'),
+            },
+            {
                 find: '@vendure/store-management-plugin/currency-conversion',
                 replacement: path.join(
                     root,

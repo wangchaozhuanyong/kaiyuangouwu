@@ -103,6 +103,8 @@ describe('HomePage carousel pointer interactions', () => {
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     let reducedMotion: boolean;
+    let viewportWidth: number;
+    let phoneViewportListeners: Set<() => void>;
     let resizeObservers: Array<{ elements: Set<Element>; notify: () => void }>;
     let boundsMock: MockInstance<() => DOMRect>;
     const target = vi.fn();
@@ -129,6 +131,8 @@ describe('HomePage carousel pointer interactions', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         reducedMotion = false;
+        viewportWidth = 390;
+        phoneViewportListeners = new Set();
         resizeObservers = [];
         target.mockClear();
         vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -153,10 +157,19 @@ describe('HomePage carousel pointer interactions', () => {
         );
         vi.stubGlobal(
             'matchMedia',
-            vi.fn(() => ({
-                matches: reducedMotion,
-                addEventListener: vi.fn(),
-                removeEventListener: vi.fn(),
+            vi.fn((query: string) => ({
+                matches:
+                    query === '(prefers-reduced-motion: reduce)'
+                        ? reducedMotion
+                        : query === '(max-width: 767px)'
+                          ? viewportWidth <= 767
+                          : query === '(min-width: 1024px)' && viewportWidth >= 1024,
+                addEventListener: vi.fn((_type: string, listener: () => void) => {
+                    if (query === '(max-width: 767px)') phoneViewportListeners.add(listener);
+                }),
+                removeEventListener: vi.fn((_type: string, listener: () => void) => {
+                    if (query === '(max-width: 767px)') phoneViewportListeners.delete(listener);
+                }),
             })),
         );
         vi.spyOn(productDisplay, 'decodeStorefrontImage').mockResolvedValue(undefined);
@@ -195,12 +208,16 @@ describe('HomePage carousel pointer interactions', () => {
             await Promise.resolve();
         });
     }
-    async function render(desktop = false, contentBlocks = heroes) {
+    async function render(
+        desktop = false,
+        contentBlocks = heroes,
+        language: HomePageProps['language'] = 'zh',
+    ) {
         await interact(() =>
             root.render(
                 <DesktopLayoutContext.Provider value={desktop}>
                     <HomePageContext.Provider
-                        value={{ ...baseProps, contentBlocks, onContentTarget: target }}
+                        value={{ ...baseProps, contentBlocks, language, onContentTarget: target }}
                     >
                         <HomePage />
                     </HomePageContext.Provider>
@@ -219,7 +236,13 @@ describe('HomePage carousel pointer interactions', () => {
             };
         }
     }
-    async function pointer(type: string, x: number, y = 40, pointerId = 1, onImage = false) {
+    async function pointer(
+        type: string,
+        x: number,
+        y = 40,
+        pointerId = 1,
+        onImage: boolean | string = false,
+    ) {
         const event = new MouseEvent(type, {
             bubbles: true,
             cancelable: true,
@@ -227,10 +250,18 @@ describe('HomePage carousel pointer interactions', () => {
             clientY: y,
             button: 0,
         });
-        Object.defineProperties(event, { pointerId: { value: pointerId }, isPrimary: { value: true } });
+        Object.defineProperties(event, {
+            pointerId: { value: pointerId },
+            pointerType: { value: 'touch' },
+            isPrimary: { value: true },
+        });
         const element = requiredElement(
             host,
-            onImage ? '.hero-carousel-slide:not(.is-neighbor) .hero-rich-image-link' : '.hero',
+            typeof onImage === 'string'
+                ? `.hero-carousel-slide:not(.is-neighbor) ${onImage}`
+                : onImage
+                  ? '.hero-carousel-slide:not(.is-neighbor) .hero-rich-image-link'
+                  : '.hero',
         );
         await interact(() => {
             element.dispatchEvent(event);
@@ -248,6 +279,109 @@ describe('HomePage carousel pointer interactions', () => {
     function activeButton(selector: string) {
         return requiredElement<HTMLButtonElement>(activeSlide(), selector);
     }
+
+    const viewportHero: StorefrontContentBlock = {
+        ...heroes[0],
+        imageUrl: '/assets/desktop-hero.jpg',
+        title: 'Desktop title',
+        subtitle: 'Desktop subtitle',
+        body: 'Original desktop description',
+        ctaLabel: 'Desktop action',
+        settings: {
+            mobileImageUrl: '/assets/phone-hero.jpg',
+            mobileImageWidth: 1600,
+            mobileImageHeight: 900,
+            mobileHeroTranslations: [
+                {
+                    languageCode: 'zh_Hans',
+                    title: '手机标题',
+                    subtitle: '',
+                    body: '手机简短说明',
+                    ctaLabel: '立即查看',
+                },
+                {
+                    languageCode: 'en',
+                    title: 'Phone title',
+                    subtitle: '',
+                    body: 'Short phone copy',
+                    ctaLabel: 'View',
+                },
+            ],
+        },
+    };
+
+    it.each([
+        { width: 767, language: 'zh' as const, title: '手机标题', body: '手机简短说明', action: '立即查看' },
+        {
+            width: 767,
+            language: 'en' as const,
+            title: 'Phone title',
+            body: 'Short phone copy',
+            action: 'View',
+        },
+        {
+            width: 768,
+            language: 'zh' as const,
+            title: 'Desktop title',
+            body: 'Original desktop description',
+            action: 'Desktop action',
+        },
+        {
+            width: 1024,
+            language: 'en' as const,
+            title: 'Desktop title',
+            body: 'Original desktop description',
+            action: 'Desktop action',
+        },
+    ])(
+        'renders the matching asset and $language copy at $width px',
+        async ({ width, language, title, body, action }) => {
+            viewportWidth = width;
+            await render(width >= 1024, [viewportHero], language);
+            expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(title);
+            expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(body);
+            expect(activeButton('.hero-rich-cta-btn').textContent).toBe(action);
+            const artwork = requiredElement(
+                activeSlide(),
+                '.hero-rich-image-link img:not([aria-hidden="true"])',
+            );
+            expect(artwork.getAttribute('src')).toContain(
+                width <= 767 ? 'phone-hero.jpg' : 'desktop-hero.jpg',
+            );
+            if (width <= 767) {
+                expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
+                expect(artwork.getAttribute('width')).toBe('1600');
+                expect(artwork.getAttribute('height')).toBe('900');
+            } else {
+                expect(requiredElement(activeSlide(), '.hero-rich-pill').textContent).toBe(
+                    'Desktop subtitle',
+                );
+            }
+        },
+    );
+
+    it('updates phone presentation across 767/768 without changing the tablet desktop-layout context', async () => {
+        viewportWidth = 767;
+        await render(false, [viewportHero]);
+        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('手机标题');
+        await interact(() => {
+            viewportWidth = 768;
+            phoneViewportListeners.forEach(listener => listener());
+        });
+        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('Desktop title');
+        expect(
+            requiredElement(
+                activeSlide(),
+                '.hero-rich-image-link img:not([aria-hidden="true"])',
+            ).getAttribute('src'),
+        ).toContain('desktop-hero.jpg');
+        await interact(() => {
+            viewportWidth = 767;
+            phoneViewportListeners.forEach(listener => listener());
+        });
+        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('手机标题');
+        expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
+    });
 
     it.each([false, true])(
         'tracks horizontal dragging and coordinates next-slide movement, desktop=%s',
@@ -270,6 +404,85 @@ describe('HomePage carousel pointer interactions', () => {
             expect(activeSlide().textContent).toContain('Second slide');
         },
     );
+    it.each(['.hero-rich-image-link', '.hero-rich-copy-surface'])(
+        'keeps swiping when implicit touch capture transfers from %s to the carousel',
+        async selector => {
+            await render();
+            await pointer('pointerdown', 260, 40, 1, selector);
+            await pointer('pointermove', 230, 40, 1, selector);
+            const viewport = requiredElement(host, '.hero');
+            expect(viewport.hasPointerCapture(1)).toBe(true);
+
+            // Touch starts with capture on the hit-tested child. Reassigning it to the
+            // carousel fires a bubbling lostpointercapture from that previous owner.
+            await pointer('lostpointercapture', 230, 40, 1, selector);
+            expect(viewport.hasPointerCapture(1)).toBe(true);
+            expect(viewport.classList.contains('is-dragging')).toBe(true);
+            await pointer('pointermove', 160);
+            expect(activeSlide().style.transform).toBe('translate3d(-100px, 0, 0)');
+            await pointer('pointerup', 160);
+            await interact(() => activeButton('.hero-rich-image-link').click());
+            expect(target).not.toHaveBeenCalled();
+            await advance();
+            expect(activeSlide().textContent).toContain('Second slide');
+        },
+    );
+    it('rebounds when the carousel itself really loses pointer capture', async () => {
+        await render();
+        await pointer('pointerdown', 250, 40, 1, true);
+        await pointer('pointermove', 150);
+        requiredElement(host, '.hero').releasePointerCapture(1);
+        await pointer('lostpointercapture', 150);
+        await advance();
+        expect(activeSlide().textContent).toContain('First slide');
+        expect(host.querySelector('.is-neighbor')).toBeNull();
+        await advance(5_000);
+        await advance();
+        expect(activeSlide().textContent).toContain('Second slide');
+    });
+    it('preserves direct taps on the activity action button', async () => {
+        await render();
+        await pointer('pointerdown', 100, 40, 1, '.hero-rich-cta-btn');
+        await pointer('pointerup', 100, 40, 1, '.hero-rich-cta-btn');
+        expect(host.querySelector('.is-neighbor')).toBeNull();
+        await interact(() => activeButton('.hero-rich-cta-btn').click());
+        expect(target).toHaveBeenCalledExactlyOnceWith('URL', '/first');
+    });
+    it.each([
+        { manual: true, selector: '.hero-rich-cta-btn' },
+        { manual: true, selector: '.hero-rich-image-link' },
+        { manual: false, selector: '.hero-rich-cta-btn' },
+        { manual: false, selector: '.hero-rich-image-link' },
+    ])(
+        'allows the entering $selector to open its own activity during animation, manual=$manual',
+        async ({ manual, selector }) => {
+            await render();
+            if (manual) {
+                await pointer('pointerdown', 260, 40, 1, true);
+                await pointer('pointermove', 150);
+                await pointer('pointerup', 150);
+            } else {
+                await advance(5_000);
+                await advance(40);
+            }
+            // A new tap after the swipe's synthetic click is allowed before the 520ms transition ends.
+            await advance(1);
+            expect(host.querySelector('.is-settling')).not.toBeNull();
+            const entering = requiredElement(host, '.hero-carousel-slide.is-neighbor');
+            expect(entering.hasAttribute('inert')).toBe(false);
+            expect(entering.hasAttribute('aria-hidden')).toBe(false);
+            expect(activeSlide().hasAttribute('inert')).toBe(true);
+            expect(activeSlide().getAttribute('aria-hidden')).toBe('true');
+            expect(host.querySelectorAll('.hero-carousel-slide:not([inert])')).toHaveLength(1);
+            expect(requiredElement(host, '.hero').getAttribute('aria-label')).toBe('Second slide');
+            await interact(() => requiredElement<HTMLButtonElement>(entering, selector).click());
+            expect(target).toHaveBeenCalledExactlyOnceWith('URL', '/second');
+            await advance();
+            await interact(() => activeButton(selector).click());
+            expect(target).toHaveBeenCalledTimes(2);
+            expect(target).toHaveBeenLastCalledWith('URL', '/second');
+        },
+    );
     it('wraps rightward dragging to the preceding slide', async () => {
         await render();
         await pointer('pointerdown', 100);
@@ -287,6 +500,8 @@ describe('HomePage carousel pointer interactions', () => {
         await interact(() => activeButton('.hero-rich-image-link').click());
         expect(target).not.toHaveBeenCalled();
         expect(activeSlide().style.transform).toBe('translate3d(0px, 0, 0)');
+        expect(activeSlide().hasAttribute('inert')).toBe(false);
+        expect(requiredElement(host, '.hero-carousel-slide.is-neighbor').hasAttribute('inert')).toBe(true);
         await advance();
         expect(activeSlide().textContent).toContain('First slide');
         await pointer('pointerdown', 200, 40, 1, true);
@@ -415,8 +630,12 @@ describe('HomePage carousel pointer interactions', () => {
         await advance(40);
         expect(host.querySelector('.is-settling')).not.toBeNull();
         await interact(() => {
-            activeButton('[aria-label="切换到第 3 张图片"]').click();
-            activeButton('[aria-label="切换到第 1 张图片"]').click();
+            const entering = requiredElement(host, '.hero-carousel-slide:not([inert])');
+            expect(
+                requiredElement(entering, '[aria-label="切换到第 2 张图片"]').getAttribute('aria-current'),
+            ).toBe('true');
+            requiredElement<HTMLButtonElement>(entering, '[aria-label="切换到第 3 张图片"]').click();
+            requiredElement<HTMLButtonElement>(entering, '[aria-label="切换到第 1 张图片"]').click();
         });
         await advance();
         await advance();

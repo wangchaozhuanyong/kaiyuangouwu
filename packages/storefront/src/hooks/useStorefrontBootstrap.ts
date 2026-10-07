@@ -1,5 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 
 import { ShopApi } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -13,9 +21,16 @@ import {
     uiCopy,
 } from '../i18n';
 import { configureMoneyDisplay } from '../money-display';
-import { refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
+import {
+    isStorefrontScopeAccessDenied,
+    refreshStorefrontQueries,
+    restorePublicQueryCache,
+    storefrontQueryKeys,
+    watchStorefrontScopeAccess,
+} from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
-import { readInitialPublicPage } from '../storefront-page-data';
+import { isStorefrontClosedError } from '../storefront-access';
+import { readInitialPublicPage, setPublicPageNavigationScope } from '../storefront-page-data';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
@@ -47,6 +62,7 @@ export function useStorefrontBootstrap() {
     const queryClient = useQueryClient();
     const [initialPage] = useState(readInitialPublicPage);
     const initializedPreferenceScope = useRef('');
+    const restoredCacheScopes = useRef(new Set<string>());
 
     const [{ market, language }, setStorefrontContext] = useState<{
         market: MarketConfig;
@@ -85,6 +101,16 @@ export function useStorefrontBootstrap() {
     const isZh = language === 'zh';
     const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
+    const marketCode = storefrontQueryKeys.market(market);
+    const subscribeAccess = useCallback(
+        (notify: () => void) => watchStorefrontScopeAccess(queryClient, notify),
+        [queryClient],
+    );
+    const readAccessDenied = useCallback(
+        () => isStorefrontScopeAccessDenied(queryClient, { marketCode, languageCode: vendureLanguageCode }),
+        [queryClient, marketCode, vendureLanguageCode],
+    );
+    const accessDenied = useSyncExternalStore(subscribeAccess, readAccessDenied, readAccessDenied);
     const cartController = useMemo(
         () => new CartController(`${market.code}:${market.currencyCode}`),
         [market.code, market.currencyCode],
@@ -108,7 +134,7 @@ export function useStorefrontBootstrap() {
     const accountQuery = useQuery({
         queryKey: storefrontQueryKeys.customer(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.activeCustomer(signal),
-        enabled: storefrontContextResolved,
+        enabled: storefrontContextResolved && !accessDenied,
         staleTime: 0,
     });
     const customerAuthenticated = Boolean(accountQuery.data);
@@ -117,18 +143,27 @@ export function useStorefrontBootstrap() {
         market,
         language,
         vendureLanguageCode,
-        storefrontContextResolved,
+        storefrontContextResolved: storefrontContextResolved && !accessDenied,
         customerAuthenticated,
     };
     const visualConfig = useStorefrontVisualPreset(
         api,
         market,
         vendureLanguageCode,
-        storefrontContextResolved,
+        storefrontContextResolved && !accessDenied,
     );
 
     const publicData = useStorefrontPublicData(queryContext);
-    const { configQuery, productsQuery, collectionsQuery } = publicData;
+    const { configQuery } = publicData;
+    const storefrontUnavailable =
+        accessDenied ||
+        configQuery.data?.accessMode === 'CLOSED' ||
+        isStorefrontClosedError(configQuery.error, true);
+    useEffect(() => {
+        if (!storefrontUnavailable) return;
+        setStorefrontContextResolved(false);
+        setPublicPageNavigationScope(undefined);
+    }, [storefrontUnavailable]);
 
     const legalIdentity = useMemo<StorefrontLegalIdentity>(
         () => ({
@@ -150,7 +185,7 @@ export function useStorefrontBootstrap() {
 
     useEffect(() => {
         const config = configQuery.data;
-        if (!config) return;
+        if (!config || storefrontUnavailable) return;
         const nextStorefrontCode = config.code;
         const configuredMarket = marketForStorefrontConfig(config);
         const currencyConfiguration = config.currencyConfiguration;
@@ -183,7 +218,13 @@ export function useStorefrontBootstrap() {
             nextMarket.countryCode !== market.countryCode
         ) {
             const nextLanguage = previewLanguage(readStoredLanguage(nextMarket));
-            if (nextLanguage === language) {
+            if (
+                nextLanguage === language &&
+                !isStorefrontScopeAccessDenied(queryClient, {
+                    marketCode: storefrontQueryKeys.market(nextMarket),
+                    languageCode: vendureLanguageCode,
+                })
+            ) {
                 const nextConfigKey = [
                     ...storefrontQueryKeys.config(
                         storefrontQueryKeys.market(nextMarket),
@@ -205,6 +246,15 @@ export function useStorefrontBootstrap() {
                 language: nextLanguage,
             });
             return;
+        }
+        const cacheScope = `${marketCode}:${vendureLanguageCode}`;
+        if (
+            config.accessMode === 'LIVE' &&
+            !restoredCacheScopes.current.has(cacheScope) &&
+            storefrontPreviewParameters().get('storefrontPreviewEmbedded') !== '1'
+        ) {
+            restoredCacheScopes.current.add(cacheScope);
+            restorePublicQueryCache(queryClient);
         }
         setStorefrontContextResolved(true);
         setStorefrontCode(nextStorefrontCode);
@@ -241,6 +291,8 @@ export function useStorefrontBootstrap() {
         market,
         queryClient,
         vendureLanguageCode,
+        marketCode,
+        storefrontUnavailable,
     ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {
@@ -262,6 +314,33 @@ export function useStorefrontBootstrap() {
     );
 
     useEffect(() => {
+        if (!storefrontContextResolved || storefrontUnavailable) {
+            setPublicPageNavigationScope(undefined);
+            return;
+        }
+        setPublicPageNavigationScope({
+            channelCode: market.code,
+            currencyCode: market.currencyCode,
+            languageCode: vendureLanguageCode,
+        });
+        const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `storefront_public_language=${vendureLanguageCode}; Path=/; SameSite=Lax; Max-Age=31536000${secure}`;
+        const allowed = configQuery.data?.currencyConfiguration?.availableCurrencyCodes ?? [
+            market.currencyCode,
+        ];
+        if (/^[A-Z]{3}$/u.test(market.currencyCode) && allowed.includes(market.currencyCode))
+            document.cookie = `storefront_public_currency=${market.currencyCode}; Path=/; SameSite=Lax; Max-Age=31536000${secure}`;
+        return () => setPublicPageNavigationScope(undefined);
+    }, [
+        storefrontContextResolved,
+        storefrontUnavailable,
+        vendureLanguageCode,
+        market.code,
+        market.currencyCode,
+        configQuery.data,
+    ]);
+
+    useEffect(() => {
         document.documentElement.lang = documentLanguageFor(language);
         document.documentElement.setAttribute('translate', 'yes');
     }, [language]);
@@ -275,12 +354,14 @@ export function useStorefrontBootstrap() {
 
     return {
         ...publicData,
+        storefrontAccessMode: configQuery.data?.accessMode,
         market,
         language,
         setStorefrontContext,
         displayCurrencyCode,
         setDisplayCurrencyCode,
-        storefrontContextResolved,
+        storefrontContextResolved: storefrontContextResolved && !storefrontUnavailable,
+        storefrontUnavailable,
         favoriteProductIds,
         recentProductIds,
         setFavoriteProductIds,

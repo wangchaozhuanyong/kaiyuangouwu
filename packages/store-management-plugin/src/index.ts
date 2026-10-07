@@ -116,8 +116,12 @@ export { StoreManagementPlugin } from './store-management.plugin.js';
 export { StorePaymentReportingService } from './store-payment-reporting.service.js';
 export { StoreProfileService } from './store-profile.service.js';
 export { StoreProvisioningService, storeAdministratorPermissions } from './store-provisioning.service.js';
-export { isOperationalStorefront } from './storefront-activation.service.js';
-export type { OperationalStorefrontInput } from './storefront-activation.service.js';
+export {
+    StorefrontActivationService,
+    StorefrontClosedError,
+    isOperationalStorefront,
+} from './storefront-activation.service.js';
+export type { OperationalStorefrontInput, StorefrontAccessMode } from './storefront-activation.service.js';
 export { SystemAnnouncementService } from './system-announcement.service.js';
 export type {
     CreateStoreCouponCampaignInput,
@@ -172,3 +176,5 @@ export { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalo
 
 export { StorefrontPublicCacheInvalidatedEvent } from './performance/storefront-cache-invalidation.service';
 export { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';
+
+export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-purge-config';

@@ -2,6 +2,7 @@ import type { ShopApiContext } from './api/client-context';
 import type { ImageStudioApi } from './api/image-studio';
 import type { IcloudMailItem, IcloudQueryResult, MailQueryApi } from './api/mail-query';
 import type { RealtimeApi } from './api/realtime';
+import type { ReferralsApi } from './api/referrals';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
 import type {
@@ -64,7 +65,6 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
-import { ReferralsApi } from './api/referrals';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
 
@@ -83,7 +83,7 @@ export class ShopApi {
     readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
-    private readonly referralsApi: ReferralsApi;
+    private readonly createReferralsApi: () => Promise<ReferralsApi>;
     private readonly createImageStudioApi: () => Promise<ImageStudioApi>;
     private readonly createMailQueryApi: () => Promise<MailQueryApi>;
     readonly watchMailEvents: MailQueryApi['watchMailEvents'];
@@ -115,7 +115,10 @@ export class ShopApi {
         this.contentReviewsApi = new ContentReviewsApi(ctx);
         this.catalogApi = new CatalogApi(ctx);
         this.accountApi = new AccountApi(ctx);
-        this.referralsApi = new ReferralsApi(ctx);
+        this.createReferralsApi = async () => {
+            const { ReferralsApi } = await import('./api/referrals');
+            return new ReferralsApi(ctx);
+        };
         this.createImageStudioApi = async () => {
             const { ImageStudioApi } = await import('./api/image-studio');
             return new ImageStudioApi(ctx);
@@ -332,15 +335,15 @@ export class ShopApi {
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
-        return this.referralsApi.referralProgram(signal);
+        return (await this.createReferralsApi()).referralProgram(signal);
     }
 
     async validateReferralInviteCode(code: string, signal?: AbortSignal): Promise<boolean> {
-        return this.referralsApi.validateReferralInviteCode(code, signal);
+        return (await this.createReferralsApi()).validateReferralInviteCode(code, signal);
     }
 
     async myReferralOverview(signal?: AbortSignal): Promise<MyReferralOverview> {
-        return this.referralsApi.myReferralOverview(signal);
+        return (await this.createReferralsApi()).myReferralOverview(signal);
     }
 
     async registerCustomerAccount(
@@ -349,11 +352,11 @@ export class ShopApi {
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
     ): Promise<void> {
-        return this.referralsApi.registerCustomerAccount(input, consent, inviteCode, source);
+        return (await this.createReferralsApi()).registerCustomerAccount(input, consent, inviteCode, source);
     }
 
     async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
-        return this.referralsApi.useReferralBalance(amount);
+        return (await this.createReferralsApi()).useReferralBalance(amount);
     }
 
     imageStudioConfig: ImageStudioApi['imageStudioConfig'] = async (...args) =>
@@ -404,15 +407,15 @@ export class ShopApi {
         (await this.createImageStudioApi()).deleteMyImageGenerationJob(...args);
 
     async recordStorefrontVisit(): Promise<boolean> {
-        return this.referralsApi.recordStorefrontVisit();
+        return (await this.createReferralsApi()).recordStorefrontVisit();
     }
 
     async recordStorefrontPageView(input: StorefrontPageViewInput): Promise<boolean> {
-        return this.referralsApi.recordStorefrontPageView(input);
+        return (await this.createReferralsApi()).recordStorefrontPageView(input);
     }
 
     async recordAnalyticsConsent(input: { consentId: string; granted: boolean; locale: string }) {
-        return this.referralsApi.recordAnalyticsConsent(input);
+        return (await this.createReferralsApi()).recordAnalyticsConsent(input);
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {
@@ -611,11 +614,12 @@ export class ShopApi {
     async watchRealtime(
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
+        onConnectionChange?: (connected: boolean) => void,
     ): Promise<void> {
         if (signal.aborted) return;
         const realtimeApi = await this.createRealtimeApi();
         if (signal.aborted) return;
-        return realtimeApi.watchRealtime(onEvent, signal);
+        return realtimeApi.watchRealtime(onEvent, signal, onConnectionChange);
     }
 
     private async request<T>(

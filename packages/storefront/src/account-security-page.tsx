@@ -22,8 +22,8 @@ import { serviceMessageDisplay } from '../../common/src/display-localization';
 import './styles/account-security.css';
 
 import { isInputMethodKey } from './input-method';
+import { Overlay } from './overlay-host';
 import { SafeImage } from './safe-image';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { EmptyState, SubHeader, Subpage, SubpageBody } from './storefront-ui/page-shell';
@@ -102,7 +102,6 @@ export function AccountSecurityPage({
     const [avatarError, setAvatarError] = useState<string | null>(null);
     const [privacyAction, setPrivacyAction] = useState<'export' | 'closure' | 'cancel' | null>(null);
     const [privacyDialog, setPrivacyDialog] = useState<'export' | 'closure' | null>(null);
-    const privacyDialogRef = useRef<HTMLElement>(null);
     const privacyActionRef = useRef<'export' | 'closure' | null>(null);
     const [privacyPassword, setPrivacyPassword] = useState('');
     const [privacyError, setPrivacyError] = useState<string | null>(null);
@@ -118,54 +117,6 @@ export function AccountSecurityPage({
         },
         [],
     );
-
-    useEffect(() => {
-        if (!privacyDialog) return;
-        const dialog = privacyDialogRef.current;
-        if (!dialog) return;
-        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseScrollLock = acquireBodyScrollLock();
-        const focusable = () =>
-            Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'));
-        const focusFrame = window.requestAnimationFrame(() => dialog.querySelector('input')?.focus());
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape' && !privacyActionRef.current) {
-                event.preventDefault();
-                setPrivacyDialog(null);
-                setPrivacyPassword('');
-                setPrivacyError(null);
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            const first = items[0];
-            const last = items[items.length - 1];
-            if (!first || !last) {
-                event.preventDefault();
-                dialog.focus();
-            } else if (
-                event.shiftKey &&
-                (document.activeElement === first || !dialog.contains(document.activeElement))
-            ) {
-                event.preventDefault();
-                last.focus();
-            } else if (
-                !event.shiftKey &&
-                (document.activeElement === last || !dialog.contains(document.activeElement))
-            ) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            document.removeEventListener('keydown', keydown);
-            releaseScrollLock();
-            previousFocus?.focus({ preventScroll: true });
-        };
-    }, [privacyDialog]);
 
     const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.currentTarget.files?.[0];
@@ -732,9 +683,12 @@ export function AccountSecurityPage({
                 </div>
             </SubpageBody>
             {privacyDialog && (
-                <div className="security-privacy-dialog-backdrop" role="presentation">
+                <Overlay
+                    className="security-privacy-dialog-backdrop"
+                    role="presentation"
+                    onClose={closePrivacyDialog}
+                >
                     <section
-                        ref={privacyDialogRef}
                         tabIndex={-1}
                         className="security-privacy-dialog"
                         role="dialog"
@@ -782,6 +736,7 @@ export function AccountSecurityPage({
                             id="security-privacy-password"
                             type="password"
                             autoComplete="current-password"
+                            data-overlay-autofocus
                             value={privacyPassword}
                             disabled={privacyAction !== null}
                             onChange={event => setPrivacyPassword(event.target.value)}
@@ -819,7 +774,7 @@ export function AccountSecurityPage({
                             </button>
                         </div>
                     </section>
-                </div>
+                </Overlay>
             )}
         </main>
     );

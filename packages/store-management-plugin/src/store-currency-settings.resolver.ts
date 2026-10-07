@@ -198,7 +198,7 @@ export class StoreCurrencySettingsShopResolver {
         return this.currencySettings.setActiveOrderPaymentCurrency(ctx, currencyCode);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Owner)
     createStorefrontUsdtCheckoutQuote(@Ctx() ctx: RequestContext) {

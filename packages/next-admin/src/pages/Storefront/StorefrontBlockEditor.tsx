@@ -3,6 +3,7 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { Check, Plus, Search, X } from 'lucide-react';
 import { useDeferredValue, useLayoutEffect, useState } from 'react';
+import { storefrontAssetUrl } from '../../../../storefront-content-plugin/src/content-image';
 import {
     heroThemePresets,
     homepageVisualStyles,
@@ -14,6 +15,10 @@ import {
     dualCardTemplates,
 } from '../../../../storefront-content-plugin/src/dual-card-template-options';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
+import {
+    mobileHeroTranslation,
+    type MobileHeroTranslation,
+} from '../../../../storefront-content-plugin/src/shared/hero-image';
 import { authHeroCopyPosition } from '../../../../storefront/src/auth-visual';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -100,6 +105,7 @@ export function StorefrontBlockEditor({
     ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
     const imageChangeDescriptions = imageChanges.map(change => {
         if (change.slot === 'main') return `主图：${imageName(value)} → ${imageName(draft)}`;
+        if (change.slot === 'mobile-hero') return '手机轮播图已替换或清除';
         if (change.slot === 'mobile-decoration') return '手机底部装饰图已替换或清除';
         const itemId = change.slot.slice('item:'.length);
         const previous = value.items.find(item => String(item.id) === itemId);
@@ -131,6 +137,21 @@ export function StorefrontBlockEditor({
             ...current,
             settings: { ...(current.settings ?? {}), ...patch },
         }));
+    const phoneTranslation = mobileHeroTranslation(draft.settings, language);
+    const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
+        const translations = (['zh_Hans', 'en'] as const).map(code => {
+            const translation = {
+                ...mobileHeroTranslation(draft.settings, code),
+                ...(code === language ? patch : {}),
+            };
+            // Keep the draft identical to the JSON settings sent for save and readback.
+            for (const field of ['title', 'subtitle', 'body', 'ctaLabel'] as const) {
+                if (translation[field] === undefined) delete translation[field];
+            }
+            return translation;
+        });
+        updateSettings({ mobileHeroTranslations: translations });
+    };
     const toggleProduct = (id: string) => {
         if (!productSettingKey) return;
         const next = selectedProductIds.includes(id)
@@ -402,6 +423,70 @@ export function StorefrontBlockEditor({
                                             />
                                         </Field>
                                     )}
+                                    {draft.type === 'HERO' && (
+                                        <>
+                                            <Field
+                                                label="手机标题（选填）"
+                                                helpText="未设置沿用当前语言电脑版文案；已填写后清空则手机隐藏该文字。"
+                                            >
+                                                <AdminInput
+                                                    value={phoneTranslation.title ?? ''}
+                                                    onChange={event =>
+                                                        updatePhoneTranslation({ title: event.target.value })
+                                                    }
+                                                    className={inputClass}
+                                                />
+                                            </Field>
+                                            <Field label="手机副标题（选填）">
+                                                <AdminInput
+                                                    value={phoneTranslation.subtitle ?? ''}
+                                                    onChange={event =>
+                                                        updatePhoneTranslation({
+                                                            subtitle: event.target.value,
+                                                        })
+                                                    }
+                                                    className={inputClass}
+                                                />
+                                            </Field>
+                                            <Field label="手机说明（选填）">
+                                                <AdminTextArea
+                                                    rows={2}
+                                                    value={phoneTranslation.body ?? ''}
+                                                    onChange={event =>
+                                                        updatePhoneTranslation({ body: event.target.value })
+                                                    }
+                                                    className={`${inputClass} resize-y`}
+                                                />
+                                            </Field>
+                                            <Field label="手机按钮文案（选填）">
+                                                <AdminInput
+                                                    value={phoneTranslation.ctaLabel ?? ''}
+                                                    onChange={event =>
+                                                        updatePhoneTranslation({
+                                                            ctaLabel: event.target.value,
+                                                        })
+                                                    }
+                                                    className={inputClass}
+                                                />
+                                            </Field>
+                                            <div className="sm:col-span-2">
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() =>
+                                                        updatePhoneTranslation({
+                                                            title: undefined,
+                                                            subtitle: undefined,
+                                                            body: undefined,
+                                                            ctaLabel: undefined,
+                                                        })
+                                                    }
+                                                    className="rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-100"
+                                                >
+                                                    恢复当前语言电脑版文案
+                                                </AdminButton>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </section>
 
@@ -440,6 +525,30 @@ export function StorefrontBlockEditor({
                                                     })
                                                 }
                                             />
+                                        </div>
+                                    )}
+                                    {draft.type === 'HERO' && (
+                                        <div className="sm:col-span-2">
+                                            <AssetPicker
+                                                label="手机轮播图（可选）"
+                                                value={null}
+                                                fallbackUrl={
+                                                    stringSetting(draft.settings?.mobileImageUrl, '') || null
+                                                }
+                                                onChange={asset =>
+                                                    updateSettings({
+                                                        mobileImageUrl: asset
+                                                            ? storefrontAssetUrl(asset) || null
+                                                            : null,
+                                                        mobileImageAssetId: asset?.id ?? null,
+                                                        mobileImageWidth: asset?.width ?? null,
+                                                        mobileImageHeight: asset?.height ?? null,
+                                                    })
+                                                }
+                                            />
+                                            <p className="mt-2 text-xs text-slate-500">
+                                                使用与手机容器比例匹配的专用图片；留空沿用主图。电脑端继续使用主图。
+                                            </p>
                                         </div>
                                     )}
                                     {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
@@ -483,6 +592,42 @@ export function StorefrontBlockEditor({
                                     )}
                                     {draft.type === 'HERO' && (
                                         <>
+                                            <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+                                                <AdminInput
+                                                    type="checkbox"
+                                                    checked={draft.settings?.mobileHeroHideStats === true}
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            mobileHeroHideStats: event.target.checked,
+                                                        })
+                                                    }
+                                                />
+                                                手机隐藏轮播卖点（电脑端保留）
+                                            </label>
+                                            <Field label="手机标题文字色（选填）">
+                                                <ColorInput
+                                                    value={stringSetting(
+                                                        draft.settings?.mobileHeroTextColor,
+                                                        '',
+                                                    )}
+                                                    onChange={color =>
+                                                        updateSettings({ mobileHeroTextColor: color })
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label="手机说明文字色（选填）">
+                                                <ColorInput
+                                                    value={stringSetting(
+                                                        draft.settings?.mobileHeroSecondaryTextColor,
+                                                        '',
+                                                    )}
+                                                    onChange={color =>
+                                                        updateSettings({
+                                                            mobileHeroSecondaryTextColor: color,
+                                                        })
+                                                    }
+                                                />
+                                            </Field>
                                             <Field label="轮播图样式">
                                                 <AdminSelect
                                                     className={inputClass}

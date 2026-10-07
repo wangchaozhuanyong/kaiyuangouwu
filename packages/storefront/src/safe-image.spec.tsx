@@ -149,7 +149,7 @@ describe('SafeImage', () => {
             });
             expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
             await act(async () => {
-                await vi.advanceTimersByTimeAsync(1);
+                await vi.advanceTimersByTimeAsync(15_001);
             });
             expect(host.querySelector('img')).toBeNull();
         } finally {
@@ -194,12 +194,58 @@ describe('SafeImage', () => {
             expect(requiredImage(host).getAttribute('src')).toBe('/current.png');
             const image = requiredImage(host);
             await act(async () => {
-                await vi.advanceTimersByTimeAsync(10_000);
+                await vi.advanceTimersByTimeAsync(25_000);
             });
             expect(host.querySelector('img')).toBeNull();
             expect(image.hasAttribute('srcset')).toBe(false);
         } finally {
             act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+    it('times visible lazy images locally and recovers a late load without a page-readiness event', async () => {
+        vi.useFakeTimers();
+        let enter = () => undefined as void;
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+                    enter = () => callback([{ isIntersecting: true }]);
+                }
+                observe() {
+                    return undefined;
+                }
+                disconnect() {
+                    return undefined;
+                }
+            },
+        );
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/late-local.png" alt="Product" loading="lazy" />));
+            await act(() => vi.advanceTimersByTimeAsync(60_000));
+            expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+            act(() => enter());
+            await act(() => vi.advanceTimersByTimeAsync(15_000));
+            expect(host.querySelector('[data-safe-image=timeout]')).not.toBeNull();
+            expect(host.querySelector('[data-image-state=timeout]')).not.toBeNull();
+            const image = requiredImage(host);
+            Object.defineProperties(image, {
+                complete: { value: true, configurable: true },
+                naturalWidth: { value: 320, configurable: true },
+                decode: { value: () => Promise.resolve(), configurable: true },
+            });
+            await act(async () => {
+                image.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            await act(() => vi.advanceTimersByTimeAsync(15_000));
+            expect(requiredImage(host)).toBe(image);
+        } finally {
+            act(() => root.unmount());
+            vi.unstubAllGlobals();
             vi.useRealTimers();
         }
     });
@@ -223,7 +269,7 @@ describe('SafeImage', () => {
                 ),
             );
             await act(async () => {
-                await vi.advanceTimersByTimeAsync(15_000);
+                await vi.advanceTimersByTimeAsync(30_000);
             });
             expect(matching.isConnected).toBe(false);
             expect(unrelated.isConnected).toBe(true);
@@ -407,7 +453,7 @@ describe('SafeImage', () => {
         expect(markup).toContain('storefront-card-square-960');
     });
 
-    it('keeps the hero preview visible when a responsive preset falls back to the original', () => {
+    it('recovers once with a bounded WebP candidate without requesting an uploaded original', () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         try {
@@ -426,6 +472,7 @@ describe('SafeImage', () => {
                 image.dispatchEvent(new Event('error'));
             });
             expect(image.getAttribute('srcset')).toBeNull();
+            expect(image.getAttribute('src')).toContain('preset=storefront-hero-fit-960&format=webp&q=90');
             expect(host.querySelector<HTMLImageElement>('.safe-image-preview')?.src).toContain(
                 'data:image/webp;base64,AAAA',
             );
@@ -533,7 +580,7 @@ describe('SafeImage', () => {
         }
     });
 
-    it('does not retry the same responsive candidate when the final fallback uses the original asset', () => {
+    it('does not retry a failed bounded recovery through an equivalent original fallback URL', () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         try {
@@ -555,8 +602,9 @@ describe('SafeImage', () => {
             act(() => {
                 image.dispatchEvent(new Event('error'));
             });
-            expect(image.getAttribute('src')).toBe('/assets/preview/auth.jpg');
-            expect(image.getAttribute('srcset')).toBeNull();
+            expect(image.getAttribute('src')).toContain('preset=storefront-detail-1200&format=webp&q=90');
+            expect(host.querySelector('img')).toBeNull();
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
         } finally {
             act(() => root.unmount());
         }

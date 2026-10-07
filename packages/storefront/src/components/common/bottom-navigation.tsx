@@ -24,6 +24,8 @@ import { SafeImage } from '../../safe-image';
 import { rootPages, RouteName } from '../../storefront-router';
 import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
+import { CountBadge, countBadgeLabel } from './count-badge';
+
 function cn(...classes: Array<string | undefined | null | false>) {
     return twMerge(clsx(classes));
 }
@@ -196,7 +198,10 @@ export function BottomNavigation({
                             isActive && 'weight-bold text-[var(--interaction-ink)]',
                         )}
                         aria-current={isActive ? 'page' : undefined}
-                        aria-label={item.label}
+                        aria-label={countBadgeLabel(
+                            item.label,
+                            item.routeName === 'cart' ? cartQuantity : undefined,
+                        )}
                         href={item.target}
                         onClick={event => {
                             if (
@@ -216,7 +221,7 @@ export function BottomNavigation({
                         onMouseEnter={preloadTarget}
                         onTouchStart={preloadTarget}
                     >
-                        <span className="relative flex h-[30px] w-[42px] items-center justify-center">
+                        <span className="count-badge-anchor">
                             {item.iconUrl ? (
                                 <SafeImage className="size-6 object-contain" src={item.iconUrl} alt="" />
                             ) : (
@@ -225,11 +230,7 @@ export function BottomNavigation({
                                     style={{ color: isActive ? item.activeColor : 'var(--muted)' }}
                                 />
                             )}
-                            {item.routeName === 'cart' && cartQuantity > 0 && (
-                                <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-[var(--paper)] bg-[var(--accent)] px-1 type-navigation-compact weight-bold  text-white shadow-sm">
-                                    {cartQuantity > 99 ? '99+' : cartQuantity}
-                                </b>
-                            )}
+                            {item.routeName === 'cart' && <CountBadge count={cartQuantity} overlay />}
                         </span>
                         <span
                             className={clsx(

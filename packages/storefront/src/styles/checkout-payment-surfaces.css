@@ -265,6 +265,8 @@
     padding: 16px 14px;
     background: var(--surface);
     border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
 }
 
 .payment-test-notice {
@@ -305,6 +307,54 @@
     line-height: var(--type-helper-leading);
 }
 
+.payment-usdt-quote {
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
+}
+
+.payment-balance-panel {
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--selection-soft);
+}
+
+.payment-quote-details,
+.payment-balance-currency,
+.payment-balance-input {
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.payment-balance-currency {
+    color: var(--interaction-ink);
+}
+
+.payment-secondary-action {
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--accent-ink);
+}
+
+.payment-secondary-action:hover:not(:disabled) {
+    background: var(--interaction-hover);
+}
+
+.payment-secondary-action:active:not(:disabled) {
+    background: var(--interaction-pressed);
+}
+
+.payment-secondary-action:disabled,
+.payment-balance-input:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    cursor: not-allowed;
+}
+
 .payment-method-section h2 {
     margin: 0 0 12px;
     font-size: var(--type-section-size);
@@ -327,7 +377,7 @@
     min-height: 72px;
     padding: 10px 12px;
     border: 1px solid var(--line);
-    border-radius: 7px;
+    border-radius: var(--skin-control-radius);
     display: grid;
     grid-template-columns: 18px 36px minmax(0, 1fr) 20px;
     align-items: center;
@@ -441,7 +491,7 @@
     margin-top: 12px;
     padding: 0 16px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--skin-control-radius);
     background: transparent;
     color: var(--accent-ink);
     display: flex;
@@ -453,7 +503,11 @@
 
 .payment-summary > button[type='submit'] {
     background: var(--accent);
-    color: white;
+    color: var(--accent-foreground);
+}
+
+.payment-summary > button[type='submit']:hover:not(:disabled) {
+    background: var(--accent-hover);
 }
 
 .payment-summary > button svg {

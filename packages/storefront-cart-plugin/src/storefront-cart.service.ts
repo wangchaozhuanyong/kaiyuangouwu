@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
     ActiveOrderService,
     ConfigService,
@@ -141,7 +141,13 @@ export function isRegisteredProductionPaymentMethod(
 }
 
 @Injectable()
-export class StorefrontCartService {
+export class StorefrontCartService implements OnApplicationBootstrap {
+    onApplicationBootstrap(): void {
+        this.orderService.registerOrderMutationLock('storefront-cart-before-order', (ctx, orderId) =>
+            this.lockForOrder(ctx, orderId),
+        );
+    }
+
     private readonly stockResolvers: Array<
         (ctx: RequestContext, variant: ProductVariant) => Promise<number | undefined>
     > = [];

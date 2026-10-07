@@ -1,20 +1,20 @@
+import type { RouteName } from './storefront-router';
+import type { StorefrontLanguage } from './types';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-// Prettier organizes this type import before value imports.
-// eslint-disable-next-line import/order
-import type { RouteName } from './storefront-router';
 
+import { shouldShowStorefrontUpdatePrompt } from './storefront-deferred-ui';
 import {
     STOREFRONT_VERSION_CHECK_INTERVAL_MS,
     currentStorefrontAssetFingerprint,
     fetchStorefrontAssetFingerprint,
+    storefrontAssetFingerprint,
 } from './storefront-version';
-// Prettier organizes type-only imports after value imports in this file.
-// eslint-disable-next-line import/order
-import type { StorefrontLanguage } from './types';
 
-// Capture the entry assets while this eagerly-loaded module is evaluated. Route-level
-// styles can be attached before React effects run and are not part of the build identity.
+export { shouldShowStorefrontUpdatePrompt } from './storefront-deferred-ui';
+
+// Standalone callers retain their existing capture behavior. The shell passes references
+// captured before lazy route styles were attached, even though this module now loads later.
 const initialStorefrontAssetFingerprint =
     typeof document === 'undefined' ? null : currentStorefrontAssetFingerprint();
 
@@ -34,27 +34,6 @@ const storefrontUpdateCopy = {
 } satisfies Record<StorefrontLanguage, { title: string; description: string; action: string; later: string }>;
 
 const REMIND_LATER_MS = 30 * 60 * 1000;
-const deferredRoutes = new Set<RouteName>([
-    'purchase',
-    'checkout',
-    'payment',
-    'addresses',
-    'account-security',
-    'reviews',
-    'support',
-    'image-studio',
-    'two-factor',
-    'mail-query',
-    'login',
-    'register',
-    'verify-account',
-    'forgot-password',
-    'reset-password',
-]);
-
-export function shouldShowStorefrontUpdatePrompt(route: RouteName): boolean {
-    return !deferredRoutes.has(route);
-}
 
 function reminderKey(fingerprint: string): string {
     return `storefront-update-remind-at:${fingerprint}`;
@@ -75,9 +54,11 @@ export function getStorefrontUpdateCopy(language: StorefrontLanguage) {
 export function StorefrontUpdatePrompt({
     language,
     route,
+    initialAssetReferences,
 }: {
     language: StorefrontLanguage;
     route: RouteName;
+    initialAssetReferences?: readonly string[];
 }) {
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const [latestFingerprint, setLatestFingerprint] = useState('');
@@ -86,7 +67,9 @@ export function StorefrontUpdatePrompt({
 
     useEffect(() => {
         if (!import.meta.env.PROD) return;
-        const currentFingerprint = initialStorefrontAssetFingerprint ?? currentStorefrontAssetFingerprint();
+        const currentFingerprint = initialAssetReferences
+            ? storefrontAssetFingerprint(initialAssetReferences, window.location.href)
+            : (initialStorefrontAssetFingerprint ?? currentStorefrontAssetFingerprint());
         if (!currentFingerprint) return;
 
         let disposed = false;
@@ -142,7 +125,7 @@ export function StorefrontUpdatePrompt({
             window.removeEventListener('online', checkVisiblePage);
             document.removeEventListener('visibilitychange', checkVisiblePage);
         };
-    }, []);
+    }, [initialAssetReferences]);
 
     useEffect(() => {
         if (!updateAvailable || remindAt <= now) return;

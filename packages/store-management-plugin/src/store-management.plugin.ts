@@ -216,6 +216,7 @@ import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.
 import { StorefrontLcpPreloadController } from './storefront-lcp-preload.controller';
 import { StorefrontLcpPreloadService } from './storefront-lcp-preload.service';
 import { StorefrontPaymentCurrencyInterceptor } from './storefront-payment-currency.interceptor';
+import { StorefrontPublicPageWarmService } from './storefront-public-page-warm.service';
 import { StorefrontPublicPageController } from './storefront-public-page.controller';
 import { StorefrontPublicPageService } from './storefront-public-page.service';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
@@ -363,6 +364,7 @@ import {
         StorefrontCacheInvalidationService,
         StorefrontMediaDeliveryService,
         StorefrontPublicPageService,
+        StorefrontPublicPageWarmService,
         StorefrontPublicCacheService,
         StorefrontMediaManifestService,
         CustomerAvatarService,
@@ -405,6 +407,7 @@ import {
         },
     ],
     exports: [
+        StorefrontActivationService,
         StorefrontMediaDeliveryService,
         StorefrontPublicCacheService,
         StorefrontMediaManifestService,

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontPublicCacheService } from './storefront-public-cache.service';
 
-vi.mock('@vendure/core', () => ({ CacheService: class {}, ConfigService: class {} }));
+vi.mock('@vendure/core', () => ({
+    CacheService: class {},
+    ConfigService: class {},
+    RequestContextCacheService: class {},
+}));
 const ctx = { channelId: 'a', languageCode: 'en', currencyCode: 'MYR' } as any;
 function harness() {
     const entries = new Map<string, unknown>();
@@ -35,6 +39,166 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 afterEach(() => vi.useRealTimers());
 
 describe('public cache boundaries', () => {
+    it('does not return an old snapshot if publication changes while an access guard is awaiting', async () => {
+        const { service } = harness();
+        await service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('old'));
+        const guard = vi
+            .fn()
+            .mockImplementationOnce(() => service.invalidate('a'))
+            .mockResolvedValue(undefined);
+        const loader = vi.fn(() => Promise.resolve('new'));
+        expect(await service.runGuarded(guard, () => service.readThrough(ctx, 'page', 30_000, loader))).toBe(
+            'new',
+        );
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(
+            await service.runGuarded(
+                () => service.invalidate('a'),
+                () => service.peek(ctx, 'page'),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('retries a fill when its final access lookup races with publication', async () => {
+        const { service } = harness();
+        const guard = vi
+            .fn()
+            .mockResolvedValueOnce(undefined)
+            .mockImplementationOnce(() => service.invalidate('a'))
+            .mockResolvedValue(undefined);
+        let generation = 0;
+        const result = await service.runGuarded(guard, () =>
+            service.readThrough(ctx, 'page', 30_000, () => Promise.resolve(++generation)),
+        );
+        expect(result).toBe(2);
+        expect(await service.peek(ctx, 'page')).toBe(2);
+    });
+
+    it('rejects a joined result if its original generation changed after the owner completed', async () => {
+        const { service } = harness();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const loaded = vi.fn();
+        const owner = service.readThrough(ctx, 'page', 30_000, async () => {
+            loaded();
+            await gate;
+            return 'old';
+        });
+        await vi.waitFor(() => expect(loaded).toHaveBeenCalled());
+        const joined = service.runGuarded(
+            () => service.invalidate('a'),
+            () => service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('unexpected')),
+        );
+        // Allow the joined caller to register against the owner's in-flight key.
+        await pause(5);
+        release();
+        expect(await owner).toBe('old');
+        await expect(joined).rejects.toThrow('Public data is temporarily unavailable');
+        expect(await service.peek(ctx, 'page')).toBeUndefined();
+    });
+    it('bypasses existing snapshots and nested cache operations for each preview while retaining origin limits', async () => {
+        const { service, cache } = harness();
+        await service.readThrough(ctx, 'section', 30_000, () => Promise.resolve('live'));
+        cache.get.mockClear();
+        cache.set.mockClear();
+        let calls = 0;
+        const preview = () =>
+            service.runUncached(async () => {
+                expect(await service.peek(ctx, 'section')).toBeUndefined();
+                return service.readThrough(ctx, 'page', 30_000, () =>
+                    service.readThrough(ctx, 'section', 30_000, () => Promise.resolve(++calls)),
+                );
+            });
+        expect(await Promise.all([preview(), preview()])).toEqual([1, 2]);
+        expect(cache.get).not.toHaveBeenCalled();
+        expect(cache.set).not.toHaveBeenCalled();
+        expect(await service.peek(ctx, 'section')).toBe('live');
+    });
+
+    it('keeps preview origin work under the same four-loader permit and isolates concurrent live contexts', async () => {
+        const { service } = harness();
+        let active = 0;
+        let maximum = 0;
+        await Promise.all(
+            Array.from({ length: 10 }, () =>
+                service.runUncached(async () => {
+                    active++;
+                    maximum = Math.max(maximum, active);
+                    await pause(5);
+                    active--;
+                }),
+            ),
+        );
+        expect(maximum).toBe(4);
+        await Promise.all([
+            service.runUncached(() =>
+                service.readThrough(ctx, 'shared', 30_000, () => Promise.resolve('preview')),
+            ),
+            service.readThrough(ctx, 'shared', 30_000, () => Promise.resolve('live')),
+        ]);
+        expect(await service.peek(ctx, 'shared')).toBe('live');
+    });
+
+    it('keeps the preview permit while optional work outlives the page response budget', async () => {
+        const { service } = harness();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const started = vi.fn();
+        const responses = Array.from({ length: 4 }, () =>
+            service.runUncached(() => {
+                const optional = service.readThrough(ctx, 'slow-optional', 30_000, async () => {
+                    started();
+                    await gate;
+                    return 'late';
+                });
+                return Promise.race([optional, Promise.resolve('response-budget-ended')]);
+            }),
+        );
+        expect(await Promise.all(responses)).toEqual(Array(4).fill('response-budget-ended'));
+        expect(started).toHaveBeenCalledTimes(4);
+        const fifthStarted = vi.fn();
+        const fifth = service.runUncached(() => {
+            fifthStarted();
+            return Promise.resolve('fifth');
+        });
+        await pause(10);
+        expect(fifthStarted).not.toHaveBeenCalled();
+        release();
+        expect(await fifth).toBe('fifth');
+        expect(fifthStarted).toHaveBeenCalledTimes(1);
+    });
+
+    it('carries the access guard into a late nested fill and never persists a revoked result', async () => {
+        const { service, cache } = harness();
+        let live = true;
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const guard = () => (live ? Promise.resolve() : Promise.reject(new Error('revoked')));
+        const started = vi.fn();
+        const result = service.runGuarded(guard, () =>
+            service.readThrough(ctx, 'page', 30_000, async () => {
+                return service.readThrough(ctx, 'optional', 30_000, async () => {
+                    started();
+                    await gate;
+                    return 'old';
+                });
+            }),
+        );
+        await vi.waitFor(() => expect(started).toHaveBeenCalled());
+        live = false;
+        await service.invalidate('a');
+        release();
+        await expect(result).rejects.toThrow('revoked');
+        expect(cache.set).not.toHaveBeenCalled();
+        expect(await service.peek(ctx, 'optional')).toBeUndefined();
+        expect(await service.peek(ctx, 'page')).toBeUndefined();
+    });
     it('singleflights concurrent reads and separates store, language, currency and host scopes', async () => {
         const { service } = harness();
         const loader = vi.fn(async () => {
@@ -57,6 +221,38 @@ describe('public cache boundaries', () => {
             service.readThrough({ ...ctx, activeUserId: 'private' }, 'host:a', 30000, loader),
         ).rejects.toThrow('anonymous');
         expect(await service.peek({ ...ctx, activeUserId: 'private' }, 'host:a')).toBeUndefined();
+    });
+    it('refreshes one key while its existing snapshot stays readable and keeps generation guards', async () => {
+        const { service } = harness();
+        await service.readThrough(ctx, 'page', 30000, () => Promise.resolve('previous'));
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const load = vi.fn(async () => {
+            await gate;
+            return 'refreshed';
+        });
+        const refreshes = Array.from({ length: 8 }, () =>
+            service.readThrough(ctx, 'page', 30000, load, { refresh: true }),
+        );
+        await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+        expect(await service.peek(ctx, 'page')).toBe('previous');
+        release();
+        expect(await Promise.all(refreshes)).toEqual(Array(8).fill('refreshed'));
+        expect(await service.peek(ctx, 'page')).toBe('refreshed');
+        const racing = vi
+            .fn()
+            .mockImplementationOnce(async () => {
+                await service.invalidate('a');
+                return 'revoked';
+            })
+            .mockResolvedValue('after-publication');
+        expect(await service.readThrough(ctx, 'page', 30000, racing, { refresh: true })).toBe(
+            'after-publication',
+        );
+        expect(racing).toHaveBeenCalledTimes(2);
+        expect(await service.peek(ctx, 'page')).toBe('after-publication');
     });
     it('uses shared revisions across independently constructed API and worker services', async () => {
         const test = harness();

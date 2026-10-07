@@ -17,6 +17,7 @@ export function ProductCard({
     onOpen,
     onFavorite,
     priority = false,
+    eager = priority,
     imageSizes,
     appearance = 'card',
 }: {
@@ -28,6 +29,7 @@ export function ProductCard({
     onOpen: () => void;
     onFavorite?: () => void;
     priority?: boolean;
+    eager?: boolean;
     imageSizes?: string;
     appearance?: 'card' | 'plain' | 'gallery' | 'mosaic';
 }) {
@@ -52,7 +54,7 @@ export function ProductCard({
                     <ProductImage
                         language={language}
                         product={product}
-                        loading={priority ? 'eager' : 'lazy'}
+                        loading={eager ? 'eager' : 'lazy'}
                         fetchPriority={priority ? 'high' : 'auto'}
                         sizes={imageSizes}
                     />

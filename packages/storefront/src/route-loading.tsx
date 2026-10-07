@@ -1,8 +1,5 @@
-import { Store } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
-
-import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
-import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
+import { BrandLoadingIndicator } from './brand-loading';
+import { usePageReadiness } from './page-readiness';
 
 export type RouteSkeletonVariant =
     'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'studio' | 'default';
@@ -41,43 +38,27 @@ export function PageSkeleton({
     language,
     variant = 'default',
     root = false,
+    compact = false,
 }: {
     label?: string;
     language?: string;
     variant?: RouteSkeletonVariant;
     root?: boolean;
+    compact?: boolean;
 }) {
+    usePageReadiness(true);
     const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
-    const content = (
-        <span className="page-loading-indicator">
-            <span className="page-loading-spinner" aria-hidden="true" />
-            <span>{ariaLabel}</span>
-        </span>
-    );
-    const className = `page-skeleton page-skeleton--route page-skeleton--${variant}`;
-    if (root) {
-        return (
-            <main
-                data-page-pending="data"
-                className={className}
-                role="status"
-                aria-label={ariaLabel}
-                aria-busy="true"
-            >
-                {content}
-            </main>
-        );
-    }
+    const Tag = root ? 'main' : 'div';
     return (
-        <div
+        <Tag
             data-page-pending="data"
-            className={className}
+            className={`page-skeleton page-skeleton--route page-skeleton--${variant}${compact ? ' page-skeleton--compact' : ''}`}
             role="status"
             aria-label={ariaLabel}
             aria-busy="true"
         >
-            {content}
-        </div>
+            <BrandLoadingIndicator language={language} local={compact} label={ariaLabel} />
+        </Tag>
     );
 }
 
@@ -90,10 +71,6 @@ export function RouteTransitionLoader({
     logoUrl?: string | null;
     storefrontName?: string;
 }) {
-    const localizedStorefrontName =
-        storefrontName?.trim() || DEFAULT_STOREFRONT_NAMES[isZh(language) ? 'zh' : 'en'];
-    const logoSource = normalizeStorefrontAssetUrl(logoUrl ?? '');
-
     return (
         <div
             data-page-pending="module"
@@ -103,64 +80,7 @@ export function RouteTransitionLoader({
             aria-live="polite"
             aria-busy="true"
         >
-            <div className="route-transition-card" aria-hidden="true">
-                <RouteTransitionLogo key={logoSource} source={logoSource} />
-                <strong>{localizedStorefrontName}</strong>
-                <span className="route-transition-track">
-                    <span />
-                </span>
-            </div>
+            <BrandLoadingIndicator language={language} logoUrl={logoUrl} storefrontName={storefrontName} />
         </div>
-    );
-}
-
-function RouteTransitionLogo({ source }: { source: string }) {
-    const imageRef = useRef<HTMLImageElement>(null);
-    const [originalSource, setOriginalSource] = useState(false);
-    const [failed, setFailed] = useState(false);
-    const [readySource, setReadySource] = useState('');
-    const src = source ? (originalSource ? source : storefrontWebpUrl(source, 'thumbnail')) : '';
-    const ready = Boolean(src && readySource === src && !failed);
-
-    function reveal(image: HTMLImageElement) {
-        const show = () => {
-            if (imageRef.current === image && image.getAttribute('src') === src && image.naturalWidth > 0) {
-                setReadySource(src);
-            }
-        };
-        if (typeof image.decode === 'function') {
-            void image.decode().then(show, show);
-        } else {
-            show();
-        }
-    }
-
-    useLayoutEffect(() => {
-        const image = imageRef.current;
-        // A cached image can finish before React attaches its load listener.
-        if (image?.complete && image.naturalWidth > 0) reveal(image);
-    }, [src]);
-
-    return (
-        <span className={`route-transition-mark${ready ? ' is-logo-ready' : ''}`}>
-            {!ready && <Store className="route-transition-placeholder" aria-hidden="true" />}
-            {src && !failed && (
-                <img
-                    ref={imageRef}
-                    src={src}
-                    alt=""
-                    width="160"
-                    height="120"
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                    onLoad={event => reveal(event.currentTarget)}
-                    onError={() => {
-                        if (src !== source) setOriginalSource(true);
-                        else setFailed(true);
-                    }}
-                />
-            )}
-        </span>
     );
 }

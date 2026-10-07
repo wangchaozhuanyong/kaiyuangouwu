@@ -1,6 +1,7 @@
 import { Check, Copy, Download, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Overlay } from './overlay-host';
 import { referralShareUrl } from './referral-attribution';
 import {
     availablePosterTemplates,
@@ -8,7 +9,6 @@ import {
     renderReferralPoster,
     replacePosterTokens,
 } from './referral-poster-layout';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import './styles/modals-and-support.css';
 import { ReferralPosterTemplate, StorefrontLanguage } from './types';
@@ -74,18 +74,10 @@ export function ReferralPosterModal({
     const posterCacheRef = useRef(new Map<string, string>());
     const navRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef(new Map<string, HTMLButtonElement>());
-    useEffect(() => acquireBodyScrollLock(), []);
     useEffect(() => {
         setSelectedId(defaultTemplate);
         setCopied(false);
     }, [channelId, defaultTemplate]);
-    useEffect(() => {
-        const handleKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
-        };
-        document.addEventListener('keydown', handleKey);
-        return () => document.removeEventListener('keydown', handleKey);
-    }, [onClose]);
     useEffect(() => {
         if (style && selectedId !== style.id) setSelectedId(style.id);
     }, [selectedId, style]);
@@ -171,18 +163,19 @@ export function ReferralPosterModal({
     };
 
     return (
-        <div
+        <Overlay
+            onClose={onClose}
             className={
-                'fixed inset-0 z-[100] flex items-start justify-center overflow-x-hidden overflow-y-auto ' +
+                'fixed inset-0 flex items-start justify-center overflow-x-hidden overflow-y-auto ' +
                 'bg-slate-950/65 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] ' +
-                'pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm'
+                'pt-[max(1rem,env(safe-area-inset-top))]'
             }
-            role="dialog"
-            aria-modal="true"
-            aria-label={isZh ? '选择邀请海报' : 'Choose referral poster'}
             onClick={onClose}
         >
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={isZh ? '选择邀请海报' : 'Choose referral poster'}
                 className="referral-poster-dialog relative my-auto w-full max-w-sm min-w-0 overflow-hidden rounded-3xl px-4 pb-4 pt-14 shadow-2xl"
                 onClick={event => event.stopPropagation()}
             >
@@ -291,6 +284,6 @@ export function ReferralPosterModal({
                     </button>
                 </div>
             </div>
-        </div>
+        </Overlay>
     );
 }

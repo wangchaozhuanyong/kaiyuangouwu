@@ -1,5 +1,7 @@
 import type { Query, QueryClient, QueryKey } from '@tanstack/react-query';
 
+import { invalidatePublicPageReads } from './public-page-transport';
+
 export const storefrontRealtimeTopics = [
     'catalog',
     'content',
@@ -199,9 +201,40 @@ export async function invalidateStorefrontRealtimeQueries(
     event: StorefrontRealtimeEvent,
     scope: StorefrontRealtimeScope,
 ): Promise<void> {
+    if (event.topics.some(topic => ['catalog', 'content', 'config'].includes(topic))) {
+        // A publication event invalidates any older transport, even if it is still downloading.
+        invalidatePublicPageReads();
+        await queryClient.cancelQueries({
+            predicate: query =>
+                matchesPrefix(query.queryKey, ['storefront', scope.marketCode, scope.languageCode]) &&
+                query.queryKey[3] !== 'private' &&
+                (query.meta?.publicAggregatePart === true ||
+                    query.queryKey[3] === 'config' ||
+                    storefrontRealtimeQueryMatches(query, event, scope)),
+        });
+    }
+    // Aggregate sections share config's read owner. Mark their cached values stale without
+    // launching independent content/visual/collection requests.
     await queryClient.invalidateQueries({
-        predicate: query => storefrontRealtimeQueryMatches(query, event, scope),
+        predicate: query =>
+            storefrontRealtimeQueryMatches(query, event, scope) && query.meta?.publicAggregatePart === true,
+        refetchType: 'none',
     });
+    await queryClient.invalidateQueries(
+        {
+            predicate: query =>
+                query.meta?.publicAggregatePart !== true &&
+                (storefrontRealtimeQueryMatches(query, event, scope) ||
+                    (matchesPrefix(query.queryKey, [
+                        'storefront',
+                        scope.marketCode,
+                        scope.languageCode,
+                        'config',
+                    ]) &&
+                        event.topics.some(topic => ['catalog', 'content', 'config'].includes(topic)))),
+        },
+        { cancelRefetch: false },
+    );
 }
 
 export function storefrontRealtimeQueryMatches(

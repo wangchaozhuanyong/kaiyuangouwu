@@ -254,11 +254,12 @@ export class ContentReviewsApi extends BaseDomainApi {
         type StorefrontConfigResponse = {
             activeChannel: Omit<
                 StorefrontConfig,
-                'availableCountries' | 'availableProvinces' | 'logoUrl' | 'description'
+                'availableCountries' | 'availableProvinces' | 'logoUrl' | 'description' | 'accessMode'
             >;
             availableCountries: StorefrontConfig['availableCountries'];
             availableStorefrontProvinces?: NonNullable<StorefrontConfig['availableProvinces']>;
             storefrontBranding: {
+                accessMode: NonNullable<StorefrontConfig['accessMode']>;
                 logoUrl: string | null;
                 logoOnLightUrl: string | null;
                 logoOnDarkUrl: string | null;
@@ -304,6 +305,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                         : ''
                 }
                 storefrontBranding {
+                    accessMode
                     logoUrl
                     logoOnLightUrl
                     logoOnDarkUrl
@@ -349,6 +351,7 @@ export class ContentReviewsApi extends BaseDomainApi {
         }
         return {
             ...result.activeChannel,
+            accessMode: result.storefrontBranding?.accessMode,
             availableCountries: result.availableCountries,
             availableProvinces: result.availableStorefrontProvinces ?? [],
             logoUrl: result.storefrontBranding?.logoUrl ?? null,

@@ -1,0 +1,7 @@
+{
+    "extends": "./tsconfig.order-closure.json",
+    "include": [
+        "./public-preview-checkout-browser.e2e-spec.ts",
+        "../../store-management-plugin/src/markdown-it.d.ts"
+    ]
+}

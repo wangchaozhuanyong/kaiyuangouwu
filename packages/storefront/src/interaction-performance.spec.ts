@@ -19,13 +19,12 @@ describe('shared interaction performance contract', () => {
         }
     });
 
-    it('limits readiness observation to attributes that can change page readiness', () => {
+    it('uses declared route/query state without DOM or opacity polling', () => {
         const source = readFileSync(path.join(__dirname, 'page-readiness.tsx'), 'utf8');
-
-        expect(source).toContain('attributeFilter: [');
-        expect(source).toContain("'data-page-pending'");
-        expect(source).toContain("'data-safe-image'");
-        expect(source).not.toContain("attributeFilter: ['class', 'style'");
+        expect(source).toContain('usePageReadiness');
+        expect(source).not.toContain('MutationObserver');
+        expect(source).not.toContain('getComputedStyle');
+        expect(source).not.toContain('querySelectorAll');
     });
 
     it('respects reduced-motion preferences across the whole storefront', () => {
@@ -99,5 +98,22 @@ describe('shared interaction performance contract', () => {
             expect(page).toContain('../styles/account-catalog-surfaces.css');
         }
         expect(routeStyles.content).toContain('../styles/account-catalog-surfaces.css');
+    });
+
+    it('loads embedded preview state styles in the iframe instead of relying on the parent document', () => {
+        const panel = readFileSync(path.join(__dirname, 'storefront-preview-scenario-panel.tsx'), 'utf8');
+        const entry = readFileSync(path.join(__dirname, 'main.tsx'), 'utf8');
+        const shell = readFileSync(path.join(__dirname, 'StorefrontShell.tsx'), 'utf8');
+        const baseStyles = readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
+        expect(panel).toContain("import './styles/storefront-preview-scenario.css'");
+        expect(entry).not.toContain('storefront-preview-scenario.css');
+        expect(shell).not.toContain('storefront-preview-scenario.css');
+        expect(baseStyles).not.toContain('storefront-preview-scenario.css');
+        const panelStyles = readFileSync(path.join(stylesDirectory, 'storefront-preview-scenario.css'), 'utf8');
+        expect(panelStyles).toMatch(/\.storefront-preview-scenario\s*\{\s*position:\s*absolute;/);
+        expect(panelStyles).toContain('pointer-events: none');
+        const parentStyles = readFileSync(path.join(stylesDirectory, 'storefront-design-preview.css'), 'utf8');
+        expect(parentStyles).not.toContain('.storefront-preview-scenario');
+        expect(parentStyles).toContain('.storefront-preview-toolbar');
     });
 });

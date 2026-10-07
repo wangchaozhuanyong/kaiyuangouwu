@@ -10,6 +10,7 @@ import { getValidFormat } from './common';
 import { ImageTransformParameters, ImageTransformStrategy } from './config/image-transform-strategy';
 import { S3AssetStorageStrategy } from './config/s3-asset-storage-strategy';
 import { ASSET_SERVER_PLUGIN_INIT_OPTIONS, DEFAULT_CACHE_HEADER, loggerCtx } from './constants';
+import { ImageTransformBusyError, ImageTransformQueue } from './image-transform-queue';
 import { transformImage } from './transform-image';
 import { AssetServerOptions, ImageTransformMode, ImageTransformPreset } from './types';
 
@@ -30,7 +31,7 @@ export class AssetServer {
     private cacheHeader: string;
     private presets: ImageTransformPreset[];
     private imageTransformStrategies: ImageTransformStrategy[];
-    private readonly preparing = new Map<string, Promise<void>>();
+    private readonly transforms: ImageTransformQueue;
 
     constructor(
         @Inject(ASSET_SERVER_PLUGIN_INIT_OPTIONS) private options: AssetServerOptions,
@@ -39,6 +40,7 @@ export class AssetServer {
     ) {
         this.assetStorageStrategy = this.configService.assetOptions.assetStorageStrategy;
         this.presets = options.presets ?? [];
+        this.transforms = new ImageTransformQueue(processContext.isWorker ? 1 : 2);
     }
 
     /** Worker-only preparation. Callers must authorize source paths with the store's public manifest. */
@@ -69,26 +71,7 @@ export class AssetServer {
             fpx: undefined,
             fpy: undefined,
         };
-        const key = this.getFileNameFromParameters(identifier, parameters);
-        const current = this.preparing.get(key);
-        if (current) return current;
-        const prepare = async () => {
-            if (await this.assetStorageStrategy.fileExists(key)) return;
-            const original = await this.assetStorageStrategy.readFileToBuffer(
-                this.sanitizeFilePath(identifier),
-            );
-            const image = await transformImage(original, parameters);
-            await this.assetStorageStrategy.writeFileFromBuffer(key, await image.toBuffer());
-        };
-        // Queue concurrency is one; this also protects direct internal callers from duplicate transforms.
-        if (this.preparing.size >= 8) throw new Error('Image preparation capacity exceeded');
-        const pending = prepare();
-        this.preparing.set(key, pending);
-        try {
-            await pending;
-        } finally {
-            this.preparing.delete(key);
-        }
+        await this.transformedBuffer(identifier, parameters, true);
     }
 
     /** @internal */
@@ -174,31 +157,17 @@ export class AssetServer {
                 if (req.query) {
                     const decodedReqPath = this.sanitizeFilePath(req.path);
                     Logger.debug(`Pre-cached Asset not found: ${decodedReqPath}`, loggerCtx);
-                    let file: Buffer;
-                    try {
-                        file = await this.assetStorageStrategy.readFileToBuffer(decodedReqPath);
-                    } catch (_err: any) {
-                        res.status(404).send('Resource not found');
-                        return;
-                    }
                     try {
                         const parameters =
                             this.validatedTransformParameters.get(req) ??
                             (await this.getImageTransformParameters(req));
                         this.validatedTransformParameters.delete(req);
-                        const image = await transformImage(file, parameters);
-                        let imageBuffer: Buffer = await image.toBuffer();
                         const cachedFileName = this.getFileNameFromParameters(req.path, parameters);
-                        if (!req.query.cache || req.query.cache === 'true') {
-                            await this.assetStorageStrategy.writeFileFromBuffer(cachedFileName, imageBuffer);
-                            if (cachedFileName.startsWith('avatars/v2/')) {
-                                // Avatar storage normalizes bytes again; serve the persisted result
-                                // so the first response and subsequent cache hits are identical.
-                                imageBuffer =
-                                    await this.assetStorageStrategy.readFileToBuffer(cachedFileName);
-                            }
-                            Logger.debug(`Saved cached asset: ${cachedFileName}`, loggerCtx);
-                        }
+                        const imageBuffer = await this.transformedBuffer(
+                            req.path,
+                            parameters,
+                            !req.query.cache || req.query.cache === 'true',
+                        );
                         let mimeType = this.getMimeType(cachedFileName);
                         if (!mimeType) {
                             mimeType = (await getFileType(imageBuffer))?.mime || 'image/jpeg';
@@ -212,13 +181,43 @@ export class AssetServer {
                     } catch (e: any) {
                         Logger.error(e.message, loggerCtx, e.stack);
                         res.setHeader('Cache-Control', 'private, no-store');
-                        res.status(500).send('An error occurred when generating the image');
+                        if (e instanceof ImageTransformBusyError) {
+                            res.setHeader('Retry-After', '1');
+                            res.status(503).send('Image processing temporarily busy');
+                        } else if (e?.status === 404) {
+                            res.status(404).send('Resource not found');
+                        } else res.status(500).send('An error occurred when generating the image');
                         return;
                     }
                 }
             }
             next();
         };
+    }
+
+    private transformedBuffer(
+        identifier: string,
+        parameters: ImageTransformParameters,
+        persist: boolean,
+    ): Promise<Buffer> {
+        const key = this.getFileNameFromParameters(identifier, parameters);
+        // cache=false retains its no-write behavior and cannot join a writer's request.
+        return this.transforms.run(`${persist ? 'persist' : 'transient'}:${key}`, async () => {
+            if (persist && (await this.assetStorageStrategy.fileExists(key)))
+                return this.assetStorageStrategy.readFileToBuffer(key);
+            let source: Buffer;
+            try {
+                source = await this.assetStorageStrategy.readFileToBuffer(this.sanitizeFilePath(identifier));
+            } catch {
+                throw Object.assign(new Error('Source image not found'), { status: 404 });
+            }
+            const image = await transformImage(source, parameters);
+            const buffer = await image.toBuffer();
+            if (!persist) return buffer;
+            await this.assetStorageStrategy.writeFileFromBuffer(key, buffer);
+            // Avatar storage normalizes bytes; preserve the first-response/read-back contract.
+            return key.startsWith('avatars/v2/') ? this.assetStorageStrategy.readFileToBuffer(key) : buffer;
+        });
     }
 
     private async getImageTransformParameters(req: Request): Promise<ImageTransformParameters> {

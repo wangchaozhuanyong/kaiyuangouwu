@@ -32,6 +32,58 @@ async function harness(worker = true) {
 }
 
 describe('bounded worker derivative preparation', () => {
+    it('coalesces cold HTTP derivatives after authorizing every request, including denied joiners', async () => {
+        const { server, storage } = await harness(false);
+        const preset = new PresetOnlyStrategy({
+            defaultPreset: 'storefront-icon-96',
+            permittedQuality: [82],
+            permittedFormats: ['webp'],
+        });
+        const authorize = vi.fn(({ req, input }: any) => {
+            if (req.headers.denied) throw new Error('denied');
+            return input;
+        });
+        const router = server.createAssetServer({
+            presets: storefrontAssetPresets,
+            imageTransformStrategies: [{ getImageTransformParameters: authorize }, preset],
+        });
+        const request = async (denied = false) => {
+            const headers = new Map<string, string>();
+            const result = { status: 200, body: undefined as Buffer | string | undefined };
+            const res: any = {
+                hasHeader: (key: string) => headers.has(key),
+                setHeader: (key: string, value: string) => headers.set(key, value),
+                set: (key: string, value: string) => headers.set(key, value),
+                contentType: (value: string) => headers.set('Content-Type', value),
+                status: (status: number) => {
+                    result.status = status;
+                    return res;
+                },
+                send: (body: Buffer | string) => {
+                    result.body = body;
+                    return res;
+                },
+            };
+            const req: any = {
+                path: '/preview/public.png',
+                headers: { denied },
+                res,
+                query: { preset: 'storefront-icon-96', q: '82', format: 'webp' },
+            };
+            const stack = (router as any).stack;
+            await stack[0].handle(req, res, (error: unknown) =>
+                stack[1].handle(error, req, res, () => undefined),
+            );
+            return result;
+        };
+        const results = await Promise.all([request(), request(), request(true), request()]);
+        expect(authorize).toHaveBeenCalledTimes(4);
+        expect(results.map(result => result.status)).toEqual([200, 200, 400, 200]);
+        expect(storage.writeFileFromBuffer).toHaveBeenCalledTimes(1);
+        expect(results[0].body).toEqual(results[1].body);
+        await request();
+        expect(storage.writeFileFromBuffer).toHaveBeenCalledTimes(1);
+    });
     it('uses the existing request cache identity and reuses completed or concurrent derivatives', async () => {
         const { server, storage, files } = await harness();
         await Promise.all(

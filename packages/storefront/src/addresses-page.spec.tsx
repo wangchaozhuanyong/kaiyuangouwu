@@ -395,12 +395,12 @@ describe('AddressesPage checkout selection and editing', () => {
         });
     }
     function element<T extends Element = HTMLElement>(selector: string): T {
-        const value = container.querySelector<T>(selector);
+        const value = document.body.querySelector<T>(selector);
         if (!value) throw new Error(`Missing address element: ${selector}`);
         return value;
     }
     const button = (text: string) => {
-        const value = [...container.querySelectorAll('button')].find(item => item.textContent === text);
+        const value = [...document.body.querySelectorAll('button')].find(item => item.textContent === text);
         if (!value) throw new Error(`Missing address action: ${text}`);
         return value;
     };
@@ -478,10 +478,10 @@ describe('AddressesPage checkout selection and editing', () => {
             expect(container.querySelector('.addresses-page')).not.toBeNull();
         });
         await interact(() => button('删除').click());
-        expect(container.querySelector('[role="dialog"]')?.textContent).toContain('确定删除这个地址');
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('确定删除这个地址');
         expect(page.api.deleteAddress).not.toHaveBeenCalled();
         await interact(() => button('取消').click());
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         let release!: () => void;
         vi.mocked(page.api.deleteAddress).mockImplementationOnce(
             () =>
@@ -496,7 +496,7 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(page.api.deleteAddress).toHaveBeenCalledTimes(1);
         expect(button('删除中…').disabled).toBe(true);
         await interact(() => release());
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
     });
 
     it('selects for this checkout only, keeping default unchanged until the user confirms', async () => {
@@ -514,12 +514,12 @@ describe('AddressesPage checkout selection and editing', () => {
 
     it('opens the first address form once and leaves it closed after cancellation and refresh', async () => {
         const { render, props } = mount({ customer: mockCustomer });
-        expect(container.textContent).toContain('新增收货地址');
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('新增收货地址');
         await interact(() => element<HTMLButtonElement>('.sheet > header button').click());
         render({ ...props, customer: { ...mockCustomer } });
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         await interact(() => button('新增地址').click());
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     });
 
     it('fills recognized text for review without saving and keeps the selected country', async () => {
@@ -528,7 +528,7 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(element<HTMLInputElement>('input[name="fullName"]').value).toBe('张三');
         expect(element<HTMLSelectElement>('select[name="province"]').value).toBe('CN-GD');
         expect(element<HTMLInputElement>('input[name="city"]').value).toBe('深圳市');
-        expect(container.textContent).toContain('已填入，请核对后保存');
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('已填入，请核对后保存');
         expect(api.createAddress).not.toHaveBeenCalled();
         expect(props.selection?.onUse).not.toHaveBeenCalled();
         await save();
@@ -555,9 +555,9 @@ describe('AddressesPage checkout selection and editing', () => {
         vi.mocked(api.updateAddress).mockRejectedValueOnce(new Error('INTERNAL_FAILURE'));
         await fill('streetLine2', 'B栋9楼');
         await save();
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
         expect(element<HTMLInputElement>('input[name="streetLine2"]').value).toBe('B栋9楼');
-        expect(container.textContent).not.toContain('INTERNAL_FAILURE');
+        expect(document.body.textContent).not.toContain('INTERNAL_FAILURE');
         expect(props.selection?.onUse).not.toHaveBeenCalled();
         await save();
         expect(props.selection?.onUse).toHaveBeenCalledWith(address);
@@ -578,7 +578,7 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(element<HTMLFieldSetElement>('.address-form-fields').disabled).toBe(true);
         expect(element<HTMLInputElement>('input[name="phoneNumber"]').matches(':disabled')).toBe(true);
         await interact(() => element<HTMLButtonElement>('.sheet > header button').click());
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
         expect(props.selection?.onUse).not.toHaveBeenCalled();
         await interact(() => finishSave(address));
         expect(props.selection?.onUse).toHaveBeenCalledWith(address);
@@ -592,8 +592,8 @@ describe('AddressesPage checkout selection and editing', () => {
         await save();
         expect(api.createAddress).toHaveBeenCalledTimes(1);
         expect(props.selection?.onUse).not.toHaveBeenCalled();
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-        expect(container.textContent).toContain('地址已保存，列表更新失败');
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('地址已保存，列表更新失败');
         await save();
         expect(api.createAddress).toHaveBeenCalledTimes(1);
         expect(api.updateAddress).not.toHaveBeenCalled();
@@ -612,7 +612,7 @@ describe('AddressesPage checkout selection and editing', () => {
         await fill('streetLine2', '新楼层');
         await save();
         expect(api.updateAddress).toHaveBeenCalled();
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(props.onBack).not.toHaveBeenCalled();
     });
 
@@ -642,8 +642,8 @@ describe('AddressesPage checkout selection and editing', () => {
 
             expect(api.createAddress).not.toHaveBeenCalled();
             expect(api.updateAddress).not.toHaveBeenCalled();
-            expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-            expect(container.textContent).toContain('请输入有效的电话号码');
+            expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+            expect(document.querySelector('[role="dialog"]')?.textContent).toContain('请输入有效的电话号码');
             expect(onUse).not.toHaveBeenCalled();
         },
     );
@@ -668,7 +668,7 @@ describe('AddressesPage checkout selection and editing', () => {
             await fill('phoneNumber', phoneNumber);
             await save();
             expect(api.updateAddress).not.toHaveBeenCalled();
-            expect(container.textContent).toContain('请输入有效的电话号码');
+            expect(document.querySelector('[role="dialog"]')?.textContent).toContain('请输入有效的电话号码');
         },
     );
 
@@ -731,8 +731,9 @@ describe('AddressesPage checkout selection and editing', () => {
         mount({ language: 'en' });
         expect(container.textContent).toContain('Choose shipping address');
         await interact(() => button('Edit').click());
-        expect(container.textContent).toContain('Save and use');
-        expect(container.textContent).toContain('Recognize and fill');
-        expect(container.textContent).not.toContain('保存');
+        const editor = document.querySelector('[role="dialog"]');
+        expect(editor?.textContent).toContain('Save and use');
+        expect(editor?.textContent).toContain('Recognize and fill');
+        expect(editor?.textContent).not.toContain('保存');
     });
 });

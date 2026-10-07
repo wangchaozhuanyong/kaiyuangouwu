@@ -1,0 +1,44 @@
+/* One geometry/type owner for numeric badges in every store and skin. */
+.count-badge {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-family: var(--font-numeric);
+    font-size: var(--type-badge-size);
+    line-height: var(--type-badge-leading);
+    font-weight: var(--font-weight-bold);
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-normal);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.count-badge.is-overlay {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    box-shadow: 0 0 0 1.5px var(--paper);
+    pointer-events: none;
+}
+
+.count-badge-anchor {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.storefront-bottom-nav .count-badge-anchor {
+    width: 24px;
+    height: 30px;
+}

@@ -1,4 +1,8 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import {
+    isConfirmedControlledTestPayment,
+    isControlledTestPaymentMethod,
+} from '@vendure/common/lib/controlled-test-payment';
 import { PaymentInput } from '@vendure/common/lib/generated-shop-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
@@ -630,15 +634,47 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     private async isCouponOrderPaymentPending(ctx: RequestContext, orderId: ID): Promise<boolean> {
         if (await this.carts?.isOrderPaymentLocked(ctx, orderId)) return true;
         const order = await this.orderService.findOne(ctx, orderId, ['payments'], 'business');
+        // A completed server-owned simulation cannot keep a customer's real coupon locked forever.
+        if (order && isConfirmedSimulatedOrder(order)) return false;
         return (
             !!order &&
             (order.state === 'ArrangingPayment' ||
                 order.payments.some(
                     payment =>
-                        payment.state === 'Authorized' ||
-                        payment.state === 'Settled' ||
+                        !['Declined', 'Cancelled'].includes(payment.state) ||
                         payment.metadata?.manualReview?.required,
                 ))
+        );
+    }
+
+    /** Maintenance holds cart, order and coupon locks before accepting this server-owned expiry signal. */
+    private async isReleasedUnpaidCheckout(ctx: RequestContext, orderId: ID, now: Date): Promise<boolean> {
+        const metadata = this.connection.rawConnection.entityMetadatas.find(
+            item => item.name === 'CheckoutResourceHold',
+        );
+        if (!metadata) return false; // The optional fulfillment plugin must never be inferred from order state.
+        const hold = await this.connection.getRepository(ctx, metadata.target).findOne({
+            where: { channelId: ctx.channelId, orderId, state: 'RELEASED', expiresAt: LessThanOrEqual(now) },
+        });
+        if (
+            !hold ||
+            !idsAreEqual(hold.channelId, ctx.channelId) ||
+            !idsAreEqual(hold.orderId, orderId) ||
+            hold.state !== 'RELEASED' ||
+            !(new Date(hold.expiresAt).getTime() <= now.getTime())
+        )
+            return false;
+        const order = await this.orderService.findOne(ctx, orderId, ['payments'], 'business');
+        return (
+            !!order &&
+            idsAreEqual(order.salesChannelId, ctx.channelId) &&
+            order.active &&
+            order.state === 'ArrangingPayment' &&
+            order.payments.every(
+                payment =>
+                    ['Declined', 'Cancelled'].includes(payment.state) &&
+                    !payment.metadata?.manualReview?.required,
+            )
         );
     }
 
@@ -765,7 +801,10 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                     this.carts?.withTransaction.bind(this.carts) ??
                     this.connection.withTransaction.bind(this.connection)
                 )(ctx, async txCtx => {
-                    if (coupon.lockedOrderId) await this.carts?.lockForOrder(txCtx, coupon.lockedOrderId);
+                    if (coupon.lockedOrderId) {
+                        await this.carts?.lockForOrder(txCtx, coupon.lockedOrderId);
+                        await this.orderService.lockOrderForRefund(txCtx, coupon.lockedOrderId);
+                    }
                     await this.connection
                         .getRepository(txCtx, CustomerCoupon)
                         .createQueryBuilder()
@@ -779,21 +818,53 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                     });
                     if (!fresh || String(fresh.lockedOrderId ?? '') !== String(coupon.lockedOrderId ?? ''))
                         return;
+                    let releasedUnpaidCheckout = false;
                     if (
                         fresh.lockedOrderId &&
                         (await this.isCouponOrderPaymentPending(txCtx, fresh.lockedOrderId))
-                    )
-                        return;
+                    ) {
+                        if (fresh.status !== 'LOCKED' || !fresh.lockExpiresAt || fresh.lockExpiresAt > now)
+                            return;
+                        releasedUnpaidCheckout = await this.isReleasedUnpaidCheckout(
+                            txCtx,
+                            fresh.lockedOrderId,
+                            now,
+                        );
+                        if (!releasedUnpaidCheckout) return;
+                    }
                     if (fresh.status === 'LOCKED' && fresh.lockExpiresAt && fresh.lockExpiresAt <= now) {
                         const order = fresh.lockedOrderId
                             ? await this.orderService.findOne(
                                   txCtx,
                                   fresh.lockedOrderId,
-                                  ['lines', 'shippingLines'],
+                                  ['lines', 'shippingLines', 'payments'],
                                   'business',
                               )
                             : undefined;
-                        await this.releaseLockedCoupon(txCtx, fresh, order ?? null, '购物车锁定超时自动释放');
+                        if (releasedUnpaidCheckout) {
+                            // Do not reprice a locked quote: a later trusted receipt must reconcile its original evidence.
+                            await this.releaseLockedCouponWithinCart(
+                                txCtx,
+                                fresh,
+                                null,
+                                '未付款结算占用已过期释放，自动退回优惠券',
+                            );
+                        } else if (order && isConfirmedSimulatedOrder(order)) {
+                            // Preserve the placed simulation quote; only return its temporary entitlement.
+                            await this.releaseLockedCouponWithinCart(
+                                txCtx,
+                                fresh,
+                                null,
+                                '模拟订单完成，释放真实优惠券',
+                            );
+                        } else {
+                            await this.releaseLockedCoupon(
+                                txCtx,
+                                fresh,
+                                order ?? null,
+                                '购物车锁定超时自动释放',
+                            );
+                        }
                         released++;
                     }
                     if (this.isExpired(fresh, now) && fresh.status !== 'USED' && fresh.status !== 'REVOKED') {
@@ -1114,6 +1185,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         state: PaymentState,
         source: 'handler' | 'manual',
     ): Promise<string | undefined> {
+        if (source === 'handler' && isConfirmedControlledTestPayment(payment)) return;
         const order = await this.loadOrder(ctx, orderId);
         if (!(await this.hasCouponEntitlements(ctx, order))) return;
         const isUsdt = payment.method === USDT_TRC20_PAYMENT_METHOD_CODE;
@@ -1168,6 +1240,24 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         });
         if (!coupons.length) return;
         const order = await this.loadOrder(ctx, orderId);
+        const hasSimulatedPayment = order.payments.some(
+            payment =>
+                ['Settled', 'Authorized'].includes(payment.state) &&
+                (isControlledTestPaymentMethod(payment.method) || payment.metadata?.public?.testPayment),
+        );
+        if (hasSimulatedPayment) {
+            if (!isConfirmedSimulatedOrder(order)) return; // Mixed or unknown funds require reconciliation.
+            for (const candidate of coupons) {
+                await this.lockRow(ctx, CustomerCoupon, candidate.id);
+                const coupon = await repository.findOneOrFail({
+                    where: { id: candidate.id, channelId: ctx.channelId },
+                    relations: { promotion: true, campaignConfig: true },
+                });
+                if (coupon.status !== 'LOCKED' || !idsAreEqual(coupon.lockedOrderId, order.id)) continue;
+                await this.releaseLockedCouponWithinCart(ctx, coupon, null, '模拟订单完成，释放真实优惠券');
+            }
+            return;
+        }
         const settledPayments = order.payments.filter(payment => payment.state === 'Settled');
         const times = settledPayments.map(payment =>
             Date.parse(payment.metadata?.couponPaymentValidation?.paidAt ?? ''),
@@ -1231,6 +1321,23 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             ],
             relations: { promotion: true, campaignConfig: true },
         });
+        if (coupons.some(coupon => coupon.status === 'LOCKED')) {
+            const order = await this.loadOrder(ctx, orderId);
+            const hasSimulationEvidence = order.payments.some(
+                payment =>
+                    ['Authorized', 'Settled'].includes(payment.state) &&
+                    (isControlledTestPaymentMethod(payment.method) || payment.metadata?.public?.testPayment),
+            );
+            if (
+                order.payments.some(
+                    payment =>
+                        !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                        payment.metadata?.manualReview?.required,
+                ) ||
+                (hasSimulationEvidence && !isConfirmedSimulatedOrder(order))
+            )
+                return;
+        }
         for (const coupon of coupons) {
             if (coupon.status === 'LOCKED') {
                 await this.releaseLockedCoupon(ctx, coupon, null, '订单取消，释放未核销优惠券');
@@ -1729,6 +1836,19 @@ function isLockNotSupportedError(error: unknown): boolean {
     return (
         error.name === 'LockNotSupportedOnGivenDriverError' ||
         error.message.toLowerCase().includes('locking not supported')
+    );
+}
+
+function isConfirmedSimulatedOrder(order: Order): boolean {
+    const successful = order.payments.filter(payment => ['Authorized', 'Settled'].includes(payment.state));
+    return (
+        successful.length > 0 &&
+        successful.every(isConfirmedControlledTestPayment) &&
+        !order.payments.some(
+            payment =>
+                !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                payment.metadata?.manualReview?.required,
+        )
     );
 }
 

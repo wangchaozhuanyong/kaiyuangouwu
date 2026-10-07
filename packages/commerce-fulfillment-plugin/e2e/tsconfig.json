@@ -1,3 +1,12 @@
 {
-    "extends": "./tsconfig.order-closure.json"
+    "extends": "./tsconfig.order-closure.json",
+    "include": [
+        "./order-processing-closure.e2e-spec.ts",
+        "./digital-order-closure.e2e-spec.ts",
+        "./product-domains.e2e-spec.ts",
+        "../../store-management-plugin/src/markdown-it.d.ts",
+        "./browser-native-custom-fields.ts",
+        "./public-preview-checkout-browser.e2e-spec.ts",
+        "./public-preview-simulation.e2e-spec.ts"
+    ]
 }

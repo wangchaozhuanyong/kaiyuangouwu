@@ -167,4 +167,59 @@ describe('public media manifest', () => {
             .getRawMany.mockResolvedValue(Array(20001).fill({ preview: 'preview/image.jpg' }));
         await expect(test.service.get(ctx, 'shop.example')).rejects.toThrow('bounded catalog size');
     });
+    it('authorizes only the current published phone HERO, then withdraws cleared or disabled bindings through existing invalidation', async () => {
+        const test = harness();
+        const block = {
+            type: 'HERO',
+            enabled: true,
+            imageUrl: '/assets/preview/desktop.webp',
+            items: [],
+            settings: { mobileImageUrl: '/assets/preview/a-phone.webp' },
+        };
+        test.content.findPublished.mockImplementation((request: any) =>
+            Promise.resolve(request.channelId === 'a' && block.enabled ? [block] : []),
+        );
+        expect(await test.service.isPublic(ctx, 'shop.example', 'preview/a-phone.webp')).toBe(true);
+        expect((await test.service.get(ctx, 'shop.example')).uses).toContainEqual({
+            path: 'preview/a-phone.webp',
+            kind: 'hero',
+        });
+        expect(
+            await test.service.isPublic({ ...ctx, channelId: 'b' }, 'shop.example', 'preview/a-phone.webp'),
+        ).toBe(false);
+        expect(test.content.findPublished).toHaveBeenCalledWith(ctx, false, 'zh_Hans');
+        block.settings.mobileImageUrl = '';
+        await test.cache.invalidate('a');
+        expect(await test.service.isPublic(ctx, 'shop.example', 'preview/a-phone.webp')).toBe(false);
+        expect(await test.service.isPublic(ctx, 'shop.example', 'preview/desktop.webp')).toBe(true);
+        block.settings.mobileImageUrl = '/assets/preview/a-phone.webp';
+        block.enabled = false;
+        await test.cache.invalidate('a');
+        expect(await test.service.isPublic(ctx, 'shop.example', 'preview/a-phone.webp')).toBe(false);
+        expect(await test.service.isPublic(ctx, 'shop.example', 'preview/desktop.webp')).toBe(false);
+    });
+    it('never grants access from non-HERO settings, another host, a cache or source traversal', async () => {
+        const test = harness();
+        test.content.findPublished.mockResolvedValue([
+            {
+                type: 'SUPPORT',
+                settings: { mobileImageUrl: '/assets/preview/support-phone.webp' },
+                items: [],
+            },
+            {
+                type: 'HERO',
+                settings: { mobileImageUrl: 'https://other.example/assets/preview/foreign-phone.webp' },
+                items: [],
+            },
+            { type: 'HERO', settings: { mobileImageUrl: '/assets/cache/private.webp' }, items: [] },
+            { type: 'HERO', settings: { mobileImageUrl: '/assets/source/%2e%2e/private.webp' }, items: [] },
+        ]);
+        for (const path of [
+            'preview/support-phone.webp',
+            'preview/foreign-phone.webp',
+            'cache/private.webp',
+            'private.webp',
+        ])
+            expect(await test.service.isPublic(ctx, 'shop.example', path)).toBe(false);
+    });
 });

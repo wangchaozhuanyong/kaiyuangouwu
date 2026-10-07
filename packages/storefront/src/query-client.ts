@@ -1,27 +1,268 @@
-import { DehydratedState, QueryClient, QueryKey, dehydrate, hydrate } from '@tanstack/react-query';
+import type { StorefrontConfig } from './types';
+import {
+    DehydratedState,
+    QueryClient,
+    QueryKey,
+    dehydrate,
+    hashKey,
+    hydrate,
+    type Query,
+} from '@tanstack/react-query';
 
 import { ShopApiTimeoutError } from './api';
+import { invalidatePublicPageReads } from './public-page-transport';
+import { isStorefrontClosedError } from './storefront-access';
 import { storefrontErrorCode } from './storefront-errors';
+
+type PublicQuerySource = { mode?: StorefrontConfig['accessMode']; dataUpdateCount: number };
+type QueryReadStart = { access: number; persistence: number; mode?: StorefrontConfig['accessMode'] };
+type AccessScope = Pick<StorefrontRefreshScope, 'marketCode' | 'languageCode'>;
+type ScopeAccess = {
+    denied: boolean;
+    epoch: number;
+    persistenceEpoch: number;
+    restricted: boolean;
+    mode?: StorefrontConfig['accessMode'];
+};
+const accessRuntimes = new WeakMap<
+    QueryClient,
+    {
+        scopes: Map<string, ScopeAccess>;
+        starts: WeakMap<Query, QueryReadStart>;
+        sources: WeakMap<Query, PublicQuerySource>;
+        listeners: Set<() => void>;
+    }
+>();
+const accessScopeKey = (scope: AccessScope) => JSON.stringify([scope.marketCode, scope.languageCode]);
+function queryScope(key: QueryKey): AccessScope | undefined {
+    return key[0] === 'storefront' &&
+        typeof key[1] === 'string' &&
+        typeof key[2] === 'string' &&
+        key[2] !== 'commerce-mode'
+        ? { marketCode: key[1], languageCode: key[2] }
+        : undefined;
+}
+function clearPersistedPublicData(): void {
+    try {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(PUBLIC_QUERY_CACHE_KEY);
+    } catch {
+        // Access denial must still clear in-memory data when storage is unavailable.
+    }
+}
+
+/** Access epochs are control metadata only; server data remains in the Query cache. */
+function accessRuntime(client: QueryClient) {
+    const existing = accessRuntimes.get(client);
+    if (existing) return existing;
+    const runtime = {
+        scopes: new Map<string, ScopeAccess>(),
+        starts: new WeakMap<Query, QueryReadStart>(),
+        sources: new WeakMap<Query, PublicQuerySource>(),
+        listeners: new Set<() => void>(),
+    };
+    accessRuntimes.set(client, runtime);
+    const cache = client.getQueryCache();
+    cache.subscribe(event => {
+        if (event.type !== 'updated') return;
+        const query = event.query;
+        const scope = queryScope(query.queryKey);
+        if (!scope || cache.get(query.queryHash) !== query) return;
+        const key = accessScopeKey(scope);
+        let state = runtime.scopes.get(key);
+        if (!state) {
+            state = { denied: false, epoch: 0, persistenceEpoch: 0, restricted: false };
+            runtime.scopes.set(key, state);
+        }
+        const config = query.queryKey[3] === 'config';
+        if (event.action.type === 'fetch') {
+            runtime.starts.set(query, {
+                access: state.epoch,
+                persistence: state.persistenceEpoch,
+                mode: state.mode,
+            });
+            return;
+        }
+        const data = query.state.data as StorefrontConfig | undefined;
+        const denied =
+            (event.action.type === 'error' && isStorefrontClosedError(query.state.error, config)) ||
+            (config && event.action.type === 'success' && data?.accessMode === 'CLOSED');
+        if (denied) {
+            state.denied = true;
+            state.epoch++;
+            state.mode = 'CLOSED';
+            state.restricted = true;
+            state.persistenceEpoch++;
+            invalidatePublicPageReads();
+            clearPersistedPublicData();
+            // Notify the shell before removing query objects; no stale observer may keep content visible.
+            runtime.listeners.forEach(listener => listener());
+            const matches = (candidate: Query) =>
+                isStorefrontQueryInScope(candidate.queryKey, { ...scope, includePrivate: true });
+            void client.cancelQueries({
+                predicate: candidate => matches(candidate) && candidate.state.fetchStatus === 'fetching',
+            });
+            client.removeQueries({
+                predicate: candidate => matches(candidate) && candidate.queryKey[3] !== 'config',
+            });
+            return;
+        }
+        if (event.action.type !== 'success') return;
+        if (state.denied) {
+            if (!config) {
+                client.removeQueries({ queryKey: query.queryKey, exact: true });
+                return;
+            }
+            // Copying config/SSI data never restores access. Removed query objects were rejected above.
+            if (event.action.manual || runtime.starts.get(query)?.access !== state.epoch) return;
+            state.denied = false;
+            runtime.listeners.forEach(listener => listener());
+        }
+        if (!config && query.queryKey[3] !== 'private') {
+            const previous = runtime.sources.get(query);
+            runtime.sources.set(query, {
+                mode: event.action.manual
+                    ? (previous?.mode ?? state.mode)
+                    : (runtime.starts.get(query)?.mode ?? state.mode),
+                dataUpdateCount: query.state.dataUpdateCount,
+            });
+        }
+        if (config) {
+            if (data?.accessMode === 'PREVIEW') {
+                restrictStorefrontScopePersistence(client, scope);
+            } else if (
+                !event.action.manual &&
+                runtime.starts.get(query)?.persistence === state.persistenceEpoch
+            ) {
+                const wasRestricted = state.restricted;
+                state.mode = data?.accessMode;
+                state.restricted = data?.accessMode !== 'LIVE';
+                if (wasRestricted && state.mode === 'LIVE') {
+                    // A fresh LIVE config cannot republish old PREVIEW entities. The same LIVE
+                    // aggregate may already have seeded newer entities with explicit LIVE provenance.
+                    const stalePreview = (candidate: Query) => {
+                        if (
+                            !isStorefrontQueryInScope(candidate.queryKey, scope) ||
+                            candidate.queryKey[3] === 'config'
+                        )
+                            return false;
+                        const source = runtime.sources.get(candidate);
+                        return (
+                            source?.mode !== 'LIVE' ||
+                            source.dataUpdateCount !== candidate.state.dataUpdateCount
+                        );
+                    };
+                    void client.cancelQueries({ predicate: stalePreview });
+                    client.removeQueries({ predicate: stalePreview });
+                }
+            } else if (!state.restricted) {
+                // Validated initial LIVE SSI may authorize restoration, never a previously restricted scope.
+                state.mode = data?.accessMode;
+            }
+        }
+    });
+    return runtime;
+}
+
+export function isStorefrontScopeAccessDenied(client: QueryClient, scope: AccessScope): boolean {
+    return accessRuntime(client).scopes.get(accessScopeKey(scope))?.denied === true;
+}
+
+export function watchStorefrontScopeAccess(client: QueryClient, notify: () => void): () => void {
+    const listeners = accessRuntime(client).listeners;
+    listeners.add(notify);
+    return () => {
+        listeners.delete(notify);
+    };
+}
+
+/** Tag the response just written by the aggregate owner; this never grants access or changes scope mode. */
+export function markStorefrontPublicQuerySource(
+    client: QueryClient,
+    key: QueryKey,
+    mode?: StorefrontConfig['accessMode'],
+): void {
+    const query = client.getQueryCache().find({ queryKey: key, exact: true });
+    if (!query || key[3] === 'config' || key[3] === 'private') return;
+    accessRuntime(client).sources.set(query, { mode, dataUpdateCount: query.state.dataUpdateCount });
+}
+
+/** Tighten access before a PREVIEW aggregate is seeded, even while the previous config still says LIVE. */
+export function restrictStorefrontScopePersistence(client: QueryClient, scope: AccessScope): void {
+    const runtime = accessRuntime(client);
+    const key = accessScopeKey(scope);
+    let state = runtime.scopes.get(key);
+    if (!state) {
+        state = { denied: false, epoch: 0, persistenceEpoch: 0, restricted: false };
+        runtime.scopes.set(key, state);
+    }
+    clearPersistedPublicData();
+    if (state.restricted && state.mode === 'PREVIEW') return;
+    state.restricted = true;
+    state.persistenceEpoch++;
+    state.mode = 'PREVIEW';
+    // Clear old LIVE results before the caller seeds the new PREVIEW response.
+    const publicData = (query: Query) =>
+        isStorefrontQueryInScope(query.queryKey, scope) && query.queryKey[3] !== 'config';
+    void client.cancelQueries({ predicate: publicData });
+    client.removeQueries({ predicate: publicData });
+}
+
+function isLivePublicQuery(client: QueryClient, key: QueryKey): boolean {
+    const runtime = accessRuntime(client);
+    const scopes =
+        key[2] === 'commerce-mode'
+            ? client
+                  .getQueryCache()
+                  .getAll()
+                  .filter(
+                      query =>
+                          query.queryKey[0] === 'storefront' &&
+                          query.queryKey[1] === key[1] &&
+                          query.queryKey[3] === 'config',
+                  )
+                  .flatMap(query => queryScope(query.queryKey) ?? [])
+            : [queryScope(key)].filter((scope): scope is AccessScope => Boolean(scope));
+    return (
+        scopes.length > 0 &&
+        scopes.every(scope => {
+            const access = runtime.scopes.get(accessScopeKey(scope));
+            const configs = client
+                .getQueryCache()
+                .findAll({ queryKey: storefrontQueryKeys.config(scope.marketCode, scope.languageCode) });
+            return (
+                access?.mode === 'LIVE' &&
+                !access.denied &&
+                !access.restricted &&
+                configs.length > 0 &&
+                configs.every(
+                    query => (query.state.data as StorefrontConfig | undefined)?.accessMode === 'LIVE',
+                )
+            );
+        })
+    );
+}
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
 // Periodic refresh remains a fallback when the public event stream is disconnected.
-export const STOREFRONT_CONFIG_REFRESH_INTERVAL = 30_000;
+export const STOREFRONT_CONFIG_REFRESH_INTERVAL = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
-export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v6';
+export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v7';
 export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = [
+    'vendure-storefront-public-query-cache:v6',
     'vendure-storefront-public-query-cache:v5',
     'vendure-storefront-public-query-cache:v4',
     'vendure-storefront-public-query-cache:v3',
     'vendure-storefront-public-query-cache:v2',
 ] as const;
-const PUBLIC_QUERY_CACHE_VERSION = 6;
+const PUBLIC_QUERY_CACHE_VERSION = 7;
 
 export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
     return (
         !(error instanceof ShopApiTimeoutError) &&
         storefrontErrorCode(error) !== 'FORBIDDEN' &&
+        storefrontErrorCode(error) !== 'STOREFRONT_CLOSED' &&
         failureCount < 1
     );
 }
@@ -33,7 +274,7 @@ interface PersistedPublicQueryCache {
 }
 
 export function createStorefrontQueryClient(): QueryClient {
-    return new QueryClient({
+    const client = new QueryClient({
         defaultOptions: {
             queries: {
                 retry: storefrontQueryRetry,
@@ -51,6 +292,8 @@ export function createStorefrontQueryClient(): QueryClient {
             },
         },
     });
+    accessRuntime(client);
+    return client;
 }
 
 export const storefrontQueryClient = createStorefrontQueryClient();
@@ -79,21 +322,41 @@ export function isStorefrontQueryInScope(queryKey: QueryKey, scope: StorefrontRe
     );
 }
 
-/** Placeholder continuity is limited to the same store, settlement currency and language. */
+/** Only the identical request may retain results. An old empty filter is not the new filter. */
 export function storefrontPlaceholderData<T>(
     previous: T | undefined,
     previousKey: QueryKey | undefined,
     nextKey: QueryKey,
 ): T | undefined {
-    return previousKey?.slice(0, 3).every((part, index) => part === nextKey[index]) ? previous : undefined;
+    return previousKey && hashKey(previousKey) === hashKey(nextKey) ? previous : undefined;
 }
 
-/** Refresh active reads together; repeated clicks join the existing request and never replay writes. */
-export function refreshStorefrontQueries(client: QueryClient, scope: StorefrontRefreshScope) {
-    return client.refetchQueries(
-        { type: 'active', predicate: query => isStorefrontQueryInScope(query.queryKey, scope) },
-        { cancelRefetch: false },
-    );
+const refreshFlights = new WeakMap<QueryClient, Map<string, Promise<void>>>();
+/** SSE, reconnect and manual refresh join active reads. Mutations are never part of this path. */
+export function refreshStorefrontQueries(client: QueryClient, scope: StorefrontRefreshScope): Promise<void> {
+    let flights = refreshFlights.get(client);
+    if (!flights) {
+        flights = new Map();
+        refreshFlights.set(client, flights);
+    }
+    const key = JSON.stringify(scope);
+    const existing = flights.get(key);
+    if (existing) return existing;
+    const promise = Promise.resolve()
+        .then(() =>
+            client.refetchQueries(
+                {
+                    type: 'active',
+                    predicate: query =>
+                        isStorefrontQueryInScope(query.queryKey, scope) &&
+                        query.meta?.publicAggregatePart !== true,
+                },
+                { cancelRefetch: false },
+            ),
+        )
+        .finally(() => flights?.delete(key));
+    flights.set(key, promise);
+    return promise;
 }
 
 const reusablePublicQueries = new Set([
@@ -116,15 +379,21 @@ function isReusablePublicQuery(queryKey: QueryKey): boolean {
 
 export function persistPublicQueryCache(
     client: QueryClient,
-    storage: Pick<Storage, 'setItem'> = sessionStorage,
+    storage: Pick<Storage, 'setItem'> & Partial<Pick<Storage, 'removeItem'>> = sessionStorage,
     savedAt = Date.now(),
 ): void {
     const state = dehydrate(client, {
         shouldDehydrateQuery: query =>
             query.state.data !== undefined &&
             query.meta?.persistPublic === true &&
-            isReusablePublicQuery(query.queryKey),
+            isReusablePublicQuery(query.queryKey) &&
+            isLivePublicQuery(client, query.queryKey) &&
+            accessRuntime(client).sources.get(query)?.mode !== 'PREVIEW',
     });
+    if (state.queries.length === 0) {
+        storage.removeItem?.(PUBLIC_QUERY_CACHE_KEY);
+        return;
+    }
     // Persist confirmed public data, never the error object from a later failed refresh.
     // Keep the original dataUpdatedAt so hydration cannot make old data appear fresh.
     state.queries = state.queries.map(query => ({
@@ -169,7 +438,9 @@ export function restorePublicQueryCache(
         // Always load configuration from the Shop API so cleared copy cannot return on reload.
         hydrate(client, {
             ...payload.state,
-            queries: payload.state.queries.filter(query => isReusablePublicQuery(query.queryKey)),
+            queries: payload.state.queries.filter(
+                query => isReusablePublicQuery(query.queryKey) && isLivePublicQuery(client, query.queryKey),
+            ),
         });
         return true;
     } catch {
@@ -184,7 +455,10 @@ export function watchPublicQueryCache(
 ): () => void {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = client.getQueryCache().subscribe(event => {
-        if (event.query.meta?.persistPublic !== true || !isReusablePublicQuery(event.query.queryKey)) {
+        if (
+            event.query.queryKey[3] !== 'config' &&
+            (event.query.meta?.persistPublic !== true || !isReusablePublicQuery(event.query.queryKey))
+        ) {
             return;
         }
         // Observer bookkeeping happens on navigation and renders even when the
@@ -233,7 +507,12 @@ export const storefrontQueryKeys = {
         marketCode: string,
         languageCode: string,
         input: Record<string, string | number | boolean | undefined>,
-    ) => [...storefrontQueryKeys.scope(marketCode, languageCode), 'catalog', input] as const,
+    ) =>
+        [
+            ...storefrontQueryKeys.scope(marketCode, languageCode),
+            'catalog',
+            catalogCacheInput(input),
+        ] as const,
     privateScope: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'private'] as const,
     cart: (marketCode: string, languageCode: string) =>
@@ -328,3 +607,21 @@ export const storefrontQueryKeys = {
             'payment-methods',
         ] as const,
 };
+
+export const STOREFRONT_CATALOG_PAGE_SIZE = 12;
+
+export function catalogCacheInput(input: Record<string, string | number | boolean | undefined>) {
+    return {
+        ...(input.purpose ? { purpose: input.purpose } : {}),
+        term: typeof input.term === 'string' ? input.term.trim() || undefined : undefined,
+        collectionId: input.collectionId || undefined,
+        sort: String(input.sort || 'RECOMMENDED')
+            .toUpperCase()
+            .replaceAll('-', '_'),
+        fulfillmentType: input.fulfillmentType ? String(input.fulfillmentType).toUpperCase() : undefined,
+        inStockOnly: input.inStockOnly === true,
+        minPriceWithTax: input.minPriceWithTax,
+        maxPriceWithTax: input.maxPriceWithTax,
+        take: input.take ?? STOREFRONT_CATALOG_PAGE_SIZE,
+    };
+}

@@ -68,7 +68,9 @@ it('keeps the drawer and order list visible when order data arrives before the d
         act(() => trigger.click());
         const dialog = document.querySelector('[role="dialog"]');
         if (!dialog) throw new Error('Missing order detail drawer');
-        expect(dialog.textContent).toContain('正在加载订单详情');
+        const loading = dialog.querySelector('[data-page-pending="data"][role="status"]');
+        expect(loading?.getAttribute('aria-label')).toBe('正在加载订单详情');
+        expect(loading?.getAttribute('aria-busy')).toBe('true');
         await act(async () => {
             resolveOrder({ id: 'local-order', state: 'Delivered' });
             await new Promise(resolve => setTimeout(resolve, 10));

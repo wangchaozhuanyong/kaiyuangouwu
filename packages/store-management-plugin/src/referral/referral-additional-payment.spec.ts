@@ -55,6 +55,7 @@ function fixture() {
         connection,
         orderService: orders,
         walletSpend: spend,
+        activation: { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) },
         getConfig: vi.fn().mockResolvedValue({ allowBalanceSpend: true }),
     });
     void referralBalancePaymentHandler.init?.({
@@ -113,9 +114,16 @@ describe('placed order wallet usage and refund source', () => {
     );
     it('captures the verified reserved usage and identifies it separately from legacy balance payments', async () => {
         const h = fixture();
-        const result = await referralBalancePaymentHandler.createPayment(h.ctx, h.order, 500, [], {
-            proof: h.proof(),
-        });
+        const result = await referralBalancePaymentHandler.createPayment(
+            h.ctx,
+            h.order,
+            500,
+            [],
+            {
+                proof: h.proof(),
+            },
+            {} as any,
+        );
         expect(result).toMatchObject({
             state: 'Settled',
             amount: 500,
@@ -125,7 +133,14 @@ describe('placed order wallet usage and refund source', () => {
         expect(h.spend.capture).toHaveBeenCalledOnce();
         h.usage.status = 'CAPTURED';
         expect(
-            await referralBalancePaymentHandler.createPayment(h.ctx, h.order, 500, [], { proof: h.proof() }),
+            await referralBalancePaymentHandler.createPayment(
+                h.ctx,
+                h.order,
+                500,
+                [],
+                { proof: h.proof() },
+                {} as any,
+            ),
         ).toMatchObject({ state: 'Declined' });
         expect(h.spend.capture).toHaveBeenCalledOnce();
     });
@@ -133,7 +148,14 @@ describe('placed order wallet usage and refund source', () => {
         const h = fixture();
         h.ctx.channelId = 'other-store';
         expect(
-            await referralBalancePaymentHandler.createPayment(h.ctx, h.order, 500, [], { proof: h.proof() }),
+            await referralBalancePaymentHandler.createPayment(
+                h.ctx,
+                h.order,
+                500,
+                [],
+                { proof: h.proof() },
+                {} as any,
+            ),
         ).toMatchObject({ state: 'Declined' });
         expect(h.spend.capture).not.toHaveBeenCalled();
     });
@@ -173,4 +195,36 @@ describe('placed order wallet usage and refund source', () => {
         expect((h.service as any).applyWalletDelta).not.toHaveBeenCalled();
         expect(use).toMatchObject({ status: 'CAPTURED', refundedAmount: 0 });
     });
+});
+
+it('blocks preview balance top-up before reserving funds or creating payment proof', async () => {
+    const h = fixture();
+    (h.service as any).activation.assertNewRealPaymentAllowed.mockRejectedValue(
+        new Error('公开预览禁止真实付款'),
+    );
+    await expect(h.service.useAdditionalBalance(h.ctx, 'order', 500, 500, 'preview')).rejects.toThrow(
+        '禁止真实付款',
+    );
+    expect(h.spend.reserve).not.toHaveBeenCalled();
+    expect(h.orders.addPaymentToOrder).not.toHaveBeenCalled();
+});
+
+it('blocks initial preview balance spending before wallet/account writes', async () => {
+    const h = fixture();
+    h.order.state = 'ArrangingPayment';
+    h.order.active = true;
+    Object.assign(h.service, {
+        activeCustomer: vi.fn().mockResolvedValue(h.order.customer),
+        getOrCreateAccount: vi.fn(),
+        getOrCreateWallet: vi.fn(),
+    });
+    (h.orders as any).getActiveOrderForUser = vi.fn().mockResolvedValue(h.order);
+    (h.service as any).activation.assertNewRealPaymentAllowed.mockRejectedValue(
+        new Error('公开预览禁止真实付款'),
+    );
+    await expect(h.service.useBalance(h.ctx, 500)).rejects.toThrow('禁止真实付款');
+    expect((h.service as any).getOrCreateAccount).not.toHaveBeenCalled();
+    expect((h.service as any).getOrCreateWallet).not.toHaveBeenCalled();
+    expect(h.orders.lockOrderForRefund).toHaveBeenCalledWith(h.ctx, h.order.id);
+    expect(h.orders.addPaymentToOrder).not.toHaveBeenCalled();
 });

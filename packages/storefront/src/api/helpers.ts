@@ -1,4 +1,5 @@
 import { productAvailability } from '../product-availability';
+import { ShopApiGraphQlError } from '../shop-api-errors';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
     AccountRecommendationSettings,
@@ -9,6 +10,8 @@ import {
     StorefrontFlashSale,
     StorefrontSystemAnnouncement,
 } from '../types';
+
+export { ShopApiGraphQlError } from '../shop-api-errors';
 
 export const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 export const AUTH_TOKEN_HEADER = 'vendure-auth-token';
@@ -275,17 +278,6 @@ export async function cancelStorefrontRealtimeBody(
         await body.cancel(reason);
     } catch {
         // The connection failure remains the actionable error even if the body has already closed.
-    }
-}
-
-export class ShopApiGraphQlError extends Error {
-    constructor(
-        readonly messages: string[],
-        readonly status: number,
-        readonly errorCode?: string,
-    ) {
-        super(messages[0] ?? `Shop API request failed (${status})`);
-        this.name = 'ShopApiGraphQlError';
     }
 }
 

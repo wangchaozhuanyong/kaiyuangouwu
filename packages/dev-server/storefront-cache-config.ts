@@ -1,15 +1,13 @@
 import { RedisCachePlugin } from '@vendure/core';
+import { storefrontCdnPurgeConfiguration } from '@vendure/store-management-plugin';
 
 /** Opt-in only. No Redis connection or infrastructure change when the URL is absent. */
 export function storefrontCachePlugins(env: NodeJS.ProcessEnv = process.env) {
     const address = env.STOREFRONT_REDIS_URL?.trim();
-    if (
-        env.STOREFRONT_CDN_PURGE_ENABLED === 'true' &&
-        (!address ||
-            !/^[a-f0-9]{32}$/iu.test(env.STOREFRONT_CLOUDFLARE_ZONE_ID ?? '') ||
-            !env.STOREFRONT_CLOUDFLARE_PURGE_TOKEN?.trim())
-    ) {
-        throw new Error('Exact media purge requires Redis, a Cloudflare zone and a purge token');
+    if (env.STOREFRONT_CDN_PURGE_ENABLED === 'true') {
+        if (!address)
+            throw new Error('Exact media purge requires Redis, Cloudflare routing and a purge token');
+        storefrontCdnPurgeConfiguration(env);
     }
     if (!address) return [];
     let url: URL;

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService, ID } from '@vendure/core';
 
+import { storefrontCdnPurgeConfiguration } from './storefront-cdn-purge-config';
+
 interface DeliverySetStrategy {
     addToBoundedSet?(key: string, value: string, limit: number, ttlSeconds: number): Promise<boolean>;
     boundedSetMembers?(key: string): Promise<string[]>;
@@ -52,10 +54,7 @@ export class StorefrontMediaDeliveryService {
 
     async purge(urls: string[]): Promise<{ status: 'disabled' | 'purged'; count: number }> {
         if (!this.purgeEnabled) return { status: 'disabled', count: 0 };
-        const zone = process.env.STOREFRONT_CLOUDFLARE_ZONE_ID;
-        const token = process.env.STOREFRONT_CLOUDFLARE_PURGE_TOKEN;
-        if (!zone || !/^[a-f0-9]{32}$/iu.test(zone) || !token)
-            throw new Error('Exact media purge configuration is incomplete');
+        const { zones, zone, token } = storefrontCdnPurgeConfiguration();
         const files = [...new Set(urls)];
         if (
             files.length > 8192 ||
@@ -68,15 +67,33 @@ export class StorefrontMediaDeliveryService {
             })
         )
             throw new Error('Invalid public media purge batch');
-        for (let start = 0; start < files.length; start += 30) {
-            const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: files.slice(start, start + 30) }),
-                signal: AbortSignal.timeout(5000),
-            });
-            const result = (await response.json().catch(() => null)) as { success?: boolean } | null;
-            if (!response.ok || result?.success !== true) throw new Error('Exact media CDN purge failed');
+        const hosts = files.map(url => new URL(url).hostname);
+        if (!zones && new Set(hosts).size > 1)
+            throw new Error('Exact media purge requires a hostname map for mixed hosts');
+        const filesByZone = new Map<string, string[]>();
+        // Route the entire validated batch before any request; a later unknown host must not
+        // leave an earlier zone partially purged. Never infer a zone from a parent domain.
+        files.forEach((url, index) => {
+            const targetZone = zones ? zones.get(hosts[index]) : zone;
+            if (!targetZone) throw new Error('Exact media purge hostname is not configured');
+            const zoneFiles = filesByZone.get(targetZone) ?? [];
+            zoneFiles.push(url);
+            filesByZone.set(targetZone, zoneFiles);
+        });
+        for (const [targetZone, zoneFiles] of filesByZone) {
+            for (let start = 0; start < zoneFiles.length; start += 30) {
+                const response = await fetch(
+                    `https://api.cloudflare.com/client/v4/zones/${targetZone}/purge_cache`,
+                    {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: zoneFiles.slice(start, start + 30) }),
+                        signal: AbortSignal.timeout(5000),
+                    },
+                );
+                const result = (await response.json().catch(() => null)) as { success?: boolean } | null;
+                if (!response.ok || result?.success !== true) throw new Error('Exact media CDN purge failed');
+            }
         }
         return { status: 'purged', count: files.length };
     }
@@ -92,6 +109,7 @@ export class StorefrontMediaDeliveryService {
                 url.username ||
                 url.password ||
                 url.hash ||
+                /(?:\*|%2a)/iu.test(url.hostname + url.pathname + url.search) ||
                 !/^\/assets\/(?:preview|source)\//u.test(url.pathname)
             )
                 return;

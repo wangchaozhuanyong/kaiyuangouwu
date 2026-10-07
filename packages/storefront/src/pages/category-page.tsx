@@ -24,6 +24,7 @@ import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { productAvailability } from '../product-availability';
+import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
@@ -48,6 +49,7 @@ export interface CategoryPageProps {
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
     loading: boolean;
+    contextResolved?: boolean;
     error: string | null;
     market: MarketConfig;
     locale: string;
@@ -79,6 +81,7 @@ export function CategoryPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         api,
+        contextResolved = true,
         products,
         collections,
         contentBlocks,
@@ -199,7 +202,7 @@ export function CategoryPage() {
         languageCode: vendureLanguageCode,
         language,
         input: catalogInput,
-        enabled: true,
+        enabled: contextResolved,
         suspended: filterOpen || allCategoriesOpen,
     });
     const catalogQuery = pagination.query;
@@ -231,7 +234,7 @@ export function CategoryPage() {
     const visibleProducts = categoryProducts;
     const totalItems = pagination.totalItems;
     const categoryLoading =
-        catalogQuery.isLoading && !catalogQuery.isPlaceholderData && !categoryProducts.length;
+        catalogQuery.isPending && !catalogQuery.isError && !categoryProducts.length;
     const categoryError =
         catalogQuery.isPaused && catalogQuery.data === undefined
             ? offlineLoadError(language)
@@ -359,8 +362,8 @@ export function CategoryPage() {
                                                     src={image}
                                                     alt=""
                                                     imageKind="thumbnail"
+                                                    sizes={STOREFRONT_IMAGE_SIZES.categoryNavigation}
                                                     loading={index < 6 ? 'eager' : 'lazy'}
-                                                    fetchPriority={index < 2 ? 'high' : 'auto'}
                                                     showFallbackIcon={false}
                                                     errorFallback={<LayoutGrid aria-hidden="true" />}
                                                 />
@@ -426,6 +429,7 @@ export function CategoryPage() {
                                                         src={image}
                                                         alt=""
                                                         imageKind="thumbnail"
+                                                        sizes={STOREFRONT_IMAGE_SIZES.categoryNavigation}
                                                         loading="lazy"
                                                         showFallbackIcon={false}
                                                         errorFallback={<LayoutGrid aria-hidden="true" />}
@@ -611,9 +615,16 @@ export function CategoryPage() {
                                         : ''
                                 }`}
                             >
-                                {visibleProducts.map(product => (
+                                {visibleProducts.map((product, index) => (
                                     <ProductRow
                                         key={product.id}
+                                        priority={index < 2}
+                                        fetchPriority={index === 0 ? 'high' : 'auto'}
+                                        imageSizes={
+                                            hasChildCategories
+                                                ? STOREFRONT_IMAGE_SIZES.categorySidebarRow
+                                                : undefined
+                                        }
                                         product={product}
                                         market={market}
                                         locale={locale}

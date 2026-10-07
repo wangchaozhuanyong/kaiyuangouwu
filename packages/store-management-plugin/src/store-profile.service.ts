@@ -349,9 +349,6 @@ export class StoreProfileService {
             profile.isOperational = isOperationalStorefront({
                 isDefaultChannel: idsAreEqual(profile.channelId, defaultChannel.id),
                 status: profile.status,
-                isPlatformOwned:
-                    Boolean(profile.channel.sellerId) &&
-                    idsAreEqual(profile.channel.sellerId, defaultChannel.sellerId),
                 isPublished: profile.isPublished,
                 hasVerifiedPrimaryDomain: Boolean(profile.primaryDomain),
             });

@@ -38,6 +38,18 @@ export function useStorefrontNavigation({
     const tanstackNavigate = useNavigate();
     const [isPreparingProduct, setIsPreparingProduct] = useState(false);
     const navigationAttempt = useRef(0);
+    const productPreparationTimer = useRef<number | null>(null);
+    const pendingProductNavigation = useRef<{
+        key: string;
+        prepare: (id: string) => Promise<void>;
+    } | null>(null);
+    const clearProductPreparationTimer = useCallback(() => {
+        pendingProductNavigation.current = null;
+        if (productPreparationTimer.current !== null) {
+            window.clearTimeout(productPreparationTimer.current);
+            productPreparationTimer.current = null;
+        }
+    }, []);
     const mediaContext = useRef({ contentBlocks, products });
     mediaContext.current = { contentBlocks, products };
     useEffect(() => {
@@ -47,6 +59,12 @@ export function useStorefrontNavigation({
         };
         const unsubscribe = router.subscribe('onBeforeNavigate', event => {
             prepare(routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search));
+        });
+        // Formal loads include same-URL and history navigation, but exclude intent preloads.
+        const unsubscribeLoad = router.subscribe('onBeforeLoad', () => {
+            navigationAttempt.current++;
+            clearProductPreparationTimer();
+            setIsPreparingProduct(false);
         });
         const onIntent = (event: Event) => {
             const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
@@ -62,12 +80,15 @@ export function useStorefrontNavigation({
         document.addEventListener('focusin', onIntent);
         document.addEventListener('pointerdown', onIntent);
         return () => {
+            navigationAttempt.current++;
+            clearProductPreparationTimer();
             unsubscribe();
+            unsubscribeLoad();
             document.removeEventListener('pointerover', onIntent);
             document.removeEventListener('focusin', onIntent);
             document.removeEventListener('pointerdown', onIntent);
         };
-    }, [router]);
+    }, [clearProductPreparationTimer, router]);
 
     const routerLocation = useRouterState({ select: state => state.location });
 
@@ -121,13 +142,32 @@ export function useStorefrontNavigation({
 
     const navigate = useCallback(
         (next: RouteState, replace = false) => {
-            const attempt = ++navigationAttempt.current;
             const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
+            const productPreparationKey =
+                resolvedNext.name === 'product' && resolvedNext.id && prepareProduct
+                    ? JSON.stringify([
+                          routePath(resolvedNext.name),
+                          Object.entries(routeSearch(resolvedNext))
+                              .filter(([, searchValue]) => searchValue !== undefined)
+                              .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)),
+                          replace,
+                      ])
+                    : null;
+            if (
+                productPreparationKey !== null &&
+                pendingProductNavigation.current?.key === productPreparationKey &&
+                pendingProductNavigation.current.prepare === prepareProduct
+            ) {
+                return;
+            }
+            clearProductPreparationTimer();
+            const attempt = ++navigationAttempt.current;
             if (resolvedNext.name === 'category') {
                 categoryStateRef.current = catalogRouteSearch(resolvedNext);
             }
             const commit = () => {
                 if (navigationAttempt.current !== attempt) return;
+                clearProductPreparationTimer();
                 setIsPreparingProduct(false);
                 void tanstackNavigate({
                     to: routePath(resolvedNext.name),
@@ -135,26 +175,38 @@ export function useStorefrontNavigation({
                     replace,
                 } as never);
             };
-            if (resolvedNext.name === 'product' && resolvedNext.id && prepareProduct) {
+            if (
+                resolvedNext.name === 'product' &&
+                resolvedNext.id &&
+                prepareProduct &&
+                productPreparationKey !== null
+            ) {
+                pendingProductNavigation.current = { key: productPreparationKey, prepare: prepareProduct };
                 setIsPreparingProduct(true);
                 void Promise.race([
                     prepareProduct(resolvedNext.id).catch(() => undefined),
-                    new Promise<void>(resolve => window.setTimeout(resolve, PRODUCT_NAVIGATION_WAIT_MS)),
+                    new Promise<void>(resolve => {
+                        productPreparationTimer.current = window.setTimeout(
+                            resolve,
+                            PRODUCT_NAVIGATION_WAIT_MS,
+                        );
+                    }),
                 ]).then(commit);
                 return;
             }
             commit();
         },
-        [prepareProduct, tanstackNavigate],
+        [clearProductPreparationTimer, prepareProduct, tanstackNavigate],
     );
 
     const goBack = useCallback(() => {
         if (router.history.canGoBack()) {
             navigationAttempt.current++;
+            clearProductPreparationTimer();
             setIsPreparingProduct(false);
             router.history.back();
         } else navigate({ name: 'home' }, true);
-    }, [navigate, router.history]);
+    }, [clearProductPreparationTimer, navigate, router.history]);
 
     const updateCategory = useCallback(
         (

@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client';
 import type {
     ActiveCustomer,
     MarketConfig,
+    Order,
     Product,
     ProductVariant,
     StoreCustomerCoupon,
@@ -25,6 +26,7 @@ import { CheckoutPage } from '../../src/checkout-page';
 import '../../src/commerce-styles';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { ProductDetailPage } from '../../src/pages/product-detail-page';
+import { PaymentPage } from '../../src/payment-pages';
 import { ProductDetailPageContext } from '../../src/storefront-page-contexts';
 import '../../src/styles.css';
 import '../../src/styles/control-surfaces.css';
@@ -39,12 +41,13 @@ import { applyStorefrontVisualPreset } from '../../src/use-storefront-visual-pre
 
 // This entry exists only in the E2E harness; all data writes use the local Shop API.
 const params = new URLSearchParams(location.search);
+const language = params.get('language') === 'en' ? 'en' : 'zh';
 const market: MarketConfig = {
     code: params.get('channel') ?? '',
-    currencyCode: 'MYR',
-    countryCode: 'MY',
-    defaultLanguageCode: 'zh_Hans',
-    locale: 'zh-CN',
+    currencyCode: params.get('currency') ?? 'MYR',
+    countryCode: params.get('country') ?? 'MY',
+    defaultLanguageCode: language === 'en' ? 'en' : 'zh_Hans',
+    locale: language === 'en' ? 'en-GB' : 'zh-CN',
     label: 'Local fixture',
 };
 const api = new ShopApi(market);
@@ -55,6 +58,11 @@ applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
 async function initialize() {
     // Synthetic customer credentials created by the test, not a production account.
     await api.login(params.get('email') ?? '', 'local-checkout-fixture');
+    const accessMode =
+        params.get('controlledPayment') === '1' ? (await api.storefrontConfig()).accessMode : undefined;
+    if (params.get('controlledPayment') === '1' && accessMode !== 'PREVIEW') {
+        throw new Error('The synthetic checkout must use the actual PREVIEW access mode.');
+    }
     let cart = await api.cart();
     if (cart.state === 'PAYMENT_PENDING') cart = await api.reopenCart(cart.revision);
     const productId = params.get('productId');
@@ -70,11 +78,11 @@ async function initialize() {
         await api.createAddress({
             fullName: 'Browser Checkout',
             streetLine1: '1 Test Street',
-            city: 'Kuala Lumpur',
-            province: 'Kuala Lumpur',
-            postalCode: '50000',
-            countryCode: 'MY',
-            phoneNumber: '+60100000000',
+            city: market.countryCode === 'GB' ? 'London' : 'Kuala Lumpur',
+            province: market.countryCode === 'GB' ? 'London' : 'Kuala Lumpur',
+            postalCode: market.countryCode === 'GB' ? 'SW1A 1AA' : '50000',
+            countryCode: market.countryCode ?? 'MY',
+            phoneNumber: market.countryCode === 'GB' ? '+441000000000' : '+60100000000',
             defaultShippingAddress: true,
             defaultBillingAddress: true,
         });
@@ -89,7 +97,7 @@ async function initialize() {
     const product = productId ? await api.product(productId) : null;
     if (productId && !product) throw new Error('Synthetic product was not found');
     const session = productId ? null : await api.beginCheckout(cart.revision);
-    return { cart: session?.cart ?? cart, customer, coupons, product };
+    return { cart: session?.cart ?? cart, customer, coupons, product, accessMode };
 }
 
 function Fixture() {
@@ -102,6 +110,10 @@ function Fixture() {
     const [showCheckout, setShowCheckout] = useState(!params.has('productId'));
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [accessMode, setAccessMode] = useState<string | undefined>();
+    const [preparedVerified, setPreparedVerified] = useState(false);
+    const [paymentError, setPaymentError] = useState('');
+    const controlledPayment = params.get('controlledPayment') === '1';
     useEffect(() => {
         void initialize()
             .then(data => {
@@ -109,9 +121,48 @@ function Fixture() {
                 setCustomer(data.customer);
                 setCoupons(data.coupons);
                 setProduct(data.product);
+                setAccessMode(data.accessMode);
             })
             .catch(reason => setError(String(reason)));
     }, []);
+    useEffect(() => {
+        if (!controlledPayment || session?.order.state !== 'ArrangingPayment') return;
+        let active = true;
+        void (async () => {
+            const methods = await api.eligiblePaymentMethods(undefined, session.order.id);
+            const eligible = methods.filter(method => method.isEligible).map(method => method.code);
+            if (eligible.length !== 1 || eligible[0] !== 'controlled-test-payment-platform') {
+                throw new Error('The local PREVIEW fixture must offer only its controlled test payment.');
+            }
+            const response = await fetch('/__public-preview-fixture/prepared', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: session.order.id }),
+            });
+            if (!response.ok)
+                throw new Error('The local backend has not confirmed the prepared resource holds.');
+            if (active) setPreparedVerified(true);
+        })().catch(reason => {
+            if (active) setPaymentError(String(reason));
+        });
+        return () => {
+            active = false;
+        };
+    }, [controlledPayment, session?.order.id, session?.order.state]);
+    function updatePaymentOrder(order: Order) {
+        setSession(current => (current ? { ...current, order } : current));
+    }
+    async function reopenPayment() {
+        if (!session) return;
+        try {
+            setCart(await api.reopenCart(session.cart.revision));
+            setSession(null);
+            setPreparedVerified(false);
+            setCoupons(await api.myCoupons());
+        } catch (reason) {
+            setPaymentError(String(reason));
+        }
+    }
     async function couponChange(id: string, remove: boolean) {
         try {
             if (remove) await api.removeCustomerCoupon(id);
@@ -152,9 +203,52 @@ function Fixture() {
     return (
         <DesktopLayoutContext.Provider value={desktop}>
             <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
+                {accessMode === 'PREVIEW' && (
+                    <aside
+                        className="storefront-preview-notice type-helper"
+                        role="status"
+                        data-access-mode={accessMode}
+                    >
+                        <strong>{language === 'zh' ? '公开预览' : 'Public preview'}</strong>
+                        <span>
+                            {language === 'zh'
+                                ? '店铺尚未正式营业；测试支付只会生成模拟订单。'
+                                : 'This store is not live yet. Test payments create simulated orders only.'}
+                        </span>
+                    </aside>
+                )}
                 <div id="storefront-content">
+                    {controlledPayment && (
+                        <p role="status">
+                            Synthetic local checkout — no external payment provider or real charge.
+                        </p>
+                    )}
+                    {controlledPayment && (
+                        <p className="type-helper">
+                            Apply the synthetic coupon, refresh to confirm it persists, enter both delivery
+                            email fields, submit the checkout form, then select Confirm test payment on the
+                            actual payment page.
+                        </p>
+                    )}
                     {error ? (
                         <p role="alert">{error}</p>
+                    ) : session &&
+                      controlledPayment &&
+                      preparedVerified &&
+                      session.order.state === 'ArrangingPayment' ? (
+                        <PaymentPage
+                            api={api}
+                            cart={session.cart}
+                            order={session.order}
+                            customer={customer}
+                            market={market}
+                            displayCurrencyCode={market.currencyCode}
+                            locale={market.locale}
+                            language={language}
+                            onOrderChange={updatePaymentOrder}
+                            onComplete={order => Promise.resolve(updatePaymentOrder(order))}
+                            onCancel={() => void reopenPayment()}
+                        />
                     ) : session ? (
                         <section aria-label="Prepared local order">
                             <h1>订单已准备</h1>
@@ -162,6 +256,21 @@ function Fixture() {
                                 {session.order.state} · {session.order.currencyCode}{' '}
                                 {session.order.totalWithTax / 100}
                             </output>
+                            {controlledPayment && (
+                                <>
+                                    {paymentError && <p role="alert">{paymentError}</p>}
+                                    {session.order.state === 'PaymentSettled' ? (
+                                        <p role="status">
+                                            Settled — controlled simulation, no external charge.
+                                        </p>
+                                    ) : (
+                                        <p role="status">
+                                            Confirming natural resource holds and controlled payment
+                                            eligibility…
+                                        </p>
+                                    )}
+                                </>
+                            )}
                         </section>
                     ) : !cart ? (
                         <p role="status">正在加载本地结算</p>
@@ -176,7 +285,7 @@ function Fixture() {
                                     cartQuantity: cart.totalQuantity,
                                     market,
                                     locale: market.locale,
-                                    language: 'zh',
+                                    language,
                                     storefrontName: 'Local fixture',
                                     logoUrl: null,
                                     flashSaleItems: [],
@@ -201,9 +310,13 @@ function Fixture() {
                             customer={customer}
                             market={market}
                             storefrontCode={params.get('storeCode') ?? ''}
-                            availableProvinces={[{ code: 'MY-14', name: 'Kuala Lumpur', countryCode: 'MY' }]}
-                            locale="zh-CN"
-                            language="zh"
+                            availableProvinces={
+                                market.countryCode === 'MY'
+                                    ? [{ code: 'MY-14', name: 'Kuala Lumpur', countryCode: 'MY' }]
+                                    : []
+                            }
+                            locale={market.locale}
+                            language={language}
                             coupons={coupons}
                             onBack={() => undefined}
                             onNotify={() => undefined}

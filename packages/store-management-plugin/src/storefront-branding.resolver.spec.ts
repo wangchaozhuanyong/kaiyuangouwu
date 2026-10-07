@@ -5,14 +5,30 @@ import {
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
 
-function createResolver(profile: Record<string, unknown> | null) {
+function createResolver(profile: Record<string, unknown> | null, accessMode = 'LIVE') {
     const repository = { findOne: vi.fn().mockResolvedValue(profile) };
     const connection = { getRepository: vi.fn().mockReturnValue(repository) };
     const configService = { assetOptions: { assetStorageStrategy: {} } };
-    return new StorefrontBrandingShopResolver(connection as any, configService as any);
+    return new StorefrontBrandingShopResolver(
+        connection as any,
+        configService as any,
+        {
+            getAccessMode: vi.fn().mockResolvedValue(accessMode),
+        } as any,
+    );
 }
 
 describe('StorefrontBrandingShopResolver', () => {
+    it.each(['CLOSED', 'PREVIEW', 'LIVE'])('returns the authoritative %s access mode', async accessMode => {
+        const resolver = createResolver(null, accessMode);
+        await expect(
+            resolver.storefrontBranding({
+                channelId: 'channel-1',
+                languageCode: 'en',
+                channel: { code: 'store', customFields: {} },
+            } as any),
+        ).resolves.toMatchObject({ accessMode });
+    });
     it('returns published store branding to guests and signed-in visitors alike', async () => {
         const resolver = createResolver({
             descriptionZh: 'AI 软件商城',
@@ -187,6 +203,7 @@ describe('StorefrontBrandingAdminResolver', () => {
         const resolver = new StorefrontBrandingAdminResolver(
             connection as any,
             { assetOptions: { assetStorageStrategy: {} } } as any,
+            { getAccessMode: vi.fn().mockResolvedValue('CLOSED') } as any,
         );
         for (const channelId of ['a', 'b', 'new']) {
             const result = await resolver.storefrontPreviewBranding({

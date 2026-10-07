@@ -28,10 +28,12 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { heroContentForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -313,7 +315,7 @@ function HomepageCouponHub({
             ) : null}
             {queryLoading && coupons.length === 0 ? (
                 <div className="coupon-hub-query-state">
-                    <PageSkeleton label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
+                    <PageSkeleton compact label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
                 </div>
             ) : (
                 <div className="coupon-hub-scroll" role="list">
@@ -450,7 +452,19 @@ export interface HomePageProps {
     onRetry: () => void;
 }
 
+const phoneHeroQuery = '(max-width: 767px)';
+function subscribeToPhoneHero(onChange: () => void) {
+    const query = window.matchMedia(phoneHeroQuery);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+}
+
 export function HomePage() {
+    const phoneHero = useSyncExternalStore(
+        subscribeToPhoneHero,
+        () => window.matchMedia(phoneHeroQuery).matches,
+        () => false,
+    );
     const navigate = useNavigate();
     const desktop = useDesktopLayout();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
@@ -501,8 +515,11 @@ export function HomePage() {
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
-        () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
-        [contentBlocks],
+        () =>
+            contentBlocks
+                .filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim()))
+                .map(block => heroContentForViewport(block, !phoneHero, language)),
+        [contentBlocks, phoneHero, language],
     );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
@@ -579,12 +596,9 @@ export function HomePage() {
     });
     const heroTransitionRef = useRef(0);
     const heroCount = managedHeroes.length;
+    const heroInteractiveIndex =
+        heroMotion?.phase === 'settling' && heroMotion.completed ? heroMotion.nextIndex : heroIndex;
     const managedHero = managedHeroes[heroIndex];
-    const managedHeroProduct =
-        managedHero?.targetType === 'PRODUCT'
-            ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
-            : undefined;
-    const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
@@ -895,22 +909,20 @@ export function HomePage() {
         void showPreparedHero(index, direction);
     };
 
-    const openActiveHero = () => {
-        if (managedHero?.targetType && managedHero.targetType !== 'NONE' && managedHero.targetValue) {
-            onContentTarget(managedHero.targetType, managedHero.targetValue);
-        } else if (hero) {
-            navigateTo({ name: 'product', id: hero.id });
+    const openHero = (slide: StorefrontContentBlock) => {
+        if (slide.targetType !== 'NONE' && slide.targetValue) {
+            onContentTarget(slide.targetType, slide.targetValue);
         } else {
             navigateTo({ name: 'category' });
         }
     };
 
-    const handleHeroImageOpen = () => {
+    const handleHeroImageOpen = (slide: StorefrontContentBlock) => {
         if (heroGestureRef.current.suppressClick) {
             heroGestureRef.current.suppressClick = false;
             return;
         }
-        openActiveHero();
+        openHero(slide);
     };
 
     const beginHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
@@ -1222,7 +1234,10 @@ export function HomePage() {
                                             .filter(Boolean)
                                             .join(' ')}
                                         role="region"
-                                        aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                                        aria-label={
+                                            managedHeroes[heroInteractiveIndex]?.title ||
+                                            (isZh ? '精选推荐' : 'Featured')
+                                        }
                                         aria-roledescription={isZh ? '轮播' : 'carousel'}
                                         onScrollCapture={event => {
                                             if (
@@ -1242,7 +1257,11 @@ export function HomePage() {
                                             if (!heroGestureRef.current.horizontal)
                                                 finishHeroSwipe(event, true);
                                         }}
-                                        onLostPointerCapture={event => finishHeroSwipe(event, true)}
+                                        onLostPointerCapture={event => {
+                                            // Transferring implicit touch capture from a child also bubbles here.
+                                            if (event.target === event.currentTarget)
+                                                finishHeroSwipe(event, true);
+                                        }}
                                         onClickCapture={event => {
                                             if (!heroGestureRef.current.suppressClick) return;
                                             heroGestureRef.current.suppressClick = false;
@@ -1260,7 +1279,7 @@ export function HomePage() {
                                             event.preventDefault();
                                             selectHeroManually(
                                                 heroIndexAfterManualMove(
-                                                    heroIndex,
+                                                    heroInteractiveIndex,
                                                     heroCount,
                                                     event.key === 'ArrowLeft' ? -1 : 1,
                                                 ),
@@ -1285,6 +1304,7 @@ export function HomePage() {
                                                     const completing =
                                                         heroMotion?.phase === 'settling' &&
                                                         heroMotion.completed;
+                                                    const inactive = completing ? !neighbor : neighbor;
                                                     const offset = heroMotion?.offset ?? 0;
                                                     const direction = heroMotion?.direction ?? 1;
                                                     const translation = completing
@@ -1300,8 +1320,8 @@ export function HomePage() {
                                                             style={{
                                                                 transform: `translate3d(${translation}, 0, 0)`,
                                                             }}
-                                                            aria-hidden={neighbor || undefined}
-                                                            inert={neighbor || undefined}
+                                                            aria-hidden={inactive || undefined}
+                                                            inert={inactive || undefined}
                                                         >
                                                             <HeroScene
                                                                 content={slide}
@@ -1335,7 +1355,7 @@ export function HomePage() {
                                                                                             }
                                                                                             aria-current={
                                                                                                 index ===
-                                                                                                heroIndex
+                                                                                                heroInteractiveIndex
                                                                                                     ? 'true'
                                                                                                     : undefined
                                                                                             }
@@ -1356,8 +1376,8 @@ export function HomePage() {
                                                                     </div>
                                                                 }
                                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${slide.title || storefrontName}`}
-                                                                onImageOpen={handleHeroImageOpen}
-                                                                onOpen={openActiveHero}
+                                                                onImageOpen={() => handleHeroImageOpen(slide)}
+                                                                onOpen={() => openHero(slide)}
                                                                 image={
                                                                     <SafeImage
                                                                         src={slideImage}
@@ -1401,8 +1421,8 @@ export function HomePage() {
                                         >
                                             {heroAutoplayStopped
                                                 ? isZh
-                                                    ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
-                                                    : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
+                                                    ? `自动轮播已停止，当前为第 ${heroInteractiveIndex + 1} 张广告`
+                                                    : `Autoplay stopped. Promotion ${heroInteractiveIndex + 1} is active.`
                                                 : ''}
                                         </span>
                                     </section>
@@ -1572,6 +1592,7 @@ export function HomePage() {
                             >
                                 {catalogLoading ? (
                                     <PageSkeleton
+                                        compact
                                         variant="catalog"
                                         label={isZh ? '正在加载商品' : 'Loading products'}
                                     />

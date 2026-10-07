@@ -25,6 +25,59 @@ it('shows a trusted catalog count or a count-free apply action', () => {
     expect(categoryFilterActionLabel('en', null)).toBe('Apply filters');
 });
 
+it('keeps the target skeleton while the store identity is unresolved', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const api = { catalog: vi.fn() };
+    const noop = () => undefined;
+    try {
+        act(() => {
+            root.render(
+                <QueryClientProvider client={client}>
+                    <CategoryPageContext.Provider
+                        value={
+                            {
+                                api,
+                                products: [],
+                                collections: [],
+                                contentBlocks: [],
+                                loading: true,
+                                contextResolved: false,
+                                error: null,
+                                market: { code: 'my-malaysia', currencyCode: 'MYR' },
+                                locale: 'en-MY',
+                                language: 'en',
+                                activeCollectionId: 'all',
+                                activeChildId: 'all',
+                                sortMode: 'recommended',
+                                fulfillmentFilter: 'all',
+                                inStockOnly: false,
+                                minimumPrice: '',
+                                maximumPrice: '',
+                                onCollectionChange: noop,
+                                onChildChange: noop,
+                                onSortChange: noop,
+                                onFilterChange: noop,
+                                onNotify: noop,
+                                onRetry: noop,
+                            } as any
+                        }
+                    >
+                        <CategoryPage />
+                    </CategoryPageContext.Provider>
+                </QueryClientProvider>,
+            );
+        });
+        expect(api.catalog).not.toHaveBeenCalled();
+        expect(container.querySelector('[aria-label="Loading products"]')).not.toBeNull();
+        expect(container.querySelector('.empty-state')).toBeNull();
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
 it.each([
     { language: 'zh', name: '马来西亚特色食品与日常生活用品' },
     { language: 'en', name: 'Everyday essentials and travel accessories' },

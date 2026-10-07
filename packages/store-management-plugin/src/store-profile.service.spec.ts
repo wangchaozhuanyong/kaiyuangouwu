@@ -453,7 +453,7 @@ describe('StoreProfileService', () => {
             status: 'ACTIVE',
         });
 
-        expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false, isOperational: true });
+        expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false, isOperational: false });
     });
 
     it('allows a merchant to publish a draft preview only with a verified primary domain', async () => {
@@ -803,4 +803,27 @@ describe('StoreProfileService', () => {
         ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
         expect(profileRepository.save).not.toHaveBeenCalled();
     });
+});
+
+describe('shared public operational state', () => {
+    it.each([false, true])(
+        'never grants a Seller-owned draft implicit public access with preview=%s',
+        async isPublished => {
+            const current = profile({ isPublished });
+            const { service } = createService(
+                { find: vi.fn().mockResolvedValue([current]) },
+                {
+                    find: vi.fn().mockResolvedValue([
+                        {
+                            channelId: current.channelId,
+                            domain: 'store.example',
+                            isPrimary: true,
+                            status: 'ACTIVE',
+                        },
+                    ]),
+                },
+            );
+            expect((await service.findAllForAdmin({} as any))[0].isOperational).toBe(isPublished);
+        },
+    );
 });

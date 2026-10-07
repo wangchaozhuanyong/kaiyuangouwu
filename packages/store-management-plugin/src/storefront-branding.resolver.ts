@@ -14,6 +14,7 @@ import { storefrontContentPermission } from '@vendure/storefront-content-plugin'
 import { Request } from 'express';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { StorefrontActivationService } from './storefront-activation.service';
 
 interface StorefrontChannelFields {
     storefrontNameZh?: string | null;
@@ -25,6 +26,7 @@ export class StorefrontBrandingShopResolver {
     constructor(
         private connection: TransactionalConnection,
         private configService: ConfigService,
+        private activation: StorefrontActivationService,
     ) {}
 
     @Query()
@@ -70,6 +72,7 @@ export class StorefrontBrandingShopResolver {
             : null;
 
         return {
+            accessMode: await this.activation.getAccessMode(ctx),
             logoAssetId: profile?.logoAssetId ?? null,
             logoOnLightAssetId: profile?.logoOnLightAssetId ?? null,
             logoOnDarkAssetId: profile?.logoOnDarkAssetId ?? null,
@@ -116,6 +119,7 @@ export class StorefrontBrandingAdminResolver {
     constructor(
         private connection: TransactionalConnection,
         private configService: ConfigService,
+        private activation: StorefrontActivationService,
     ) {}
 
     @Query()
@@ -124,6 +128,7 @@ export class StorefrontBrandingAdminResolver {
         const branding = await new StorefrontBrandingShopResolver(
             this.connection,
             this.configService,
+            this.activation,
         ).loadBranding(ctx);
         return { channelId: String(ctx.channelId), ...branding };
     }

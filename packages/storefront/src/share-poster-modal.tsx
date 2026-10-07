@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 
 import './styles/modals-and-support.css';
 
+import { Overlay } from './overlay-host';
 import { productImage } from './product-media';
 import { storefrontWebpUrl } from './responsive-image';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { Product, StorefrontLanguage } from './types';
 
 export async function createQrCodeSvgDataUrl(value: string): Promise<string> {
@@ -49,12 +49,6 @@ export function SharePosterModal({
     const mainImageSource = productImage(product);
     const mainImage = mainImageSource ? storefrontWebpUrl(mainImageSource, 'detail') : '';
     const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
-
-    useEffect(() => {
-        if (embedded) return;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        return releaseBodyScrollLock;
-    }, [embedded]);
 
     useEffect(() => {
         if (!productUrl) return;
@@ -255,8 +249,14 @@ export function SharePosterModal({
     );
     if (embedded) return content;
     return (
-        <div className="poster-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
-            <div className="poster-modal-card" onClick={event => event.stopPropagation()}>
+        <Overlay className="poster-modal-overlay" onClick={onClose} onClose={onClose}>
+            <div
+                className="poster-modal-card"
+                onClick={event => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={isZh ? '分享海报' : 'Share poster'}
+            >
                 <button
                     type="button"
                     className="poster-close-btn"
@@ -267,6 +267,6 @@ export function SharePosterModal({
                 </button>
                 {content}
             </div>
-        </div>
+        </Overlay>
     );
 }

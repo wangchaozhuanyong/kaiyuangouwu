@@ -7,6 +7,7 @@ import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
+import { publicRefreshScheduler } from '../public-refresh-scheduler';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -18,7 +19,7 @@ import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import { isPublicStorefrontRoute } from '../storefront-access';
-import { storefrontErrorCode, storefrontErrorMessage } from '../storefront-errors';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
@@ -52,6 +53,8 @@ export function useStorefrontAppState() {
         displayCurrencyCode,
         setDisplayCurrencyCode,
         storefrontContextResolved,
+        storefrontUnavailable,
+        storefrontAccessMode,
         favoriteProductIds: guestFavoriteProductIds,
         recentProductIds: guestRecentProductIds,
         setFavoriteProductIds: setGuestFavoriteProductIds,
@@ -213,14 +216,27 @@ export function useStorefrontAppState() {
     useEffect(() => {
         if (!storefrontContextResolved) return;
         const controller = new AbortController();
-        void api.watchRealtime(event => {
-            void invalidateStorefrontRealtimeQueries(queryClient, event, {
+        const scheduler = publicRefreshScheduler(() => {
+            void refreshStorefrontQueries(queryClient, {
                 marketCode: storefrontQueryKeys.market(market),
                 languageCode: vendureLanguageCode,
-                customerId: customer?.id,
             });
-        }, controller.signal);
-        return () => controller.abort();
+        });
+        void api.watchRealtime(
+            event => {
+                void invalidateStorefrontRealtimeQueries(queryClient, event, {
+                    marketCode: storefrontQueryKeys.market(market),
+                    languageCode: vendureLanguageCode,
+                    customerId: customer?.id,
+                });
+            },
+            controller.signal,
+            connected => scheduler.connection(connected),
+        );
+        return () => {
+            scheduler.dispose();
+            controller.abort();
+        };
     }, [
         api,
         customerAuthenticated,
@@ -679,6 +695,7 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
+        storefrontContextResolved,
         route,
         displayedRoute,
         api,
@@ -821,11 +838,9 @@ export function useStorefrontAppState() {
     return {
         // The shell only depends on resolving the current store identity. Route components own
         // their content/query skeletons, so an unrelated content request never blocks the app.
-        pageDataPending: !storefrontContextResolved && !configQuery.isError,
-        storefrontUnavailable:
-            configQuery.isError &&
-            configQuery.data === undefined &&
-            storefrontErrorCode(configQuery.error) === 'FORBIDDEN',
+        pageDataPending: !storefrontContextResolved && !storefrontUnavailable && !configQuery.isError,
+        storefrontUnavailable,
+        storefrontAccessMode,
         isNavigationPending,
         isPreparingProduct,
         storefrontContextValue,

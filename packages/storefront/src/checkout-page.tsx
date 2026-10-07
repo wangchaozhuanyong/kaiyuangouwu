@@ -17,12 +17,12 @@ import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
 import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { QuantityControl } from './components/common/quantity-control';
+import { useCheckoutViewport } from './hooks/useCheckoutViewport';
 import { compactUiCopy } from './i18n';
-import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
+import { Overlay } from './overlay-host';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
@@ -154,6 +154,10 @@ export function CheckoutPage({
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
+    const hasCheckoutContent = Boolean(
+        order && cart && (cartPending || (order.totalQuantity > 0 && order.lines.length > 0)),
+    );
+    const { pageRef, actionBarRef } = useCheckoutViewport(hasCheckoutContent);
     const activeAddress = checkoutAddress(customer, selectedAddressId);
     const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
@@ -539,7 +543,7 @@ export function CheckoutPage({
         }
     };
 
-    if (!order || !cart || (!cartPending && (order.totalQuantity <= 0 || order.lines.length === 0))) {
+    if (!order || !cart || !hasCheckoutContent) {
         return (
             <Subpage
                 title={
@@ -633,6 +637,7 @@ export function CheckoutPage({
 
     return (
         <main
+            ref={pageRef}
             className={checkoutPageClassName(
                 `page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`,
             )}
@@ -934,10 +939,10 @@ export function CheckoutPage({
                         </span>
                         <span>
                             <RotateCcw />
-                            {compactCopy.orders.returns}
+                            {isZh ? '售后服务' : compactCopy.orders.returns}
                         </span>
                     </section>
-                    <div className={checkoutPageClassName('submit-order-bar')}>
+                    <div ref={actionBarRef} className={checkoutPageClassName('submit-order-bar')}>
                         <button
                             type={requiresShipping && !addressComplete ? 'button' : 'submit'}
                             onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
@@ -1624,62 +1629,12 @@ function Sheet({
     className?: string;
     showHandle?: boolean;
 }) {
-    const dialogRef = useRef<HTMLElement>(null);
-    const previousFocus = useRef<HTMLElement | null>(null);
-    const onCloseRef = useRef(onClose);
     const titleId = useId();
-    useEffect(() => {
-        onCloseRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector =
-            'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const focusable = () =>
-            Array.from(dialog.querySelectorAll<HTMLElement>(selector)).filter(
-                element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
-            );
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus({ preventScroll: true }));
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                onCloseRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            if (!items.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = items[0];
-            const last = items[items.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus({ preventScroll: true });
-        };
-    }, []);
     return (
-        <div
+        <Overlay
             className={checkoutPageClassName(`sheet-layer${className ? ` ${className}-layer` : ''}`)}
             role="presentation"
+            onClose={onClose}
         >
             <button
                 className={checkoutPageClassName('sheet-mask')}
@@ -1688,7 +1643,6 @@ function Sheet({
                 aria-label={language === 'zh' ? '关闭' : 'Close'}
             />
             <section
-                ref={dialogRef}
                 className={checkoutPageClassName(`sheet${className ? ` ${className}` : ''}`)}
                 role="dialog"
                 aria-modal="true"
@@ -1709,7 +1663,7 @@ function Sheet({
                 </header>
                 {children}
             </section>
-        </div>
+        </Overlay>
     );
 }
 

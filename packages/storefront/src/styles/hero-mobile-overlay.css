@@ -1,4 +1,4 @@
-/* One 12:5 phone canvas and the same published artwork in the storefront and Admin preview. */
+/* Shared non-desktop overlays; phones use the proportions of the approved reference. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
         min-height: 0;
@@ -71,6 +71,7 @@
         flex: 1;
         overflow-y: auto;
         overscroll-behavior-y: contain;
+        touch-action: pan-y;
         scrollbar-width: thin;
         pointer-events: auto;
     }
@@ -149,6 +150,32 @@
         padding: 0;
         border-radius: 0;
         background: transparent;
+    }
+}
+
+@media (max-width: 767px) {
+    .hero.hero-image-overlay {
+        aspect-ratio: 16 / 9;
+    }
+
+    .hero.hero-image-overlay .hero-rich-copy-region {
+        width: 60%;
+    }
+
+    .hero.hero-image-overlay .hero-rich-cta-btn {
+        max-width: 60%;
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar,
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar.has-long-copy {
+        padding: var(--space-4);
+        border-radius: var(--skin-control-radius);
+        background: var(--surface);
+        color: var(--text);
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-item {
+        color: var(--text);
     }
 }
 

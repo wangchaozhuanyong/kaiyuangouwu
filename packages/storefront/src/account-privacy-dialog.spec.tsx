@@ -71,7 +71,7 @@ function openDialog(label: string) {
     if (!trigger) throw new Error(`Missing ${label}`);
     trigger.focus();
     void act(() => trigger.click());
-    const dialog = host.querySelector<HTMLElement>('[role="dialog"]');
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     const input = dialog?.querySelector<HTMLInputElement>('input');
     if (!dialog || !input) throw new Error('Missing privacy dialog');
     return { trigger, dialog, input };
@@ -96,9 +96,9 @@ it.each(['导出我的个人数据', '申请注销账户'])(
         expect(key(document, 'Tab', { shiftKey: true }).defaultPrevented).toBe(true);
         expect(document.activeElement).toBe(enabled.at(-1));
         key(document, 'Escape', { isComposing: true });
-        expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
         key(document, 'Escape');
-        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(document.activeElement).toBe(trigger);
         expect(document.body.style.overflow).not.toBe('hidden');
         expect(exportData).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ it('ignores IME confirmation and duplicate Enter while a fixture request is pend
     key(input, 'Enter');
     key(document, 'Escape');
     expect(requestClosure).toHaveBeenCalledOnce();
-    expect(host.querySelector('[role="dialog"]')).toBe(dialog);
+    expect(document.querySelector('[role="dialog"]')).toBe(dialog);
     dialog.focus();
     key(document, 'Tab');
     expect(document.activeElement).toBe(dialog);
@@ -142,7 +142,7 @@ it('ignores IME confirmation and duplicate Enter while a fixture request is pend
         '操作暂时未能完成，请稍后重试。',
     );
     key(document, 'Escape');
-    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it('keeps account closure working when personal-data export is not exposed', async () => {
@@ -163,5 +163,5 @@ it('keeps account closure working when personal-data export is not exposed', asy
     });
     expect(requestClosure).toHaveBeenCalledWith('local-test-password');
     expect(exportData).not.toHaveBeenCalled();
-    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
 });

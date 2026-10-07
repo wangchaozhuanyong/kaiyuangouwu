@@ -13,7 +13,7 @@ import { promotionAssetPaths } from '../promotion/promotion-public-assets';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
 
 import { StorefrontPublicCacheService } from './storefront-public-cache.service';
-import { PUBLIC_MEDIA_USES, publicContentImageKinds } from './storefront-public-media';
+import { PUBLIC_MEDIA_USES, publicContentImageKinds, publicHeroMobileImage } from './storefront-public-media';
 
 export const STOREFRONT_MEDIA_MANIFEST_TTL_MS = 30_000;
 const MAX_CATALOG_ROWS = 20_000;
@@ -80,7 +80,12 @@ export class StorefrontMediaManifestService {
                 paths.add(path);
         };
         for (const block of blocks) {
-            for (const image of [block, ...block.items]) {
+            const mobileImageUrl = publicHeroMobileImage(block, origin);
+            for (const image of [
+                block,
+                ...block.items,
+                ...(mobileImageUrl ? [{ imageUrl: mobileImageUrl }] : []),
+            ]) {
                 if (!image.imageUrl) continue;
                 try {
                     const url = new URL(image.imageUrl, origin);
@@ -89,7 +94,7 @@ export class StorefrontMediaManifestService {
                         add(path);
                         for (const kind of publicContentImageKinds(
                             block.type,
-                            image === block ? 'block' : 'item',
+                            image === block || image.imageUrl === mobileImageUrl ? 'block' : 'item',
                         ))
                             use(path, kind);
                     }

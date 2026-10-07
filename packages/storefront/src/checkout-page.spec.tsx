@@ -519,7 +519,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         return { api, props, order, onCartChange };
     }
     function element<T extends Element = HTMLElement>(selector: string): T {
-        const match = container.querySelector<T>(selector);
+        const match = document.body.querySelector<T>(selector);
         if (!match) throw new Error(`Missing checkout element: ${selector}`);
         return match;
     }
@@ -538,7 +538,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
         expect(container.textContent).not.toContain('下一步，选择配送');
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(api.preparePayment).not.toHaveBeenCalled();
         expect(navigate).not.toHaveBeenCalled();
     });
@@ -550,12 +550,12 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             expect.objectContaining({ preferredShippingCode: 'economy' }),
         );
         await flush(() => trigger().click());
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
         expect(container.querySelector('.checkout-options fieldset')).toBeNull();
         await flush(() => element<HTMLInputElement>('input[value="standard"]').click());
         expect(api.setShippingMethodWithCart).toHaveBeenLastCalledWith('standard');
         expect(trigger().textContent).toContain('标准配送');
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(api.preparePayment).not.toHaveBeenCalled();
     });
 
@@ -664,15 +664,15 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             new ShopApiError('INELIGIBLE_SHIPPING_METHOD_ERROR', 'Shipping is ineligible'),
         );
         await flush(() => element<HTMLInputElement>('input[value="economy"]').click());
-        expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
             '此配送方式不适用于当前订单，请重新选择。',
         );
         expect(submitButton().disabled).toBe(true);
-        const retry = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
             button => button.textContent === '重新计算配送',
         );
         await flush(() => retry?.click());
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
         expect(api.preparePayment).not.toHaveBeenCalled();

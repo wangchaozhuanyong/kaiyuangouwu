@@ -6,6 +6,7 @@ import {
 } from '../../../../common/src/product-description-summary';
 import { productListingAvailability } from '../../product-availability';
 import { lowestPricedProductVariant } from '../../product-pricing';
+import { STOREFRONT_IMAGE_SIZES } from '../../responsive-image';
 import { PriceDisplay, ProductImage, resolveProductSubtitle } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
@@ -74,6 +75,9 @@ export function ProductRow({
     onOpen,
     layout = 'row',
     showDescription = true,
+    priority = false,
+    fetchPriority = 'auto',
+    imageSizes,
 }: {
     product: Product;
     market: MarketConfig;
@@ -82,6 +86,9 @@ export function ProductRow({
     onOpen: () => void;
     layout?: 'row' | 'catalog' | 'compact';
     showDescription?: boolean;
+    priority?: boolean;
+    fetchPriority?: 'high' | 'low' | 'auto';
+    imageSizes?: string;
 }) {
     const isZh = language === 'zh';
     const variant = lowestPricedProductVariant(product);
@@ -96,7 +103,18 @@ export function ProductRow({
             onOpen={onOpen}
         >
             <div className="product-row-image">
-                <ProductImage language={language} product={product} />
+                <ProductImage
+                    language={language}
+                    product={product}
+                    sizes={
+                        imageSizes ??
+                        (layout === 'compact'
+                            ? STOREFRONT_IMAGE_SIZES.compactProductRow
+                            : STOREFRONT_IMAGE_SIZES.productRow)
+                    }
+                    loading={priority ? 'eager' : 'lazy'}
+                    fetchPriority={fetchPriority}
+                />
             </div>
             <div className="product-row-content">
                 <div className="product-row-top">

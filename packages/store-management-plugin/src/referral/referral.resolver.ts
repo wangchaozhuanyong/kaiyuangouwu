@@ -72,7 +72,7 @@ export class ReferralShopResolver {
         return result;
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     useMyReferralBalance(@Ctx() ctx: RequestContext, @Args('amount') amount: number) {

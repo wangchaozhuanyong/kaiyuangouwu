@@ -1,7 +1,7 @@
-import { Outlet, lazyRouteComponent } from '@tanstack/react-router';
+import { lazyRouteComponent, Outlet } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { WifiOff } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import {
@@ -12,17 +12,34 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { desktopPageFamily } from './desktop-page-contract';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
+import { OverlayHost } from './overlay-host';
 import { PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
+import {
+    initialStorefrontAssetReferences,
+    shouldShowStorefrontUpdatePrompt,
+    useDeferredStorefrontUi,
+} from './storefront-deferred-ui';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
-import { StorefrontTrafficPreference } from './storefront-ui/storefront-traffic-preference';
 import { StorefrontContext } from './StorefrontContext';
-import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import { type ActiveCustomer } from './types';
 
+const StorefrontUpdatePrompt = lazy(() =>
+    import('./StorefrontUpdatePrompt').then(module => ({ default: module.StorefrontUpdatePrompt })),
+);
+const StorefrontTrafficPreference = lazy(() =>
+    import('./storefront-ui/storefront-traffic-preference').then(module => ({
+        default: module.StorefrontTrafficPreference,
+    })),
+);
+
 const LoginRoutePage = lazyRouteComponent(() => import('./route-pages/auth-route-pages'), 'LoginRoutePage');
+const PreviewScenarioPanel = lazyRouteComponent(
+    () => import('./storefront-preview-scenario-panel'),
+    'PreviewScenarioPanel',
+);
 
 type StorefrontShellProps = { state: ReturnType<typeof useStorefrontAppState> };
 
@@ -73,11 +90,18 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
     const readinessIdentity = JSON.stringify([
         storefrontContextValue.storefrontCode,
+        storefrontContextValue.market.code,
+        storefrontContextValue.market.currencyCode,
+        customer?.id ?? null,
         language,
         routeHref(displayedRoute),
     ]);
     const skeletonVariant = pageSkeletonVariantForPathname(routeHref(displayedRoute));
     const renderedRouteName = protectedRoute && !customer ? 'login' : displayedRoute.name;
+    const deferredUiReady = useDeferredStorefrontUi(
+        previewEmbedded || !state.storefrontUnavailable,
+        readinessIdentity,
+    );
 
     useEffect(() => {
         if (
@@ -145,178 +169,176 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     return (
         <StorefrontContext.Provider value={effectiveStorefrontContext}>
             <DesktopLayoutContext.Provider value={desktop}>
-                <PageReadinessBoundary
-                    requestKey={readinessIdentity}
-                    navigationKey={readinessIdentity}
-                    pending={Boolean(state.pageDataPending || state.isNavigationPending)}
-                    navigationPreparing={state.isPreparingProduct}
-                    online={online}
-                    language={language}
-                    onRetry={() => void state.retryPageLoad()}
-                    onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
-                >
-                    <div
-                        data-route={renderedRouteName}
-                        data-page-family={desktopPageFamily(renderedRouteName)}
-                        data-preview-embedded={previewEmbedded ? 'true' : undefined}
-                        className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
+                <OverlayHost ownerKey={readinessIdentity}>
+                    <PageReadinessBoundary
+                        requestKey={readinessIdentity}
+                        navigationKey={readinessIdentity}
+                        pending={Boolean(state.pageDataPending || state.isNavigationPending)}
+                        navigationPreparing={state.isPreparingProduct}
+                        online={online}
+                        language={language}
+                        onRetry={() => void state.retryPageLoad()}
+                        onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
                     >
-                        <a className="skip-link" href="#storefront-content">
-                            {isZh ? '跳到主要内容' : 'Skip to content'}
-                        </a>
-                        {!online && (
-                            <div className="network-banner" role="status">
-                                <WifiOff aria-hidden="true" />
-                                {isZh
-                                    ? '当前网络不可用，部分操作可能失败'
-                                    : 'You are offline. Some actions may fail.'}
-                            </div>
-                        )}
-                        {desktop && showNavigation && (
-                            <DesktopHeader
-                                navigationBlock={navigationBlock}
-                                cartQuantity={cart?.totalQuantity ?? 0}
-                            />
-                        )}
-                        {!previewEmbedded && (
-                            <StorefrontUpdatePrompt language={language} route={renderedRouteName} />
-                        )}
                         <div
-                            className={
-                                desktop
-                                    ? customer && isDesktopAccountRoute(displayedRoute.name)
-                                        ? 'desktop-shell-frame desktop-account-layout'
-                                        : 'desktop-shell-frame'
-                                    : undefined
-                            }
+                            data-route={renderedRouteName}
+                            data-page-family={desktopPageFamily(renderedRouteName)}
+                            data-preview-embedded={previewEmbedded ? 'true' : undefined}
+                            className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
                         >
-                            {desktop && customer && <DesktopAccountNavigation />}
-                            <div id="storefront-content" tabIndex={-1}>
-                                <Suspense
-                                    fallback={
-                                        <PageSkeleton variant={skeletonVariant} language={language} root />
-                                    }
-                                >
-                                    {protectedRoute && waitingForAccount ? (
-                                        accountFailed ? (
-                                            <div role="alert" className="empty-state">
-                                                <p>{customerLoadError}</p>
-                                                <button type="button" onClick={() => void retryAccount()}>
-                                                    {isZh ? '重试' : 'Try again'}
-                                                </button>
-                                                <a href="/promo">
-                                                    {isZh ? '返回介绍页' : 'Back to introduction'}
-                                                </a>
-                                            </div>
-                                        ) : (
-                                            <PageSkeleton variant="account" language={language} root />
-                                        )
-                                    ) : protectedRoute && !customer ? (
-                                        <LoginRoutePage />
-                                    ) : (
-                                        <Outlet />
-                                    )}
-                                </Suspense>
-                                {previewEmbedded &&
-                                    previewScenario &&
-                                    !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
-                                        previewScenario,
-                                    ) &&
-                                    !(
-                                        displayedRoute.name === 'home' &&
-                                        ['empty', 'loading'].includes(previewScenario)
-                                    ) && <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />}
-                            </div>
-                        </div>
-                    </div>
-                    {!desktop &&
-                        showNavigation &&
-                        shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
-                            <BottomNavigation
-                                activeRoute={displayedRoute.name}
-                                cartQuantity={cart?.totalQuantity ?? 0}
-                                language={language}
-                                navigationBlock={navigationBlock}
-                            />
-                        )}
-                    {toast && (
-                        <div
-                            className={clsx(
-                                'toast',
-                                typeof toast === 'object' && toast.type && `toast--${toast.type}`,
-                            )}
-                            role="status"
-                            aria-live="polite"
-                        >
-                            {typeof toast === 'string' ? (
-                                toast
-                            ) : (
-                                <div className="toast-inner">
-                                    {toast.type === 'success' && <span className="toast-icon">✓</span>}
-                                    {toast.type === 'error' && <span className="toast-icon">✕</span>}
-                                    {toast.type === 'warning' && <span className="toast-icon">⚠</span>}
-                                    {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
-                                    <div className="toast-content">
-                                        {toast.title && <div className="toast-title">{toast.title}</div>}
-                                        <div className="toast-message">{toast.message}</div>
-                                    </div>
-                                    {toast.action && (
-                                        <button
-                                            type="button"
-                                            className="toast-action"
-                                            onClick={toast.action.onClick}
-                                        >
-                                            {toast.action.label}
-                                        </button>
-                                    )}
+                            <a className="skip-link" href="#storefront-content">
+                                {isZh ? '跳到主要内容' : 'Skip to content'}
+                            </a>
+                            {!online && (
+                                <div className="network-banner" role="status">
+                                    <WifiOff aria-hidden="true" />
+                                    {isZh
+                                        ? '当前网络不可用，部分操作可能失败'
+                                        : 'You are offline. Some actions may fail.'}
                                 </div>
                             )}
+                            {!previewEmbedded && state.storefrontAccessMode === 'PREVIEW' && (
+                                <aside className="storefront-preview-notice type-helper" role="status">
+                                    <strong>{isZh ? '公开预览' : 'Public preview'}</strong>
+                                    <span>
+                                        {isZh
+                                            ? '店铺尚未正式营业；测试支付只会生成模拟订单。'
+                                            : 'This store is not live yet. Test payments create simulated orders only.'}
+                                    </span>
+                                </aside>
+                            )}
+                            {desktop && showNavigation && (
+                                <DesktopHeader
+                                    navigationBlock={navigationBlock}
+                                    cartQuantity={cart?.totalQuantity ?? 0}
+                                />
+                            )}
+                            {!previewEmbedded &&
+                                deferredUiReady &&
+                                shouldShowStorefrontUpdatePrompt(renderedRouteName) && (
+                                    <Suspense fallback={null}>
+                                        <StorefrontUpdatePrompt
+                                            language={language}
+                                            route={renderedRouteName}
+                                            initialAssetReferences={initialStorefrontAssetReferences}
+                                        />
+                                    </Suspense>
+                                )}
+                            <div
+                                className={
+                                    desktop
+                                        ? customer && isDesktopAccountRoute(displayedRoute.name)
+                                            ? 'desktop-shell-frame desktop-account-layout'
+                                            : 'desktop-shell-frame'
+                                        : undefined
+                                }
+                            >
+                                {desktop && customer && <DesktopAccountNavigation />}
+                                <div id="storefront-content" tabIndex={-1}>
+                                    <Suspense
+                                        fallback={
+                                            <PageSkeleton
+                                                variant={skeletonVariant}
+                                                language={language}
+                                                root
+                                            />
+                                        }
+                                    >
+                                        {protectedRoute && waitingForAccount ? (
+                                            accountFailed ? (
+                                                <div role="alert" className="empty-state">
+                                                    <p>{customerLoadError}</p>
+                                                    <button type="button" onClick={() => void retryAccount()}>
+                                                        {isZh ? '重试' : 'Try again'}
+                                                    </button>
+                                                    <a href="/promo">
+                                                        {isZh ? '返回介绍页' : 'Back to introduction'}
+                                                    </a>
+                                                </div>
+                                            ) : (
+                                                <PageSkeleton variant="account" language={language} root />
+                                            )
+                                        ) : protectedRoute && !customer ? (
+                                            <LoginRoutePage />
+                                        ) : (
+                                            <Outlet />
+                                        )}
+                                    </Suspense>
+                                    {previewEmbedded &&
+                                        previewScenario &&
+                                        !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
+                                            previewScenario,
+                                        ) &&
+                                        !(
+                                            displayedRoute.name === 'home' &&
+                                            ['empty', 'loading'].includes(previewScenario)
+                                        ) && (
+                                            <Suspense fallback={null}>
+                                                <PreviewScenarioPanel
+                                                    scenario={previewScenario}
+                                                    isZh={isZh}
+                                                />
+                                            </Suspense>
+                                        )}
+                                </div>
+                            </div>
                         </div>
-                    )}
+                        {!desktop &&
+                            showNavigation &&
+                            shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
+                                <BottomNavigation
+                                    activeRoute={displayedRoute.name}
+                                    cartQuantity={cart?.totalQuantity ?? 0}
+                                    language={language}
+                                    navigationBlock={navigationBlock}
+                                />
+                            )}
+                        {toast && (
+                            <div
+                                className={clsx(
+                                    'toast',
+                                    typeof toast === 'object' && toast.type && `toast--${toast.type}`,
+                                )}
+                                role="status"
+                                aria-live="polite"
+                            >
+                                {typeof toast === 'string' ? (
+                                    toast
+                                ) : (
+                                    <div className="toast-inner">
+                                        {toast.type === 'success' && <span className="toast-icon">✓</span>}
+                                        {toast.type === 'error' && <span className="toast-icon">✕</span>}
+                                        {toast.type === 'warning' && <span className="toast-icon">⚠</span>}
+                                        {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
+                                        <div className="toast-content">
+                                            {toast.title && <div className="toast-title">{toast.title}</div>}
+                                            <div className="toast-message">{toast.message}</div>
+                                        </div>
+                                        {toast.action && (
+                                            <button
+                                                type="button"
+                                                className="toast-action"
+                                                onClick={toast.action.onClick}
+                                            >
+                                                {toast.action.label}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                    <StorefrontTrafficPreference api={storefrontContextValue.api} language={language} />
-                </PageReadinessBoundary>
+                        {deferredUiReady && (
+                            <Suspense fallback={null}>
+                                <StorefrontTrafficPreference
+                                    api={storefrontContextValue.api}
+                                    language={language}
+                                />
+                            </Suspense>
+                        )}
+                    </PageReadinessBoundary>
+                </OverlayHost>
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>
-    );
-}
-
-function PreviewScenarioPanel({ scenario, isZh }: { scenario: string; isZh: boolean }) {
-    if (scenario === 'loading') return <PageSkeleton variant="account" language={isZh ? 'zh' : 'en'} root />;
-    const content =
-        scenario === 'empty'
-            ? {
-                  title: isZh ? '暂无数据' : 'No data yet',
-                  body: isZh ? '当前页面暂无可展示内容。' : 'There is nothing to display on this page.',
-              }
-            : scenario === 'error'
-              ? {
-                    title: isZh ? '加载失败' : 'Unable to load',
-                    body: isZh ? '请检查网络后重试。' : 'Check your connection and try again.',
-                }
-              : scenario === 'disabled'
-                ? {
-                      title: isZh ? '功能暂不可用' : 'Feature unavailable',
-                      body: isZh ? '当前操作条件尚未满足。' : 'The requirements for this action are not met.',
-                  }
-                : {
-                      title: isZh ? '确认操作' : 'Confirm action',
-                      body: isZh
-                          ? '这是用于验收弹窗状态的只读预览。'
-                          : 'This read-only preview verifies the dialog state.',
-                  };
-    return (
-        <div
-            className={`storefront-preview-scenario is-${scenario}`}
-            role={scenario === 'dialog' ? 'dialog' : 'status'}
-        >
-            <div className="storefront-preview-state-card">
-                <strong>{content.title}</strong>
-                <p>{content.body}</p>
-                <button type="button" disabled={scenario === 'disabled'}>
-                    {scenario === 'error' ? (isZh ? '重试' : 'Try again') : isZh ? '知道了' : 'Got it'}
-                </button>
-            </div>
-        </div>
     );
 }

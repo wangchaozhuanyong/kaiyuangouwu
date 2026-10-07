@@ -18,7 +18,10 @@ export class RealtimeApi extends BaseDomainApi {
     async watchRealtime(
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
+        onConnectionChange?: (connected: boolean) => void,
     ): Promise<void> {
+        onConnectionChange?.(false);
+        signal.addEventListener('abort', () => onConnectionChange?.(false), { once: true });
         let retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
         while (!signal.aborted) {
             try {
@@ -56,11 +59,13 @@ export class RealtimeApi extends BaseDomainApi {
                 await consumeStorefrontRealtimeStream(response.body, onEvent, {
                     signal,
                     onReady: () => {
+                        onConnectionChange?.(true);
                         retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
                     },
                 });
                 if (!signal.aborted) throw new Error('Storefront realtime connection closed');
             } catch (error) {
+                onConnectionChange?.(false);
                 if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
                 const retry = calculateStorefrontRealtimeRetry({
                     status: error instanceof StorefrontRealtimeConnectionError ? error.status : undefined,

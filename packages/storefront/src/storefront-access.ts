@@ -1,5 +1,13 @@
 import type { RouteName } from './storefront-router';
 
+import { storefrontErrorCode } from './storefront-errors';
+
+/** Legacy FORBIDDEN is a closure signal only for the public configuration boundary. */
+export function isStorefrontClosedError(error: unknown, publicConfiguration = false): boolean {
+    const code = storefrontErrorCode(error);
+    return code === 'STOREFRONT_CLOSED' || (publicConfiguration && code === 'FORBIDDEN');
+}
+
 const browsingRoutes = new Set<RouteName>([
     'home',
     'category',
