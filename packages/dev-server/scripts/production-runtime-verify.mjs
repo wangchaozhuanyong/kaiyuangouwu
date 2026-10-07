@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { lstat, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
+import { lstat, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -232,6 +232,44 @@ export async function collectArtifactEntries(root) {
  * @param {string} root
  * @param {ArtifactEntry[]} [entries]
  */
+export async function assertRuntimeSymlinksResolve(root, entries) {
+    const resolvedRoot = path.resolve(root);
+    const realRoot = await realpath(resolvedRoot);
+    const artifactEntries = entries ?? (await collectArtifactEntries(resolvedRoot));
+    for (const entry of artifactEntries) {
+        if (entry.type !== 'symlink') continue;
+        const symlinkPath = path.join(resolvedRoot, entry.path);
+        const targetPath = path.resolve(path.dirname(symlinkPath), entry.target);
+        // Absolute links would break when the immutable artifact is renamed or
+        // installed on another host, even if they currently point inside staging.
+        if (
+            !isPathInside(resolvedRoot, symlinkPath) ||
+            path.isAbsolute(entry.target) ||
+            !isPathInside(resolvedRoot, targetPath)
+        ) {
+            throw new Error(`Runtime symlink escapes the artifact or is not portable: ${entry.path}`);
+        }
+        let target;
+        try {
+            assert.equal(
+                await readlink(symlinkPath),
+                entry.target,
+                'Runtime symlink changed during verification',
+            );
+            target = await realpath(symlinkPath);
+        } catch {
+            throw new Error(`Runtime symlink is broken or cyclic: ${entry.path}`);
+        }
+        if (!isPathInside(realRoot, target)) {
+            throw new Error(`Runtime symlink redirects outside the artifact: ${entry.path}`);
+        }
+    }
+}
+
+/**
+ * @param {string} root
+ * @param {ArtifactEntry[]} [entries]
+ */
 export async function assertVendureWorkspaceSymlinksResolve(root, entries) {
     const artifactEntries = entries ?? (await collectArtifactEntries(root));
     const workspacePackageSymlinks = artifactEntries.filter(
@@ -321,6 +359,7 @@ async function sha256File(filePath) {
 
 export async function writeIntegrityFiles(root) {
     const initialEntries = await collectArtifactEntries(root);
+    await assertRuntimeSymlinksResolve(root, initialEntries);
     const symlinks = initialEntries
         .filter(entry => entry.type === 'symlink')
         .map(({ path: symlinkPath, target }) => ({ path: symlinkPath, target }));
@@ -479,6 +518,7 @@ export async function verifyRuntimeArtifact(
 
     const entries = await collectArtifactEntries(resolvedRoot);
     await assertVendureWorkspaceSymlinksResolve(resolvedRoot, entries);
+    await assertRuntimeSymlinksResolve(resolvedRoot, entries);
     await verifyIntegrity(resolvedRoot, entries);
     const actualPackages = await collectPackageInventory(resolvedRoot, entries);
     const expectedPackages = parsePackageInventory(
