@@ -33,22 +33,93 @@ const columnFields: Record<string, string[]> = Object.fromEntries(
         .map(([name, definition]) => [name, definition.fields.map(field => field.path)]),
 );
 
+/** Counting and scanning must use the same customer-visible entity scope. */
+export function customerContentScopeWhere(
+    metadata: EntityMetadata,
+    channelId: string | number,
+): ObjectLiteral | ObjectLiteral[] {
+    const active = metadata.deleteDateColumn ? { [metadata.deleteDateColumn.propertyName]: IsNull() } : {};
+    if (metadata.name === 'SystemAnnouncement') {
+        return [
+            { ...active, ownerChannelId: IsNull(), targetMode: 'ALL' },
+            { ...active, ownerChannelId: IsNull(), channels: { id: channelId } },
+            { ...active, ownerChannelId: channelId, targetMode: 'SINGLE', channels: { id: channelId } },
+        ];
+    }
+    const visible = { ...active, ...(metadata.name === 'Collection' ? { isRoot: false } : {}) };
+    if (metadata.findColumnWithPropertyName('channelId')) return { ...visible, channelId };
+    if (metadata.name === 'StorefrontContentItem') return { ...visible, block: { channelId } };
+    if (metadata.relations.some(relation => relation.propertyName === 'channels'))
+        return { ...visible, channels: { id: channelId } };
+    return visible;
+}
+
 @Injectable()
 export class TranslationContentAdapter {
     @Inject(ModuleRef) private readonly moduleRef!: ModuleRef;
     @Optional() @Inject(EventBus) private readonly eventBus?: EventBus;
     @Optional() @Inject(RequestContextService) private readonly contexts?: RequestContextService;
     constructor(private readonly connection: TransactionalConnection) {}
-    scopeWhere(metadata: EntityMetadata, channelId: string | number): ObjectLiteral {
-        const active = metadata.deleteDateColumn
-            ? { [metadata.deleteDateColumn.propertyName]: IsNull() }
-            : {};
-        if (metadata.name === 'SystemAnnouncement') return { ...active, ownerChannelId: channelId };
-        if (metadata.findColumnWithPropertyName('channelId')) return { ...active, channelId };
-        if (metadata.name === 'StorefrontContentItem') return { ...active, block: { channelId } };
-        if (metadata.relations.some(relation => relation.propertyName === 'channels'))
-            return { ...active, channels: { id: channelId } };
-        return active;
+    scopeWhere(metadata: EntityMetadata, channelId: string | number): ObjectLiteral | ObjectLiteral[] {
+        return customerContentScopeWhere(metadata, channelId);
+    }
+
+    /** Visibility check for authenticated management operations; it does not grant write permission. */
+    async isVisibleInChannel(
+        manager: EntityManager,
+        state: ContentTranslationState,
+        channelId: string | number,
+    ): Promise<boolean> {
+        if (state.channelId != null && state.channelId !== String(channelId)) return false;
+        if (!Object.prototype.hasOwnProperty.call(customerFacingContentRegistry, state.entityType))
+            return false;
+        const metadata = manager.connection.entityMetadatas.find(item => item.name === state.entityType);
+        if (!metadata) return false;
+        const hasChannels = metadata.relations.some(relation => relation.propertyName === 'channels');
+        const entity = await manager.getRepository<ObjectLiteral>(metadata.target).findOne({
+            where: { id: state.entityId },
+            ...(hasChannels ? { relations: { channels: true } } : {}),
+        });
+        if (!entity || entity.deletedAt || (metadata.name === 'Collection' && entity.isRoot)) return false;
+        if (metadata.name === 'SystemAnnouncement') {
+            if (entity.ownerChannelId != null) {
+                return (
+                    state.channelId === String(entity.ownerChannelId) &&
+                    String(entity.ownerChannelId) === String(channelId) &&
+                    entity.targetMode === 'SINGLE' &&
+                    entity.channels?.length === 1 &&
+                    String(entity.channels[0].id) === String(channelId)
+                );
+            }
+            return (
+                state.channelId == null &&
+                (entity.targetMode === 'ALL' ||
+                    !!entity.channels?.some(
+                        (channel: { id: unknown }) => String(channel.id) === String(channelId),
+                    ))
+            );
+        }
+        if (metadata.findColumnWithPropertyName('channelId')) {
+            return state.channelId != null && String(entity.channelId) === String(channelId);
+        }
+        if (hasChannels) {
+            return (
+                state.channelId != null &&
+                !!entity.channels?.some(
+                    (channel: { id: unknown }) => String(channel.id) === String(channelId),
+                )
+            );
+        }
+        if (metadata.name === 'StorefrontContentItem') {
+            const relation = metadata.relations.find(item => item.propertyName === 'block');
+            if (!relation || state.channelId == null) return false;
+            const block = await manager
+                .getRepository<ObjectLiteral>(relation.inverseEntityMetadata.target)
+                .findOne({ where: { id: entity.blockId } });
+            return !!block && !block.deletedAt && String(block.channelId) === String(channelId);
+        }
+        // Registered entities without Channel ownership (e.g. countries) retain their shared scope.
+        return true;
     }
 
     async notify(state: ContentTranslationState) {
@@ -108,6 +179,18 @@ export class TranslationContentAdapter {
                 : String(entity.ownerChannelId) !== state.channelId)
         )
             return;
+        if (state.entityType === 'SystemAnnouncement' && entity.ownerChannelId != null) {
+            const owned = await repository.findOne({
+                where: { id: entity.id },
+                relations: { channels: true },
+            });
+            if (
+                owned?.targetMode !== 'SINGLE' ||
+                owned.channels?.length !== 1 ||
+                String(owned.channels[0].id) !== state.channelId
+            )
+                return;
+        }
         if (
             metadata.findColumnWithPropertyName('channelId') &&
             entity.channelId != null &&

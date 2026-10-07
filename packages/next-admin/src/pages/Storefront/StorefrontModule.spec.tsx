@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
     other: vi.fn(),
     token: 'store-a',
     canUpdate: true,
+    search: '',
+    setSearchParams: vi.fn(),
 }));
 vi.mock('@apollo/client/react', () => ({
     useQuery: mocks.query,
@@ -39,7 +41,7 @@ vi.mock('../../apollo', () => ({
 vi.mock('react-router-dom', async importOriginal => ({
     ...(await importOriginal<typeof import('react-router-dom')>()),
     useLocation: () => ({ search: '' }),
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useSearchParams: () => [new URLSearchParams(mocks.search), mocks.setSearchParams],
 }));
 vi.mock('../../hooks/use-url-tab', () => ({ useUrlTab: () => ['PAGES', vi.fn()] }));
 vi.mock('../../hooks/use-admin-permissions', () => ({
@@ -59,9 +61,13 @@ vi.mock('./StorefrontBlockEditor', () => ({
     StorefrontBlockEditor: ({
         value,
         onSave,
+        initialLanguage,
+        reviewTarget,
     }: {
         value: StorefrontContentBlock;
         onSave: (value: StorefrontContentBlock) => Promise<void>;
+        initialLanguage?: string;
+        reviewTarget?: { itemId: string | null; field: string | null };
     }) => (
         <button
             aria-label="保存测试草稿"
@@ -69,6 +75,9 @@ vi.mock('./StorefrontBlockEditor', () => ({
             data-block-type={value.type}
             data-block-position={value.position}
             data-display-mode={value.settings?.displayMode as string}
+            data-review-language={initialLanguage}
+            data-review-item={reviewTarget?.itemId ?? undefined}
+            data-review-field={reviewTarget?.field ?? undefined}
             onClick={() => void onSave(value)}
         >
             保存测试草稿
@@ -156,6 +165,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     mocks.token = 'store-a';
     mocks.canUpdate = true;
+    mocks.search = '';
     current = data();
     mocks.query.mockImplementation((_document, options) => ({
         data: options?.skip ? undefined : current,
@@ -172,6 +182,29 @@ afterEach(() => {
 });
 
 describe('store scoped verified content writes', () => {
+    it('opens an audit deep link for content-only blocks in the shared existing editor without writing', async () => {
+        const legal = { ...newContentBlock('LEGAL', 5), id: 'legal-87', items: [item] };
+        current.storefrontContentBlocks.push(legal);
+        mocks.search = '?blockId=legal-87&itemId=card&field=description&language=en';
+        await render();
+        const editor = button('保存测试草稿');
+        expect(editor.dataset.blockId).toBe('legal-87');
+        expect(editor.dataset.reviewLanguage).toBe('en');
+        expect(editor.dataset.reviewItem).toBe('card');
+        expect(editor.dataset.reviewField).toBe('description');
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(mocks.create).not.toHaveBeenCalled();
+    });
+
+    it('does not open an audit deep link for another store or without edit permission', async () => {
+        mocks.search = '?blockId=missing-from-store&field=title&language=en';
+        await render();
+        expect(host.querySelector('[aria-label="保存测试草稿"]')).toBeNull();
+        mocks.search = '?blockId=core&field=title&language=en';
+        mocks.canUpdate = false;
+        await render();
+        expect(host.querySelector('[aria-label="保存测试草稿"]')).toBeNull();
+    });
     it('creates independent custom card floors repeatedly without editing existing custom ads or images', async () => {
         const existing = {
             ...newContentBlock('CUSTOM', 10, '空间灵感'),

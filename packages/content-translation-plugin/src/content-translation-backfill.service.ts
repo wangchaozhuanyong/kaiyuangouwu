@@ -105,6 +105,9 @@ export class ContentTranslationBackfillService {
         result.skippedRecords = result.skippedRecords.slice(0, 50);
         result.nextOffset = Math.min(offset + result.scanned, total);
         result.hasMore = result.nextOffset < total;
+        if (result.hasMore && result.nextOffset <= offset) {
+            throw new UserInputError('补译扫描未取得进展，内容可能已变更，请刷新后重新扫描');
+        }
         return result;
     }
 

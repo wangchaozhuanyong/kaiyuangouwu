@@ -3,7 +3,9 @@ import { Permission, PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { adminApiExtensions } from './api-extensions.js';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
+import { ContentTranslationRecoveryService } from './content-translation-recovery.service.js';
 import { ContentTranslationRetryService } from './content-translation-retry.service.js';
+import { ContentTranslationReviewService } from './content-translation-review.service.js';
 import { ContentTranslationAdminResolver } from './content-translation.resolver.js';
 import { ContentTranslationService } from './content-translation.service.js';
 import {
@@ -29,6 +31,8 @@ import { ContentTranslationPluginOptions, ResolvedContentTranslationOptions } fr
         TranslationContentAdapter,
         NativeContentTranslationService,
         ContentTranslationRetryService,
+        ContentTranslationReviewService,
+        ContentTranslationRecoveryService,
         TranslationResultCacheService,
         {
             provide: CONTENT_TRANSLATION_OPTIONS,

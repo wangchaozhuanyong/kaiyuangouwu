@@ -2,7 +2,15 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, Permission, RequestContext } from '@vendure/core';
 
 import { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
+import {
+    ContentTranslationRecoveryService,
+    RecoverCustomerContentTranslationInput,
+} from './content-translation-recovery.service.js';
 import { ContentTranslationRetryService } from './content-translation-retry.service.js';
+import {
+    ConfirmCustomerContentTranslationReviewInput,
+    ContentTranslationReviewService,
+} from './content-translation-review.service.js';
 import { ContentTranslationService } from './content-translation.service.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
 import { ContentTranslationAuditOptions, ContentTranslationSegment } from './types.js';
@@ -14,6 +22,8 @@ export class ContentTranslationAdminResolver {
         private readonly nativeTranslations: ContentTranslationBackfillService,
         private readonly retry: ContentTranslationRetryService,
         private readonly execution: TranslationExecutionService,
+        private readonly reviewService: ContentTranslationReviewService,
+        private readonly recovery: ContentTranslationRecoveryService,
     ) {}
 
     @Query()
@@ -61,6 +71,41 @@ export class ContentTranslationAdminResolver {
     @Allow(Permission.SuperAdmin)
     async retryCustomerContentTranslations(@Ctx() ctx: RequestContext, @Args() args: { ids: string[] }) {
         const result = await this.retry.requestRetry(ctx, args.ids);
+        if (result.queued) await this.execution.reset();
+        return result;
+    }
+
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    contentTranslationReview(@Ctx() ctx: RequestContext, @Args() args: { id: string }) {
+        return this.reviewService.review(ctx, args.id);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    confirmCustomerContentTranslationReview(
+        @Ctx() ctx: RequestContext,
+        @Args() args: { input: ConfirmCustomerContentTranslationReviewInput },
+    ) {
+        return this.reviewService.confirm(ctx, args.input);
+    }
+
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    contentTranslationRecoveryPreview(
+        @Ctx() ctx: RequestContext,
+        @Args() args: { limit?: number | null; offset?: number | null },
+    ) {
+        return this.recovery.preview(ctx, args.limit ?? 100, args.offset ?? 0);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    async recoverCustomerContentTranslations(
+        @Ctx() ctx: RequestContext,
+        @Args() args: { inputs: RecoverCustomerContentTranslationInput[] },
+    ) {
+        const result = await this.recovery.recover(ctx, args.inputs);
         if (result.queued) await this.execution.reset();
         return result;
     }

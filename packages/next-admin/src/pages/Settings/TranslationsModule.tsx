@@ -11,23 +11,30 @@ import {
     WandSparkles,
     X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSystemLabel } from '../../../../common/src/display-localization';
+import { getAdminQueryScope } from '../../apollo';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
 import {
     BACKFILL_CONTENT_TRANSLATIONS_MUTATION,
+    CONFIRM_CONTENT_TRANSLATION_REVIEW_MUTATION,
     CONTENT_TRANSLATION_AUDIT_QUERY,
+    CONTENT_TRANSLATION_REVIEW_QUERY,
     RETRY_CONTENT_TRANSLATIONS_MUTATION,
     TEST_CONTENT_TRANSLATION_MUTATION,
     type ContentTranslationAuditResult,
+    type ContentTranslationBackfillResult,
+    type ContentTranslationReviewRecord,
     type ContentTranslationStateRecord,
 } from '../../graphql/plugins.graphql';
-import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { usePageActivity } from '../../hooks/use-page-activity';
 import { usePageSize } from '../../hooks/use-page-size';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { getTranslationStatusLabel } from '../../utils/status-labels';
@@ -64,6 +71,10 @@ const entityOptions = [
 const backfillEntityOptions = entityOptions;
 
 export function TranslationsModule() {
+    return <TranslationAuditPage key={getAdminQueryScope()} />;
+}
+
+function TranslationAuditPage() {
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('ALL');
     const [entityType, setEntityType] = useState('ALL');
@@ -73,6 +84,13 @@ export function TranslationsModule() {
     const [testOpen, setTestOpen] = useState(false);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
+    const [reviewId, setReviewId] = useState<string | null>(null);
+    const active = usePageActivity();
+    const activeRef = useRef(active);
+    useLayoutEffect(() => {
+        activeRef.current = active;
+    }, [active]);
+    const isCurrentScope = useCurrentTranslationScope();
     const query = useQuery<ContentTranslationAuditResult>(CONTENT_TRANSLATION_AUDIT_QUERY, {
         variables: {
             options: {
@@ -87,16 +105,33 @@ export function TranslationsModule() {
         notifyOnNetworkStatusChange: true,
     });
     // Keep the search/filter controls mounted while a different page is loading.
-    const result = query.data ?? query.previousData;
+    // The shared adapter retains data only for the same request identity. Apollo's
+    // previousData may belong to another filter and must never be reused here.
+    const result = query.data;
     const audit = result?.contentTranslationAudit;
     const states = audit?.states ?? [];
     const statusOptions = ['ALL', ...new Set((audit?.counts ?? []).map(item => item.status))];
+    if (!statusOptions.includes(status)) statusOptions.push(status);
+    const count = (value: string) => audit?.counts.find(item => item.status === value)?.count ?? 0;
     const lastPage = Math.max(0, Math.ceil((audit?.filteredTotal ?? 0) / pageSize) - 1);
     if (!query.loading && !query.error && query.data && page > lastPage) setPage(lastPage);
     const contentRef = useRef<HTMLElement>(null);
     useEffect(() => {
         if (contentRef.current) contentRef.current.scrollTop = 0;
     }, [page, pageSize, search, status, entityType]);
+
+    const writeCompleted = async (message: string) => {
+        if (!isCurrentScope()) return;
+        setNotice(message);
+        setActionError('');
+        if (!activeRef.current) return; // The runtime refreshes an invalidated hidden page when it resumes.
+        try {
+            await query.refetch();
+        } catch (error) {
+            if (isCurrentScope())
+                setActionError(`操作已完成，但最新记录读取失败，请刷新读取，勿重复提交。${errorText(error)}`);
+        }
+    };
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -125,7 +160,6 @@ export function TranslationsModule() {
                         <AdminButton
                             type="button"
                             onClick={() => setBackfillOpen(true)}
-                            disabled={!audit?.configured}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
                             <WandSparkles className="h-3.5 w-3.5" />
@@ -160,6 +194,71 @@ export function TranslationsModule() {
                         {actionError}
                     </Message>
                 )}
+                <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                    <div>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            字段翻译审计
+                            <FeatureHelpButton
+                                topic="settings.translations"
+                                title="字段翻译审计"
+                                description={'每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示'}
+                            />
+                        </h2>
+
+                        {audit && (
+                            <p className="mt-1 text-xs text-slate-500" role="status">
+                                当前店铺及全局内容共 {audit?.total ?? 0} 条，筛选匹配{' '}
+                                {audit?.filteredTotal ?? 0} 条；搜索与分页覆盖全部历史记录。
+                            </p>
+                        )}
+                    </div>
+                    <div className="grid min-w-0 gap-2 sm:grid-cols-3">
+                        <div className="relative min-w-0">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
+                            <SearchInput
+                                value={search}
+                                onValueChange={value => {
+                                    setSearch(value);
+                                    setPage(0);
+                                }}
+                                aria-label="搜索翻译审计记录"
+                                placeholder="搜索实体、ID 或字段"
+                                className={`${inputClass} pl-8`}
+                            />
+                        </div>
+                        <AdminSelect
+                            value={entityType}
+                            onChange={event => {
+                                setEntityType(event.target.value);
+                                setPage(0);
+                            }}
+                            aria-label="筛选内容类型"
+                            className={inputClass}
+                        >
+                            <option value="ALL">全部内容类型</option>
+                            {entityOptions.slice(1).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                        <AdminSelect
+                            value={status}
+                            onChange={event => {
+                                setStatus(event.target.value);
+                                setPage(0);
+                            }}
+                            aria-label="筛选翻译状态"
+                            className={inputClass}
+                        >
+                            {statusOptions.map(value => (
+                                <option key={value} value={value}>
+                                    {value === 'ALL' ? '全部状态' : getTranslationStatusLabel(value)}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </div>
+                </section>
                 {query.loading && !audit ? (
                     <LoadingState />
                 ) : query.error && !query.data ? (
@@ -174,7 +273,7 @@ export function TranslationsModule() {
                                 <Metric
                                     label="翻译服务"
                                     value={audit.configured ? '已配置' : '未配置'}
-                                    detail={audit.provider || '无可用服务商'}
+                                    detail={`${audit.provider || '无可用服务商'} · 配置存在不代表连接已验证`}
                                     tone={audit.configured ? 'green' : 'amber'}
                                 />
                                 <Metric
@@ -184,9 +283,13 @@ export function TranslationsModule() {
                                 />
                                 <Metric
                                     label="待人工复核"
-                                    value={`${result?.contentTranslationStaleCount ?? 0} 项`}
+                                    value={`${count('STALE')} 项`}
                                     detail="人工英文不会被自动覆盖"
-                                    tone={(result?.contentTranslationStaleCount ?? 0) > 0 ? 'amber' : 'green'}
+                                    tone={count('STALE') > 0 ? 'amber' : 'green'}
+                                    onClick={() => {
+                                        setStatus('STALE');
+                                        setPage(0);
+                                    }}
                                 />
                                 <Metric
                                     label="当前店铺"
@@ -197,6 +300,36 @@ export function TranslationsModule() {
                                     }
                                 />
                             </section>
+                            <section className="flex flex-wrap gap-2" aria-label="翻译处理状态">
+                                {(['PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED'] as const).map(
+                                    value => (
+                                        <AdminButton
+                                            key={value}
+                                            type="button"
+                                            aria-pressed={status === value}
+                                            onClick={() => {
+                                                setStatus(value);
+                                                setPage(0);
+                                            }}
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700"
+                                        >
+                                            {getTranslationStatusLabel(value)} {count(value)} 项
+                                        </AdminButton>
+                                    ),
+                                )}
+                            </section>
+                            {query.error && query.data && (
+                                <div role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                                    更新失败，保留当前记录。{toUserFacingError(query.error)}
+                                    <AdminButton
+                                        type="button"
+                                        className="ml-3 text-blue-600"
+                                        onClick={() => void query.refetch()}
+                                    >
+                                        重试读取
+                                    </AdminButton>
+                                </div>
+                            )}
                             {!audit.configured && (
                                 <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
                                     <strong>自动翻译服务未配置。</strong>
@@ -205,73 +338,6 @@ export function TranslationsModule() {
                                 </section>
                             )}
                             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                <div className="space-y-3 border-b border-slate-100 p-4">
-                                    <div>
-                                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                            字段翻译审计
-                                            <FeatureHelpButton
-                                                topic="settings.translations"
-                                                title="字段翻译审计"
-                                                description={
-                                                    '每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示'
-                                                }
-                                            />
-                                        </h2>
-
-                                        <p className="mt-1 text-xs text-slate-500" role="status">
-                                            当前店铺及全局内容共 {audit.total} 条，筛选匹配{' '}
-                                            {audit.filteredTotal} 条；搜索与分页覆盖全部历史记录。
-                                        </p>
-                                    </div>
-                                    <div className="grid min-w-0 gap-2 sm:grid-cols-3">
-                                        <div className="relative min-w-0">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
-                                            <SearchInput
-                                                value={search}
-                                                onValueChange={value => {
-                                                    setSearch(value);
-                                                    setPage(0);
-                                                }}
-                                                aria-label="搜索翻译审计记录"
-                                                placeholder="搜索实体、ID 或字段"
-                                                className={`${inputClass} pl-8`}
-                                            />
-                                        </div>
-                                        <AdminSelect
-                                            value={entityType}
-                                            onChange={event => {
-                                                setEntityType(event.target.value);
-                                                setPage(0);
-                                            }}
-                                            aria-label="筛选内容类型"
-                                            className={inputClass}
-                                        >
-                                            <option value="ALL">全部内容类型</option>
-                                            {entityOptions.slice(1).map(([value, label]) => (
-                                                <option key={value} value={value}>
-                                                    {label}
-                                                </option>
-                                            ))}
-                                        </AdminSelect>
-                                        <AdminSelect
-                                            value={status}
-                                            onChange={event => {
-                                                setStatus(event.target.value);
-                                                setPage(0);
-                                            }}
-                                            aria-label="筛选翻译状态"
-                                            className={inputClass}
-                                        >
-                                            {statusOptions.map(value => (
-                                                <option key={value} value={value}>
-                                                    {value === 'ALL'
-                                                        ? '全部状态'
-                                                        : getTranslationStatusLabel(value)}
-                                                </option>
-                                            ))}
-                                        </AdminSelect>
-                                    </div>
-                                </div>
                                 <div
                                     className="overflow-x-auto"
                                     tabIndex={0}
@@ -323,8 +389,9 @@ export function TranslationsModule() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {!query.loading &&
-                                                states.map(item => <AuditRow key={item.id} item={item} />)}
+                                            {states.map(item => (
+                                                <AuditRow key={item.id} item={item} onReview={setReviewId} />
+                                            ))}
                                             {query.loading && !query.data && (
                                                 <tr>
                                                     <td
@@ -368,15 +435,19 @@ export function TranslationsModule() {
                 <BackfillDialog
                     configured={Boolean(audit?.configured)}
                     onClose={() => setBackfillOpen(false)}
-                    onCompleted={async message => {
-                        setNotice(message);
-                        setActionError('');
-                        await query.refetch();
-                    }}
+                    onCompleted={writeCompleted}
                     onError={message => {
                         setActionError(message);
                         setNotice('');
                     }}
+                />
+            )}
+            {reviewId && (
+                <TranslationReviewDialog
+                    key={reviewId}
+                    id={reviewId}
+                    onClose={() => setReviewId(null)}
+                    onCompleted={writeCompleted}
                 />
             )}
             {testOpen && (
@@ -394,8 +465,15 @@ export function TranslationsModule() {
     );
 }
 
-function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
+function AuditRow({
+    item,
+    onReview,
+}: {
+    item: ContentTranslationStateRecord;
+    onReview: (id: string) => void;
+}) {
     const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION);
+    const retryLock = useRef(false);
     return (
         <tr className="group h-[52px] hover:bg-slate-50">
             <td
@@ -470,7 +548,15 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
                         type="button"
                         disabled={retryState.loading}
                         className="mr-3 text-blue-600 disabled:opacity-50"
-                        onClick={() => void retry({ variables: { ids: [item.id] } }).catch(() => undefined)}
+                        onClick={() => {
+                            if (retryState.loading || retryLock.current) return;
+                            retryLock.current = true;
+                            void retry({ variables: { ids: [item.id] } })
+                                .catch(() => undefined)
+                                .finally(() => {
+                                    retryLock.current = false;
+                                });
+                        }}
                     >
                         {retryState.loading ? '排队中' : '重试'}
                     </AdminButton>
@@ -480,18 +566,179 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
                         {toUserFacingError(retryState.error)}
                     </span>
                 )}
-                {item.entityType === 'SystemAnnouncement' ? (
-                    <Link
-                        to={`/storefront/content?tab=announcements&announcementId=${encodeURIComponent(item.entityId)}`}
-                        className="whitespace-nowrap text-[10px] font-bold text-blue-600 hover:text-blue-700"
-                    >
-                        编辑并锁定
-                    </Link>
-                ) : (
-                    <span className="text-slate-300">—</span>
-                )}
+                <AdminButton
+                    type="button"
+                    onClick={() => onReview(item.id)}
+                    className="whitespace-nowrap text-[10px] font-bold text-blue-600 hover:text-blue-700"
+                >
+                    {item.status === 'STALE' ? '查看／复核' : '查看内容'}
+                </AdminButton>
             </td>
         </tr>
+    );
+}
+
+function TranslationReviewDialog({
+    id,
+    onClose,
+    onCompleted,
+}: {
+    id: string;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+}) {
+    const query = useQuery<{ contentTranslationReview: ContentTranslationReviewRecord | null }>(
+        CONTENT_TRANSLATION_REVIEW_QUERY,
+        { variables: { id } },
+    );
+    const review = query.data?.contentTranslationReview;
+    const [confirm, state] = useMutation<{
+        confirmCustomerContentTranslationReview: ContentTranslationStateRecord;
+    }>(CONFIRM_CONTENT_TRANSLATION_REVIEW_MUTATION);
+    const [error, setError] = useState('');
+    const [confirmed, setConfirmed] = useState(false);
+    const actionLock = useRef(false);
+    const isCurrentScope = useCurrentTranslationScope();
+    const run = async () => {
+        if (!review?.canConfirm || confirmed || state.loading || actionLock.current || !isCurrentScope())
+            return;
+        actionLock.current = true;
+        setError('');
+        try {
+            const response = await confirm({
+                variables: {
+                    input: {
+                        id: review.state.id,
+                        revision: review.state.revision,
+                        sourceHash: review.sourceHash,
+                        translatedHash: review.translatedHash,
+                    },
+                },
+            });
+            if (!isCurrentScope()) return;
+            const saved = response.data?.confirmCustomerContentTranslationReview;
+            if (!saved?.locked || saved.status !== 'MANUAL_LOCKED')
+                throw new Error('复核未返回受保护的人工译文状态');
+            setConfirmed(true);
+            await onCompleted('已确认英文复核，继续保留人工锁定。');
+        } catch (error) {
+            if (isCurrentScope()) setError(errorText(error));
+        } finally {
+            actionLock.current = false;
+        }
+    };
+    return (
+        <Modal
+            title="客户可见内容复核"
+            description="对照当前中文与英文；修改文字使用原内容编辑器。确认不会解除人工锁定。"
+            onClose={() => {
+                if (!state.loading && !actionLock.current) onClose();
+            }}
+            actions={
+                <div className="flex flex-wrap justify-end gap-2">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={state.loading}
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                    >
+                        关闭
+                    </AdminButton>
+                    {review?.editPath && !state.loading && (
+                        <Link
+                            to={review.editPath}
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                            onClick={onClose}
+                        >
+                            去原页面编辑
+                        </Link>
+                    )}
+                    {review?.canConfirm && !confirmed && (
+                        <AdminButton
+                            type="button"
+                            onClick={() => void run()}
+                            disabled={
+                                state.loading || query.loading || Boolean(query.error) || Boolean(error)
+                            }
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            {state.loading ? '正在确认…' : '确认已复核，保留锁定'}
+                        </AdminButton>
+                    )}
+                </div>
+            }
+        >
+            {query.loading && !review ? (
+                <p role="status" className="text-sm text-slate-500">
+                    正在读取当前内容…
+                </p>
+            ) : null}
+            {query.error && (
+                <div role="alert" className="mb-3 text-xs text-rose-700">
+                    {toUserFacingError(query.error, '内容读取失败')}
+                    <AdminButton className="ml-3 text-blue-600" onClick={() => void query.refetch()}>
+                        重试读取
+                    </AdminButton>
+                </div>
+            )}
+            {!query.loading && !query.error && !review && (
+                <p className="text-sm text-slate-500">当前内容不存在或不属于当前店铺。</p>
+            )}
+            {review && (
+                <>
+                    <p className="mb-3 text-xs text-slate-500">
+                        {entityLabel(review.state.entityType)} · {review.state.entityId} ·{' '}
+                        {review.state.fieldPath}
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="当前中文源内容">
+                            <AdminTextArea
+                                readOnly
+                                rows={10}
+                                value={review.sourceText}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label="当前英文内容">
+                            <AdminTextArea
+                                readOnly
+                                rows={10}
+                                value={review.targetText}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                    {review.format === 'HTML' && (
+                        <p className="mt-2 text-xs text-slate-500">HTML 以原文显示，不执行内容中的代码。</p>
+                    )}
+                    {!review.canConfirm && !confirmed && (
+                        <p className="mt-3 text-xs text-amber-700">
+                            {review.reason || '当前状态无需人工确认，或尚无可确认的人工英文。'}
+                        </p>
+                    )}
+                </>
+            )}
+            {error && (
+                <div role="alert" className="mt-3 text-xs text-rose-700">
+                    {error}
+                    <AdminButton
+                        className="ml-3 text-blue-600"
+                        disabled={state.loading}
+                        onClick={() => {
+                            setError('');
+                            void query.refetch();
+                        }}
+                    >
+                        重新读取内容
+                    </AdminButton>
+                </div>
+            )}
+            {confirmed && (
+                <p role="status" className="mt-3 text-xs text-emerald-700">
+                    复核已确认，人工锁定已保留。
+                </p>
+            )}
+        </Modal>
     );
 }
 
@@ -508,55 +755,84 @@ function BackfillDialog({
 }) {
     const [entityType, setEntityType] = useState('ALL');
     const [offset, setOffset] = useState(0);
-    const [result, setResult] = useState<{
-        total: number;
-        scanned: number;
-        processed: number;
-        queued: number;
-        skipped: number;
-        failed: number;
-        nextOffset: number;
-        hasMore: boolean;
-        skippedRecords: string[];
-        errors: string[];
-    } | null>(null);
+    const [result, setResult] = useState<ContentTranslationBackfillResult | null>(null);
+    const [totals, setTotals] = useState({ scanned: 0, processed: 0, queued: 0, skipped: 0, failed: 0 });
+    const [error, setError] = useState('');
+    const actionLock = useRef(false);
+    const isCurrentScope = useCurrentTranslationScope();
     const [backfill, state] = useMutation<{
-        backfillCustomerContentTranslations: {
-            total: number;
-            scanned: number;
-            processed: number;
-            queued: number;
-            skipped: number;
-            failed: number;
-            nextOffset: number;
-            hasMore: boolean;
-            skippedRecords: string[];
-            errors: string[];
-        };
+        backfillCustomerContentTranslations: ContentTranslationBackfillResult;
     }>(BACKFILL_CONTENT_TRANSLATIONS_MUTATION);
     const run = async () => {
-        if (state.loading) return;
+        if (state.loading || actionLock.current || !isCurrentScope()) return;
+        actionLock.current = true;
+        setError('');
         try {
             const response = await backfill({
                 variables: { entityType: entityType === 'ALL' ? null : entityType, limit: 100, offset },
             });
             const next = response.data?.backfillCustomerContentTranslations;
+            if (!isCurrentScope()) return;
             if (!next) throw new Error('后端未返回补齐结果');
+            if (next.hasMore && next.nextOffset <= offset)
+                throw new Error('扫描未取得进展，已停止继续。请刷新记录后核对范围，不要反复提交同一批。');
+            const cumulative = {
+                scanned: totals.scanned + next.scanned,
+                processed: totals.processed + next.processed,
+                queued: totals.queued + next.queued,
+                skipped: totals.skipped + next.skipped,
+                failed: totals.failed + next.failed,
+            };
             setResult(next);
+            setTotals(cumulative);
             setOffset(next.nextOffset);
             if (!next.hasMore)
                 await onCompleted(
-                    `本页扫描完成：已排队 ${next.queued} 项，已就绪 ${next.processed} 项，跳过 ${next.skipped} 项，失败 ${next.failed} 项。英文将在后台补齐。`,
+                    `${next.errors.length ? '扫描已停止，存在需处理的错误' : '扫描完成'}：累计扫描 ${cumulative.scanned} 项，已排队 ${cumulative.queued} 项，已就绪 ${cumulative.processed} 项，跳过 ${cumulative.skipped} 项，失败 ${cumulative.failed} 项。扫描结束不代表译文完成，请查看后台处理状态。`,
                 );
         } catch (error) {
-            onError(errorText(error));
+            if (isCurrentScope()) {
+                setError(errorText(error));
+                onError(errorText(error));
+            }
+        } finally {
+            actionLock.current = false;
         }
     };
     return (
         <Modal
             title="补齐历史客户可见内容"
             description="每批最多扫描 100 项，人工编辑并锁定的英文不会被覆盖"
-            onClose={onClose}
+            onClose={() => {
+                if (!state.loading && !actionLock.current) onClose();
+            }}
+            actions={
+                <div className="flex flex-wrap justify-end gap-2">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={state.loading}
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                    >
+                        {result && !result.hasMore ? '关闭' : '取消'}
+                    </AdminButton>
+                    {(!result || result.hasMore) && (
+                        <AdminButton
+                            type="button"
+                            onClick={() => void run()}
+                            disabled={state.loading || Boolean(error)}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            {state.loading ? (
+                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Play className="h-3.5 w-3.5" />
+                            )}
+                            {result ? '继续下一批' : '开始第一批'}
+                        </AdminButton>
+                    )}
+                </div>
+            }
         >
             <Field label="内容类型">
                 <AdminSelect
@@ -565,6 +841,8 @@ function BackfillDialog({
                         setEntityType(event.target.value);
                         setOffset(0);
                         setResult(null);
+                        setTotals({ scanned: 0, processed: 0, queued: 0, skipped: 0, failed: 0 });
+                        setError('');
                     }}
                     disabled={state.loading || offset > 0}
                     className={inputClass}
@@ -581,16 +859,29 @@ function BackfillDialog({
                     翻译服务未配置，仍可登记待译内容；配置恢复后再重试。
                 </p>
             )}
+            {error && (
+                <p role="alert" className="mt-3 text-xs text-rose-700">
+                    {error}
+                </p>
+            )}
             {result && (
                 <div className="mt-4 rounded-xl bg-slate-50 p-4 text-xs">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                         <ResultMetric label="总量" value={result.total} />
                         <ResultMetric label="本批扫描" value={result.scanned} />
-                        <ResultMetric label="已就绪" value={result.processed} />
-                        <ResultMetric label="已排队" value={result.queued} />
-                        <ResultMetric label="缺少中文源" value={result.skipped} />
-                        <ResultMetric label="失败" value={result.failed} />
+                        <ResultMetric label="本批就绪" value={result.processed} />
+                        <ResultMetric label="本批排队" value={result.queued} />
+                        <ResultMetric label="本批跳过" value={result.skipped} />
+                        <ResultMetric label="本批失败" value={result.failed} />
                     </div>
+                    <p className="mt-3 leading-5" role="status">
+                        累计扫描 {totals.scanned} 项；就绪 {totals.processed} 项；排队 {totals.queued} 项；
+                        跳过 {totals.skipped} 项；失败 {totals.failed} 项。
+                        {!result.hasMore &&
+                            (result.errors.length
+                                ? ' 扫描已停止，请核对错误。'
+                                : ' 扫描完成，后台翻译可能仍在进行。')}
+                    </p>
                     {result.skippedRecords.length > 0 && (
                         <div className="mt-3 max-h-32 overflow-y-auto rounded bg-amber-50 p-2 text-[10px] text-amber-800">
                             {result.skippedRecords.map((warning, index) => (
@@ -607,31 +898,6 @@ function BackfillDialog({
                     )}
                 </div>
             )}
-            <div className="mt-5 flex justify-end gap-2">
-                <AdminButton
-                    type="button"
-                    onClick={onClose}
-                    disabled={state.loading}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
-                >
-                    {result && !result.hasMore ? '关闭' : '取消'}
-                </AdminButton>
-                {(!result || result.hasMore) && (
-                    <AdminButton
-                        type="button"
-                        onClick={() => void run()}
-                        disabled={state.loading || !configured}
-                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                    >
-                        {state.loading ? (
-                            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                            <Play className="h-3.5 w-3.5" />
-                        )}
-                        {result ? '继续下一批' : '开始第一批'}
-                    </AdminButton>
-                )}
-            </div>
         </Modal>
     );
 }
@@ -650,6 +916,9 @@ function TranslationTestDialog({
     const [source, setSource] = useState('');
     const [format, setFormat] = useState<'TEXT' | 'HTML'>('TEXT');
     const [translated, setTranslated] = useState('');
+    const [error, setError] = useState('');
+    const actionLock = useRef(false);
+    const isCurrentScope = useCurrentTranslationScope();
     const [test, state] = useMutation<{
         translateCustomerContent: {
             configured: boolean;
@@ -658,27 +927,63 @@ function TranslationTestDialog({
         };
     }>(TEST_CONTENT_TRANSLATION_MUTATION);
     const run = async () => {
-        if (!configured || !source.trim()) return;
+        if (!configured || !source.trim() || state.loading || actionLock.current || !isCurrentScope()) return;
+        actionLock.current = true;
+        setError('');
         try {
             const response = await test({
                 variables: { segments: [{ key: 'preview', text: source.trim(), format }] },
             });
             const result = response.data?.translateCustomerContent;
+            if (!isCurrentScope()) return;
             if (!result?.configured) throw new Error('翻译服务未配置');
             setTranslated(result.translations.find(item => item.key === 'preview')?.text ?? '');
         } catch (error) {
-            onError(errorText(error));
+            if (isCurrentScope()) {
+                setError(errorText(error));
+                onError(errorText(error));
+            }
+        } finally {
+            actionLock.current = false;
         }
     };
     return (
         <Modal
             title="翻译服务测试"
-            description={`使用当前服务商 ${provider || '未配置'} 执行一次临时中译英，不写入业务数据`}
-            onClose={onClose}
+            description={`使用当前服务商 ${provider || '未配置'} 临时中译英，不修改商品或装修正文。结果可能命中共享缓存，不能单凭结果认定服务商连接已验证。`}
+            onClose={() => {
+                if (!state.loading && !actionLock.current) onClose();
+            }}
+            actions={
+                <div className="flex flex-wrap justify-end gap-2">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={state.loading}
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                    >
+                        关闭
+                    </AdminButton>
+                    <AdminButton
+                        type="button"
+                        onClick={() => void run()}
+                        disabled={state.loading || !configured || !source.trim()}
+                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                        {state.loading ? (
+                            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <FlaskConical className="h-3.5 w-3.5" />
+                        )}
+                        执行测试
+                    </AdminButton>
+                </div>
+            }
         >
             <div className="flex justify-end">
                 <AdminSelect
                     value={format}
+                    disabled={state.loading}
                     onChange={event => setFormat(event.target.value as 'TEXT' | 'HTML')}
                     className={inputClass}
                 >
@@ -691,7 +996,11 @@ function TranslationTestDialog({
                     <AdminTextArea
                         rows={8}
                         value={source}
-                        onChange={event => setSource(event.target.value)}
+                        disabled={state.loading}
+                        onChange={event => {
+                            setSource(event.target.value);
+                            setTranslated('');
+                        }}
                         className={inputClass}
                         placeholder="输入需要测试的中文"
                     />
@@ -707,28 +1016,16 @@ function TranslationTestDialog({
                 </Field>
             </div>
             {!configured && <p className="mt-3 text-xs text-amber-700">服务未配置，无法测试。</p>}
-            <div className="mt-5 flex justify-end gap-2">
-                <AdminButton
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
-                >
-                    关闭
-                </AdminButton>
-                <AdminButton
-                    type="button"
-                    onClick={() => void run()}
-                    disabled={state.loading || !configured || !source.trim()}
-                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                >
-                    {state.loading ? (
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                        <FlaskConical className="h-3.5 w-3.5" />
-                    )}
-                    执行测试
-                </AdminButton>
-            </div>
+            {error && (
+                <p role="alert" className="mt-3 text-xs text-rose-700">
+                    {error}
+                </p>
+            )}
+            {translated && (
+                <p role="status" className="mt-3 text-xs text-slate-500">
+                    已取得译文；服务商实时连通与额度仍需独立核验。
+                </p>
+            )}
         </Modal>
     );
 }
@@ -773,20 +1070,31 @@ function Metric({
     value,
     detail,
     tone = 'slate',
+    onClick,
 }: {
     label: string;
     value: string;
     detail: string;
     tone?: 'slate' | 'green' | 'amber';
+    onClick?: () => void;
 }) {
     const color =
         tone === 'green' ? 'text-emerald-700' : tone === 'amber' ? 'text-amber-700' : 'text-slate-900';
-    return (
-        <div className="border-b border-slate-100 p-4 last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+    const content = (
+        <>
             <div className="text-[10px] font-bold text-slate-400">{label}</div>
             <div className={`mt-1 text-lg font-bold ${color}`}>{value}</div>
             <div className="mt-1 text-[10px] text-slate-400">{detail}</div>
-        </div>
+        </>
+    );
+    const className =
+        'border-b border-slate-100 p-4 text-left last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0';
+    return onClick ? (
+        <AdminButton type="button" className={className} onClick={onClick} aria-label={`筛选${label}`}>
+            {content}
+        </AdminButton>
+    ) : (
+        <div className={className}>{content}</div>
     );
 }
 function ResultMetric({ label, value }: { label: string; value: number }) {
@@ -802,45 +1110,65 @@ function Modal({
     description,
     onClose,
     children,
+    actions,
 }: {
     title: string;
     description?: string;
     onClose: () => void;
     children: React.ReactNode;
+    actions: React.ReactNode;
 }) {
-    const { dialogRef, titleId } = useAccessibleDialog(onClose);
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-            <div
-                ref={dialogRef as React.RefObject<HTMLDivElement>}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                tabIndex={-1}
-                className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
+        <AdminOverlayPortal>
+            <AccessibleDialogSurface
+                accessibleName={title}
+                onRequestClose={onClose}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
             >
-                <div className="mb-5 flex items-start justify-between gap-4">
-                    <div>
-                        <h2 id={titleId} className="font-bold text-slate-900">
-                            {title}
-                        </h2>
-                        {description && (
-                            <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-                        )}
+                <div className="flex max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-2xl outline-none sm:p-6">
+                    <div className="mb-5 flex shrink-0 items-start justify-between gap-4">
+                        <div>
+                            <h2 className="font-bold text-slate-900">{title}</h2>
+                            {description && (
+                                <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
+                            )}
+                        </div>
+                        <AdminButton
+                            type="button"
+                            onClick={onClose}
+                            className="p-1 text-slate-400"
+                            aria-label="关闭"
+                        >
+                            <X className="h-5 w-5" />
+                        </AdminButton>
                     </div>
-                    <AdminButton
-                        type="button"
-                        onClick={onClose}
-                        className="p-1 text-slate-400"
-                        aria-label="关闭"
+                    <div
+                        data-translation-dialog-content
+                        className="min-h-0 flex-1 overflow-y-auto"
+                        role="region"
+                        aria-label={`${title}内容`}
+                        tabIndex={0}
                     >
-                        <X className="h-5 w-5" />
-                    </AdminButton>
+                        {children}
+                    </div>
+                    <footer className="shrink-0 border-t border-slate-100 pt-4">{actions}</footer>
                 </div>
-                {children}
-            </div>
-        </div>
+            </AccessibleDialogSurface>
+        </AdminOverlayPortal>
     );
+}
+
+/** A completed request may update only the scope and mounted page that started it. */
+function useCurrentTranslationScope() {
+    const [scope] = useState(getAdminQueryScope);
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+    return () => mounted.current && getAdminQueryScope() === scope;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (

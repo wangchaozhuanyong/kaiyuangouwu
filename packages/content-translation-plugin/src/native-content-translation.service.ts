@@ -40,6 +40,7 @@ import { ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
 import { customerFacingContentRegistry } from './customer-facing-content-registry.js';
+import { customerContentScopeWhere } from './translation-content-adapter.js';
 import { ContentTranslationFormat } from './types.js';
 
 type TranslationField = {
@@ -340,6 +341,9 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         }
         result.nextOffset = Math.min(offset + result.scanned, total);
         result.hasMore = result.nextOffset < total;
+        if (result.hasMore && result.nextOffset <= offset) {
+            throw new UserInputError('补译扫描未取得进展，内容可能已变更，请刷新后重新扫描');
+        }
         return result;
     }
 
@@ -499,12 +503,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
 
     private backfillWhere(ctx: RequestContext, entityClass: NamedEntityClass) {
         const metadata = this.connection.rawConnection.getMetadata(entityClass);
-        return {
-            ...(entityClass === Collection ? { isRoot: false } : {}),
-            ...(metadata.relations.some(relation => relation.propertyName === 'channels')
-                ? { channels: { id: ctx.channelId } }
-                : {}),
-        };
+        return customerContentScopeWhere(metadata, ctx.channelId);
     }
 
     private translationRepository(
