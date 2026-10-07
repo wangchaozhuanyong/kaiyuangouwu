@@ -991,6 +991,7 @@
     "@isaacs/brace-expansion": "5.0.1",
     "@modelcontextprotocol/sdk": "1.31.0",
     "@nestjs/apollo": "13.4.4",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@nestjs/common": "11.2.1",
     "@nestjs/core": "11.2.1",
     "@nestjs/graphql": "13.4.4",
