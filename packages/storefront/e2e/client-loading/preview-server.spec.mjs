@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { STOREFRONT_IMAGE_SIZES } from '../../../storefront-content-plugin/src/shared/responsive-image.ts';
 
@@ -8,7 +9,9 @@ import { buildPublicPage, createPreviewServer } from './preview-server.mjs';
 let server;
 let base;
 before(async () => {
-    server = createPreviewServer();
+    // SSI contract tests run before a production build on a clean CI checkout.
+    // Use the real source HTML marker rather than depending on an old dist directory.
+    server = createPreviewServer({ dist: fileURLToPath(new URL('../../', import.meta.url)) });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
 });
