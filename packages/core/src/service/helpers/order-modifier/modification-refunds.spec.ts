@@ -81,13 +81,13 @@ describe('order modification refund assembly', () => {
             600,
             100,
         );
-        expect(requests.filter(request => request.reasonType === RefundReasonType.Items)).toMatchObject([
+        expect(requests.filter(request => request.reasonType === RefundReasonType.ITEMS)).toMatchObject([
             { paymentId: 'item-source', amount: 500, lines: units },
         ]);
-        expect(requests.filter(request => request.reasonType === RefundReasonType.Shipping)).toMatchObject([
+        expect(requests.filter(request => request.reasonType === RefundReasonType.SHIPPING)).toMatchObject([
             { paymentId: 'small-source', amount: 100, shipping: 100, lines: [] },
         ]);
-        expect(requests.some(request => request.reasonType === RefundReasonType.Compensation)).toBe(false);
+        expect(requests.some(request => request.reasonType === RefundReasonType.COMPENSATION)).toBe(false);
     });
     it('splits item money across original payments while counting the removed unit only once', () => {
         const requests = buildModificationRefunds(
@@ -96,7 +96,7 @@ describe('order modification refund assembly', () => {
             0,
         );
         expect(requests).toHaveLength(2);
-        expect(requests.every(request => request.reasonType === RefundReasonType.Items)).toBe(true);
+        expect(requests.every(request => request.reasonType === RefundReasonType.ITEMS)).toBe(true);
         expect(requests.flatMap(request => request.lines ?? [])).toEqual(units);
         expect(requests.map(request => request.amount)).toEqual([250, 250]);
     });
@@ -110,7 +110,7 @@ describe('order modification refund assembly', () => {
         expect(
             requests.every(
                 request =>
-                    request.reasonType === RefundReasonType.Compensation && request.lines?.length === 0,
+                    request.reasonType === RefundReasonType.COMPENSATION && request.lines?.length === 0,
             ),
         ).toBe(true);
     });

@@ -208,7 +208,7 @@ describe('order processing service contract', () => {
                 shipping: 50,
                 lines: [],
                 reason: 'fixture',
-                reasonType: RefundReasonType.Shipping,
+                reasonType: RefundReasonType.SHIPPING,
             }),
         ).rejects.toThrow('纯数字订单');
     });
@@ -220,7 +220,7 @@ describe('order processing service contract', () => {
             amount: 400,
             lines: [],
             reason: 'fixture',
-            reasonType: RefundReasonType.Compensation,
+            reasonType: RefundReasonType.COMPENSATION,
             afterSalesId: 'request-1',
         };
         await expect(h.service.validateRefundRequest(h.ctx, sale('1'), input)).rejects.toThrow(
@@ -298,7 +298,7 @@ describe('order processing service contract', () => {
             amount: 400,
             lines: [],
             reason: 'fixture',
-            reasonType: RefundReasonType.Compensation,
+            reasonType: RefundReasonType.COMPENSATION,
             afterSalesId: 'request-1',
         };
         h.setAfterSales({

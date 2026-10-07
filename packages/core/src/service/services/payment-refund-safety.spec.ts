@@ -360,7 +360,7 @@ describe('refund money and receipt safety', () => {
             {
                 ...test.input,
                 amount: 100,
-                reasonType: RefundReasonType.Items,
+                reasonType: RefundReasonType.ITEMS,
                 lines: [{ orderLineId: 'line-1', quantity: 2 }],
             },
             test.order,
@@ -372,7 +372,7 @@ describe('refund money and receipt safety', () => {
                 ...test.input,
                 amount: 100,
                 idempotencyKey: 'separate-request',
-                reasonType: RefundReasonType.Items,
+                reasonType: RefundReasonType.ITEMS,
                 lines: [{ orderLineId: 'line-1', quantity: 2 }],
             },
             test.order,
@@ -389,7 +389,7 @@ describe('refund money and receipt safety', () => {
         test.provider.mockResolvedValueOnce({ state: 'Failed' });
         const first = (await test.service.createRefund(
             test.ctx,
-            { ...test.input, amount: 200, shipping: 200, reasonType: RefundReasonType.Shipping },
+            { ...test.input, amount: 200, shipping: 200, reasonType: RefundReasonType.SHIPPING },
             test.order,
             test.payment,
         )) as Refund;
@@ -400,7 +400,7 @@ describe('refund money and receipt safety', () => {
                 amount: 100,
                 shipping: 100,
                 idempotencyKey: 'separate-request',
-                reasonType: RefundReasonType.Shipping,
+                reasonType: RefundReasonType.SHIPPING,
             },
             test.order,
             test.payment,
@@ -460,7 +460,7 @@ describe('refund money and receipt safety', () => {
             {
                 ...test.input,
                 amount: 400,
-                reasonType: RefundReasonType.Items,
+                reasonType: RefundReasonType.ITEMS,
                 lines: [{ orderLineId: line.id, quantity: 4 }],
             },
             test.order,
@@ -474,7 +474,7 @@ describe('refund money and receipt safety', () => {
                     ...test.input,
                     idempotencyKey: 'second-request',
                     amount: 200,
-                    reasonType: RefundReasonType.Items,
+                    reasonType: RefundReasonType.ITEMS,
                     lines: [{ orderLineId: line.id, quantity: 2 }],
                 },
                 test.order,
@@ -498,7 +498,7 @@ describe('refund money and receipt safety', () => {
                         ...test.input,
                         amount: 100,
                         afterSalesId: 'approval-1',
-                        reasonType: RefundReasonType.Items,
+                        reasonType: RefundReasonType.ITEMS,
                         lines: [{ orderLineId: 'line-1', quantity: 1 }],
                     },
                     {
@@ -506,7 +506,7 @@ describe('refund money and receipt safety', () => {
                         amount: null,
                         shipping: 100,
                         afterSalesId: 'approval-1',
-                        reasonType: RefundReasonType.Shipping,
+                        reasonType: RefundReasonType.SHIPPING,
                         lines: [],
                     },
                 ],
@@ -543,7 +543,7 @@ describe('refund money and receipt safety', () => {
                         ...test.input,
                         amount: 100,
                         afterSalesId: 'approval-1',
-                        reasonType: RefundReasonType.Items,
+                        reasonType: RefundReasonType.ITEMS,
                         lines: [{ orderLineId: 'line-1', quantity: 1 }],
                     },
                     {
@@ -551,7 +551,7 @@ describe('refund money and receipt safety', () => {
                         paymentId: secondPayment.id,
                         amount: 100,
                         afterSalesId: 'approval-1',
-                        reasonType: RefundReasonType.Items,
+                        reasonType: RefundReasonType.ITEMS,
                         lines: [{ orderLineId: 'line-1', quantity: 1 }],
                     },
                 ],
@@ -608,7 +608,7 @@ describe('refund money and receipt safety', () => {
         await expect(
             test.service.createRefund(
                 test.ctx,
-                { ...test.input, reasonType: RefundReasonType.Items, lines },
+                { ...test.input, reasonType: RefundReasonType.ITEMS, lines },
                 test.order,
                 test.payment,
             ),
@@ -622,7 +622,7 @@ describe('refund money and receipt safety', () => {
             test.ctx,
             {
                 ...test.input,
-                reasonType: RefundReasonType.Items,
+                reasonType: RefundReasonType.ITEMS,
                 lines: [{ orderLineId: 'line-1', quantity: 2 }],
             },
             test.order,
@@ -636,7 +636,7 @@ describe('refund money and receipt safety', () => {
                 {
                     ...test.input,
                     idempotencyKey: 'request-2',
-                    reasonType: RefundReasonType.Items,
+                    reasonType: RefundReasonType.ITEMS,
                     lines: [{ orderLineId: 'line-1', quantity: 2 }],
                 },
                 test.order,
@@ -650,7 +650,7 @@ describe('refund money and receipt safety', () => {
                 {
                     ...test.input,
                     idempotencyKey: 'reviewed-request-2',
-                    reasonType: RefundReasonType.Items,
+                    reasonType: RefundReasonType.ITEMS,
                     lines: [{ orderLineId: 'line-1', quantity: 2 }],
                 },
                 test.order,
@@ -663,7 +663,7 @@ describe('refund money and receipt safety', () => {
         await expect(
             test.service.createRefund(
                 test.ctx,
-                { ...test.input, reasonType: RefundReasonType.Items, lines: [] },
+                { ...test.input, reasonType: RefundReasonType.ITEMS, lines: [] },
                 test.order,
                 test.payment,
             ),
@@ -671,7 +671,7 @@ describe('refund money and receipt safety', () => {
         await expect(
             test.service.createRefund(
                 test.ctx,
-                { ...test.input, reasonType: RefundReasonType.Compensation, lines: [] },
+                { ...test.input, reasonType: RefundReasonType.COMPENSATION, lines: [] },
                 test.order,
                 test.payment,
             ),
@@ -708,7 +708,7 @@ describe('refund money and receipt safety', () => {
             ...test.input,
             amount: 150,
             shipping: 150,
-            reasonType: RefundReasonType.Shipping,
+            reasonType: RefundReasonType.SHIPPING,
             lines: [],
         };
         const first = (await test.service.createRefund(
@@ -742,7 +742,7 @@ describe('refund money and receipt safety', () => {
         await expect(
             test.service.createRefund(
                 test.ctx,
-                { ...test.input, amount: 1, shipping: 1, reasonType: RefundReasonType.Shipping },
+                { ...test.input, amount: 1, shipping: 1, reasonType: RefundReasonType.SHIPPING },
                 test.order,
                 test.payment,
             ),
@@ -750,12 +750,12 @@ describe('refund money and receipt safety', () => {
         expect(test.provider).not.toHaveBeenCalled();
     });
     it.each([
-        { amount: 100, shipping: 101, reasonType: RefundReasonType.Shipping },
-        { amount: 100, shipping: 1, reasonType: RefundReasonType.Compensation },
+        { amount: 100, shipping: 101, reasonType: RefundReasonType.SHIPPING },
+        { amount: 100, shipping: 1, reasonType: RefundReasonType.COMPENSATION },
         {
             amount: 100,
             shipping: 1,
-            reasonType: RefundReasonType.Items,
+            reasonType: RefundReasonType.ITEMS,
             lines: [{ orderLineId: 'line-1', quantity: 1 }],
         },
     ])('rejects mixed or inconsistent shipping purposes %#', async changes => {
@@ -783,7 +783,7 @@ describe('refund money and receipt safety', () => {
             ...test.input,
             amount: 101,
             shipping: 101,
-            reasonType: RefundReasonType.Shipping,
+            reasonType: RefundReasonType.SHIPPING,
             lines: [],
         };
         await expect(
@@ -797,7 +797,7 @@ describe('refund money and receipt safety', () => {
         const items = {
             ...test.input,
             amount: 100,
-            reasonType: RefundReasonType.Items,
+            reasonType: RefundReasonType.ITEMS,
             lines: [{ orderLineId: 'line-1', quantity: 2 }],
         };
         await expect(
