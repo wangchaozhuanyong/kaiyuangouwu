@@ -158,8 +158,10 @@ describe('USDT amount lifecycle on a real database', () => {
         }),
         withOrderMutationTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
             db.options.type === 'sqljs'
-                ? db.transaction(manager => work({ ..._ctx, manager }))
-                : db.transaction('READ COMMITTED', manager => work({ ..._ctx, manager })),
+                ? (_ctx.manager ?? db.manager).transaction(manager => work({ ..._ctx, manager }))
+                : (_ctx.manager ?? db.manager).transaction('READ COMMITTED', manager =>
+                      work({ ..._ctx, manager }),
+                  ),
     };
     const eventBus = { publish: vi.fn() };
     const chain = { scanIncomingTransfers: vi.fn(), solidifiedTransaction: vi.fn() };

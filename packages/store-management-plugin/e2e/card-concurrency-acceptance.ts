@@ -95,9 +95,31 @@ export function registerCardConcurrencyAcceptance(
                     await connection.withTransaction(salesContext, tx => auto.availabilityError(tx, order)),
                 ).toBeUndefined();
                 order.state = 'PaymentSettled';
+                order.active = false;
+                order.orderPlacedAt = new Date();
+                await connection.rawConnection.getRepository(Order).update(order.id, {
+                    state: 'PaymentSettled',
+                    active: false,
+                    orderPlacedAt: order.orderPlacedAt,
+                });
+                line.orderPlacedQuantity = 1;
                 await connection.rawConnection
-                    .getRepository(Order)
-                    .update(order.id, { state: 'PaymentSettled' });
+                    .getRepository(OrderLine)
+                    .update(line.id, { orderPlacedQuantity: 1 });
+                // Seed native synthetic evidence as well as the state label; no external payment is sent.
+                order.payments = [
+                    await connection.rawConnection.getRepository(Payment).save(
+                        new Payment({
+                            order,
+                            state: 'Settled',
+                            amount: 2400,
+                            method: 'governance-concurrency-local-fixture',
+                            transactionId: `fixture-${order.code}`,
+                            metadata: {},
+                            refunds: [],
+                        }),
+                    ),
+                ];
                 return order;
             };
             const orderA = await createOrder(a);
@@ -172,16 +194,13 @@ export function registerCardConcurrencyAcceptance(
                     },
                 ],
             });
-            const paid = await connection.rawConnection.getRepository(Payment).save(
-                new Payment({
-                    method: refundMethod.code,
-                    amount: 2400,
-                    state: 'Settled',
-                    transactionId: 'synthetic-paid-proof',
-                    metadata: {},
-                    order: { id: resumed.orderId },
-                }),
-            );
+            const paid = await connection.rawConnection.getRepository(Payment).findOneOrFail({
+                where: { order: { id: resumed.orderId }, state: 'Settled' },
+            });
+            await connection.rawConnection
+                .getRepository(Payment)
+                .update(paid.id, { method: refundMethod.code });
+            paid.method = refundMethod.code;
             const orders: OrderService = server.app.get(OrderService);
             const request = {
                 paymentId: paid.id,
@@ -196,9 +215,17 @@ export function registerCardConcurrencyAcceptance(
             ).rejects.toThrow();
             const refund = await orders.refundOrder(ctx, request);
             expect(refund).toMatchObject({ total: 2400, state: 'Pending' });
-            const settled = await orders.settleRefund(ctx, {
-                id: (refund as any).id,
+            await expect(
+                orders.settleRefund(ctx, {
+                    id: (refund as any).id,
+                    transactionId: 'synthetic-manual-refund-proof',
+                }),
+            ).rejects.toThrow('登记线下退款');
+            const settled = await orders.recordManualRefund(ctx, {
+                refundId: (refund as any).id,
                 transactionId: 'synthetic-manual-refund-proof',
+                evidenceReference: 'local-fixture:synthetic-refund-receipt',
+                note: 'Synthetic local receipt only; no external transfer',
             });
             expect(settled.state).toBe('Settled');
             expect(
