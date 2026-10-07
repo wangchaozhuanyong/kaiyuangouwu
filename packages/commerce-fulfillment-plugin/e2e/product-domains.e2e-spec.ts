@@ -42,6 +42,7 @@ import {
     mergeConfig,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, testConfig } from '@vendure/testing';
 import { gql } from 'graphql-tag';
@@ -109,6 +110,7 @@ const config = mergeConfig(testConfig, {
         OperationsDashboardPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
+        StoreDomainPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'isolated-no-network',
@@ -176,6 +178,17 @@ beforeAll(async () => {
             status: 'ACTIVE',
             descriptionZh: '隔离测试店铺',
             descriptionEn: 'Isolated test store',
+        }),
+    );
+    await connection.getRepository(root, StoreDomain).save(
+        new StoreDomain({
+            channelId: channel.id,
+            domain: 'independent-domains.example.invalid',
+            status: 'ACTIVE',
+            isPrimary: true,
+            primaryChannelId: channel.id,
+            verifiedAt: new Date(),
+            verificationToken: randomUUID(),
         }),
     );
     await connection

@@ -332,7 +332,8 @@ beforeAll(
                 productVariantId: digitalId,
                 deliveryMode: 'manual_service',
                 stockPolicy: 'limited',
-                availableQuantity: 3,
+                // Two Authorized and two late-receipt cases retain their units; browser checkout needs one more.
+                availableQuantity: 5,
                 fileVersionId: null,
                 migrationState: 'ACTIVE',
             }),
