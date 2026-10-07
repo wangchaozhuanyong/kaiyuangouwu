@@ -133,7 +133,7 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
         writeScope: 'STORE',
     },
     page('/sales/after-sales', 'STORE', ['ReadOrder'], ['UpdateOrder']),
-    page('/sales/reviews', 'STORE', ['ReadOrder'], ['UpdateOrder']),
+    page('/sales/reviews', 'STORE', ['ReadCatalog'], ['UpdateCatalog']),
     page('/sales/customer-service-feedback', 'BOTH', ['ReadCustomer'], ['UpdateCustomer']),
     page(
         '/customers/list',

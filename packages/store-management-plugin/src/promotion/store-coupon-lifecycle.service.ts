@@ -233,6 +233,27 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             });
         const items = allocations.flatMap(allocation => {
             if (!allocation.usedAt || !allocation.customerCoupon || !allocation.order) return [];
+            const minimumSpend = convertChannelAmount(
+                ctx,
+                allocation.customerCoupon.minimumSpend,
+                allocation.customerCoupon.currencyCode,
+                allocation.currencyCode,
+            );
+            const discountAmount =
+                allocation.customerCoupon.discountAmount == null
+                    ? null
+                    : convertChannelAmount(
+                          ctx,
+                          allocation.customerCoupon.discountAmount,
+                          allocation.customerCoupon.currencyCode,
+                          allocation.currencyCode,
+                      );
+            // This view has one currency for both the rule and realized savings; do not hide history.
+            if (
+                minimumSpend == null ||
+                (allocation.customerCoupon.discountAmount != null && discountAmount == null)
+            )
+                throw new UserInputError('历史优惠券金额无法换算为订单币种，请配置汇率后查看用券记录');
             return [
                 {
                     id: allocation.id,
@@ -243,22 +264,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                     appearanceTheme: allocation.customerCoupon.campaignConfig?.appearanceTheme ?? null,
                     status: allocation.status as 'USED' | 'REFUNDED',
                     currencyCode: allocation.currencyCode,
-                    minimumSpend:
-                        convertChannelAmount(
-                            ctx,
-                            allocation.customerCoupon.minimumSpend,
-                            allocation.customerCoupon.currencyCode,
-                            allocation.currencyCode,
-                        ) ?? 0,
-                    discountAmount:
-                        allocation.customerCoupon.discountAmount == null
-                            ? null
-                            : convertChannelAmount(
-                                  ctx,
-                                  allocation.customerCoupon.discountAmount,
-                                  allocation.customerCoupon.currencyCode,
-                                  allocation.currencyCode,
-                              ),
+                    minimumSpend,
+                    discountAmount,
                     discountRate: allocation.customerCoupon.discountRate,
                     savedAmount: allocation.discountAmountWithTax,
                     usedAt: allocation.usedAt,
@@ -899,6 +906,13 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
         const rule = couponRuleSnapshot(promotion);
         if (!rule) throw new UserInputError('优惠券规则无法识别');
+        const currencyCode = rule.currencyCode || ctx.channel.defaultCurrencyCode;
+        if (
+            convertChannelAmount(ctx, rule.minimumSpend, currencyCode, ctx.currencyCode) == null ||
+            (rule.discountAmount != null &&
+                convertChannelAmount(ctx, rule.discountAmount, currencyCode, ctx.currencyCode) == null)
+        )
+            throw new UserInputError('优惠券金额无法换算为当前币种，请配置汇率或切换币种后领取');
         // Date columns use whole seconds on MySQL. An immediately usable coupon must not
         // round into the next second when it is saved and then immediately applied.
         const claimedAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
@@ -921,7 +935,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 campaignName: promotion.name,
                 campaignKind: rule.kind,
                 minimumSpend: rule.minimumSpend,
-                currencyCode: rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
+                currencyCode,
                 discountAmount: rule.discountAmount,
                 discountRate: rule.discountRate,
                 claimedAt,
@@ -1625,12 +1639,17 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     }
 
     private toCustomerCouponView(ctx: RequestContext, coupon: CustomerCoupon): StoreCustomerCouponView {
-        const minimumSpend =
-            convertChannelAmount(ctx, coupon.minimumSpend, coupon.currencyCode, ctx.currencyCode) ?? 0;
+        const minimumSpend = convertChannelAmount(
+            ctx,
+            coupon.minimumSpend,
+            coupon.currencyCode,
+            ctx.currencyCode,
+        );
         const discountAmount =
             coupon.discountAmount == null
                 ? null
                 : convertChannelAmount(ctx, coupon.discountAmount, coupon.currencyCode, ctx.currencyCode);
+        const convertible = minimumSpend != null && (coupon.discountAmount == null || discountAmount != null);
         const rule = coupon.promotion ? couponRuleSnapshot(coupon.promotion) : null;
         return {
             id: coupon.id,
@@ -1639,9 +1658,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             campaignKind: coupon.campaignKind,
             appearanceTheme: coupon.campaignConfig?.appearanceTheme ?? null,
             status: coupon.status,
-            minimumSpend,
-            currencyCode: ctx.currencyCode,
-            discountAmount,
+            minimumSpend: convertible ? minimumSpend : coupon.minimumSpend,
+            currencyCode: convertible ? ctx.currencyCode : coupon.currencyCode,
+            discountAmount: convertible ? discountAmount : coupon.discountAmount,
             discountRate: coupon.discountRate,
             collectionIds: rule?.collectionIds ?? [],
             productVariantIds: rule?.productVariantIds ?? [],
@@ -1656,6 +1675,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             usedOrderId: coupon.usedOrderId,
             returnCount: coupon.returnCount,
             usable:
+                convertible &&
                 usableCustomerCouponStatuses.includes(coupon.status) &&
                 coupon.validFrom <= new Date() &&
                 !this.isExpired(coupon, new Date()) &&

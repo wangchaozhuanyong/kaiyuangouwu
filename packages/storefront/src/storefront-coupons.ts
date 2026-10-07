@@ -204,11 +204,17 @@ export function couponCardsFromCampaigns(
 ): StorefrontCouponCard[] {
     const isZh = language === 'zh';
     return campaigns.filter(isDisplayableCampaign).map(coupon => {
+        const sourceCurrencyCode = coupon.currencyCode || currencyCode;
         const isFixed = coupon.kind === 'ORDER_FIXED';
-        const money = displayMoneyParts(coupon.minimumSpend, currencyCode, displayCurrencyCode, language);
+        const money = displayMoneyParts(
+            coupon.minimumSpend,
+            sourceCurrencyCode,
+            displayCurrencyCode,
+            language,
+        );
         const discountMoney = displayMoneyParts(
             coupon.discountAmount ?? 0,
-            currencyCode,
+            sourceCurrencyCode,
             displayCurrencyCode,
             language,
         );
@@ -244,10 +250,16 @@ export function couponCardFromCustomerCoupon(
     displayCurrencyCode = currencyCode,
 ): StorefrontCouponCard {
     const isZh = language === 'zh';
-    const minimumMoney = displayMoneyParts(coupon.minimumSpend, currencyCode, displayCurrencyCode, language);
+    const sourceCurrencyCode = coupon.currencyCode || currencyCode;
+    const minimumMoney = displayMoneyParts(
+        coupon.minimumSpend,
+        sourceCurrencyCode,
+        displayCurrencyCode,
+        language,
+    );
     const discountMoney = displayMoneyParts(
         coupon.discountAmount ?? 0,
-        currencyCode,
+        sourceCurrencyCode,
         displayCurrencyCode,
         language,
     );

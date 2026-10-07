@@ -167,6 +167,61 @@ describe('frozen test-order cleanup transaction', () => {
             await context.close();
         }
     });
+    it('keeps database coupon dates in UTC under Asia/Kuala_Lumpur during preview, apply and restore', async () => {
+        const previousTimezone = process.env.TZ;
+        process.env.TZ = 'Asia/Kuala_Lumpur';
+        const context = await fixture([
+            "UPDATE customer_coupon SET validUntil='2026-10-07 13:00:00.000000' WHERE id=51",
+            "INSERT INTO customer_coupon VALUES(54,1,NULL,'USED','2026-10-07 11:00:00.000000',NULL,NULL,NULL)",
+            "INSERT INTO customer_coupon VALUES(55,1,NULL,'USED','2026-10-07T13:00:00.000Z',NULL,NULL,NULL)",
+            "INSERT INTO customer_coupon VALUES(56,1,NULL,'USED','2026-10-07T21:00:00.000+08:00',NULL,NULL,NULL)",
+        ]);
+        try {
+            const backup = await prepared(context);
+            assert.equal(
+                publicCleanupPreview(backup.plan).canApply,
+                true,
+                JSON.stringify(backup.plan.blockers),
+            );
+            const statuses = backup.plan.patches
+                .filter(patch => patch.table === 'customer_coupon')
+                .map(patch => [patch.before.id, patch.after.status])
+                .sort((a, b) => a[0] - b[0]);
+            assert.deepEqual(statuses, [
+                [51, 'AVAILABLE'],
+                [54, 'EXPIRED'],
+                [55, 'AVAILABLE'],
+                [56, 'AVAILABLE'],
+            ]);
+            process.env.TZ = 'UTC';
+            const { plan } = await prepared(context);
+            assert.equal(plan.planHash, backup.plan.planHash);
+            const receipt = await applyCleanup(
+                context.runner,
+                backup.envelope,
+                backup.backupHash,
+                backup.plan.planHash,
+                backup.key,
+            );
+            assert.equal(receipt.status, 'APPLIED');
+            process.env.TZ = 'Asia/Kuala_Lumpur';
+            const restored = await restoreCleanup(
+                context.runner,
+                backup.envelope,
+                backup.backupHash,
+                backup.plan.planHash,
+                backup.key,
+                receipt,
+                receipt.receiptHash,
+            );
+            assert.equal(restored.status, 'RESTORED');
+            assert.equal((await prepared(context)).plan.planHash, backup.plan.planHash);
+        } finally {
+            await context.close();
+            if (previousTimezone === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTimezone;
+        }
+    });
     it('commits the complete graph and baseline restoration once; retry never double-restocks', async () => {
         const context = await fixture();
         try {
@@ -344,6 +399,44 @@ describe('frozen test-order cleanup transaction', () => {
             'EXTERNAL_CHAIN_EVIDENCE',
         ],
         [
+            'reconciliation refund chain proof without an intent transaction',
+            [
+                'CREATE TABLE storefront_usdt_payment_intent(id INTEGER PRIMARY KEY,orderId INTEGER REFERENCES "order"(id),transactionId TEXT)',
+                `CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,
+                    intentId INTEGER,orderId INTEGER,action TEXT,transactionId TEXT,blockNumber INTEGER)`,
+                'INSERT INTO storefront_usdt_payment_intent VALUES(82,1,NULL)',
+                "INSERT INTO store_usdt_reconciliation_action VALUES(83,82,1,'CONFIRM_EXTERNAL_REFUND','refund-chain-proof-fixture',100)",
+            ],
+            'EXTERNAL_CHAIN_EVIDENCE',
+        ],
+        [
+            'reconciliation block evidence without a transaction identifier',
+            [
+                'CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,orderId INTEGER,action TEXT,transactionId TEXT,blockNumber INTEGER)',
+                "INSERT INTO store_usdt_reconciliation_action VALUES(83,1,'RETRY_SETTLEMENT',NULL,100)",
+            ],
+            'EXTERNAL_CHAIN_EVIDENCE',
+        ],
+        [
+            'confirmed external reconciliation refund with incomplete stored proof',
+            [
+                'CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,orderId INTEGER,action TEXT,transactionId TEXT,blockNumber INTEGER)',
+                "INSERT INTO store_usdt_reconciliation_action VALUES(83,1,'CONFIRM_EXTERNAL_REFUND',NULL,NULL)",
+            ],
+            'EXTERNAL_CHAIN_EVIDENCE',
+        ],
+        [
+            'legacy reconciliation chain proof reachable only through the frozen intent',
+            [
+                'CREATE TABLE storefront_usdt_payment_intent(id INTEGER PRIMARY KEY,orderId INTEGER REFERENCES "order"(id),transactionId TEXT)',
+                `CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,
+                    intentId INTEGER,orderId INTEGER,action TEXT,transactionId TEXT,blockNumber INTEGER)`,
+                'INSERT INTO storefront_usdt_payment_intent VALUES(82,1,NULL)',
+                "INSERT INTO store_usdt_reconciliation_action VALUES(83,82,999,'CONFIRM_EXTERNAL_REFUND','refund-chain-proof-fixture',100)",
+            ],
+            'EXTERNAL_CHAIN_EVIDENCE',
+        ],
+        [
             'limited quota without attributable ledger',
             [
                 `CREATE TABLE digital_order_reservation(id INTEGER PRIMARY KEY,
@@ -380,10 +473,90 @@ describe('frozen test-order cleanup transaction', () => {
                     { stockOnHand: 9 },
                     ...(label === 'ambiguous multi-warehouse sale' ? [{ stockOnHand: 8 }] : []),
                 ]);
+                if (label.includes('reconciliation'))
+                    assert.deepEqual(
+                        await context.runner.query(
+                            'SELECT COUNT(*) AS count FROM store_usdt_reconciliation_action',
+                        ),
+                        [{ count: 1 }],
+                    );
             } finally {
                 await context.close();
             }
         });
+
+    it('cleans and restores reconciliation retry records without external transfer evidence', async () => {
+        const context = await fixture([
+            'CREATE TABLE storefront_usdt_payment_intent(id INTEGER PRIMARY KEY,orderId INTEGER REFERENCES "order"(id),transactionId TEXT)',
+            'CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,intentId INTEGER,orderId INTEGER,action TEXT,transactionId TEXT,blockNumber INTEGER)',
+            'INSERT INTO storefront_usdt_payment_intent VALUES(82,1,NULL)',
+            "INSERT INTO store_usdt_reconciliation_action VALUES(83,82,1,'RETRY_SETTLEMENT',NULL,NULL)",
+        ]);
+        try {
+            const backup = await prepared(context);
+            assert.equal(publicCleanupPreview(backup.plan).canApply, true);
+            const receipt = await applyCleanup(
+                context.runner,
+                backup.envelope,
+                backup.backupHash,
+                backup.plan.planHash,
+                backup.key,
+            );
+            assert.deepEqual(
+                await context.runner.query('SELECT COUNT(*) AS count FROM store_usdt_reconciliation_action'),
+                [{ count: 0 }],
+            );
+            const restored = await restoreCleanup(
+                context.runner,
+                backup.envelope,
+                backup.backupHash,
+                backup.plan.planHash,
+                backup.key,
+                receipt,
+                receipt.receiptHash,
+            );
+            assert.equal(restored.status, 'RESTORED');
+            assert.deepEqual(
+                await context.runner.query(
+                    'SELECT action,transactionId FROM store_usdt_reconciliation_action',
+                ),
+                [{ action: 'RETRY_SETTLEMENT', transactionId: null }],
+            );
+        } finally {
+            await context.close();
+        }
+    });
+
+    it('uses a real reconciliation intent foreign key before any implicit USDT mapping', async () => {
+        const context = await fixture([
+            'CREATE TABLE storefront_usdt_payment_intent(id INTEGER PRIMARY KEY,orderId INTEGER REFERENCES "order"(id),transactionId TEXT)',
+            'CREATE TABLE unrelated_intent(id INTEGER PRIMARY KEY)',
+            `CREATE TABLE store_usdt_reconciliation_action(id INTEGER PRIMARY KEY,
+                intentId INTEGER REFERENCES unrelated_intent(id),orderId INTEGER,
+                action TEXT,transactionId TEXT,blockNumber INTEGER)`,
+            'INSERT INTO storefront_usdt_payment_intent VALUES(82,1,NULL)',
+            'INSERT INTO unrelated_intent VALUES(82)',
+            "INSERT INTO store_usdt_reconciliation_action VALUES(83,82,NULL,'RETRY_SETTLEMENT',NULL,NULL)",
+        ]);
+        try {
+            const backup = await prepared(context);
+            assert.equal(publicCleanupPreview(backup.plan).canApply, true);
+            assert.equal(backup.snapshot.rows.store_usdt_reconciliation_action.length, 0);
+            await applyCleanup(
+                context.runner,
+                backup.envelope,
+                backup.backupHash,
+                backup.plan.planHash,
+                backup.key,
+            );
+            assert.deepEqual(
+                await context.runner.query('SELECT COUNT(*) AS count FROM store_usdt_reconciliation_action'),
+                [{ count: 1 }],
+            );
+        } finally {
+            await context.close();
+        }
+    });
 });
 
 describe('cleanup receipt persistence', () => {

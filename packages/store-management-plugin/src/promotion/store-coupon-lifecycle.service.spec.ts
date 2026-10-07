@@ -11,9 +11,101 @@ import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
 const ctx = {
     channelId: 'channel-1',
     activeUserId: 'user-1',
+    currencyCode: 'CNY',
+    channel: { defaultCurrencyCode: 'CNY', customFields: {} },
 } as any;
 
 describe('StoreCouponLifecycleService', () => {
+    it.each(['MYR', 'USD'])(
+        'rejects direct coupon claims without conversion into %s before entitlement or issuance writes',
+        async currencyCode => {
+            const harness = createIssueHarness();
+            await expect(harness.service.claim({ ...ctx, currencyCode }, 'promotion-1')).rejects.toThrow(
+                '优惠券金额无法换算为当前币种',
+            );
+            expect(harness.customerCouponSave).not.toHaveBeenCalled();
+            expect(harness.ledgerSave).not.toHaveBeenCalled();
+        },
+    );
+
+    it('issues a same-currency percentage coupon with a genuine zero minimum without a rate', async () => {
+        const harness = createIssueHarness();
+        harness.promotion.actions = [
+            { code: 'order_percentage_discount', args: [{ name: 'discount', value: '20' }] },
+        ];
+        harness.promotion.conditions = [
+            { code: 'minimum_order_amount', args: [{ name: 'amount', value: '0' }] },
+        ];
+        await expect(harness.service.claim(ctx, 'promotion-1')).resolves.toMatchObject({
+            minimumSpend: 0,
+            currencyCode: 'CNY',
+            discountAmount: null,
+            discountRate: 8,
+            usable: true,
+        });
+        expect(harness.customerCouponSave).toHaveBeenCalledOnce();
+        expect(harness.ledgerSave).toHaveBeenCalledOnce();
+    });
+
+    it.each(['MYR', 'USD'])(
+        'preserves source amounts but disables a percentage coupon without conversion into %s',
+        currencyCode => {
+            const service = Object.create(StoreCouponLifecycleService.prototype);
+            const coupon = {
+                id: 'coupon-1',
+                currencyCode: 'CNY',
+                minimumSpend: 10_000,
+                discountAmount: null,
+                discountRate: 8,
+                status: 'AVAILABLE',
+                validFrom: new Date(Date.now() - 60_000),
+                validUntil: null,
+                promotion: { enabled: true, deletedAt: null, actions: [], conditions: [] },
+            };
+            expect(service.toCustomerCouponView({ ...ctx, currencyCode }, coupon)).toMatchObject({
+                minimumSpend: 10_000,
+                currencyCode: 'CNY',
+                discountRate: 8,
+                usable: false,
+            });
+            expect(service.toCustomerCouponView(ctx, { ...coupon, minimumSpend: 0 })).toMatchObject({
+                minimumSpend: 0,
+                currencyCode: 'CNY',
+                usable: true,
+            });
+        },
+    );
+
+    it('reports unconvertible history explicitly instead of hiding it or relabelling realized savings', async () => {
+        const allocation = {
+            id: 'usage-1',
+            status: 'USED',
+            currencyCode: 'CNY',
+            discountAmountWithTax: 500,
+            usedAt: new Date(),
+            order: { code: 'ORDER-1' },
+            customerCoupon: {
+                currencyCode: 'CNY',
+                minimumSpend: 10_000,
+                discountAmount: null,
+                discountRate: 8,
+            },
+        };
+        const findAndCount = vi
+            .fn()
+            .mockResolvedValue([[allocation, { ...allocation, id: 'usage-2', currencyCode: 'MYR' }], 2]);
+        const service = Object.assign(Object.create(StoreCouponLifecycleService.prototype), {
+            activeCustomerOrThrow: vi.fn().mockResolvedValue({ id: 'customer-1' }),
+            connection: { getRepository: () => ({ findAndCount }) },
+        });
+        await expect(service.findMyUsageRecordsPage(ctx)).rejects.toThrow('历史优惠券金额无法换算为订单币种');
+        findAndCount.mockResolvedValueOnce([[allocation], 1]);
+        await expect(service.findMyUsageRecordsPage(ctx)).resolves.toMatchObject({
+            items: [{ id: 'usage-1', minimumSpend: 10_000, currencyCode: 'CNY', savedAmount: 500 }],
+            totalItems: 1,
+        });
+    });
+
     it('scopes coupon ownership to the authenticated customer for separate email accounts', async () => {
         const find = vi.fn(async (_options?: unknown) => []);
         const findOneByUserId = vi.fn(async (_ctx: unknown, userId: string) => ({
@@ -471,6 +563,7 @@ describe('StoreCouponLifecycleService', () => {
                 order: { code: 'T0001' },
                 customerCoupon: {
                     campaignKind: 'ORDER_FIXED',
+                    currencyCode: 'CNY',
                     minimumSpend: 10_000,
                     discountAmount: 1_000,
                     discountRate: null,
@@ -668,6 +761,7 @@ function createIssueHarness({
     );
     return {
         service,
+        promotion,
         customerCouponSave,
         ledgerSave,
         get savedCoupon() {

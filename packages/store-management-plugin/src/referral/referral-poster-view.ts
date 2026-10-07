@@ -58,12 +58,18 @@ export class ReferralPosterView {
                           );
                       }),
                   );
-        const minimumOrderAmount =
-            convertChannelAmount(ctx, config.minimumOrderAmount, config.currencyCode, ctx.currencyCode) ?? 0;
+        const minimumOrderAmount = convertChannelAmount(
+            ctx,
+            config.minimumOrderAmount,
+            config.currencyCode,
+            ctx.currencyCode,
+        );
         const maxRewardPerOrder =
             config.maxRewardPerOrder == null
                 ? null
                 : convertChannelAmount(ctx, config.maxRewardPerOrder, config.currencyCode, ctx.currencyCode);
+        const convertible =
+            minimumOrderAmount != null && (config.maxRewardPerOrder == null || maxRewardPerOrder != null);
         const posterTemplates =
             config.posterTemplates == null
                 ? [...referralPosterTemplates]
@@ -71,12 +77,12 @@ export class ReferralPosterView {
         return {
             channelId: config.channelId,
             updatedAt: config.updatedAt,
-            enabled: config.enabled,
+            enabled: config.enabled && convertible,
             rewardRate: config.rewardRateBps / 100,
             releaseDelayDays: config.releaseDelayDays,
-            currencyCode: ctx.currencyCode,
-            minimumOrderAmount,
-            maxRewardPerOrder,
+            currencyCode: convertible ? ctx.currencyCode : config.currencyCode,
+            minimumOrderAmount: convertible ? minimumOrderAmount : config.minimumOrderAmount,
+            maxRewardPerOrder: convertible ? maxRewardPerOrder : config.maxRewardPerOrder,
             allowBalanceSpend: config.allowBalanceSpend,
             attributionWindowDays: config.attributionWindowDays,
             defaultPosterTemplate: this.publicPosterId(

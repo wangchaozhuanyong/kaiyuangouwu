@@ -34,6 +34,9 @@ vi.mock('../../hooks/use-admin-permissions', () => ({
             !permissions.includes('CreateAsset') || mocks.canCreateAsset,
     }),
 }));
+vi.mock('../../hooks/use-admin-capabilities', () => ({
+    useAdminCapabilities: () => ({ canUseCapability: () => true }),
+}));
 vi.mock('./ProductAiImageDialog', () => ({
     ProductAiImageDialog: ({ onUse }: { onUse: (asset: { id: string; preview: string }) => void }) => (
         <button

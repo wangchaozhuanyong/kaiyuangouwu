@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { configureMoneyDisplay, resetMoneyDisplay } from './money-display';
 import {
     bestProductCouponPrice,
     couponCardFromCustomerCoupon,
@@ -9,6 +10,8 @@ import {
     couponScopeLabel,
 } from './storefront-coupons';
 import { StoreCustomerCoupon, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
+
+afterEach(() => resetMoneyDisplay());
 
 function couponCampaign(overrides: Partial<StorefrontCouponCampaign>): StorefrontCouponCampaign {
     return {
@@ -101,6 +104,121 @@ function couponBlock(): StorefrontContentBlock {
         ],
     };
 }
+
+describe.each(['campaign', 'owned'] as const)('%s coupon source currency', kind => {
+    const cardFrom = (
+        sourceCurrencyCode: string | undefined,
+        currentCurrencyCode: string,
+        displayCurrencyCode = currentCurrencyCode,
+        minimumSpend = 10_000,
+        discountAmount = 1_000,
+    ) =>
+        kind === 'campaign'
+            ? couponCardsFromCampaigns(
+                  [
+                      couponCampaign({
+                          kind: 'ORDER_FIXED',
+                          currencyCode: sourceCurrencyCode,
+                          minimumSpend,
+                          discountAmount,
+                          discountRate: null,
+                          claimable: false,
+                      }),
+                  ],
+                  'zh',
+                  currentCurrencyCode,
+                  displayCurrencyCode,
+              )[0]
+            : couponCardFromCustomerCoupon(
+                  customerCoupon({
+                      campaignKind: 'ORDER_FIXED',
+                      currencyCode: sourceCurrencyCode,
+                      minimumSpend,
+                      discountAmount,
+                      discountRate: null,
+                      usable: false,
+                  }),
+                  'zh',
+                  currentCurrencyCode,
+                  0,
+                  displayCurrencyCode,
+              );
+
+    it('keeps unavailable CNY amounts in CNY when the selected currency is MYR', () => {
+        expect(cardFrom('CNY', 'MYR')).toMatchObject({
+            value: '10',
+            unit: '¥',
+            description: '满 ¥100 可用',
+            claimable: false,
+        });
+    });
+
+    it('uses the caller currency only when a legacy record omits its currency', () => {
+        expect(cardFrom(undefined, 'CNY')).toMatchObject({
+            value: '10',
+            unit: '¥',
+            description: '满 ¥100 可用',
+            claimable: false,
+        });
+    });
+
+    it('uses the actual source rate and existing markup for USDT display', () => {
+        configureMoneyDisplay({
+            displayCurrencyCode: 'USDT',
+            cnyPerUsdtRate: 7,
+            myrPerUsdtRate: 4,
+            usdtMarkupPercent: 10,
+        });
+        expect(cardFrom('CNY', 'MYR', 'USDT', 14_000, 7_000)).toMatchObject({
+            value: '11.00',
+            unit: '₮',
+            description: '满 ₮22.00 可用',
+            claimable: false,
+        });
+    });
+
+    it('preserves the original amount and unit when the source has no USDT rate', () => {
+        configureMoneyDisplay({
+            displayCurrencyCode: 'USDT',
+            cnyPerUsdtRate: null,
+            myrPerUsdtRate: 4,
+            usdtMarkupPercent: 0,
+        });
+        expect(cardFrom('CNY', 'MYR', 'USDT')).toMatchObject({
+            value: '10',
+            unit: '¥',
+            description: '满 ¥100 可用',
+            claimable: false,
+        });
+    });
+});
+
+it('does not derive a discounted product price from unclaimable and unusable source records', () => {
+    expect(
+        bestProductCouponPrice({
+            campaigns: [
+                couponCampaign({
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 10_000,
+                    discountAmount: 1_000,
+                    claimable: false,
+                }),
+            ],
+            customerCoupons: [
+                customerCoupon({
+                    campaignKind: 'ORDER_FIXED',
+                    minimumSpend: 10_000,
+                    discountAmount: 1_000,
+                    usable: false,
+                }),
+            ],
+            collectionIds: [],
+            productVariantId: 'variant-1',
+            priceWithTax: 20_000,
+            currencyCode: 'CNY',
+        }),
+    ).toBeNull();
+});
 
 describe('storefront coupons', () => {
     it('uses the lowest eligible coupon price for the selected product variant', () => {
