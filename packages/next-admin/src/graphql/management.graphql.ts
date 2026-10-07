@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import { print } from 'graphql';
 
 export const TEAM_MANAGEMENT_QUERY = gql`
     query NextAdminTeamManagement {
@@ -963,7 +964,9 @@ export const DELETE_SHIPPING_METHOD_MUTATION = gql`
 `;
 
 const SHIPPING_METHOD_FIELDS = {
-    ...STORE_MANAGEMENT_QUERY,
+    // gql interpolates loc.source.body when present; the original query location
+    // would restore all operations even after filtering definitions below.
+    kind: STORE_MANAGEMENT_QUERY.kind,
     definitions: STORE_MANAGEMENT_QUERY.definitions.filter(
         definition =>
             definition.kind === 'FragmentDefinition' &&
@@ -994,7 +997,7 @@ const SHIPPING_TEMPLATE_MANAGEMENT_FIELDS = gql`
             }
         }
     }
-    ${SHIPPING_METHOD_FIELDS}
+    ${print(SHIPPING_METHOD_FIELDS)}
 `;
 
 export const SHIPPING_TEMPLATE_MANAGEMENT_QUERY = gql`
