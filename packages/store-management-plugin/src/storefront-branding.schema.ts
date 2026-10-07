@@ -4,7 +4,13 @@ import { storefrontRegionSchema } from './storefront-region.schema';
 
 export const storefrontBrandingSchema = gql`
     ${storefrontRegionSchema}
+    enum StorefrontAccessMode {
+        CLOSED
+        PREVIEW
+        LIVE
+    }
     type StorefrontBranding {
+        accessMode: StorefrontAccessMode!
         logoAssetId: ID
         logoOnLightAssetId: ID
         logoOnDarkAssetId: ID
@@ -28,6 +34,12 @@ export const storefrontBrandingSchema = gql`
 `;
 
 export const storefrontPreviewBrandingSchema = gql`
+    type StorefrontPublicCacheRefresh {
+        channelId: ID!
+        processId: Int!
+        shared: Boolean!
+        revisionFingerprint: String!
+    }
     type StorefrontPreviewBranding {
         channelId: ID!
         name: String!
@@ -38,5 +50,8 @@ export const storefrontPreviewBrandingSchema = gql`
     }
     extend type Query {
         storefrontPreviewBranding: StorefrontPreviewBranding!
+    }
+    extend type Mutation {
+        refreshStorefrontPublicCache: StorefrontPublicCacheRefresh!
     }
 `;

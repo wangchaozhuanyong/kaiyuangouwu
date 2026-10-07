@@ -127,7 +127,7 @@ export function ProductEditorWorkspace() {
                         >
                             <section className="product-editor-panel">
                                 <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                    基本信息
+                                    基本信息 <FeatureHelpButton topic="catalog.spu-core" title="基本信息" />
                                 </h2>
                                 <ProductEditorIdentityFields />
                             </section>

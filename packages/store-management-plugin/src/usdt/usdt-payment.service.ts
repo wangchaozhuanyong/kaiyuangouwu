@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
     assertOrderSalesChannel,
     Channel,
@@ -27,6 +27,7 @@ import {
 } from '../entities/store-usdt-reconciliation-action.entity';
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
+import { StorefrontActivationService } from '../storefront-activation.service';
 
 import { maskTronAddress, StoreUsdtWalletService } from './store-usdt-wallet.service';
 import { loadReviewedRefundSenders } from './usdt-manual-refund.service';
@@ -140,6 +141,7 @@ export class UsdtPaymentService {
         private readonly storeWallets: StoreUsdtWalletService,
         private readonly tronClient: UsdtTrc20Client,
         private readonly eventBus: EventBus,
+        @Inject(StorefrontActivationService) private readonly activation?: StorefrontActivationService,
     ) {}
 
     async walletStatus(
@@ -568,18 +570,22 @@ export class UsdtPaymentService {
         ctx: RequestContext,
         quote: StorefrontUsdtCheckoutQuote,
     ): Promise<StorefrontUsdtPaymentIntent> {
-        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
-            await this.assertQuoteScope(txCtx, quote);
-            await this.orderService.lockOrderForRefund(txCtx, quote.orderId);
-            return this.ensureIntentInTransaction(txCtx, quote);
-        });
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.ensureIntentInTransaction(txCtx, quote),
+        );
     }
 
     private async ensureIntentInTransaction(
         ctx: RequestContext,
         quote: StorefrontUsdtCheckoutQuote,
     ): Promise<StorefrontUsdtPaymentIntent> {
-        await this.assertQuoteScope(ctx, quote);
+        if (String(quote.channelId) !== String(ctx.channelId)) {
+            throw new UserInputError('USDT 报价不属于当前店铺');
+        }
+        await this.orderService.lockOrderForRefund(ctx, quote.orderId);
+        const order = await this.assertQuoteScope(ctx, quote);
+        if (!this.activation) throw new UserInputError('当前店铺付款配置不可用');
+        await this.activation.assertNewRealPaymentAllowed(ctx, quote.channelId, order);
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const existing = await repository.findOne({ where: { quoteId: quote.id } });
         if (existing) {
@@ -703,12 +709,15 @@ export class UsdtPaymentService {
         return intents.length;
     }
 
-    private async assertQuoteScope(ctx: RequestContext, quote: StorefrontUsdtCheckoutQuote): Promise<void> {
+    private async assertQuoteScope(ctx: RequestContext, quote: StorefrontUsdtCheckoutQuote): Promise<Order> {
         if (String(quote.channelId) !== String(ctx.channelId)) {
             throw new UserInputError('USDT 报价不属于当前店铺');
         }
-        const order = await this.connection.getEntityOrThrow(ctx, Order, quote.orderId);
+        const order = await this.connection.getEntityOrThrow(ctx, Order, quote.orderId, {
+            relations: ['payments'],
+        });
         assertOrderSalesChannel(ctx, order);
+        return order;
     }
 
     private assertIntentScope(intent: StorefrontUsdtPaymentIntent, quote: StorefrontUsdtCheckoutQuote): void {

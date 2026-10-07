@@ -1,3 +1,4 @@
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { effectiveRefundLines, Order, OrderLine } from '@vendure/core';
 
 /** Pending refunds suspend only their selected quantities; failed refunds restore access. */
@@ -8,7 +9,18 @@ export function digitalDeliverableQuantity(order: Order, line: OrderLine): numbe
         line.quantity <= 0
     )
         return 0;
-    const payments = (order.payments ?? []).filter(
+    if (
+        !Array.isArray(order.payments) ||
+        order.payments.some(
+            payment =>
+                isControlledTestPaymentMethod(payment.method) ||
+                payment.metadata?.public?.testPayment === true ||
+                !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                payment.metadata?.manualReview?.required,
+        )
+    )
+        return 0;
+    const payments = order.payments.filter(
         payment =>
             payment.state === 'Settled' &&
             !payment.metadata?.public?.testPayment &&

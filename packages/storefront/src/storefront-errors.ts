@@ -30,6 +30,7 @@ export const storefrontErrorCopy = {
         '当前无法执行此操作，请确认登录状态后重试。',
         'This action is unavailable. Check your sign-in status and try again.',
     ),
+    STOREFRONT_CLOSED: copy('店铺暂未开放，请稍后再来。', 'Store not open yet. Please check back later.'),
     UNAUTHORIZED: copy('请先登录后继续操作。', 'Please sign in to continue.'),
     USER_INPUT_ERROR: copy(
         '提交的信息有误，请检查后重试。',

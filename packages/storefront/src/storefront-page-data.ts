@@ -9,7 +9,7 @@ import {
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 
 import { storefrontNavigationCollections } from './api/catalog';
-import { createRequestSignal, SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
+import { createRequestSignal, SEND_CLIENT_CHANNEL_TOKEN, ShopApiGraphQlError } from './api/helpers';
 import { languageCodeFor, marketForStorefrontConfig } from './i18n';
 import { asListProduct } from './product-summary';
 import { storefrontQueryKeys } from './query-client';
@@ -117,7 +117,20 @@ export async function fetchPublicPage(
             (response.ok && !response.headers.get('content-type')?.includes('application/json'))
         )
             return;
-        if (!response.ok) throw new Error(`Public page request failed (${response.status})`);
+        if (!response.ok) {
+            const failure: unknown = await response.json().catch(() => null);
+            const errorCode =
+                typeof failure === 'object' &&
+                failure !== null &&
+                (failure as { errorCode?: unknown }).errorCode === 'STOREFRONT_CLOSED'
+                    ? 'STOREFRONT_CLOSED'
+                    : undefined;
+            throw new ShopApiGraphQlError(
+                [`Public page request failed (${response.status})`],
+                response.status,
+                errorCode,
+            );
+        }
         const page: unknown = await response.json();
         if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
         if (!validatePublicPageData(page, window.location.host))

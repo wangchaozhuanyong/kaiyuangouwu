@@ -1,0 +1,4 @@
+{
+    "extends": "../tsconfig.json",
+    "include": ["./checkout-flow/fixture.tsx", "../src/**/*.d.ts"]
+}

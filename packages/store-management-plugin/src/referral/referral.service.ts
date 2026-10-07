@@ -42,6 +42,7 @@ import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
 import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
+import { StorefrontActivationService } from '../storefront-activation.service';
 import { StorefrontPromotionPluginOptions } from '../types';
 
 import {
@@ -151,6 +152,7 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
         @Inject(ReferralWalletSpendService)
         private readonly walletSpend: ReferralWalletSpendService | undefined = undefined,
+        @Inject(StorefrontActivationService) private readonly activation?: StorefrontActivationService,
     ) {
         this.posters = new ReferralPosterView(connection, configService);
         this.reports = new ReferralReportQuery(connection);
@@ -505,6 +507,12 @@ export class ReferralService implements OnApplicationBootstrap {
     }
 
     async useBalance(ctx: RequestContext, amount: number) {
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.useBalanceInTransaction(txCtx, amount),
+        );
+    }
+
+    private async useBalanceInTransaction(ctx: RequestContext, amount: number) {
         if (!Number.isInteger(amount) || amount <= 0) throw new UserInputError('请输入有效的抵扣金额');
         const config = await this.getConfig(ctx);
         if (!config.allowBalanceSpend) throw new UserInputError('当前店铺已暂停使用返利余额');
@@ -514,6 +522,7 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!activeOrder || activeOrder.state !== 'ArrangingPayment') {
             throw new UserInputError('请先提交订单再使用返利余额');
         }
+        await this.orderService.lockOrderForRefund(ctx, activeOrder.id);
         const order = await this.orderService.findOne(
             ctx,
             activeOrder.id,
@@ -523,6 +532,14 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!order || !order.customer || order.customer.id.toString() !== customer.id.toString()) {
             throw new UserInputError('找不到待支付订单');
         }
+        assertOrderSalesChannel(ctx, order);
+        if (!order.active || order.state !== 'ArrangingPayment') {
+            throw new UserInputError('订单付款状态已变化，请重新加载订单');
+        }
+        if (!this.activation || order.salesChannelId == null) {
+            throw new UserInputError('当前店铺付款配置不可用');
+        }
+        await this.activation.assertNewRealPaymentAllowed(ctx, order.salesChannelId, order);
         const existing = await this.connection.getRepository(ctx, ReferralBalanceUse).findOne({
             where: { channelId: ctx.channelId, orderId: order.id },
         });
@@ -639,6 +656,10 @@ export class ReferralService implements OnApplicationBootstrap {
             );
             if (!order) throw new UserInputError('找不到待补款订单');
             assertOrderSalesChannel(txCtx, order);
+            if (!this.activation || order.salesChannelId == null) {
+                throw new UserInputError('当前店铺付款配置不可用');
+            }
+            await this.activation.assertNewRealPaymentAllowed(txCtx, order.salesChannelId, order);
             const customer = order.customer;
             if (!customer || !txCtx.activeUserId || String(customer.user?.id) !== String(txCtx.activeUserId))
                 throw new UserInputError('请登录订单所属账户使用余额');

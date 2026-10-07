@@ -331,7 +331,7 @@ describe('unified store notifications with real persistence and additive migrati
         await db
             .getRepository(CustomerServiceFeedback)
             .update(
-                { id: Number(first.review.id.replace('feedback:', '')) },
+                { id: Number(String(first.review.id).replace('feedback:', '')) },
                 { updatedAt: new Date(Date.now() - 61_000) },
             );
         const changed = await reviews.submit(ctx(1, 7), {
@@ -487,7 +487,7 @@ describe('unified store notifications with real persistence and additive migrati
                 promotionConnection,
                 {} as never,
                 presence,
-                {} as never,
+                fixtureDependency({}),
                 fixtureDependency(notifications),
                 {} as never,
             );
@@ -525,7 +525,7 @@ describe('unified store notifications with real persistence and additive migrati
             connection,
             { create: ({ channelOrToken }: any) => Promise.resolve(ctx(channelOrToken.id)) } as never,
             presence,
-            { get: () => Promise.resolve({ enabled: true, notifyOnlineReports: true }) } as never,
+            fixtureDependency({ get: () => Promise.resolve({ enabled: true, notifyOnlineReports: true }) }),
             fixtureDependency(notifications),
             {} as never,
         );

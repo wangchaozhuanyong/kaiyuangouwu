@@ -74,7 +74,7 @@ export class OrderResolver {
         return this.orderService.findOne(ctx, args.id, relations);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async settlePayment(
@@ -84,7 +84,7 @@ export class OrderResolver {
         return this.orderService.settlePayment(ctx, args.id);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async cancelPayment(
@@ -104,14 +104,16 @@ export class OrderResolver {
         return this.orderService.createFulfillment(ctx, args.input);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async cancelOrder(
         @Ctx() ctx: RequestContext,
         @Args() args: MutationCancelOrderArgs,
     ): Promise<ErrorResultUnion<CancelOrderResult, Order>> {
-        return this.orderService.cancelOrder(ctx, args.input);
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.orderService.cancelOrder(txCtx, args.input),
+        );
     }
 
     @Transaction('manual')
@@ -180,14 +182,16 @@ export class OrderResolver {
         return this.orderService.updateOrderCustomer(ctx, input);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async transitionOrderToState(
         @Ctx() ctx: RequestContext,
         @Args() args: MutationTransitionOrderToStateArgs,
     ) {
-        return this.orderService.transitionToState(ctx, args.id, args.state as OrderState);
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.orderService.transitionToState(txCtx, args.id, args.state as OrderState),
+        );
     }
 
     @Transaction()
@@ -200,7 +204,7 @@ export class OrderResolver {
         return this.orderService.transitionFulfillmentToState(ctx, args.id, args.state as FulfillmentState);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async transitionPaymentToState(
@@ -231,13 +235,15 @@ export class OrderResolver {
         return result;
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async addManualPaymentToOrder(
         @Ctx() ctx: RequestContext,
         @Args() args: MutationAddManualPaymentToOrderArgs,
     ) {
-        return this.orderService.addManualPaymentToOrder(ctx, args.input);
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.orderService.addManualPaymentToOrder(txCtx, args.input),
+        );
     }
 }

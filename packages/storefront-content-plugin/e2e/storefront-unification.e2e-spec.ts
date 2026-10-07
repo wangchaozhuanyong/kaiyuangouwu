@@ -14,8 +14,11 @@ import {
     Customer,
     DefaultSearchPlugin,
     mergeConfig,
+    RequestContextService,
+    RoleService,
     TransactionalConnection,
 } from '@vendure/core';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import { parse, print, visit } from 'graphql';
 import gql from 'graphql-tag';
@@ -77,6 +80,7 @@ const config = mergeConfig(testConfig, {
     },
     plugins: [
         ContentTranslationPlugin,
+        StoreDomainPlugin,
         StorefrontContentPlugin,
         BrandingFixturePlugin,
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
@@ -137,8 +141,8 @@ const testOutput =
 async function prepareClientPreview(context: BrowserContext) {
     // This content-only SQL.js fixture has no currency, fulfillment or announcement
     // plugins. Keep branding, skin, channel and managed content on the real Shop API.
-    // This local content fixture does not mount StoreDomainPlugin. Supply owned
-    // synthetic ACTIVE domains, then forward their read-only queries to this SQL.js API.
+    // These owned synthetic hosts match the native ACTIVE domain records below.
+    // Route browser host metadata and read-only preview requests to this SQL.js API.
     // This is fixture wiring, not public domain acceptance or a production bypass.
     await context.route('http://127.0.0.1:5299/admin-api**', async route => {
         const body = route.request().postDataJSON() as { query: string; variables?: { channelId?: string } };
@@ -317,8 +321,7 @@ beforeAll(async () => {
         `);
         zones.items.push(createZone);
     }
-    stores.push(activeChannel);
-    for (const code of ['unified-store-b', 'unified-new-store']) {
+    for (const code of ['unified-store-a', 'unified-store-b', 'unified-new-store']) {
         const { createChannel } = await adminClient.query(
             gql`
                 mutation CreateChannelForIsolation($input: CreateChannelInput!) {
@@ -350,6 +353,35 @@ beforeAll(async () => {
         stores.push(createChannel);
     }
     const connection = server.app.get(TransactionalConnection);
+    const context = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+    const roles = server.app.get(RoleService);
+    const customerRole = await roles.getCustomerRole(context);
+    const superAdminRole = await roles.getSuperAdminRole(context);
+    for (const store of stores) {
+        await roles.assignRoleToChannel(context, customerRole.id, store.id);
+        await roles.assignRoleToChannel(context, superAdminRole.id, store.id);
+        await connection.rawConnection.getRepository(StoreProfile).save(
+            new StoreProfile({
+                channelId: Number(store.id),
+                status: 'ACTIVE',
+                isPublished: false,
+                descriptionZh: '',
+                descriptionEn: '',
+            }),
+        );
+        await connection.rawConnection.getRepository(StoreDomain).save(
+            new StoreDomain({
+                channelId: Number(store.id),
+                domain: `store-${store.id}.unification.test`,
+                status: 'ACTIVE',
+                isPrimary: true,
+                primaryChannelId: Number(store.id),
+                verificationToken: `unification-fixture-${store.id}`,
+                verifiedAt: new Date(),
+            }),
+        );
+    }
+    await adminClient.asSuperAdmin();
     const fixtureCustomer = await connection.rawConnection.getRepository(Customer).findOneByOrFail({
         emailAddress: 'unified-catalog@example.test',
     });
@@ -357,16 +389,14 @@ beforeAll(async () => {
         .createQueryBuilder()
         .relation(Customer, 'channels')
         .of(fixtureCustomer.id)
-        .add(stores.slice(1).map(store => store.id));
+        .add(stores.map(store => store.id));
     for (const [index, store] of stores.slice(0, 2).entries()) {
-        await connection.rawConnection.getRepository(StoreProfile).save(
-            new StoreProfile({
-                channelId: Number(store.id),
-                descriptionZh: '',
-                descriptionEn: '',
+        await connection.rawConnection.getRepository(StoreProfile).update(
+            { channelId: Number(store.id) },
+            {
                 brandBackgroundColor: index === 0 ? '#eee8e0' : '#edf5fb',
                 brandPrimaryColor: index === 0 ? '#15803d' : '#7c3aed',
-            }),
+            },
         );
         const asset = await connection.rawConnection.getRepository(Asset).save(
             new Asset({
@@ -1240,6 +1270,29 @@ describe('unified storefront Admin API to Shop API', () => {
             }
         `;
         try {
+            // This case owns its native saved-skin prerequisites when run alone.
+            for (const store of stores.slice(0, 2)) {
+                adminClient.setChannelToken(store.token);
+                const existing = (await adminClient.query(READ_VISUAL)).storefrontVisualPreset;
+                await adminClient.query(
+                    gql`
+                        mutation ($input: UpdateStorefrontVisualPresetInput!) {
+                            updateStorefrontVisualPreset(input: $input) {
+                                revision
+                            }
+                        }
+                    `,
+                    {
+                        input: {
+                            channelId: store.id,
+                            expectedRevision: existing.revision,
+                            presetId: 'neo-minimalist',
+                            desktopLayout: 'catalog',
+                        },
+                    },
+                );
+            }
+            adminClient.setChannelToken(stores[0].token);
             await vite.listen();
             const first = await context.newPage();
             const stale = await context.newPage();

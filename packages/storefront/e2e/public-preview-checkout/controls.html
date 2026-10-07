@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>合成环境 · 公开预览结账验收</title>
+        <style>
+            body {
+                margin: 0;
+                font: 16px/1.5 system-ui;
+                color: #172033;
+                background: #f5f7fa;
+            }
+            header {
+                padding: 16px 24px;
+                background: white;
+                border-bottom: 1px solid #dde2ea;
+            }
+            p {
+                margin: 6px 0;
+            }
+            button {
+                padding: 10px 16px;
+                font: inherit;
+                cursor: pointer;
+            }
+            output {
+                display: block;
+                white-space: pre-wrap;
+                margin: 8px 0;
+                font-size: 14px;
+                max-height: 260px;
+                overflow: auto;
+            }
+            iframe {
+                border: 0;
+                width: 100%;
+                height: calc(100vh - 220px);
+                min-height: 680px;
+                background: white;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <strong>本地合成环境：GBP / GB · 真实 CheckoutPage 与 Shop API</strong>
+            <p>
+                先应用合成优惠券并刷新确认保留，再填写交付邮箱与确认邮箱（例如
+                browser-delivery@example.invalid），提交准备订单，最后在真实付款选择页点击 Confirm test
+                payment。
+            </p>
+            <p>隔离数据库，不调用外部支付；地址、账号、商品和券均为测试数据。</p>
+            <output id="status" aria-live="polite">正在读取本地状态…</output>
+            <button id="finish" type="button">完成本地验收并核对数据库</button>
+            <button id="shutdown" type="button" hidden>截图已保存，关闭本地测试服务器</button>
+        </header>
+        <iframe id="checkout" title="真实结账页面"></iframe>
+        <script type="module">
+            const params = new URLSearchParams(location.search);
+            document.getElementById('checkout').src = `/e2e/checkout-flow/index.html?${params}`;
+            const status = document.getElementById('status');
+            const finish = document.getElementById('finish');
+            const shutdown = document.getElementById('shutdown');
+            let completed = false;
+            async function refreshStatus() {
+                if (completed) return;
+                try {
+                    const response = await fetch('/__public-preview-fixture/status');
+                    const result = await response.json();
+                    if (!completed) status.textContent = JSON.stringify(result, null, 2);
+                } catch {
+                    if (!completed) status.textContent = '本地测试服务器已结束。';
+                }
+            }
+            const poll = setInterval(refreshStatus, 2000);
+            await refreshStatus();
+            finish.addEventListener('click', async () => {
+                finish.disabled = true;
+                try {
+                    const response = await fetch('/__public-preview-fixture/finish', { method: 'POST' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message);
+                    completed = true;
+                    status.style.maxHeight = 'none';
+                    status.textContent = JSON.stringify(
+                        { result: result.result, summary: result.summary },
+                        null,
+                        2,
+                    );
+                    clearInterval(poll);
+                    finish.textContent = '本地验收通过，数据库断言已保存';
+                    shutdown.hidden = false;
+                } catch (error) {
+                    status.textContent = error.message;
+                    finish.disabled = false;
+                }
+            });
+            shutdown.addEventListener('click', async () => {
+                shutdown.disabled = true;
+                try {
+                    const response = await fetch('/__public-preview-fixture/shutdown', { method: 'POST' });
+                    if (!response.ok) throw new Error('本地验收尚未通过，服务器保持运行。');
+                    shutdown.textContent = '本地测试服务器已关闭';
+                } catch (error) {
+                    shutdown.textContent = error.message;
+                    shutdown.disabled = false;
+                }
+            });
+        </script>
+    </body>
+</html>

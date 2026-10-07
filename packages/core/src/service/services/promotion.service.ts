@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+    CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+    isConfirmedControlledTestPayment,
+} from '@vendure/common/lib/controlled-test-payment';
 import { ApplyCouponCodeResult } from '@vendure/common/lib/generated-shop-types';
 import {
     AssignPromotionsToChannelInput,
@@ -176,7 +180,7 @@ export class PromotionService {
             input,
             entityType: Promotion,
             translationType: PromotionTranslation,
-            beforeSave: async p => {
+            beforeSave: p => {
                 p.priorityScore = this.calculatePriorityScore(input);
                 if (input.conditions) {
                     p.conditions = input.conditions.map(c =>
@@ -454,8 +458,53 @@ export class PromotionService {
         if (customerId) {
             qb.andWhere('order.customer = :customerId', { customerId });
         }
+        const simulations = await this.confirmedSimulationOrderIds(ctx, promotionIds, customerId);
+        if (simulations.length)
+            qb.andWhere('order.id NOT IN (:...simulatedOrderIds)', { simulatedOrderIds: simulations });
         const results = await qb.getRawMany<{ promotionId: string; usageCount: string }>();
         return new Map(results.map(r => [r.promotionId.toString(), Number(r.usageCount)]));
+    }
+
+    private async confirmedSimulationOrderIds(
+        ctx: RequestContext,
+        promotionIds: ID[],
+        customerId?: ID,
+        excludeOrderId?: ID,
+    ): Promise<ID[]> {
+        // Keep normal usage counting in SQL. Only simulation candidates need JSON evidence checks,
+        // which use the same strict predicate on every supported database rather than JSON dialects.
+        const qb = this.placedOrdersWithPromotionQb(ctx)
+            .innerJoin(
+                'order.payments',
+                'simulationCandidate',
+                'simulationCandidate.method LIKE :simulationMethod AND simulationCandidate.state IN (:...simulationStates)',
+                {
+                    simulationMethod: CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+                    simulationStates: ['Authorized', 'Settled'],
+                },
+            )
+            .leftJoinAndSelect('order.payments', 'simulationEvidence')
+            .andWhere('promotion.id IN (:...promotionIds)', { promotionIds });
+        if (customerId) qb.andWhere('order.customer = :customerId', { customerId });
+        if (excludeOrderId) qb.andWhere('order.id != :excludeOrderId', { excludeOrderId });
+        const simulations: ID[] = [];
+        for (const order of await qb.getMany()) {
+            const successful = order.payments.filter(payment =>
+                ['Authorized', 'Settled'].includes(payment.state),
+            );
+            if (
+                !successful.length ||
+                !successful.every(isConfirmedControlledTestPayment) ||
+                order.payments.some(
+                    payment =>
+                        !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                        payment.metadata?.manualReview?.required,
+                )
+            )
+                continue;
+            simulations.push(order.id);
+        }
+        return simulations;
     }
 
     /**
@@ -489,6 +538,16 @@ export class PromotionService {
             pendingPaymentQb.andWhere('order.id != :excludeOrderId', { excludeOrderId });
         }
 
+        const simulations = await this.confirmedSimulationOrderIds(
+            ctx,
+            [promotionId],
+            customerId,
+            excludeOrderId,
+        );
+        if (simulations.length)
+            completedQb.andWhere('order.id NOT IN (:...simulatedOrderIds)', {
+                simulatedOrderIds: simulations,
+            });
         const [completedCount, pendingCount] = await Promise.all([
             completedQb.getCount(),
             pendingPaymentQb.getCount(),
@@ -525,6 +584,16 @@ export class PromotionService {
             pendingPaymentQb.andWhere('order.id != :excludeOrderId', { excludeOrderId });
         }
 
+        const simulations = await this.confirmedSimulationOrderIds(
+            ctx,
+            [promotionId],
+            undefined,
+            excludeOrderId,
+        );
+        if (simulations.length)
+            completedQb.andWhere('order.id NOT IN (:...simulatedOrderIds)', {
+                simulatedOrderIds: simulations,
+            });
         const [completedCount, pendingCount] = await Promise.all([
             completedQb.getCount(),
             pendingPaymentQb.getCount(),

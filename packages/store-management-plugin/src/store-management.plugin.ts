@@ -413,6 +413,7 @@ import {
     exports: [
         AdminCapabilitiesService,
         StorefrontClientPluginAccessService,
+        StorefrontActivationService,
         StorefrontMediaDeliveryService,
         StorefrontPublicCacheService,
         StorefrontMediaManifestService,

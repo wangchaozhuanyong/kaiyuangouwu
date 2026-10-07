@@ -61,6 +61,7 @@ import {
     MultipleOrderError,
     NothingToRefundError,
     PaymentOrderMismatchError,
+    PaymentStateTransitionError,
     RefundOrderStateError,
     RefundStateTransitionError,
     SettlePaymentError,
@@ -150,6 +151,16 @@ import { StockLevelService } from './stock-level.service';
 @Injectable()
 @Instrument()
 export class OrderService {
+    private readonly orderMutationLocks = new Map<
+        string,
+        (ctx: RequestContext, orderId: ID) => Promise<void>
+    >();
+
+    /** Plugins acquire dependent rows before the order row, preserving one lock order. */
+    registerOrderMutationLock(id: string, lock: (ctx: RequestContext, orderId: ID) => Promise<void>): void {
+        this.orderMutationLocks.set(id, lock);
+    }
+
     /** Plugins validate their own after-sales references and fulfillment-specific costs. */
     registerRefundRequestValidator(
         id: string,
@@ -1330,6 +1341,7 @@ export class OrderService {
      */
     async getEligiblePaymentMethods(ctx: RequestContext, orderId: ID): Promise<PaymentMethodQuote[]> {
         const order = await this.getOrderOrThrow(ctx, orderId);
+        order.payments = await this.getOrderPayments(ctx, orderId);
         return this.paymentMethodService.getEligiblePaymentMethods(ctx, order);
     }
 
@@ -1373,7 +1385,8 @@ export class OrderService {
         // half-committed state (state=new, active=true, orderPlacedAt=null).
         // Joins any existing transaction in ctx, so callers that already have
         // @Transaction() are unaffected. See #4686.
-        return this.connection.withTransaction(ctx, async txCtx => {
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            await this.lockOrderForRefund(txCtx, orderId);
             const order = await this.getOrderOrThrow(txCtx, orderId);
             order.payments = await this.getOrderPayments(txCtx, orderId);
             const fromState = order.state;
@@ -1522,7 +1535,9 @@ export class OrderService {
         paymentId: ID,
         state: PaymentState,
     ): Promise<ErrorResultUnion<TransitionPaymentToStateResult, Payment>> {
-        return this.paymentService.transitionToState(ctx, paymentId, state);
+        return this.withPaymentMutationTransaction(ctx, paymentId, state, txCtx =>
+            this.paymentService.transitionToState(txCtx, paymentId, state),
+        );
     }
 
     /**
@@ -1559,6 +1574,7 @@ export class OrderService {
         if (!this.canAddPaymentToOrder(order)) {
             return new OrderPaymentStateError();
         }
+        order.payments = await this.getOrderPayments(ctx, orderId);
         const totalWithTaxBeforeRevalidation = order.totalWithTax;
         const entitlementRemovedCodes: string[] = [];
         for (const validator of this.checkoutValidators.values()) {
@@ -1788,6 +1804,7 @@ export class OrderService {
         if (order.state !== 'ArrangingAdditionalPayment' && order.state !== 'ArrangingPayment') {
             return new ManualPaymentStateError();
         }
+        order.payments = await this.getOrderPayments(ctx, input.orderId);
         let preserveReceivedQuote = false;
         for (const validator of this.checkoutValidators.values()) {
             const result = await validator(
@@ -1796,6 +1813,7 @@ export class OrderService {
                 { method: input.method, metadata: input.metadata },
                 'manual',
             );
+            if (result.error) return Object.assign(new ManualPaymentStateError(), { message: result.error });
             preserveReceivedQuote ||= result.preserveReceivedQuote === true;
         }
         const manualRemovedCouponCodes = preserveReceivedQuote
@@ -1908,13 +1926,15 @@ export class OrderService {
         ctx: RequestContext,
         paymentId: ID,
     ): Promise<ErrorResultUnion<SettlePaymentResult, Payment>> {
-        const payment = await this.paymentService.settlePayment(ctx, paymentId);
-        if (!isGraphQlErrorResult(payment)) {
-            if (payment.state !== 'Settled') {
-                return new SettlePaymentError({ paymentErrorMessage: payment.errorMessage || '' });
+        return this.withPaymentMutationTransaction(ctx, paymentId, 'Settled', async txCtx => {
+            const payment = await this.paymentService.settlePayment(txCtx, paymentId);
+            if (!isGraphQlErrorResult(payment)) {
+                if (payment.state !== 'Settled') {
+                    return new SettlePaymentError({ paymentErrorMessage: payment.errorMessage || '' });
+                }
             }
-        }
-        return payment;
+            return payment;
+        });
     }
 
     /**
@@ -1926,13 +1946,53 @@ export class OrderService {
         ctx: RequestContext,
         paymentId: ID,
     ): Promise<ErrorResultUnion<CancelPaymentResult, Payment>> {
-        const payment = await this.paymentService.cancelPayment(ctx, paymentId);
-        if (!isGraphQlErrorResult(payment)) {
-            if (payment.state !== 'Cancelled') {
-                return new CancelPaymentError({ paymentErrorMessage: payment.errorMessage || '' });
+        return this.withPaymentMutationTransaction(ctx, paymentId, 'Cancelled', async txCtx => {
+            const payment = await this.paymentService.cancelPayment(txCtx, paymentId);
+            if (!isGraphQlErrorResult(payment)) {
+                if (payment.state !== 'Cancelled') {
+                    return new CancelPaymentError({ paymentErrorMessage: payment.errorMessage || '' });
+                }
             }
-        }
-        return payment;
+            return payment;
+        });
+    }
+
+    /** Existing receipts share cart -> order -> payment locking without a new-checkout gate. */
+    private withPaymentMutationTransaction<T>(
+        ctx: RequestContext,
+        paymentId: ID,
+        state: PaymentState,
+        work: (txCtx: RequestContext) => Promise<T>,
+    ): Promise<T | Payment | PaymentStateTransitionError> {
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            const observed = await this.paymentService.findOneOrThrow(txCtx, paymentId);
+            assertOrderSalesChannel(txCtx, observed.order);
+            await this.lockOrderForRefund(txCtx, observed.order.id);
+            await this.connection
+                .getRepository(txCtx, Payment)
+                .createQueryBuilder()
+                .update()
+                .set({ updatedAt: () => 'updatedAt' })
+                .where('id = :id', { id: paymentId })
+                .execute();
+            const payment = await this.paymentService.findOneOrThrow(txCtx, paymentId);
+            assertOrderSalesChannel(txCtx, payment.order);
+            if (!idsAreEqual(payment.order.id, observed.order.id))
+                throw new UserInputError('付款归属已变化，请刷新后重试');
+            if (payment.state === state) return payment;
+            if (payment.state === 'Settled' && state === 'Cancelled')
+                throw new UserInputError('已到账款项必须通过退款处理，不能取消支付记录');
+            if (!this.paymentService.getNextStates(payment).includes(state))
+                return new PaymentStateTransitionError({
+                    fromState: payment.state,
+                    toState: state,
+                    transitionError: txCtx.translate('error.cannot-transition-payment-from-to', {
+                        fromState: payment.state,
+                        toState: state,
+                    }),
+                });
+            return work(txCtx);
+        });
     }
 
     /**
@@ -2096,6 +2156,7 @@ export class OrderService {
         ctx: RequestContext,
         input: CancelOrderInput,
     ): Promise<ErrorResultUnion<CancelOrderResult, Order>> {
+        await this.lockOrderForRefund(ctx, input.orderId);
         let allOrderItemsCancelled = false;
         const cancelResult =
             input.lines != null
@@ -2178,6 +2239,7 @@ export class OrderService {
     /** Serialize all refund writers for an order, including separate payment records. */
     async lockOrderForRefund(ctx: RequestContext, orderId: ID): Promise<void> {
         await this.getOrderOrThrow(ctx, orderId, []);
+        for (const lock of this.orderMutationLocks.values()) await lock(ctx, orderId);
         await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder()

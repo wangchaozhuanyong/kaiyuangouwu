@@ -22,6 +22,7 @@ export function storefrontQueryRetry(failureCount: number, error: unknown): bool
     return (
         !(error instanceof ShopApiTimeoutError) &&
         storefrontErrorCode(error) !== 'FORBIDDEN' &&
+        storefrontErrorCode(error) !== 'STOREFRONT_CLOSED' &&
         failureCount < 1
     );
 }

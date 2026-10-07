@@ -1,10 +1,12 @@
-import { Controller, Get, Req, Res } from '@nestjs/common';
+import { Controller, Get, Req, Res, UseFilters } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
+import { StorefrontClosedHttpFilter } from './storefront-closed-http.filter';
 import { StorefrontLcpPreloadService } from './storefront-lcp-preload.service';
 
 @Controller('storefront')
+@UseFilters(StorefrontClosedHttpFilter)
 export class StorefrontLcpPreloadController {
     constructor(
         private readonly accessService: StorefrontPromotionAccessService,

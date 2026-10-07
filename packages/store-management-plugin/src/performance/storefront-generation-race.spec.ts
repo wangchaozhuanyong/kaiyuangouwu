@@ -17,7 +17,8 @@ it('discards retained request DataLoader results before rebuilding a changed pub
             },
         } as any,
         { systemOptions: { cacheStrategy: {} } } as any,
-        requestCache,
+        // Keep the real source cache; the consumer signature can resolve private fields from dist.
+        requestCache as unknown as NonNullable<ConstructorParameters<typeof StorefrontPublicCacheService>[2]>,
     );
     let stock = 1;
     let first = true;

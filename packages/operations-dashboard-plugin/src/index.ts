@@ -11,6 +11,7 @@ export {
     type DepartmentRoute,
     type NotificationSeverity,
 } from './department-notification-router.js';
+export { IncidentResponseService } from './incident-response.service.js';
 export { OperationsDashboardPlugin } from './operations-dashboard.plugin.js';
 
 export { AdminNotificationConfigService } from './admin-notification-config.service.js';

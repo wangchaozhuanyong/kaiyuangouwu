@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { storefrontQueryPresentation } from './loading-state';
 import { PAGE_LOADING_DELAY_MS } from './page-readiness';
 import { isStorefrontQueryInScope, type StorefrontRefreshScope } from './query-client';
+import { isStorefrontClosedError } from './storefront-access';
 import { storefrontErrorMessage } from './storefront-errors';
 
 /** One non-modal status for active queries, including plugins, in the current store/language. */
@@ -36,7 +37,11 @@ export function StorefrontQueryFeedback({
             )
             .join('|');
     useSyncExternalStore(subscribe, snapshot, snapshot);
-    const queries = activeQueries();
+    // The closed-store boundary has removed usable content and owns its retry UI.
+    // Do not describe its retained configuration cache as content still being shown.
+    const queries = activeQueries().filter(
+        query => !isStorefrontClosedError(query.state.error, query.queryKey[3] === 'config'),
+    );
     // Next-page failure belongs to the pagination footer; do not turn it into a page refresh failure.
     const failed = queries.filter(
         query =>

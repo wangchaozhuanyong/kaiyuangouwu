@@ -162,6 +162,15 @@ describe('public page fetch boundary', () => {
         vi.resetModules();
     });
 
+    it.each([
+        [Response.json({ errorCode: 'STOREFRONT_CLOSED' }, { status: 403 }), 'STOREFRONT_CLOSED'],
+        [new Response('legacy access denied', { status: 403 }), undefined],
+    ])('preserves access-denial status and the reviewed closure code', async (response, errorCode) => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+        const { fetchPublicPage } = await import('./storefront-page-data');
+        await expect(fetchPublicPage('en')).rejects.toMatchObject({ status: 403, errorCode });
+    });
+
     it('accepts a response for the verified channel without sending account credentials', async () => {
         const page = fixture();
         const fetchMock = vi.fn().mockResolvedValue(Response.json(page));

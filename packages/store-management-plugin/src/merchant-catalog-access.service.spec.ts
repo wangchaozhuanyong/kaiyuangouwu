@@ -315,7 +315,10 @@ describe('MerchantCatalogAccessService', () => {
                         channelPermissions: [
                             {
                                 id: permissionsChannelId,
-                                code: permissionsChannelId,
+                                code:
+                                    permissionsChannelId === 'default-channel'
+                                        ? '__default_channel__'
+                                        : permissionsChannelId,
                                 token: 'fixture-channel-token',
                                 permissions: [...permissions] as Permission[],
                             },

@@ -61,13 +61,14 @@ describe('UsdtPaymentService', () => {
                 getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'order-1', salesChannelId: 'channel-1' }),
             } as any,
             {
-                withOrderMutationTransaction: (_ctx: unknown, work: (ctx: unknown) => unknown) => work(_ctx),
-                lockOrderForRefund: vi.fn().mockResolvedValue(undefined),
+                withOrderMutationTransaction: vi.fn((ctx, work) => work(ctx)),
+                lockOrderForRefund: vi.fn(),
             } as any,
             {} as any,
             { get: () => wallet, requireConfigured: () => wallet } as any,
             {} as any,
             {} as any,
+            { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) } as any,
         );
         const quote = new StorefrontUsdtCheckoutQuote({
             id: 'quote-1',
@@ -347,6 +348,7 @@ describe('UsdtPaymentService', () => {
             {} as any,
             {} as any,
             {} as any,
+            { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) } as any,
         );
 
         await expect(
@@ -415,4 +417,39 @@ describe('UsdtPaymentService', () => {
         });
         expect(event.notification.payload).not.toHaveProperty('receivingAddress', receivingAddress);
     });
+});
+
+it('blocks preview intent creation and existing-intent reuse before loading wallets or allocating payment amounts', async () => {
+    const repository = { findOne: vi.fn(), createQueryBuilder: vi.fn() };
+    const wallets = { requireConfigured: vi.fn() };
+    const service = new UsdtPaymentService(
+        {
+            getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'order', salesChannelId: 'store' }),
+            getRepository: vi.fn().mockReturnValue(repository),
+        } as any,
+        {
+            withOrderMutationTransaction: vi.fn((ctx, work) => work(ctx)),
+            lockOrderForRefund: vi.fn(),
+        } as any,
+        {} as any,
+        wallets as any,
+        {} as any,
+        {} as any,
+        {
+            assertNewRealPaymentAllowed: vi.fn().mockRejectedValue(new Error('公开预览禁止真实付款')),
+        } as any,
+    );
+    await expect(
+        service.ensureIntent(
+            { channelId: 'store' } as any,
+            {
+                id: 'quote',
+                channelId: 'store',
+                orderId: 'order',
+            } as any,
+        ),
+    ).rejects.toThrow('禁止真实付款');
+    expect(repository.findOne).not.toHaveBeenCalled();
+    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(wallets.requireConfigured).not.toHaveBeenCalled();
 });

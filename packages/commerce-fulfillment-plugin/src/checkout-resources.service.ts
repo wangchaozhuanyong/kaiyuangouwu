@@ -1,5 +1,8 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
+import {
+    isConfirmedControlledTestPayment,
+    isControlledTestPaymentMethod,
+} from '@vendure/common/lib/controlled-test-payment';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Allocation,
@@ -115,6 +118,21 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                         ['Declined', 'Cancelled'].includes(event.resultState ?? '');
                     if (declined) {
                         const currentOrder = await this.order(event.ctx, event.order.id);
+                        if (
+                            this.simulationDisposition(currentOrder) === 'REVIEW' ||
+                            currentOrder.payments.some(
+                                payment =>
+                                    !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(
+                                        payment.state,
+                                    ) || payment.metadata?.manualReview?.required,
+                            )
+                        ) {
+                            await attempts.update(
+                                { orderId: event.order.id },
+                                { state: 'REVIEW', reviewReason: '付款结果待核验' },
+                            );
+                            return;
+                        }
                         const alreadyFunded = currentOrder.payments.some(
                             payment =>
                                 ['Authorized', 'Settled'].includes(payment.state) &&
@@ -149,9 +167,15 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                     await this.confirm(event.ctx, event.order);
                 if (['Declined', 'Cancelled'].includes(event.toState)) {
                     const order = await this.order(event.ctx, event.order.id);
+                    if (this.simulationDisposition(order) === 'SIMULATED') {
+                        await this.confirm(event.ctx, order);
+                        return;
+                    }
                     if (
-                        !order.payments.some(payment =>
-                            ['Authorized', 'Settled', 'Created'].includes(payment.state),
+                        !order.payments.some(
+                            payment =>
+                                !['Declined', 'Cancelled'].includes(payment.state) ||
+                                payment.metadata?.manualReview?.required,
                         )
                     ) {
                         await this.connection
@@ -255,8 +279,27 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
     }
 
     async confirm(ctx: RequestContext, order: Order) {
+        // Payment events carry the caller's pre-payment Order. Read the linked, persisted evidence.
+        await this.digital.lock(ctx, Order, order.id);
+        order = await this.order(ctx, order.id);
         const hold = await this.hold(ctx, order.id);
+        const simulation = this.simulationDisposition(order);
+        if (simulation === 'REVIEW') {
+            await this.markReview(ctx, order, '付款证据不完整或与模拟付款混合，请核对原始支付凭证');
+            return;
+        }
         if (!hold) return; // Existing paid orders remain readable during staged rollout.
+        if (simulation === 'SIMULATED') {
+            // A successful local handler has a known outcome. It has no external funds to reconcile.
+            if (hold.state !== 'RELEASED') {
+                await this.connection.getRepository(ctx, CheckoutResourceHold).update(hold.id, {
+                    state: 'HELD',
+                    reviewReason: null,
+                });
+                await this.release(ctx, order);
+            }
+            return;
+        }
         const intact = await this.resourcesIntact(ctx, order);
         if (hold.state === 'REVIEW' && hold.reviewReason && hold.reviewReason !== '付款结果待核验') return;
         await this.connection.getRepository(ctx, CheckoutResourceHold).update(hold.id, {
@@ -266,6 +309,29 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                     ? null
                     : '付款已记录，结算资源不足或占用已释放，请补货后重试交付或退款',
         });
+    }
+
+    async isConfirmedSimulation(ctx: RequestContext, orderId: ID): Promise<boolean> {
+        return this.simulationDisposition(await this.order(ctx, orderId)) === 'SIMULATED';
+    }
+
+    private simulationDisposition(order: Order): 'SIMULATED' | 'REVIEW' | 'REAL' {
+        if (
+            order.payments.some(
+                payment =>
+                    !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                    payment.metadata?.manualReview?.required,
+            )
+        )
+            return 'REVIEW';
+        const successful = order.payments.filter(payment =>
+            ['Authorized', 'Settled'].includes(payment.state),
+        );
+        const hasTestEvidence = successful.some(
+            payment => isControlledTestPaymentMethod(payment.method) || payment.metadata?.public?.testPayment,
+        );
+        if (!hasTestEvidence) return 'REAL';
+        return successful.every(isConfirmedControlledTestPayment) ? 'SIMULATED' : 'REVIEW';
     }
 
     async markReview(ctx: RequestContext, order: Order, reason: string) {
@@ -318,6 +384,10 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         await this.digital.lock(ctx, Order, orderId);
         const order = await this.order(ctx, orderId);
         assertOrderSalesChannel(ctx, order);
+        if (this.hasTestPaymentIdentity(order))
+            throw new UserInputError('模拟付款订单不具备真实交付资格，暂不能补交付');
+        if (this.simulationDisposition(order) === 'REVIEW')
+            throw new UserInputError('实际付款尚未确认或付款证据混合，暂不能补交付');
         const funding = order.payments.filter(
             payment =>
                 payment.state === 'Settled' &&
@@ -403,14 +473,30 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         return this.hold(ctx, order.id);
     }
 
-    async canDeliver(ctx: RequestContext, orderId: ID): Promise<boolean> {
+    async canDeliver(ctx: RequestContext, orderId: ID, currentOrder?: Order): Promise<boolean> {
+        const order =
+            currentOrder && String(currentOrder.id) === String(orderId)
+                ? currentOrder
+                : await this.order(ctx, orderId);
+        if (this.hasTestPaymentIdentity(order)) return false;
+        if (this.simulationDisposition(order) !== 'REAL') return false;
         const hold = await this.hold(ctx, orderId);
         return !hold || hold.state === 'CONFIRMED';
+    }
+
+    private hasTestPaymentIdentity(order: Order): boolean {
+        return order.payments.some(
+            payment =>
+                isControlledTestPaymentMethod(payment.method) ||
+                payment.metadata?.public?.testPayment === true,
+        );
     }
 
     async assertCancellationAllowed(ctx: RequestContext, orderId: ID) {
         const hold = await this.hold(ctx, orderId);
         if (hold?.state === 'PAYING' || (hold?.state === 'REVIEW' && hold.reviewReason === '付款结果待核验'))
+            throw new UserInputError('付款结果尚待核验，不能取消订单或释放交付资源');
+        if (this.simulationDisposition(await this.order(ctx, orderId)) === 'REVIEW')
             throw new UserInputError('付款结果尚待核验，不能取消订单或释放交付资源');
     }
 
@@ -421,11 +507,10 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         if (!hold || hold.state === 'RELEASED') return;
         for (const line of order.lines) {
             await this.digital.releaseLine(ctx, line.id);
-            if (getOrderLineFulfillmentType(line) === 'physical') {
-                const quantity = await this.outstandingAllocation(ctx, line.id);
-                if (quantity)
-                    await this.stock.createReleasesForOrderLines(ctx, [{ orderLineId: line.id, quantity }]);
-            }
+            // Staged-rollout digital variants may still have legacy warehouse allocations.
+            const quantity = await this.outstandingAllocation(ctx, line.id);
+            if (quantity)
+                await this.stock.createReleasesForOrderLines(ctx, [{ orderLineId: line.id, quantity }]);
         }
         await this.connection.getRepository(ctx, CheckoutResourceHold).update(hold.id, { state: 'RELEASED' });
     }
@@ -442,26 +527,46 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                 .findOne({ where: { id: hold.channelId } });
             if (!channel) continue;
             const ctx = await this.contexts.create({ apiType: 'admin', channelOrToken: channel });
-            await this.connection.withTransaction(ctx, async tx => {
-                await this.digital.lock(tx, Order, hold.orderId);
-                const current = await this.hold(tx, hold.orderId);
-                if (!current || current.state === 'RELEASED' || current.expiresAt > new Date()) return;
-                const order = await this.order(tx, hold.orderId);
-                if (order.payments.some(payment => ['Authorized', 'Settled'].includes(payment.state)))
-                    return this.confirm(tx, order);
-                // Pending/unknown gateway attempts must be reconciled, never inferred to be unpaid.
-                if (current.state !== 'HELD' || order.payments.some(payment => payment.state === 'Created'))
-                    return;
-                const expiresAt = await this.expiry(tx, order.id, false);
-                if (expiresAt && expiresAt > new Date()) {
-                    await this.connection
-                        .getRepository(tx, CheckoutResourceHold)
-                        .update(hold.id, { expiresAt });
-                    return;
-                }
-                await this.release(tx, order);
-                released++;
-            });
+            // Waiting for the cart/order lock must not preserve a pre-receipt funding snapshot.
+            await this.connection.withTransaction(
+                ctx,
+                async tx => {
+                    await this.digital.lock(tx, Order, hold.orderId);
+                    const current = await this.hold(tx, hold.orderId);
+                    if (!current || current.state === 'RELEASED' || current.expiresAt > new Date()) return;
+                    const order = await this.order(tx, hold.orderId);
+                    if (order.payments.some(payment => ['Authorized', 'Settled'].includes(payment.state))) {
+                        const simulated = this.simulationDisposition(order) === 'SIMULATED';
+                        // An older simulation does not resolve a later attempt whose gateway result is unknown.
+                        if (simulated && current.state !== 'HELD') return;
+                        await this.confirm(tx, order);
+                        if (simulated && (await this.hold(tx, order.id))?.state === 'RELEASED') released++;
+                        return;
+                    }
+                    // Pending/unknown gateway attempts must be reconciled, never inferred to be unpaid.
+                    if (
+                        current.state !== 'HELD' ||
+                        order.payments.some(
+                            payment =>
+                                !['Declined', 'Cancelled'].includes(payment.state) ||
+                                payment.metadata?.manualReview?.required,
+                        )
+                    )
+                        return;
+                    const expiresAt = await this.expiry(tx, order.id, false);
+                    if (expiresAt && expiresAt > new Date()) {
+                        await this.connection
+                            .getRepository(tx, CheckoutResourceHold)
+                            .update(hold.id, { expiresAt });
+                        return;
+                    }
+                    await this.release(tx, order);
+                    released++;
+                },
+                ['mysql', 'mariadb', 'postgres'].includes(this.connection.rawConnection.options.type)
+                    ? 'READ COMMITTED'
+                    : undefined,
+            );
         }
         return { examined: holds.length, released };
     }

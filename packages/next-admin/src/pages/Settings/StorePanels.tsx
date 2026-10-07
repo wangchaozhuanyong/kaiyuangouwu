@@ -192,6 +192,7 @@ export function StoresPanel({
     profiles,
     activeChannelId,
     publicPreviewBusy,
+    canUpdatePublicPreview,
     onTogglePublicPreview,
     onEdit,
     onDeprovision,
@@ -200,6 +201,7 @@ export function StoresPanel({
     profiles: StoreProfileRecord[];
     activeChannelId: string;
     publicPreviewBusy: boolean;
+    canUpdatePublicPreview: boolean;
     onTogglePublicPreview: (profile: StoreProfileRecord) => void | Promise<void>;
     onEdit: (profile: StoreProfileRecord) => void;
     onDeprovision: (profile: StoreProfileRecord) => void;
@@ -282,13 +284,15 @@ export function StoresPanel({
                                         id={`public-preview-help-${profile.id}`}
                                         className="mt-1 text-[10px] leading-4 text-slate-600"
                                     >
-                                        {profile.channel.id !== activeChannelId
-                                            ? '请先从顶部切换到此店铺，再操作公开预览。'
-                                            : !profile.primaryDomain && !profile.isPublished
-                                              ? '请先配置并验证主域名，再开放预览。'
-                                              : profile.isPublished
-                                                ? '此店铺的公开预览已开放。'
-                                                : '开放后所有访客均可浏览此店铺。'}
+                                        {!canUpdatePublicPreview
+                                            ? '当前账号仅可查看公开预览状态。'
+                                            : profile.channel.id !== activeChannelId
+                                              ? '请先从顶部切换到此店铺，再操作公开预览。'
+                                              : !profile.primaryDomain && !profile.isPublished
+                                                ? '请先配置并验证主域名，再开放预览。'
+                                                : profile.isPublished
+                                                  ? '此店铺的公开预览已开放。'
+                                                  : '开放后所有访客均可浏览此店铺。'}
                                     </p>
                                 </div>
                                 <AdminButton
@@ -300,6 +304,7 @@ export function StoresPanel({
                                     onClick={() => void onTogglePublicPreview(profile)}
                                     disabled={
                                         publicPreviewBusy ||
+                                        !canUpdatePublicPreview ||
                                         profile.channel.id !== activeChannelId ||
                                         (!profile.primaryDomain && !profile.isPublished)
                                     }
