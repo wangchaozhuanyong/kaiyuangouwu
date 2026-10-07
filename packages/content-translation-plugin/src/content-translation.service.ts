@@ -214,12 +214,13 @@ export class ContentTranslationService {
                 fieldPath: field.path,
                 sourceText: field.sourceText,
                 translatedText: field.translatedText,
-                status:
-                    retainLock && !reuseState
+                status: retainLock
+                    ? existing.sourceHash !== hash(field.sourceText) || existing.status === 'STALE'
                         ? 'STALE'
-                        : reuseState && !field.clearLock
-                          ? existing.status
-                          : field.status,
+                        : 'MANUAL_LOCKED'
+                    : reuseState && !field.clearLock
+                      ? existing.status
+                      : field.status,
                 origin: retainLock
                     ? 'MANUAL'
                     : reuseState && !field.clearLock

@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { newContentBlock } from './storefront-content-utils';
+import { newContentBlock, newContentItem } from './storefront-content-utils';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 
 vi.mock('@apollo/client/react', () => ({ useQuery: () => ({ data: undefined }) }));
@@ -26,6 +26,44 @@ vi.mock('./storefront-asset-picker', () => ({
     ),
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+it('focuses the requested existing item field in English without changing content or image bindings', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const value = {
+        ...newContentBlock('CUSTOM', 0),
+        id: 'audit-block',
+        items: [{ ...newContentItem(0), id: 'audit-item' }],
+    };
+    value.items[0].translations[1].description = 'Reviewed English';
+    const before = structuredClone(value);
+    const onSave = vi.fn();
+    try {
+        await act(async () =>
+            root.render(
+                <StorefrontBlockEditor
+                    value={value}
+                    saving={false}
+                    onClose={() => undefined}
+                    onSave={onSave}
+                    initialLanguage="en"
+                    reviewTarget={{ itemId: 'audit-item', field: 'description' }}
+                />,
+            ),
+        );
+        const target = host.querySelector<HTMLInputElement>(
+            '[data-translation-item-id="audit-item"] [data-translation-field="description"]',
+        )!;
+        expect(target.value).toBe('Reviewed English');
+        expect(document.activeElement).toBe(target);
+        expect(value).toEqual(before);
+        expect(onSave).not.toHaveBeenCalled();
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
 
 it.each([
     ['AUTH_LOGIN', undefined, 'bottom'],

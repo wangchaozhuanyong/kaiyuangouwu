@@ -2,7 +2,7 @@ import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../compo
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { Check, Plus, Search, X } from 'lucide-react';
-import { useDeferredValue, useLayoutEffect, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useRef, useState } from 'react';
 import {
     heroThemePresets,
     homepageVisualStyles,
@@ -59,18 +59,40 @@ export function StorefrontBlockEditor({
     error,
     onClose,
     onSave,
+    initialLanguage = 'zh_Hans',
+    reviewTarget,
 }: {
     value: StorefrontContentBlock;
     saving: boolean;
     error?: string;
     onClose: () => void;
     onSave: (value: StorefrontContentBlock, allowImageReplacement?: boolean) => Promise<void>;
+    initialLanguage?: StorefrontLanguageCode;
+    reviewTarget?: { itemId: string | null; field: string | null };
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canReadProducts = hasAnyPermission(['ReadCatalog', 'ReadProduct']);
     const [draft, setDraft] = useState(() => cloneContentBlock(value));
     const [reviewedImages, setReviewedImages] = useState<string | null>(null);
-    const [language, setLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
+    const [language, setLanguage] = useState<StorefrontLanguageCode>(initialLanguage);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const reviewItemId = reviewTarget?.itemId;
+    const reviewField = reviewTarget?.field;
+    useLayoutEffect(() => {
+        if (!reviewField || !contentRef.current) return;
+        const scope = reviewItemId
+            ? [...contentRef.current.querySelectorAll<HTMLElement>('[data-translation-item-id]')].find(
+                  item => item.dataset.translationItemId === reviewItemId,
+              )
+            : contentRef.current;
+        const target =
+            scope &&
+            [
+                ...scope.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-translation-field]'),
+            ].find(item => item.dataset.translationField === reviewField);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView?.({ block: 'center' });
+    }, [reviewItemId, reviewField]);
     const [showProducts, setShowProducts] = useState(false);
     const [productSearch, setProductSearch] = useState('');
     const [productPage, setProductPage] = useState(0);
@@ -173,7 +195,13 @@ export function StorefrontBlockEditor({
                     </AdminButton>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-5 sm:p-7">
+                <div ref={contentRef} className="flex-1 overflow-y-auto p-5 sm:p-7">
+                    {reviewTarget && (
+                        <p className="mb-4 text-xs text-blue-700" role="status">
+                            已定位英文复核内容：{reviewTarget.itemId ? `子项 ${reviewTarget.itemId} · ` : ''}
+                            {reviewTarget.field || '区块文案'}。修改后仍需保存。
+                        </p>
+                    )}
                     {error && (
                         <p
                             role="alert"
@@ -301,6 +329,7 @@ export function StorefrontBlockEditor({
                                         {isAuth ? (
                                             <AdminTextArea
                                                 rows={2}
+                                                data-translation-field="title"
                                                 value={translation.title}
                                                 onChange={event =>
                                                     updateTranslation({ title: event.target.value })
@@ -310,6 +339,7 @@ export function StorefrontBlockEditor({
                                             />
                                         ) : (
                                             <AdminInput
+                                                data-translation-field="title"
                                                 value={translation.title}
                                                 onChange={event =>
                                                     updateTranslation({ title: event.target.value })
@@ -320,6 +350,7 @@ export function StorefrontBlockEditor({
                                     </Field>
                                     <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
                                         <AdminInput
+                                            data-translation-field="subtitle"
                                             value={translation.subtitle}
                                             onChange={event =>
                                                 updateTranslation({ subtitle: event.target.value })
@@ -384,6 +415,7 @@ export function StorefrontBlockEditor({
                                     <Field label={isSupport ? '客服说明' : '正文'}>
                                         <AdminTextArea
                                             rows={5}
+                                            data-translation-field="body"
                                             value={translation.body}
                                             onChange={event =>
                                                 updateTranslation({ body: event.target.value })
@@ -394,6 +426,7 @@ export function StorefrontBlockEditor({
                                     {!isSupport && (
                                         <Field label={isAuth ? '图片上的引导短句' : '按钮文案'}>
                                             <AdminInput
+                                                data-translation-field="ctaLabel"
                                                 value={translation.ctaLabel}
                                                 onChange={event =>
                                                     updateTranslation({ ctaLabel: event.target.value })

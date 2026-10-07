@@ -17,6 +17,7 @@ import {
     X,
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     accountRecommendationSettingsEqual,
     resolveAccountRecommendationSettings,
@@ -87,6 +88,7 @@ type ContentActionScope = {
 };
 
 export function StorefrontModule() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -154,6 +156,57 @@ export function StorefrontModule() {
     }, [channelId]);
     /* oxlint-enable react/set-state-in-effect */
     const allBlocks = channelConsistent ? (query.data?.storefrontContentBlocks ?? []) : [];
+    const requestedBlockId = searchParams.get('blockId');
+    const requestedItemId = searchParams.get('itemId');
+    const requestedField = searchParams.get('field');
+    const requestedBlock = channelConsistent
+        ? query.data?.storefrontContentBlocks.find(item => String(item.id) === requestedBlockId)
+        : undefined;
+    const openedRequest = useRef('');
+    /* oxlint-disable react/set-state-in-effect -- Open an explicit audit deep link once, without replacing a live editor draft on refresh. */
+    useLayoutEffect(() => {
+        const key = `${channelId}:${requestedBlockId ?? ''}:${requestedItemId ?? ''}:${requestedField ?? ''}`;
+        if (!requestedBlockId) {
+            openedRequest.current = '';
+            return;
+        }
+        if (
+            !requestedBlockId ||
+            !canUpdate ||
+            query.loading ||
+            !channelConsistent ||
+            editing ||
+            openedRequest.current === key
+        )
+            return;
+        if (!requestedBlock) return;
+        openedRequest.current = key;
+        setEditing(requestedBlock);
+    }, [
+        channelId,
+        requestedBlockId,
+        requestedItemId,
+        requestedField,
+        canUpdate,
+        query.loading,
+        channelConsistent,
+        requestedBlock,
+        editing,
+    ]);
+    /* oxlint-enable react/set-state-in-effect */
+    const closeEditor = () => {
+        setEditing(null);
+        setActionError('');
+        if (!requestedBlockId) return;
+        setSearchParams(
+            current => {
+                const next = new URLSearchParams(current);
+                for (const key of ['blockId', 'itemId', 'field', 'language']) next.delete(key);
+                return next;
+            },
+            { replace: true },
+        );
+    };
     const homepageRows = storefrontHomepageRows(allBlocks);
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
     const scrollingAdBlocks = homepageBlocks.filter(
@@ -312,7 +365,7 @@ export function StorefrontModule() {
                 const blocks = refreshed.storefrontContentBlocks;
                 await persistOrder(homepageOrderIds(blocks, storefrontHomepageRows(blocks)), scope);
             }
-            setEditing(null);
+            closeEditor();
             showNotice(publicationNotice(readback));
         });
     };
@@ -475,6 +528,19 @@ export function StorefrontModule() {
             </header>
 
             <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start items-start gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
+                {requestedBlockId &&
+                    !query.loading &&
+                    channelConsistent &&
+                    (!requestedBlock || !canUpdate) && (
+                        <p
+                            role="alert"
+                            className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 xl:col-span-2"
+                        >
+                            {!canUpdate
+                                ? '当前账号没有此内容的编辑权限。'
+                                : '要复核的内容已不存在或不属于当前店铺，请返回翻译审计重新读取。'}
+                        </p>
+                    )}
                 <StorefrontMobileViewSwitch value={mobileView} onChange={setMobileView} />
                 <div className={`min-w-0 space-y-4 ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}>
                     {notice && !carouselOpen && (
@@ -842,10 +908,13 @@ export function StorefrontModule() {
                     value={editing}
                     saving={savePending}
                     error={actionError}
-                    onClose={() => {
-                        setEditing(null);
-                        setActionError('');
-                    }}
+                    initialLanguage={searchParams.get('language') === 'en' ? 'en' : 'zh_Hans'}
+                    reviewTarget={
+                        requestedBlockId === String(editing.id)
+                            ? { itemId: requestedItemId, field: requestedField }
+                            : undefined
+                    }
+                    onClose={closeEditor}
                     onSave={saveEditor}
                 />
             )}

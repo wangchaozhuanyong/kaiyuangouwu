@@ -9,7 +9,16 @@ import {
 
 describe('translation audit database pagination', () => {
     // A disposable SQL database verifies actual filter grouping and LIKE escaping.
-    const schema = new EntitySchema({
+    const schema = new EntitySchema<{
+        id: number;
+        channelId: string | null;
+        entityType: string;
+        entityId: string;
+        fieldPath: string;
+        status: string;
+        error: string | null;
+        updatedAt: Date;
+    }>({
         name: 'AuditState',
         columns: {
             id: { type: Number, primary: true, generated: true },

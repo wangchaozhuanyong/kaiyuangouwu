@@ -262,6 +262,62 @@ export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
     }
 `;
 
+export const CONTENT_TRANSLATION_REVIEW_QUERY = gql`
+    query NextAdminContentTranslationReview($id: ID!) {
+        contentTranslationReview(id: $id) {
+            state {
+                id
+                channelId
+                entityType
+                entityId
+                fieldPath
+                sourceLanguageCode
+                targetLanguageCode
+                status
+                origin
+                locked
+                error
+                attempts
+                revision
+                nextAttemptAt
+                lastErrorCode
+                updatedAt
+            }
+            sourceText
+            targetText
+            sourceHash
+            translatedHash
+            format
+            canConfirm
+            editPath
+            reason
+        }
+    }
+`;
+
+export const CONFIRM_CONTENT_TRANSLATION_REVIEW_MUTATION = gql`
+    mutation NextAdminConfirmContentTranslationReview($input: ConfirmCustomerContentTranslationReviewInput!) {
+        confirmCustomerContentTranslationReview(input: $input) {
+            id
+            channelId
+            entityType
+            entityId
+            fieldPath
+            sourceLanguageCode
+            targetLanguageCode
+            status
+            origin
+            locked
+            error
+            attempts
+            revision
+            nextAttemptAt
+            lastErrorCode
+            updatedAt
+        }
+    }
+`;
+
 export const BACKFILL_CONTENT_TRANSLATIONS_MUTATION = gql`
     mutation NextAdminBackfillContentTranslations($entityType: String, $limit: Int, $offset: Int) {
         backfillCustomerContentTranslations(entityType: $entityType, limit: $limit, offset: $offset) {
@@ -431,6 +487,31 @@ export interface ContentTranslationStateRecord {
     locked: boolean;
     error: string | null;
     updatedAt: string;
+}
+
+export interface ContentTranslationReviewRecord {
+    state: ContentTranslationStateRecord;
+    sourceText: string;
+    targetText: string;
+    sourceHash: string;
+    translatedHash: string;
+    format: string;
+    canConfirm: boolean;
+    editPath: string | null;
+    reason: string | null;
+}
+
+export interface ContentTranslationBackfillResult {
+    total: number;
+    scanned: number;
+    processed: number;
+    queued: number;
+    skipped: number;
+    failed: number;
+    nextOffset: number;
+    hasMore: boolean;
+    skippedRecords: string[];
+    errors: string[];
 }
 
 export interface ContentTranslationAuditResult {

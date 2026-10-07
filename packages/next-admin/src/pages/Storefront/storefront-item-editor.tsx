@@ -60,7 +60,10 @@ export function ItemEditor({
             },
         });
     return (
-        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <article
+            data-translation-item-id={item.id}
+            className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+        >
             <div className="flex items-center justify-between gap-3">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                     <AdminInput
@@ -95,6 +98,7 @@ export function ItemEditor({
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}名称 *`}>
                     <AdminInput
+                        data-translation-field="label"
                         value={translation.label}
                         onChange={event => updateTranslation({ label: event.target.value })}
                         className={inputClass}
@@ -105,12 +109,14 @@ export function ItemEditor({
                         {legal ? (
                             <AdminTextArea
                                 rows={8}
+                                data-translation-field="description"
                                 value={translation.description}
                                 onChange={event => updateTranslation({ description: event.target.value })}
                                 className={`${inputClass} min-h-40 resize-y`}
                             />
                         ) : (
                             <AdminInput
+                                data-translation-field="description"
                                 value={translation.description}
                                 onChange={event => updateTranslation({ description: event.target.value })}
                                 className={inputClass}
