@@ -13,6 +13,7 @@ import {
     ChannelService,
     Collection,
     CollectionService,
+    CountryService,
     CurrencyCode,
     Customer,
     CustomerService,
@@ -1755,12 +1756,19 @@ describe('platform governance real database and API boundaries', () => {
                 where: { id: a.channelId },
                 relations: ['defaultShippingZone'],
             });
-            const operatingContext = a.copy({ channel: operatingChannel });
-            const zone = await server.app
-                .get(ZoneService)
-                .findOne(operatingContext, operatingChannel.defaultShippingZone.id);
-            const destination = zone?.members.find(member => member.enabled);
-            if (!destination) throw new Error('Synthetic store needs an enabled destination');
+            const destination = await server.app.get(CountryService).create(platform, {
+                code: 'QZ',
+                enabled: true,
+                translations: [{ languageCode: LanguageCode.en, name: 'Synthetic quote destination' }],
+            });
+            const zone = await server.app.get(ZoneService).create(platform, {
+                name: 'Synthetic public shipping quote zone',
+                memberIds: [destination.id],
+            });
+            await channels.save({ ...operatingChannel, defaultShippingZone: zone });
+            const operatingContext = a.copy({
+                channel: { ...operatingChannel, defaultShippingZone: zone } as Channel,
+            });
             const shipping = server.app.get(ShippingMethodService);
             const method = await shipping.findOne(operatingContext, publicId);
             if (!method) throw new Error('Adopted public shipping template missing');

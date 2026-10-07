@@ -67,7 +67,7 @@ describe('Migrate Command E2E', { timeout: 60_000 }, () => {
                 outputDir: MIGRATIONS_DIR,
             });
 
-            expect(result.success).toBe(true);
+            expect(result.success, result.message).toBe(true);
             expect(result.migrationName).toBeDefined();
             expect(result.message).toContain('New migration generated');
 

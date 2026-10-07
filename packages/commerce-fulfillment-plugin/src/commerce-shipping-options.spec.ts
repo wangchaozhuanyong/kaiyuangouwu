@@ -254,6 +254,32 @@ describe('supportedDestinationEligibilityChecker', () => {
         ).resolves.toBe(false);
     });
 
+    it('preserves a single configured country or postal restriction when the other is absent', async () => {
+        const allowedOnly = [{ name: 'allowedCountryCodes', value: 'MY' }];
+        const blockedOnly = [{ name: 'blockedPostalPrefixes', value: '87' }];
+        await expect(
+            supportedDestinationEligibilityChecker.check(ctx, order, allowedOnly, ctx),
+        ).resolves.toBe(true);
+        await expect(
+            supportedDestinationEligibilityChecker.check(
+                ctx,
+                { ...order, shippingAddress: { countryCode: 'SG' } },
+                allowedOnly,
+                ctx,
+            ),
+        ).resolves.toBe(false);
+        await expect(
+            supportedDestinationEligibilityChecker.check(ctx, order, blockedOnly, ctx),
+        ).resolves.toBe(false);
+        await expect(
+            supportedDestinationEligibilityChecker.check(
+                ctx,
+                { ...order, shippingAddress: { countryCode: 'MY', postalCode: '50000' } },
+                blockedOnly,
+                ctx,
+            ),
+        ).resolves.toBe(true);
+    });
     it('rejects digital-only orders because they do not need a shipping method', async () => {
         await supportedDestinationEligibilityChecker.init({ get: () => ({ get: () => null }) } as any);
         await expect(
