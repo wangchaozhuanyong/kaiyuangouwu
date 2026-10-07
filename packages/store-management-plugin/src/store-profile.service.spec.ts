@@ -6,6 +6,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { evaluateStoreActivationReadiness } from './store-activation-readiness.service';
 import { StoreProfileService } from './store-profile.service';
 import { StoreActivationReadiness } from './types';
 
@@ -553,9 +554,9 @@ describe('StoreProfileService', () => {
             checks: [
                 { code: 'DOMAIN', ready: false, message: '验证并设置主域名', messageEn: '' },
                 {
-                    code: 'PAYMENT',
+                    code: 'TERMS',
                     ready: false,
-                    message: '启用至少一种非测试支付方式',
+                    message: '发布使用条款（英文自动生成）',
                     messageEn: '',
                 },
             ],
@@ -568,8 +569,38 @@ describe('StoreProfileService', () => {
                 expectedUpdatedAt: current.updatedAt,
                 status: 'ACTIVE',
             }),
-        ).rejects.toThrow('验证并设置主域名；启用至少一种非测试支付方式');
+        ).rejects.toThrow('验证并设置主域名；发布使用条款（英文自动生成）');
         expect(profileRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('activates a store whose remaining launch checks pass without payment setup', async () => {
+        const current = profile({ status: 'DRAFT' });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const readiness = evaluateStoreActivationReadiness({
+            profile: true,
+            domain: true,
+            password: true,
+            catalog: true,
+            support: true,
+            privacy: true,
+            terms: true,
+            shipping: true,
+            payment: false,
+        });
+        const { service } = createService(repository, { find: vi.fn().mockResolvedValue([]) }, readiness);
+
+        const updated = await service.update(platformContext(), {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            status: 'ACTIVE',
+        });
+
+        expect(updated.status).toBe('ACTIVE');
+        expect(repository.save).toHaveBeenCalledOnce();
+        expect(updated.activationReadiness?.checks.some(check => check.code === 'PAYMENT')).toBe(false);
     });
 
     it('allows a SuperAdmin to update both storefront names', async () => {

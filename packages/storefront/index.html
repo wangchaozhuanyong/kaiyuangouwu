@@ -40,7 +40,19 @@
         <script nomodule src="/legacy-browser-guard.js"></script>
     </head>
     <body>
-        <div id="root"></div>
+        <div id="root">
+            <main
+                id="storefront-boot-loading"
+                class="page-skeleton page-skeleton--route page-skeleton--viewport"
+                role="status"
+                aria-label="正在加载页面"
+                aria-busy="true"
+            >
+                <span class="brand-loading" aria-hidden="true">
+                    <span class="brand-loading-dots"><i></i><i></i><i></i></span>
+                </span>
+            </main>
+        </div>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>

@@ -52,6 +52,7 @@ import {
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
 import { StoreSettingsNavigation } from './StoreSettingsNavigation';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
+import { useStoreSellerOptions } from './use-store-seller-options';
 const directoryOptions = (skip: number) => ({ skip, take: 100, sort: dataTableSortPolicy.newestCreated });
 
 export function PlatformGovernanceCenter({
@@ -68,6 +69,7 @@ export function PlatformGovernanceCenter({
     const [tab, setTab] = useUrlTab<StoreSettingsTab>(STORE_SETTINGS_TABS, 'stores');
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [storeEditor, setStoreEditor] = useState<StoreProfileRecord | null>(null);
+    const sellerOptions = useStoreSellerOptions(Boolean(storeEditor));
     const [deprovisionProfile, setDeprovisionProfile] = useState<StoreProfileRecord | null>(null);
     const [provisionOpen, setProvisionOpen] = useState(false);
     const [sellerOpen, setSellerOpen] = useState(false);
@@ -549,10 +551,10 @@ export function PlatformGovernanceCenter({
                 <StoreEditor
                     key={storeEditor.id}
                     profile={storeEditor}
-                    sellers={query.data?.sellers?.items ?? []}
-                    sellerOptionsReady={Boolean(
-                        query.data && query.data.sellers?.items.length >= query.data.sellers?.totalItems,
-                    )}
+                    sellers={sellerOptions.sellers}
+                    sellerOptionsState={sellerOptions.status}
+                    sellerOptionsError={sellerOptions.error}
+                    onRetrySellers={sellerOptions.retry}
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}
                     onError={setActionError}

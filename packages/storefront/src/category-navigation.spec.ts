@@ -198,15 +198,14 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('keeps category labels on one line in the same five-character width for every language', () => {
+    it('gives category labels the full item width and lets longer mobile names wrap in every language', () => {
         const labelRule = stylesheet.match(/\.primary-category-label\s*\{([^}]*)\}/)?.[1] ?? '';
-        expect(labelRule).toMatch(/width:\s*5em;[^}]*min-width:\s*5em;[^}]*max-width:\s*5em;/);
-        expect(labelRule).toMatch(/overflow:\s*hidden;/);
-        expect(labelRule).toMatch(/white-space:\s*nowrap;/);
-        expect(labelRule).toMatch(/text-overflow:\s*ellipsis;/);
-        expect(stylesheet).not.toMatch(
-            /(?:html\[lang='en'\] |\.category-page )?\.primary-category-label\s*\{[^}]*(?:white-space:\s*normal|-webkit-line-clamp:|overflow-wrap:\s*anywhere)/,
+        expect(labelRule).toMatch(/width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*none;/);
+        expect(labelRule).toMatch(/font-size:\s*var\(--type-label-size\);/);
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-category-label\s*\{[^}]*height:\s*auto;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/,
         );
+        expect(stylesheet).not.toMatch(/html\[lang='en'\] \.primary-category-label\s*\{/);
         expect(categoryPageSource).toContain('title={collection.name}');
         expect(categoryPageSource).toContain('aria-label={collection.name}');
         expect(categoryPageSource).toContain(
@@ -214,16 +213,16 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('reserves the five-character width without stretching sparse categories or overlapping expanded labels', () => {
+    it('reserves mixed-script label width without stretching sparse categories or clipping expanded names', () => {
         expect(stylesheet).toMatch(
-            /\.primary-categories button\s*\{[^}]*width:\s*calc\(5 \* var\(--type-label-size\) \+ 4px\);[^}]*flex:\s*0 0 auto;/,
+            /\.primary-categories button\s*\{[^}]*width:\s*84px;[^}]*min-width:\s*84px;[^}]*max-width:\s*84px;[^}]*flex:\s*0 0 auto;/,
         );
         expect(stylesheet).not.toMatch(/html\[lang='en'\] \.primary-categories button\s*\{/);
         expect(stylesheet).toMatch(
-            /\.all-primary-category-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit, calc\(5 \* var\(--type-label-size\) \+ 4px\)\);/,
+            /\.all-primary-category-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit, 84px\);/,
         );
         expect(stylesheet).toMatch(
-            /\.all-primary-category-grid button > span:last-child\s*\{[^}]*width:\s*5em;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/,
+            /\.all-primary-category-grid button > span:last-child\s*\{[^}]*width:\s*100%;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/,
         );
         expect(stylesheet).toMatch(
             // eslint-disable-next-line max-len -- This single rule is the shared mobile gutter contract.

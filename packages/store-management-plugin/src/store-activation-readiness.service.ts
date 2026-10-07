@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     Channel,
-    ConfigService,
     ID,
     PaymentMethod,
-    PaymentMethodService,
     ProductVariant,
     RequestContext,
     ShippingMethodService,
@@ -17,7 +15,6 @@ import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { hasReadyShippingMethod } from './shipping-readiness';
-import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
 import {
     USDT_TRC20_PAYMENT_HANDLER_CODE,
@@ -32,21 +29,53 @@ export function isUsableEnglishContent(value: unknown): boolean {
 }
 
 export function hasCompleteStoreProfile(profile: StoreProfile): boolean {
+    return storeProfileActivationCheck(profile).ready;
+}
+
+/** Explain the exact saved fields, including automatic translations, without weakening readiness. */
+export function storeProfileActivationCheck(profile: StoreProfile): StoreActivationCheck {
     const customFields = profile.channel?.customFields as
         { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
-    return (
-        [customFields?.storefrontNameZh, profile.descriptionZh, profile.logoAssetId].every(
-            value => String(value ?? '').trim().length > 0,
-        ) &&
-        isUsableEnglishContent(customFields?.storefrontNameEn) &&
-        isUsableEnglishContent(profile.descriptionEn) &&
-        [
-            profile.legalEntityName,
-            profile.legalRegistrationCountry,
-            profile.supportEmail,
-            profile.privacyEmail,
-        ].every(value => String(value ?? '').trim().length > 0)
-    );
+    const manual = [
+        [customFields?.storefrontNameZh, '中文店铺名称', 'Chinese store name'],
+        [profile.descriptionZh, '中文简介', 'Chinese description'],
+        [profile.logoAssetId, '店铺图标', 'Store icon'],
+        [profile.legalEntityName, '法定经营主体', 'Legal entity'],
+        [profile.legalRegistrationCountry, '注册国家/地区', 'Registration country/region'],
+        [profile.supportEmail, '客服邮箱', 'Support email'],
+        [profile.privacyEmail, '隐私邮箱', 'Privacy email'],
+    ].filter(([value]) => !String(value ?? '').trim());
+    const automatic = [
+        [customFields?.storefrontNameEn, '店铺名称', 'store name'],
+        [profile.descriptionEn, '简介', 'description'],
+    ].filter(([value]) => !isUsableEnglishContent(value));
+    const ready = manual.length === 0 && automatic.length === 0;
+    return {
+        code: 'PROFILE',
+        ready,
+        message: ready
+            ? '店铺品牌与经营资料已完整'
+            : [
+                  manual.length ? `请在“编辑档案”补充：${manual.map(field => field[1]).join('、')}` : '',
+                  automatic.length
+                      ? `英文资料尚未生成或未通过校验：${automatic.map(field => field[1]).join('、')}；请保存中文资料后查看翻译结果`
+                      : '',
+              ]
+                  .filter(Boolean)
+                  .join('；'),
+        messageEn: ready
+            ? 'Store brand and legal profile are complete'
+            : [
+                  manual.length
+                      ? `Complete in Edit profile: ${manual.map(field => field[2]).join(', ')}`
+                      : '',
+                  automatic.length
+                      ? `English content is missing or invalid: ${automatic.map(field => field[2]).join(', ')}. Save the Chinese content and review the translation`
+                      : '',
+              ]
+                  .filter(Boolean)
+                  .join('; '),
+    };
 }
 
 export function isProductionPaymentMethod(
@@ -95,13 +124,14 @@ export interface StoreActivationSnapshot {
     privacy: boolean;
     terms: boolean;
     shipping: boolean;
-    payment: boolean;
+    /** Accepted for older callers; payment setup is not a store activation requirement. */
+    payment?: boolean;
 }
 
-const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }> = {
+const checkMessages: Record<Exclude<StoreActivationCheckCode, 'PAYMENT'>, { zh: string; en: string }> = {
     PROFILE: {
-        zh: '填写店铺品牌、法定经营主体、注册地及客服/隐私邮箱（英文自动生成）',
-        en: 'Complete the store brand, legal entity, registration country, and support/privacy emails',
+        zh: '在“编辑档案”填写中文店铺名称、中文简介、店铺图标，以及法定经营主体、注册国家/地区和客服/隐私邮箱（英文自动生成）',
+        en: 'In Edit profile, fill in the store name, description, icon, legal entity, country and support/privacy emails (English auto-generated)',
     },
     DOMAIN: { zh: '验证并设置主域名', en: 'Verify and select a primary domain' },
     PASSWORD: {
@@ -128,14 +158,13 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
         zh: '配置本店配送区域，并启用通用包邮或本店配送模板',
         en: 'Configure the store shipping zone and enable a shared or private shipping template',
     },
-    PAYMENT: { zh: '启用至少一种非测试支付方式', en: 'Enable at least one non-test payment method' },
 };
 
 export function evaluateStoreActivationReadiness(
     snapshot: StoreActivationSnapshot,
     commerceMode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID' = 'HYBRID',
 ): StoreActivationReadiness {
-    const mappings: Array<[StoreActivationCheckCode, boolean]> = [
+    const mappings: Array<[Exclude<StoreActivationCheckCode, 'PAYMENT'>, boolean]> = [
         ['PROFILE', snapshot.profile],
         ['DOMAIN', snapshot.domain],
         ['PASSWORD', snapshot.password],
@@ -145,8 +174,9 @@ export function evaluateStoreActivationReadiness(
         ['TERMS', snapshot.terms],
         ...(commerceMode === 'DIGITAL_ONLY'
             ? []
-            : ([['SHIPPING', snapshot.shipping]] as Array<[StoreActivationCheckCode, boolean]>)),
-        ['PAYMENT', snapshot.payment],
+            : ([['SHIPPING', snapshot.shipping]] as Array<
+                  [Exclude<StoreActivationCheckCode, 'PAYMENT'>, boolean]
+              >)),
     ];
     const checks: StoreActivationCheck[] = mappings.map(([code, ready]) => ({
         code,
@@ -161,9 +191,6 @@ export function evaluateStoreActivationReadiness(
 export class StoreActivationReadinessService {
     constructor(
         private readonly connection: TransactionalConnection,
-        private readonly configService: ConfigService,
-        private readonly currencySettings: StoreCurrencySettingsService,
-        private readonly paymentMethodService: PaymentMethodService,
         private readonly shippingMethodService: ShippingMethodService,
     ) {}
 
@@ -176,60 +203,37 @@ export class StoreActivationReadinessService {
             return evaluateStoreActivationReadiness(this.emptySnapshot());
         }
 
-        const [
-            domain,
-            temporaryPasswordCount,
-            catalogVariants,
-            contentBlocks,
-            paymentMethods,
-            shippingMethods,
-        ] = await Promise.all([
-            this.connection.getRepository(ctx, StoreDomain).findOne({
-                where: {
-                    channelId: profile.channelId,
-                    isPrimary: true,
-                    status: 'ACTIVE',
-                },
-            }),
-            this.temporaryPasswordCount(ctx, profile.channelId),
-            this.connection.getRepository(ctx, ProductVariant).find({
-                where: {
-                    enabled: true,
-                    product: { enabled: true },
-                    channels: { id: profile.channelId },
-                },
-                relations: { translations: true, product: { translations: true } },
-            }),
-            this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                where: { channelId: profile.channelId, enabled: true },
-                relations: { items: { translations: true } },
-            }),
-            this.paymentMethodService.getActivePaymentMethods(ctx.copy({ channel })),
-            this.shippingMethodService.getActiveShippingMethods(ctx.copy({ channel })),
-        ]);
+        const [domain, temporaryPasswordCount, catalogVariants, contentBlocks, shippingMethods] =
+            await Promise.all([
+                this.connection.getRepository(ctx, StoreDomain).findOne({
+                    where: {
+                        channelId: profile.channelId,
+                        isPrimary: true,
+                        status: 'ACTIVE',
+                    },
+                }),
+                this.temporaryPasswordCount(ctx, profile.channelId),
+                this.connection.getRepository(ctx, ProductVariant).find({
+                    where: {
+                        enabled: true,
+                        product: { enabled: true },
+                        channels: { id: profile.channelId },
+                    },
+                    relations: { translations: true, product: { translations: true } },
+                }),
+                this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                    where: { channelId: profile.channelId, enabled: true },
+                    relations: { items: { translations: true } },
+                }),
+                this.shippingMethodService.getActiveShippingMethods(ctx.copy({ channel })),
+            ]);
 
         const activeContent = contentBlocks.filter(block => this.isActiveContent(block));
-        const registeredPaymentHandlers = new Set(
-            this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
-        );
-        const hasUsdtMethod = paymentMethods.some(
-            method =>
-                method.code === USDT_TRC20_PAYMENT_METHOD_CODE ||
-                method.handler?.code === USDT_TRC20_PAYMENT_HANDLER_CODE,
-        );
-        const usdtConfiguration = hasUsdtMethod
-            ? await this.currencySettings.getForChannel(ctx, channel)
-            : null;
-        const usdtPaymentReady = Boolean(
-            usdtConfiguration?.selectorEnabled &&
-            usdtConfiguration.usdtDisplayEnabled &&
-            usdtConfiguration.usdtRateAvailable &&
-            usdtConfiguration.usdtPaymentConfigured,
-        );
 
-        return evaluateStoreActivationReadiness(
+        const profileCheck = storeProfileActivationCheck(profile);
+        const readiness = evaluateStoreActivationReadiness(
             {
-                profile: hasCompleteStoreProfile(profile),
+                profile: profileCheck.ready,
                 domain: Boolean(domain),
                 password: temporaryPasswordCount === 0,
                 catalog: this.hasBilingualCatalog(catalogVariants),
@@ -237,12 +241,11 @@ export class StoreActivationReadinessService {
                 privacy: this.hasLegalContent(activeContent, 'privacy'),
                 terms: this.hasLegalContent(activeContent, 'terms'),
                 shipping: hasReadyShippingMethod(channel, shippingMethods),
-                payment: paymentMethods.some(method =>
-                    isProductionPaymentMethod(method, registeredPaymentHandlers, usdtPaymentReady),
-                ),
             },
             channel.customFields?.commerceMode ?? 'DIGITAL_ONLY',
         );
+        readiness.checks = readiness.checks.map(check => (check.code === 'PROFILE' ? profileCheck : check));
+        return readiness;
     }
 
     private emptySnapshot(): StoreActivationSnapshot {
@@ -255,7 +258,6 @@ export class StoreActivationReadinessService {
             privacy: false,
             terms: false,
             shipping: false,
-            payment: false,
         };
     }
 

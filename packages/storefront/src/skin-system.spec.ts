@@ -432,6 +432,11 @@ describe('storefront skin system', () => {
                         !(thinWidth && thinHeight) &&
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
                         !/display:\s*none|content:\s*none/.test(body) &&
+                        // The approved coupon navigation underline marks the active tab.
+                        !(
+                            file === path.join(__dirname, 'styles/coupon-center.css') &&
+                            selector.trim() === '.coupon-center-tabs button.is-active::after'
+                        ) &&
                         !new Set([
                             // The active search sort underline identifies the selected control.
                             '.search-sort > button.is-active::after',
@@ -1081,77 +1086,49 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('preserves desktop and tablet canvases while phones use the approved 16:9 artwork frame', () => {
+    it('preserves the desktop canvas and lets full mobile copy precede original-ratio artwork', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
-        const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
-            ([, selector]) =>
-                selector.includes('.hero.hero-image-overlay') && selector.includes('.hero-rich-backdrop'),
-        );
-        expect(imageRules.length).toBeGreaterThan(0);
-        for (const [, , declarations] of imageRules) {
-            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: cover;');
-            expect(declarations).toContain('height: 100%;');
-        }
         expect(source).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/,
+            /\.hero\.hero-image-overlay \.hero-rich-backdrop\s*\{[^}]*object-fit:\s*cover;/,
         );
-        expect(source).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,
-        );
-        expect(source).toMatch(/\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*max-height:\s*none;/);
-        expect(source).not.toContain("data-copy-layout='below'");
         expect(source).toMatch(/\.hero-rich-copy-region\s*\{[^}]*display:\s*contents;/);
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-desc\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;/,
         );
-        const mobile = postcss.parse(stylesheet('./styles/hero-mobile-overlay.css'));
-        const responsive = mobile.nodes.find(
-            node => node.type === 'atrule' && node.params === '(max-width: 1023px)',
+        const mobile = stylesheet('./styles/hero-mobile-overlay.css');
+        expect(mobile).toContain('@media (max-width: 1023px)');
+        expect(mobile).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*auto;/);
+        expect(mobile).toMatch(/\.hero-carousel-stage[^}]*position:\s*relative;/);
+        expect(mobile).toMatch(/\.hero-scene-wrapper[^}]*display:\s*grid;[^}]*height:\s*auto;/);
+        expect(mobile).toMatch(/\.hero-rich-media[^}]*grid-row:\s*2;[^}]*height:\s*auto;/);
+        expect(mobile).toMatch(/\.hero-rich-backdrop[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/);
+        expect(mobile).toMatch(/\.hero-rich-content[^}]*position:\s*relative;[^}]*grid-row:\s*1;/);
+        expect(mobile).toMatch(
+            /\.hero-rich-copy-region[^}]*width:\s*100%;[^}]*flex:\s*none;[^}]*overflow:\s*visible;/,
         );
-        if (!responsive || responsive.type !== 'atrule') throw new Error('Expected a responsive composition');
-        expect(responsive.params).toBe('(max-width: 1023px)');
-        const mobileSource = responsive.toString();
-        expect(mobileSource).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*12\s*\/\s*5;/);
-        expect(mobileSource).toMatch(/\.hero-carousel-stage[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
-        expect(mobileSource).toMatch(/\.hero-rich-backdrop[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/);
-        expect(mobileSource).toMatch(/\.hero-rich-content[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
-        expect(mobileSource).toMatch(/\.hero-rich-content[^}]*background:\s*transparent;/);
-        expect(mobileSource).toMatch(
-            /\.hero-rich-copy-region[^}]*display:\s*block;[^}]*min-height:\s*0;[^}]*flex:\s*1;[^}]*overflow-y:\s*auto;/,
+        expect(mobile).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow:\s*visible;/);
+        expect(mobile).toMatch(
+            /\.hero-rich-cta-btn\s*\{[^}]*min-height:\s*var\(--experience-control-min, 44px\);[^}]*white-space:\s*normal;/,
         );
-        expect(mobileSource).toMatch(/\.hero-rich-copy-region[^}]*touch-action:\s*pan-y;/);
-        expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow:\s*visible;/);
-        expect(mobileSource).toMatch(/\.hero-rich-cta-btn[^}]*flex-shrink:\s*0;/);
-        expect(mobileSource).toMatch(/\.hero-rich-copy-surface \.hero-rich-title\s*\{[^}]*order:\s*-2;/);
-        expect(mobileSource).toMatch(
-            /\.hero-rich-cta-btn\s*\{[^}]*min-height:\s*var\(--experience-control-min, 44px\);/,
-        );
-        expect(mobileSource).not.toContain('has-wide-artwork');
+        expect(mobile).toMatch(/\.hero-rich-cta-label\s*\{[^}]*overflow:\s*visible;/);
+        expect(mobile).toMatch(/\.hero-overlay-controls[^}]*left:\s*50%;[^}]*translateX\(-50%\)/);
+        // The new request supersedes the fixed 16:9 copy frame and separate white mobile strip.
+        expect(mobile).not.toMatch(/60%|text-overflow:\s*ellipsis|overflow-[xy]:\s*auto|16\s*\/\s*9/);
+        expect(mobile).not.toMatch(/home-trust-bar|home-trust-item/);
+        expect(mobile).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i);
         const services = stylesheet('./styles/home-showcase.css');
         expect(services).toMatch(
             /\.home-page \.hero \.hero-service-overlay \.home-trust-item \.trust-icon\s*\{[^}]*color:\s*inherit;/,
         );
         expect(services).toMatch(
-            /\.home-page \.hero \.hero-service-overlay \.home-trust-bar\.has-long-copy\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/,
+            /\.home-page \.hero \.hero-service-overlay \.home-trust-bar\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--text\) 76%, transparent\);/,
         );
-        const phone = mobile.nodes.find(
-            node => node.type === 'atrule' && node.params === '(max-width: 767px)',
+        expect(services).toMatch(
+            new RegExp(
+                '\\.home-page \\.hero \\.hero-service-overlay \\.home-trust-bar\\.has-long-copy\\s*\\{[^}]*' +
+                    'display:\\s*grid;[^}]*grid-template-columns:\\s*repeat\\(2,[^}]*overflow:\\s*visible;',
+            ),
         );
-        if (!phone || phone.type !== 'atrule') throw new Error('Expected a phone-only composition');
-        const phoneSource = phone.toString();
-        expect(phoneSource).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9;/);
-        expect(phoneSource).toMatch(/\.hero-rich-copy-region\s*\{[^}]*width:\s*60%;/);
-        expect(phoneSource).toMatch(/\.hero-rich-cta-btn\s*\{[^}]*max-width:\s*60%;/);
-        expect(phoneSource).toMatch(
-            /\.home-trust-bar\.has-long-copy\s*\{[^}]*background:\s*var\(--surface\);[^}]*color:\s*var\(--text\);/,
-        );
-        expect(phoneSource).toMatch(/\.home-trust-item\s*\{[^}]*color:\s*var\(--text\);/);
-        expect(mobileSource).not.toMatch(
-            /#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i,
-        );
-        expect(
-            mobile.nodes.some(node => node.type === 'atrule' && node.params === '(max-width: 359px)'),
-        ).toBe(true);
     });
 
     it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {

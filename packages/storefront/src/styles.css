@@ -381,50 +381,6 @@ img {
 .page-readiness-stage {
     min-height: inherit;
 }
-.route-transition {
-    display: grid;
-    min-height: 65vh;
-    place-items: center;
-    padding: var(--space-24);
-    color: var(--muted);
-}
-
-.route-transition-mark {
-    width: 60px;
-    height: 60px;
-    position: relative;
-    display: grid;
-    place-items: center;
-    border: none;
-    background: transparent;
-}
-
-.route-transition-mark::after {
-    display: none;
-}
-
-.route-transition-mark img,
-.route-transition-placeholder {
-    width: 52px;
-    height: 52px;
-    grid-area: 1 / 1;
-    object-fit: contain;
-}
-
-.route-transition-placeholder {
-    color: var(--text);
-    stroke-width: 1.6;
-}
-
-.route-transition-mark img {
-    visibility: hidden;
-    border-radius: 0;
-}
-
-.route-transition-mark.is-logo-ready img {
-    visibility: visible;
-}
-
 @media (prefers-reduced-motion: reduce) {
     html:focus-within {
         scroll-behavior: auto;
@@ -446,17 +402,6 @@ img {
     .auth-button-spinner {
         transition: none;
         animation: none;
-    }
-
-    .route-transition,
-    .route-transition-mark::after,
-    .route-transition-track > span {
-        animation: none;
-    }
-
-    .route-transition-track > span {
-        width: 100%;
-        transform: none;
     }
 }
 

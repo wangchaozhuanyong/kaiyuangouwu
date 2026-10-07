@@ -1,6 +1,5 @@
 // organize-imports-ignore
 import type { BrandLoadingProps } from './brand-loading';
-import { Store } from 'lucide-react';
 import { useContext, useLayoutEffect, useRef, useState } from 'react';
 
 import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
@@ -84,9 +83,10 @@ function BrandLoadingLogo({ source }: { source: string }) {
         if (image?.complete && image.naturalWidth > 0) reveal(image);
     }, [src]);
 
+    if (!src || failed) return null;
+
     return (
         <span className={`route-transition-mark${ready ? ' is-logo-ready' : ''}`}>
-            {!ready && <Store className="route-transition-placeholder" aria-hidden="true" />}
             {src && !failed && (
                 <img
                     ref={imageRef}

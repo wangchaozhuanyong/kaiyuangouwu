@@ -754,17 +754,13 @@ export function HomePage() {
     }, [managedHeroes, clearHeroMotionSchedule, updateHeroMotion]);
 
     useLayoutEffect(() => {
-        if (!desktop) {
-            heroStageHeightRef.current = undefined;
-            heroHeightGrowthDeadlineRef.current = 0;
-            setHeroStageHeight(undefined);
-            return;
-        }
         const stage = heroStageRef.current;
         const viewport = heroViewportRef.current;
         if (!stage || !viewport) return;
-        const heightSurfaces = Array.from(stage.querySelectorAll<HTMLElement>('.hero-rich-content'));
-        const gallery = viewport.closest('.home-intro-grid')?.querySelector('.quick-grid');
+        const heightSurfaces = Array.from(
+            stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
+        );
+        const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
         const measure = () => {
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
@@ -1091,16 +1087,12 @@ export function HomePage() {
                             ) : (
                                 <TrustIcon className="trust-icon" aria-hidden="true" />
                             )}
-                            {desktop ? (
-                                <span className="home-trust-copy">
-                                    <span className="home-trust-label">{label}</span>
-                                    {description.trim() && (
-                                        <small className="home-trust-description">{description}</small>
-                                    )}
-                                </span>
-                            ) : (
+                            <span className="home-trust-copy">
                                 <span className="home-trust-label">{label}</span>
-                            )}
+                                {description.trim() && (
+                                    <small className="home-trust-description">{description}</small>
+                                )}
+                            </span>
                         </div>
                     );
                 })}
@@ -1290,11 +1282,7 @@ export function HomePage() {
                                         <div
                                             ref={heroStageRef}
                                             className={`hero-carousel-stage${heroMotion?.phase === 'settling' ? ' is-settling' : ''}`}
-                                            style={
-                                                desktop && heroStageHeight
-                                                    ? { height: heroStageHeight }
-                                                    : undefined
-                                            }
+                                            style={heroStageHeight ? { height: heroStageHeight } : undefined}
                                         >
                                             {[heroIndex, ...(heroMotion ? [heroMotion.nextIndex] : [])].map(
                                                 (slideIndex, position) => {
@@ -1325,7 +1313,6 @@ export function HomePage() {
                                                         >
                                                             <HeroScene
                                                                 content={slide}
-                                                                copyScrollable={!desktop}
                                                                 mediaOverlay={
                                                                     <div className="hero-overlay-controls">
                                                                         {overlayTrustBar && (

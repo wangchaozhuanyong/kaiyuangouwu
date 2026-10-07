@@ -341,6 +341,9 @@ describe('HomePage carousel pointer interactions', () => {
             expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(title);
             expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(body);
             expect(activeButton('.hero-rich-cta-btn').textContent).toBe(action);
+            const copy = requiredElement(activeSlide(), '.hero-rich-copy-region');
+            expect(copy.hasAttribute('role')).toBe(false);
+            expect(copy.hasAttribute('tabindex')).toBe(false);
             const artwork = requiredElement(
                 activeSlide(),
                 '.hero-rich-image-link img:not([aria-hidden="true"])',
@@ -661,13 +664,17 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
     it.each([
-        { desktop: false, expectedHeight: '' },
+        { desktop: false, expectedHeight: '726px' },
         { desktop: true, expectedHeight: '520px' },
     ])(
-        'lets the shared phone canvas own its height while desktop copy still grows ($desktop)',
+        'measures the full mobile scene and the desktop copy surface ($desktop)',
         async ({ desktop, expectedHeight }) => {
             boundsMock.mockImplementation(function (this: Element) {
-                const height = this.matches('.hero-rich-content') ? 520 : 206;
+                const height = this.matches('.hero-rich-content')
+                    ? 520
+                    : this.matches('.hero-scene-wrapper')
+                      ? 726
+                      : 206;
                 return {
                     x: 0,
                     y: 0,
@@ -685,53 +692,57 @@ describe('HomePage carousel pointer interactions', () => {
         },
     );
 
-    it('measures desktop copy before entrance, then shrinks after settling', async () => {
-        let tallHeight = 520;
-        boundsMock.mockImplementation(function (this: Element) {
-            const height =
-                this.matches('.hero-rich-content') && this.textContent?.includes('Tall copy')
-                    ? tallHeight
-                    : 320;
-            return {
-                x: 0,
-                y: 0,
-                top: 0,
-                left: 0,
-                right: 360,
-                bottom: height,
-                width: 360,
-                height,
-                toJSON: () => ({}),
-            };
-        });
-        await render(true, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
-        const stage = requiredElement(host, '.hero-carousel-stage');
-        expect(stage.style.height).toBe('320px');
-        await pointer('pointerdown', 250);
-        await pointer('pointermove', 150);
-        expect(stage.style.height).toBe('520px');
-        await pointer('pointerup', 150);
-        expect(host.querySelector('.is-settling')).toBeNull();
-        await advance(HERO_HEIGHT_TRANSITION_MS + 1);
-        expect(host.querySelector('.is-settling')).not.toBeNull();
-        await advance();
-        expect(activeSlide().textContent).toContain('Tall copy');
-        expect(stage.style.height).toBe('520px');
-        // Responsive desktop copy changes keep the existing scene observer behavior.
-        tallHeight = 580;
-        const scene = requiredElement(activeSlide(), '.hero-rich-content');
-        const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
-        expect(observer).toBeDefined();
-        if (!observer) throw new Error('Expected the current slide resize observer');
-        await interact(() => observer.notify());
-        expect(stage.style.height).toBe('580px');
-        await advance(HERO_HEIGHT_TRANSITION_MS);
-        await pointer('pointerdown', 100);
-        await pointer('pointermove', 180);
-        await pointer('pointerup', 180);
-        expect(stage.style.height).toBe('580px');
-        await advance();
-        expect(activeSlide().textContent).toContain('First slide');
-        expect(stage.style.height).toBe('320px');
-    });
+    it.each([false, true])(
+        'grows before entrance, observes content changes and shrinks after settling (desktop=%s)',
+        async desktop => {
+            let tallHeight = 520;
+            const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
+            boundsMock.mockImplementation(function (this: Element) {
+                const height =
+                    this.matches(heightSelector) && this.textContent?.includes('Tall copy')
+                        ? tallHeight
+                        : 320;
+                return {
+                    x: 0,
+                    y: 0,
+                    top: 0,
+                    left: 0,
+                    right: 360,
+                    bottom: height,
+                    width: 360,
+                    height,
+                    toJSON: () => ({}),
+                };
+            });
+            await render(desktop, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
+            const stage = requiredElement(host, '.hero-carousel-stage');
+            expect(stage.style.height).toBe('320px');
+            await pointer('pointerdown', 250);
+            await pointer('pointermove', 150);
+            expect(stage.style.height).toBe('520px');
+            await pointer('pointerup', 150);
+            expect(host.querySelector('.is-settling')).toBeNull();
+            await advance(HERO_HEIGHT_TRANSITION_MS + 1);
+            expect(host.querySelector('.is-settling')).not.toBeNull();
+            await advance();
+            expect(activeSlide().textContent).toContain('Tall copy');
+            expect(stage.style.height).toBe('520px');
+            // Font, copy and media changes update the currently measured surface.
+            tallHeight = 580;
+            const scene = requiredElement(activeSlide(), heightSelector);
+            const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
+            expect(observer).toBeDefined();
+            if (!observer) throw new Error('Expected the current slide resize observer');
+            await interact(() => observer.notify());
+            expect(stage.style.height).toBe('580px');
+            await advance(HERO_HEIGHT_TRANSITION_MS);
+            await pointer('pointerdown', 100);
+            await pointer('pointermove', 180);
+            await pointer('pointerup', 180);
+            expect(stage.style.height).toBe('580px');
+            await advance();
+            expect(activeSlide().textContent).toContain('First slide');
+            expect(stage.style.height).toBe('320px');
+        },
+    );
 });

@@ -37,8 +37,14 @@ describes the shared controls and the ownership of saved values.
 1. Provision the store from the Dashboard's `Provision store` page.
 2. Deliver the one-time temporary password to the merchant through a secure channel.
 3. Bind and verify the merchant domain on the new Channel.
-4. Configure production shipping and payment methods.
-5. Set the profile to `ACTIVE` after the primary domain is active.
+4. Configure shipping for physical or hybrid stores. Payment methods can be configured independently;
+   enabling a non-test payment method is not required for store activation.
+5. Complete the remaining launch checks and set the profile to `ACTIVE` after the primary domain is active.
+
+In Next Admin, open `店铺综合设置` → `店铺实例` → `编辑档案` to edit the store's brand. The profile
+check requires the Chinese store name, description and `店铺图标`, generated or reviewed English names
+and descriptions, plus the legal entity, registration country and support/privacy emails. Brand taglines,
+colors and light/dark background logos are optional.
 
 ## Independent storefront profiles
 

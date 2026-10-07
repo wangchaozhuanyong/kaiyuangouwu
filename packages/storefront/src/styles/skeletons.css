@@ -1,18 +1,26 @@
-/* Static placeholders share the final media geometry and never hide available content. */
+/* One centered stage for initial, route and local waits. Available content stays outside it. */
 .page-skeleton,
-.page-skeleton--compact {
-    min-height: 100px;
-}
-
+.route-transition,
 .list-skeleton {
     display: grid;
     place-items: center;
-    padding: 24px;
+    width: 100%;
+    min-width: 0;
+    padding: var(--space-24);
+    font-family: var(--font-ui);
     color: var(--muted);
 }
 
-.page-skeleton--route {
-    min-height: 65vh;
+.page-skeleton--route,
+.route-transition {
+    min-height: 60svh;
+}
+
+/* Only the bootstrap/root pending screen occupies the viewport, never an inner route. */
+.page-skeleton--viewport,
+#root > .page-skeleton,
+#root > .route-transition {
+    min-height: 100svh;
 }
 
 .page-skeleton--compact {
@@ -125,20 +133,27 @@
     justify-items: center;
     align-content: center;
     gap: var(--space-16);
-    max-width: min(100%, 280px);
+    width: min(100%, 280px);
+    min-width: 0;
     color: var(--text);
 }
-.brand-loading .route-transition-mark {
+.route-transition-mark {
+    position: relative;
+    display: grid;
+    place-items: center;
     width: 80px;
     height: 80px;
 }
-.brand-loading .route-transition-mark img,
-.brand-loading .route-transition-placeholder {
+.route-transition-mark img {
     width: 72px;
     height: 72px;
+    grid-area: 1 / 1;
+    object-fit: contain;
+    visibility: hidden;
+    border-radius: 0;
 }
-.brand-loading .is-logo-ready img {
-    animation: brand-loading-breathe 1.8s ease-in-out infinite;
+.route-transition-mark.is-logo-ready img {
+    visibility: visible;
 }
 .brand-loading-name {
     max-width: 100%;
@@ -179,16 +194,19 @@
 }
 .brand-loading--compact {
     display: flex;
+    justify-content: center;
+    align-items: center;
+    width: auto;
+    max-width: 100%;
     gap: var(--space-8);
 }
 .brand-loading--compact .route-transition-mark,
-.brand-loading--compact .route-transition-mark img,
-.brand-loading--compact .route-transition-placeholder {
+.brand-loading--compact .route-transition-mark img {
     width: 24px;
     height: 24px;
+    flex: 0 0 24px;
 }
 @media (prefers-reduced-motion: reduce) {
-    .brand-loading .is-logo-ready img,
     .brand-loading-dots > i {
         animation: none;
         opacity: 1;

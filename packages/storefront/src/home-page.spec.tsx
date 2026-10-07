@@ -341,7 +341,8 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('只显示后台配置的内容');
         expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);
         const copyAttributes = markup.match(/<div class="hero-rich-copy-region"([^>]*)>/)?.[1] ?? '';
-        expect(copyAttributes.includes('tabindex="0"')).toBe(!desktop);
+        expect(copyAttributes).not.toContain('tabindex');
+        expect(copyAttributes).not.toContain('role="region"');
     });
 
     it('pairs the current store icon with a separate store name in the main header', () => {
@@ -536,21 +537,49 @@ describe('HomePage localized trust bar layout', () => {
         expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
     });
 
-    it('shows saved service descriptions on desktop while preserving compact mobile labels', () => {
-        const block = {
-            ...trustBarBlock,
-            items: trustBarBlock.items.map((item, index) => ({
-                ...item,
-                description: index === 0 ? '发货后可查看物流进度' : '',
-            })),
-        };
-        const desktopMarkup = renderHome({ contentBlocks: [block] }, true);
-        const mobileMarkup = renderHome({ contentBlocks: [block] });
+    it.each([
+        { desktop: false, language: 'zh' as const },
+        { desktop: true, language: 'zh' as const },
+        { desktop: false, language: 'en' as const },
+        { desktop: true, language: 'en' as const },
+    ])(
+        'keeps complete saved labels and descriptions in the hero ($desktop, $language)',
+        ({ desktop, language }) => {
+            const label = language === 'zh' ? '数字商品订单进度可查' : 'Review your digital product orders';
+            const description =
+                language === 'zh'
+                    ? '请在订单详情中查看当前进度与商品说明。'
+                    : 'Review the current progress and product details in your order.';
+            const block = {
+                ...trustBarBlock,
+                items: [{ ...trustBarBlock.items[0], label, description }],
+            };
+            const markup = renderHome({ contentBlocks: [heroBlock, block], language }, desktop);
 
-        expect(desktopMarkup).toContain('发货后可查看物流进度');
-        expect(desktopMarkup).not.toContain('查看规格、价格与库存');
-        expect(mobileMarkup).toContain('物流');
-        expect(mobileMarkup).not.toContain('发货后可查看物流进度');
+            expect(markup).toContain(`class="home-trust-label">${label}</span>`);
+            expect(markup).toContain(`class="home-trust-description">${description}</small>`);
+            expect(markup).toMatch(/hero-rich-media[\s\S]*?hero-service-overlay[\s\S]*?home-trust-copy/);
+            expect(markup).not.toContain('查看规格、价格与库存');
+        },
+    );
+
+    it.each([false, true])('preserves description-only service information (desktop=%s)', desktop => {
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    {
+                        ...trustBarBlock,
+                        items: [
+                            { ...trustBarBlock.items[0], label: '', description: '后台填写的完整服务说明' },
+                        ],
+                    },
+                ],
+            },
+            desktop,
+        );
+
+        expect(markup.match(/class="home-trust-item"/g)).toHaveLength(1);
+        expect(markup).toContain('class="home-trust-description">后台填写的完整服务说明');
     });
 
     it('keeps every saved trust item beyond the old four-item limit', () => {
