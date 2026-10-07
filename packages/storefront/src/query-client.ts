@@ -10,7 +10,7 @@ import {
     type Query,
 } from '@tanstack/react-query';
 
-import { ShopApiTimeoutError } from './api';
+import { ShopApiTimeoutError } from './api/helpers';
 import { invalidatePublicPageReads } from './public-page-transport';
 import { isStorefrontClosedError } from './storefront-access';
 import { storefrontErrorCode } from './storefront-errors';
