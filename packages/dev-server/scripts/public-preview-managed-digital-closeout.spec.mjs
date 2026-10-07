@@ -81,6 +81,7 @@ function fixture() {
         coupons: [{ id: '8', status: 'USED', version: 5, usedAt: 'old-time', usedOrderId: '37' }],
         ledger: [{ id: 'old', eventType: 'REDEEMED' }],
         digital: {
+            variant: { id: '1093', enabled: true, deletedAt: null },
             task: {
                 id: '1',
                 state: 'MANUAL_REVIEW',
@@ -806,8 +807,17 @@ test('authenticated network reader refuses another Admin host before transmittin
     assert.equal(sent, false);
 });
 
-function networkFixture({ publicStock = 100, domainExists = true, hostname = '127.0.0.1' } = {}) {
+function networkFixture({
+    publicStock = 100,
+    domainExists = true,
+    hostname = '127.0.0.1',
+    softDeleted = false,
+    stalePublic = false,
+    staleShop = false,
+} = {}) {
     const f = fixture();
+    const deletedAt = softDeleted ? '2026-10-03T05:22:33.000Z' : null;
+    f.fresh.snapshot.digital.variant.deletedAt = deletedAt;
     const requested = [];
     const ctx = { channel: { token: 'owned-channel-routing-value', code: 'owned-store' } };
     const assembly = {
@@ -831,7 +841,14 @@ function networkFixture({ publicStock = 100, domainExists = true, hostname = '12
                               return domainExists ? { verifiedAt: new Date() } : null;
                           },
                       }
-                    : { findOneByOrFail: async () => ({ sku: 'owned-variant', productId: '5907' }) },
+                    : {
+                          findOneByOrFail: async () => ({
+                              sku: 'owned-variant',
+                              productId: '5907',
+                              deletedAt,
+                              enabled: true,
+                          }),
+                      },
         },
     };
     const fetchImpl = async (url, options = {}) => {
@@ -847,11 +864,25 @@ function networkFixture({ publicStock = 100, domainExists = true, hostname = '12
             assert.ok(!/recipientEmail|packages|note|customerEmail|payload|reveal/u.test(request.query));
             body = {
                 data: {
-                    order: { id: '37', state: 'Modifying', payments: [{ id: '10', state: 'Settled' }] },
-                    productVariant: {
-                        id: '1093',
-                        stockLevels: [
-                            { id: 'level', stockLocationId: '10', stockOnHand: 100, stockAllocated: 0 },
+                    order: {
+                        id: '37',
+                        state: 'Modifying',
+                        payments: [{ id: '10', state: 'Settled' }],
+                        lines: [
+                            {
+                                id: '248',
+                                productVariant: {
+                                    id: '1093',
+                                    stockLevels: [
+                                        {
+                                            id: 'level',
+                                            stockLocationId: '10',
+                                            stockOnHand: 100,
+                                            stockAllocated: 0,
+                                        },
+                                    ],
+                                },
+                            },
                         ],
                     },
                     manualDigitalDelivery: {
@@ -873,10 +904,22 @@ function networkFixture({ publicStock = 100, domainExists = true, hostname = '12
                 scope: { host: 'owned.example', channelCode: 'owned-store' },
                 config: { accessMode: 'PREVIEW' },
                 failures: [],
-                catalog: { items: [{ variants: [{ id: '1093', saleableStockLevel: publicStock }] }] },
+                catalog: {
+                    items:
+                        softDeleted && !stalePublic
+                            ? []
+                            : [{ variants: [{ id: '1093', saleableStockLevel: publicStock }] }],
+                },
             };
         } else if (url.pathname === '/shop-api') {
-            body = { data: { product: { id: '5907', variants: [{ id: '1093', saleableStockLevel: 100 }] } } };
+            body = {
+                data: {
+                    product:
+                        softDeleted && !staleShop
+                            ? null
+                            : { id: '5907', variants: [{ id: '1093', saleableStockLevel: 100 }] },
+                },
+            };
         } else throw new Error('Unexpected network path');
         return { ok: true, json: async () => body };
     };
@@ -914,6 +957,46 @@ test('finish reads exact native GraphQL metadata and compares the public cached 
 test('a HTTP200 cached stock mismatch does not complete native finish', async () => {
     const f = networkFixture({ publicStock: 99 });
     await assert.rejects(independentNetworkReadback(f.input), /cache stock differs/);
+});
+
+test('soft-deleted historical variants use order-line stock and remain absent from cached and native catalogs', async () => {
+    const f = networkFixture({ softDeleted: true });
+    const result = await independentNetworkReadback(f.input);
+    assert.equal(result.status, 'VERIFIED');
+    assert.equal(result.publicVisibility, 'SOFT_DELETED_NOT_EXPOSED');
+    assert.match(result.shopReadbackFingerprint, /^[a-f0-9]{64}$/);
+    for (const [option, reason] of [
+        ['stalePublic', /remains in public cache/],
+        ['staleShop', /remains in native Shop/],
+    ]) {
+        const stale = networkFixture({ softDeleted: true, [option]: true });
+        await assert.rejects(independentNetworkReadback(stale.input), reason);
+    }
+    const changed = networkFixture({ softDeleted: true });
+    changed.input.fresh.snapshot.digital.variant.deletedAt = null;
+    await assert.rejects(independentNetworkReadback(changed.input), /deletion state changed/);
+    const missing = networkFixture({ softDeleted: true });
+    const fetchImpl = missing.input.fetchImpl;
+    missing.input.fetchImpl = async (url, options) => {
+        const response = await fetchImpl(url, options);
+        if (url.pathname !== '/storefront/page-data') return response;
+        const page = await response.json();
+        delete page.catalog;
+        return { ok: true, json: async () => page };
+    };
+    await assert.rejects(independentNetworkReadback(missing.input), /catalog readback missing/);
+    for (const item of [{}, { variants: null }, { variants: [{}] }]) {
+        const malformed = networkFixture({ softDeleted: true });
+        const nativeFetch = malformed.input.fetchImpl;
+        malformed.input.fetchImpl = async (url, options) => {
+            const response = await nativeFetch(url, options);
+            if (url.pathname !== '/storefront/page-data') return response;
+            const page = await response.json();
+            page.catalog.items = [item];
+            return { ok: true, json: async () => page };
+        };
+        await assert.rejects(independentNetworkReadback(malformed.input), /variant schema missing/);
+    }
 });
 
 test('an unverified or wrong primary storefront cannot receive any authenticated readback', async () => {

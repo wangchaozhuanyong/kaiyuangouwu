@@ -413,6 +413,8 @@ export function createLegacyDigitalCompensationExecutor(providers) {
                 ),
                 variant: {
                     id: id(variant.id),
+                    enabled: variant.enabled,
+                    deletedAt: variant.deletedAt == null ? null : new Date(variant.deletedAt).toISOString(),
                     trackInventory: variant.trackInventory,
                     digitalDeliveryMode: variant.customFields?.digitalDeliveryMode ?? null,
                     digitalStockPolicy: variant.customFields?.digitalStockPolicy ?? null,

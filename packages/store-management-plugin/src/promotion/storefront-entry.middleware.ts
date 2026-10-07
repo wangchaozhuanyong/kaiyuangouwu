@@ -1,6 +1,9 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 
+import { StorefrontClosedError } from '../storefront-activation.service';
+import { sendStorefrontClosedResponse } from '../storefront-closed-http.filter';
+
 import { StorefrontPromotionAccessService } from './storefront-promotion-access.service';
 
 @Injectable()
@@ -12,7 +15,14 @@ export class StorefrontEntryMiddleware implements NestMiddleware {
             next();
             return;
         }
-        const request = await this.accessService.resolveRequest(req);
+        let request: Awaited<ReturnType<StorefrontPromotionAccessService['resolveRequest']>>;
+        try {
+            request = await this.accessService.resolveRequest(req);
+        } catch (error) {
+            if (!(error instanceof StorefrontClosedError)) throw error;
+            sendStorefrontClosedResponse(res, true);
+            return;
+        }
         if (request) {
             next();
             return;

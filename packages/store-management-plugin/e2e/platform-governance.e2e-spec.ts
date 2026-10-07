@@ -40,7 +40,7 @@ import {
     User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -289,6 +289,28 @@ describe('platform governance real database and API boundaries', () => {
                 })),
             },
         };
+        for (const ctx of [a, b]) {
+            await connection.rawConnection.getRepository(StoreProfile).save(
+                new StoreProfile({
+                    channelId: ctx.channelId,
+                    status: 'ACTIVE',
+                    isPublished: false,
+                    descriptionZh: '',
+                    descriptionEn: '',
+                }),
+            );
+            await connection.rawConnection.getRepository(StoreDomain).save(
+                new StoreDomain({
+                    channelId: ctx.channelId,
+                    domain: `${ctx.channel.code}.example.test`,
+                    isPrimary: true,
+                    primaryChannelId: ctx.channelId,
+                    status: 'ACTIVE',
+                    verificationToken: `governance-fixture-${ctx.channelId}`,
+                    verifiedAt: new Date(),
+                }),
+            );
+        }
         catalog = server.app.get(PlatformCatalogService);
         const product = await server.app.get(ProductService).create(a, {
             translations: [
@@ -1344,6 +1366,47 @@ describe('platform governance real database and API boundaries', () => {
             expect(unmappedStatus).toBe(404);
         } finally {
             requests.forEach(request => request.destroy());
+        }
+    });
+
+    it('returns the dedicated closed response through every native public HTTP entry', async () => {
+        const profiles = connection.getRepository(platform, StoreProfile);
+        const existing = await profiles.findOneOrFail({ where: { channelId: a.channelId } });
+        await profiles.update(existing.id, { status: 'DRAFT', isPublished: false });
+        try {
+            const entries = [
+                '/storefront-realtime/events',
+                '/storefront/lcp-preload',
+                '/promo/access',
+                '/storefront/page-data',
+                '/shop-api',
+            ];
+            for (const entry of entries) {
+                const graphQl = entry === '/shop-api';
+                const response = await fetch(`http://127.0.0.1:3477${entry}`, {
+                    method: graphQl ? 'POST' : 'GET',
+                    headers: {
+                        'vendure-token': a.channel.token,
+                        ...(graphQl ? { 'content-type': 'application/json' } : {}),
+                    },
+                    ...(graphQl
+                        ? { body: JSON.stringify({ query: '{ storefrontBranding { name accessMode } }' }) }
+                        : {}),
+                    signal: AbortSignal.timeout(10000),
+                });
+                expect(response.status, entry).toBe(403);
+                expect(response.headers.get('cache-control'), entry).toContain('no-store');
+                const body = await response.json();
+                expect(body.errorCode, entry).toBe('STOREFRONT_CLOSED');
+                if (graphQl) {
+                    expect(body.errors[0].extensions.code, entry).toBe('STOREFRONT_CLOSED');
+                }
+            }
+        } finally {
+            await profiles.update(existing.id, {
+                status: existing.status,
+                isPublished: existing.isPublished,
+            });
         }
     });
 

@@ -16,6 +16,7 @@ import {
     User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import {
     CustomerCoupon,
     StoreCouponLifecycleService,
@@ -63,6 +64,7 @@ const config = mergeConfig(testConfig(), {
     },
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         CatalogManagementPlugin,
         ContentTranslationPlugin.init({
             provider: {
@@ -231,6 +233,20 @@ beforeAll(async () => {
                 isPublished: false,
                 descriptionZh: '',
                 descriptionEn: '',
+            }),
+        );
+    await server.app
+        .get(TransactionalConnection)
+        .rawConnection.getRepository(StoreDomain)
+        .save(
+            new StoreDomain({
+                channelId: strategy.decodeId(channel.id),
+                domain: 'cart-checkout.example.test',
+                isPrimary: true,
+                primaryChannelId: strategy.decodeId(channel.id),
+                status: 'ACTIVE',
+                verificationToken: 'cart-checkout-fixture',
+                verifiedAt: new Date(),
             }),
         );
     adminClient.setChannelToken(cartChannelToken);

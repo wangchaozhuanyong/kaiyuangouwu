@@ -684,8 +684,10 @@ export async function independentNetworkReadback({
     };
     const result = await query(
         `query HistoricalTestCloseoutReadback($deliveryId: ID!) {
-        order(id: "37") { id state payments { id state } manualDigitalDeliveries { id state } storeCouponAllocations { id customerCouponId status } }
-        productVariant(id: "1093") { id stockLevels { id stockLocationId stockOnHand stockAllocated } }
+        order(id: "37") { id state payments { id state }
+            lines { id productVariant { id stockLevels { id stockLocationId stockOnHand stockAllocated } } }
+            manualDigitalDeliveries { id state } storeCouponAllocations { id customerCouponId status }
+        }
         manualDigitalDelivery(id: $deliveryId) { id state attemptCount hasContent eligibleQuantity sentAt fulfillmentId }
         storeCouponLedger(options: {orderId: "37", take: 200}) { items { id customerCouponId eventType } }
     }`,
@@ -698,7 +700,10 @@ export async function independentNetworkReadback({
         fresh.snapshot.payments.map(row => [row.id, row.state]).sort(),
         'Native network payments differ',
     );
-    const level = result.productVariant?.stockLevels.find(row => row.stockLocationId === '10');
+    // Historical order lines retain native access to soft-deleted variants; the catalog query does not.
+    const orderVariant = result.order.lines?.find(row => row.id === '248')?.productVariant;
+    assert.equal(orderVariant?.id, '1093', 'Native network historical line variant changed');
+    const level = orderVariant.stockLevels.find(row => row.stockLocationId === '10');
     assert.ok(level, 'Native network original warehouse missing');
     same(
         [level.stockOnHand, level.stockAllocated],
@@ -728,6 +733,17 @@ export async function independentNetworkReadback({
     const variant = await assembly.dataSource
         .getRepository(assembly.core.ProductVariant)
         .findOneByOrFail({ id: '1093' });
+    const deletedAt = variant.deletedAt == null ? null : new Date(variant.deletedAt).toISOString();
+    assert.equal(
+        deletedAt,
+        fresh.snapshot.digital.variant.deletedAt,
+        'Native variant deletion state changed',
+    );
+    assert.equal(
+        variant.enabled,
+        fresh.snapshot.digital.variant.enabled,
+        'Native variant availability changed',
+    );
     const publicUrl = new URL('/storefront/page-data', storefront);
     publicUrl.searchParams.set('kind', 'catalog');
     publicUrl.searchParams.set('input', JSON.stringify({ term: variant.sku, take: 48 }));
@@ -742,10 +758,19 @@ export async function independentNetworkReadback({
     assert.equal(page.scope?.host, storefront.hostname, 'Public cache host mismatch');
     assert.ok(['PREVIEW', 'LIVE'].includes(page.config?.accessMode), 'Public access mode unavailable');
     assert.ok(!page.failures?.length, 'Public cache assembly incomplete');
+    assert.ok(Array.isArray(page.catalog?.items), 'Public catalog readback missing');
+    assert.ok(
+        page.catalog.items.every(
+            product =>
+                product &&
+                Array.isArray(product.variants) &&
+                product.variants.every(row => row && typeof row.id === 'string' && row.id),
+        ),
+        'Public catalog variant schema missing',
+    );
     const publicVariant = page.catalog?.items
         ?.flatMap(product => product.variants ?? [])
         .find(row => row.id === '1093');
-    assert.ok(publicVariant, 'Reviewed variant absent from public cache');
     // Compare the cached DTO with the running native Shop resolver, not a locally guessed stock policy.
     const shopResponse = await fetchImpl(
         new URL(`/${assembly.configService.apiOptions.shopApiPath}`, storefront),
@@ -763,6 +788,19 @@ export async function independentNetworkReadback({
     assert.ok(shopResponse.ok, 'Native Shop stock readback unavailable');
     const shop = await shopResponse.json();
     assert.ok(!shop.errors?.length, 'Native Shop stock readback rejected');
+    if (deletedAt !== null) {
+        assert.equal(publicVariant, undefined, 'Deleted variant remains in public cache');
+        assert.equal(shop.data?.product, null, 'Deleted variant product remains in native Shop');
+        return {
+            status: 'VERIFIED',
+            publicVisibility: 'SOFT_DELETED_NOT_EXPOSED',
+            adminReadbackFingerprint: compensationFingerprint(result),
+            publicReadbackFingerprint: compensationFingerprint(page),
+            shopReadbackFingerprint: compensationFingerprint(shop),
+            checkedAt: new Date().toISOString(),
+        };
+    }
+    assert.ok(publicVariant, 'Reviewed variant absent from public cache');
     const nativeVariant = shop.data?.product?.variants.find(row => row.id === '1093');
     assert.ok(nativeVariant, 'Native Shop reviewed variant missing');
     assert.equal(
