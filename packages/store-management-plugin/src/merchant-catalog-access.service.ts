@@ -37,6 +37,10 @@ import { hasMachineMailboxAccess, sensitiveStoreFinancePermission } from './cons
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
+import {
+    GlobalSettingsReadInfo,
+    isStoreRuntimeGlobalSettingsRead,
+} from './store-runtime-global-settings-read';
 
 const merchantScopeExemptions = new Set([
     'Query.activeAdministrator',
@@ -343,6 +347,7 @@ export class MerchantCatalogAccessService {
         parentType: string,
         fieldName: string,
         args: Record<string, unknown>,
+        info?: GlobalSettingsReadInfo,
     ): Promise<void> {
         if (
             ctx.apiType !== 'admin' ||
@@ -366,7 +371,12 @@ export class MerchantCatalogAccessService {
         }
         if (
             platformManagementFields.has(`${parentType}.${fieldName}`) &&
-            ctx.channel.code !== DEFAULT_CHANNEL_CODE
+            ctx.channel.code !== DEFAULT_CHANNEL_CODE &&
+            !(
+                parentType === 'Query' &&
+                fieldName === 'globalSettings' &&
+                isStoreRuntimeGlobalSettingsRead(info)
+            )
         ) {
             throw new UserInputError('平台功能请切换到平台管理中心操作');
         }
