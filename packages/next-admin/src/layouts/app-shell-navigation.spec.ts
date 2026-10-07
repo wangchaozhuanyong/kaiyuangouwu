@@ -70,6 +70,27 @@ describe('app shell navigation', () => {
     });
 
     it.each([
+        '/storefront/content/announcements',
+        '/storefront/content/announcements/',
+        '/storefront/content/announcements?announcementId=42',
+        '/storefront/content/announcements#details',
+    ])('keeps the registered platform announcement page reachable at %s', pathname => {
+        expect(isPlatformBusinessPath(pathname)).toBe(false);
+    });
+
+    it.each([
+        '/storefront',
+        '/storefront/content',
+        '/storefront/content/pages',
+        '/storefront/content/landing',
+        '/storefront/decoration',
+        '/storefront/content/announcements-other',
+        '/storefront/content/announcements/history',
+    ])('preserves platform blocking for other storefront paths at %s', pathname => {
+        expect(isPlatformBusinessPath(pathname)).toBe(true);
+    });
+
+    it.each([
         ['/catalog/list', 'catalog'],
         ['/sales/orders', 'sales'],
         ['/marketing/promotions', 'marketing'],

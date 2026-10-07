@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { REFERRAL_REPORT_FIELDS, REFERRAL_TABS } from '../pages/Marketing/referrals-types';
 import { getRouteModuleKey } from '../route-modules';
+import { hasAnyAdminPermission } from '../utils/admin-permissions';
 import {
     ADMIN_NAV_SECTIONS,
     STANDALONE_ADMIN_PAGES,
@@ -56,6 +57,23 @@ describe('standalone administration navigation', () => {
     it('keeps existing independent URLs and child URL queries intact', () => {
         expect(getStandaloneAdminRedirect('/sales/orders', '?state=Settled')).toBeNull();
         expect(getStandaloneAdminRedirect('/settings/data-management/exports', '?page=2')).toBeNull();
+    });
+    it.each([
+        ['/storefront/announcements', '?announcementId=42'],
+        ['/storefront/content', '?tab=announcements&announcementId=42'],
+    ])('normalizes the legacy announcement entry %s before the shell mounts', (path, search) => {
+        expect(getStandaloneAdminRedirect(path, search)).toBe(
+            '/storefront/content/announcements?announcementId=42',
+        );
+    });
+    it('retains SuperAdmin access for platform announcements', () => {
+        const permissions = standalonePagePermissions(
+            getStandaloneAdminPage('/storefront/content/announcements')!,
+        )!;
+        expect(permissions).toEqual(['SuperAdmin']);
+        expect(hasAnyAdminPermission(['SuperAdmin'], permissions)).toBe(true);
+        expect(hasAnyAdminPermission(['ReadStorefrontContent'], permissions)).toBe(false);
+        expect(hasAnyAdminPermission([], permissions)).toBe(false);
     });
     it('separates platform review/data from merchant operations using existing capabilities', () => {
         expect(standalonePageScopeAllows('/settings/store-profile/review', false)).toBe(false);
