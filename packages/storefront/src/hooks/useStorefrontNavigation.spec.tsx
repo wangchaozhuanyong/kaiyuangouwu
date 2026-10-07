@@ -703,7 +703,7 @@ describe('storefront navigation state', () => {
         });
         expect(router.navigate).toHaveBeenCalledTimes(2);
         expect(value.isPreparingProduct).toBe(false);
-        expect(router.state.location.search.id).toBe('new-scope-product');
+        expect(router.state.location.search).toMatchObject({ id: 'new-scope-product' });
     });
 
     it('retains navigation fallback when the current product preparation fails', async () => {

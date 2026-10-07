@@ -1068,7 +1068,17 @@ export async function collectCleanupSnapshot(runner, freeze, original) {
     await ensureUtcSession(runner);
     const targetFingerprint = await databaseFingerprint(runner);
     assert.equal(targetFingerprint, freeze.targetFingerprint, 'Wrong database instance');
-    const tables = (await runner.getTables())
+    // TypeORM's unqualified MySQL getTables() scans every accessible database.
+    // Keep the frozen graph confined to the instance/database already verified above.
+    let tableNames;
+    if (['mysql', 'mariadb'].includes(runner.connection.options.type)) {
+        const names = await runner.query(
+            "SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' LIMIT 20001",
+        );
+        assert.ok(names.length <= 20000, 'Current database schema exceeds bounded table inventory');
+        tableNames = names.map(row => row.name);
+    }
+    const tables = (await runner.getTables(tableNames))
         .map(table => ({
             name: table.name,
             columns: table.columns.map(column => column.name),

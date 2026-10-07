@@ -141,7 +141,14 @@ type TestContext = { channelId?: number; manager?: DataSource['manager'] };
 
 async function isolatedMysqlDatabase(): Promise<string> {
     const port = Number(process.env.USDT_TEST_PORT);
-    if (
+    const ownedLabFile = process.env.USDT_TEST_OWNED_LAB;
+    let expectedServerUuid: string | undefined;
+    if (ownedLabFile) {
+        const { verifyLab } = await import('../../../dev-server/scripts/store-isolation-mysql-lab.mjs');
+        expectedServerUuid = (await verifyLab(ownedLabFile)).serverUuid;
+        if (!Number.isInteger(port) || port < 1024 || port > 65535)
+            throw new Error('Owned USDT MySQL lab requires a valid loopback relay port');
+    } else if (
         process.env.ORDER_CLOSURE_MYSQL !== '1' ||
         port !== 37406 ||
         !process.env.ORDER_CLOSURE_MYSQL_PASSWORD
@@ -155,6 +162,11 @@ async function isolatedMysqlDatabase(): Promise<string> {
         password: process.env.ORDER_CLOSURE_MYSQL_PASSWORD,
     });
     try {
+        if (expectedServerUuid) {
+            const [rows] = await connection.query('SELECT @@server_uuid AS serverUuid');
+            if ((rows as Array<{ serverUuid: string }>)[0]?.serverUuid !== expectedServerUuid)
+                throw new Error('USDT MySQL relay does not match the verified owned server');
+        }
         // Only create a new randomly named database in our owned disposable server. Never drop
         // existing tables or reuse a configured application database, even between test cases.
         await connection.query(`CREATE DATABASE \`${database}\``);
