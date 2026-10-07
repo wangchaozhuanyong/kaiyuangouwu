@@ -53,6 +53,7 @@ import { StorefrontContentItemTranslation } from './entities/storefront-content-
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { imageReplacements } from './image-replacement-policy';
+import { mobileHeroTextFields } from './shared/hero-image';
 import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
 import {
@@ -196,6 +197,7 @@ export class StorefrontContentService {
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
+        normalized.settings = await this.resolveHeroImageSettings(ctx, normalized.type, normalized.settings);
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
@@ -317,6 +319,7 @@ export class StorefrontContentService {
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
         const image = await this.resolveImage(ctx, next.imageAssetId, requestedImageUrl, '区块图片');
         this.assertEnabledHeroHasImage(next.type, next.enabled, image);
+        next.settings = await this.resolveHeroImageSettings(ctx, next.type, next.settings);
         Object.assign(block, {
             code: next.code,
             internalName: next.internalName,
@@ -763,6 +766,15 @@ export class StorefrontContentService {
         translated.imageUrl =
             (translated.imageAsset ? this.externalImageService.storefrontUrl(translated.imageAsset) : null) ??
             (publishedOnly ? this.publishedLegacyImageUrl(translated.imageUrl) : translated.imageUrl);
+        if (publishedOnly && translated.type === 'HERO' && translated.settings?.mobileImageUrl) {
+            translated.settings = {
+                ...translated.settings,
+                mobileImageUrl:
+                    typeof translated.settings.mobileImageUrl === 'string'
+                        ? this.publishedLegacyImageUrl(translated.settings.mobileImageUrl)
+                        : null,
+            };
+        }
         translated.items = (translated.items ?? [])
             .filter(item => !publishedOnly || item.enabled)
             .map(item => {
@@ -933,6 +945,8 @@ export class StorefrontContentService {
         this.validateImageUrl(input.imageUrl, '区块图片');
         this.validateColor(input.backgroundColor, '背景颜色');
         this.validateColor(input.textColor, '文字颜色');
+        const settings = this.normalizeSettings(input.settings, '模块设置');
+        if (input.type === 'HERO') this.validateHeroMobileSettings(settings);
         const targetType = input.targetType ?? 'NONE';
         return {
             code,
@@ -949,7 +963,7 @@ export class StorefrontContentService {
             textColor: this.optionalText(input.textColor),
             targetType,
             targetValue: this.normalizeTarget(targetType, input.targetValue),
-            settings: this.normalizeSettings(input.settings, '模块设置'),
+            settings,
             translations: input.translations,
             items: input.items,
         };
@@ -1111,7 +1125,7 @@ export class StorefrontContentService {
                 !Array.isArray(categoryIds) ||
                 categoryIds.length > 200 ||
                 categoryIds.some(id => typeof id !== 'string' || !id.trim()) ||
-                new Set(categoryIds).size !== categoryIds.length
+                new Set<unknown>(categoryIds).size !== categoryIds.length
             ) {
                 throw new UserInputError('客户端插件分类配置不正确');
             }
@@ -1263,6 +1277,83 @@ export class StorefrontContentService {
             if (error instanceof UserInputError) throw error;
             throw new UserInputError(`${label}导入失败，请改为上传到素材库`);
         }
+    }
+
+    private validateHeroMobileSettings(settings: StorefrontContentSettingsValue | null): void {
+        if (!settings) return;
+        if (settings.mobileHeroHideStats != null && typeof settings.mobileHeroHideStats !== 'boolean') {
+            throw new UserInputError('手机轮播卖点隐藏设置必须使用开关');
+        }
+        for (const field of ['mobileHeroTextColor', 'mobileHeroSecondaryTextColor'] as const) {
+            if (settings[field] != null && typeof settings[field] !== 'string') {
+                throw new UserInputError('手机轮播文字颜色格式不正确');
+            }
+            this.validateColor(settings[field], '手机轮播文字颜色');
+        }
+        const imageId = settings.mobileImageAssetId;
+        if (
+            imageId != null &&
+            !(
+                (typeof imageId === 'string' && imageId.trim()) ||
+                (typeof imageId === 'number' && Number.isInteger(imageId) && imageId > 0)
+            )
+        ) {
+            throw new UserInputError('手机轮播图素材编号格式不正确');
+        }
+        if (settings.mobileImageUrl != null && typeof settings.mobileImageUrl !== 'string') {
+            throw new UserInputError('手机轮播图地址格式不正确');
+        }
+        this.validateImageUrl(settings.mobileImageUrl, '手机轮播图');
+        if (settings.mobileHeroTranslations == null) return;
+        if (!Array.isArray(settings.mobileHeroTranslations) || settings.mobileHeroTranslations.length > 2) {
+            throw new UserInputError('手机轮播文案仅支持中英文语言设置');
+        }
+        const languages = new Set<string>();
+        for (const translation of settings.mobileHeroTranslations) {
+            if (
+                !translation ||
+                typeof translation !== 'object' ||
+                Array.isArray(translation) ||
+                !['zh_Hans', 'en'].includes(translation.languageCode) ||
+                languages.has(translation.languageCode)
+            ) {
+                throw new UserInputError('手机轮播文案语言不支持或重复');
+            }
+            languages.add(translation.languageCode);
+            for (const field of mobileHeroTextFields) {
+                if (translation[field] != null && typeof translation[field] !== 'string') {
+                    throw new UserInputError('手机轮播文案必须使用文字');
+                }
+            }
+        }
+    }
+
+    private async resolveHeroImageSettings(
+        ctx: RequestContext,
+        type: StorefrontContentBlockType,
+        settings: StorefrontContentSettingsValue | null,
+    ): Promise<StorefrontContentSettingsValue | null> {
+        if (
+            type !== 'HERO' ||
+            !settings ||
+            (!Object.prototype.hasOwnProperty.call(settings, 'mobileImageAssetId') &&
+                !Object.prototype.hasOwnProperty.call(settings, 'mobileImageUrl'))
+        ) {
+            return settings;
+        }
+        const image = await this.resolveImage(
+            ctx,
+            settings.mobileImageAssetId as ID | null | undefined,
+            settings.mobileImageUrl as string | null | undefined,
+            '手机轮播图',
+        );
+        return {
+            ...settings,
+            mobileImageAssetId: image.asset?.id ?? null,
+            mobileImageUrl: image.imageUrl,
+            mobileImageWidth: image.asset?.width ?? null,
+            mobileImageHeight: image.asset?.height ?? null,
+        };
     }
 
     private publishedLegacyImageUrl(imageUrl: string | null): string | null {

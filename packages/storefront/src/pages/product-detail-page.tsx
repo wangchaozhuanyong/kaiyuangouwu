@@ -15,6 +15,7 @@ import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
+import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
@@ -68,6 +69,7 @@ export interface ProductDetailPageProps {
     couponCampaigns: StorefrontCouponCampaign[];
     customerCoupons: StoreCustomerCoupon[];
     addingVariantId: string | null;
+    cartCommandUnknown?: boolean;
     favorite: boolean;
     onAdd: (variant: ProductVariant, quantity: number) => void;
     onBuyNow: (variant: ProductVariant, quantity: number) => void;
@@ -112,6 +114,7 @@ export function ProductDetailPage() {
         couponCampaigns,
         customerCoupons,
         addingVariantId,
+        cartCommandUnknown = false,
         favorite,
         initialVariantId,
         onAdd,
@@ -570,10 +573,16 @@ export function ProductDetailPage() {
                 <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
             </button>
             {!quoteOnly && (
-                <button type="button" onClick={() => navigateTo({ name: 'cart' })}>
-                    <ShoppingCart />
+                <button
+                    type="button"
+                    onClick={() => navigateTo({ name: 'cart' })}
+                    aria-label={countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)}
+                >
+                    <span className="count-badge-anchor">
+                        <ShoppingCart aria-hidden="true" />
+                        <CountBadge count={cartQuantity} overlay />
+                    </span>
                     <span>{isZh ? '购物车' : 'Cart'}</span>
-                    {cartQuantity > 0 && <b>{cartQuantity}</b>}
                 </button>
             )}
             {quoteOnly ? (
@@ -584,7 +593,7 @@ export function ProductDetailPage() {
                 <>
                     <button
                         type="button"
-                        disabled={unavailable || addingVariantId !== null}
+                        disabled={unavailable || addingVariantId !== null || cartCommandUnknown}
                         onClick={() => variant && onAdd(variant, purchaseQuantity)}
                     >
                         {unavailable
@@ -601,23 +610,37 @@ export function ProductDetailPage() {
                     </button>
                     <button
                         type="button"
-                        disabled={unavailable || addingVariantId !== null}
-                        onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
-                        onFocus={() => void preloadStorefrontRouteComponent('purchase')}
-                        onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
-                        onClick={() => variant && onBuyNow(variant, purchaseQuantity)}
+                        disabled={!cartCommandUnknown && (unavailable || addingVariantId !== null)}
+                        onPointerEnter={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onFocus={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onTouchStart={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onClick={() =>
+                            cartCommandUnknown
+                                ? navigateTo({ name: 'cart' })
+                                : variant && onBuyNow(variant, purchaseQuantity)
+                        }
                     >
-                        {unavailable
+                        {cartCommandUnknown
                             ? isZh
-                                ? '已售罄'
-                                : 'Sold out'
-                            : addingVariantId === variant?.id
+                                ? '核对购物车'
+                                : 'Review cart'
+                            : unavailable
                               ? isZh
-                                  ? '正在进入结算'
-                                  : 'Opening checkout'
-                              : isZh
-                                ? '立即购买'
-                                : 'Buy now'}
+                                  ? '已售罄'
+                                  : 'Sold out'
+                              : addingVariantId === variant?.id
+                                ? isZh
+                                    ? '正在进入结算'
+                                    : 'Opening checkout'
+                                : isZh
+                                  ? '立即购买'
+                                  : 'Buy now'}
                     </button>
                 </>
             )}

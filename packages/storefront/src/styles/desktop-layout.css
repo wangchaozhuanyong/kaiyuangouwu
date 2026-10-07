@@ -370,21 +370,9 @@
         scroll-padding-inline: 32px;
     }
 
-    html[lang='en'] .primary-categories button {
-        width: 140px;
-        min-width: 140px;
-        height: 68px;
-    }
-
     html[lang='en'] .primary-category-image {
         width: 36px;
         height: 36px;
-    }
-
-    html[lang='en'] .primary-category-label {
-        height: 24px;
-        line-height: var(--line-height-body);
-        -webkit-line-clamp: 2;
     }
 
     .primary-categories-all {
@@ -612,7 +600,6 @@
     .payment-summary {
         margin-top: 0;
         padding: 24px;
-        border-radius: 8px;
     }
 
     .payment-method-section {

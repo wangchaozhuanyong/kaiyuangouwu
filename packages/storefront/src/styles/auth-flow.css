@@ -654,13 +654,23 @@
     position: relative;
     z-index: 1;
     overflow-y: auto;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--skin-card-radius) var(--skin-card-radius) 0 0;
     animation: sheet-in 220ms ease-out;
     padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--shadow-sm);
     border: var(--skin-card-outline, 0);
+}
+
+.sheet > .sheet-drag-handle {
+    display: block;
+    width: 48px;
+    height: 12px;
+    margin: 4px auto 0;
+    color: var(--line);
+    stroke-width: 6;
+    pointer-events: none;
 }
 
 .sheet:focus {

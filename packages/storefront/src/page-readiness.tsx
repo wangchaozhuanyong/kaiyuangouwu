@@ -1,5 +1,7 @@
+// organize-imports-ignore
 import { ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
+import { BrandLoadingIndicator } from './brand-loading';
 import {
     decodeImageElement,
     IMAGE_WAIT_EXPIRED_EVENT,
@@ -252,6 +254,7 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
         return () => observer.disconnect();
     }, [phase, online, pending, navigationKey, requestKey]);
 
+    const navigationLabel = language === 'zh' ? '正在打开商品' : 'Opening product';
     return (
         <div
             className="page-readiness"
@@ -263,20 +266,20 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             </div>
             {((phase === 'preparing' && showProgress) || navigationPreparing) && (
                 <div
-                    className="page-readiness-progress"
+                    className={navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'}
                     role="status"
                     aria-live="polite"
                     aria-label={
                         navigationPreparing
-                            ? language === 'zh'
-                                ? '正在打开商品'
-                                : 'Opening product'
+                            ? navigationLabel
                             : language === 'zh'
                               ? '页面正在加载'
                               : 'Page loading'
                     }
                 >
-                    <span aria-hidden="true" />
+                    {navigationPreparing && (
+                        <BrandLoadingIndicator language={language} compact label={navigationLabel} />
+                    )}
                 </div>
             )}
             {phase === 'error' && (

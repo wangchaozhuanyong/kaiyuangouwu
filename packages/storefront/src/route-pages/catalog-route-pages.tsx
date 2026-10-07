@@ -99,8 +99,14 @@ export function HomeRoutePage() {
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
-                onCouponCampaignsRetry: () =>
-                    void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
+                onCouponCampaignsRetry: () => {
+                    if (runtime.customerLoadState !== 'ready') {
+                        // Recover the account first; its resolved customer key enables the coupon read.
+                        void runtime.retryAccount();
+                    } else {
+                        void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false });
+                    }
+                },
                 onContentTarget: runtime.openContentTarget,
                 onContentRetry: () => void runtime.contentQuery?.refetch?.({ cancelRefetch: false }),
                 onRetry: () => void runtime.refetchStorefront(),
@@ -221,6 +227,7 @@ export function ProductRoutePage() {
                 couponCampaigns: runtime.activeCoupons,
                 customerCoupons: runtime.myCoupons,
                 addingVariantId: runtime.addingVariantId,
+                cartCommandUnknown: runtime.cartCommandUnknown,
                 favorite: runtime.favoriteProductIds.includes(product.id),
                 onAdd: (variant: ProductVariant, quantity: number) =>
                     void runtime.addToCart(variant, quantity),

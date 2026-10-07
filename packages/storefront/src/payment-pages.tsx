@@ -1,6 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Check, CircleAlert, CircleCheck, Copy, Gift, House, Package, WalletCards } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CircleAlert,
+    CircleCheck,
+    Copy,
+    Gift,
+    House,
+    Package,
+    WalletCards,
+} from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
@@ -33,7 +43,7 @@ import {
 
 type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' | 'pending' };
 const referralCurrencyBadgeClassName =
-    'grid min-h-11 place-items-center rounded-xl border border-amber-200 bg-white px-3 type-body weight-bold text-amber-700';
+    'payment-balance-currency grid min-h-11 place-items-center px-3 type-body weight-bold';
 
 export function PaymentPage({
     api,
@@ -339,30 +349,30 @@ export function PaymentPage({
             <form className="payment-layout" onSubmit={event => void submitPayment(event)}>
                 <div className="payment-main">
                     {isUsdtPayment ? (
-                        <section
-                            className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4"
-                            role="note"
-                        >
+                        <section className="payment-usdt-quote p-4" role="note">
                             <div className="flex items-start gap-3">
-                                <WalletCards className="mt-0.5 size-5 text-emerald-600" aria-hidden="true" />
+                                <WalletCards
+                                    className="mt-0.5 size-5 text-[var(--success)]"
+                                    aria-hidden="true"
+                                />
                                 <div className="min-w-0 flex-1">
-                                    <strong className="block text-slate-900">
+                                    <strong className="block text-[var(--text)]">
                                         {isZh ? 'USDT 结账锁价' : 'Locked USDT checkout quote'}
                                     </strong>
                                     {usdtQuoteQuery.data ? (
                                         <>
-                                            <span className="mt-1 block type-page weight-bold text-emerald-700">
+                                            <span className="mt-1 block type-page weight-bold text-[var(--success)]">
                                                 ₮{usdtQuoteQuery.data.usdtAmount.toFixed(6)}
                                             </span>
-                                            <small className="mt-2 block [line-height:var(--line-height-body)] text-slate-600">
+                                            <small className="mt-2 block [line-height:var(--line-height-body)] text-[var(--muted)]">
                                                 {usdtQuoteDescription(usdtQuoteQuery.data, locale, language)}
                                             </small>
-                                            <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
+                                            <div className="mt-3 payment-quote-details p-3">
                                                 <div className="flex items-center justify-between gap-3">
-                                                    <span className="type-helper weight-bold text-slate-500">
+                                                    <span className="type-helper weight-bold text-[var(--muted)]">
                                                         {usdtQuoteQuery.data.network} USDT
                                                     </span>
-                                                    <span className="type-helper weight-semibold text-emerald-700">
+                                                    <span className="type-helper weight-semibold text-[var(--success)]">
                                                         {usdtQuoteQuery.data.paymentStatus === 'PENDING'
                                                             ? isZh
                                                                 ? '等待链上到账'
@@ -382,12 +392,12 @@ export function PaymentPage({
                                                                   : 'Quote expired'}
                                                     </span>
                                                 </div>
-                                                <code className="mt-2 block break-all type-body weight-bold text-slate-900">
+                                                <code className="mt-2 block break-all type-body weight-bold text-[var(--text)]">
                                                     {usdtQuoteQuery.data.receivingAddress}
                                                 </code>
                                                 <button
                                                     type="button"
-                                                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 type-action text-white"
+                                                    className="mt-3 inline-flex min-h-10 items-center gap-2 payment-secondary-action px-3 type-action"
                                                     disabled={usdtQuoteQuery.data.paymentStatus !== 'PENDING'}
                                                     onClick={() => void copyUsdtAddress()}
                                                 >
@@ -401,11 +411,11 @@ export function PaymentPage({
                                                           : 'Copy address'}
                                                 </button>
                                             </div>
-                                            <small className="mt-2 block break-all [line-height:var(--line-height-body)] text-slate-500">
+                                            <small className="mt-2 block break-all [line-height:var(--line-height-body)] text-[var(--muted)]">
                                                 {isZh ? '钱包校验码：' : 'Wallet verification: '}
                                                 {usdtQuoteQuery.data.receivingAddressFingerprint.slice(0, 16)}
                                             </small>
-                                            <small className="mt-1 block [line-height:var(--line-height-body)] weight-semibold text-amber-700">
+                                            <small className="mt-1 block [line-height:var(--line-height-body)] weight-semibold text-[var(--warning)]">
                                                 {usdtQuoteQuery.data.paymentStatus === 'MANUAL_REVIEW'
                                                     ? isZh
                                                         ? '这笔付款需要人工复核，请停止继续转账并联系客服。'
@@ -419,11 +429,11 @@ export function PaymentPage({
                                             </small>
                                         </>
                                     ) : usdtQuoteQuery.isLoading ? (
-                                        <span className="mt-2 block type-body text-slate-600">
+                                        <span className="mt-2 block type-body text-[var(--muted)]">
                                             {isZh ? '正在锁定当前报价…' : 'Locking the current quote…'}
                                         </span>
                                     ) : (
-                                        <span className="mt-2 block type-body text-red-600">
+                                        <span className="mt-2 block type-body text-[var(--danger)]">
                                             {usdtQuoteQuery.error instanceof Error
                                                 ? storefrontErrorMessage(usdtQuoteQuery.error, language)
                                                 : isZh
@@ -480,13 +490,16 @@ export function PaymentPage({
                     {customer && !isUsdtPayment && referralProgramQuery.data?.enabled && (
                         <section className="payment-method-section">
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
-                            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                            <div className="payment-balance-panel p-4">
                                 <div className="flex items-center justify-between gap-3">
-                                    <span className="flex items-center gap-2 weight-bold text-slate-800">
-                                        <Gift aria-hidden="true" className="size-4 text-amber-600" />
+                                    <span className="flex items-center gap-2 weight-bold text-[var(--text)]">
+                                        <Gift
+                                            aria-hidden="true"
+                                            className="size-4 text-[var(--interaction-ink)]"
+                                        />
                                         {isZh ? '可用余额' : 'Available balance'}
                                     </span>
-                                    <strong className="text-amber-700">
+                                    <strong className="text-[var(--interaction-ink)]">
                                         {formatSettlementMoney(
                                             referralWallet?.availableBalance ?? 0,
                                             order.currencyCode,
@@ -495,7 +508,7 @@ export function PaymentPage({
                                     </strong>
                                 </div>
                                 {appliedReferralAmount > 0 ? (
-                                    <p className="mb-0 mt-3 type-body weight-semibold text-emerald-700">
+                                    <p className="mb-0 mt-3 type-body weight-semibold text-[var(--success)]">
                                         {isZh
                                             ? `已抵扣 ${formatSettlementMoney(appliedReferralAmount, order.currencyCode, locale)}，剩余金额请继续选择支付方式。`
                                             : `${formatSettlementMoney(appliedReferralAmount, order.currencyCode, locale)} applied. Choose a method for the remainder.`}
@@ -510,7 +523,7 @@ export function PaymentPage({
                                         </span>
                                         <input
                                             id="referral-balance-amount"
-                                            className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 type-input outline-none focus:border-amber-500"
+                                            className="payment-balance-input min-w-0 flex-1 px-3 type-input"
                                             type="number"
                                             min="0.01"
                                             max={(maximumReferralAmount / 100).toFixed(2)}
@@ -521,7 +534,7 @@ export function PaymentPage({
                                         />
                                         <button
                                             type="button"
-                                            className="min-h-11 rounded-xl bg-amber-500 px-4 weight-bold text-white disabled:opacity-50"
+                                            className="payment-secondary-action min-h-11 px-4 weight-bold"
                                             disabled={applyingReferral || submitting}
                                             onClick={() => void applyReferralBalance()}
                                         >
@@ -535,7 +548,7 @@ export function PaymentPage({
                                         </button>
                                     </div>
                                 ) : (
-                                    <p className="mb-0 mt-3 type-body text-slate-500">
+                                    <p className="mb-0 mt-3 type-body text-[var(--muted)]">
                                         {referralProgramQuery.data.allowBalanceSpend
                                             ? isZh
                                                 ? '当前币种暂无可用返利余额。'
@@ -752,6 +765,7 @@ export function PaymentPage({
                         disabled={submitting || applyingReferral || appliedReferralAmount > 0}
                         onClick={() => onCancel(order)}
                     >
+                        {appliedReferralAmount === 0 && <ArrowLeft aria-hidden="true" />}
                         {appliedReferralAmount > 0
                             ? isZh
                                 ? '余额已抵扣，订单需完成支付'

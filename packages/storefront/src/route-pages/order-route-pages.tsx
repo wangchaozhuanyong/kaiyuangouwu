@@ -16,8 +16,15 @@ import { orderStatusRefreshInterval } from '../order-refresh';
 import { PUBLIC_QUERY_GC_TIME, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
-import { AuthPageBoundary, EmptyState, InlineError, Sheet, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer, DataSubjectRequest, FraudRiskCase } from '../types';
+import {
+    AsyncRouteStatePage,
+    AuthPageBoundary,
+    EmptyState,
+    InlineError,
+    Sheet,
+    Subpage,
+} from '../storefront-ui/page-shell';
+import { ActiveCustomer } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -339,135 +346,124 @@ export function AccountSecurityRoutePage() {
 }
 
 function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof useRuntime> }) {
+    const queryClient = useQueryClient();
     const isZh = runtime.language === 'zh';
-    const [dataSubjectRequests, setDataSubjectRequests] = useState<DataSubjectRequest[]>([]);
-    const [dataSubjectLoading, setDataSubjectLoading] = useState(Boolean(runtime.customer));
-    const [fraudRiskCases, setFraudRiskCases] = useState<FraudRiskCase[]>([]);
-    const [fraudRiskLoading, setFraudRiskLoading] = useState(Boolean(runtime.customer));
-    const refreshDataSubjectRequests = async () => {
-        if (!runtime.customer) {
-            setDataSubjectRequests([]);
-            setDataSubjectLoading(false);
-            return;
-        }
-        setDataSubjectLoading(true);
-        try {
-            setDataSubjectRequests(await runtime.api.dataSubjectRequests());
-        } catch (error) {
-            runtime.notify(storefrontErrorMessage(error, runtime.language));
-        } finally {
-            setDataSubjectLoading(false);
-        }
+    const customerScope = storefrontQueryKeys.customerScope(
+        storefrontQueryKeys.market(runtime.market),
+        languageCodeFor(runtime.language),
+        runtime.customer?.id ?? '',
+    );
+    // Keep confirmed results during route revisits, but revalidate security status on every visit.
+    // These private queries are scoped to the store, currency, language and customer, never persisted.
+    const dataSubjectQuery = useQuery({
+        queryKey: [...customerScope, 'data-subject-requests'],
+        queryFn: ({ signal }) => runtime.api.dataSubjectRequests(signal),
+        enabled: Boolean(runtime.customer),
+        staleTime: 0,
+        refetchOnMount: 'always',
+    });
+    const fraudRiskQuery = useQuery({
+        queryKey: [...customerScope, 'fraud-risk-cases'],
+        queryFn: ({ signal }) => runtime.api.fraudRiskCases(signal),
+        enabled: Boolean(runtime.customer),
+        staleTime: 0,
+        refetchOnMount: 'always',
+    });
+    const pendingInitialData =
+        Boolean(runtime.customer) &&
+        (dataSubjectQuery.data === undefined || fraudRiskQuery.data === undefined);
+    const paused = dataSubjectQuery.isPaused || fraudRiskQuery.isPaused;
+    const readError = dataSubjectQuery.error ?? fraudRiskQuery.error;
+    const loadError = readError
+        ? storefrontErrorMessage(readError, runtime.language)
+        : paused
+          ? offlineLoadError(runtime.language)
+          : '';
+    const retryReads = () => {
+        void dataSubjectQuery.refetch({ cancelRefetch: false });
+        void fraudRiskQuery.refetch({ cancelRefetch: false });
     };
-    const refreshFraudRiskCases = async () => {
-        if (!runtime.customer) {
-            setFraudRiskCases([]);
-            setFraudRiskLoading(false);
-            return;
-        }
-        setFraudRiskLoading(true);
-        try {
-            setFraudRiskCases(await runtime.api.fraudRiskCases());
-        } catch (error) {
-            runtime.notify(storefrontErrorMessage(error, runtime.language));
-        } finally {
-            setFraudRiskLoading(false);
-        }
-    };
-    useEffect(() => {
-        const controller = new AbortController();
-        if (!runtime.customer) {
-            setFraudRiskCases([]);
-            setFraudRiskLoading(false);
-            return () => controller.abort();
-        }
-        setFraudRiskLoading(true);
-        void runtime.api
-            .fraudRiskCases(controller.signal)
-            .then(cases => setFraudRiskCases(cases))
-            .catch(error => {
-                if (!controller.signal.aborted)
-                    runtime.notify(storefrontErrorMessage(error, runtime.language));
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setFraudRiskLoading(false);
-            });
-        return () => controller.abort();
-    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
-    useEffect(() => {
-        const controller = new AbortController();
-        if (!runtime.customer) {
-            setDataSubjectRequests([]);
-            setDataSubjectLoading(false);
-            return () => controller.abort();
-        }
-        setDataSubjectLoading(true);
-        void runtime.api
-            .dataSubjectRequests(controller.signal)
-            .then(requests => setDataSubjectRequests(requests))
-            .catch(error => {
-                if (!controller.signal.aborted) {
-                    runtime.notify(storefrontErrorMessage(error, runtime.language));
-                }
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setDataSubjectLoading(false);
-            });
-        return () => controller.abort();
-    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
     return (
         <RouteGate name="account-security">
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
-                <LazyAccountSecurityPage
-                    customer={runtime.customer}
-                    language={runtime.language}
-                    storefrontName={runtime.storefrontName}
-                    commerceMode={runtime.commerceMode}
-                    onBack={runtime.goBack}
-                    dataSubjectRequests={dataSubjectRequests}
-                    dataSubjectLoading={dataSubjectLoading}
-                    fraudRiskCases={fraudRiskCases}
-                    fraudRiskLoading={fraudRiskLoading}
-                    onAvatarChange={async (file: File) => {
-                        const avatar = await runtime.api.uploadCustomerAvatar(file);
-                        runtime.setCustomer((current: ActiveCustomer | null) =>
-                            current ? { ...current, avatar } : current,
-                        );
-                        runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
-                    }}
-                    onAvatarRemove={async () => {
-                        await runtime.api.removeCustomerAvatar();
-                        runtime.setCustomer((current: ActiveCustomer | null) =>
-                            current ? { ...current, avatar: null } : current,
-                        );
-                        runtime.notify(isZh ? '头像已移除' : 'Profile photo removed');
-                    }}
-                    onDataExport={
-                        runtime.contentQuery?.data?.settings.personalDataExportEnabled === true
-                            ? password => runtime.api.exportPersonalData(password)
-                            : undefined
-                    }
-                    onRequestAccountClosure={async password => {
-                        await runtime.api.requestAccountClosure(password);
-                        await refreshDataSubjectRequests();
-                    }}
-                    onCancelAccountClosure={async () => {
-                        await runtime.api.cancelAccountClosure();
-                        await refreshDataSubjectRequests();
-                    }}
-                    onAppealFraudRiskCase={async (id, reason) => {
-                        await runtime.api.appealFraudRiskCase(id, reason);
-                        await refreshFraudRiskCases();
-                    }}
-                    onLogout={() => {
-                        void runtime.api.logout().then(() => {
-                            runtime.clearPrivateQueryCache();
-                            runtime.setCustomer(null);
-                            runtime.notify(isZh ? '已退出登录' : 'Signed out');
-                            runtime.navigate({ name: 'account' }, true);
-                        });
-                    }}
-                />
+                {pendingInitialData ? (
+                    <AsyncRouteStatePage
+                        routeName="account-security"
+                        state={paused ? 'paused' : readError ? 'error' : 'loading'}
+                        error={loadError}
+                        language={runtime.language}
+                        onBack={runtime.goBack}
+                        onRetry={retryReads}
+                    />
+                ) : (
+                    <LazyAccountSecurityPage
+                        customer={runtime.customer}
+                        language={runtime.language}
+                        storefrontName={runtime.storefrontName}
+                        commerceMode={runtime.commerceMode}
+                        onBack={runtime.goBack}
+                        dataSubjectRequests={dataSubjectQuery.data ?? []}
+                        dataSubjectLoading={
+                            dataSubjectQuery.isFetching ||
+                            dataSubjectQuery.isError ||
+                            dataSubjectQuery.isPaused
+                        }
+                        fraudRiskCases={fraudRiskQuery.data ?? []}
+                        fraudRiskLoading={
+                            fraudRiskQuery.isFetching || fraudRiskQuery.isError || fraudRiskQuery.isPaused
+                        }
+                        loadError={loadError}
+                        onRetry={retryReads}
+                        onAvatarChange={async (file: File) => {
+                            const avatar = await runtime.api.uploadCustomerAvatar(file);
+                            runtime.setCustomer((current: ActiveCustomer | null) =>
+                                current ? { ...current, avatar } : current,
+                            );
+                            runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
+                        }}
+                        onAvatarRemove={async () => {
+                            await runtime.api.removeCustomerAvatar();
+                            runtime.setCustomer((current: ActiveCustomer | null) =>
+                                current ? { ...current, avatar: null } : current,
+                            );
+                            runtime.notify(isZh ? '头像已移除' : 'Profile photo removed');
+                        }}
+                        onDataExport={
+                            runtime.contentQuery?.data?.settings.personalDataExportEnabled === true
+                                ? password => runtime.api.exportPersonalData(password)
+                                : undefined
+                        }
+                        onRequestAccountClosure={async password => {
+                            await runtime.api.requestAccountClosure(password);
+                            await queryClient.invalidateQueries({
+                                queryKey: [...customerScope, 'data-subject-requests'],
+                                exact: true,
+                            });
+                        }}
+                        onCancelAccountClosure={async () => {
+                            await runtime.api.cancelAccountClosure();
+                            await queryClient.invalidateQueries({
+                                queryKey: [...customerScope, 'data-subject-requests'],
+                                exact: true,
+                            });
+                        }}
+                        onAppealFraudRiskCase={async (id, reason) => {
+                            await runtime.api.appealFraudRiskCase(id, reason);
+                            await queryClient.invalidateQueries({
+                                queryKey: [...customerScope, 'fraud-risk-cases'],
+                                exact: true,
+                            });
+                        }}
+                        onLogout={() => {
+                            void runtime.api.logout().then(() => {
+                                runtime.clearPrivateQueryCache();
+                                runtime.setCustomer(null);
+                                runtime.notify(isZh ? '已退出登录' : 'Signed out');
+                                runtime.navigate({ name: 'account' }, true);
+                            });
+                        }}
+                    />
+                )}
             </AuthPageBoundary>
         </RouteGate>
     );

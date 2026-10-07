@@ -186,11 +186,12 @@ export function useStorefrontAppState() {
         customerCouponUsageRecordsError,
         customerLoadError,
         customerLoadState,
+        retryCustomer,
         cartLoadState,
         couponCampaignsLoading,
         couponCampaignsError,
         cartQueryError,
-    } = useStorefrontCustomerData(queryContext);
+    } = useStorefrontCustomerData({ ...queryContext, configQuery });
 
     const productActivity = useCustomerProductActivity({
         api,
@@ -679,6 +680,7 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
+        retryAccount: retryCustomer,
         route,
         displayedRoute,
         api,
@@ -832,7 +834,7 @@ export function useStorefrontAppState() {
         customer,
         customerLoadState,
         customerLoadError,
-        retryAccount: () => customerQuery.refetch({ cancelRefetch: false }),
+        retryAccount: retryCustomer,
         retryPageLoad: () =>
             refreshStorefrontQueries(queryClient, {
                 marketCode: storefrontQueryKeys.market(market),

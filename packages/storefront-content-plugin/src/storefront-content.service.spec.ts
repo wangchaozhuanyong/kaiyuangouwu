@@ -705,6 +705,139 @@ describe('StorefrontContentService image ownership', () => {
     });
 });
 
+describe('shared phone hero settings', () => {
+    it('keeps the existing JSON settings serializer compatible with pre-staged phone assets and object-array translations', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const settings = {
+            mobileImageAssetId: 'phone',
+            mobileImageUrl: '/assets/phone.webp',
+            mobileImageWidth: 1200,
+            mobileImageHeight: 900,
+            mobileHeroHideStats: true,
+            mobileHeroTranslations: [{ languageCode: 'zh_Hans', title: '手机标题', subtitle: '' }],
+        };
+        // normalizeSettings is the same serializer used by the deployed pre-phone-capability service.
+        expect((service as any).normalizeSettings(settings, '模块设置')).toEqual(settings);
+    });
+    it('validates phone copy languages, image addresses and text colors without changing older settings', () => {
+        const settings = {
+            themePreset: 'bright',
+            mobileImageAssetId: 'phone',
+            mobileHeroTranslations: [{ languageCode: 'zh_Hans' as const, title: '手机标题', subtitle: '' }],
+            mobileHeroTextColor: '#292d32',
+        };
+        expect(validate(createInput({ settings })).settings).toEqual(settings);
+        expect(validate(createInput({ settings: null })).settings).toBeNull();
+        for (const patch of [
+            { mobileHeroHideStats: 'true' },
+            { mobileImageUrl: 'javascript:alert(1)' },
+            { mobileImageAssetId: false },
+            { mobileHeroTextColor: 'red' },
+            { mobileHeroSecondaryTextColor: 3 },
+            { mobileHeroTranslations: [{ languageCode: 'fr', title: 'titre' }] },
+            { mobileHeroTranslations: [{ languageCode: 'en' }, { languageCode: 'en' }] },
+            { mobileHeroTranslations: [{ languageCode: 'zh_Hans', body: 12 }] },
+        ]) {
+            expect(() => validate(createInput({ settings: patch as never }))).toThrow(/手机轮播/);
+        }
+    });
+
+    it.each(['moyao', 'damatong', 'flashcast'])(
+        'resolves phone asset metadata on create/update in %s while preserving desktop bindings',
+        async channelId => {
+            let saved: StorefrontContentBlock;
+            const repository = {
+                save: vi.fn((block: StorefrontContentBlock) => {
+                    saved = block;
+                    saved.id = 'hero';
+                    saved.updatedAt ??= new Date('2026-10-07T00:00:00Z');
+                    return saved;
+                }),
+            };
+            const service = new StorefrontContentService(
+                { getRepository: () => repository } as never,
+                { translate: (block: StorefrontContentBlock) => block } as never,
+                { storefrontUrl: (asset: { id: string }) => `/assets/${asset.id}.webp` } as never,
+                {} as never,
+            );
+            for (const method of ['assertUniqueCode', 'validateDesktopCategoryBanner', 'syncItems'] as const)
+                vi.spyOn(service as any, method).mockResolvedValue(undefined);
+            vi.spyOn(service as any, 'replaceBlockTranslations').mockImplementation(
+                (_ctx, block: any, translations: any) => {
+                    block.translations = translations;
+                },
+            );
+            vi.spyOn(service as any, 'getOwnedBlockOrThrow').mockImplementation(() => saved);
+            vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockImplementation(() => saved);
+            const resolve = vi.spyOn(service as any, 'resolveImage').mockImplementation((_ctx, id: any) => ({
+                asset: id
+                    ? { id, width: id === 'desktop' ? 1600 : 1200, height: id === 'desktop' ? 700 : 900 }
+                    : null,
+                imageUrl: id ? `/assets/${id}.webp` : null,
+            }));
+            const settings = {
+                themePreset: 'bright',
+                mobileImageAssetId: 'phone',
+                mobileImageUrl: '/assets/stale.webp',
+                mobileImageWidth: 999,
+                mobileImageHeight: 1,
+                mobileHeroTranslations: [
+                    { languageCode: 'zh_Hans' as const, title: '手机标题', subtitle: '' },
+                ],
+            };
+            const ctx = { channelId } as never;
+            const created = await service.create(ctx, createInput({ imageAssetId: 'desktop', settings }));
+            expect(created).toMatchObject({
+                imageAssetId: 'desktop',
+                imageUrl: '/assets/desktop.webp',
+                settings: {
+                    ...settings,
+                    mobileImageUrl: '/assets/phone.webp',
+                    mobileImageWidth: 1200,
+                    mobileImageHeight: 900,
+                },
+            });
+            const before = created.updatedAt;
+            await expect(
+                service.update(ctx, {
+                    id: created.id,
+                    expectedUpdatedAt: before,
+                    settings: { ...created.settings, mobileImageAssetId: 'new-phone' },
+                }),
+            ).rejects.toThrow('IMAGE_REPLACEMENT_REQUIRES_REVIEW');
+            const changed = await service.update(ctx, {
+                id: created.id,
+                expectedUpdatedAt: before,
+                allowImageReplacement: true,
+                settings: { ...created.settings, mobileImageAssetId: 'new-phone' },
+            });
+            expect(changed.imageAssetId).toBe('desktop');
+            expect(changed.imageUrl).toBe('/assets/desktop.webp');
+            expect(changed.translations[0].title).toBe('首页主图');
+            expect(changed.settings).toMatchObject({
+                mobileImageAssetId: 'new-phone',
+                mobileImageUrl: '/assets/new-phone.webp',
+                mobileImageWidth: 1200,
+                mobileImageHeight: 900,
+            });
+            const cleared = await service.update(ctx, {
+                id: changed.id,
+                expectedUpdatedAt: changed.updatedAt,
+                allowImageReplacement: true,
+                settings: { ...changed.settings, mobileImageAssetId: null, mobileImageUrl: null },
+            });
+            expect(cleared.settings).toMatchObject({
+                mobileImageAssetId: null,
+                mobileImageUrl: null,
+                mobileImageWidth: null,
+                mobileImageHeight: null,
+            });
+            expect(cleared.imageAssetId).toBe('desktop');
+            expect(resolve.mock.calls.filter(call => call[3] === '手机轮播图')).toHaveLength(3);
+        },
+    );
+});
+
 describe('StorefrontContentService Channel isolation', () => {
     it('lists and reads only content owned by the active Channel', async () => {
         const blocks = [

@@ -4,13 +4,12 @@ import { useState } from 'react';
 
 import { ShopApi } from '../api';
 import { useDesktopLayout } from '../desktop-layout';
-import { storefrontInitialQueryError } from '../loading-state';
+import { useAccountProductList } from '../hooks/useAccountProductList';
 import { PageSkeleton } from '../route-loading';
-import { useProductsByIdsQuery } from '../route-queries';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { FavoriteProductsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
-import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
+import { EmptyState, InlineError, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { MarketConfig, StorefrontLanguage } from '../types';
 
@@ -55,15 +54,18 @@ export function FavoriteProductsPage() {
         onClear,
     } = FavoriteProductsPageContext.useValue();
     const isZh = language === 'zh';
-    const favoritesQuery = useProductsByIdsQuery({ api, productIds, market, language });
-    const favoriteProducts = productIds.length ? (favoritesQuery.data ?? []) : [];
+    const {
+        query: favoritesQuery,
+        products: favoriteProducts,
+        error: queryError,
+    } = useAccountProductList({ api, productIds, market, language });
     const loading = activityLoading || (productIds.length > 0 && favoritesQuery.isLoading);
-    const favoriteError = activityError
-        ? storefrontErrorMessage(activityError, language)
-        : storefrontInitialQueryError(favoritesQuery, language);
+    const favoriteError = activityError ? storefrontErrorMessage(activityError, language) : queryError;
     const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
     const selected = selectedIds.filter(id => availableProducts.some(product => product.id === id));
     const allSelected = availableProducts.length > 0 && selected.length === availableProducts.length;
+    const retry = () =>
+        activityError ? onActivityRetry?.() : void favoritesQuery.refetch({ cancelRefetch: false });
 
     return (
         <main className="page subpage favorites-page">
@@ -137,19 +139,18 @@ export function FavoriteProductsPage() {
                     </div>
                 </div>
             )}
+            {favoriteError && availableProducts.length > 0 && (
+                <InlineError message={favoriteError} action={isZh ? '重试' : 'Retry'} onAction={retry} />
+            )}
             {loading && !favoriteProducts.length ? (
                 <PageSkeleton label={isZh ? '正在加载收藏商品' : 'Loading favorites'} />
-            ) : favoriteError ? (
+            ) : favoriteError && !availableProducts.length ? (
                 <EmptyState
                     icon={<WifiOff />}
                     title={isZh ? '收藏商品加载失败' : 'Could not load favorites'}
                     detail={favoriteError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() =>
-                        activityError
-                            ? onActivityRetry?.()
-                            : void favoritesQuery.refetch({ cancelRefetch: false })
-                    }
+                    onAction={retry}
                 />
             ) : availableProducts.length ? (
                 <ProductSection

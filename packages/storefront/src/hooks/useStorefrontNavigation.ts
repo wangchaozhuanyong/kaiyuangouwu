@@ -1,5 +1,5 @@
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { catalogRouteSearch, catalogRouteState, type CatalogRouteState } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
@@ -20,8 +20,6 @@ import {
     type StorefrontContentBlock,
 } from '../types';
 
-const PRODUCT_NAVIGATION_WAIT_MS = 1_800;
-
 export function useStorefrontNavigation({
     collections,
     contentBlocks = [],
@@ -36,8 +34,6 @@ export function useStorefrontNavigation({
     const router = useRouter();
 
     const tanstackNavigate = useNavigate();
-    const [isPreparingProduct, setIsPreparingProduct] = useState(false);
-    const navigationAttempt = useRef(0);
     const mediaContext = useRef({ contentBlocks, products });
     mediaContext.current = { contentBlocks, products };
     useEffect(() => {
@@ -121,37 +117,36 @@ export function useStorefrontNavigation({
 
     const navigate = useCallback(
         (next: RouteState, replace = false) => {
-            const attempt = ++navigationAttempt.current;
             const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
             if (resolvedNext.name === 'category') {
                 categoryStateRef.current = catalogRouteSearch(resolvedNext);
             }
-            const commit = () => {
-                if (navigationAttempt.current !== attempt) return;
-                setIsPreparingProduct(false);
-                void tanstackNavigate({
-                    to: routePath(resolvedNext.name),
-                    search: routeSearch(resolvedNext),
-                    replace,
-                } as never);
-            };
-            if (resolvedNext.name === 'product' && resolvedNext.id && prepareProduct) {
-                setIsPreparingProduct(true);
-                void Promise.race([
-                    prepareProduct(resolvedNext.id).catch(() => undefined),
-                    new Promise<void>(resolve => window.setTimeout(resolve, PRODUCT_NAVIGATION_WAIT_MS)),
-                ]).then(commit);
-                return;
+            // The router owns the latest navigation intent. Warm data in parallel;
+            // a late response must never commit a second navigation or restart a click delay.
+            if (resolvedNext.name === 'product' && resolvedNext.id) {
+                const current = routeFromRouterLocation(
+                    router.state.location.pathname,
+                    router.state.location.search,
+                );
+                if (
+                    routeHref(current) === routeHref(resolvedNext) &&
+                    current.variantId === resolvedNext.variantId &&
+                    !replace
+                )
+                    return;
+                void prepareProduct?.(resolvedNext.id).catch(() => undefined);
             }
-            commit();
+            void tanstackNavigate({
+                to: routePath(resolvedNext.name),
+                search: routeSearch(resolvedNext),
+                replace,
+            } as never);
         },
-        [prepareProduct, tanstackNavigate],
+        [prepareProduct, router, tanstackNavigate],
     );
 
     const goBack = useCallback(() => {
         if (router.history.canGoBack()) {
-            navigationAttempt.current++;
-            setIsPreparingProduct(false);
             router.history.back();
         } else navigate({ name: 'home' }, true);
     }, [navigate, router.history]);
@@ -226,7 +221,7 @@ export function useStorefrontNavigation({
         displayedRoute,
         displayedRouterLocation,
         isNavigationPending,
-        isPreparingProduct,
+        isPreparingProduct: false,
         activeCollectionId,
         activeChildId,
         sortMode,

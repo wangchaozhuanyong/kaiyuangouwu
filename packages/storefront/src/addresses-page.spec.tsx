@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClientProvider } from '@tanstack/react-query';
+import { notifyManager, onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { act, createElement, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -734,5 +734,290 @@ describe('AddressesPage checkout selection and editing', () => {
         expect(container.textContent).toContain('Save and use');
         expect(container.textContent).toContain('Recognize and fill');
         expect(container.textContent).not.toContain('保存');
+    });
+});
+
+// Exercise the real page's dependent reads rather than seeding both query results.
+describe('AddressesPage asynchronous contact readiness', () => {
+    let root: ReturnType<typeof createRoot>;
+    let host: HTMLDivElement;
+    let client: ReturnType<typeof createStorefrontQueryClient>;
+    let props: ComponentProps<typeof AddressesPage>;
+    let readMode: ReturnType<typeof vi.fn<ShopApi['activeStoreCommerceMode']>>;
+    let readEmails: ReturnType<typeof vi.fn<ShopApi['myDeliveryEmails']>>;
+    const email: CustomerDeliveryEmail = {
+        id: 'synthetic-delivery-email',
+        emailAddress: 'delivery@example.com',
+        label: 'Synthetic delivery',
+        isDefault: true,
+        confirmedAt: '2026-10-07T00:00:00Z',
+    };
+    const deferred = <T,>() => {
+        let resolve!: (value: T) => void;
+        let reject!: (error: Error) => void;
+        const promise = new Promise<T>((yes, no) => {
+            resolve = yes;
+            reject = no;
+        });
+        return { promise, resolve, reject };
+    };
+    const emailKey = () => {
+        if (!props.customer) throw new Error('Synthetic customer is required');
+        return storefrontQueryKeys.deliveryEmails(
+            storefrontQueryKeys.market(props.market),
+            languageCodeFor(props.language),
+            props.customer.id,
+        );
+    };
+    const modeKey = () => storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(props.market));
+    const render = () =>
+        act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <AddressesPage {...props} />
+                </QueryClientProvider>,
+            ),
+        );
+    const eventually = async (assertion: () => void) => {
+        await vi.waitFor(async () => {
+            await act(async () => {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            });
+            assertion();
+        });
+    };
+    const button = (text: string) => {
+        const target = [...host.querySelectorAll('button')].find(item => item.textContent === text);
+        if (!target) throw new Error(`Missing contact action: ${text}`);
+        return target;
+    };
+    const expectPending = () => expect(host.querySelector('[data-page-pending="data"]')).not.toBeNull();
+    beforeEach(() => {
+        onlineManager.setOnline(true);
+        notifyManager.setNotifyFunction(callback => act(callback));
+        client = createStorefrontQueryClient();
+        client.setDefaultOptions({ queries: { retry: false } });
+        readMode = vi.fn<ShopApi['activeStoreCommerceMode']>().mockResolvedValue('HYBRID');
+        readEmails = vi.fn<ShopApi['myDeliveryEmails']>().mockResolvedValue([]);
+        props = {
+            api: { activeStoreCommerceMode: readMode, myDeliveryEmails: readEmails } as unknown as ShopApi,
+            customer: {
+                ...mockCustomer,
+                id: 'contact-readiness-customer',
+                emailAddress: 'customer@example.com',
+            },
+            market: { ...market },
+            language: 'zh',
+            availableCountries: [{ code: 'CN', name: '中国' }],
+            commerceMode: 'HYBRID',
+            onBack: vi.fn(),
+            onCustomerChange: vi.fn(),
+            onNotify: vi.fn(),
+        };
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+    });
+    afterEach(() => {
+        act(() => root.unmount());
+        client.clear();
+        host.remove();
+        onlineManager.setOnline(true);
+        notifyManager.setNotifyFunction(callback => callback());
+    });
+
+    it('waits for uncached HYBRID emails instead of flashing a physical-address empty card', async () => {
+        const pending = deferred<CustomerDeliveryEmail[]>();
+        readEmails.mockReturnValue(pending.promise);
+        render();
+        expectPending();
+        expect(host.textContent).not.toContain('还没有收货地址');
+        expect(host.querySelector('[aria-label="新增地址"]')).toBeNull();
+        await act(async () => {
+            pending.resolve([email]);
+            await Promise.resolve();
+        });
+        await eventually(() => expect(host.textContent).toContain(email.emailAddress));
+        expect(host.textContent).not.toContain('还没有收货地址');
+    });
+
+    it.each(['error', 'offline'] as const)('offers a mode-read retry after initial %s', async failure => {
+        props.commerceMode = null;
+        if (failure === 'offline') onlineManager.setOnline(false);
+        else readMode.mockRejectedValueOnce(new Error('Synthetic mode failure'));
+        render();
+        await eventually(() =>
+            expect(
+                failure === 'offline'
+                    ? client.getQueryState(modeKey())?.fetchStatus
+                    : client.getQueryState(modeKey())?.status,
+            ).toBe(failure === 'offline' ? 'paused' : 'error'),
+        );
+        expect(host.querySelector('[role="alert"]')).not.toBeNull();
+        expect(host.textContent).not.toContain('还没有收货地址');
+        expect(host.querySelector('[aria-label="新增地址"]')).toBeNull();
+        const retry = button('重试');
+        readMode.mockResolvedValue('PHYSICAL_ONLY');
+        act(() => {
+            onlineManager.setOnline(true);
+            retry.click();
+        });
+        await eventually(() => expect(host.textContent).toContain('还没有收货地址'));
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it.each([
+        ['HYBRID', 'error'],
+        ['HYBRID', 'offline'],
+        ['DIGITAL_ONLY', 'error'],
+        ['DIGITAL_ONLY', 'offline'],
+    ] as const)(
+        'offers an email-read retry for %s initial %s without claiming the list is empty',
+        async (mode, failure) => {
+            props.commerceMode = mode;
+            readMode.mockResolvedValue(mode);
+            if (failure === 'offline') onlineManager.setOnline(false);
+            else readEmails.mockRejectedValueOnce(new Error('Synthetic email failure'));
+            render();
+            await eventually(() =>
+                expect(
+                    failure === 'offline'
+                        ? client.getQueryState(emailKey())?.fetchStatus
+                        : client.getQueryState(emailKey())?.status,
+                ).toBe(failure === 'offline' ? 'paused' : 'error'),
+            );
+            expect(host.querySelector('[role="alert"]')).not.toBeNull();
+            expect(host.textContent).not.toContain('还没有交付邮箱');
+            expect(host.textContent).not.toContain('还没有收货地址');
+            const retry = button('重试');
+            const recovery = deferred<CustomerDeliveryEmail[]>();
+            readEmails.mockReturnValue(recovery.promise);
+            act(() => {
+                onlineManager.setOnline(true);
+                retry.click();
+                retry.click();
+            });
+            await act(async () => {
+                recovery.resolve([email]);
+                await Promise.resolve();
+            });
+            await eventually(() => expect(host.textContent).toContain(email.emailAddress));
+            expect(host.querySelector('[role="alert"]')).toBeNull();
+            expect(readEmails).toHaveBeenCalledTimes(failure === 'offline' ? 1 : 2);
+        },
+    );
+
+    it('keeps the confirmed default physical tab when a background refresh discovers an email', async () => {
+        client.setQueryData(emailKey(), [], { updatedAt: 1 });
+        const pending = deferred<CustomerDeliveryEmail[]>();
+        readEmails.mockReturnValue(pending.promise);
+        render();
+        expect(host.querySelector('.address-type-tabs .is-active')?.textContent).toBe('实际地址');
+        await act(async () => {
+            pending.resolve([email]);
+            await Promise.resolve();
+        });
+        await eventually(() => expect(client.getQueryData(emailKey())).toEqual([email]));
+        expect(host.querySelector('.address-type-tabs .is-active')?.textContent).toBe('实际地址');
+        expect(host.textContent).toContain('还没有收货地址');
+        expect(host.textContent).not.toContain(email.emailAddress);
+    });
+
+    it('stays on the confirmed default email tab after deleting the last email', async () => {
+        client.setQueryData(emailKey(), [email]);
+        const deleteEmail = vi.fn<ShopApi['deleteDeliveryEmail']>().mockResolvedValue(true);
+        props.api.deleteDeliveryEmail = deleteEmail;
+        render();
+        expect(host.querySelector('.address-type-tabs .is-active')?.textContent).toBe('交付邮箱');
+        act(() => button('删除').click());
+        act(() => button('确认删除').click());
+        await eventually(() => expect(client.getQueryData(emailKey())).toEqual([]));
+        expect(deleteEmail).toHaveBeenCalledExactlyOnceWith(email.id);
+        expect(host.querySelector('.address-type-tabs .is-active')?.textContent).toBe('交付邮箱');
+        expect(host.textContent).toContain('还没有交付邮箱');
+        expect(host.textContent).not.toContain('还没有收货地址');
+    });
+
+    it('does not let a delayed email refresh override an explicitly selected physical tab', async () => {
+        client.setQueryData(emailKey(), [], { updatedAt: 1 });
+        const pending = deferred<CustomerDeliveryEmail[]>();
+        readEmails.mockReturnValue(pending.promise);
+        render();
+        act(() => button('实际地址').click());
+        await act(async () => {
+            pending.resolve([email]);
+            await Promise.resolve();
+        });
+        await eventually(() => expect(client.getQueryData(emailKey())).toEqual([email]));
+        expect(host.textContent).toContain('还没有收货地址');
+        expect(host.textContent).not.toContain(email.emailAddress);
+        expect(host.querySelector('.address-type-tabs .is-active')?.textContent).toBe('实际地址');
+    });
+
+    it.each([false, true])(
+        'preserves confirmed email content through failed background refresh: has email=%s',
+        async hasEmail => {
+            props.commerceMode = null;
+            client.setQueryData(modeKey(), 'DIGITAL_ONLY', { updatedAt: 1 });
+            readMode.mockRejectedValue(new Error('Synthetic mode refresh failure'));
+            client.setQueryData(emailKey(), hasEmail ? [email] : [], { updatedAt: 1 });
+            const pending = deferred<CustomerDeliveryEmail[]>();
+            readEmails.mockReturnValue(pending.promise);
+            render();
+            const expected = hasEmail ? email.emailAddress : '还没有交付邮箱';
+            expect(host.textContent).toContain(expected);
+            expect(host.querySelector('[data-page-pending="data"]')).toBeNull();
+            await act(async () => {
+                pending.reject(new Error('Synthetic refresh failure'));
+                await Promise.resolve();
+            });
+            await eventually(() => {
+                expect(client.getQueryState(modeKey())?.status).toBe('error');
+                expect(client.getQueryState(emailKey())?.status).toBe('error');
+            });
+            expect(host.textContent).toContain(expected);
+            expect(host.querySelector('[data-page-pending="data"]')).toBeNull();
+            expect(host.querySelector('[role="alert"]')).toBeNull();
+        },
+    );
+
+    it.each(['customer', 'market', 'currency', 'language'] as const)(
+        'does not reuse email content or a manual tab from another %s scope',
+        async dimension => {
+            client.setQueryData(emailKey(), [email]);
+            render();
+            act(() => button('实际地址').click());
+            const pending = deferred<CustomerDeliveryEmail[]>();
+            readEmails.mockReturnValue(pending.promise);
+            if (dimension === 'customer') {
+                if (!props.customer) throw new Error('Synthetic customer is required');
+                props = { ...props, customer: { ...props.customer, id: 'next-customer' } };
+            }
+            if (dimension === 'market')
+                props = { ...props, market: { ...props.market, code: 'next-market' } };
+            if (dimension === 'currency')
+                props = { ...props, market: { ...props.market, currencyCode: 'MYR' } };
+            if (dimension === 'language') props = { ...props, language: 'en' };
+            render();
+            expectPending();
+            expect(host.textContent).not.toContain(email.emailAddress);
+            const nextEmail = { ...email, id: 'next-email', emailAddress: 'next@example.com' };
+            await act(async () => {
+                pending.resolve([nextEmail]);
+                await Promise.resolve();
+            });
+            await eventually(() => expect(host.textContent).toContain(nextEmail.emailAddress));
+            expect(host.textContent).not.toContain(email.emailAddress);
+        },
+    );
+
+    it('keeps confirmed HYBRID email cards immediately on an ordinary remount', () => {
+        client.setQueryData(emailKey(), [email]);
+        render();
+        act(() => root.render(null));
+        render();
+        expect(host.textContent).toContain(email.emailAddress);
+        expect(host.textContent).not.toContain('还没有收货地址');
+        expect(host.querySelector('[data-page-pending="data"]')).toBeNull();
     });
 });
