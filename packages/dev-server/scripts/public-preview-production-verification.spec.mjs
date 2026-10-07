@@ -5,9 +5,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { compensationFingerprint } from './public-preview-legacy-compensation.mjs';
 import {
     createPinnedReviewVerifier,
     createProductionRuntimeVerifier,
+    kernelCommandProvesEntry,
     PROTECTION_MANIFEST_VERSION,
     REQUIRED_PROTECTION_PAIRS,
     runtimeConfigurationFingerprints,
@@ -43,6 +45,44 @@ const observation = () => ({
         mtimeMs: 1000,
         ctimeMs: 1000,
     })),
+});
+
+test('actual truncated PM2 Node titles require full kernel environment and an exact release prefix', () => {
+    const installed =
+        '/var/www/kaiyuangouwu-releases/a535b99d937858b3907372bad77429aad809d8dd-37430769850-1-linux-x64';
+    for (const [file, observedLength] of [
+        ['index.js', 117],
+        ['index-worker.js', 67],
+    ]) {
+        const entry = `${installed}/packages/dev-server/dist/${file}`;
+        const env = { pm_exec_path: entry, pm_cwd: installed };
+        const title = `node ${entry}`;
+        const captured = title.slice(0, observedLength);
+        assert.equal(kernelCommandProvesEntry([captured, ''], entry, installed, env), true);
+        assert.equal(kernelCommandProvesEntry([captured], entry, installed, {}), false);
+        assert.equal(
+            kernelCommandProvesEntry([captured], entry, installed, { ...env, pm_cwd: '/old' }),
+            false,
+        );
+        assert.equal(
+            kernelCommandProvesEntry([captured], entry, installed, { ...env, pm_exec_path: entry + '.old' }),
+            false,
+        );
+        assert.equal(kernelCommandProvesEntry([captured + 'x'], entry, installed, env), false);
+        assert.equal(kernelCommandProvesEntry([title.slice(0, 40)], entry, installed, env), false);
+        assert.equal(kernelCommandProvesEntry([captured, 'other'], entry, installed, env), false);
+        assert.equal(kernelCommandProvesEntry([title], entry, installed, {}), true);
+        assert.equal(kernelCommandProvesEntry(['node', entry], entry, installed, {}), true);
+        assert.equal(
+            kernelCommandProvesEntry(['/opt/pm2/lib/ProcessContainerFork.js'], entry, installed, env),
+            true,
+        );
+        assert.equal(
+            kernelCommandProvesEntry(['/opt/pm2/lib/ProcessContainerFork.js'], entry, installed, {}),
+            false,
+        );
+        assert.equal(kernelCommandProvesEntry([title], '/elsewhere/index.js', installed, env), false);
+    }
 });
 
 test('actual DB and Redis target binding excludes passwords and rejects missing runtime configuration', () => {
@@ -81,7 +121,14 @@ test('actual DB and Redis target binding excludes passwords and rejects missing 
         proof,
     );
     assert.throws(() => runtimeConfigurationFingerprints({ ...env, DB_NAME: '' }));
-    assert.throws(() => runtimeConfigurationFingerprints({ ...env, STOREFRONT_REDIS_URL: '' }));
+    assert.equal(
+        runtimeConfigurationFingerprints({ ...env, STOREFRONT_REDIS_URL: '' }).cacheConfigurationFingerprint,
+        compensationFingerprint({
+            strategy: 'InMemoryCacheStrategy',
+            cacheSize: 10_000,
+            ttlProvider: 'DefaultCacheTtlProvider',
+        }),
+    );
     assert.throws(() => runtimeConfigurationFingerprints({ ...env, DB: 'sqlite' }));
 });
 

@@ -64,7 +64,17 @@ export function runtimeConfigurationFingerprints(environment) {
         DB_USERNAME: env('DB_USERNAME').trim(),
     });
     const address = env('STOREFRONT_REDIS_URL')?.trim();
-    assert.ok(address, 'Running shared Redis configuration required for managed closeout');
+    if (!address)
+        return {
+            configurationFingerprint,
+            cacheConfigurationFingerprint: compensationFingerprint({
+                strategy: 'InMemoryCacheStrategy',
+                cacheSize: 10_000,
+                ttlProvider: 'DefaultCacheTtlProvider',
+            }),
+            apiPort,
+            apiHostname,
+        };
     let url;
     try {
         url = new URL(address);
@@ -88,6 +98,9 @@ export const REQUIRED_PROTECTION_PAIRS = Object.freeze(
         ['common', 'controlled-test-payment', 'lib'],
         ['core', 'service/services/order.service', 'dist'],
         ['core', 'service/services/payment-method.service', 'dist'],
+        ['core', 'config/default-config', 'dist'],
+        ['core', 'config/system/in-memory-cache-strategy', 'dist'],
+        ['core', 'cache/cache-ttl-provider', 'dist'],
         ['commerce-fulfillment-plugin', 'checkout-resources.service', 'dist'],
         ['commerce-fulfillment-plugin', 'commerce-fulfillment.plugin', 'dist'],
         ['commerce-fulfillment-plugin', 'digital-fulfillment.guard', 'dist'],
@@ -97,6 +110,9 @@ export const REQUIRED_PROTECTION_PAIRS = Object.freeze(
         ['store-management-plugin', 'storefront-activation.service', 'dist'],
         ['store-management-plugin', 'storefront-activation.interceptor', 'dist'],
         ['store-management-plugin', 'store-management.plugin', 'dist'],
+        ['store-management-plugin', 'storefront-branding.resolver', 'dist'],
+        ['store-management-plugin', 'storefront-branding.schema', 'dist'],
+        ['store-management-plugin', 'performance/storefront-public-cache.service', 'dist'],
         ['store-management-plugin', 'promotion/store-coupon-lifecycle.service', 'dist'],
         ['operations-dashboard-plugin', 'incident-response.service', 'dist'],
         ['operations-dashboard-plugin', 'admin-notification.service', 'dist'],
@@ -177,6 +193,33 @@ export function validateRuntimeObservation(observation, releaseRoot, expectedRel
     return observation;
 }
 
+export function kernelCommandProvesEntry(command, entry, releaseRoot, environment) {
+    const args = command.filter(Boolean);
+    if (
+        ![
+            path.join(releaseRoot, 'packages/dev-server/dist/index.js'),
+            path.join(releaseRoot, 'packages/dev-server/dist/index-worker.js'),
+        ].includes(entry)
+    )
+        return false;
+    if (args.includes(entry) || args.some(value => value === `node ${entry}` || value === `nodejs ${entry}`))
+        return true;
+    const env = typeof environment === 'function' ? environment : key => environment[key];
+    if (env('pm_exec_path') !== entry || env('pm_cwd') !== releaseRoot) return false;
+    if (args.some(value => value.endsWith('/pm2/lib/ProcessContainerFork.js'))) return true;
+    // Linux truncates process.title to the original argv buffer. Actual PM2 processes
+    // use a shortened Node title, while /proc/environ retains the full managed entry.
+    // Require the exact title prefix through 96 bits of the immutable release id;
+    // the caller still independently verifies kernel cwd/exe, PID/start and all bytes.
+    const releaseId = path.basename(releaseRoot);
+    if (args.length !== 1 || !/^[a-f0-9]{40}-/u.test(releaseId)) return false;
+    return ['node', 'nodejs'].some(name => {
+        const title = `${name} ${entry}`;
+        const minimum = `${name} ${path.dirname(releaseRoot)}/${releaseId.slice(0, 24)}`;
+        return args[0].length >= minimum.length && args[0].length < title.length && title.startsWith(args[0]);
+    });
+}
+
 async function observeKernelProcess(managed, releaseRoot, clockTicks, bootMs) {
     const pid = managed.pid;
     assert.ok(Number.isSafeInteger(pid) && pid > 0, 'Managed PID missing');
@@ -192,15 +235,8 @@ async function observeKernelProcess(managed, releaseRoot, clockTicks, bootMs) {
     const envValue = key => environment.find(value => value.startsWith(`${key}=`))?.slice(key.length + 1);
     const command = (await readFile(`${proc}/cmdline`, 'utf8')).split('\0');
     const entry = managed.pm2_env?.pm_exec_path;
-    // PM2 sets process.title to this exact Node entry, replacing /proc/cmdline's original argv.
-    const direct =
-        command.includes(entry) ||
-        command.some(value => value === `node ${entry}` || value === `nodejs ${entry}`);
-    const pm2 =
-        command.some(value => value.endsWith('/pm2/lib/ProcessContainerFork.js')) &&
-        envValue('pm_exec_path') === entry &&
-        envValue('pm_cwd') === releaseRoot;
-    assert.ok(direct || pm2, 'Kernel command does not prove the expected production entry');
+    const kernelEntryVerified = kernelCommandProvesEntry(command, entry, releaseRoot, envValue);
+    assert.ok(kernelEntryVerified, 'Kernel command does not prove the expected production entry');
     assert.match(
         path.basename(await realpath(`${proc}/exe`)),
         /^node(?:js)?$/u,
@@ -215,7 +251,7 @@ async function observeKernelProcess(managed, releaseRoot, clockTicks, bootMs) {
         managedCwd: managed.pm2_env?.pm_cwd,
         entry,
         cwd,
-        kernelEntry: direct || pm2 ? entry : null,
+        kernelEntry: kernelEntryVerified ? entry : null,
         startedAtMs,
         ...runtimeConfigurationFingerprints(envValue),
         pidStable:

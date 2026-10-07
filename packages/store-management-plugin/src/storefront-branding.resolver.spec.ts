@@ -180,6 +180,47 @@ describe('StorefrontBrandingShopResolver', () => {
     });
 });
 
+describe('native Admin public cache refresh', () => {
+    const fixture = () => {
+        const cache = {
+            revision: vi.fn().mockResolvedValueOnce('before').mockResolvedValue('after'),
+            invalidate: vi.fn().mockResolvedValue(undefined),
+            sharedVersions: false,
+        };
+        const resolver = new StorefrontBrandingAdminResolver({} as any, {} as any, {} as any, cache as any);
+        const ctx = {
+            apiType: 'admin',
+            activeUserId: 'native-admin',
+            channelId: 'channel-current',
+            userHasPermissions: vi.fn().mockReturnValue(true),
+        };
+        return { cache, resolver, ctx };
+    };
+    it('rotates only the native active Channel and returns the serving process identity', async () => {
+        const { cache, resolver, ctx } = fixture();
+        const result = await resolver.refreshStorefrontPublicCache(ctx as any);
+        expect(cache.invalidate).toHaveBeenCalledExactlyOnceWith('channel-current');
+        expect(result).toMatchObject({ channelId: 'channel-current', processId: process.pid, shared: false });
+        expect(result.revisionFingerprint).toMatch(/^[a-f0-9]{64}$/u);
+    });
+    it.each([{ apiType: 'shop' }, { activeUserId: undefined }, { userHasPermissions: () => false }])(
+        'denies untrusted contexts before touching cache',
+        async change => {
+            const { cache, resolver, ctx } = fixture();
+            await expect(
+                resolver.refreshStorefrontPublicCache({ ...ctx, ...change } as any),
+            ).rejects.toThrow();
+            expect(cache.invalidate).not.toHaveBeenCalled();
+            expect(cache.revision).not.toHaveBeenCalled();
+        },
+    );
+    it('rejects unavailable or unchanged revision rather than claiming refresh succeeded', async () => {
+        const { cache, resolver, ctx } = fixture();
+        cache.revision.mockReset().mockResolvedValue('same');
+        await expect(resolver.refreshStorefrontPublicCache(ctx as any)).rejects.toThrow('did not advance');
+    });
+});
+
 describe('StorefrontBrandingAdminResolver', () => {
     it('reads the selected channel profile and clears branding for a new store', async () => {
         const profiles: Record<string, Record<string, unknown>> = {

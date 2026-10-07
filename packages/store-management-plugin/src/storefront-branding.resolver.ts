@@ -1,4 +1,5 @@
-import { Query, Resolver } from '@nestjs/graphql';
+import { Optional } from '@nestjs/common';
+import { Mutation, Query, Resolver } from '@nestjs/graphql';
 import { getLocalizedMetadata } from '@vendure/common/lib/display-localization';
 import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import type { Asset } from '@vendure/core';
@@ -6,14 +7,17 @@ import {
     Allow,
     ConfigService,
     Ctx,
+    ForbiddenError,
     Permission,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
 import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 import { Request } from 'express';
+import { createHash } from 'node:crypto';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { StorefrontActivationService } from './storefront-activation.service';
 
 interface StorefrontChannelFields {
@@ -120,7 +124,26 @@ export class StorefrontBrandingAdminResolver {
         private connection: TransactionalConnection,
         private configService: ConfigService,
         private activation: StorefrontActivationService,
+        @Optional() private readonly publicCache?: StorefrontPublicCacheService,
     ) {}
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    async refreshStorefrontPublicCache(@Ctx() ctx: RequestContext) {
+        if (ctx.apiType !== 'admin' || !ctx.activeUserId || !ctx.userHasPermissions([Permission.SuperAdmin]))
+            throw new ForbiddenError();
+        if (!this.publicCache) throw new Error('Public cache service unavailable');
+        const before = await this.publicCache.revision(ctx.channelId);
+        await this.publicCache.invalidate(ctx.channelId);
+        const revision = await this.publicCache.revision(ctx.channelId);
+        if (!revision || revision === before) throw new Error('Public cache revision did not advance');
+        return {
+            channelId: String(ctx.channelId),
+            processId: process.pid,
+            shared: this.publicCache.sharedVersions,
+            revisionFingerprint: createHash('sha256').update(revision).digest('hex'),
+        };
+    }
 
     @Query()
     @Allow(storefrontContentPermission.Read)

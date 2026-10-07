@@ -3,6 +3,7 @@ import { Allow, Ctx, Permission, PluginCommonModule, RequestContext, VendurePlug
 import gql from 'graphql-tag';
 
 import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
+import { StorefrontActivationService } from '../../store-management-plugin/src/storefront-activation.service';
 import {
     StorefrontBrandingAdminResolver,
     StorefrontBrandingShopResolver,
@@ -40,6 +41,7 @@ class BrowserCurrencyFixtureResolver {
 @VendurePlugin({
     imports: [PluginCommonModule],
     entities: [StoreProfile],
+    providers: [StorefrontActivationService],
     adminApiExtensions: {
         schema: storefrontPreviewBrandingSchema,
         resolvers: [StorefrontBrandingAdminResolver],

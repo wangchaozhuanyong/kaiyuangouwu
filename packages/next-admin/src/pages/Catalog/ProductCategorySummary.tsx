@@ -136,7 +136,10 @@ function ProductCategoryDialog({ onClose }: { onClose: () => void }) {
                 >
                     <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6">
                         <div className="min-w-0">
-                            <h2 className="text-base font-bold text-slate-900">选择商品分类</h2>
+                            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                                选择商品分类
+                                <FeatureHelpButton topic="catalog.collections" title="选择商品分类" />
+                            </h2>
                             <p className="mt-1 text-xs text-slate-500">
                                 确认后加入商品草稿，保存商品后生效。
                             </p>

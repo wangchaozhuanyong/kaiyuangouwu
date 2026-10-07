@@ -28,6 +28,15 @@ async function pinnedJson(file, digest) {
     return JSON.parse(bytes);
 }
 
+function assertSourceSnapshotBinding(manifest) {
+    assert.ok(manifest?.entry && typeof manifest.entry === 'object', 'Full native source snapshot required');
+    assert.equal(
+        manifest.sourceSnapshotSha256,
+        compensationFingerprint(manifest.entry),
+        'Full native source snapshot hash does not match manifest entry',
+    );
+}
+
 /** No user-id flag grants authority: an unexpired native authenticated session is mandatory. */
 export async function authenticatedContext({
     dataSource,
@@ -149,6 +158,53 @@ export function nativeDatabaseConfigurationFingerprint(options) {
 }
 
 export function nativeCacheConfigurationFingerprint(strategy) {
+    if (strategy.constructor.name === 'InMemoryCacheStrategy') {
+        const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+        const load = scopedRequire(root);
+        const { InMemoryCacheStrategy } = load(
+            path.join(root, 'packages/core/dist/config/system/in-memory-cache-strategy.js'),
+        );
+        const { DefaultCacheTtlProvider } = load(
+            path.join(root, 'packages/core/dist/cache/cache-ttl-provider.js'),
+        );
+        assert.equal(
+            strategy.constructor,
+            InMemoryCacheStrategy,
+            'Actual installed native cache class required',
+        );
+        assert.equal(
+            Object.getPrototypeOf(strategy),
+            InMemoryCacheStrategy.prototype,
+            'Actual native cache prototype required',
+        );
+        for (const method of ['get', 'set', 'delete', 'invalidateTags'])
+            assert.equal(
+                strategy[method],
+                InMemoryCacheStrategy.prototype[method],
+                'Native cache behavior changed',
+            );
+        assert.equal(strategy.cacheSize, 10_000, 'Reviewed in-process cache capacity required');
+        assert.equal(
+            strategy.ttlProvider?.constructor,
+            DefaultCacheTtlProvider,
+            'Actual native cache clock required',
+        );
+        assert.equal(
+            Object.getPrototypeOf(strategy.ttlProvider),
+            DefaultCacheTtlProvider.prototype,
+            'Actual native clock prototype required',
+        );
+        assert.equal(
+            strategy.ttlProvider.getTime,
+            DefaultCacheTtlProvider.prototype.getTime,
+            'Native cache clock behavior changed',
+        );
+        return compensationFingerprint({
+            strategy: 'InMemoryCacheStrategy',
+            cacheSize: strategy.cacheSize,
+            ttlProvider: strategy.ttlProvider.constructor.name,
+        });
+    }
     assert.equal(strategy.constructor.name, 'RedisCacheStrategy', 'Shared native cache strategy required');
     const options = strategy.options;
     assert.ok(options?.redisOptions && options.namespace, 'Reviewed Redis configuration required');
@@ -197,6 +253,9 @@ export const REQUIRED_ASSEMBLY_IMPORT_FILES = Object.freeze([
     'packages/dev-server/dist/dev-config.js',
     'packages/core/dist/index.js',
     'packages/core/dist/bootstrap.js',
+    'packages/core/dist/config/default-config.js',
+    'packages/core/dist/config/system/in-memory-cache-strategy.js',
+    'packages/core/dist/cache/cache-ttl-provider.js',
     'packages/core/dist/plugin/plugin-metadata.js',
     'packages/core/dist/connection/transaction-wrapper.js',
     'packages/storefront-cart-plugin/dist/index.js',
@@ -511,6 +570,61 @@ export async function refreshSharedChannelCache({ configService, loadRedis, now 
     }
 }
 
+/** Refresh the serving API's private cache through its native permission/scope boundary. */
+export async function refreshManagedChannelCache({
+    assembly,
+    ctx,
+    proof,
+    loadRedis,
+    fetchImpl = fetch,
+    now = () => new Date(),
+}) {
+    assert.equal(String(ctx.channelId), '5', 'Managed cache context scope mismatch');
+    assert.equal(String(ctx.channel?.id), '5', 'Native cache Channel identity mismatch');
+    assert.ok(
+        typeof ctx.channel.token === 'string' && ctx.channel.token.trim(),
+        'Native cache Channel token required',
+    );
+    assertManagedRuntimeBinding(assembly.configService, proof);
+    if (assembly.configService.systemOptions.cacheStrategy.constructor.name === 'RedisCacheStrategy')
+        return refreshSharedChannelCache({ configService: assembly.configService, loadRedis, now });
+    const api = proof.processes?.filter(p => p.name === 'vendure-api');
+    assert.ok(
+        api?.length === 1 && Number.isSafeInteger(api[0].pid) && api[0].pid > 0,
+        'Actual API PID required for private cache refresh',
+    );
+    const { hostname, port, adminApiPath } = assembly.configService.apiOptions;
+    const host = hostname === '::1' ? '[::1]' : hostname;
+    const response = await fetchImpl(new URL(`/${adminApiPath}`, `http://${host}:${port}`), {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000),
+        headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${assembly.sessionToken}`,
+            'vendure-token': ctx.channel.token,
+        },
+        body: JSON.stringify({
+            query: 'mutation ManagedPublicCacheRefresh { refreshStorefrontPublicCache { channelId processId shared revisionFingerprint } }',
+        }),
+    });
+    assert.ok(response.ok, 'Native API cache refresh unavailable');
+    const result = await response.json();
+    assert.ok(!result.errors?.length, 'Native API cache refresh rejected');
+    const row = result.data?.refreshStorefrontPublicCache;
+    assert.equal(row?.channelId, '5', 'Native cache refresh Channel mismatch');
+    assert.equal(row.processId, api[0].pid, 'Cache refresh came from another API process');
+    assert.equal(row.shared, false, 'Native cache topology differs from attested strategy');
+    assertDigest(row.revisionFingerprint);
+    return {
+        channelId: '5',
+        topology: 'IN_PROCESS',
+        apiProcessId: row.processId,
+        revisionFingerprint: row.revisionFingerprint,
+        updatedAt: now().toISOString(),
+    };
+}
+
 function verifiedUrl(value, label) {
     const url = new URL(value);
     assert.ok(!url.username && !url.password && !url.search && !url.hash, `${label} origin required`);
@@ -678,6 +792,7 @@ export async function runManagedCloseout({
     onPhase = async () => undefined,
 }) {
     assert.ok(['inspect', 'preview', 'apply', 'finish'].includes(mode), 'Unknown managed mode');
+    if (mode === 'preview' || mode === 'apply') assertSourceSnapshotBinding(manifest);
     const ctx = await assembly.context();
     const proof = await verifyRuntime();
     assertManagedRuntimeBinding(assembly.configService, proof);
@@ -734,7 +849,7 @@ export async function runManagedCloseout({
     try {
         assert.equal(typeof refreshCache, 'function', 'Managed cache updater required');
         assert.equal(typeof readNetwork, 'function', 'Independent network reader required');
-        cache = await refreshCache();
+        cache = await refreshCache({ ctx, proof });
         network = await readNetwork({ ctx, receipt, fresh });
         assert.equal(network.status, 'VERIFIED', 'Independent network readback rejected');
     } catch {
@@ -884,6 +999,7 @@ async function main() {
         const manifest = values.manifest
             ? await pinnedJson(values.manifest, values['manifest-sha256'])
             : undefined;
+        if (mode === 'preview' || mode === 'apply') assertSourceSnapshotBinding(manifest);
         const reviewEnvelope = values.review
             ? await pinnedJson(values.review, values['review-sha256'])
             : undefined;
@@ -916,9 +1032,10 @@ async function main() {
             verifyRuntime,
             verifyReview,
             onPhase: persist,
-            refreshCache: () =>
-                refreshSharedChannelCache({
-                    configService: assembly.configService,
+            refreshCache: input =>
+                refreshManagedChannelCache({
+                    assembly,
+                    ...input,
                     loadRedis: async () => scopedRequire(values['release-root'])('ioredis'),
                 }),
             readNetwork: input =>

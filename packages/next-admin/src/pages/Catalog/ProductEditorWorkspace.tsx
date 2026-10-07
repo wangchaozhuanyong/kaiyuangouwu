@@ -115,7 +115,7 @@ export function ProductEditorWorkspace() {
                     >
                         <section className="product-editor-panel">
                             <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                基本信息
+                                基本信息 <FeatureHelpButton topic="catalog.spu-core" title="基本信息" />
                             </h2>
                             <ProductEditorIdentityFields />
                         </section>
@@ -170,7 +170,7 @@ export function ProductEditorWorkspace() {
                         </section>
                         <section className="product-editor-panel">
                             <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                售后规则
+                                售后规则 <FeatureHelpButton topic="catalog.product-policy" title="售后规则" />
                             </h2>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <AdminField

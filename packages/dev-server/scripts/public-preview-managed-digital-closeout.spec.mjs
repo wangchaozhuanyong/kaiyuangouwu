@@ -12,6 +12,7 @@ import {
     independentNetworkReadback,
     nativeCacheConfigurationFingerprint,
     nativeDatabaseConfigurationFingerprint,
+    refreshManagedChannelCache,
     refreshSharedChannelCache,
     runManagedCloseout,
     verifyAssemblyCallbacks,
@@ -128,6 +129,7 @@ function fixture() {
         closedIncidentIds: [],
     };
     const fresh = { snapshot: after, fingerprint: compensationFingerprint(after) };
+    const manifest = { entry: fresh, sourceSnapshotSha256: compensationFingerprint(fresh) };
     const rows = [{ id: 'history', data: { digitalCompensation: receipt } }];
     let executions = 0;
     let writes = 0;
@@ -160,7 +162,16 @@ function fixture() {
             },
         },
     };
-    return { before, after, receipt, fresh, assembly, rows, counters: () => ({ executions, writes }) };
+    return {
+        before,
+        after,
+        receipt,
+        fresh,
+        manifest,
+        assembly,
+        rows,
+        counters: () => ({ executions, writes }),
+    };
 }
 
 test('default inspect captures evidence without mutation or claiming review', async () => {
@@ -169,13 +180,74 @@ test('default inspect captures evidence without mutation or claiming review', as
     assert.equal(result.status, 'INSPECTED_NOT_REVIEWED');
     assert.equal(result.productionCompleted, false);
     assert.equal(result.manifest.entry.fingerprint, f.fresh.fingerprint);
+    assert.equal(result.manifest.sourceSnapshotSha256, compensationFingerprint(result.manifest.entry));
     assert.deepEqual(f.counters(), { executions: 0, writes: 0 });
 });
+
+for (const [name, tamper] of [
+    [
+        'forged source hash with unchanged entry',
+        manifest => {
+            manifest.sourceSnapshotSha256 = 'd'.repeat(64);
+        },
+    ],
+    [
+        'changed full snapshot body with stale source hash',
+        manifest => {
+            manifest.entry.snapshot.order.state = 'Cancelled';
+        },
+    ],
+]) {
+    test(`preview and apply reject ${name} before authentication, review or side effects`, async () => {
+        for (const mode of ['preview', 'apply']) {
+            const f = fixture();
+            const manifest = structuredClone(f.manifest);
+            tamper(manifest);
+            assert.notEqual(manifest.sourceSnapshotSha256, compensationFingerprint(manifest.entry));
+            let contexts = 0;
+            let runtimeReads = 0;
+            let reviews = 0;
+            let phases = 0;
+            f.assembly.context = async () => {
+                contexts++;
+            };
+            await assert.rejects(
+                runManagedCloseout({
+                    mode,
+                    assembly: f.assembly,
+                    manifest,
+                    verifyRuntime: async () => {
+                        runtimeReads++;
+                        return proof;
+                    },
+                    verifyReview: async () => {
+                        reviews++;
+                        return true;
+                    },
+                    onPhase: async () => {
+                        phases++;
+                    },
+                }),
+                /Full native source snapshot hash does not match/,
+            );
+            assert.deepEqual(
+                { contexts, runtimeReads, reviews, phases },
+                { contexts: 0, runtimeReads: 0, reviews: 0, phases: 0 },
+            );
+            assert.deepEqual(f.counters(), { executions: 0, writes: 0 });
+        }
+    });
+}
 
 test('preview requires a pinned independent reviewer and never enables apply', async () => {
     const f = fixture();
     await assert.rejects(
-        runManagedCloseout({ mode: 'preview', assembly: f.assembly, verifyRuntime: async () => proof }),
+        runManagedCloseout({
+            mode: 'preview',
+            assembly: f.assembly,
+            manifest: f.manifest,
+            verifyRuntime: async () => proof,
+        }),
         /review verifier/,
     );
     const result = await runManagedCloseout({
@@ -183,7 +255,7 @@ test('preview requires a pinned independent reviewer and never enables apply', a
         assembly: f.assembly,
         verifyRuntime: async () => proof,
         verifyReview: async () => true,
-        manifest: { entry: f.fresh },
+        manifest: f.manifest,
         reviewArtifact: {},
     });
     assert.equal(result.status, 'PREVIEW_ONLY');
@@ -202,7 +274,7 @@ test('apply reports the committed phase before a local evidence write can fail',
         runManagedCloseout({
             mode: 'apply',
             assembly: f.assembly,
-            manifest: { entry: f.fresh },
+            manifest: f.manifest,
             reviewArtifact: {},
             verifyRuntime: async () => proof,
             verifyReview: async () => true,
@@ -276,6 +348,123 @@ test('native cache attestation detects the wrong Redis database or namespace wit
     assert.notEqual(nativeCacheConfigurationFingerprint(strategy), expected);
 });
 
+function inProcessCacheFixture() {
+    const configService = nativeConfigurationFixture();
+    const { InMemoryCacheStrategy } = createRequire(import.meta.url)(
+        fileURLToPath(new URL('../../core/dist/config/system/in-memory-cache-strategy.js', import.meta.url)),
+    );
+    configService.activeConfig.systemOptions.cacheStrategy = new InMemoryCacheStrategy();
+    return configService;
+}
+
+test('actual default native in-process cache is bound and custom capacity or clock is rejected', () => {
+    const config = inProcessCacheFixture();
+    const strategy = config.systemOptions.cacheStrategy;
+    const fingerprint = nativeCacheConfigurationFingerprint(strategy);
+    assert.equal(
+        fingerprint,
+        compensationFingerprint({
+            strategy: 'InMemoryCacheStrategy',
+            cacheSize: 10_000,
+            ttlProvider: 'DefaultCacheTtlProvider',
+        }),
+    );
+    assertManagedRuntimeBinding(config, { ...proof, cacheConfigurationFingerprint: fingerprint });
+    strategy.cacheSize = 20_000;
+    assert.throws(() => nativeCacheConfigurationFingerprint(strategy), /capacity/);
+    strategy.cacheSize = 10_000;
+    strategy.ttlProvider = { getTime: () => 0 };
+    assert.throws(() => nativeCacheConfigurationFingerprint(strategy), /clock/);
+    class InMemoryCacheStrategy {
+        cacheSize = 10_000;
+        ttlProvider = { constructor: { name: 'DefaultCacheTtlProvider' }, getTime: () => 0 };
+    }
+    assert.throws(() => nativeCacheConfigurationFingerprint(new InMemoryCacheStrategy()), /class/);
+    const clockFixture = inProcessCacheFixture().systemOptions.cacheStrategy;
+    class DefaultCacheTtlProvider {
+        getTime() {
+            return 0;
+        }
+    }
+    clockFixture.ttlProvider = new DefaultCacheTtlProvider();
+    assert.throws(() => nativeCacheConfigurationFingerprint(clockFixture), /clock/);
+    const changed = inProcessCacheFixture().systemOptions.cacheStrategy;
+    changed.get = async () => undefined;
+    assert.throws(() => nativeCacheConfigurationFingerprint(changed), /behavior/);
+});
+
+test('in-process cache refresh uses only the attested native API PID and exact managed Channel', async () => {
+    const configService = inProcessCacheFixture();
+    const runtimeProof = {
+        ...proof,
+        cacheConfigurationFingerprint: nativeCacheConfigurationFingerprint(
+            configService.systemOptions.cacheStrategy,
+        ),
+        processes: [{ name: 'vendure-api', pid: 123 }],
+    };
+    const assembly = { configService, sessionToken: 'private-fixture-session' };
+    const ctx = { channelId: '5', channel: { id: '5', token: 'native-channel' } };
+    const row = { channelId: '5', processId: 123, shared: false, revisionFingerprint: 'd'.repeat(64) };
+    let requests = 0;
+    const input = {
+        assembly,
+        ctx,
+        proof: runtimeProof,
+        fetchImpl: async (url, options) => {
+            requests++;
+            assert.equal(url.origin, 'http://127.0.0.1:3000');
+            assert.equal(url.pathname, '/admin-api');
+            assert.equal(options.headers['vendure-token'], ctx.channel.token);
+            assert.equal(options.headers.authorization, `Bearer ${assembly.sessionToken}`);
+            assert.equal(JSON.parse(options.body).query.includes('refreshStorefrontPublicCache'), true);
+            return { ok: true, json: async () => ({ data: { refreshStorefrontPublicCache: row } }) };
+        },
+    };
+    const result = await refreshManagedChannelCache(input);
+    assert.equal(result.topology, 'IN_PROCESS');
+    assert.ok(!JSON.stringify(result).includes(assembly.sessionToken));
+    for (const change of [
+        { channelId: '4' },
+        { processId: 124 },
+        { shared: true },
+        { revisionFingerprint: 'bad' },
+    ]) {
+        const original = { ...row };
+        Object.assign(row, change);
+        await assert.rejects(refreshManagedChannelCache(input));
+        Object.assign(row, original);
+    }
+    const before = requests;
+    await assert.rejects(refreshManagedChannelCache({ ...input, ctx: { ...ctx, channelId: '4' } }), /scope/);
+    await assert.rejects(
+        refreshManagedChannelCache({ ...input, ctx: { ...ctx, channel: { ...ctx.channel, id: '4' } } }),
+        /identity/,
+    );
+    await assert.rejects(
+        refreshManagedChannelCache({ ...input, ctx: { ...ctx, channel: { ...ctx.channel, token: '' } } }),
+        /token/,
+    );
+    await assert.rejects(
+        refreshManagedChannelCache({ ...input, proof: { ...runtimeProof, processes: [] } }),
+        /PID/,
+    );
+    assert.equal(requests, before);
+    let redisLoads = 0;
+    await assert.rejects(
+        refreshManagedChannelCache({
+            ...input,
+            assembly: { ...assembly, configService: proofConfig },
+            proof,
+            ctx: { ...ctx, channelId: '4' },
+            loadRedis: async () => {
+                redisLoads++;
+            },
+        }),
+        /scope/,
+    );
+    assert.equal(redisLoads, 0);
+});
+
 test('native API port attestation rejects another local process before database connection', async () => {
     const configService = nativeConfigurationFixture();
     let connections = 0;
@@ -305,7 +494,7 @@ for (const [field, value, pattern] of [
                 assembly: f.assembly,
                 verifyRuntime: async () => ({ ...proof, [field]: value }),
                 verifyReview: async () => true,
-                manifest: { entry: f.fresh },
+                manifest: f.manifest,
             }),
             pattern,
         );
@@ -333,6 +522,7 @@ test('apply rechecks runtime and review before the native executor; rejected che
             runManagedCloseout({
                 mode,
                 assembly: f.assembly,
+                manifest: f.manifest,
                 verifyRuntime: async () => ({ status: 'UNKNOWN' }),
             }),
             /runtime proof/,
@@ -341,6 +531,7 @@ test('apply rechecks runtime and review before the native executor; rejected che
         runManagedCloseout({
             mode: 'apply',
             assembly: f.assembly,
+            manifest: f.manifest,
             verifyRuntime: async () => proof,
             verifyReview: async () => false,
         }),
