@@ -1,5 +1,7 @@
 import { PageSkeleton } from './route-loading';
 
+import './styles/storefront-preview-scenario.css';
+
 /** Read-only Admin design scenarios load only when the iframe asks for one. */
 export function PreviewScenarioPanel({ scenario, isZh }: { scenario: string; isZh: boolean }) {
     if (scenario === 'loading') return <PageSkeleton variant="account" language={isZh ? 'zh' : 'en'} root />;

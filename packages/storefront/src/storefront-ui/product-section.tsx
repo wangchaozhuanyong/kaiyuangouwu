@@ -87,6 +87,7 @@ export function ProductSection({
                                   language={language}
                                   appearance={appearance}
                                   priority={prioritizeFirstImage && index === 0}
+                                  eager={prioritizeFirstImage && index < 2}
                                   imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
                                   favorite={favoriteProductIds?.includes(product.id)}
                                   onOpen={() => onProduct(product)}

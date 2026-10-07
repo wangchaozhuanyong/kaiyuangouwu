@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { SortOrder } from '@vendure/common/lib/generated-types';
 import {
@@ -14,6 +14,10 @@ import {
 } from '@vendure/core';
 import type { PublicPageRequest, StorefrontPageData } from '@vendure/storefront-content-plugin';
 import {
+    canonicalPublicPageRequest,
+    isReusablePublicPageData,
+    publicPageRequestKey,
+    publicPageRouteHref,
     StorefrontAccountSettingsService,
     StorefrontAuthSettingsService,
     StorefrontContentService,
@@ -28,12 +32,17 @@ import { publicPageMedia } from './performance/storefront-public-media';
 import { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service';
 import { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
-import { StorefrontActivationService, StorefrontClosedError } from './storefront-activation.service';
+import {
+    StorefrontActivationService,
+    StorefrontClosedError,
+    type StorefrontAccessMode,
+} from './storefront-activation.service';
 import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 
 const PAGE_TTL = 30_000;
+class PublicPageAccessChangedError extends Error {}
 const publicFields = <T extends object, K extends keyof T>(value: T, keys: readonly K[]) =>
     Object.fromEntries(keys.map(key => [key, value[key]])) as Pick<T, K>;
 
@@ -55,6 +64,8 @@ export async function publicSectionWithinBudget<T>(promise: Promise<T>, budgetMs
 /** The shared assembly path for cached SSI and public client reads. Business writes remain elsewhere. */
 @Injectable()
 export class StorefrontPublicPageService {
+    private readonly observedModes = new Map<string, StorefrontAccessMode>();
+    private readonly invalidating = new Map<string, Promise<void>>();
     constructor(
         private readonly cache: StorefrontPublicCacheService,
         private readonly moduleRef: ModuleRef,
@@ -72,23 +83,98 @@ export class StorefrontPublicPageService {
     ) {}
 
     private key(host: string, request: PublicPageRequest) {
-        return `page:${host}:${JSON.stringify(request)}`;
+        return `page:v2:${host}:${publicPageRequestKey(request)}`;
     }
 
-    peek(ctx: RequestContext, host: string) {
-        return this.cache.peek<StorefrontPageData>(ctx, this.key(host, { kind: 'home' }));
+    /** Do not cache this decision: a reused context must see a committed status/domain change. */
+    async getAccessMode(ctx: RequestContext): Promise<StorefrontAccessMode> {
+        const mode = await this.activation.getAccessMode(ctx);
+        const channel = String(ctx.channelId);
+        if (mode !== 'LIVE' && this.observedModes.get(channel) !== mode) {
+            let invalidating = this.invalidating.get(channel);
+            if (!invalidating) {
+                invalidating = this.cache
+                    .invalidate(ctx.channelId)
+                    .catch(error => {
+                        // The cache already marks shared revisions unavailable and rotates on recovery.
+                        // Closure still returns 403 and preview still uses bounded, uncached origin reads.
+                        if (!(error instanceof ServiceUnavailableException)) throw error;
+                    })
+                    .finally(() => {
+                        this.invalidating.delete(channel);
+                    });
+                this.invalidating.set(channel, invalidating);
+            }
+            await invalidating;
+        }
+        if (!this.observedModes.has(channel) && this.observedModes.size >= 256) {
+            const oldest = this.observedModes.keys().next().value;
+            if (oldest !== undefined) this.observedModes.delete(oldest);
+        }
+        this.observedModes.set(channel, mode);
+        return mode;
+    }
+
+    private async assertMode(ctx: RequestContext, expected: 'LIVE' | 'PREVIEW'): Promise<void> {
+        const mode = await this.getAccessMode(ctx);
+        if (mode === 'CLOSED') throw new StorefrontClosedError();
+        if (mode !== expected) throw new PublicPageAccessChangedError('Public access changed during read');
+    }
+
+    async peek(ctx: RequestContext, host: string, request: PublicPageRequest = { kind: 'home' }) {
+        if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop') return undefined;
+        const mode = await this.getAccessMode(ctx);
+        if (mode === 'CLOSED') throw new StorefrontClosedError();
+        if (mode !== 'LIVE') return undefined;
+        try {
+            const page = await this.cache.runGuarded(
+                () => this.assertMode(ctx, 'LIVE'),
+                () => this.cache.peek<StorefrontPageData>(ctx, this.key(host, request)),
+            );
+            if (!page) {
+                // A miss has no cached value to version-check; closure must still be explicit.
+                if ((await this.getAccessMode(ctx)) === 'CLOSED') throw new StorefrontClosedError();
+            }
+            return isReusablePublicPageData(page) ? page : undefined;
+        } catch (error) {
+            if (error instanceof PublicPageAccessChangedError) return undefined;
+            throw error;
+        }
     }
 
     read(
         ctx: RequestContext,
         host: string,
         request: PublicPageRequest = { kind: 'home' },
+        options: { refresh?: boolean } = {},
     ): Promise<StorefrontPageData> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
             throw new Error('Public page requires anonymous Shop context');
-        return this.cache
-            .readThrough(ctx, this.key(host, request), PAGE_TTL, async () => {
-                const routeData =
+        request = canonicalPublicPageRequest(request);
+        return this.readAuthorized(ctx, host, request, options);
+    }
+
+    private async readAuthorized(
+        ctx: RequestContext,
+        host: string,
+        request: PublicPageRequest,
+        options: { refresh?: boolean },
+    ): Promise<StorefrontPageData> {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const mode = await this.getAccessMode(ctx);
+            if (mode === 'CLOSED') throw new StorefrontClosedError();
+            // Concurrent section completions share only a currently executing authority lookup.
+            // Clear it immediately: cache hits, later phases and delayed sections must query again.
+            let guardInFlight: Promise<void> | undefined;
+            const assertReusable = () => {
+                if (!guardInFlight)
+                    guardInFlight = this.assertMode(ctx, 'LIVE').finally(() => {
+                        guardInFlight = undefined;
+                    });
+                return guardInFlight;
+            };
+            const load = async (): Promise<StorefrontPageData> => {
+                const routeData = this.cache.trackSource(() =>
                     request.kind === 'catalog'
                         ? this.moduleRef
                               .get<PublicCatalogReader>(PUBLIC_CATALOG_READER, { strict: false })
@@ -104,43 +190,93 @@ export class StorefrontPublicPageService {
                                     route: `/product/${encodeURIComponent(request.id)}`,
                                     product,
                                 }))
-                          : Promise.resolve({ route: '/' });
+                          : Promise.resolve({ route: '/' }),
+                );
                 const [common, data] = await Promise.all([
-                    this.assemble(ctx, host, request.kind === 'home'),
+                    this.assemble(ctx, host, request.kind === 'home', mode),
                     routeData,
                 ]);
-                const combined = { ...common, ...data };
-                const page = { ...combined, media: publicPageMedia(combined) };
+                const combined = {
+                    ...common,
+                    config: { ...(common.config as object), accessMode: mode },
+                    ...data,
+                    route: publicPageRouteHref(request),
+                    request,
+                    requestKey: publicPageRequestKey(request),
+                };
+                const content = combined.content as { blocks?: Array<{ type?: string }> } | undefined;
+                const navigationContent = content
+                    ? {
+                          ...content,
+                          blocks: content.blocks?.filter(block =>
+                              ['NAVIGATION', 'CORE_CATEGORIES', 'QUICK_LINKS'].includes(block.type ?? ''),
+                          ),
+                      }
+                    : undefined;
+                const page = {
+                    ...combined,
+                    media: publicPageMedia(
+                        request.kind === 'home' ? combined : { ...combined, content: navigationContent },
+                    ),
+                };
                 return {
                     ...page,
                     version: createHash('sha256').update(JSON.stringify(page)).digest('hex').slice(0, 24),
                 };
-            })
-            .then(async page => {
-                // Cache content only; public access must reflect the current store state on every response.
-                const accessMode = await this.activation.getAccessMode(ctx);
-                if (accessMode === 'CLOSED') throw new StorefrontClosedError();
-                const { version: _cachedVersion, ...data } = page;
-                const current = { ...data, config: { ...(data.config as object), accessMode } };
-                return {
-                    ...current,
-                    version: createHash('sha256').update(JSON.stringify(current)).digest('hex').slice(0, 24),
-                };
-            });
+            };
+            try {
+                const page =
+                    mode === 'PREVIEW'
+                        ? await this.cache.runUncached(load)
+                        : await this.cache.runGuarded(assertReusable, async () => {
+                              let result = await this.cache.readThrough(
+                                  ctx,
+                                  this.key(host, request),
+                                  PAGE_TTL,
+                                  load,
+                                  options,
+                              );
+                              if (!isReusablePublicPageData(result)) {
+                                  // Snapshots created before access metadata existed must never be reusable.
+                                  await this.cache.invalidate(ctx.channelId);
+                                  result = await this.cache.readThrough(
+                                      ctx,
+                                      this.key(host, request),
+                                      PAGE_TTL,
+                                      load,
+                                      { refresh: true },
+                                  );
+                              }
+                              return result;
+                          });
+                // LIVE's final authority check is inside the cache's final revision check.
+                // An additional await here would reopen the just-validated generation window.
+                if (mode === 'PREVIEW') await this.assertMode(ctx, mode);
+                return page;
+            } catch (error) {
+                if (!(error instanceof PublicPageAccessChangedError)) throw error;
+            }
+        }
+        throw new ServiceUnavailableException('Public access changed; retry the read');
     }
 
-    private async assemble(ctx: RequestContext, host: string, home: boolean): Promise<StorefrontPageData> {
+    private async assemble(
+        ctx: RequestContext,
+        host: string,
+        home: boolean,
+        mode: 'LIVE' | 'PREVIEW',
+    ): Promise<StorefrontPageData> {
+        const section = <T>(key: string, ttl: number, load: () => Promise<T>) =>
+            mode === 'PREVIEW' ? this.cache.loadUncached(load) : this.cache.readThrough(ctx, key, ttl, load);
         // Optional sections fail independently. No failed response is converted to an empty success.
-        const configPromise = this.cache.readThrough(ctx, `config:${host}`, 60_000, () =>
-            this.loadConfig(ctx),
-        );
+        const configPromise = section(`config:${host}`, 60_000, () => this.loadConfig(ctx));
         const [config, sections] = await Promise.all([
             configPromise,
             Promise.allSettled(
                 [
-                    this.cache.readThrough(ctx, `content:${host}`, 60_000, () => this.loadContent(ctx)),
+                    section(`content:${host}`, 60_000, () => this.loadContent(ctx)),
                     home
-                        ? this.cache.readThrough(ctx, `home-products:${host}`, 30_000, () =>
+                        ? section(`home-products:${host}`, 30_000, () =>
                               this.moduleRef
                                   .get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
                                       strict: false,
@@ -149,13 +285,11 @@ export class StorefrontPublicPageService {
                                   .then(page => page.items),
                           )
                         : Promise.resolve(undefined),
-                    this.cache.readThrough(ctx, `collections:${host}`, 30_000, () =>
-                        this.loadCollections(ctx),
-                    ),
-                    this.cache.readThrough(ctx, `visual-preset:${host}`, 60_000, () =>
+                    section(`collections:${host}`, 30_000, () => this.loadCollections(ctx)),
+                    section(`visual-preset:${host}`, 60_000, () =>
                         this.moduleRef.get(StorefrontVisualPresetService, { strict: false }).get(ctx),
                     ),
-                    this.cache.readThrough(ctx, `flash-sales:${host}`, 30_000, () =>
+                    section(`flash-sales:${host}`, 30_000, () =>
                         this.campaigns.findFlashSales(ctx, true).then(sales =>
                             sales.map(sale => ({
                                 id: String(sale.id),
@@ -165,7 +299,7 @@ export class StorefrontPublicPageService {
                             })),
                         ),
                     ),
-                ].map(section => publicSectionWithinBudget<unknown>(section)),
+                ].map(promise => publicSectionWithinBudget<unknown>(promise)),
             ),
         ]);
         const names = ['content', 'products', 'collections', 'visualPreset', 'flashSales'] as const;
@@ -195,16 +329,20 @@ export class StorefrontPublicPageService {
 
     private async loadConfig(ctx: RequestContext) {
         const [branding, countries, provinces, currency] = await Promise.all([
-            new StorefrontBrandingShopResolver(
-                this.connection,
-                this.configService,
-                this.moduleRef.get(StorefrontActivationService, { strict: false }),
-            ).loadBranding(ctx),
-            this.countries.findAllAvailable(ctx),
-            new StorefrontRegionShopResolver(this.provinces, this.countries).availableStorefrontProvinces(
-                ctx,
+            this.cache.trackSource(() =>
+                new StorefrontBrandingShopResolver(
+                    this.connection,
+                    this.configService,
+                    this.activation,
+                ).loadBranding(ctx),
             ),
-            this.currency.getPublic(ctx),
+            this.cache.trackSource(() => this.countries.findAllAvailable(ctx)),
+            this.cache.trackSource(() =>
+                new StorefrontRegionShopResolver(this.provinces, this.countries).availableStorefrontProvinces(
+                    ctx,
+                ),
+            ),
+            this.cache.trackSource(() => this.currency.getPublic(ctx)),
         ]);
         const custom = (ctx.channel.customFields ?? {}) as {
             storefrontNameZh?: string;
@@ -260,12 +398,12 @@ export class StorefrontPublicPageService {
         const account = this.moduleRef.get(StorefrontAccountSettingsService, { strict: false });
         const [blocks, settings, auth, personalDataExportEnabled, accountRecommendations, announcements] =
             await Promise.all([
-                this.content.findPublished(ctx),
-                this.content.getSettings(ctx),
-                this.auth.get(ctx),
-                account.getPersonalDataExportEnabled(ctx),
-                account.getRecommendations(ctx),
-                this.announcements.findActive(ctx),
+                this.cache.trackSource(() => this.content.findPublished(ctx)),
+                this.cache.trackSource(() => this.content.getSettings(ctx)),
+                this.cache.trackSource(() => this.auth.get(ctx)),
+                this.cache.trackSource(() => account.getPersonalDataExportEnabled(ctx)),
+                this.cache.trackSource(() => account.getRecommendations(ctx)),
+                this.cache.trackSource(() => this.announcements.findActive(ctx)),
             ]);
         return {
             blocks: blocks.map(block => this.publicBlock(block)),

@@ -610,15 +610,6 @@ img {
     transform: translate(-50%, 0);
 }
 
-@keyframes pageEnter {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
 .page,
 .subpage {
     --page-bottom-fixed-height: var(--bottom-navigation-height);
@@ -629,7 +620,6 @@ img {
         var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--page-end-gap) +
             var(--safe-bottom)
     );
-    animation: pageEnter 180ms ease both;
     background: var(--bg);
     color: var(--text);
 }

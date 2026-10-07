@@ -8,6 +8,7 @@ import {
 
 import { DEFAULT_HERO_IMAGE, staticStorefrontImageSource } from './storefront-images';
 
+export { STOREFRONT_IMAGE_SIZES } from '../../storefront-content-plugin/src/shared/responsive-image';
 export { type ResponsiveImageSources, type StorefrontImageKind };
 
 export const normalizeStorefrontAssetUrl = normalizeAssetUrl;

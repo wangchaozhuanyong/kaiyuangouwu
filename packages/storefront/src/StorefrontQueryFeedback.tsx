@@ -2,7 +2,11 @@ import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 
-import { isStorefrontQueryInScope, type StorefrontRefreshScope } from './query-client';
+import {
+    isStorefrontQueryInScope,
+    isStorefrontScopeAccessDenied,
+    type StorefrontRefreshScope,
+} from './query-client';
 import { isStorefrontClosedError } from './storefront-access';
 import { storefrontErrorMessage } from './storefront-errors';
 
@@ -52,7 +56,7 @@ export function StorefrontQueryFeedback({
     const [dismissed, setDismissed] = useState('');
     const showError = failed.length > 0 && dismissed !== failureKey;
     const retrying = failed.some(query => query.state.fetchStatus === 'fetching');
-    if (!showError) return null;
+    if (isStorefrontScopeAccessDenied(client, scope) || !showError) return null;
     const isZh = language === 'zh';
     return (
         <aside

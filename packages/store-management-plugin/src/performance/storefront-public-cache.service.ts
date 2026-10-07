@@ -28,6 +28,11 @@ export class StorefrontPublicCacheService {
     private readonly channels = new Set<string>();
     private activeLoaders = 0;
     private readonly loaderContext = new AsyncLocalStorage<boolean>();
+    private readonly accessContext = new AsyncLocalStorage<{
+        uncached?: boolean;
+        assertReusable?: () => Promise<void>;
+        pendingOrigin?: Set<Promise<unknown>>;
+    }>();
     private readonly waiting: Array<() => void> = [];
     private sharedUnavailable = false;
     private recovering?: Promise<string | undefined>;
@@ -44,6 +49,53 @@ export class StorefrontPublicCacheService {
     }
     observedChannels(): string[] {
         return [...this.channels];
+    }
+
+    /** Preview assembly and all nested readers share the existing bounded origin permit, never a cache. */
+    runUncached<T>(load: () => Promise<T>): Promise<T> {
+        if (this.accessContext.getStore()?.uncached) return this.loadUncached(load);
+        let resolve!: (value: T) => void;
+        let reject!: (error: unknown) => void;
+        const response = new Promise<T>((yes, no) => {
+            resolve = yes;
+            reject = no;
+        });
+        const pendingOrigin = new Set<Promise<unknown>>();
+        // The response budget may end before optional origin work. Keep this same permit until
+        // that work actually settles, without extending the response's 600 ms section budget.
+        void this.withLoaderPermit(() =>
+            this.accessContext.run({ uncached: true, pendingOrigin }, async () => {
+                try {
+                    resolve(await load());
+                } catch (error) {
+                    reject(error);
+                }
+                while (pendingOrigin.size) await Promise.allSettled([...pendingOrigin]);
+            }),
+        ).catch(reject);
+        return response;
+    }
+
+    loadUncached<T>(load: () => Promise<T>): Promise<T> {
+        const access = this.accessContext.getStore();
+        if (!access?.uncached) return this.runUncached(load);
+        const result = this.withLoaderPermit(load);
+        access.pendingOrigin?.add(result);
+        const settled = () => {
+            access.pendingOrigin?.delete(result);
+        };
+        void result.then(settled, settled);
+        return result;
+    }
+
+    /** Own each explicit source, including siblings left pending after Promise.all fails fast. */
+    trackSource<T>(load: () => Promise<T>): Promise<T> {
+        return this.accessContext.getStore()?.uncached ? this.loadUncached(load) : load();
+    }
+
+    /** The guard also follows optional loaders which complete after their page's response budget. */
+    runGuarded<T>(assertReusable: () => Promise<void>, load: () => Promise<T>): Promise<T> {
+        return this.accessContext.run({ ...this.accessContext.getStore(), assertReusable }, load);
     }
 
     async revision(channelId: ID, deadline = Date.now() + CACHE_TIMEOUT_MS): Promise<string | undefined> {
@@ -80,7 +132,7 @@ export class StorefrontPublicCacheService {
     }
 
     async peek<T>(ctx: RequestContext, scopeKey: string): Promise<T | undefined> {
-        if (ctx.activeUserId) return undefined;
+        if (ctx.activeUserId || this.accessContext.getStore()?.uncached) return undefined;
         const deadline = Date.now() + PEEK_BUDGET_MS;
         const revision = await this.revision(ctx.channelId, deadline);
         if (!revision || Date.now() >= deadline) return undefined;
@@ -91,6 +143,9 @@ export class StorefrontPublicCacheService {
         if (!entry || entry.expiresAt <= Date.now() || entry.revision !== revision || Date.now() >= deadline)
             return undefined;
         if (revision !== (await this.revision(ctx.channelId, deadline))) return undefined;
+        await this.accessContext.getStore()?.assertReusable?.();
+        if (Date.now() >= deadline || revision !== (await this.revision(ctx.channelId, deadline)))
+            return undefined;
         this.metrics.hits++;
         return entry.value as T;
     }
@@ -100,15 +155,22 @@ export class StorefrontPublicCacheService {
         scopeKey: string,
         ttlMs: number,
         loader: () => Promise<T>,
-        options: { requireSharedRevision?: boolean } = {},
+        options: { requireSharedRevision?: boolean; refresh?: boolean } = {},
     ): Promise<T> {
         if (ctx.activeUserId) throw new Error('Public cache requires an anonymous request context');
+        const access = this.accessContext.getStore();
+        if (access?.uncached) {
+            this.metrics.bypasses++;
+            return this.loadUncached(loader);
+        }
         const ttl = Math.min(60_000, Math.max(1, ttlMs));
         const revision = await this.revision(ctx.channelId);
+        const initialFallback = this.fallbackRevision;
         if (!revision && options.requireSharedRevision) throw this.unavailable();
         if (!revision) this.metrics.bypasses++;
         const key = this.key(ctx, scopeKey, revision ?? `uncached:${this.fallbackRevision}`);
-        if (revision) {
+        // A proactive refresh keeps the existing snapshot readable until its guarded replacement is ready.
+        if (revision && !options.refresh) {
             const cached = await this.bounded(this.cache.get<PublicEntry<any>>(key));
             if (
                 cached &&
@@ -116,12 +178,26 @@ export class StorefrontPublicCacheService {
                 cached.expiresAt > Date.now() &&
                 revision === (await this.revision(ctx.channelId))
             ) {
-                this.metrics.hits++;
-                return cached.value as T;
+                await access?.assertReusable?.();
+                if (revision === (await this.revision(ctx.channelId))) {
+                    this.metrics.hits++;
+                    return cached.value as T;
+                }
             }
         }
         const existing = this.inFlight.get(key);
-        if (existing) return existing as Promise<T>;
+        if (existing) {
+            const value = await (existing as Promise<T>);
+            await access?.assertReusable?.();
+            // A joined result has no independent fill ownership. Conservatively retry the read
+            // if its original key generation changed, even if the owner has already retried.
+            if (
+                revision !== (await this.revision(ctx.channelId)) ||
+                initialFallback !== this.fallbackRevision
+            )
+                throw this.unavailable();
+            return value;
+        }
         if (this.inFlight.size >= MAX_LOADERS + MAX_QUEUED) throw this.unavailable();
         this.metrics.misses++;
         const result = this.withLoaderPermit(async () => {
@@ -130,6 +206,7 @@ export class StorefrontPublicCacheService {
                 const fallbackBefore = this.fallbackRevision;
                 if (!before && options.requireSharedRevision) throw this.unavailable();
                 const value = await loader();
+                await access?.assertReusable?.();
                 const after = await this.revision(ctx.channelId);
                 if (!before || !after) {
                     if (options.requireSharedRevision) throw this.unavailable();
@@ -151,6 +228,12 @@ export class StorefrontPublicCacheService {
                         { ttl },
                     ),
                 );
+                if (before !== (await this.revision(ctx.channelId))) {
+                    this.metrics.superseded++;
+                    this.requestCache?.clear(ctx);
+                    continue;
+                }
+                await access?.assertReusable?.();
                 if (before !== (await this.revision(ctx.channelId))) {
                     this.metrics.superseded++;
                     this.requestCache?.clear(ctx);

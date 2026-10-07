@@ -151,7 +151,7 @@ async function setup(options: { paid?: boolean; balance?: number; history?: Imag
                 return { items: filtered.slice(skip, skip + take), totalItems: filtered.length };
             },
         ),
-        myImageGenerationJob: vi.fn(async (id: string) => {
+        myImageGenerationJob: vi.fn(async (id: string, _signal?: AbortSignal) => {
             const found = history.find(item => item.id === id);
             if (!found) throw new Error('Job unavailable');
             return found;
@@ -202,6 +202,11 @@ async function setup(options: { paid?: boolean; balance?: number; history?: Imag
 function button(container: Element, text: string) {
     const value = [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text));
     if (!value) throw new Error(`Missing button ${text}`);
+    return value;
+}
+function selectedButton(container: ParentNode, selector: string): HTMLButtonElement {
+    const value = container.querySelector<HTMLButtonElement>(selector);
+    if (!value) throw new Error(`Missing button ${selector}`);
     return value;
 }
 async function click(element: HTMLElement) {
@@ -665,7 +670,7 @@ describe('AI studio complete customer workflows', () => {
         );
         vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
         await click(button(document.body, '下载'));
-        expect(api.myImageGenerationJob).toHaveBeenLastCalledWith(`job-${index}`);
+        expect(api.myImageGenerationJob).toHaveBeenLastCalledWith(`job-${index}`, expect.any(AbortSignal));
         expect(fetchMock).toHaveBeenCalledWith('/download.png', expect.anything());
         expect(onNotify).toHaveBeenCalledWith('图片已保存');
         const dialogClose = document.querySelector<HTMLButtonElement>(
@@ -679,6 +684,79 @@ describe('AI studio complete customer workflows', () => {
         await click(button(document.body, '确认删除'));
         expect(api.deleteMyImageGenerationJob).toHaveBeenCalledWith(`job-${index}`);
         expect(container.querySelectorAll('article')).toHaveLength(index > 40 ? 44 : 40);
+    });
+
+    it('keeps the latest preview selection when earlier reads settle out of order', async () => {
+        const item = {
+            ...job(),
+            outputs: [0, 1].map(index => ({
+                id: `output-${index}`,
+                outputIndex: index,
+                state: 'SUCCEEDED' as const,
+                attemptCount: 1,
+                billingMode: 'FREE' as const,
+                chargeAmount: 0,
+                imageUrl: `/image-${index}.png`,
+            })),
+        };
+        const { api, container, onNotify } = await setup({ history: [item] });
+        const view = selectedButton(container, 'button[aria-label="查看生成详情"]');
+        await click(view);
+        const pending: Array<{ signal?: AbortSignal; resolve(value: ImageGenerationJob): void }> = [];
+        api.myImageGenerationJob.mockImplementation(
+            (_id, signal) => new Promise(resolve => pending.push({ signal, resolve })),
+        );
+        const previews = document.querySelectorAll<HTMLButtonElement>('.ai-generation-output-preview');
+        await click(previews[0]);
+        await click(previews[1]);
+        expect(pending).toHaveLength(2);
+        expect(pending[0].signal?.aborted).toBe(true);
+        expect(pending[1].signal?.aborted).toBe(false);
+        await act(async () => pending[1].resolve(item));
+        expect(document.querySelector('.ai-generation-lightbox-dialog')?.getAttribute('aria-label')).toBe(
+            '生成图片 2/2',
+        );
+        await act(async () => pending[0].resolve(item));
+        expect(document.querySelector('.ai-generation-lightbox-dialog')?.getAttribute('aria-label')).toBe(
+            '生成图片 2/2',
+        );
+        expect(document.querySelectorAll('[data-overlay-top]')).toHaveLength(1);
+        expect(onNotify).not.toHaveBeenCalled();
+    });
+
+    it('aborts a pending preview when its detail closes and never reopens it after settlement', async () => {
+        const item = {
+            ...job(),
+            outputs: [
+                {
+                    id: 'output-1',
+                    outputIndex: 0,
+                    state: 'SUCCEEDED' as const,
+                    attemptCount: 1,
+                    billingMode: 'FREE' as const,
+                    chargeAmount: 0,
+                    imageUrl: '/image.png',
+                },
+            ],
+        };
+        const { api, container, onNotify } = await setup({ history: [item] });
+        await click(selectedButton(container, 'button[aria-label="查看生成详情"]'));
+        let resolve!: (value: ImageGenerationJob) => void;
+        let signal: AbortSignal | undefined;
+        api.myImageGenerationJob.mockImplementation(
+            (_id, nextSignal) =>
+                new Promise(complete => {
+                    signal = nextSignal;
+                    resolve = complete;
+                }),
+        );
+        await click(selectedButton(document, '.ai-generation-output-preview'));
+        await click(selectedButton(document, '.sheet > header button'));
+        expect(signal?.aborted).toBe(true);
+        await act(async () => resolve(item));
+        expect(document.querySelector('[data-overlay-layer]')).toBeNull();
+        expect(document.body.style.overflow).toBe('');
+        expect(onNotify).not.toHaveBeenCalled();
     });
 
     it('warns about legacy replay and blocks an unavailable model', async () => {

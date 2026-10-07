@@ -139,10 +139,17 @@ export function StorefrontBlockEditor({
         }));
     const phoneTranslation = mobileHeroTranslation(draft.settings, language);
     const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
-        const translations = (['zh_Hans', 'en'] as const).map(code => ({
-            ...mobileHeroTranslation(draft.settings, code),
-            ...(code === language ? patch : {}),
-        }));
+        const translations = (['zh_Hans', 'en'] as const).map(code => {
+            const translation = {
+                ...mobileHeroTranslation(draft.settings, code),
+                ...(code === language ? patch : {}),
+            };
+            // Keep the draft identical to the JSON settings sent for save and readback.
+            for (const field of ['title', 'subtitle', 'body', 'ctaLabel'] as const) {
+                if (translation[field] === undefined) delete translation[field];
+            }
+            return translation;
+        });
         updateSettings({ mobileHeroTranslations: translations });
     };
     const toggleProduct = (id: string) => {

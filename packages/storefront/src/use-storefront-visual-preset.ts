@@ -8,7 +8,8 @@ import {
 } from '../../storefront-content-plugin/src/visual-presets';
 
 import { type ShopApi } from './api';
-import { STOREFRONT_CONFIG_REFRESH_INTERVAL, storefrontQueryKeys } from './query-client';
+import { SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
+import { storefrontQueryKeys } from './query-client';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { restoredStorefrontTheme } from './storefront-theme-cache';
 import { type MarketConfig } from './types';
@@ -50,7 +51,10 @@ export function useStorefrontVisualPreset(
         queryFn: ({ signal }) => api.storefrontVisualPreset(signal),
         enabled: enabled && !previewPreset,
         staleTime: 30_000,
-        refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        meta: { publicAggregatePart: !SEND_CLIENT_CHANNEL_TOKEN },
         // Do not persist a style selection under an unverified store context.
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.

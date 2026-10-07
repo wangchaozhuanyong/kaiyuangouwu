@@ -71,6 +71,20 @@ describe('navigation image hints', () => {
         },
     );
 
+    it('does not speculate about disabled, empty or later home slides before responsive rendering', () => {
+        preloadRouteMedia(
+            { name: 'home' },
+            [
+                { ...block('HERO', '/assets/preview/disabled.jpg'), enabled: false },
+                block('HERO', ''),
+                block('HERO', '/assets/preview/first.jpg'),
+                block('HERO', '/assets/preview/later.jpg'),
+            ],
+            [],
+        );
+        expect(preload).not.toHaveBeenCalled();
+    });
+
     it('does not preload an arbitrary catalog product when no home hero is configured', () => {
         preloadRouteMedia(
             { name: 'home' },

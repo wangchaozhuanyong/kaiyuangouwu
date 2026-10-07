@@ -1,60 +1,26 @@
-import { Controller, Get, Req, Res } from '@nestjs/common';
-import { CurrencyCode, LanguageCode, RequestContextService } from '@vendure/core';
-import type {
-    PublicPageCatalogInput,
-    PublicPageRequest,
-    StorefrontPageData,
-} from '@vendure/storefront-content-plugin';
+import { Controller, Get, Optional, Post, Req, Res } from '@nestjs/common';
+import { ForbiddenError, Logger, RequestContextService } from '@vendure/core';
+import { canonicalPublicPageRequest, type PublicPageRequest } from '@vendure/storefront-content-plugin';
 import type { Request, Response } from 'express';
 
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
 import { StorefrontClosedError } from './storefront-activation.service';
+import { parsePublicPerformanceBatch, publicPerformanceRegion } from './storefront-performance';
+import { StorefrontPublicPageWarmService } from './storefront-public-page-warm.service';
 import { StorefrontPublicPageService } from './storefront-public-page.service';
+import { publicPagePreferences } from './storefront-public-request';
 
 export function parsePublicPageRequest(query: Request['query']): PublicPageRequest {
-    if (query.kind == null || query.kind === 'home') return { kind: 'home' };
-    if (query.kind === 'product' && typeof query.id === 'string' && /^[a-z0-9_-]{1,100}$/iu.test(query.id)) {
-        return { kind: 'product', id: query.id };
-    }
+    if (query.kind == null || query.kind === 'home') return canonicalPublicPageRequest({ kind: 'home' });
+    if (query.kind === 'product' && typeof query.id === 'string')
+        return canonicalPublicPageRequest({ kind: 'product', id: query.id });
     if (query.kind !== 'catalog' || typeof query.input !== 'string' || query.input.length > 2000)
         throw new Error('Invalid public page');
-    const raw = JSON.parse(query.input);
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid catalog input');
-    const input: PublicPageCatalogInput = {};
-    if (raw.term != null) {
-        if (typeof raw.term !== 'string' || raw.term.length > 200) throw new Error('Invalid search');
-        input.term = raw.term.trim();
-    }
-    if (raw.collectionId != null) {
-        if (typeof raw.collectionId !== 'string' || !/^[a-z0-9_-]{1,100}$/iu.test(raw.collectionId))
-            throw new Error('Invalid collection');
-        input.collectionId = raw.collectionId;
-    }
-    if (raw.sort != null) {
-        if (!['RECOMMENDED', 'SALES', 'NEWEST', 'NAME', 'PRICE_ASC', 'PRICE_DESC'].includes(raw.sort))
-            throw new Error('Invalid sort');
-        input.sort = raw.sort;
-    }
-    if (raw.fulfillmentType != null) {
-        if (!['PHYSICAL', 'DIGITAL'].includes(raw.fulfillmentType)) throw new Error('Invalid fulfillment');
-        input.fulfillmentType = raw.fulfillmentType;
-    }
-    if (raw.inStockOnly != null && typeof raw.inStockOnly !== 'boolean')
-        throw new Error('Invalid stock filter');
-    input.inStockOnly = raw.inStockOnly === true;
-    for (const key of ['minPriceWithTax', 'maxPriceWithTax', 'skip', 'take'] as const) {
-        const value = raw[key];
-        if (value == null) continue;
-        if (
-            !Number.isSafeInteger(value) ||
-            value < 0 ||
-            (key === 'take' && (value < 1 || value > 48)) ||
-            (key === 'skip' && value > 100_000)
-        )
-            throw new Error('Invalid pagination or price');
-        input[key] = value;
-    }
-    return { kind: 'catalog', input };
+    return canonicalPublicPageRequest({
+        kind: 'catalog',
+        input: JSON.parse(query.input),
+        path: query.path as '/category' | '/search' | undefined,
+    });
 }
 
 @Controller('storefront')
@@ -63,41 +29,62 @@ export class StorefrontPublicPageController {
         private readonly access: StorefrontPromotionAccessService,
         private readonly contexts: RequestContextService,
         private readonly pages: StorefrontPublicPageService,
+        @Optional() private readonly warmer?: StorefrontPublicPageWarmService,
     ) {}
+
+    @Post('performance')
+    async performance(@Req() req: Request, @Res() res: Response): Promise<void> {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        let batch: ReturnType<typeof parsePublicPerformanceBatch>;
+        try {
+            batch = parsePublicPerformanceBatch(req.body);
+        } catch {
+            res.status(400).end();
+            return;
+        }
+        const verified = await this.access.resolveRequest(req);
+        if (!verified) {
+            res.status(404).end();
+            return;
+        }
+        Logger.info(
+            JSON.stringify({
+                event: 'storefront-performance',
+                store: verified.ctx.channel.code,
+                region: publicPerformanceRegion(req),
+                ...batch,
+            }),
+            'StorefrontPerformance',
+        );
+        res.status(204).end();
+    }
 
     @Get('page-data')
     async read(@Req() req: Request, @Res() res: Response): Promise<void> {
         // Public snapshots contain no cookie/session data, but are host-scoped and not a CDN HTML cache.
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        let verified: Awaited<ReturnType<StorefrontPromotionAccessService['resolveRequest']>>;
         try {
-            verified = await this.access.resolveRequest(req);
+            await this.readPage(req, res);
         } catch (error) {
-            if (!(error instanceof StorefrontClosedError)) throw error;
-            res.status(403).json({ errorCode: 'STOREFRONT_CLOSED', message: 'Store not open yet' });
-            return;
+            if (!(error instanceof StorefrontClosedError) && !(error instanceof ForbiddenError)) throw error;
+            res.status(403).json({ errorCode: 'STOREFRONT_CLOSED', message: 'Storefront is closed' });
         }
+    }
+
+    private async readPage(req: Request, res: Response): Promise<void> {
+        const verified = await this.access.resolveRequest(req);
         if (!verified) {
             res.status(404).end();
             return;
         }
         const language = req.query.languageCode;
         const currency = req.query.currencyCode;
-        if (language != null && language !== 'en' && language !== 'zh_Hans') {
-            res.status(400).json({ error: 'Unsupported language' });
-            return;
-        }
-        if (
-            currency != null &&
-            (typeof currency !== 'string' ||
-                !verified.ctx.channel.availableCurrencyCodes.includes(currency as CurrencyCode))
-        ) {
-            res.status(400).json({ error: 'Unsupported currency' });
-            return;
-        }
         let request: PublicPageRequest;
+        let preferences: ReturnType<typeof publicPagePreferences>;
         try {
+            preferences = publicPagePreferences(verified.ctx, language, currency);
             request = parsePublicPageRequest(req.query);
         } catch {
             res.status(400).json({ error: 'Invalid public page request' });
@@ -112,18 +99,11 @@ export class StorefrontPublicPageController {
             } as unknown as Request,
             apiType: 'shop',
             channelOrToken: verified.ctx.channel,
-            languageCode: (language as LanguageCode | undefined) ?? verified.ctx.languageCode,
-            currencyCode: (currency as CurrencyCode | undefined) ?? verified.ctx.currencyCode,
+            ...preferences,
         });
         const start = performance.now();
-        let page: StorefrontPageData;
-        try {
-            page = await this.pages.read(ctx, verified.host, request);
-        } catch (error) {
-            if (!(error instanceof StorefrontClosedError)) throw error;
-            res.status(403).json({ errorCode: 'STOREFRONT_CLOSED', message: 'Store not open yet' });
-            return;
-        }
+        const page = await this.pages.read(ctx, verified.host, request);
+        void this.warmer?.observe(ctx, verified.host, request).catch(() => undefined);
         res.setHeader('Server-Timing', `public-page;dur=${(performance.now() - start).toFixed(1)}`);
         res.status(200).json(page);
     }

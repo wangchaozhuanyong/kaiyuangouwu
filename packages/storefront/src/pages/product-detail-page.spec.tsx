@@ -173,27 +173,27 @@ describe('desktop product purchase controls', () => {
         trigger.focus();
         const originalOverflow = document.body.style.overflow;
         act(() => trigger.click());
-        const dialog = host.querySelector('[role="dialog"]');
+        const dialog = document.querySelector('[role="dialog"]');
         expect(dialog).not.toBeNull();
         expect(dialog?.textContent).toContain('正在加载分享海报');
         expect(document.body.style.overflow).toBe('hidden');
-        act(() => host.querySelector<HTMLButtonElement>('.poster-close-btn')?.click());
-        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        act(() => document.querySelector<HTMLButtonElement>('.poster-close-btn')?.click());
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(document.body.style.overflow).toBe(originalOverflow);
         expect(document.activeElement).toBe(trigger);
         act(() => trigger.click());
-        const reopened = host.querySelector('[role="dialog"]');
+        const reopened = document.querySelector('[role="dialog"]');
         await act(async () => {
             posterLoad.resolve?.();
             await Promise.resolve();
         });
-        expect(host.querySelector('[role="dialog"]')).toBe(reopened);
-        expect(host.querySelectorAll('.poster-modal-overlay')).toHaveLength(1);
+        expect(document.querySelector('[role="dialog"]')).toBe(reopened);
+        expect(document.querySelectorAll('.poster-modal-overlay')).toHaveLength(1);
         expect(reopened?.textContent).toContain('海报内容已就绪');
         act(() => {
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         });
-        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(document.body.style.overflow).toBe(originalOverflow);
     });
 

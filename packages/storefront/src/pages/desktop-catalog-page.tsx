@@ -11,6 +11,7 @@ import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { storefrontInitialQueryError } from '../loading-state';
+import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { useStorefront } from '../StorefrontContext';
@@ -20,6 +21,7 @@ import '../styles/account-catalog-surfaces.css';
 
 interface DesktopCatalogContext {
     api: ShopApi;
+    storefrontContextResolved?: boolean;
     route: RouteState;
     market: MarketConfig;
     language: StorefrontLanguage;
@@ -42,9 +44,8 @@ export function DesktopCatalogPage() {
         languageCode: languageCodeFor(language),
         language,
         input,
-        enabled: true,
+        enabled: runtime.storefrontContextResolved !== false,
         suspended: false,
-        pageSize: 20,
     });
     const query = pagination.query;
     const products = pagination.products;
@@ -258,9 +259,12 @@ export function DesktopCatalogPage() {
                             />
                         ) : products.length ? (
                             <div className="desktop-product-grid">
-                                {products.map(product => (
+                                {products.map((product, index) => (
                                     <ProductCard
                                         key={product.id}
+                                        eager={index < 5}
+                                        priority={index === 0}
+                                        imageSizes={STOREFRONT_IMAGE_SIZES.desktopCatalogCard}
                                         product={product}
                                         market={market}
                                         locale={locale}

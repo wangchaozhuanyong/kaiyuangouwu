@@ -172,9 +172,15 @@ function SafeImageSource({
     function useFallback() {
         if (!active.current) return;
         setLoadedCandidate('');
-        if (responsive && imageKind && sources.srcSet) setResponsive(false);
-        else if (fallbackSrc && currentSrc !== fallbackSrc) {
-            setCurrentSrc(fallbackSrc);
+        const recovery = sources.recoverySrc;
+        const failedUrl = imageRef.current?.currentSrc || imageRef.current?.src;
+        const fallback = fallbackSrc ? imageSources(fallbackSrc, imageKind, imageProps.sizes) : undefined;
+        const fallbackUrl = fallback?.recoverySrc ?? fallback?.src;
+        if (responsive && recovery && new URL(recovery, window.location.href).href !== failedUrl) {
+            setCurrentSrc(recovery);
+            setResponsive(false);
+        } else if (fallbackUrl && currentSrc !== fallbackUrl) {
+            setCurrentSrc(fallbackUrl);
             setResponsive(false);
         } else {
             setFallbackHeight(imageRef.current?.getBoundingClientRect().height || undefined);
@@ -223,7 +229,11 @@ function SafeImageSource({
         active.current = true;
         const image = imageRef.current;
         let requestTimer: number | undefined;
-        const clearRequestTimer = () => window.clearTimeout(requestTimer);
+        let cancelTimer: number | undefined;
+        const clearRequestTimer = () => {
+            window.clearTimeout(requestTimer);
+            window.clearTimeout(cancelTimer);
+        };
         const boundRequest = () => {
             if (!image || image.complete || requestTimer !== undefined) return;
             requestTimer = window.setTimeout(() => {
@@ -231,9 +241,12 @@ function SafeImageSource({
                 exceededBudget.current = true;
                 setFallbackHeight(image.getBoundingClientRect().height || undefined);
                 setTimedOut(true);
-                // A placeholder alone leaves the eager request holding window.load open.
-                cancelPendingImage(image);
-                setFailed(true);
+                // A late response may still recover this local image without restarting page loading.
+                cancelTimer = window.setTimeout(() => {
+                    if (!active.current || imageRef.current !== image || image.complete) return;
+                    cancelPendingImage(image);
+                    setFailed(true);
+                }, IMAGE_REQUEST_TIMEOUT_MS);
             }, IMAGE_REQUEST_TIMEOUT_MS);
         };
         const expire = () => {
@@ -244,9 +257,18 @@ function SafeImageSource({
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
         image?.addEventListener('load', clearRequestTimer);
         image?.addEventListener('error', clearRequestTimer);
-        // Offscreen lazy images do not block window.load and may not have started yet.
-        // The readiness observer notifies us if it promotes one into an eager request.
+        // Start a local deadline when a lazy image enters view. Page readiness owns no image timers.
+        let observer: IntersectionObserver | undefined;
         if (image?.getAttribute('loading') !== 'lazy') boundRequest();
+        else if (image && typeof IntersectionObserver !== 'undefined') {
+            observer = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) {
+                    boundRequest();
+                    observer?.disconnect();
+                }
+            });
+            observer.observe(image);
+        }
         if (image?.complete && image.naturalWidth > 0) {
             const candidate = imageCandidateIdentity(image);
             if (
@@ -262,6 +284,7 @@ function SafeImageSource({
         return () => {
             active.current = false;
             clearRequestTimer();
+            observer?.disconnect();
             image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
             image?.removeEventListener('load', clearRequestTimer);
             image?.removeEventListener('error', clearRequestTimer);
@@ -354,7 +377,7 @@ function SafeImageSource({
                     (!placeholder || failed) &&
                     showFallbackIcon && (
                         <ImagePlaceholder
-                            state={failed ? 'error' : 'loading'}
+                            state={timedOut ? 'timeout' : failed ? 'error' : 'loading'}
                             alt={alt}
                             compact={imageKind === 'thumbnail' || imageKind === 'icon'}
                             language={language}

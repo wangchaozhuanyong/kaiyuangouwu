@@ -18,15 +18,14 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 import '../styles/image-studio.css';
 import '../styles/modals-and-support.css';
 
 import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import { ShopApi, ShopApiTimeoutError } from '../api';
-import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
+import { Overlay, useOverlayOwnerKey } from '../overlay-host';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
@@ -972,9 +971,10 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
             setDeletingJobId(null);
         }
     };
-    const refreshDetail = async (id: string) => {
+    const refreshDetail = async (id: string, signal?: AbortSignal) => {
         const epoch = settlementEpoch.current;
-        const result = await api.myImageGenerationJob(id);
+        const result = await (signal ? api.myImageGenerationJob(id, signal) : api.myImageGenerationJob(id));
+        if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
         if (epoch !== settlementEpoch.current)
             throw new Error(isZh ? '登录或店铺已变化，请重新打开' : 'Session changed. Open this item again.');
         setJobs(current => [...current.filter(item => item.id !== id), result]);
@@ -2056,7 +2056,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                         >
                             <GenerationDetail
                                 key={`${customer?.id}:${market.code}:${selectedJob.id}`}
-                                refreshJob={() => refreshDetail(selectedJob.id)}
+                                refreshJob={signal => refreshDetail(selectedJob.id, signal)}
                                 job={selectedJob}
                                 language={language}
                                 locale={market.locale}
@@ -2271,7 +2271,7 @@ function GenerationDetail({
     locale,
     onNotify,
 }: Readonly<{
-    refreshJob(): Promise<ImageGenerationJob>;
+    refreshJob(signal?: AbortSignal): Promise<ImageGenerationJob>;
     job: ImageGenerationJob;
     language: StorefrontLanguage;
     locale: string;
@@ -2279,9 +2279,27 @@ function GenerationDetail({
 }>) {
     const isZh = language === 'zh';
     const [previewOutput, setPreviewOutput] = useState<ImageGenerationOutput | null>(null);
+    const ownerKey = useOverlayOwnerKey();
+    const previewScope = `${ownerKey}:${job.id}`;
+    const currentPreviewScope = useRef(previewScope);
+    currentPreviewScope.current = previewScope;
+    const previewSequence = useRef(0);
+    const previewController = useRef<AbortController | null>(null);
     const [downloadingOutputId, setDownloadingOutputId] = useState<string | null>(null);
     const downloadController = useRef<AbortController | null>(null);
-    useEffect(() => () => downloadController.current?.abort(), []);
+    useEffect(() => {
+        setPreviewOutput(null);
+        return () => {
+            previewSequence.current++;
+            previewController.current?.abort();
+            downloadController.current?.abort();
+        };
+    }, [previewScope]);
+    const closePreview = () => {
+        previewSequence.current++;
+        previewController.current?.abort();
+        setPreviewOutput(null);
+    };
     const downloadOutput = async (output: ImageGenerationOutput) => {
         if (downloadingOutputId) return;
         const controller = new AbortController();
@@ -2289,7 +2307,9 @@ function GenerationDetail({
         setDownloadingOutputId(output.id);
         try {
             for (let attempt = 0; attempt < 2; attempt++) {
-                const current = (await refreshJob()).outputs.find(item => item.id === output.id);
+                const current = (await refreshJob(controller.signal)).outputs.find(
+                    item => item.id === output.id,
+                );
                 const source = current?.downloadUrl ?? current?.imageUrl;
                 if (!source) throw new Error('Image unavailable');
                 try {
@@ -2315,12 +2335,25 @@ function GenerationDetail({
         }
     };
     const preview = async (output: ImageGenerationOutput) => {
+        const sequence = ++previewSequence.current;
+        previewController.current?.abort();
+        const controller = new AbortController();
+        previewController.current = controller;
         try {
-            const current = (await refreshJob()).outputs.find(item => item.id === output.id);
+            const current = (await refreshJob(controller.signal)).outputs.find(item => item.id === output.id);
+            if (
+                controller.signal.aborted ||
+                sequence !== previewSequence.current ||
+                previewScope !== currentPreviewScope.current
+            )
+                return;
             if (!current?.imageUrl) throw new Error(isZh ? '图片已删除或过期' : 'Image deleted or expired');
             setPreviewOutput(current);
         } catch (error) {
+            if (controller.signal.aborted || sequence !== previewSequence.current) return;
             onNotify(customerErrorMessage(error, isZh));
+        } finally {
+            if (previewController.current === controller) previewController.current = null;
         }
     };
     const settlementLabel =
@@ -2474,7 +2507,7 @@ function GenerationDetail({
                     }
                     language={language}
                     downloading={downloadingOutputId === previewOutput.id}
-                    onClose={() => setPreviewOutput(null)}
+                    onClose={closePreview}
                     onDownload={() => downloadOutput(previewOutput)}
                 />
             ) : null}
@@ -2500,59 +2533,13 @@ function GenerationImagePreview({
     onDownload(): Promise<void>;
 }>) {
     const isZh = language === 'zh';
-    const dialogRef = useRef<HTMLDivElement>(null);
-    const previousFocusRef = useRef<HTMLElement | null>(null);
-    const onCloseRef = useRef(onClose);
-    useEffect(() => {
-        onCloseRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        previousFocusRef.current =
-            document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                onCloseRef.current();
-                return;
-            }
-            if (event.key !== 'Tab' || !dialogRef.current) return;
-            const focusableElements = Array.from(
-                dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [tabindex="0"]'),
-            ).filter(element => element !== dialogRef.current && !element.hidden);
-            if (!focusableElements.length) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                dialogRef.current.focus();
-                return;
-            }
-            const currentIndex = focusableElements.indexOf(document.activeElement as HTMLElement);
-            const nextIndex = event.shiftKey
-                ? currentIndex <= 0
-                    ? focusableElements.length - 1
-                    : currentIndex - 1
-                : currentIndex < 0 || currentIndex === focusableElements.length - 1
-                  ? 0
-                  : currentIndex + 1;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            focusableElements[nextIndex].focus();
-        };
-        window.addEventListener('keydown', handleKeyDown, true);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            window.removeEventListener('keydown', handleKeyDown, true);
-            document.body.style.overflow = previousOverflow;
-            previousFocusRef.current?.focus();
-        };
-    }, []);
-
-    const content = (
-        <div className="ai-generation-lightbox" role="presentation">
+    return (
+        <Overlay
+            className="ai-generation-lightbox"
+            role="presentation"
+            onClose={onClose}
+            initialFocus="dialog"
+        >
             <button
                 type="button"
                 className="ai-generation-lightbox-mask"
@@ -2560,7 +2547,6 @@ function GenerationImagePreview({
                 onClick={onClose}
             />
             <div
-                ref={dialogRef}
                 className="ai-generation-lightbox-dialog"
                 role="dialog"
                 aria-modal="true"
@@ -2589,9 +2575,8 @@ function GenerationImagePreview({
                     </button>
                 </footer>
             </div>
-        </div>
+        </Overlay>
     );
-    return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
 function ConfirmationDialog({
@@ -2610,30 +2595,16 @@ function ConfirmationDialog({
     onConfirm(): void;
 }>) {
     const isZh = language === 'zh';
-    const cancelButtonRef = useRef<HTMLButtonElement>(null);
-    const onCancelRef = useRef(onCancel);
-    useEffect(() => {
-        onCancelRef.current = onCancel;
-    }, [onCancel]);
-    useEffect(() => {
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        const focusFrame = window.requestAnimationFrame(() => cancelButtonRef.current?.focus());
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key !== 'Escape' || busy) return;
-            event.preventDefault();
-            onCancelRef.current();
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            window.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [busy]);
-    const content = (
-        <div className="ai-confirmation-dialog-layer" role="presentation">
+    const titleId = useId();
+    const descriptionId = useId();
+    return (
+        <Overlay
+            className="ai-confirmation-dialog-layer"
+            role="presentation"
+            onClose={() => {
+                if (!busy) onCancel();
+            }}
+        >
             <button
                 type="button"
                 className="ai-confirmation-dialog-mask"
@@ -2645,16 +2616,16 @@ function ConfirmationDialog({
                 className="ai-confirmation-dialog"
                 role="alertdialog"
                 aria-modal="true"
-                aria-labelledby="ai-delete-confirmation-title"
-                aria-describedby="ai-delete-confirmation-description"
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
             >
                 <span className="ai-confirmation-dialog-icon" aria-hidden="true">
                     <Trash2 />
                 </span>
-                <h2 id="ai-delete-confirmation-title">{title}</h2>
-                <p id="ai-delete-confirmation-description">{description}</p>
+                <h2 id={titleId}>{title}</h2>
+                <p id={descriptionId}>{description}</p>
                 <footer>
-                    <button ref={cancelButtonRef} type="button" disabled={busy} onClick={onCancel}>
+                    <button type="button" disabled={busy} onClick={onCancel}>
                         {isZh ? '取消' : 'Cancel'}
                     </button>
                     <button type="button" className="is-danger" disabled={busy} onClick={onConfirm}>
@@ -2663,9 +2634,8 @@ function ConfirmationDialog({
                     </button>
                 </footer>
             </section>
-        </div>
+        </Overlay>
     );
-    return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
 function referenceModeOptions(isZh: boolean): Array<{

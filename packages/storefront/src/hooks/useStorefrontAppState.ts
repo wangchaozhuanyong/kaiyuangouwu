@@ -7,6 +7,7 @@ import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
+import { publicRefreshScheduler } from '../public-refresh-scheduler';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -216,14 +217,27 @@ export function useStorefrontAppState() {
     useEffect(() => {
         if (!storefrontContextResolved) return;
         const controller = new AbortController();
-        void api.watchRealtime(event => {
-            void invalidateStorefrontRealtimeQueries(queryClient, event, {
+        const scheduler = publicRefreshScheduler(() => {
+            void refreshStorefrontQueries(queryClient, {
                 marketCode: storefrontQueryKeys.market(market),
                 languageCode: vendureLanguageCode,
-                customerId: customer?.id,
             });
-        }, controller.signal);
-        return () => controller.abort();
+        });
+        void api.watchRealtime(
+            event => {
+                void invalidateStorefrontRealtimeQueries(queryClient, event, {
+                    marketCode: storefrontQueryKeys.market(market),
+                    languageCode: vendureLanguageCode,
+                    customerId: customer?.id,
+                });
+            },
+            controller.signal,
+            connected => scheduler.connection(connected),
+        );
+        return () => {
+            scheduler.dispose();
+            controller.abort();
+        };
     }, [
         api,
         customerAuthenticated,
@@ -683,6 +697,7 @@ export function useStorefrontAppState() {
 
     const storefrontContextValue = {
         retryAccount: retryCustomer,
+        storefrontContextResolved,
         route,
         displayedRoute,
         api,
@@ -825,7 +840,7 @@ export function useStorefrontAppState() {
     return {
         // The shell only depends on resolving the current store identity. Route components own
         // their content/query skeletons, so an unrelated content request never blocks the app.
-        pageDataPending: !storefrontContextResolved && !configQuery.isError,
+        pageDataPending: !storefrontContextResolved && !storefrontUnavailable && !configQuery.isError,
         storefrontUnavailable,
         storefrontAccessMode,
         isNavigationPending,

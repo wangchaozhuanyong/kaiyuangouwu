@@ -18,6 +18,7 @@ export { StorefrontContentBlock } from './entities/storefront-content-block.enti
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
 export { sourceImageReplacements } from './image-replacement-policy';
 export {
+    STOREFRONT_IMAGE_SIZES,
     mediaDescriptor,
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
@@ -31,8 +32,19 @@ export { StorefrontContentChangedEvent } from './storefront-content-changed.even
 export { StorefrontContentPlugin } from './storefront-content.plugin';
 export { StorefrontContentService } from './storefront-content.service';
 
-export { STOREFRONT_PAGE_DATA_ELEMENT_ID, serializeStorefrontPageData } from './shared/public-page-data';
+export {
+    STOREFRONT_PAGE_DATA_ELEMENT_ID,
+    canonicalPublicPageRequest,
+    isReusablePublicPageData,
+    publicPageDataSearchParams,
+    publicPageRequestFromUrl,
+    publicPageRequestKey,
+    publicPageRouteHref,
+    serializeStorefrontPageData,
+    storefrontNavigationCollections,
+} from './shared/public-page-data';
 export type {
+    PublicNavigationCollection,
     PublicPageCatalogInput,
     PublicPageRequest,
     StorefrontPageData,

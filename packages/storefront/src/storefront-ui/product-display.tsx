@@ -15,16 +15,20 @@ import {
 import { ReactNode } from 'react';
 
 import { sanitizeProductSubtitle, trimProductText } from '../../../common/src/product-description-summary';
-import { decodeImageElement } from '../image-readiness';
 import { formatDisplayMoney } from '../money-display';
 import { productImage } from '../product-media';
-import { imageSources, StorefrontImageKind } from '../responsive-image';
 import { SafeImage } from '../safe-image';
+import { prefetchStorefrontImage } from '../storefront-image-prefetch';
 import { CollectionSummary, OrderSummary, Product, ProductVariant, StorefrontLanguage } from '../types';
 
 export { sanitizeProductSubtitle } from '../../../common/src/product-description-summary';
 export { productImage } from '../product-media';
 export { minimumProductPrice } from '../product-pricing';
+export {
+    decodeStorefrontImage,
+    prefetchStorefrontImage,
+    shouldPrefetchMedia,
+} from '../storefront-image-prefetch';
 
 export function OpenAiIcon({ className }: { className?: string }) {
     const pathD = [
@@ -299,39 +303,12 @@ export function ProductImage({
     );
 }
 
-export function shouldPrefetchMedia(): boolean {
-    const connection = (
-        navigator as Navigator & {
-            connection?: { saveData?: boolean; effectiveType?: string };
-        }
-    ).connection;
-    return !connection?.saveData && !['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
-}
-
 export function scheduleIdleWork(work: () => void): void {
     if (typeof window.requestIdleCallback === 'function') {
         window.requestIdleCallback(work, { timeout: 1_500 });
     } else {
         setTimeout(work, 120);
     }
-}
-
-export function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind, sizes?: string): void {
-    if (!shouldPrefetchMedia()) return;
-    void decodeStorefrontImage(src, imageKind, sizes).catch(() => undefined);
-}
-
-export async function decodeStorefrontImage(
-    src: string,
-    imageKind: StorefrontImageKind,
-    sizes?: string,
-): Promise<void> {
-    const sources = imageSources(src, imageKind, sizes);
-    const image = new Image();
-    if (sources.srcSet) image.srcset = sources.srcSet;
-    if (sources.sizes) image.sizes = sources.sizes;
-    image.src = sources.src;
-    await decodeImageElement(image);
 }
 
 export function prefetchProductAsset(product: Product): void {

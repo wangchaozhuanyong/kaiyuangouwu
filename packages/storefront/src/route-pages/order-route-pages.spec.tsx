@@ -71,6 +71,7 @@ it('keeps the drawer and order list visible when order data arrives before the d
         const pending = dialog.querySelector('[role="status"][aria-busy="true"]');
         expect(pending?.getAttribute('aria-label')).toBe('正在加载订单详情');
         expect(pending?.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(pending?.getAttribute('data-page-pending')).toBe('data');
         await act(async () => {
             resolveOrder({ id: 'local-order', state: 'Delivered' });
             await new Promise(resolve => setTimeout(resolve, 10));

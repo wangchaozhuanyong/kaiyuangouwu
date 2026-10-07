@@ -1,0 +1,8 @@
+/* Stack order belongs to the shared host, not individual page implementations. */
+[data-overlay-layer] {
+    z-index: calc(var(--layer-overlay, 100) + var(--overlay-stack-index, 0));
+}
+
+[data-overlay-layer]:not([data-overlay-top]) {
+    pointer-events: none;
+}

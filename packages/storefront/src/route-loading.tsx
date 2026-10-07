@@ -1,4 +1,5 @@
 import { BrandLoadingIndicator } from './brand-loading';
+import { usePageReadiness } from './page-readiness';
 
 export type RouteSkeletonVariant =
     'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'studio' | 'default';
@@ -45,6 +46,7 @@ export function PageSkeleton({
     root?: boolean;
     compact?: boolean;
 }) {
+    usePageReadiness(true);
     const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     const Tag = root ? 'main' : 'div';
     return (

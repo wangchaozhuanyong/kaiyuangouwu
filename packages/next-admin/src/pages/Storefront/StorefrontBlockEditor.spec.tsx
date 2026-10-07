@@ -3,7 +3,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
-import { newContentBlock, newContentItem } from './storefront-content-utils';
+import { newContentBlock, newContentItem, storefrontBlockInput } from './storefront-content-utils';
+import { verifySavedBlock } from './storefront-save-verification';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 
 vi.mock('@apollo/client/react', () => ({ useQuery: () => ({ data: undefined }) }));
@@ -306,7 +307,9 @@ it('switches phone draft language and restores only the selected language to des
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
-    const onSave = vi.fn((_value: unknown, _review?: boolean) => Promise.resolve(undefined));
+    const onSave = vi.fn((_value: ReturnType<typeof newContentBlock>, _review?: boolean) =>
+        Promise.resolve(undefined),
+    );
     const value = {
         ...newContentBlock('HERO', 0),
         id: 'hero',
@@ -323,6 +326,7 @@ it('switches phone draft language and restores only the selected language to des
             },
         ],
         settings: {
+            mobileHeroTextColor: null,
             mobileHeroTranslations: [
                 {
                     languageCode: 'zh_Hans',
@@ -363,12 +367,27 @@ it('switches phone draft language and restores only the selected language to des
         expect(title().value).toBe('');
         await fixtureAct(() => button('保存并核对').click());
         const saved = onSave.mock.calls.at(-1)?.[0];
+        if (!saved) throw new Error('Expected a saved phone draft');
+        // JSON settings omit undefined fields during the actual mutation transport.
+        const readback = JSON.parse(JSON.stringify(saved));
+        expect(() => verifySavedBlock(readback, storefrontBlockInput(saved, value))).not.toThrow();
+        expect(saved.settings?.mobileHeroTranslations).toEqual([
+            value.settings.mobileHeroTranslations[0],
+            { languageCode: 'en' },
+        ]);
+        expect(() =>
+            verifySavedBlock(
+                { ...readback, settings: { ...readback.settings, mobileHeroHideStats: false } },
+                storefrontBlockInput(saved, value),
+            ),
+        ).toThrow('settings');
         expect(JSON.parse(JSON.stringify(saved))).toMatchObject({
             imageAssetId: 'desktop',
             imageUrl: '/assets/desktop.webp',
             translations: value.translations,
             items: value.items,
             settings: {
+                mobileHeroTextColor: null,
                 mobileHeroHideStats: true,
                 mobileHeroTranslations: [value.settings.mobileHeroTranslations[0], { languageCode: 'en' }],
             },

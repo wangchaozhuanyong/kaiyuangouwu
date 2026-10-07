@@ -5,7 +5,7 @@ type RoutePreloader = () => Promise<void>;
 const routePreloaders = {
     home: () => import('./route-pages/catalog-route-pages').then(module => module.preloadHomeRoutePage()),
     category: () =>
-        import('./route-pages/catalog-route-pages').then(module => module.preloadCategoryRoutePage()),
+        import('./route-pages/category-route-page').then(module => module.preloadCategoryRoutePage()),
     product: () =>
         import('./route-pages/catalog-route-pages').then(module => module.preloadProductRoutePage()),
     search: () => import('./route-pages/catalog-route-pages').then(module => module.preloadSearchRoutePage()),

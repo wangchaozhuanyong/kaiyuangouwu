@@ -1,9 +1,11 @@
 // Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
+import { storefrontQueryClient } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
+import { prefetchPublicPage } from './storefront-page-data';
 import {
     getStorefrontScrollRestorationKey,
     routeFromHash,
@@ -50,6 +52,7 @@ export const router = createRouter({
 router.subscribe('onBeforeNavigate', event => {
     const route = routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search);
     void preloadStorefrontRouteComponent(route.name);
+    void prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined);
 });
 
 function StorefrontPendingPage() {
