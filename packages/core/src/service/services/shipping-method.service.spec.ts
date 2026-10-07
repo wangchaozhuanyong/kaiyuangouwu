@@ -236,6 +236,8 @@ describe('shipping template store ownership and switches', () => {
             expect.objectContaining({
                 arguments: [
                     { name: 'baseRate', value: '1000' },
+                    { name: 'estimateMinDays', value: '1' },
+                    { name: 'estimateMaxDays', value: '3' },
                     { name: 'sourceCurrencyCode', value: 'CNY' },
                 ],
             }),
@@ -479,6 +481,8 @@ describe('shipping template store ownership and switches', () => {
                 arguments: [
                     { name: 'baseRate', value: '1000' },
                     { name: 'freeAbove', value: '4000' },
+                    { name: 'estimateMinDays', value: '1' },
+                    { name: 'estimateMaxDays', value: '3' },
                     { name: 'sourceCurrencyCode', value: 'CNY' },
                 ],
             }),
