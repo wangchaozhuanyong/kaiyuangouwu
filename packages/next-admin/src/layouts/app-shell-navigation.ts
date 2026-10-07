@@ -25,7 +25,7 @@ export function isPlatformManagementChannel(code?: string | null) {
 
 export function isPlatformBusinessPath(pathname: string) {
     const page = getStandaloneAdminPage(pathname);
-    // Announcements are platform content; their existing SuperAdmin checks still apply.
+    // Announcements support platform oversight and store-scoped management.
     if (page?.sourcePath === '/storefront/content' && page.key === 'announcements') return false;
     return PLATFORM_BLOCKED_BUSINESS_PREFIXES.some(
         prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),

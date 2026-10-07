@@ -12,6 +12,7 @@ import {
 } from '@vendure/common/lib/generated-types';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
+import { createHash } from 'node:crypto';
 
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
@@ -39,6 +40,28 @@ import { TranslatorService } from '../helpers/translator/translator.service';
 
 import { ChannelService } from './channel.service';
 import { RoleService } from './role.service';
+
+/** Server-only settlement scope, constructed after validating an already accepted payment intent. */
+export interface AcceptedPaymentIntent {
+    channelId: ID;
+    orderId: ID;
+    method: string;
+    paymentMethodId: ID;
+    handlerCode: string;
+    handlerArgumentsHash: string;
+    amount: number;
+    currencyCode: string;
+}
+
+export function paymentHandlerArgumentsHash(args: ReadonlyArray<{ name: string; value: string }>): string {
+    return createHash('sha256')
+        .update(
+            JSON.stringify(
+                args.map(({ name, value }) => ({ name, value })).sort((a, b) => a.name.localeCompare(b.name)),
+            ),
+        )
+        .digest('hex');
+}
 
 /**
  * @description
@@ -470,6 +493,24 @@ export class PaymentMethodService {
             paymentMethod.checker &&
             this.configArgService.getByCode('PaymentMethodEligibilityChecker', paymentMethod.checker.code);
         return { paymentMethod, handler, checker };
+    }
+
+    /** This scope is never read from GraphQL input or payment metadata. */
+    async getOperationsForAcceptedIntent(ctx: RequestContext, scope: AcceptedPaymentIntent) {
+        if (!idsAreEqual(ctx.channelId, scope.channelId)) {
+            throw new UserInputError('error.payment-method-not-found', { method: scope.method });
+        }
+        const operations = await this.getMethodAndOperations(ctx, scope.method, true);
+        const method = operations.paymentMethod;
+        if (
+            !idsAreEqual(method.id, scope.paymentMethodId) ||
+            method.code !== scope.method ||
+            method.handler.code !== scope.handlerCode ||
+            paymentHandlerArgumentsHash(method.handler.args) !== scope.handlerArgumentsHash
+        ) {
+            throw new UserInputError('error.payment-method-not-found', { method: scope.method });
+        }
+        return operations;
     }
 
     async getActivePaymentMethods(ctx: RequestContext): Promise<PaymentMethod[]> {

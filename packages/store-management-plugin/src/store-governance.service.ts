@@ -44,7 +44,7 @@ export class StoreGovernanceService {
     }
 
     async myRequests(ctx: RequestContext): Promise<StoreGovernanceChangeRequest[]> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         if (actor.scope !== 'STORE' || !actor.channelId) throw new ForbiddenError();
         return this.connection.getRepository(ctx, StoreGovernanceChangeRequest).find({
             where: { channelId: actor.channelId },
@@ -54,7 +54,7 @@ export class StoreGovernanceService {
     }
 
     async reviewQueue(ctx: RequestContext, channelId?: ID | null): Promise<StoreGovernanceChangeRequest[]> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         if (actor.scope !== 'PLATFORM') {
             throw new ForbiddenError();
         }
@@ -69,7 +69,7 @@ export class StoreGovernanceService {
         ctx: RequestContext,
         request: StoreGovernanceChangeRequest,
     ): Promise<Record<string, unknown>> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         if (actor.scope !== 'PLATFORM') throw new ForbiddenError();
         return this.decrypt(request.encryptedPayload);
     }
@@ -78,7 +78,7 @@ export class StoreGovernanceService {
         ctx: RequestContext,
         input: SubmitStoreGovernanceChangeInput,
     ): Promise<StoreGovernanceChangeRequest> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         if (actor.scope !== 'STORE' || !actor.channelId || actor.status !== 'ACTIVE') {
             throw new ForbiddenError();
         }
@@ -128,7 +128,7 @@ export class StoreGovernanceService {
         ctx: RequestContext,
         input: ReviewStoreGovernanceChangeInput,
     ): Promise<StoreGovernanceChangeRequest> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         if (actor.scope !== 'PLATFORM') {
             throw new ForbiddenError();
         }
@@ -181,7 +181,7 @@ export class StoreGovernanceService {
     }
 
     async assertRequestBelongsToActiveStore(ctx: RequestContext, requestId: ID): Promise<void> {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         const request = await this.connection.getRepository(ctx, StoreGovernanceChangeRequest).findOne({
             where: { id: requestId },
         });

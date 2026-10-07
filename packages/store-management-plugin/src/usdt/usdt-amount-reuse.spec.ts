@@ -1,4 +1,13 @@
-import { Channel, Order, Payment, PaymentMethod, StorePaymentMethodState } from '@vendure/core';
+import {
+    Channel,
+    Order,
+    OrderService,
+    Payment,
+    PaymentMethod,
+    PaymentMethodService,
+    PaymentService,
+    StorePaymentMethodState,
+} from '@vendure/core';
 import { createConnection } from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntitySchema, EntitySchemaColumnOptions, getMetadataArgsStorage } from 'typeorm';
@@ -7,8 +16,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
+import { usdtTrc20PaymentHandler } from './usdt-payment-handler';
 import { configureUsdtPaymentProofSecret } from './usdt-payment-proof';
-import { USDT_TRC20_CONTRACT_ADDRESS, USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt-payment.constants';
+import {
+    USDT_TRC20_CONTRACT_ADDRESS,
+    USDT_TRC20_PAYMENT_HANDLER_CODE,
+    USDT_TRC20_PAYMENT_METHOD_CODE,
+} from './usdt-payment.constants';
 import { createMatchKey, UsdtPaymentService } from './usdt-payment.service';
 import { ConfirmedTrc20Transfer } from './usdt-trc20-client';
 import { fingerprintReceivingAddress } from './usdt-wallet-configuration.service';
@@ -80,7 +94,12 @@ const methodSchema = new EntitySchema<PaymentMethod>({
     name: 'PaymentMethod',
     target: PaymentMethod,
     tableName: 'payment_method',
-    columns: { id: { type: Number, primary: true }, code: { type: String }, enabled: { type: Boolean } },
+    columns: {
+        id: { type: Number, primary: true },
+        code: { type: String },
+        enabled: { type: Boolean },
+        handler: { type: 'simple-json' },
+    },
     relations: {
         channels: { type: 'many-to-many', target: 'Channel', joinTable: true },
     },
@@ -96,17 +115,40 @@ const switchSchema = new EntitySchema({
         enabled: { type: Boolean },
     },
 });
-const orderSchema = new EntitySchema({
+const orderSchema = new EntitySchema<Order>({
     name: 'Order',
     target: Order,
     tableName: 'order',
     columns: { id: { type: Number, primary: true }, salesChannelId: { type: Number, nullable: true } },
+    relations: { payments: { type: 'one-to-many', target: 'Payment', inverseSide: 'order' } },
+});
+const paymentSchema = new EntitySchema<Payment>({
+    name: 'Payment',
+    target: Payment,
+    tableName: 'payment',
+    columns: {
+        id: { type: Number, primary: true, generated: true },
+        amount: { type: Number },
+        state: { type: String },
+        method: { type: String },
+        transactionId: { type: String, nullable: true },
+        metadata: { type: 'simple-json' },
+        errorMessage: { type: String, nullable: true },
+    },
+    relations: { order: { type: 'many-to-one', target: 'Order', joinColumn: true } },
 });
 type TestContext = { channelId?: number; manager?: DataSource['manager'] };
 
 async function isolatedMysqlDatabase(): Promise<string> {
     const port = Number(process.env.USDT_TEST_PORT);
-    if (
+    const ownedLabFile = process.env.USDT_TEST_OWNED_LAB;
+    let expectedServerUuid: string | undefined;
+    if (ownedLabFile) {
+        const { verifyLab } = await import('../../../dev-server/scripts/store-isolation-mysql-lab.mjs');
+        expectedServerUuid = (await verifyLab(ownedLabFile)).serverUuid;
+        if (!Number.isInteger(port) || port < 1024 || port > 65535)
+            throw new Error('Owned USDT MySQL lab requires a valid loopback relay port');
+    } else if (
         process.env.ORDER_CLOSURE_MYSQL !== '1' ||
         port !== 37406 ||
         !process.env.ORDER_CLOSURE_MYSQL_PASSWORD
@@ -120,6 +162,11 @@ async function isolatedMysqlDatabase(): Promise<string> {
         password: process.env.ORDER_CLOSURE_MYSQL_PASSWORD,
     });
     try {
+        if (expectedServerUuid) {
+            const [rows] = await connection.query('SELECT @@server_uuid AS serverUuid');
+            if ((rows as Array<{ serverUuid: string }>)[0]?.serverUuid !== expectedServerUuid)
+                throw new Error('USDT MySQL relay does not match the verified owned server');
+        }
         // Only create a new randomly named database in our owned disposable server. Never drop
         // existing tables or reuse a configured application database, even between test cases.
         await connection.query(`CREATE DATABASE \`${database}\``);
@@ -132,8 +179,10 @@ async function isolatedMysqlDatabase(): Promise<string> {
 describe('USDT amount lifecycle on a real database', () => {
     let db: DataSource;
     let service: UsdtPaymentService;
+    let connection: any;
+    let realPayments: boolean;
     const orderService = {
-        addPaymentToOrder: vi.fn(),
+        addPaymentToOrderFromAcceptedIntent: vi.fn(),
         lockOrderForRefund: vi.fn(async (ctx: TestContext, orderId: number) => {
             // Mirror the production no-op UPDATE lock on the same transaction before locking the intent.
             if (!ctx.manager) throw new Error('Order lock requires the mutation transaction');
@@ -148,8 +197,10 @@ describe('USDT amount lifecycle on a real database', () => {
         }),
         withOrderMutationTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
             db.options.type === 'sqljs'
-                ? db.transaction(manager => work({ ..._ctx, manager }))
-                : db.transaction('READ COMMITTED', manager => work({ ..._ctx, manager })),
+                ? (_ctx.manager ?? db.manager).transaction(manager => work({ ..._ctx, manager }))
+                : (_ctx.manager ?? db.manager).transaction('READ COMMITTED', manager =>
+                      work({ ..._ctx, manager }),
+                  ),
     };
     const eventBus = { publish: vi.fn() };
     const chain = { scanIncomingTransfers: vi.fn(), solidifiedTransaction: vi.fn() };
@@ -169,7 +220,15 @@ describe('USDT amount lifecycle on a real database', () => {
                       password: process.env.ORDER_CLOSURE_MYSQL_PASSWORD,
                       database: await isolatedMysqlDatabase(),
                   }),
-            entities: [intentSchema, quoteSchema, channelSchema, orderSchema, methodSchema, switchSchema],
+            entities: [
+                intentSchema,
+                quoteSchema,
+                channelSchema,
+                orderSchema,
+                methodSchema,
+                switchSchema,
+                paymentSchema,
+            ],
             synchronize: true,
             dropSchema: false,
         });
@@ -178,24 +237,30 @@ describe('USDT amount lifecycle on a real database', () => {
             { id: 1, code: 'test' },
             { id: 2, code: '__default_channel__' },
         ]);
-        await db
-            .getRepository(PaymentMethod)
-            .save({ id: 1, code: USDT_TRC20_PAYMENT_METHOD_CODE, enabled: true, channels: [{ id: 2 }] });
+        await db.getRepository(PaymentMethod).save({
+            id: 1,
+            code: USDT_TRC20_PAYMENT_METHOD_CODE,
+            enabled: true,
+            channels: [{ id: 2 }],
+            handler: { code: USDT_TRC20_PAYMENT_HANDLER_CODE, args: [] },
+        });
         await db
             .getRepository(StorePaymentMethodState)
             .save({ channelId: 1, paymentMethodId: 1, enabled: true });
         nextOrder = 1;
+        realPayments = false;
         vi.clearAllMocks();
         chain.scanIncomingTransfers.mockResolvedValue({ complete: true, transfers: [] });
         chain.solidifiedTransaction.mockImplementation((id: string) => ({
             transactionId: id,
             blockNumber: 100,
         }));
-        orderService.addPaymentToOrder.mockResolvedValue({ id: 1 });
+        orderService.addPaymentToOrderFromAcceptedIntent.mockResolvedValue({ id: 1 });
         configureUsdtPaymentProofSecret('isolated-usdt-reuse-test-proof-secret-long-enough');
-        const connection = {
+        connection = {
+            platformStoreGovernanceEnabled: true,
             getRepository: (ctx: TestContext, entity: typeof StorefrontUsdtPaymentIntent) =>
-                entity === (Payment as unknown)
+                entity === (Payment as unknown) && !realPayments
                     ? {
                           findOne: async ({ where }: { where: { transactionId: string } }) => {
                               const paid = await (ctx.manager ?? db.manager)
@@ -209,15 +274,19 @@ describe('USDT amount lifecycle on a real database', () => {
                     : (ctx.manager ?? db.manager).getRepository(entity),
             getEntityOrThrow: (ctx: TestContext, entity: typeof StorefrontUsdtCheckoutQuote, id: number) =>
                 (ctx.manager ?? db.manager).getRepository(entity).findOneByOrFail({ id }),
-            withTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
-                db.transaction(manager => work({ ..._ctx, manager })),
+            withTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) => {
+                const manager = _ctx.manager ?? db.manager;
+                return driver === 'sqljs'
+                    ? manager.transaction(tx => work({ ..._ctx, manager: tx }))
+                    : manager.transaction('READ COMMITTED', tx => work({ ..._ctx, manager: tx }));
+            },
         };
         service = new UsdtPaymentService(
             connection as never,
             orderService as never,
             {
                 create: ({ channelOrToken }: { channelOrToken: Channel }) =>
-                    Promise.resolve({ channelId: channelOrToken.id }),
+                    Promise.resolve({ channelId: channelOrToken.id, channel: channelOrToken }),
             } as never,
             { requireConfigured: () => Promise.resolve(wallet) } as never,
             chain as never,
@@ -260,6 +329,191 @@ describe('USDT amount lifecycle on a real database', () => {
         };
     }
 
+    it.each([
+        [false, true],
+        [true, false],
+        [false, false],
+    ])(
+        'rejects new intents with current platform=%s store=%s before inserting acceptance evidence',
+        async (platform, store) => {
+            const q = await quote();
+            await db.getRepository(PaymentMethod).update(1, { enabled: platform });
+            await db.getRepository(StorePaymentMethodState).update({ channelId: 1 }, { enabled: store });
+            await expect(service.ensureIntent({ channelId: 1 } as never, q)).rejects.toThrow(
+                '本店未开启平台 USDT 支付',
+            );
+            expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(0);
+        },
+    );
+
+    it('persists a real USDT payment from the accepted snapshot after both switches close', async () => {
+        const accepted = await intent();
+        expect(accepted.acceptedHandlerSnapshot).toMatchObject({
+            version: 1,
+            methodId: '1',
+            methodCode: 'usdt-trc20',
+        });
+        await db.getRepository(PaymentMethod).update(1, { enabled: false });
+        await db.getRepository(StorePaymentMethodState).update({ channelId: 1 }, { enabled: false });
+        realPayments = true;
+        const methods = new PaymentMethodService(
+            connection,
+            {} as never,
+            {} as never,
+            {} as never,
+            eventBus as never,
+            { getByCode: () => usdtTrc20PaymentHandler } as never,
+            { getDefaultChannel: () => Promise.resolve({ id: 2 }) } as never,
+            {} as never,
+            {} as never,
+            { translate: (value: unknown) => value } as never,
+        );
+        const payments = new PaymentService(
+            connection,
+            {
+                transition: (_ctx: unknown, _order: unknown, payment: Payment, state: Payment['state']) => {
+                    payment.state = state;
+                    return Promise.resolve({ finalize: () => Promise.resolve() });
+                },
+            } as never,
+            {} as never,
+            methods,
+            eventBus as never,
+        );
+        const order = {
+            id: accepted.orderId,
+            salesChannelId: 1,
+            state: 'ArrangingPayment',
+            totalWithTax: 10_000,
+            shippingWithTax: 0,
+            currencyCode: 'CNY',
+            payments: [],
+            lines: [],
+            customFields: { paymentCurrencyCode: 'USDT' },
+        } as unknown as Order;
+        const orders = Object.assign(Object.create(OrderService.prototype), {
+            connection,
+            paymentService: payments,
+            checkoutValidators: new Map(),
+            assertInTransaction: vi.fn(),
+            lockOrderForRefund: orderService.lockOrderForRefund,
+            withOrderMutationTransaction: orderService.withOrderMutationTransaction,
+            getOrderOrThrow: () => Promise.resolve(order),
+            canAddPaymentToOrder: () => true,
+            revalidateCouponCodesForOrder: () => Promise.resolve([]),
+            getOrderPayments: () => Promise.resolve([]),
+            findOne: () => Promise.resolve(order),
+        }) as OrderService;
+        const actualService = new UsdtPaymentService(
+            connection,
+            orders,
+            { create: () => Promise.resolve({ channelId: 1, channel: { id: 1, code: 'test' } }) } as never,
+            { requireConfigured: () => Promise.resolve(wallet) } as never,
+            chain as never,
+            eventBus as never,
+        );
+        chain.scanIncomingTransfers.mockResolvedValue({ complete: true, transfers: [transfer(accepted)] });
+        const result = await actualService.scanPendingPayments({} as never, now);
+        const afterMatch = await db
+            .getRepository(StorefrontUsdtPaymentIntent)
+            .findOneByOrFail({ id: accepted.id });
+        expect(result, afterMatch.failureReason ?? undefined).toMatchObject({
+            settledCount: 1,
+            manualReviewCount: 0,
+        });
+        const recorded = await db.getRepository(Payment).findOneOrFail({
+            where: { transactionId: `tron:${'a'.repeat(64)}` },
+            relations: { order: true },
+        });
+        expect(recorded).toMatchObject({
+            state: 'Settled',
+            amount: 10_000,
+            method: 'usdt-trc20',
+            order: { id: accepted.orderId },
+        });
+        const received = recorded.metadata.verifiedUsdtPayment as {
+            proof: string;
+            orderId: string;
+            fiatAmount: number;
+        };
+        expect(received).toMatchObject({ orderId: String(accepted.orderId), fiatAmount: 10_000 });
+        expect(
+            await db.getRepository(StorefrontUsdtPaymentIntent).findOneByOrFail({ id: accepted.id }),
+        ).toMatchObject({ status: 'SETTLED', paymentId: recorded.id });
+        const ctx = { channelId: 1, channel: { id: 1, code: 'test' } } as never;
+        await expect(
+            orders.withOrderMutationTransaction(ctx, tx =>
+                orders.addPaymentToOrder(tx, accepted.orderId, {
+                    method: 'usdt-trc20',
+                    metadata: {
+                        proof: received.proof,
+                        existingPayment: true,
+                        acceptedHandlerSnapshot: accepted.acceptedHandlerSnapshot,
+                    },
+                }),
+            ),
+        ).rejects.toThrow();
+        expect(await db.getRepository(Payment).count()).toBe(1);
+        const replay = await actualService.scanPendingPayments({} as never, now);
+        expect(replay.settledCount).toBe(0);
+        expect(await db.getRepository(Payment).count()).toBe(1);
+    });
+
+    it.each(['legacy', 'unknown-version', 'args-changed', 'deleted', 'same-code-recreated'] as const)(
+        'retains the receipt in manual review for %s instead of constructing settlement scope',
+        async change => {
+            const accepted = await intent();
+            if (change === 'legacy')
+                await db
+                    .getRepository(StorefrontUsdtPaymentIntent)
+                    .update(accepted.id, { acceptedHandlerSnapshot: null });
+            if (change === 'unknown-version') {
+                const snapshot = accepted.acceptedHandlerSnapshot;
+                if (!snapshot) throw new Error('Missing accepted handler snapshot in fixture');
+                await db.getRepository(StorefrontUsdtPaymentIntent).update(accepted.id, {
+                    acceptedHandlerSnapshot: { ...snapshot, version: 2 } as any,
+                });
+            }
+            if (change === 'args-changed')
+                await db.getRepository(PaymentMethod).update(1, {
+                    handler: {
+                        code: USDT_TRC20_PAYMENT_HANDLER_CODE,
+                        args: [{ name: 'destination', value: 'changed' }],
+                    },
+                });
+            if (change === 'deleted' || change === 'same-code-recreated') {
+                await db
+                    .getRepository(PaymentMethod)
+                    .remove(await db.getRepository(PaymentMethod).findOneByOrFail({ id: 1 }));
+                if (change === 'same-code-recreated')
+                    await db.getRepository(PaymentMethod).save({
+                        id: 7,
+                        code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                        enabled: true,
+                        channels: [{ id: 2 }],
+                        handler: { code: USDT_TRC20_PAYMENT_HANDLER_CODE, args: [] },
+                    });
+            }
+            chain.scanIncomingTransfers.mockResolvedValue({
+                complete: true,
+                transfers: [transfer(accepted)],
+            });
+            expect(await service.scanPendingPayments({} as never, now)).toMatchObject({
+                settledCount: 0,
+                manualReviewCount: 1,
+            });
+            expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
+            expect(
+                await db.getRepository(StorefrontUsdtPaymentIntent).findOneByOrFail({ id: accepted.id }),
+            ).toMatchObject({
+                status: 'MANUAL_REVIEW',
+                transactionId: 'a'.repeat(64),
+                receivedUsdtAmount: accepted.expectedUsdtAmount,
+            });
+            expect(await db.getRepository(Payment).count()).toBe(0);
+        },
+    );
+
     async function reserveSlots(count: number, expiresAt: Date) {
         const quotes: StorefrontUsdtCheckoutQuote[] = [];
         for (let index = 0; index < count; index++) quotes.push(await quote(expiresAt));
@@ -301,7 +555,7 @@ describe('USDT amount lifecycle on a real database', () => {
         await db.getRepository(Order).update(current.orderId, { salesChannelId });
         await expect(service.ensureIntent({ channelId: 1 } as never, q)).rejects.toThrow();
         expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(1);
-        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
     });
 
     it('reclaims 999 historical slots without deleting history and allocates the next quote', async () => {
@@ -323,7 +577,7 @@ describe('USDT amount lifecycle on a real database', () => {
             const quotes = await Promise.all([quote(), quote()]);
             const outcomes = await Promise.allSettled(
                 quotes.map(q =>
-                    db.transaction(manager =>
+                    db.transaction('READ COMMITTED', manager =>
                         service.ensureIntent({ channelId: q.channelId, manager } as never, q),
                     ),
                 ),
@@ -407,10 +661,10 @@ describe('USDT amount lifecycle on a real database', () => {
             activeMatchKey: current.matchKey,
             transactionId: 'a'.repeat(64),
         });
-        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
         expect(eventBus.publish).toHaveBeenCalled();
         await service.scanPendingPayments({} as never, now);
-        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
     });
 
     it('never pays a second order using an already claimed transaction', async () => {
@@ -418,7 +672,7 @@ describe('USDT amount lifecycle on a real database', () => {
         const current = await intent();
         chain.scanIncomingTransfers.mockResolvedValue({ complete: true, transfers: [transfer(current)] });
         await service.scanPendingPayments({} as never, now);
-        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
         expect(
             await db.getRepository(StorefrontUsdtPaymentIntent).findOneByOrFail({ id: current.id }),
         ).toMatchObject({ status: 'PENDING', transactionId: null });
@@ -459,7 +713,7 @@ describe('USDT amount lifecycle on a real database', () => {
                 .save({ channelId: otherChannelId, paymentMethodId: 1, enabled: true });
             const rows = await Promise.all(
                 quotes.map(q =>
-                    db.transaction(manager =>
+                    db.transaction('READ COMMITTED', manager =>
                         service.ensureIntent({ channelId: q.channelId, manager } as never, q),
                     ),
                 ),
@@ -479,7 +733,7 @@ describe('USDT amount lifecycle on a real database', () => {
                 service.scanPendingPayments({} as never, now),
                 service.scanPendingPayments({} as never, now),
             ]);
-            expect(orderService.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(orderService.addPaymentToOrderFromAcceptedIntent).toHaveBeenCalledTimes(1);
             expect(
                 await db.getRepository(StorefrontUsdtPaymentIntent).findOneByOrFail({ id: current.id }),
             ).toMatchObject({ status: 'SETTLED', transactionId: 'a'.repeat(64) });

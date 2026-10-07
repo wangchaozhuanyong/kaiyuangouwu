@@ -197,8 +197,12 @@ export class CatalogManagementAdminResolver {
 
     @Query()
     @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
-    catalogOrderProfitExpenseApplicability(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
-        return this.profit.orderExpenseApplicability(ctx, String(orderId));
+    catalogOrderProfitExpenseApplicability(
+        @Ctx() ctx: RequestContext,
+        @Args('orderId') orderId: ID,
+        @Args('targetChannelId') targetChannelId?: ID,
+    ) {
+        return this.profit.orderExpenseApplicability(ctx, String(orderId), targetChannelId);
     }
 
     @Query()
@@ -206,20 +210,29 @@ export class CatalogManagementAdminResolver {
     validateCatalogOrderProfitExpenses(
         @Ctx() ctx: RequestContext,
         @Args('input') input: ImportCatalogOrderProfitExpensesInput,
+        @Args('targetChannelId') targetChannelId?: ID,
     ) {
-        return this.profit.validateOrderExpenseImport(ctx, input);
+        return this.profit.validateOrderExpenseImport(ctx, input, targetChannelId);
     }
 
     @Query()
     @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
-    catalogOrderProfitExpense(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
-        return this.profit.orderExpense(ctx, String(orderId));
+    catalogOrderProfitExpense(
+        @Ctx() ctx: RequestContext,
+        @Args('orderId') orderId: ID,
+        @Args('targetChannelId') targetChannelId?: ID,
+    ) {
+        return this.profit.orderExpense(ctx, String(orderId), targetChannelId);
     }
 
     @Query()
     @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
-    catalogOrderProfitExpenseEvents(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
-        return this.profit.orderExpenseEvents(ctx, String(orderId));
+    catalogOrderProfitExpenseEvents(
+        @Ctx() ctx: RequestContext,
+        @Args('orderId') orderId: ID,
+        @Args('targetChannelId') targetChannelId?: ID,
+    ) {
+        return this.profit.orderExpenseEvents(ctx, String(orderId), targetChannelId);
     }
 
     @Query()

@@ -22,11 +22,11 @@ import { serviceMessageDisplay } from '../../common/src/display-localization';
 import './styles/account-security.css';
 
 import { isInputMethodKey } from './input-method';
+import { Overlay } from './overlay-host';
 import { SafeImage } from './safe-image';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { EmptyState, SubHeader, Subpage, SubpageBody } from './storefront-ui/page-shell';
+import { EmptyState, InlineError, SubHeader, Subpage, SubpageBody } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     DataSubjectExportPayload,
@@ -68,6 +68,8 @@ export function AccountSecurityPage({
     dataSubjectLoading = false,
     fraudRiskCases = [],
     fraudRiskLoading = false,
+    loadError,
+    onRetry,
     onDataExport,
     onRequestAccountClosure,
     onCancelAccountClosure,
@@ -85,6 +87,8 @@ export function AccountSecurityPage({
     dataSubjectLoading?: boolean;
     fraudRiskCases?: FraudRiskCase[];
     fraudRiskLoading?: boolean;
+    loadError?: string;
+    onRetry?: () => void;
     onDataExport?: (password: string) => Promise<DataSubjectExportPayload>;
     onRequestAccountClosure?: (password: string) => Promise<void>;
     onCancelAccountClosure?: () => Promise<void>;
@@ -102,7 +106,6 @@ export function AccountSecurityPage({
     const [avatarError, setAvatarError] = useState<string | null>(null);
     const [privacyAction, setPrivacyAction] = useState<'export' | 'closure' | 'cancel' | null>(null);
     const [privacyDialog, setPrivacyDialog] = useState<'export' | 'closure' | null>(null);
-    const privacyDialogRef = useRef<HTMLElement>(null);
     const privacyActionRef = useRef<'export' | 'closure' | null>(null);
     const [privacyPassword, setPrivacyPassword] = useState('');
     const [privacyError, setPrivacyError] = useState<string | null>(null);
@@ -118,54 +121,6 @@ export function AccountSecurityPage({
         },
         [],
     );
-
-    useEffect(() => {
-        if (!privacyDialog) return;
-        const dialog = privacyDialogRef.current;
-        if (!dialog) return;
-        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseScrollLock = acquireBodyScrollLock();
-        const focusable = () =>
-            Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'));
-        const focusFrame = window.requestAnimationFrame(() => dialog.querySelector('input')?.focus());
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape' && !privacyActionRef.current) {
-                event.preventDefault();
-                setPrivacyDialog(null);
-                setPrivacyPassword('');
-                setPrivacyError(null);
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            const first = items[0];
-            const last = items[items.length - 1];
-            if (!first || !last) {
-                event.preventDefault();
-                dialog.focus();
-            } else if (
-                event.shiftKey &&
-                (document.activeElement === first || !dialog.contains(document.activeElement))
-            ) {
-                event.preventDefault();
-                last.focus();
-            } else if (
-                !event.shiftKey &&
-                (document.activeElement === last || !dialog.contains(document.activeElement))
-            ) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            document.removeEventListener('keydown', keydown);
-            releaseScrollLock();
-            previousFocus?.focus({ preventScroll: true });
-        };
-    }, [privacyDialog]);
 
     const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.currentTarget.files?.[0];
@@ -317,6 +272,9 @@ export function AccountSecurityPage({
             />
 
             <SubpageBody className="security-page-body">
+                {loadError && (
+                    <InlineError message={loadError} action={isZh ? '重试' : 'Retry'} onAction={onRetry} />
+                )}
                 {/* Personal information and avatar actions have separate layout areas. */}
                 <section className="security-user-card" aria-label={isZh ? '个人信息' : 'Personal info'}>
                     <button
@@ -469,135 +427,123 @@ export function AccountSecurityPage({
                     </div>
                 </div>
 
-                {(fraudRiskLoading || fraudRiskCases.length > 0) && (
+                {fraudRiskCases.length > 0 && (
                     <div className="security-group">
                         <div className="security-group-header">
                             <span>{isZh ? '订单风险复核' : 'Order risk review'}</span>
                         </div>
                         <div className="security-card-list" aria-live="polite">
-                            {fraudRiskLoading ? (
-                                <div className="security-item-static">
-                                    <span className="security-item-icon icon-shield" aria-hidden="true">
-                                        <LoaderCircle size={17} />
-                                    </span>
-                                    <div className="security-item-info">
-                                        <strong className="security-item-title">
-                                            {isZh ? '正在读取复核状态…' : 'Loading review status…'}
-                                        </strong>
-                                    </div>
-                                </div>
-                            ) : (
-                                fraudRiskCases.map(riskCase => {
-                                    const canAppeal = canAppealFraudRiskCase(riskCase);
-                                    const pendingAppeal = riskCase.appeals.find(
-                                        appeal => appeal.status === 'PENDING',
-                                    );
-                                    return (
-                                        <div className="security-risk-case" key={riskCase.id}>
-                                            <div className="security-item-static">
-                                                <span
-                                                    className="security-item-icon icon-account-closure"
-                                                    aria-hidden="true"
-                                                >
-                                                    <AlertTriangle size={17} />
+                            {fraudRiskCases.map(riskCase => {
+                                const canAppeal = canAppealFraudRiskCase(riskCase);
+                                const pendingAppeal = riskCase.appeals.find(
+                                    appeal => appeal.status === 'PENDING',
+                                );
+                                return (
+                                    <div className="security-risk-case" key={riskCase.id}>
+                                        <div className="security-item-static">
+                                            <span
+                                                className="security-item-icon icon-account-closure"
+                                                aria-hidden="true"
+                                            >
+                                                <AlertTriangle size={17} />
+                                            </span>
+                                            <div className="security-item-info">
+                                                <strong className="security-item-title">
+                                                    {riskCase.caseCode} ·{' '}
+                                                    {riskCaseStatusLabel(riskCase.status, language)}
+                                                </strong>
+                                                <span className="security-item-subtitle">
+                                                    {riskCaseDescription(riskCase, language)}
                                                 </span>
-                                                <div className="security-item-info">
-                                                    <strong className="security-item-title">
-                                                        {riskCase.caseCode} ·{' '}
-                                                        {riskCaseStatusLabel(riskCase.status, language)}
-                                                    </strong>
-                                                    <span className="security-item-subtitle">
-                                                        {riskCaseDescription(riskCase, language)}
-                                                    </span>
-                                                </div>
                                             </div>
-                                            {pendingAppeal && (
-                                                <p className="security-risk-message">
-                                                    {isZh
-                                                        ? '申诉已提交，等待复核。'
-                                                        : 'Appeal submitted and awaiting review.'}
-                                                </p>
-                                            )}
-                                            {canAppeal &&
-                                                !pendingAppeal &&
-                                                onAppealFraudRiskCase &&
-                                                (riskAppealId === riskCase.id ? (
-                                                    <div className="security-risk-appeal">
-                                                        <textarea
-                                                            value={riskAppealReason}
-                                                            onChange={event =>
-                                                                setRiskAppealReason(event.target.value)
-                                                            }
-                                                            maxLength={1000}
-                                                            placeholder={
-                                                                isZh
-                                                                    ? '说明订单用途、付款人与其他有助于复核的信息'
-                                                                    : 'Explain the order purpose and any details that help the review.'
-                                                            }
-                                                        />
-                                                        <div>
-                                                            <button
-                                                                type="button"
-                                                                disabled={
-                                                                    riskAction || !riskAppealReason.trim()
-                                                                }
-                                                                onClick={() => {
-                                                                    setRiskAction(true);
-                                                                    setRiskMessage(null);
-                                                                    void onAppealFraudRiskCase(
-                                                                        riskCase.id,
-                                                                        riskAppealReason,
-                                                                    )
-                                                                        .then(() => {
-                                                                            setRiskAppealId(null);
-                                                                            setRiskAppealReason('');
-                                                                        })
-                                                                        .catch(error =>
-                                                                            setRiskMessage(
-                                                                                error instanceof Error
-                                                                                    ? storefrontErrorMessage(
-                                                                                          error,
-                                                                                          language,
-                                                                                      )
-                                                                                    : isZh
-                                                                                      ? '申诉提交失败'
-                                                                                      : 'Appeal failed',
-                                                                            ),
-                                                                        )
-                                                                        .finally(() => setRiskAction(false));
-                                                                }}
-                                                            >
-                                                                {riskAction ? (
-                                                                    <LoaderCircle size={13} />
-                                                                ) : null}
-                                                                {isZh ? '提交申诉' : 'Submit appeal'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                disabled={riskAction}
-                                                                onClick={() => setRiskAppealId(null)}
-                                                            >
-                                                                {isZh ? '取消' : 'Cancel'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        className="security-risk-open"
-                                                        onClick={() => {
-                                                            setRiskAppealId(riskCase.id);
-                                                            setRiskAppealReason('');
-                                                            setRiskMessage(null);
-                                                        }}
-                                                    >
-                                                        {isZh ? '提交复核说明' : 'Submit review details'}
-                                                    </button>
-                                                ))}
                                         </div>
-                                    );
-                                })
-                            )}
+                                        {pendingAppeal && (
+                                            <p className="security-risk-message">
+                                                {isZh
+                                                    ? '申诉已提交，等待复核。'
+                                                    : 'Appeal submitted and awaiting review.'}
+                                            </p>
+                                        )}
+                                        {canAppeal &&
+                                            !pendingAppeal &&
+                                            onAppealFraudRiskCase &&
+                                            (riskAppealId === riskCase.id ? (
+                                                <div className="security-risk-appeal">
+                                                    <textarea
+                                                        value={riskAppealReason}
+                                                        onChange={event =>
+                                                            setRiskAppealReason(event.target.value)
+                                                        }
+                                                        maxLength={1000}
+                                                        placeholder={
+                                                            isZh
+                                                                ? '说明订单用途、付款人与其他有助于复核的信息'
+                                                                : 'Explain the order purpose and any details that help the review.'
+                                                        }
+                                                    />
+                                                    <div>
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                fraudRiskLoading ||
+                                                                riskAction ||
+                                                                !riskAppealReason.trim()
+                                                            }
+                                                            onClick={() => {
+                                                                setRiskAction(true);
+                                                                setRiskMessage(null);
+                                                                void onAppealFraudRiskCase(
+                                                                    riskCase.id,
+                                                                    riskAppealReason,
+                                                                )
+                                                                    .then(() => {
+                                                                        setRiskAppealId(null);
+                                                                        setRiskAppealReason('');
+                                                                    })
+                                                                    .catch(error =>
+                                                                        setRiskMessage(
+                                                                            error instanceof Error
+                                                                                ? storefrontErrorMessage(
+                                                                                      error,
+                                                                                      language,
+                                                                                  )
+                                                                                : isZh
+                                                                                  ? '申诉提交失败'
+                                                                                  : 'Appeal failed',
+                                                                        ),
+                                                                    )
+                                                                    .finally(() => setRiskAction(false));
+                                                            }}
+                                                        >
+                                                            {riskAction ? <LoaderCircle size={13} /> : null}
+                                                            {isZh ? '提交申诉' : 'Submit appeal'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={riskAction}
+                                                            onClick={() => setRiskAppealId(null)}
+                                                        >
+                                                            {isZh ? '取消' : 'Cancel'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="security-risk-open"
+                                                    disabled={fraudRiskLoading}
+                                                    onClick={() => {
+                                                        setRiskAppealId(riskCase.id);
+                                                        setRiskAppealReason('');
+                                                        setRiskMessage(null);
+                                                    }}
+                                                >
+                                                    {isZh ? '提交复核说明' : 'Submit review details'}
+                                                </button>
+                                            ))}
+                                    </div>
+                                );
+                            })}
                             {riskMessage && <p className="security-risk-message">{riskMessage}</p>}
                         </div>
                     </div>
@@ -732,9 +678,12 @@ export function AccountSecurityPage({
                 </div>
             </SubpageBody>
             {privacyDialog && (
-                <div className="security-privacy-dialog-backdrop" role="presentation">
+                <Overlay
+                    className="security-privacy-dialog-backdrop"
+                    role="presentation"
+                    onClose={closePrivacyDialog}
+                >
                     <section
-                        ref={privacyDialogRef}
                         tabIndex={-1}
                         className="security-privacy-dialog"
                         role="dialog"
@@ -782,6 +731,7 @@ export function AccountSecurityPage({
                             id="security-privacy-password"
                             type="password"
                             autoComplete="current-password"
+                            data-overlay-autofocus
                             value={privacyPassword}
                             disabled={privacyAction !== null}
                             onChange={event => setPrivacyPassword(event.target.value)}
@@ -819,7 +769,7 @@ export function AccountSecurityPage({
                             </button>
                         </div>
                     </section>
-                </div>
+                </Overlay>
             )}
         </main>
     );

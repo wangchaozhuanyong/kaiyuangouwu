@@ -11,13 +11,15 @@ import {
     Truck,
     X,
 } from 'lucide-react';
-import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useEffect, useState } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
+import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
+import { Overlay } from '../overlay-host';
 import {
     productAvailability,
     productAvailabilityLabel,
@@ -27,7 +29,6 @@ import { lowestPricedProductVariant } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
 import { sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { acquireBodyScrollLock } from '../scroll-lock';
 import { bestProductCouponPrice } from '../storefront-coupons';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
@@ -68,6 +69,7 @@ export interface ProductDetailPageProps {
     couponCampaigns: StorefrontCouponCampaign[];
     customerCoupons: StoreCustomerCoupon[];
     addingVariantId: string | null;
+    cartCommandUnknown?: boolean;
     favorite: boolean;
     onAdd: (variant: ProductVariant, quantity: number) => void;
     onBuyNow: (variant: ProductVariant, quantity: number) => void;
@@ -112,6 +114,7 @@ export function ProductDetailPage() {
         couponCampaigns,
         customerCoupons,
         addingVariantId,
+        cartCommandUnknown = false,
         favorite,
         initialVariantId,
         onAdd,
@@ -219,25 +222,6 @@ export function ProductDetailPage() {
         .slice(0, 6);
     const descriptionHtml = sanitizeProductDescription(product.description, { textOnly: true });
     const [posterOpen, setPosterOpen] = useState(false);
-    const posterCloseButton = useRef<HTMLButtonElement>(null);
-    useEffect(() => {
-        if (!posterOpen) return;
-        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseScrollLock = acquireBodyScrollLock();
-        posterCloseButton.current?.focus();
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                setPosterOpen(false);
-            }
-        };
-        document.addEventListener('keydown', onKeyDown);
-        return () => {
-            document.removeEventListener('keydown', onKeyDown);
-            releaseScrollLock();
-            previousFocus?.focus();
-        };
-    }, [posterOpen]);
     const shareProduct = () => {
         setPosterOpen(true);
     };
@@ -570,10 +554,16 @@ export function ProductDetailPage() {
                 <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
             </button>
             {!quoteOnly && (
-                <button type="button" onClick={() => navigateTo({ name: 'cart' })}>
-                    <ShoppingCart />
+                <button
+                    type="button"
+                    onClick={() => navigateTo({ name: 'cart' })}
+                    aria-label={countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)}
+                >
+                    <span className="count-badge-anchor">
+                        <ShoppingCart aria-hidden="true" />
+                        <CountBadge count={cartQuantity} overlay />
+                    </span>
                     <span>{isZh ? '购物车' : 'Cart'}</span>
-                    {cartQuantity > 0 && <b>{cartQuantity}</b>}
                 </button>
             )}
             {quoteOnly ? (
@@ -584,7 +574,7 @@ export function ProductDetailPage() {
                 <>
                     <button
                         type="button"
-                        disabled={unavailable || addingVariantId !== null}
+                        disabled={unavailable || addingVariantId !== null || cartCommandUnknown}
                         onClick={() => variant && onAdd(variant, purchaseQuantity)}
                     >
                         {unavailable
@@ -601,23 +591,37 @@ export function ProductDetailPage() {
                     </button>
                     <button
                         type="button"
-                        disabled={unavailable || addingVariantId !== null}
-                        onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
-                        onFocus={() => void preloadStorefrontRouteComponent('purchase')}
-                        onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
-                        onClick={() => variant && onBuyNow(variant, purchaseQuantity)}
+                        disabled={!cartCommandUnknown && (unavailable || addingVariantId !== null)}
+                        onPointerEnter={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onFocus={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onTouchStart={() =>
+                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        }
+                        onClick={() =>
+                            cartCommandUnknown
+                                ? navigateTo({ name: 'cart' })
+                                : variant && onBuyNow(variant, purchaseQuantity)
+                        }
                     >
-                        {unavailable
+                        {cartCommandUnknown
                             ? isZh
-                                ? '已售罄'
-                                : 'Sold out'
-                            : addingVariantId === variant?.id
+                                ? '核对购物车'
+                                : 'Review cart'
+                            : unavailable
                               ? isZh
-                                  ? '正在进入结算'
-                                  : 'Opening checkout'
-                              : isZh
-                                ? '立即购买'
-                                : 'Buy now'}
+                                  ? '已售罄'
+                                  : 'Sold out'
+                              : addingVariantId === variant?.id
+                                ? isZh
+                                    ? '正在进入结算'
+                                    : 'Opening checkout'
+                                : isZh
+                                  ? '立即购买'
+                                  : 'Buy now'}
                     </button>
                 </>
             )}
@@ -840,18 +844,21 @@ export function ProductDetailPage() {
             {!desktop && actions}
 
             {posterOpen && (
-                <div
+                <Overlay
                     className="poster-modal-overlay"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={isZh ? '商品分享' : 'Product share'}
+                    onClose={() => setPosterOpen(false)}
                     onClick={() => setPosterOpen(false)}
                 >
-                    <div className="poster-modal-card" onClick={event => event.stopPropagation()}>
+                    <div
+                        className="poster-modal-card"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={isZh ? '商品分享' : 'Product share'}
+                        onClick={event => event.stopPropagation()}
+                    >
                         <button
                             type="button"
                             className="poster-close-btn"
-                            ref={posterCloseButton}
                             onClick={() => setPosterOpen(false)}
                             aria-label={isZh ? '关闭' : 'Close'}
                         >
@@ -886,7 +893,7 @@ export function ProductDetailPage() {
                             />
                         </Suspense>
                     </div>
-                </div>
+                </Overlay>
             )}
         </main>
     );

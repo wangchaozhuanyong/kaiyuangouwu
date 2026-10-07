@@ -1,12 +1,24 @@
-import type { ConfigurableOperationDefinitionRecord } from '../../graphql/management.graphql';
+import {
+    STORE_MANAGEMENT_QUERY,
+    type ConfigurableOperationDefinitionRecord,
+} from '../../graphql/management.graphql';
 import { configurableOperationLabel } from '../../utils/configurable-operation-localization';
+import { selectQueryFields } from '../../utils/select-query-fields';
+
+export const STORE_SHIPPING_SETTINGS_QUERY = selectQueryFields(STORE_MANAGEMENT_QUERY, [
+    'activeChannel',
+    'shippingMethods',
+    'shippingEligibilityCheckers',
+    'shippingCalculators',
+    'fulfillmentHandlers',
+]);
 
 export const SHIPPING_PRESETS = [
     {
         key: 'standard-threshold' as const,
-        title: '标准快递（满额免邮）',
-        badge: '推荐 · 单条搞定',
-        description: '基础运费 5.00，满 200.00 自动免邮。单条规则搞定，买家达标即享 0 元包邮。',
+        title: '本店配送（自定义运费与免邮门槛）',
+        badge: '自行填写',
+        description: '基础运费与实物免邮门槛由本店填写，不预设门槛；仅适用本店配送区域。',
     },
     {
         key: 'pickup-in-store' as const,
@@ -56,7 +68,10 @@ export function formatShippingCalculatorSummary(
     if (calculator.code === 'physical-subtotal-shipping-calculator') {
         const baseRate = parseArgNumericValue(argsMap.get('baseRate'));
         const freeAbove = parseArgNumericValue(argsMap.get('freeAbove'));
-        const configCurr = parseArgStringValue(argsMap.get('currencyCode')) || currencyCode;
+        const configCurr =
+            parseArgStringValue(argsMap.get('sourceCurrencyCode')) ||
+            parseArgStringValue(argsMap.get('currencyCode')) ||
+            currencyCode;
 
         const baseText =
             baseRate != null ? `基础运费: ${formatMoneyCents(baseRate, configCurr)}` : '实物基础运费';
@@ -90,6 +105,7 @@ export function formatShippingCheckerSummary(
         return '全场通用';
     }
     const argsMap = new Map((checker.args ?? []).map(a => [a.name, a.value]));
+    if (checker.code === 'store-shipping-zone-eligibility-checker') return '仅本店配送区域 · 实物商品';
     if (checker.code === 'supported-destination-eligibility-checker') {
         const countries = parseArgStringValue(argsMap.get('allowedCountryCodes'));
         if (countries) {

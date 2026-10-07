@@ -133,12 +133,15 @@ export type AdministratorPaymentInput = {
 };
 
 export type AdministratorRefundInput = {
+  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /**
    * The amount to be refunded to this particular Payment. This was introduced in
    * v2.2.0 as the preferred way to specify the refund amount. The `lines`, `shipping` and `adjustment`
    * fields will be removed in a future version.
    */
   amount?: InputMaybe<Scalars['Money']['input']>;
+  /** Keep the same key when retrying this order modification. */
+  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
   paymentId: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
 };
@@ -2979,6 +2982,8 @@ export type Mutation = {
   createProductOption: ProductOption;
   /** Create a new ProductOptionGroup */
   createProductOptionGroup: ProductOptionGroup;
+  /** Create a ProductOptionGroup and assign it to a Product in the same transaction */
+  createProductOptionGroupForProduct: ProductOptionGroup;
   /** Create a set of ProductVariants based on the OptionGroups assigned to the given Product */
   createProductVariants: Array<Maybe<ProductVariant>>;
   createPromotion: CreatePromotionResult;
@@ -3113,6 +3118,8 @@ export type Mutation = {
   modifyOrder: ModifyOrderResult;
   /** Move a Collection to a different parent or index */
   moveCollection: Collection;
+  /** Confirms a manual-channel refund from an actual external receipt; it does not send money. */
+  recordManualRefund: SettleRefundResult;
   refundOrder: RefundOrderResult;
   reindex: Job;
   /** Removes Collections from the specified Channel */
@@ -3134,6 +3141,8 @@ export type Mutation = {
    * as well as removing any of the group's options from the Product's ProductVariants.
    */
   removeOptionGroupFromProduct: RemoveOptionGroupFromProductResult;
+  /** Remove multiple OptionGroups from a Product as one atomic operation */
+  removeOptionGroupsFromProduct: Product;
   /** Removes PaymentMethods from the specified Channel */
   removePaymentMethodsFromChannel: Array<PaymentMethod>;
   /** Removes ProductOptionGroups from the specified Channel */
@@ -3152,6 +3161,8 @@ export type Mutation = {
   removeStockLocationsFromChannel: Array<StockLocation>;
   requestCompleted: Scalars['Int']['output'];
   requestStarted: Scalars['Int']['output'];
+  /** Retries the original failed refund using one stable identifier per reviewed attempt. */
+  retryRefund: RefundOrderResult;
   /**
    * Replaces the old with a new API-Key.
    * This is a convenience method to invalidate an API-Key without
@@ -3299,6 +3310,7 @@ export type MutationAddNoteToOrderArgs = {
 
 
 export type MutationAddOptionGroupToProductArgs = {
+  expectedUpdatedAt?: InputMaybe<Scalars['DateTime']['input']>;
   optionGroupId: Scalars['ID']['input'];
   productId: Scalars['ID']['input'];
 };
@@ -3472,6 +3484,13 @@ export type MutationCreateProductOptionArgs = {
 
 export type MutationCreateProductOptionGroupArgs = {
   input: CreateProductOptionGroupInput;
+};
+
+
+export type MutationCreateProductOptionGroupForProductArgs = {
+  expectedUpdatedAt: Scalars['DateTime']['input'];
+  input: CreateProductOptionGroupInput;
+  productId: Scalars['ID']['input'];
 };
 
 
@@ -3814,6 +3833,11 @@ export type MutationMoveCollectionArgs = {
 };
 
 
+export type MutationRecordManualRefundArgs = {
+  input: RecordManualRefundInput;
+};
+
+
 export type MutationRefundOrderArgs = {
   input: RefundOrderInput;
 };
@@ -3860,6 +3884,14 @@ export type MutationRemoveOptionGroupFromProductArgs = {
 };
 
 
+export type MutationRemoveOptionGroupsFromProductArgs = {
+  expectedUpdatedAt: Scalars['DateTime']['input'];
+  force?: InputMaybe<Scalars['Boolean']['input']>;
+  optionGroupIds: Array<Scalars['ID']['input']>;
+  productId: Scalars['ID']['input'];
+};
+
+
 export type MutationRemovePaymentMethodsFromChannelArgs = {
   input: RemovePaymentMethodsFromChannelInput;
 };
@@ -3898,6 +3930,11 @@ export type MutationRemoveShippingMethodsFromChannelArgs = {
 
 export type MutationRemoveStockLocationsFromChannelArgs = {
   input: RemoveStockLocationsFromChannelInput;
+};
+
+
+export type MutationRetryRefundArgs = {
+  input: RetryRefundInput;
 };
 
 
@@ -4320,6 +4357,8 @@ export type Order = Node & {
   payments?: Maybe<Array<Payment>>;
   /** Promotions applied to the order. Only gets populated after the payment process has completed. */
   promotions: Array<Promotion>;
+  /** The actual selling store. Null means historical ownership awaits review. */
+  salesChannel?: Maybe<Channel>;
   sellerOrders?: Maybe<Array<Order>>;
   shipping: Scalars['Money']['output'];
   shippingAddress?: Maybe<OrderAddress>;
@@ -5009,6 +5048,7 @@ export type ProductVariantListArgs = {
 export type ProductFilterParameter = {
   _and?: InputMaybe<Array<ProductFilterParameter>>;
   _or?: InputMaybe<Array<ProductFilterParameter>>;
+  collectionId?: InputMaybe<IdOperators>;
   createdAt?: InputMaybe<DateOperators>;
   description?: InputMaybe<StringOperators>;
   enabled?: InputMaybe<BooleanOperators>;
@@ -5079,8 +5119,15 @@ export type ProductOptionGroup = Node & {
   options: Array<ProductOption>;
   /** The number of products that use this option group */
   productCount: Scalars['Int']['output'];
+  /** Products in the current Channel that use this ProductOptionGroup */
+  products: ProductList;
   translations: Array<ProductOptionGroupTranslation>;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+export type ProductOptionGroupProductsArgs = {
+  options?: InputMaybe<ProductListOptions>;
 };
 
 export type ProductOptionGroupFilterParameter = {
@@ -5942,6 +5989,13 @@ export type QueryZonesArgs = {
   options?: InputMaybe<ZoneListOptions>;
 };
 
+export type RecordManualRefundInput = {
+  evidenceReference: Scalars['String']['input'];
+  note: Scalars['String']['input'];
+  refundId: Scalars['ID']['input'];
+  transactionId: Scalars['String']['input'];
+};
+
 export type Refund = Node & {
   __typename?: 'Refund';
   adjustment: Scalars['Money']['output'];
@@ -5981,15 +6035,19 @@ export type RefundLine = {
 export type RefundOrderInput = {
   /** @deprecated Use the `amount` field instead */
   adjustment?: InputMaybe<Scalars['Money']['input']>;
+  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /**
    * The amount to be refunded to this particular payment. This was introduced in v2.2.0 as the preferred way to specify the refund amount.
    * Can be as much as the total amount of the payment minus the sum of all previous refunds.
    */
   amount?: InputMaybe<Scalars['Money']['input']>;
+  /** A stable identifier for this refund request. Reusing it returns the original refund, including Failed or Pending outcomes. */
+  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
   /** @deprecated Use the `amount` field instead */
   lines?: InputMaybe<Array<OrderLineInput>>;
   paymentId: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
+  reasonType?: InputMaybe<RefundReasonType>;
   /** @deprecated Use the `amount` field instead */
   shipping?: InputMaybe<Scalars['Money']['input']>;
 };
@@ -6013,6 +6071,12 @@ export type RefundPaymentIdMissingError = ErrorResult & {
   errorCode: ErrorCode;
   message: Scalars['String']['output'];
 };
+
+export enum RefundReasonType {
+  COMPENSATION = 'COMPENSATION',
+  ITEMS = 'ITEMS',
+  SHIPPING = 'SHIPPING'
+}
 
 /** Returned when there is an error in transitioning the Refund state */
 export type RefundStateTransitionError = ErrorResult & {
@@ -6129,6 +6193,12 @@ export type RemoveShippingMethodsFromChannelInput = {
 export type RemoveStockLocationsFromChannelInput = {
   channelId: Scalars['ID']['input'];
   stockLocationIds: Array<Scalars['ID']['input']>;
+};
+
+export type RetryRefundInput = {
+  /** Use a new key for a new reviewed attempt, and reuse it when retrying the same submission. */
+  idempotencyKey: Scalars['String']['input'];
+  refundId: Scalars['ID']['input'];
 };
 
 export type Return = Node & StockMovement & {
@@ -7170,6 +7240,7 @@ export type UpdateProductInput = {
   assetIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   customFields?: InputMaybe<Scalars['JSON']['input']>;
   enabled?: InputMaybe<Scalars['Boolean']['input']>;
+  expectedUpdatedAt?: InputMaybe<Scalars['DateTime']['input']>;
   facetValueIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   featuredAssetId?: InputMaybe<Scalars['ID']['input']>;
   id: Scalars['ID']['input'];

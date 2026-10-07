@@ -873,6 +873,51 @@ describe('storefront skin system', () => {
         expect(source).toMatch(/\.security-privacy-message\s*\{[^}]*color:\s*var\(--success\);/);
     });
 
+    it('keeps payment appearance skin-driven at every viewport with one owner', () => {
+        const payment = postcss.parse(stylesheet('./styles/checkout-payment-surfaces.css'));
+        for (const selector of ['.payment-test-notice', '.payment-method-section', '.payment-summary']) {
+            const declarations = new Map<string, string>();
+            payment.walkRules(rule => {
+                if (!rule.selectors.includes(selector)) return;
+                rule.walkDecls(declaration => {
+                    declarations.set(declaration.prop, declaration.value);
+                });
+            });
+            expect(declarations.get('border-radius'), selector).toBe('var(--skin-card-radius)');
+            expect(declarations.get('box-shadow'), selector).toBe('var(--skin-card-shadow)');
+        }
+        for (const file of ['desktop-layout', 'desktop-pages', 'visual-presets']) {
+            postcss.parse(stylesheet(`./styles/${file}.css`)).walkRules(rule => {
+                if (!/\.payment-/u.test(rule.selector)) return;
+                rule.walkDecls(declaration => {
+                    expect(declaration.prop, `${file}: ${rule.selector}`).not.toMatch(
+                        /^(?:background|border|color|box-shadow)/u,
+                    );
+                });
+            });
+        }
+        const page = stylesheet('./payment-pages.tsx').split('export function OrderConfirmationPage')[0];
+        expect(page).not.toMatch(/(?:bg|text|border)-(?:white|black|slate|amber|emerald|red)\b/u);
+        expect(page).not.toMatch(/rounded-(?:sm|md|lg|xl|2xl|3xl)\b/u);
+    });
+
+    it('shares checkout drawers and prevents purchase mode from restyling delivery options', () => {
+        const page = stylesheet('./checkout-page.tsx');
+        const utilities = stylesheet('./tailwind/checkout-page-styles.ts');
+        const surfaces = stylesheet('./styles/checkout-payment-surfaces.css');
+        expect(page).toContain('EmptyState, Sheet, SubHeader, Subpage');
+        expect(page).not.toContain('function Sheet(');
+        expect(utilities).not.toContain('shipping-method-list');
+        expect(utilities).not.toContain("'shipping-method-sheet':");
+        expect(surfaces).toMatch(/\.shipping-method-list label\s*\{[^}]*padding: 12px 14px;/u);
+        expect(surfaces).toMatch(
+            /\.shipping-method-list label\s*\{[^}]*border-radius: var\(--skin-control-radius\);/u,
+        );
+        expect(surfaces).not.toMatch(/\.purchase-page[^{}]*shipping-method/u);
+        const chooser = page.split('{shippingPickerOpen && (')[1].split('{couponOpen && (')[0];
+        expect(chooser).not.toMatch(/(?:bg|text|border)-(?:emerald|blue)-/u);
+    });
+
     it('gives checkout line geometry one owner across desktop, purchase and skins', () => {
         const source = stylesheet('./styles/checkout-items.css');
         expect(source).toContain('grid-template-columns: 76px minmax(0, 1fr) auto;');
@@ -1036,7 +1081,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('preserves desktop overlays and places mobile copy over the whole same artwork', () => {
+    it('preserves desktop and tablet canvases while phones use the approved 16:9 artwork frame', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
             ([, selector]) =>
@@ -1066,25 +1111,41 @@ describe('storefront skin system', () => {
         if (!responsive || responsive.type !== 'atrule') throw new Error('Expected a responsive composition');
         expect(responsive.params).toBe('(max-width: 1023px)');
         const mobileSource = responsive.toString();
-        expect(mobileSource).toMatch(/\.hero-rich-backdrop[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/);
+        expect(mobileSource).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*12\s*\/\s*5;/);
+        expect(mobileSource).toMatch(/\.hero-carousel-stage[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
+        expect(mobileSource).toMatch(/\.hero-rich-backdrop[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/);
         expect(mobileSource).toMatch(/\.hero-rich-content[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
         expect(mobileSource).toMatch(/\.hero-rich-content[^}]*background:\s*transparent;/);
-        expect(mobileSource).toMatch(/\.hero-rich-copy-surface[^}]*overflow-y:\s*auto;/);
-        expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/);
+        expect(mobileSource).toMatch(
+            /\.hero-rich-copy-region[^}]*display:\s*block;[^}]*min-height:\s*0;[^}]*flex:\s*1;[^}]*overflow-y:\s*auto;/,
+        );
+        expect(mobileSource).toMatch(/\.hero-rich-copy-region[^}]*touch-action:\s*pan-y;/);
+        expect(mobileSource).toMatch(/\.hero-rich-stats-row[^}]*min-height:\s*0;[^}]*overflow:\s*visible;/);
         expect(mobileSource).toMatch(/\.hero-rich-cta-btn[^}]*flex-shrink:\s*0;/);
+        expect(mobileSource).toMatch(/\.hero-rich-copy-surface \.hero-rich-title\s*\{[^}]*order:\s*-2;/);
         expect(mobileSource).toMatch(
-            /\.has-wide-artwork \.hero-rich-content\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+            /\.hero-rich-cta-btn\s*\{[^}]*min-height:\s*var\(--experience-control-min, 44px\);/,
         );
-        expect(mobileSource).toMatch(
-            /\.has-wide-artwork \.hero-rich-copy-region\s*\{[^}]*display:\s*block;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/,
+        expect(mobileSource).not.toContain('has-wide-artwork');
+        const services = stylesheet('./styles/home-showcase.css');
+        expect(services).toMatch(
+            /\.home-page \.hero \.hero-service-overlay \.home-trust-item \.trust-icon\s*\{[^}]*color:\s*inherit;/,
         );
-        expect(mobileSource).toMatch(/\.has-wide-artwork \.hero-rich-title\s*\{[^}]*order:\s*-1;/);
-        expect(mobileSource).toMatch(
-            /\.has-wide-artwork :is\(\.hero-rich-copy-surface, \.hero-rich-stats-row\)\s*\{[^}]*overflow:\s*visible;/,
+        expect(services).toMatch(
+            /\.home-page \.hero \.hero-service-overlay \.home-trust-bar\.has-long-copy\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/,
         );
-        expect(mobileSource).toMatch(
-            /\.has-wide-artwork \.hero-rich-cta-btn\s*\{[^}]*grid-column:\s*2;[^}]*min-height:\s*var\(--experience-control-min, 44px\);/,
+        const phone = mobile.nodes.find(
+            node => node.type === 'atrule' && node.params === '(max-width: 767px)',
         );
+        if (!phone || phone.type !== 'atrule') throw new Error('Expected a phone-only composition');
+        const phoneSource = phone.toString();
+        expect(phoneSource).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9;/);
+        expect(phoneSource).toMatch(/\.hero-rich-copy-region\s*\{[^}]*width:\s*60%;/);
+        expect(phoneSource).toMatch(/\.hero-rich-cta-btn\s*\{[^}]*max-width:\s*60%;/);
+        expect(phoneSource).toMatch(
+            /\.home-trust-bar\.has-long-copy\s*\{[^}]*background:\s*var\(--surface\);[^}]*color:\s*var\(--text\);/,
+        );
+        expect(phoneSource).toMatch(/\.home-trust-item\s*\{[^}]*color:\s*var\(--text\);/);
         expect(mobileSource).not.toMatch(
             /#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i,
         );

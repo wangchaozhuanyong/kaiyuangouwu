@@ -7,6 +7,7 @@ import type {
     StorefrontCatalogInput,
 } from '../types';
 
+import { storefrontNavigationCollections } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { asListProduct } from '../product-summary';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -24,6 +25,8 @@ import {
     sortNativeCatalogProducts,
 } from './helpers';
 
+export { storefrontNavigationCollections } from '../../../storefront-content-plugin/src/shared/public-page-data';
+
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
 
@@ -35,29 +38,6 @@ function awaitCatalogSnapshot<T>(snapshot: Promise<T>, signal?: AbortSignal): Pr
         signal.addEventListener('abort', abort, { once: true });
         snapshot.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
-}
-
-/** Keep configured category entries; names and slug suffixes do not establish identity. */
-export function storefrontNavigationCollections(items: CollectionSummary[]): CollectionSummary[] {
-    const visibleItems = items
-        .map(item => ({
-            ...item,
-            children: (item.children ?? []).filter(
-                child =>
-                    child.productVariantCount == null ||
-                    child.productVariantCount > 0 ||
-                    Boolean(child.featuredAsset?.preview?.trim()),
-            ),
-        }))
-        .filter(
-            item =>
-                item.productVariantCount == null ||
-                item.productVariantCount > 0 ||
-                Boolean(item.featuredAsset?.preview?.trim()) ||
-                (item.children?.length ?? 0) > 0,
-        );
-
-    return visibleItems;
 }
 
 export class CatalogApi extends BaseDomainApi {
@@ -167,6 +147,10 @@ export class CatalogApi extends BaseDomainApi {
             signal,
             {
                 kind: 'catalog',
+                path:
+                    typeof window !== 'undefined' && window.location.pathname === '/search'
+                        ? '/search'
+                        : '/category',
                 input: {
                     ...input,
                     sort: sortMap[input.sort ?? 'recommended'] as 'RECOMMENDED',
@@ -177,7 +161,7 @@ export class CatalogApi extends BaseDomainApi {
             this.market.code,
         );
         if (pageData) {
-            seedPublicPage(storefrontQueryClient, pageData);
+            seedPublicPage(storefrontQueryClient, pageData, true, false);
             if (!pageData.catalog) throw new Error('Public catalog response is missing its results');
             return { ...pageData.catalog, items: pageData.catalog.items.map(asListProduct) };
         }

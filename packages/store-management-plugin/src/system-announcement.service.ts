@@ -1,11 +1,22 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     ContentTranslationService,
     isUsableEnglishTranslation,
     PreparedLocalizedContentField,
 } from '@vendure/content-translation-plugin';
-import { Channel, EventBus, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import {
+    Channel,
+    EventBus,
+    ForbiddenError,
+    idsAreEqual,
+    Permission,
+    RequestContext,
+    TransactionalConnection,
+    UserInputError,
+} from '@vendure/core';
+import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 import { In } from 'typeorm';
 
 import { SystemAnnouncement } from './entities/system-announcement.entity';
@@ -24,8 +35,30 @@ export class SystemAnnouncementService {
         @Optional() private readonly eventBus?: EventBus,
     ) {}
 
-    findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
-        return this.connection.getRepository(ctx, SystemAnnouncement).find({
+    async findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
+        this.assertAdminAccess(ctx, storefrontContentPermission.Read);
+        const repository = this.connection.getRepository(ctx, SystemAnnouncement);
+        if (!this.isPlatform(ctx)) {
+            const announcements = await repository
+                .createQueryBuilder('announcement')
+                .leftJoin('announcement.channels', 'scopeChannel', 'scopeChannel.id = :channelId', {
+                    channelId: ctx.channelId,
+                })
+                .leftJoinAndSelect('announcement.channels', 'targetChannel')
+                .where('(announcement.ownerChannelId IS NULL OR announcement.ownerChannelId = :channelId)', {
+                    channelId: ctx.channelId,
+                })
+                .andWhere('(announcement.targetMode = :allMode OR scopeChannel.id = :channelId)', {
+                    allMode: 'ALL',
+                    channelId: ctx.channelId,
+                })
+                .orderBy('announcement.priority', 'DESC')
+                .addOrderBy('announcement.createdAt', 'DESC')
+                .addOrderBy('announcement.id', 'DESC')
+                .getMany();
+            return announcements.filter(announcement => this.isReadable(ctx, announcement));
+        }
+        return repository.find({
             relations: { channels: true },
             order: { priority: 'DESC', createdAt: 'DESC', id: 'DESC' },
         });
@@ -65,6 +98,7 @@ export class SystemAnnouncementService {
     }
 
     async create(ctx: RequestContext, input: CreateSystemAnnouncementInput): Promise<SystemAnnouncement> {
+        this.assertAdminAccess(ctx, storefrontContentPermission.Create);
         const { values, prepared } = await this.normalize(ctx, input);
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const saved = await repository.save(repository.create(values));
@@ -74,12 +108,14 @@ export class SystemAnnouncementService {
     }
 
     async update(ctx: RequestContext, input: UpdateSystemAnnouncementInput): Promise<SystemAnnouncement> {
+        this.assertAdminAccess(ctx, storefrontContentPermission.Update);
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const announcement = await repository.findOne({
             where: { id: input.id },
             relations: { channels: true },
         });
         if (!announcement) throw new UserInputError('找不到该系统公告');
+        this.assertManageable(ctx, announcement);
         const previousAllChannels = announcement.targetMode === 'ALL';
         const previousChannelIds = announcement.channels.map(channel => channel.id);
         const { values, prepared } = await this.normalize(ctx, input, announcement);
@@ -91,17 +127,26 @@ export class SystemAnnouncementService {
     }
 
     async delete(ctx: RequestContext, id: ID) {
+        this.assertAdminAccess(ctx, storefrontContentPermission.Delete);
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const announcement = await repository.findOne({ where: { id }, relations: { channels: true } });
         if (!announcement) return { result: 'NOT_DELETED', message: '找不到该系统公告' };
+        this.assertManageable(ctx, announcement);
         await repository.remove(announcement);
         await this.publishChanged(ctx, announcement);
         return { result: 'DELETED' };
     }
 
     async translationLocks(ctx: RequestContext, id: ID) {
+        this.assertAdminAccess(ctx, storefrontContentPermission.Read);
+        const announcement = await this.connection.getRepository(ctx, SystemAnnouncement).findOne({
+            where: { id },
+            relations: { channels: true },
+        });
+        if (!announcement) throw new UserInputError('找不到该系统公告');
+        if (!this.isPlatform(ctx) && !this.isReadable(ctx, announcement)) throw new ForbiddenError();
         const states = await this.translations.findStates(ctx, {
-            channelId: null,
+            channelId: announcement.ownerChannelId ?? null,
             entityType: SystemAnnouncement.name,
             entityId: id,
         });
@@ -137,13 +182,61 @@ export class SystemAnnouncementService {
         input: CreateSystemAnnouncementInput | UpdateSystemAnnouncementInput,
         existing?: SystemAnnouncement,
     ) {
+        const platform = this.isPlatform(ctx);
+        const ownerChannelId = existing ? (existing.ownerChannelId ?? null) : platform ? null : ctx.channelId;
+        const targetMode = input.targetMode ?? existing?.targetMode ?? (platform ? 'ALL' : 'SINGLE');
+        if (!['ALL', 'SINGLE', 'MULTIPLE'].includes(targetMode)) {
+            throw new UserInputError('公告发布范围不正确');
+        }
+        const channelIds = Array.from(
+            new Set(
+                (
+                    input.channelIds ??
+                    existing?.channels.map(channel => channel.id) ??
+                    (platform ? [] : [ctx.channelId])
+                ).map(String),
+            ),
+        );
+        if (
+            !platform &&
+            (targetMode !== 'SINGLE' || channelIds.length !== 1 || !idsAreEqual(channelIds[0], ctx.channelId))
+        ) {
+            throw new UserInputError('店铺公告只能发布到当前经营店铺');
+        }
+        if (targetMode === 'SINGLE' && channelIds.length !== 1) {
+            throw new UserInputError('指定单个网店时必须选择 1 个网店');
+        }
+        if (targetMode === 'MULTIPLE' && channelIds.length < 2) {
+            throw new UserInputError('指定多个网店时至少选择 2 个网店');
+        }
+        if (
+            ownerChannelId != null &&
+            (targetMode !== 'SINGLE' ||
+                channelIds.length !== 1 ||
+                !idsAreEqual(channelIds[0], ownerChannelId))
+        ) {
+            throw new UserInputError('店铺发布的公告必须保留在原发布店铺');
+        }
+        const channels =
+            targetMode === 'ALL'
+                ? []
+                : platform
+                  ? await this.connection.getRepository(ctx, Channel).find({ where: { id: In(channelIds) } })
+                  : [ctx.channel];
+        if (
+            targetMode !== 'ALL' &&
+            (channels.length !== channelIds.length ||
+                channels.some(channel => channel.code === DEFAULT_CHANNEL_CODE))
+        ) {
+            throw new UserInputError('所选经营店铺不存在或已被删除');
+        }
         const titleZh = requiredText(input.titleZh, '中文标题', 120);
         const contentZh = requiredText(input.contentZh, '中文内容', 2_000);
         const titleEn = optionalText(input.titleEn, 120);
         const contentEn = optionalText(input.contentEn, 2_000);
         const existingStates = existing
             ? await this.translations.findStates(ctx, {
-                  channelId: null,
+                  channelId: existing.ownerChannelId ?? null,
                   entityType: SystemAnnouncement.name,
                   entityId: existing.id,
               })
@@ -197,24 +290,6 @@ export class SystemAnnouncementService {
         if (linkUrl && !isSafeAnnouncementLink(linkUrl)) {
             throw new UserInputError('跳转链接只能使用 HTTPS、HTTP 或站内相对路径');
         }
-        const targetMode = input.targetMode ?? existing?.targetMode ?? 'ALL';
-        if (!['ALL', 'SINGLE', 'MULTIPLE'].includes(targetMode)) {
-            throw new UserInputError('公告发布范围不正确');
-        }
-        const channelIds = Array.from(new Set((input.channelIds ?? []).map(id => String(id))));
-        if (targetMode === 'SINGLE' && channelIds.length !== 1) {
-            throw new UserInputError('指定单个网店时必须选择 1 个网店');
-        }
-        if (targetMode === 'MULTIPLE' && channelIds.length < 2) {
-            throw new UserInputError('指定多个网店时至少选择 2 个网店');
-        }
-        const channels =
-            targetMode === 'ALL'
-                ? []
-                : await this.connection.getRepository(ctx, Channel).find({ where: { id: In(channelIds) } });
-        if (targetMode !== 'ALL' && channels.length !== channelIds.length) {
-            throw new UserInputError('所选网店不存在或已被删除');
-        }
         return {
             prepared,
             values: {
@@ -228,9 +303,53 @@ export class SystemAnnouncementService {
                 startsAt,
                 endsAt,
                 targetMode,
+                ownerChannelId,
                 channels,
             },
         };
+    }
+
+    private isPlatform(ctx: RequestContext): boolean {
+        return ctx.channel.code === DEFAULT_CHANNEL_CODE;
+    }
+
+    private assertAdminAccess(ctx: RequestContext, permission: Permission): void {
+        if (
+            ctx.apiType !== 'admin' ||
+            !ctx.activeUserId ||
+            (!ctx.userHasPermissions([Permission.SuperAdmin]) &&
+                (this.isPlatform(ctx) || !ctx.userHasPermissions([permission])))
+        ) {
+            throw new ForbiddenError();
+        }
+    }
+
+    private isStoreAnnouncement(ctx: RequestContext, announcement: SystemAnnouncement): boolean {
+        return (
+            announcement.ownerChannelId != null &&
+            idsAreEqual(announcement.ownerChannelId, ctx.channelId) &&
+            announcement.targetMode === 'SINGLE' &&
+            announcement.channels.length === 1 &&
+            idsAreEqual(announcement.channels[0].id, ctx.channelId)
+        );
+    }
+
+    private isReadable(ctx: RequestContext, announcement: SystemAnnouncement): boolean {
+        return (
+            this.isStoreAnnouncement(ctx, announcement) ||
+            (announcement.ownerChannelId == null &&
+                (announcement.targetMode === 'ALL' ||
+                    ((announcement.targetMode === 'SINGLE'
+                        ? announcement.channels.length === 1
+                        : announcement.channels.length >= 2) &&
+                        announcement.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)))))
+        );
+    }
+
+    private assertManageable(ctx: RequestContext, announcement: SystemAnnouncement): void {
+        if (!this.isPlatform(ctx) && !this.isStoreAnnouncement(ctx, announcement)) {
+            throw new UserInputError('只能管理当前经营店铺自行发布的单店公告，平台公告只读');
+        }
     }
 
     private recordTranslationState(
@@ -241,7 +360,7 @@ export class SystemAnnouncementService {
         return this.translations.recordPreparedFields(
             ctx,
             {
-                channelId: null,
+                channelId: announcement.ownerChannelId ?? null,
                 entityType: SystemAnnouncement.name,
                 entityId: announcement.id,
             },

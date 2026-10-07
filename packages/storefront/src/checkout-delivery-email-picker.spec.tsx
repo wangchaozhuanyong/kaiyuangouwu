@@ -74,8 +74,8 @@ describe('DeliveryEmailPicker', () => {
             trigger?.querySelector('svg')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
 
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-        const workEmailOption = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
+        expect(document.querySelector('[role="dialog"]')?.parentElement?.parentElement).toBe(document.body);
+        const workEmailOption = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
             option => option.textContent?.includes('orders@example.com'),
         );
         expect(workEmailOption?.getAttribute('aria-checked')).toBe('false');
@@ -86,7 +86,7 @@ describe('DeliveryEmailPicker', () => {
         expect(updatedTrigger?.textContent).toContain('orders@example.com');
         expect(updatedTrigger?.textContent).toContain('工作');
         expect(updatedTrigger?.getAttribute('aria-expanded')).toBe('false');
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
     });
 
     it('offers a new-email option in the same bottom drawer', () => {
@@ -94,12 +94,12 @@ describe('DeliveryEmailPicker', () => {
         const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
 
         act(() => trigger?.click());
-        const newEmailOption = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
+        const newEmailOption = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
             option => option.textContent?.includes('使用新邮箱'),
         );
         act(() => newEmailOption?.click());
 
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(container.querySelector('button[aria-haspopup="dialog"]')?.textContent).toContain(
             '使用新邮箱',
         );

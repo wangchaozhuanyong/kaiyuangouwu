@@ -936,3 +936,67 @@ describe('CatalogOperationsService', () => {
         });
     });
 });
+
+describe('catalog warehouse store isolation', () => {
+    function warehouseService(scoped: Array<{ id: string; name: string }>) {
+        const { service, connection } = createService();
+        const query = {
+            innerJoin: vi.fn(),
+            where: vi.fn(),
+            orderBy: vi.fn(),
+            getMany: vi.fn().mockResolvedValue(scoped),
+            getOne: vi.fn().mockResolvedValue(scoped[0] ?? null),
+        };
+        for (const key of ['innerJoin', 'where', 'orderBy'] as const) query[key].mockReturnValue(query);
+        const foreign = { id: 'warehouse-a', name: 'A warehouse' };
+        const repository = {
+            createQueryBuilder: vi.fn(() => query),
+            find: vi.fn().mockResolvedValue([foreign]),
+            findOne: vi.fn().mockResolvedValue(foreign),
+        };
+        connection.getRepository.mockReturnValue(repository);
+        return { service, repository, query };
+    }
+    const store = {
+        channelId: 'store-b',
+        channel: { code: 'store-b' },
+        userHasPermissions: () => true,
+    } as never;
+    const platform = { channelId: 'platform', channel: { code: '__default_channel__' } } as never;
+
+    it('returns no warehouses when the current store has none instead of global warehouses', async () => {
+        const { service, repository, query } = warehouseService([]);
+        await expect(service.stockLocations(store)).resolves.toEqual([]);
+        expect(query.innerJoin).toHaveBeenCalledWith(
+            'location.channels',
+            'channel',
+            'channel.id = :channelId',
+            { channelId: 'store-b' },
+        );
+        expect(repository.find).not.toHaveBeenCalled();
+    });
+    it('rejects a forged foreign warehouse ID without globally resolving it', async () => {
+        const { service, repository } = warehouseService([]);
+        await expect(service.requireStockLocation(store, 'warehouse-a')).rejects.toThrow('不属于当前店铺');
+        expect(repository.findOne).not.toHaveBeenCalled();
+    });
+    it('allows the current store warehouse', async () => {
+        const own = { id: 'warehouse-b', name: 'B warehouse' };
+        const { service } = warehouseService([own]);
+        await expect(service.requireStockLocation(store, own.id)).resolves.toEqual(own);
+        await expect(service.stockLocations(store)).resolves.toEqual([own]);
+    });
+    it('preserves platform-wide fallback management and explicit strict lookup', async () => {
+        const { service, repository } = warehouseService([]);
+        await expect(service.stockLocations(platform)).resolves.toEqual([
+            { id: 'warehouse-a', name: 'A warehouse' },
+        ]);
+        await expect(service.requireStockLocation(platform, 'warehouse-a')).resolves.toEqual({
+            id: 'warehouse-a',
+            name: 'A warehouse',
+        });
+        repository.find.mockClear();
+        await expect(service.stockLocations(platform, false)).resolves.toEqual([]);
+        expect(repository.find).not.toHaveBeenCalled();
+    });
+});

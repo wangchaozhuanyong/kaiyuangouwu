@@ -34,6 +34,13 @@ describe('customer query boundaries', () => {
             vendureLanguageCode: 'zh_Hans',
             storefrontContextResolved,
             customerAuthenticated: Boolean(customer),
+            configQuery: {
+                isLoading: true,
+                isPaused: false,
+                isError: false,
+                error: null,
+                refetch: vi.fn(),
+            },
         });
 
     it('waits for account resolution before querying claimable campaigns', () => {

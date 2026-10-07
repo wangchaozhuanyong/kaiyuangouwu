@@ -3,16 +3,35 @@
 import { act, lazy, useState, type ComponentProps, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AdminCapabilitySnapshot } from '../../../common/src/admin-capabilities';
+import { AdminCapabilitiesContext } from '../hooks/use-admin-capabilities';
 import { AdminPermissionsContext } from '../hooks/use-admin-permissions';
 import { hasAnyAdminPermission } from '../utils/admin-permissions';
 import {
-    defineNextAdminExtension,
+    defineNextAdminExtension as registerExtension,
     resetNextAdminExtensionsForTests,
+    type NextAdminExtension,
     type NextAdminPageBlockContext,
 } from './extension-api';
 import { NextAdminActions, NextAdminPageBlocks } from './extension-hosts';
 
 const cleanups: Array<() => void> = [];
+const capabilitySnapshot: AdminCapabilitySnapshot = {
+    channelId: 'a',
+    channelCode: 'a',
+    scope: 'STORE',
+    commerceMode: 'HYBRID',
+    capabilities: [
+        { id: '/catalog/products', state: 'READY', canRead: true, canWrite: true, canConfigure: true },
+    ],
+};
+function defineNextAdminExtension(extension: NextAdminExtension) {
+    return registerExtension({
+        ...extension,
+        actions: extension.actions?.map(item => ({ ...item, capabilityId: '/catalog/products' })),
+        pageBlocks: extension.pageBlocks?.map(item => ({ ...item, capabilityId: '/catalog/products' })),
+    });
+}
 beforeEach(() => {
     resetNextAdminExtensionsForTests();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,11 +41,17 @@ afterEach(async () => {
     resetNextAdminExtensionsForTests();
 });
 
-async function renderActions() {
+async function renderActions(snapshot = capabilitySnapshot) {
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
-    await act(async () => root.render(<NextAdminActions pageId="product-list" collapseOnMobile />));
+    await act(async () =>
+        root.render(
+            <AdminCapabilitiesContext.Provider value={snapshot}>
+                <NextAdminActions pageId="product-list" collapseOnMobile />
+            </AdminCapabilitiesContext.Provider>,
+        ),
+    );
     cleanups.push(() => {
         root.unmount();
         container.remove();
@@ -46,7 +71,9 @@ async function renderBlocks(props: ComponentProps<typeof NextAdminPageBlocks>, p
                     hasAnyPermission: required => hasAnyAdminPermission(permissions, required),
                 }}
             >
-                <NextAdminPageBlocks {...props} />
+                <AdminCapabilitiesContext.Provider value={capabilitySnapshot}>
+                    <NextAdminPageBlocks {...props} />
+                </AdminCapabilitiesContext.Provider>
             </AdminPermissionsContext.Provider>,
         ),
     );
@@ -58,6 +85,16 @@ async function renderBlocks(props: ComponentProps<typeof NextAdminPageBlocks>, p
 }
 
 describe('page block placement filters', () => {
+    it('does not mount an extension with no supported capability', async () => {
+        const block = vi.fn(() => <div>未授权扩展</div>);
+        registerExtension({
+            id: 'unknown-capability',
+            pageBlocks: [{ id: 'unknown', pageId: 'product-detail', component: block }],
+        });
+        const container = await renderBlocks({ pageId: 'product-detail' }, ['SuperAdmin']);
+        expect(block).not.toHaveBeenCalled();
+        expect(container.textContent).not.toContain('未授权扩展');
+    });
     it('renders only included blocks from the current page and passes the product context', async () => {
         const unrelatedBlock = vi.fn(() => <div>供货资料</div>);
         const otherPageBlock = vi.fn(() => <div>其他页面价格</div>);
@@ -174,6 +211,36 @@ describe('page block placement filters', () => {
 });
 
 describe('collapsible extension actions', () => {
+    it('keeps an explicit read action while refusing mutation actions on a read-only capability', async () => {
+        const mutation = vi.fn(() => <button>修改商品</button>);
+        const read = vi.fn(() => <button>导出商品</button>);
+        defineNextAdminExtension({
+            id: 'read-only-actions',
+            actions: [
+                { id: 'mutate', label: '修改', pageId: 'product-list', component: mutation },
+                {
+                    id: 'read',
+                    label: '导出',
+                    pageId: 'product-list',
+                    component: read,
+                    capabilityOperation: 'read',
+                },
+            ],
+        });
+        const container = await renderActions({
+            ...capabilitySnapshot,
+            capabilities: capabilitySnapshot.capabilities.map(item => ({
+                ...item,
+                canWrite: false,
+                canConfigure: false,
+            })),
+        });
+        expect(mutation).not.toHaveBeenCalled();
+        expect(read).toHaveBeenCalled();
+        expect(container.textContent).toContain('导出商品');
+        expect(container.textContent).not.toContain('修改商品');
+    });
+
     it('loads a lazy action in its own placeholder while preserving a sibling draft', async () => {
         let finishLoading!: (module: { default: ComponentType }) => void;
         const LazyAction = lazy(

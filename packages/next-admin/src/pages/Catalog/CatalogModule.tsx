@@ -580,6 +580,7 @@ export function CatalogModule() {
 
                     <AdminButton
                         type="button"
+                        capabilityId="/catalog/products/new"
                         onClick={() =>
                             navigate('/catalog/products/new', {
                                 state: { returnTo: `${location.pathname}${location.search}` },
@@ -840,6 +841,7 @@ export function CatalogModule() {
                                 <div className="mt-2 flex flex-wrap justify-center gap-2">
                                     <AdminButton
                                         type="button"
+                                        capabilityId="/catalog/products/new"
                                         onClick={() =>
                                             navigate('/catalog/products/new', {
                                                 state: { returnTo: `${location.pathname}${location.search}` },

@@ -4,8 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopApiGraphQlError } from './api/helpers';
 import { createStorefrontQueryClient, refreshStorefrontQueries, storefrontQueryKeys } from './query-client';
+import { ShopApiGraphQlError } from './shop-api-errors';
 import { StorefrontQueryFeedback } from './StorefrontQueryFeedback';
 
 const cleanup: Array<() => void> = [];
@@ -77,30 +77,53 @@ async function mount(resource: 'products' | 'config' = 'products') {
 }
 
 describe('shared background query feedback', () => {
+    it('never labels closure as an ordinary refresh failure with retained content', async () => {
+        const page = await mount();
+        let refresh!: Promise<void>;
+        await act(async () => {
+            refresh = page.start();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            page.fail(new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED'));
+            await refresh;
+            await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(page.container.querySelector('aside')).toBeNull();
+        expect(
+            page.client.getQueryData(
+                storefrontQueryKeys.products(page.scope.marketCode, page.scope.languageCode, 12),
+            ),
+        ).toBeUndefined();
+    });
+
     it.each([
         ['STOREFRONT_CLOSED', 'products', false],
         ['FORBIDDEN', 'products', true],
         ['FORBIDDEN', 'config', false],
     ] as const)(
         'delegates %s on %s to its owning boundary without suppressing ordinary permission feedback',
-        async (code, resource, feedbackVisible) => {
+        async (code: string, resource: 'products' | 'config', feedbackVisible: boolean) => {
             const page = await mount(resource);
             let refresh!: Promise<void>;
             await act(async () => {
                 refresh = page.start();
+                await Promise.resolve();
                 page.fail(new ShopApiGraphQlError(['access denied'], 403, code));
                 await refresh;
                 await vi.advanceTimersByTimeAsync(1);
             });
-            // TanStack retains old data after a refusal; the closed-store shell separately
-            // removes it from view, so the generic "previous content" notice must disappear.
-            expect(page.client.getQueryData(page.key)).toEqual(['已有商品']);
+            // Ordinary permissions retain prior data; closure removes public/private content
+            // while keeping the config Query alive for fresh authoritative recovery.
+            if (code === 'STOREFRONT_CLOSED' && resource !== 'config')
+                expect(page.client.getQueryData(page.key)).toBeUndefined();
+            else expect(page.client.getQueryData(page.key)).toEqual(['已有商品']);
             const feedback = page.container.querySelector('[data-query-feedback]');
             if (feedbackVisible) expect(feedback?.textContent).toContain('保留上次内容');
             else expect(feedback).toBeNull();
         },
     );
-    it('keeps content visible, delays progress, and clears progress after success', async () => {
+    it('keeps routine background refresh silent even when it is slow, then updates content', async () => {
         const page = await mount();
         let refresh!: Promise<void>;
         await act(async () => {
@@ -109,8 +132,11 @@ describe('shared background query feedback', () => {
         });
         expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
         expect(page.container.querySelector('aside')).toBeNull();
-        await page.tick();
-        expect(page.container.querySelector('[role=status]')?.textContent).toContain('正在更新');
+        await page.tick(10_000);
+        expect(page.read).toHaveBeenCalledTimes(1);
+        expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
+        expect(page.container.querySelector('aside')).toBeNull();
+        expect(page.container.querySelector('[role=status]')).toBeNull();
         await act(async () => {
             page.succeed(['新商品']);
             await refresh;
@@ -119,11 +145,44 @@ describe('shared background query feedback', () => {
         expect(page.container.querySelector('main')?.textContent).toBe('新商品');
         expect(page.container.querySelector('aside')).toBeNull();
     });
-    it('keeps cached data after failure, retries locally once, and dismisses only that failure', async () => {
+    it('keeps a dismissed failure quiet during the next refresh but exposes a new failure', async () => {
+        const page = await mount();
+        await act(async () => {
+            const initialRefresh = page.start();
+            await Promise.resolve();
+            page.fail();
+            await initialRefresh;
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        const dismiss = page.container.querySelector<HTMLButtonElement>('button[aria-label="关闭更新提示"]');
+        if (!dismiss) throw new Error('Expected dismiss action');
+        await act(async () => {
+            dismiss.click();
+            await Promise.resolve();
+        });
+        expect(page.container.querySelector('aside')).toBeNull();
+        let refresh!: Promise<void>;
+        await act(async () => {
+            refresh = page.start();
+            await Promise.resolve();
+        });
+        await page.tick(1000);
+        expect(page.container.querySelector('aside')).toBeNull();
+        await act(async () => {
+            page.fail();
+            await refresh;
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(page.container.querySelector('[role=alert]')?.textContent).toContain('更新失败');
+        expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
+    });
+
+    it('keeps cached data after failure and exposes one local retry with a busy state', async () => {
         const page = await mount();
         let refresh!: Promise<void>;
         await act(async () => {
             refresh = page.start();
+            await Promise.resolve();
             page.fail();
             await refresh;
             await vi.advanceTimersByTimeAsync(1);
@@ -137,7 +196,11 @@ describe('shared background query feedback', () => {
             retry.click();
             await Promise.resolve();
         });
+        await page.tick(1);
         expect(page.read).toHaveBeenCalledTimes(2);
+        expect(retry.disabled).toBe(true);
+        expect(retry.getAttribute('aria-busy')).toBe('true');
+        expect(page.container.querySelector('[role=alert]')).not.toBeNull();
         await act(async () => {
             page.succeed(['恢复']);
             await vi.advanceTimersByTimeAsync(1);

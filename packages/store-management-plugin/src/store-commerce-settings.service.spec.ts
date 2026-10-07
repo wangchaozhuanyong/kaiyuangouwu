@@ -92,6 +92,7 @@ describe('StoreCommerceSettingsService', () => {
             code: 'my-malaysia',
             defaultCurrencyCode: 'MYR',
             pricesIncludeTax: false,
+            customFields: { commerceMode: 'HYBRID' },
             defaultTaxZone: undefined,
             defaultShippingZone: { id: 'shipping-zone-1' },
         };
@@ -109,10 +110,23 @@ describe('StoreCommerceSettingsService', () => {
             findOne: vi.fn().mockResolvedValue({
                 id: 'shipping-zone-1',
                 name: storeZoneName(channel.code, 'shipping'),
-                members: [{ code: 'MY' }],
+                members: [{ code: 'MY', enabled: true }],
             }),
         };
         const shippingMethodService = {
+            getActiveShippingMethods: vi.fn().mockResolvedValue([
+                {
+                    checker: { code: 'supported-destination-eligibility-checker' },
+                    calculator: {
+                        code: 'physical-subtotal-shipping-calculator',
+                        args: [
+                            { name: 'baseRate', value: '0' },
+                            { name: 'freeAbove', value: '0' },
+                        ],
+                    },
+                },
+            ]),
+            getShippingMethodSourceCurrency: vi.fn().mockResolvedValue('CNY'),
             findAll: vi.fn().mockResolvedValue({
                 items: [
                     {
@@ -136,13 +150,24 @@ describe('StoreCommerceSettingsService', () => {
             {} as any,
         );
 
-        const result = await service.get({ channelId: channel.id } as any);
+        const ctx = {
+            channelId: channel.id,
+            copy: (updates: any) => ({ channelId: channel.id, ...updates }),
+        } as any;
+        const result = await service.get(ctx);
 
         expect(result.taxZoneName).toBeNull();
         expect(result.taxRate).toBe(0);
         expect(result.shippingZoneName).toBe(storeZoneName(channel.code, 'shipping'));
         expect(result.ready).toBe(true);
         expect(zoneService.findOne).toHaveBeenCalledTimes(1);
+        expect(result.shippingSourceCurrencyCode).toBe('CNY');
+        shippingMethodService.getActiveShippingMethods.mockResolvedValue([
+            { checker: { code: 'store-shipping-zone-eligibility-checker' } } as any,
+        ]);
+        expect((await service.get(ctx)).ready).toBe(true);
+        shippingMethodService.getActiveShippingMethods.mockResolvedValue([]);
+        expect((await service.get(ctx)).ready).toBe(false);
     });
 
     it('creates isolated zones, tax rates and shipping configuration for the active store', async () => {
@@ -289,6 +314,22 @@ describe('StoreCommerceSettingsService', () => {
             'standard-method',
             [channel.id],
         );
+        vi.spyOn(service, 'get').mockResolvedValue({
+            ...result,
+            ...normalizeStoreCommerceInput(input),
+            shippingSourceCurrencyCode: 'CNY',
+        });
+        shippingMethodService.create.mockClear();
+        translations.prepareLocalizedFields.mockClear();
+        const taxOnly = {
+            expectedUpdatedAt: input.expectedUpdatedAt,
+            pricesIncludeTax: input.pricesIncludeTax,
+            countryCode: input.countryCode,
+            taxRate: 8,
+        };
+        await service.update(ctx, taxOnly);
+        expect(shippingMethodService.create).not.toHaveBeenCalled();
+        expect(translations.prepareLocalizedFields).not.toHaveBeenCalled();
         expect(channelService.removeFromChannels).toHaveBeenCalledWith(
             ctx,
             ShippingMethod,

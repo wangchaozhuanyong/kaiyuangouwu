@@ -6,6 +6,15 @@ import { UsdtPaymentIntentStatus } from '../usdt/usdt-payment.constants';
 
 import { StorefrontUsdtCheckoutQuote } from './storefront-usdt-checkout-quote.entity';
 
+export interface UsdtAcceptedHandlerSnapshot {
+    version: 1;
+    methodId: string;
+    methodCode: string;
+    handlerCode: string;
+    argsHash: string;
+    acceptedAt: number;
+}
+
 @Entity('storefront_usdt_payment_intent')
 @Index('IDX_storefront_usdt_intent_quote', ['quoteId'], { unique: true })
 @Index('IDX_storefront_usdt_intent_match_key', ['matchKey'])
@@ -72,6 +81,10 @@ export class StorefrontUsdtPaymentIntent extends VendureEntity {
 
     @Column({ type: 'varchar', length: 24, default: 'PENDING' })
     status: UsdtPaymentIntentStatus;
+
+    /** Captured server-side at acceptance; legacy intents remain null and require manual review. */
+    @Column({ type: 'simple-json', nullable: true })
+    acceptedHandlerSnapshot: UsdtAcceptedHandlerSnapshot | null;
 
     @Column({ type: 'varchar', length: 80, nullable: true })
     transactionId: string | null;

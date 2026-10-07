@@ -12,10 +12,116 @@ const ctx = {
     channelId: 'channel-1',
     languageCode: 'zh_Hans',
     currencyCode: 'CNY',
-    channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+    channel: { id: 'channel-1', code: 'channel-1', defaultCurrencyCode: 'CNY', customFields: {} },
 } as any;
 
 describe('StorePromotionCampaignService', () => {
+    it.each(['MYR', 'USD'])(
+        'keeps an unconvertible percentage coupon editable in source currency but inactive in %s',
+        async currencyCode => {
+            const promotion = {
+                id: 'coupon-1',
+                name: '跨币种满额折扣',
+                couponCode: 'FIXTURE',
+                enabled: true,
+                startsAt: null,
+                endsAt: null,
+                actions: [{ code: 'order_percentage_discount', args: { discount: 20 } }],
+                conditions: [
+                    {
+                        code: 'store_currency_minimum_order_amount',
+                        args: { amount: 10_000, currencyCode: 'CNY' },
+                    },
+                ],
+            };
+            const harness = createHarness({ promotions: [promotion] });
+            vi.spyOn(harness.service as any, 'couponAllocationRows').mockResolvedValue([
+                {
+                    promotionId: 'coupon-1',
+                    currencyCode: 'CNY',
+                    redeemedOrderCount: '1',
+                    refundedOrderCount: '0',
+                    discountAmountTotal: '500',
+                    assistedRevenueTotal: '2000',
+                },
+                {
+                    promotionId: 'coupon-1',
+                    currencyCode: 'MYR',
+                    redeemedOrderCount: '1',
+                    refundedOrderCount: '0',
+                    discountAmountTotal: '300',
+                    assistedRevenueTotal: '1200',
+                },
+            ]);
+            const foreignContext = { ...ctx, currencyCode };
+            await expect(harness.service.findCoupons(foreignContext)).resolves.toEqual([
+                expect.objectContaining({
+                    minimumSpend: 10_000,
+                    currencyCode: 'CNY',
+                    enabled: false,
+                    claimable: false,
+                    discountRate: 8,
+                    discountAmountTotal: 500,
+                    assistedRevenueTotal: 2_000,
+                }),
+            ]);
+            await expect(harness.service.findActiveCoupons(foreignContext)).resolves.toEqual([]);
+            await expect(harness.service.findCoupons(ctx)).resolves.toEqual([
+                expect.objectContaining({
+                    minimumSpend: 10_000,
+                    currencyCode: 'CNY',
+                    enabled: true,
+                    claimable: true,
+                }),
+            ]);
+        },
+    );
+
+    it.each(['MYR', 'USD'])(
+        'does not advertise a fallback percentage when an exact flash-sale price cannot convert into %s',
+        async currencyCode => {
+            const harness = createHarness({
+                variants: [
+                    productVariant('variant-1', 2_000, currencyCode),
+                    productVariant('variant-2', 2_000, currencyCode),
+                ],
+                promotions: [
+                    {
+                        id: 'flash-1',
+                        enabled: true,
+                        actions: [
+                            {
+                                code: 'store_flash_sale_price',
+                                args: {
+                                    variantRules: JSON.stringify([
+                                        {
+                                            variantId: 'variant-1',
+                                            salePrice: 1_000,
+                                            percentageOff: 20,
+                                            currencyCode: 'CNY',
+                                        },
+                                        { variantId: 'variant-2', percentageOff: 20 },
+                                    ]),
+                                },
+                            },
+                        ],
+                    },
+                ],
+            });
+            await expect(harness.service.findFlashSales({ ...ctx, currencyCode }, true)).resolves.toEqual([
+                expect.objectContaining({
+                    items: [
+                        expect.objectContaining({
+                            productVariantId: 'variant-2',
+                            salePrice: 1_600,
+                            currencyCode,
+                        }),
+                    ],
+                }),
+            ]);
+        },
+    );
+
     it('creates a full-reduction coupon as a real Vendure promotion', async () => {
         const harness = createHarness();
 
@@ -462,11 +568,15 @@ function createHarness({
     const updatePromotion = vi.fn((_ctx: unknown, input: any) => ({
         ...(promotions.find(promotion => promotion.id === input.id) ?? {}),
         id: input.id,
-        name: input.translations[0].name,
+        ...input,
+        name: input.translations?.[0]?.name ?? promotions.find(promotion => promotion.id === input.id)?.name,
     }));
     const promotionService = {
         findAll: findAllPromotions,
-        findOne: vi.fn((_ctx: unknown, id: string) => promotions.find(promotion => promotion.id === id)),
+        findOne: vi.fn((_ctx: unknown, id: string) => {
+            const promotion = promotions.find(item => item.id === id);
+            return promotion ? { ...promotion, channels: promotion.channels ?? [ctx.channel] } : undefined;
+        }),
         createPromotion,
         updatePromotion,
         softDeletePromotion,
@@ -625,3 +735,53 @@ function productVariant(id: string, priceWithTax: number, currencyCode = 'CNY') 
         },
     };
 }
+
+describe('promotion maintainer isolation', () => {
+    function sharedPromotion(couponCode?: string) {
+        return {
+            id: 'shared',
+            name: 'Shared',
+            enabled: true,
+            couponCode,
+            translations: [{ languageCode: 'zh_Hans', name: 'Shared' }],
+            actions: couponCode
+                ? couponPromotion().actions
+                : [{ code: 'store_flash_sale_price', args: { variantRules: '[]' } }],
+            conditions: [],
+            channels: [
+                { id: 'default', code: '__default_channel__' },
+                { id: 'channel-1', code: 'a' },
+                { id: 'channel-2', code: 'b' },
+            ],
+        };
+    }
+    it.each(['setEnabled', 'updateName', 'delete'] as const)(
+        'blocks store maintenance of shared promotion via %s',
+        async action => {
+            const harness = createHarness({ promotions: [sharedPromotion()] });
+            await expect(
+                (harness.service[action] as any)(ctx, 'shared', action === 'setEnabled' ? false : 'Renamed'),
+            ).rejects.toThrow('多个店铺共享');
+            expect(harness.updatePromotion).not.toHaveBeenCalled();
+            expect(harness.softDeletePromotion).not.toHaveBeenCalled();
+        },
+    );
+    it('prevents claiming a legacy shared coupon configuration for one store', async () => {
+        const harness = createHarness({ promotions: [sharedPromotion('CPN_LEGACY')] });
+        await expect(
+            (harness.service as any).configForPromotion(ctx, sharedPromotion('CPN_LEGACY')),
+        ).rejects.toThrow('多个店铺共享');
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+    it('allows platform maintenance of shared flash sales', async () => {
+        const harness = createHarness({ promotions: [sharedPromotion()] });
+        await expect(
+            harness.service.setEnabled(
+                { ...ctx, channel: { ...ctx.channel, code: '__default_channel__' } },
+                'shared',
+                false,
+            ),
+        ).resolves.toMatchObject({ id: 'shared', enabled: false });
+        expect(harness.updatePromotion).toHaveBeenCalledOnce();
+    });
+});

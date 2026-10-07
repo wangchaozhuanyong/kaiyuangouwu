@@ -135,11 +135,11 @@ describe('admin record pagination', () => {
         query.loading = true;
         await update();
         expect(document.activeElement).toBe(input);
-        expect(container.textContent).toContain('正在读取翻译记录');
+        expect(container.textContent).toContain('正在读取真实翻译审计数据');
         expect(query.requests.at(-1)?.options.skip).toBe(20);
-        expect(container.querySelector<HTMLButtonElement>('button[aria-label="下一页"]')?.disabled).toBe(
-            true,
-        );
+        // A new request has no trusted count until its response arrives; never expose
+        // pagination controls derived from another request's previousData.
+        expect(container.querySelector('button[aria-label="下一页"]')).toBeNull();
         query.loading = false;
         query.data = auditData();
         await update();

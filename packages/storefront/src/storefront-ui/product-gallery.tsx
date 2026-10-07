@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { productGalleryAssets } from '../product-media';
+import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { Asset, Product, StorefrontLanguage } from '../types';
 
 import {
@@ -82,6 +83,7 @@ function GalleryImages({
                                 alt=""
                                 fallbackLabel={productImageUnavailableLabel(language)}
                                 imageKind="thumbnail"
+                                sizes={STOREFRONT_IMAGE_SIZES.galleryThumbnail}
                                 loading="lazy"
                             />
                         </button>

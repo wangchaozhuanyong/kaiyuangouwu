@@ -1,16 +1,20 @@
 import { dehydrate, QueryObserver } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api';
 import { ShopApiGraphQlError } from './api/helpers';
+import { publicPageReadGeneration } from './public-page-transport';
 import {
     createStorefrontQueryClient,
+    isStorefrontScopeAccessDenied,
     LEGACY_PUBLIC_QUERY_CACHE_KEYS,
+    markStorefrontPublicQuerySource,
     persistPublicQueryCache,
     PUBLIC_QUERY_CACHE_KEY,
     PUBLIC_QUERY_CACHE_MAX_AGE,
     publicQueryMeta,
     restorePublicQueryCache,
+    restrictStorefrontScopePersistence,
     ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
     storefrontQueryRetry,
@@ -18,6 +22,16 @@ import {
     watchPublicQueryCache,
 } from './query-client';
 import { isStorefrontClosedError } from './storefront-access';
+
+function allowLive(
+    client: ReturnType<typeof createStorefrontQueryClient>,
+    marketCode: string,
+    languageCode: string,
+) {
+    client.setQueryData([...storefrontQueryKeys.config(marketCode, languageCode), 'public'], {
+        accessMode: 'LIVE',
+    });
+}
 
 function memoryStorage() {
     const values = new Map<string, string>();
@@ -36,7 +50,11 @@ describe('public cache persistence work', () => {
         await client.fetchQuery({ queryKey, queryFn: () => Promise.resolve({ accessMode: 'PREVIEW' }) });
         const denied = new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED');
         await expect(
-            client.fetchQuery({ queryKey, staleTime: 0, queryFn: () => Promise.reject(denied) }),
+            client.fetchQuery({
+                queryKey,
+                staleTime: 0,
+                queryFn: () => Promise.reject(denied),
+            }),
         ).rejects.toBe(denied);
         const state = client.getQueryState(queryKey);
         expect(state?.data).toEqual({ accessMode: 'PREVIEW' });
@@ -77,6 +95,7 @@ describe('public cache persistence work', () => {
 
     it('batches data changes, persists removals, and cancels pending work on unsubscribe', async () => {
         const client = createStorefrontQueryClient();
+        allowLive(client, 'my:MYR', 'en');
         const key = storefrontQueryKeys.product('my:MYR', 'en', '1');
         await client.fetchQuery({ queryKey: key, queryFn: () => ({ id: '1' }), meta: publicQueryMeta() });
         const storage = memoryStorage();
@@ -91,12 +110,12 @@ describe('public cache persistence work', () => {
             expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).toContain('Latest update');
             client.removeQueries({ queryKey: key });
             await vi.advanceTimersByTimeAsync(150);
-            expect(writes).toHaveBeenCalledTimes(2);
-            expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).not.toContain('Latest update');
+            expect(writes).toHaveBeenCalledTimes(1);
+            expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
             await client.fetchQuery({ queryKey: key, queryFn: () => ({ id: '1' }), meta: publicQueryMeta() });
             stop();
             await vi.advanceTimersByTimeAsync(150);
-            expect(writes).toHaveBeenCalledTimes(2);
+            expect(writes).toHaveBeenCalledTimes(1);
         } finally {
             stop();
             client.clear();
@@ -233,6 +252,7 @@ describe('public React Query session cache', () => {
 
     it('persists only explicitly public successful queries', async () => {
         const client = createStorefrontQueryClient();
+        allowLive(client, 'cn', 'zh');
         await client.fetchQuery({
             queryKey: ['storefront', 'cn', 'zh', 'product', '1'],
             queryFn: () => ({ id: '1' }),
@@ -261,6 +281,7 @@ describe('public React Query session cache', () => {
 
     it('restores a fresh cache and rejects entries older than five minutes', async () => {
         const source = createStorefrontQueryClient();
+        allowLive(source, 'my', 'en');
         await source.fetchQuery({
             queryKey: ['storefront', 'my', 'en', 'content'],
             queryFn: () => ['hero'],
@@ -270,6 +291,9 @@ describe('public React Query session cache', () => {
         persistPublicQueryCache(source, storage, 1_000);
 
         const fresh = createStorefrontQueryClient();
+        expect(restorePublicQueryCache(fresh, storage, 2_000)).toBe(true);
+        expect(fresh.getQueryData(['storefront', 'my', 'en', 'content'])).toBeUndefined();
+        allowLive(fresh, 'my', 'en');
         expect(restorePublicQueryCache(fresh, storage, 2_000)).toBe(true);
         expect(fresh.getQueryData(['storefront', 'my', 'en', 'content'])).toEqual(['hero']);
 
@@ -282,7 +306,7 @@ describe('public React Query session cache', () => {
         const client = createStorefrontQueryClient();
         await client.fetchQuery({
             queryKey: storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans'),
-            queryFn: () => ({ description: 'Old store description' }),
+            queryFn: () => ({ description: 'Old store description', accessMode: 'LIVE' }),
             meta: publicQueryMeta(),
         });
         await client.fetchQuery({
@@ -295,6 +319,7 @@ describe('public React Query session cache', () => {
         persistPublicQueryCache(client, storage);
 
         const restored = createStorefrontQueryClient();
+        allowLive(restored, 'cn-mainland:CNY', 'zh_Hans');
         expect(restorePublicQueryCache(restored, storage)).toBe(true);
         expect(
             restored.getQueryData(storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans')),
@@ -314,7 +339,7 @@ describe('public React Query session cache', () => {
         storage.setItem(
             PUBLIC_QUERY_CACHE_KEY,
             JSON.stringify({
-                version: 6,
+                version: 7,
                 savedAt: Date.now(),
                 state: dehydrate(source),
             }),
@@ -323,7 +348,7 @@ describe('public React Query session cache', () => {
 
         for (let reload = 0; reload < 2; reload += 1) {
             const client = createStorefrontQueryClient();
-            expect(restorePublicQueryCache(client, storage)).toBe(true);
+            expect(restorePublicQueryCache(client, storage)).toBe(reload === 0);
             expect(client.getQueryData(configKey)).toBeUndefined();
             expect(client.getQueryData(resolvedConfigKey)).toBeUndefined();
             await expect(
@@ -359,6 +384,7 @@ describe('public React Query session cache', () => {
 describe('failed background refresh persistence', () => {
     it('retains last confirmed public data without persisting errors or advancing freshness', async () => {
         const client = createStorefrontQueryClient();
+        allowLive(client, 'shop:MYR', 'zh_Hans');
         const key = storefrontQueryKeys.products('shop:MYR', 'zh_Hans', 12);
         const observer = new QueryObserver(client, {
             queryKey: key,
@@ -375,6 +401,7 @@ describe('failed background refresh persistence', () => {
         persistPublicQueryCache(client, storage, 200);
         expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).not.toContain('sensitive diagnostic');
         const restored = createStorefrontQueryClient();
+        allowLive(restored, 'shop:MYR', 'zh_Hans');
         expect(restorePublicQueryCache(restored, storage, 250)).toBe(true);
         expect(restored.getQueryData(key)).toEqual([]);
         expect(restored.getQueryState(key)?.dataUpdatedAt).toBe(100);
@@ -382,5 +409,216 @@ describe('failed background refresh persistence', () => {
         stop();
         client.clear();
         restored.clear();
+    });
+});
+
+describe('authoritative scope access and preview persistence', () => {
+    const clients: Array<ReturnType<typeof createStorefrontQueryClient>> = [];
+    const scope = { marketCode: 'shop:MYR', languageCode: 'en' };
+    const configKey = [...storefrontQueryKeys.config(scope.marketCode, scope.languageCode), 'public'];
+    const productKey = storefrontQueryKeys.product(scope.marketCode, scope.languageCode, 'one');
+    const closed = () => new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED');
+    const clientForTest = () => {
+        const client = createStorefrontQueryClient();
+        clients.push(client);
+        return client;
+    };
+    const failClosed = async (client: ReturnType<typeof clientForTest>) => {
+        await expect(
+            client.fetchQuery({
+                queryKey: productKey,
+                queryFn: () => Promise.reject(closed()),
+                retry: false,
+                staleTime: 0,
+            }),
+        ).rejects.toBeDefined();
+    };
+    afterEach(() => clients.splice(0).forEach(client => client.clear()));
+
+    it('clears public and private data immediately, isolates other scopes, and never retries CLOSED', async () => {
+        const client = clientForTest();
+        allowLive(client, scope.marketCode, scope.languageCode);
+        const privateKey = storefrontQueryKeys.customer(scope.marketCode, scope.languageCode);
+        const otherKey = storefrontQueryKeys.product(scope.marketCode, 'zh_Hans', 'one');
+        client.setQueryData(productKey, { id: 'one' });
+        client.setQueryData(privateKey, { id: 'customer' });
+        client.setQueryData(otherKey, { id: 'other' });
+        const generation = publicPageReadGeneration();
+        await failClosed(client);
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(true);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        expect(client.getQueryData(privateKey)).toBeUndefined();
+        expect(client.getQueryData(otherKey)).toEqual({ id: 'other' });
+        expect(publicPageReadGeneration()).toBeGreaterThan(generation);
+        expect(storefrontQueryRetry(0, closed())).toBe(false);
+    });
+
+    it('rejects late manual seeds and pre-denial config completion; only a new current query restores access', async () => {
+        const client = clientForTest();
+        let resolve!: (value: { accessMode: string }) => void;
+        const oldRead = client
+            .fetchQuery({
+                queryKey: configKey,
+                queryFn: () =>
+                    new Promise<{ accessMode: string }>(done => {
+                        resolve = done;
+                    }),
+            })
+            .catch(() => undefined);
+        await failClosed(client);
+        client.setQueryData(configKey, { accessMode: 'LIVE' });
+        client.setQueryData(productKey, { id: 'late' });
+        resolve({ accessMode: 'LIVE' });
+        await oldRead;
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(true);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        await client.fetchQuery({
+            queryKey: configKey,
+            queryFn: () => ({ accessMode: 'LIVE' }),
+            staleTime: 0,
+        });
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(false);
+    });
+
+    it('does not grant authority to a removed config query that resolves after a replacement', async () => {
+        const client = clientForTest();
+        let resolve!: (value: { accessMode: string }) => void;
+        const oldRead = client
+            .fetchQuery({
+                queryKey: configKey,
+                queryFn: () =>
+                    new Promise<{ accessMode: string }>(done => {
+                        resolve = done;
+                    }),
+            })
+            .catch(() => undefined);
+        client.removeQueries({ queryKey: configKey, exact: true });
+        await failClosed(client);
+        client.setQueryData(configKey, { accessMode: 'LIVE' });
+        resolve({ accessMode: 'LIVE' });
+        await oldRead;
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(true);
+    });
+
+    it('treats public config FORBIDDEN as closure but keeps private permission errors separate', async () => {
+        const client = clientForTest();
+        const forbidden = new ShopApiGraphQlError(['forbidden'], 403, 'FORBIDDEN');
+        await client
+            .fetchQuery({
+                queryKey: storefrontQueryKeys.customer(scope.marketCode, scope.languageCode),
+                queryFn: () => Promise.reject(forbidden),
+                retry: false,
+            })
+            .catch(() => undefined);
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(false);
+        await client
+            .fetchQuery({ queryKey: configKey, queryFn: () => Promise.reject(forbidden), retry: false })
+            .catch(() => undefined);
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(true);
+    });
+
+    it('removes LIVE data on PREVIEW restriction and prevents the pre-config seed persistence window', async () => {
+        const client = clientForTest();
+        const storage = memoryStorage();
+        allowLive(client, scope.marketCode, scope.languageCode);
+        await client.fetchQuery({
+            queryKey: productKey,
+            queryFn: () => ({ id: 'live' }),
+            meta: publicQueryMeta(),
+        });
+        restrictStorefrontScopePersistence(client, scope);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        await client.fetchQuery({
+            queryKey: productKey,
+            queryFn: () => ({ id: 'preview' }),
+            meta: publicQueryMeta(),
+        });
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+        client.setQueryData(configKey, { accessMode: 'PREVIEW' });
+        expect(client.getQueryData(productKey)).toEqual({ id: 'preview' });
+        client.setQueryData(configKey, { accessMode: 'LIVE' });
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+        await client.fetchQuery({
+            queryKey: configKey,
+            queryFn: () => ({ accessMode: 'LIVE' }),
+            staleTime: 0,
+        });
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+    });
+
+    it('preserves newly seeded LIVE entities while clearing old PREVIEW entities on a fresh LIVE config', async () => {
+        const client = clientForTest();
+        restrictStorefrontScopePersistence(client, scope);
+        const oldKey = storefrontQueryKeys.product(scope.marketCode, scope.languageCode, 'old-preview');
+        await client.fetchQuery({
+            queryKey: oldKey,
+            queryFn: () => ({ id: 'old-preview' }),
+            meta: publicQueryMeta(),
+        });
+        client.setQueryDefaults(productKey, { meta: publicQueryMeta() });
+        await client.fetchQuery({
+            queryKey: configKey,
+            queryFn: () => {
+                client.setQueryData(productKey, { id: 'new-live' });
+                markStorefrontPublicQuerySource(client, productKey, 'LIVE');
+                return { accessMode: 'LIVE' };
+            },
+            staleTime: 0,
+        });
+        expect(client.getQueryData(oldKey)).toBeUndefined();
+        expect(client.getQueryData(productKey)).toEqual({ id: 'new-live' });
+        const storage = memoryStorage();
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).toContain('new-live');
+        expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).not.toContain('old-preview');
+    });
+
+    it('does not relax a restriction for a LIVE config fetch started before PREVIEW was received', async () => {
+        const client = clientForTest();
+        let resolve!: (value: { accessMode: string }) => void;
+        const oldRead = client.fetchQuery({
+            queryKey: configKey,
+            queryFn: () =>
+                new Promise<{ accessMode: string }>(done => {
+                    resolve = done;
+                }),
+        });
+        restrictStorefrontScopePersistence(client, scope);
+        await client.fetchQuery({
+            queryKey: productKey,
+            queryFn: () => ({ id: 'preview' }),
+            meta: publicQueryMeta(),
+        });
+        resolve({ accessMode: 'LIVE' });
+        await oldRead;
+        const storage = memoryStorage();
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+    });
+
+    it('allows fresh PREVIEW recovery without writing a public cache, and never persists unspecified modes', async () => {
+        const client = clientForTest();
+        await failClosed(client);
+        await client.fetchQuery({
+            queryKey: configKey,
+            queryFn: () => ({ accessMode: 'PREVIEW' }),
+            staleTime: 0,
+        });
+        expect(isStorefrontScopeAccessDenied(client, scope)).toBe(false);
+        await client.fetchQuery({
+            queryKey: productKey,
+            queryFn: () => ({ id: 'preview' }),
+            meta: publicQueryMeta(),
+        });
+        const storage = memoryStorage();
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+        await client.fetchQuery({ queryKey: configKey, queryFn: () => ({ code: 'legacy' }), staleTime: 0 });
+        persistPublicQueryCache(client, storage);
+        expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
     });
 });

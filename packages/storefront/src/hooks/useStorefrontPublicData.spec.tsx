@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShopApi } from '../api';
 import { ContentReviewsApi } from '../api/content-reviews';
 import { enabledMarkets } from '../i18n';
-import { STOREFRONT_CONFIG_REFRESH_INTERVAL, storefrontQueryKeys } from '../query-client';
+import {
+    STOREFRONT_CONFIG_REFRESH_INTERVAL,
+    refreshStorefrontQueries,
+    storefrontQueryKeys,
+} from '../query-client';
 import { type Product, type StorefrontConfig } from '../types';
 
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
@@ -162,7 +166,7 @@ it('hides review navigation when a channel settings event invalidates the public
     }
 });
 
-it('refreshes guest configuration and toggles without reloading and stops in the background', async () => {
+it('refreshes through the shared owner and has no independent public polling', async () => {
     vi.useFakeTimers();
     focusManager.setFocused(true);
     let published = false;
@@ -217,15 +221,25 @@ it('refreshes guest configuration and toggles without reloading and stops in the
         });
         await advance(1);
         expect(element.textContent).toContain('Old store branding');
+        const refresh = () =>
+            act(async () => {
+                await refreshStorefrontQueries(client, {
+                    marketCode: storefrontQueryKeys.market(enabledMarkets[0]),
+                    languageCode: 'zh_Hans',
+                });
+                await vi.advanceTimersByTimeAsync(1);
+            });
+        await advance(STOREFRONT_CONFIG_REFRESH_INTERVAL * 2);
+        expect(api.storefrontConfig).toHaveBeenCalledTimes(1);
         published = true;
         description = 'New store branding';
-        await advance(STOREFRONT_CONFIG_REFRESH_INTERVAL);
+        await refresh();
         expect(element.textContent).toContain('Published core cards');
         expect(element.textContent).toContain('New store branding');
         published = false;
-        await advance(STOREFRONT_CONFIG_REFRESH_INTERVAL);
+        await refresh();
         expect(element.textContent).not.toContain('Published core cards');
-        expect(api.products).toHaveBeenCalledTimes(1);
+        expect(api.products).toHaveBeenCalledTimes(3);
         focusManager.setFocused(false);
         const count = api.storefrontContent.mock.calls.length;
         await advance(STOREFRONT_CONFIG_REFRESH_INTERVAL * 2);
@@ -234,7 +248,7 @@ it('refreshes guest configuration and toggles without reloading and stops in the
         act(() => {
             focusManager.setFocused(true);
         });
-        await advance(1);
+        await refresh();
         expect(element.textContent).toContain('Published core cards');
         act(() => root.unmount());
         const finalCount = api.storefrontContent.mock.calls.length;

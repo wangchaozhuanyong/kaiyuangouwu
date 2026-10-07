@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Permission } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Administrator,
@@ -95,6 +96,26 @@ export class AdministratorAccessService {
         return this.inferAndPersistLegacy(ctx, ctx.activeUserId);
     }
 
+    /** Restrict the account's authority to the selected management context without changing its identity. */
+    async currentForChannel(ctx: RequestContext): Promise<AdministratorAccessProfile> {
+        const actor = await this.current(ctx);
+        if (actor.status === 'SUSPENDED') throw new ForbiddenError();
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE) {
+            if (actor.scope !== 'PLATFORM') throw new ForbiddenError();
+            return actor;
+        }
+        if (actor.scope === 'STORE') {
+            if (!actor.channelId || !idsAreEqual(actor.channelId, ctx.channelId)) throw new ForbiddenError();
+            return actor;
+        }
+        return Object.assign(new AdministratorAccessProfile(), actor, {
+            scope: 'STORE' as const,
+            channelId: ctx.channelId,
+            channel: ctx.channel,
+            authority: actor.authority === 'OWNER' ? 'ADMIN' : actor.authority,
+        });
+    }
+
     findByUserId(
         ctx: RequestContext,
         userId: ID,
@@ -147,7 +168,7 @@ export class AdministratorAccessService {
     }
 
     async manageableAdministrators(ctx: RequestContext): Promise<AdministratorAccessProfile[]> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         if (actor.authority !== 'OWNER' && actor.authority !== 'ADMIN') return [];
         if (actor.scope === 'STORE' && !actor.channelId) return [];
         const where =
@@ -175,7 +196,7 @@ export class AdministratorAccessService {
     }
 
     async manageableRoles(ctx: RequestContext): Promise<Role[]> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         if (actor.authority !== 'OWNER' && actor.authority !== 'ADMIN') return [];
         if (actor.scope === 'STORE' && !actor.channelId) return [];
         const roles = await this.connection.getRepository(ctx, Role).find({
@@ -222,6 +243,7 @@ export class AdministratorAccessService {
     }
 
     async manageableChannels(ctx: RequestContext): Promise<Channel[]> {
+        // This directory powers the Channel switcher, not a cross-store business query.
         const actor = await this.current(ctx);
         if (actor.scope === 'STORE') {
             return actor.channel ? [actor.channel] : [];
@@ -233,7 +255,7 @@ export class AdministratorAccessService {
         ctx: RequestContext,
         input: CreateManagedAdministratorInput,
     ): Promise<AdministratorAccessProfile> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         this.assertCanCreate(actor, input.scope, input.authority, input.channelId);
         const platformAdministratorRole =
             input.scope === 'PLATFORM' && input.authority === 'ADMIN'
@@ -282,7 +304,7 @@ export class AdministratorAccessService {
         ctx: RequestContext,
         input: UpdateManagedAdministratorInput,
     ): Promise<AdministratorAccessProfile> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         const target = await this.requireByAdministratorId(ctx, input.id);
         this.assertCanManage(actor, target);
         if (input.authority) this.assertCanSetAuthority(actor, target.scope, input.authority);
@@ -336,7 +358,7 @@ export class AdministratorAccessService {
         ctx: RequestContext,
         administratorId: ID,
     ): Promise<AdministratorAccessProfile> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         const target = await this.requireByAdministratorId(ctx, administratorId);
         this.assertCanManage(actor, target);
         if (target.authority === 'OWNER' || (target.scope === 'STORE' && target.authority === 'ADMIN')) {
@@ -355,7 +377,7 @@ export class AdministratorAccessService {
     }
 
     async createManagedRole(ctx: RequestContext, input: ManagedRoleInput): Promise<Role> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         const { channelIds, permissions } = await this.validateManagedRoleInput(ctx, actor, input);
         const role = await this.roleService.create(ctx, {
             code: input.code.trim(),
@@ -373,7 +395,7 @@ export class AdministratorAccessService {
     }
 
     async createMailboxIntegrationRole(ctx: RequestContext): Promise<Role> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         if (actor.scope !== 'PLATFORM' || actor.authority !== 'OWNER') throw new ForbiddenError();
         const channel = await this.connection.getRepository(ctx, Channel).findOne({
             where: { code: '__default_channel__' },
@@ -399,7 +421,7 @@ export class AdministratorAccessService {
     }
 
     async updateManagedRole(ctx: RequestContext, input: ManagedRoleInput & { id: ID }): Promise<Role> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         const current = await this.connection.getEntityOrThrow(ctx, Role, input.id, {
             relations: ['channels'],
         });
@@ -427,7 +449,7 @@ export class AdministratorAccessService {
         ctx: RequestContext,
         targetAdministratorId: ID,
     ): Promise<AdministratorAccessProfile> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
         if (actor.scope !== 'PLATFORM' || actor.authority !== 'OWNER') throw new ForbiddenError();
         const target = await this.requireByAdministratorId(ctx, targetAdministratorId);
         if (
@@ -474,7 +496,8 @@ export class AdministratorAccessService {
         channelId: ID,
         targetAdministratorId: ID,
     ): Promise<AdministratorAccessProfile> {
-        const actor = await this.current(ctx);
+        const actor = await this.currentForChannel(ctx);
+        if (actor.scope === 'STORE' && !idsAreEqual(actor.channelId, channelId)) throw new ForbiddenError();
         const currentPrimary = await this.connection.getRepository(ctx, AdministratorAccessProfile).findOne({
             where: { storePrimarySlot: String(channelId) },
             relations: { administrator: { user: { roles: { channels: true } } }, channel: true },

@@ -29,7 +29,9 @@ import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
 import { isInputMethodKey } from '../input-method';
 import { storefrontInitialQueryError } from '../loading-state';
+import { usePageReadiness } from '../page-readiness';
 import {
+    STOREFRONT_CATALOG_PAGE_SIZE,
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
@@ -57,6 +59,7 @@ export interface SearchPageProps {
     storefrontCode: string;
     customerId?: string | null;
     initialQuery: string;
+    contextResolved?: boolean;
     initialFilters?: CatalogRouteState;
 }
 const emptyFilters = catalogRouteState({ name: 'search' });
@@ -80,6 +83,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         api,
+        contextResolved = true,
         products,
         collections = [],
         market,
@@ -157,7 +161,10 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     const searchQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
         queryFn: async ({ pageParam, signal }) => {
-            const page = await api.catalog({ ...searchInput, skip: pageParam, take: 20 }, signal);
+            const page = await api.catalog(
+                { ...searchInput, skip: pageParam, take: STOREFRONT_CATALOG_PAGE_SIZE },
+                signal,
+            );
             const cached = queryClient.getQueryData<{ pages: ProductSearchPage[]; pageParams: number[] }>(
                 storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
             );
@@ -175,7 +182,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         },
         initialPageParam: 0,
         getNextPageParam: nextCatalogPageParam,
-        enabled: !!term && (!embedded || embedded.active),
+        enabled: contextResolved && !!term && (!embedded || embedded.active),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         placeholderData: (previous, previousQuery) =>
@@ -186,6 +193,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             ),
         meta: publicQueryMeta(),
     });
+    usePageReadiness(Boolean(term) && (!embedded || embedded.active) && searchQuery.isPending);
     const suggestionsQuery = useQuery({
         // A bounded suggestion page must never overwrite the infinite result cache.
         queryKey: [
@@ -224,7 +232,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         });
     }, [searchQuery.data?.pages]);
     const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
-    const searching = searchQuery.isLoading;
+    const searching = !!term && searchQuery.isPending && !searchQuery.isError;
     const searchError = storefrontInitialQueryError(searchQuery, language);
     const loadMoreError = searchQuery.isFetchNextPageError
         ? storefrontErrorMessage(searchQuery.error, language)
@@ -720,9 +728,11 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                                 />
                             ) : (
-                                results.map(product => (
+                                results.map((product, index) => (
                                     <ProductRow
                                         key={product.id}
+                                        priority={index < 2}
+                                        fetchPriority={index === 0 ? 'high' : 'auto'}
                                         product={product}
                                         layout={embedded ? 'compact' : 'row'}
                                         showDescription={false}

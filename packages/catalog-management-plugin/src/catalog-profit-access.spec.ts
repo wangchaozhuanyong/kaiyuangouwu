@@ -308,7 +308,7 @@ describe('catalog profit access and expense writes', () => {
             service.saveOrderExpense(ctx, { orderId: 'outside', paymentFeeMicrounits: 0 }),
         ).rejects.toThrow('当前店铺');
         expect(query.innerJoin).toHaveBeenCalledWith(
-            'order.channels',
+            'order.salesChannel',
             'expenseChannel',
             'expenseChannel.id = :channelId',
             { channelId: 9 },

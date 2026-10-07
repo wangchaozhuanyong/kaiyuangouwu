@@ -18,15 +18,15 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useEffect, useId, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useId } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { BrandLoadingIndicator } from '../brand-loading';
+import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { PageBackButton } from '../components/common/page-back-button';
-import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
+import { Overlay } from '../overlay-host';
 import { PageSkeleton } from '../route-loading';
-import { acquireBodyScrollLock } from '../scroll-lock';
 import { routeFromLocation, RouteName } from '../storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
 
@@ -364,10 +364,15 @@ export function AccountShortcut({
                   ? 'mail'
                   : 'support';
     return (
-        <button type="button" onClick={onClick} data-order-status={tone}>
+        <button
+            type="button"
+            onClick={onClick}
+            data-order-status={tone}
+            aria-label={inlineCount ? undefined : countBadgeLabel(label, count)}
+        >
             <span data-icon-tone={iconTone}>
                 {icon}
-                {!inlineCount && count != null && count > 0 && <b>{count}</b>}
+                {!inlineCount && <CountBadge count={count} overlay />}
             </span>
             <small>{label}</small>
             {inlineCount && <b className="desktop-shortcut-count">{count ?? '—'}</b>}
@@ -384,15 +389,20 @@ export function ServiceButton({
 }: {
     icon: ReactNode;
     label: string;
-    badge?: string;
+    badge?: number;
     tone?: 'security' | 'mail' | 'studio' | 'coupon' | 'support';
     onClick: () => void;
 }) {
     return (
-        <button type="button" onClick={onClick} data-icon-tone={tone}>
+        <button
+            type="button"
+            onClick={onClick}
+            data-icon-tone={tone}
+            aria-label={countBadgeLabel(label, badge)}
+        >
             <span>
                 {icon}
-                {badge && <em>{badge}</em>}
+                <CountBadge count={badge} overlay />
             </span>
             <b>{label}</b>
         </button>
@@ -529,10 +539,7 @@ export function ListSkeleton({
             role="status"
             aria-label={label}
         >
-            <span className="page-loading-indicator">
-                <span className="page-loading-spinner" aria-hidden="true" />
-                <span>{label}</span>
-            </span>
+            <BrandLoadingIndicator />
         </div>
     );
 }
@@ -556,78 +563,14 @@ export function Sheet({
     initialFocus?: 'first' | 'dialog';
     side?: 'right';
 }) {
-    const dialogRef = useRef<HTMLElement>(null);
-    const previousFocusRef = useRef<HTMLElement | null>(null);
-    const onCloseRef = useRef(onClose);
     const titleId = useId();
-
-    useEffect(() => {
-        onCloseRef.current = onClose;
-    }, [onClose]);
-
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-
-        previousFocusRef.current =
-            document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const focusableSelector =
-            'a[href],:is(button,input,select,textarea):not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const getFocusableElements = () =>
-            Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-                element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
-            );
-        const focusFrame = window.requestAnimationFrame(() => {
-            (initialFocus === 'dialog' ? dialog : (getFocusableElements()[0] ?? dialog)).focus();
-        });
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.defaultPrevented || isInputMethodKey(event)) return;
-            // Only the frontmost modal owns keyboard navigation when a detail sheet opens a form.
-            const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
-            if (dialogs[dialogs.length - 1] !== dialog) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                onCloseRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-
-            const focusableElements = getFocusableElements();
-            if (!focusableElements.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const firstElement = focusableElements[0];
-            const lastElement = focusableElements[focusableElements.length - 1];
-            const activeElement = document.activeElement;
-            if (event.shiftKey && (activeElement === firstElement || !dialog.contains(activeElement))) {
-                event.preventDefault();
-                lastElement.focus();
-            } else if (
-                !event.shiftKey &&
-                (activeElement === lastElement || !dialog.contains(activeElement))
-            ) {
-                event.preventDefault();
-                firstElement.focus();
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.cancelAnimationFrame(focusFrame);
-            document.removeEventListener('keydown', handleKeyDown);
-            releaseBodyScrollLock();
-            previousFocusRef.current?.focus();
-        };
-    }, [initialFocus]);
-
-    const content = (
-        <div
+    return (
+        <Overlay
             className={`sheet-layer${className ? ` ${className}-layer` : ''}`}
             data-side={side}
             role="presentation"
+            onClose={onClose}
+            initialFocus={initialFocus}
         >
             <button
                 className="sheet-mask"
@@ -636,7 +579,6 @@ export function Sheet({
                 aria-label={language === 'zh' ? '关闭' : 'Close'}
             />
             <section
-                ref={dialogRef}
                 className={className ? `sheet ${className}` : 'sheet'}
                 data-side={side}
                 role="dialog"
@@ -644,7 +586,9 @@ export function Sheet({
                 aria-labelledby={titleId}
                 tabIndex={-1}
             >
-                {showHandle ? <Minus className="sheet-drag-handle" aria-hidden="true" /> : null}
+                {showHandle && (
+                    <Minus className="sheet-drag-handle" aria-hidden="true" preserveAspectRatio="none" />
+                )}
                 <header>
                     <strong id={titleId}>{title}</strong>
                     <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
@@ -654,9 +598,6 @@ export function Sheet({
                 </header>
                 {children}
             </section>
-        </div>
+        </Overlay>
     );
-
-    if (typeof document === 'undefined') return content;
-    return createPortal(content, document.body);
 }

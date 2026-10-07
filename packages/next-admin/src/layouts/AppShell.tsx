@@ -1,3 +1,8 @@
+import {
+    adminCapabilityAllows,
+    adminCapabilityForPath,
+    adminCapabilityScopeAllows,
+} from '../../../common/src/admin-capabilities';
 import { AdminButton, AdminInput, AdminSelect } from '../components/AdminControls';
 import { AdminField } from '../components/AdminField';
 import {
@@ -6,7 +11,6 @@ import {
     getAdminSectionLabel,
     getStandaloneAdminRedirect,
     localizeAdminNavigationTitle,
-    standalonePageScopeAllows,
 } from '../navigation/admin-navigation';
 import { getAdminDisplayLanguage } from '../utils/admin-language';
 import { getChannelDisplayName } from '../utils/channel-display';
@@ -71,25 +75,19 @@ import {
 } from '../extensions/extension-api';
 import {
     APP_SHELL_BOOTSTRAP_QUERY,
-    APP_SHELL_COMMERCE_CONTEXT_QUERY,
     APP_SHELL_PROFILE_CONTEXT_QUERY,
     type AppShellBootstrapData,
-    type AppShellCommerceContextData,
     type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
 import { useMobileLayout } from '../hooks/use-mobile-layout';
+import { useActiveInterval } from '../hooks/use-page-activity';
 import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
-import { pendingAdminWrites } from '../runtime/admin-resource-events';
+import { pendingAdminWrites, RESOURCE_INVALIDATION_EVENT } from '../runtime/admin-resource-events';
 import { useTheme } from '../theme/theme-context';
-import {
-    canAccessAdminPath,
-    getRequiredPermissionsForAdminPath,
-    hasAnyAdminPermission,
-} from '../utils/admin-permissions';
+import { hasAnyAdminPermission } from '../utils/admin-permissions';
 import { getChannelDisplayLabel } from '../utils/channel-display';
-import { commerceModeAllowsPath } from '../utils/commerce-mode';
 import { isInputMethodKey } from '../utils/input-method';
 import { toUserFacingError } from '../utils/user-facing-error';
 
@@ -97,10 +95,7 @@ import '../extensions/installed-extensions';
 import {
     filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
-    isAppShellPermissionLoading,
-    isPlatformBusinessPath,
     isPlatformManagementChannel,
-    isPlatformOwnerPath,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 import { TabbedOutlet } from './TabbedOutlet';
@@ -283,14 +278,6 @@ export function AppShell() {
             ? [...permissions, 'SuperAdmin']
             : permissions;
     }, [channelData, isSuperAdmin]);
-    const commerceContextQuery = useQuery<AppShellCommerceContextData>(APP_SHELL_COMMERCE_CONTEXT_QUERY, {
-        fetchPolicy: 'cache-first',
-        errorPolicy: 'ignore',
-        skip:
-            !channelData ||
-            isPlatformContext ||
-            !hasAnyAdminPermission(activePermissions, ['ReadCatalog', 'ReadProduct']),
-    });
     const profileContextQuery = useQuery<AppShellProfileContextData>(APP_SHELL_PROFILE_CONTEXT_QUERY, {
         fetchPolicy: 'cache-first',
         errorPolicy: 'ignore',
@@ -309,38 +296,54 @@ export function AppShell() {
     const adminBrandName = isPlatformContext
         ? getChannelDisplayName('__default_channel__', displayLanguage)
         : `${channelData?.activeChannel ? getChannelDisplayName(channelData.activeChannel) : displayLanguage === 'en' ? 'Loading store…' : '读取店铺中…'} · ${displayLanguage === 'en' ? 'Admin' : '管理后台'}`;
-    const commerceMode = commerceContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
+    const capabilitySnapshot =
+        channelData?.currentAdminCapabilities?.channelId === channelData?.activeChannel.id
+            ? channelData?.currentAdminCapabilities
+            : null;
     const canAccessPath = useCallback(
         (path: string) => {
-            if (!standalonePageScopeAllows(path, isPlatformContext)) return false;
-            if (path.startsWith('/platform/') && !isPlatformContext) return false;
-            if (
-                isPlatformOwnerPath(path) &&
-                (!isPlatformContext || !activePermissions.includes('SuperAdmin'))
-            )
-                return false;
-            if (isPlatformContext && isPlatformBusinessPath(path)) return false;
-            const extensionRoute = getNextAdminExtensionRoute(path);
-            return extensionRoute
-                ? hasAnyAdminPermission(activePermissions, extensionRoute.permissions ?? [])
-                : canAccessAdminPath(path, activePermissions);
+            const canonical = getStandaloneAdminRedirect(path) ?? path;
+            const definition = adminCapabilityForPath(canonical);
+            if (!definition || !capabilitySnapshot) return false;
+            const operation = /^\/sales\/orders\/[^/]+\/modify$/u.test(canonical) ? 'write' : 'read';
+            return adminCapabilityAllows(capabilitySnapshot, definition.id, operation);
         },
-        [activePermissions, isPlatformContext],
+        [capabilitySnapshot],
     );
-    const currentRoutePermissions =
-        getNextAdminExtensionRoute(location.pathname)?.permissions ??
-        getRequiredPermissionsForAdminPath(location.pathname);
-    const currentRouteRequiresPermission = currentRoutePermissions.length > 0;
-    const currentRouteRequiresPlatformContext =
-        !standalonePageScopeAllows(location.pathname, isPlatformContext) &&
-        hasAnyAdminPermission(activePermissions, currentRoutePermissions);
+    const currentDefinition = adminCapabilityForPath(location.pathname);
+    const currentRouteRequiresPermission = currentDefinition?.scope !== 'PERSONAL';
+    const currentRouteUnsupported = Boolean(
+        capabilitySnapshot &&
+        (!currentDefinition ||
+            !adminCapabilityScopeAllows(
+                currentDefinition,
+                capabilitySnapshot.scope,
+                capabilitySnapshot.commerceMode,
+            ) ||
+            capabilitySnapshot.capabilities.find(item => item.id === currentDefinition.id)?.state ===
+                'UNSUPPORTED'),
+    );
     const canAccessCurrentRoute = canAccessPath(location.pathname);
-    const hasPermissionSnapshot = hasAppShellPermissionSnapshot(channelData);
+    const hasPermissionSnapshot = hasAppShellPermissionSnapshot(channelData) && Boolean(capabilitySnapshot);
     const channelControlsLoading = !channelData && appShellLoading;
     // Apollo 在 fetchMore/refetch 期间也会报 loading。权限快照已存在时不应用后台请求遮住当前页面。
-    const profileError = hasPermissionSnapshot ? undefined : appShellError;
-    const profileLoading = isAppShellPermissionLoading(channelData, appShellLoading);
+    const profileError = hasPermissionSnapshot
+        ? undefined
+        : (appShellError ?? (!appShellLoading ? new Error('店铺功能信息暂时无法读取，请重试。') : undefined));
+    const profileLoading = !hasPermissionSnapshot && appShellLoading;
     const refetchProfile = refetchAppShell;
+    useActiveInterval(() => {
+        if (!isChannelSwitching) void refetchAppShell().catch(() => undefined);
+    }, 30_000);
+    useEffect(() => {
+        const refreshCapabilities = (event: Event) => {
+            const domains = (event as CustomEvent<{ domains: string[] }>).detail?.domains ?? [];
+            if (domains.some(domain => ['settings', 'plugins'].includes(domain)))
+                void refetchAppShell().catch(() => undefined);
+        };
+        window.addEventListener(RESOURCE_INVALIDATION_EVENT, refreshCapabilities);
+        return () => window.removeEventListener(RESOURCE_INVALIDATION_EVENT, refreshCapabilities);
+    }, [refetchAppShell]);
 
     const preloadState = useRef({ path: location.pathname, loading: appShellLoading });
     useLayoutEffect(() => {
@@ -368,25 +371,33 @@ export function AppShell() {
     );
 
     useEffect(() => {
-        if (!isPlatformContext || !isPlatformBusinessPath(location.pathname)) return;
-        void routerNavigate('/dashboard', { replace: true });
-    }, [isPlatformContext, location.pathname, routerNavigate]);
-
-    useEffect(() => {
-        if (
-            !commerceContextQuery.data?.myStoreCommerceMode ||
-            commerceModeAllowsPath(commerceMode, location.pathname)
-        ) {
-            return;
-        }
-        void routerNavigate('/catalog/list', { replace: true });
-    }, [commerceContextQuery.data?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
+        if (currentRouteUnsupported && location.pathname !== '/dashboard')
+            void routerNavigate('/dashboard', { replace: true });
+    }, [currentRouteUnsupported, location.pathname, routerNavigate]);
 
     const [openMenu, setOpenMenu] = useState<string | null>('catalog');
 
-    const [tabs, setTabs] = useState<OpenTab[]>([
+    const [storedTabs, setTabs] = useState<OpenTab[]>([
         { path: '/dashboard', href: '/dashboard', label: localizeAdminNavigationTitle('网站总览') },
     ]);
+    const tabs = useMemo(
+        () => (capabilitySnapshot ? storedTabs.filter(tab => canAccessPath(tab.path)) : []),
+        [capabilitySnapshot, storedTabs, canAccessPath],
+    );
+    useEffect(() => {
+        if (!capabilitySnapshot) return;
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (cancelled) return;
+            setTabs(previous => {
+                const allowed = previous.filter(tab => canAccessPath(tab.path));
+                return allowed.length === previous.length ? previous : allowed;
+            });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [capabilitySnapshot, canAccessPath]);
 
     const [isMoreTabsOpen, setIsMoreTabsOpen] = useState(false);
     const tabListRef = useRef<HTMLDivElement>(null);
@@ -666,7 +677,7 @@ export function AppShell() {
                 })),
         ];
         return [...new Map(items.map(item => [item.path, item])).values()]
-            .filter(item => canAccessPath(item.path) && commerceModeAllowsPath(commerceMode, item.path))
+            .filter(item => canAccessPath(item.path))
             .filter(
                 item =>
                     !item.path.startsWith('/settings/store-profile/usdt-') ||
@@ -679,15 +690,17 @@ export function AppShell() {
             )
             .map(item => ({ ...item, title: localizeAdminNavigationTitle(item.title, displayLanguage) }))
             .sort((a, b) => a.order - b.order);
-    }, [canAccessPath, commerceMode, displayLanguage]);
+    }, [canAccessPath, displayLanguage]);
     const allCmdItems = useMemo(
         () =>
-            navigationItems.map(item => ({
-                title: item.title,
-                path: item.path,
-                cat: extensionSectionLabel(item.section),
-                icon: navIcons[ADMIN_NAV_SECTIONS.find(([id]) => id === item.section)?.[2] ?? 'Blocks'],
-            })),
+            navigationItems
+                .filter(item => getNextAdminExtensionRoute(item.path)?.commandPalette !== false)
+                .map(item => ({
+                    title: item.title,
+                    path: item.path,
+                    cat: extensionSectionLabel(item.section),
+                    icon: navIcons[ADMIN_NAV_SECTIONS.find(([id]) => id === item.section)?.[2] ?? 'Blocks'],
+                })),
         [navigationItems],
     );
 
@@ -1309,6 +1322,8 @@ export function AppShell() {
                 >
                     {isChannelSwitching ? (
                         <RouteLoadingFallback />
+                    ) : currentRouteUnsupported ? (
+                        <RouteLoadingFallback />
                     ) : currentRouteRequiresPermission && profileLoading ? (
                         <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
                             正在核验访问权限…
@@ -1340,19 +1355,9 @@ export function AppShell() {
                         <div className="flex h-full items-center justify-center overflow-y-auto p-6">
                             <section className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
                                 <ShieldCheck className="mx-auto h-10 w-10 text-amber-500" />
-                                <h1 className="mt-4 text-base font-bold text-slate-900">
-                                    {currentRouteRequiresPlatformContext
-                                        ? displayLanguage === 'en'
-                                            ? 'Switch to the platform management center'
-                                            : '请切换到平台管理中心'
-                                        : '当前账号无权访问'}
-                                </h1>
+                                <h1 className="mt-4 text-base font-bold text-slate-900">当前账号无权访问</h1>
                                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                                    {currentRouteRequiresPlatformContext
-                                        ? displayLanguage === 'en'
-                                            ? `This feature is managed across all stores. Select “${getChannelDisplayName('__default_channel__', displayLanguage)}” in the store selector at the top, then open this page again.`
-                                            : `此功能由平台统一管理。请在顶部“当前店铺”中选择“${getChannelDisplayName('__default_channel__', displayLanguage)}”，再打开此页面。`
-                                        : '当前账号在所选店铺中缺少访问该页面所需的权限。'}
+                                    当前账号在所选店铺中缺少访问该页面所需的权限。
                                 </p>
                                 <AdminButton
                                     type="button"
@@ -1364,17 +1369,16 @@ export function AppShell() {
                             </section>
                         </div>
                     ) : (
-                        <AdminPermissionsProvider permissions={activePermissions}>
+                        <AdminPermissionsProvider
+                            permissions={activePermissions}
+                            capabilities={capabilitySnapshot}
+                        >
                             {/* Keep store-scoped queries separate while retaining pages within one store. */}
                             <CustomFieldsProvider key={channelData?.activeChannel.token}>
                                 <TabbedOutlet
                                     key={`${activeAdministrator?.id}:${channelData?.activeChannel.id}`}
                                     openPaths={tabs
-                                        .filter(
-                                            tab =>
-                                                canAccessPath(tab.path) &&
-                                                commerceModeAllowsPath(commerceMode, tab.path),
-                                        )
+                                        .filter(tab => canAccessPath(tab.path))
                                         .map(tab => tab.path)}
                                     fallback={<PageSkeleton />}
                                     pageFrame={AdminPageWorkspace}

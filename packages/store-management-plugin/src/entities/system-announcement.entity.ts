@@ -1,9 +1,11 @@
-import { Channel, DeepPartial, VendureEntity } from '@vendure/core';
-import { Column, Entity, Index, JoinTable, ManyToMany } from 'typeorm';
-import type { SystemAnnouncementTargetMode } from '../types';
+import { Channel, DeepPartial, EntityId, ID, VendureEntity } from '@vendure/core';
+import { Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne } from 'typeorm';
+
+import { SystemAnnouncementTargetMode } from '../types';
 
 @Entity({ name: 'system_announcement' })
 @Index('IDX_system_announcement_schedule', ['enabled', 'startsAt', 'endsAt', 'priority'])
+@Index('IDX_system_announcement_owner', ['ownerChannelId'])
 export class SystemAnnouncement extends VendureEntity {
     constructor(input?: DeepPartial<SystemAnnouncement>) {
         super(input);
@@ -17,6 +19,14 @@ export class SystemAnnouncement extends VendureEntity {
 
     @Column('varchar', { length: 16, default: 'ALL' })
     targetMode: SystemAnnouncementTargetMode;
+
+    /** Null identifies platform publication, including every pre-ownership announcement. */
+    @ManyToOne(() => Channel, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'ownerChannelId', foreignKeyConstraintName: 'FK_system_announcement_owner' })
+    ownerChannel: Channel | null;
+
+    @EntityId({ nullable: true })
+    ownerChannelId: ID | null;
 
     @ManyToMany(() => Channel, { onDelete: 'CASCADE', onUpdate: 'CASCADE' })
     @JoinTable({

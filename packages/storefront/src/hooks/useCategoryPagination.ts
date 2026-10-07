@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { CatalogPaginationError, nextCatalogPageParam, validateCatalogPage } from '../catalog-pagination';
+import { usePageReadiness } from '../page-readiness';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    STOREFRONT_CATALOG_PAGE_SIZE,
     storefrontPlaceholderData,
     storefrontQueryKeys,
     storefrontQueryRetry,
@@ -32,11 +34,12 @@ export function useCategoryPagination({
     input,
     enabled,
     suspended,
-    pageSize = 12,
+    pageSize = STOREFRONT_CATALOG_PAGE_SIZE,
 }: CategoryPaginationOptions) {
     const queryClient = useQueryClient();
     const queryKey = storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), languageCode, {
         ...input,
+        take: pageSize,
     });
     const scope = JSON.stringify(queryKey);
     const resultsRef = useRef<HTMLElement>(null);
@@ -95,6 +98,7 @@ export function useCategoryPagination({
             !(error instanceof CatalogPaginationError) && storefrontQueryRetry(count, error),
         meta: publicQueryMeta(),
     });
+    usePageReadiness(enabled && query.isPending && !query.isError);
     const products = useMemo(() => {
         const seen = new Set<string>();
         return (query.data?.pages.flatMap(page => page.items) ?? []).filter(product => {

@@ -9,25 +9,22 @@ import {
     RotateCcw,
     ShoppingBag,
     Truck,
-    X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
 import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { QuantityControl } from './components/common/quantity-control';
 import { compactUiCopy } from './i18n';
-import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
-import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, Sheet, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
     productImageUnavailableLabel,
@@ -154,6 +151,9 @@ export function CheckoutPage({
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
+    const hasCheckoutContent = Boolean(
+        order && cart && (cartPending || (order.totalQuantity > 0 && order.lines.length > 0)),
+    );
     const activeAddress = checkoutAddress(customer, selectedAddressId);
     const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
@@ -539,7 +539,7 @@ export function CheckoutPage({
         }
     };
 
-    if (!order || !cart || (!cartPending && (order.totalQuantity <= 0 || order.lines.length === 0))) {
+    if (!order || !cart || !hasCheckoutContent) {
         return (
             <Subpage
                 title={
@@ -934,7 +934,7 @@ export function CheckoutPage({
                         </span>
                         <span>
                             <RotateCcw />
-                            {compactCopy.orders.returns}
+                            {isZh ? '售后服务' : compactCopy.orders.returns}
                         </span>
                     </section>
                     <div className={checkoutPageClassName('submit-order-bar')}>
@@ -1034,24 +1034,12 @@ export function CheckoutPage({
                                             <strong className="flex items-center gap-1.5">
                                                 <span>{method.name}</span>
                                                 {isFree && (
-                                                    <span
-                                                        className={[
-                                                            'inline-flex items-center rounded-full border',
-                                                            'border-emerald-200 bg-emerald-50 px-2 py-0.5',
-                                                            'type-meta weight-bold text-emerald-700',
-                                                        ].join(' ')}
-                                                    >
+                                                    <span className="shipping-method-badge is-free">
                                                         {isZh ? '免运费' : 'Free'}
                                                     </span>
                                                 )}
                                                 {isPickup && !isFree && (
-                                                    <span
-                                                        className={[
-                                                            'inline-flex items-center rounded-full border',
-                                                            'border-blue-200 bg-blue-50 px-2 py-0.5',
-                                                            'type-meta weight-bold text-blue-700',
-                                                        ].join(' ')}
-                                                    >
+                                                    <span className="shipping-method-badge">
                                                         {isZh ? '门店自提' : 'Pickup'}
                                                     </span>
                                                 )}
@@ -1072,10 +1060,7 @@ export function CheckoutPage({
                             })}
                         </fieldset>
                         {shippingUpdating && (
-                            <p
-                                role="status"
-                                className="mt-3 text-center type-helper text-blue-600 animate-pulse"
-                            >
+                            <p role="status" className="shipping-method-status">
                                 {isZh ? '正在同步配送与运费…' : 'Updating delivery…'}
                             </p>
                         )}
@@ -1606,110 +1591,6 @@ export function DeliveryEmailPicker({
                 </Sheet>
             )}
         </>
-    );
-}
-
-function Sheet({
-    title,
-    language,
-    onClose,
-    children,
-    className,
-    showHandle = false,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onClose: () => void;
-    children: ReactNode;
-    className?: string;
-    showHandle?: boolean;
-}) {
-    const dialogRef = useRef<HTMLElement>(null);
-    const previousFocus = useRef<HTMLElement | null>(null);
-    const onCloseRef = useRef(onClose);
-    const titleId = useId();
-    useEffect(() => {
-        onCloseRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector =
-            'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const focusable = () =>
-            Array.from(dialog.querySelectorAll<HTMLElement>(selector)).filter(
-                element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
-            );
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus({ preventScroll: true }));
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                onCloseRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            if (!items.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = items[0];
-            const last = items[items.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus({ preventScroll: true });
-        };
-    }, []);
-    return (
-        <div
-            className={checkoutPageClassName(`sheet-layer${className ? ` ${className}-layer` : ''}`)}
-            role="presentation"
-        >
-            <button
-                className={checkoutPageClassName('sheet-mask')}
-                type="button"
-                onClick={onClose}
-                aria-label={language === 'zh' ? '关闭' : 'Close'}
-            />
-            <section
-                ref={dialogRef}
-                className={checkoutPageClassName(`sheet${className ? ` ${className}` : ''}`)}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                tabIndex={-1}
-            >
-                {showHandle ? (
-                    <span
-                        className={checkoutPageClassName('delivery-email-picker-handle')}
-                        aria-hidden="true"
-                    />
-                ) : null}
-                <header>
-                    <strong id={titleId}>{title}</strong>
-                    <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
-                        <X aria-hidden="true" />
-                    </button>
-                </header>
-                {children}
-            </section>
-        </div>
     );
 }
 

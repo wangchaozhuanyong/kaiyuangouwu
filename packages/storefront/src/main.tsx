@@ -23,26 +23,28 @@ if (!rootElement) {
 }
 const appRootElement = rootElement;
 
+const embeddedPreview = new URLSearchParams(window.location.search).get('storefrontPreviewEmbedded') === '1';
 restoreStorefrontIcons();
-try {
-    restorePublicQueryCache(storefrontQueryClient);
-    const initialPage = readInitialPublicPage();
-    if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
-    watchPublicQueryCache(storefrontQueryClient);
-    window.addEventListener('pagehide', () => {
-        try {
-            persistPublicQueryCache(storefrontQueryClient);
-        } catch {
-            // Browsing remains available when session storage is full or disabled.
-        }
-    });
-} catch {
-    // sessionStorage can be disabled without preventing the storefront from starting.
+if (!embeddedPreview) {
+    try {
+        const initialPage = readInitialPublicPage();
+        if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
+        restorePublicQueryCache(storefrontQueryClient);
+        watchPublicQueryCache(storefrontQueryClient);
+        window.addEventListener('pagehide', () => {
+            try {
+                persistPublicQueryCache(storefrontQueryClient);
+            } catch {
+                // Browsing remains available when session storage is full or disabled.
+            }
+        });
+    } catch {
+        // sessionStorage can be disabled without preventing the storefront from starting.
+    }
 }
 
 async function mountStorefront() {
-    const parameters = new URLSearchParams(window.location.search);
-    if (parameters.get('storefrontPreviewEmbedded') === '1') {
+    if (embeddedPreview) {
         const { installStorefrontPreviewRuntime } = await import('./storefront-preview-runtime');
         installStorefrontPreviewRuntime();
     }
@@ -59,3 +61,14 @@ async function mountStorefront() {
 }
 
 void mountStorefront();
+
+// CWV uses buffered performance entries, so diagnostics never join the critical rendering path.
+window.addEventListener(
+    'load',
+    () => {
+        void import('./storefront-performance')
+            .then(module => module.observeStorefrontPerformance())
+            .catch(() => undefined);
+    },
+    { once: true },
+);

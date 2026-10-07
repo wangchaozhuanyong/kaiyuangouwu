@@ -434,10 +434,10 @@ export const featureHelpContent = {
         impact: '只影响当前店铺对应固定页面。',
     },
     'storefront.announcements': {
-        purpose: '发布首页公告，并控制状态、顺序和有效时间。',
+        purpose: '各店铺发布和维护本店首页公告；平台管理中心统一管理全部店铺的公告。',
         requirements: ['填写清晰标题和内容', '定时公告需核对时区与开始结束时间'],
         example: '例如：发布“9 月 5 日 02:00–04:00 系统维护”公告。',
-        impact: '启用后可在当前店铺首页公告栏显示。',
+        impact: '本店公告只在当前店铺显示；平台公告按指定店铺或全部店铺的范围显示。',
     },
     'storefront.landing-source': {
         purpose: '编辑营销落地页的 HTML 或结构化源码，并通过安全预览检查效果。',

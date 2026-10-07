@@ -17,7 +17,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useId, useState } from 'react';
 
 import { fulfillmentStateDisplayLabel } from '../../common/src/display-localization';
 import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
@@ -32,14 +32,13 @@ import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
 import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { compactUiCopy, languageCodeFor } from './i18n';
-import { isInputMethodKey } from './input-method';
 import { offlineLoadError, storefrontInitialQueryError } from './loading-state';
 import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
+import { Overlay } from './overlay-host';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
-import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { DeliveryDetails, physicalDeliveryLines, TrackingCode } from './storefront-ui/delivery-details';
@@ -1311,59 +1310,10 @@ export function LogisticsTrackingSheet({
     onNotify?: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const dialogRef = useRef<HTMLElement>(null);
-    const closeRef = useRef(onClose);
-    const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
-    useEffect(() => {
-        closeRef.current = onClose;
-    }, [onClose]);
-
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector =
-            'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                closeRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            if (!items.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = items[0];
-            const last = items[items.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus();
-        };
-    }, []);
 
     return (
-        <div className={orderPageClassName('sheet-layer')} role="presentation">
+        <Overlay className={orderPageClassName('sheet-layer')} role="presentation" onClose={onClose}>
             <button
                 className={orderPageClassName('sheet-mask')}
                 type="button"
@@ -1371,7 +1321,6 @@ export function LogisticsTrackingSheet({
                 aria-label={isZh ? '关闭' : 'Close'}
             />
             <section
-                ref={dialogRef}
                 className={orderPageClassName('sheet logistics-sheet')}
                 role="dialog"
                 aria-modal="true"
@@ -1400,7 +1349,7 @@ export function LogisticsTrackingSheet({
                     </button>
                 </div>
             </section>
-        </div>
+        </Overlay>
     );
 }
 
@@ -1429,10 +1378,6 @@ function AfterSalesRequestSheet({
     const [evidenceBusy, setEvidenceBusy] = useState(false);
     const [evidenceReady, setEvidenceReady] = useState(!api);
     const [error, setError] = useState('');
-    const dialogRef = useRef<HTMLElement>(null);
-    const closeRef = useRef(onClose);
-    const submittingRef = useRef(submitting || evidenceBusy);
-    const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
     const eligibleLines = order.lines.filter(
         line => line.customFields.refundPolicySnapshot !== 'NON_REFUNDABLE' && !isAutoCardLine(line),
@@ -1447,56 +1392,8 @@ function AfterSalesRequestSheet({
     );
 
     useEffect(() => {
-        closeRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        submittingRef.current = submitting || evidenceBusy;
-    }, [submitting, evidenceBusy]);
-    useEffect(() => {
         if (containsDigital && type !== 'REFUND_ONLY') setType('REFUND_ONLY');
     }, [containsDigital, type]);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector =
-            'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape' && !submittingRef.current) {
-                event.preventDefault();
-                closeRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            if (!items.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = items[0];
-            const last = items[items.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus();
-        };
-    }, []);
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -1536,7 +1433,13 @@ function AfterSalesRequestSheet({
     };
 
     return (
-        <div className={orderPageClassName('sheet-layer')} role="presentation">
+        <Overlay
+            className={orderPageClassName('sheet-layer')}
+            role="presentation"
+            onClose={() => {
+                if (!submitting && !evidenceBusy) onClose();
+            }}
+        >
             <button
                 className={orderPageClassName('sheet-mask')}
                 type="button"
@@ -1545,7 +1448,6 @@ function AfterSalesRequestSheet({
                 aria-label={isZh ? '关闭' : 'Close'}
             />
             <section
-                ref={dialogRef}
                 className={orderPageClassName('sheet after-sales-sheet')}
                 role="dialog"
                 aria-modal="true"
@@ -1730,7 +1632,7 @@ function AfterSalesRequestSheet({
                     </div>
                 </form>
             </section>
-        </div>
+        </Overlay>
     );
 }
 
@@ -2121,59 +2023,7 @@ function CancelOrderSheet({
     const [reason, setReason] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const dialogRef = useRef<HTMLElement>(null);
-    const closeRef = useRef(onClose);
-    const submittingRef = useRef(submitting);
-    const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
-
-    useEffect(() => {
-        closeRef.current = onClose;
-    }, [onClose]);
-    useEffect(() => {
-        submittingRef.current = submitting;
-    }, [submitting]);
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const releaseBodyScrollLock = acquireBodyScrollLock();
-        const selector = 'button:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-        const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
-        const keydown = (event: KeyboardEvent) => {
-            if (isInputMethodKey(event)) return;
-            if (event.key === 'Escape' && !submittingRef.current) {
-                event.preventDefault();
-                closeRef.current();
-                return;
-            }
-            if (event.key !== 'Tab') return;
-            const items = focusable();
-            if (!items.length) {
-                event.preventDefault();
-                dialog.focus();
-                return;
-            }
-            const first = items[0];
-            const last = items[items.length - 1];
-            const active = document.activeElement;
-            if (event.shiftKey && (active === first || !dialog.contains(active))) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-        document.addEventListener('keydown', keydown);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener('keydown', keydown);
-            releaseBodyScrollLock();
-            previousFocus.current?.focus();
-        };
-    }, []);
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -2197,7 +2047,13 @@ function CancelOrderSheet({
     };
 
     return (
-        <div className={orderPageClassName('sheet-layer')} role="presentation">
+        <Overlay
+            className={orderPageClassName('sheet-layer')}
+            role="presentation"
+            onClose={() => {
+                if (!submitting) onClose();
+            }}
+        >
             <button
                 className={orderPageClassName('sheet-mask')}
                 type="button"
@@ -2206,7 +2062,6 @@ function CancelOrderSheet({
                 aria-label={isZh ? '关闭' : 'Close'}
             />
             <section
-                ref={dialogRef}
                 className={orderPageClassName('sheet order-cancel-sheet')}
                 role="dialog"
                 aria-modal="true"
@@ -2237,7 +2092,7 @@ function CancelOrderSheet({
                             rows={4}
                             maxLength={500}
                             required
-                            autoFocus
+                            data-overlay-autofocus
                             placeholder={isZh ? '请简要说明原因' : 'Briefly tell us why'}
                             onChange={event => setReason(event.currentTarget.value)}
                         />
@@ -2268,7 +2123,7 @@ function CancelOrderSheet({
                     </div>
                 </form>
             </section>
-        </div>
+        </Overlay>
     );
 }
 

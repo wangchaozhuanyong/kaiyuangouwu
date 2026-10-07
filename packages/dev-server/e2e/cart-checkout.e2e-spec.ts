@@ -180,11 +180,16 @@ beforeAll(async () => {
                 zones {
                     items {
                         id
+                        members {
+                            code
+                        }
                     }
                 }
             }
         `)
     ).zones.items;
+    const fixtureZone = zones.find((zone: any) => zone.members.some((country: any) => country.code === 'GB'));
+    expect(fixtureZone, 'The owned physical fixture requires the GB shipping zone').toBeDefined();
     const channel = (
         await adminClient.query(
             gql`
@@ -203,10 +208,11 @@ beforeAll(async () => {
                 input: {
                     code: cartChannelToken,
                     token: cartChannelToken,
+                    customFields: { commerceMode: 'HYBRID' },
                     defaultLanguageCode: 'zh_Hans',
                     currencyCode: 'USD',
-                    defaultTaxZoneId: zones[0].id,
-                    defaultShippingZoneId: zones[0].id,
+                    defaultTaxZoneId: fixtureZone.id,
+                    defaultShippingZoneId: fixtureZone.id,
                     pricesIncludeTax: false,
                 },
             },
@@ -744,6 +750,16 @@ describe('complete cart domain on MySQL', () => {
                 }
             }
         `);
+        // This case must also seed its digital item when run as a failed-case retry.
+        const currentCart = await read();
+        if (
+            !currentCart.lines.some((line: any) => line.selected && variants.includes(line.productVariant.id))
+        ) {
+            const digital = await send({
+                changes: { add: [{ productVariantId: variants[0], quantity: 1 }] },
+            });
+            expect(digital.status, digital.message).toBe('APPLIED');
+        }
         const product = await adminClient.query(gql`
             mutation {
                 createProduct(

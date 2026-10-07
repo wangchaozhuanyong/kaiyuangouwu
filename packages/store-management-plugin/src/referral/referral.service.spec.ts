@@ -11,6 +11,59 @@ import { referralPosterCopy } from './referral-poster-presets';
 import { ReferralPosterView } from './referral-poster-view';
 import { ReferralService, supportsReferralPessimisticLock } from './referral.service';
 
+describe('referral display currency boundaries', () => {
+    it.each(['MYR', 'USD'])(
+        'preserves source reward thresholds and caps but disables the unavailable %s view',
+        async currencyCode => {
+            const view = new ReferralPosterView(
+                {
+                    getRepository: () => ({ find: () => Promise.resolve([]) }),
+                    rawConnection: { hasMetadata: () => false },
+                } as any,
+                {} as any,
+            );
+            const config = {
+                channelId: 'store-1',
+                enabled: true,
+                minimumOrderAmount: 10_000,
+                maxRewardPerOrder: 2_000,
+                currencyCode: 'CNY',
+                rewardRateBps: 500,
+                posterTemplates: [],
+                defaultPosterTemplate: '',
+            } as any;
+            const context = {
+                channelId: 'store-1',
+                currencyCode,
+                languageCode: 'zh_Hans',
+                channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+            } as any;
+            await expect(view.configView(context, config, false)).resolves.toMatchObject({
+                enabled: false,
+                minimumOrderAmount: 10_000,
+                maxRewardPerOrder: 2_000,
+                currencyCode: 'CNY',
+            });
+            await expect(
+                view.configView(
+                    { ...context, currencyCode: 'CNY' },
+                    {
+                        ...config,
+                        minimumOrderAmount: 0,
+                        maxRewardPerOrder: 0,
+                    },
+                    true,
+                ),
+            ).resolves.toMatchObject({
+                enabled: true,
+                minimumOrderAmount: 0,
+                maxRewardPerOrder: 0,
+                currencyCode: 'CNY',
+            });
+        },
+    );
+});
+
 describe('referral database locking', () => {
     it.each(['postgres', 'mysql', 'mariadb', 'mssql'])('keeps row locking enabled for %s', driverType => {
         expect(supportsReferralPessimisticLock(driverType)).toBe(true);

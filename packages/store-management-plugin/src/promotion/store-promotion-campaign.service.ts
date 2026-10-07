@@ -5,6 +5,7 @@ import {
     LanguageCode,
     SortOrder,
 } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
 import {
@@ -90,7 +91,9 @@ export class StorePromotionCampaignService {
             : [];
         const configsByPromotion = new Map(configs.map(config => [String(config.promotionId), config]));
         const customerCounts = new Map(customerRows.map(row => [String(row.promotionId), Number(row.count)]));
-        const statsByPromotion = this.campaignStats(statusRows, allocationRows, ctx.currencyCode);
+        const statsByCurrency = new Map([
+            [ctx.currencyCode, this.campaignStats(statusRows, allocationRows, ctx.currencyCode)],
+        ]);
 
         // Vendure also assigns merchant promotions to the default Channel. The
         // unique campaign config determines which store owns the entitlement.
@@ -101,6 +104,11 @@ export class StorePromotionCampaignService {
             })
             .map(({ promotion, view }) => {
                 const config = configsByPromotion.get(String(promotion.id));
+                let statsByPromotion = statsByCurrency.get(view.currencyCode);
+                if (!statsByPromotion) {
+                    statsByPromotion = this.campaignStats(statusRows, allocationRows, view.currencyCode);
+                    statsByCurrency.set(view.currencyCode, statsByPromotion);
+                }
                 const stats = statsByPromotion.get(String(promotion.id)) ?? emptyCampaignStats();
                 const issueLimit = config?.issueLimit ?? promotion.usageLimit ?? null;
                 const remainingIssueCount =
@@ -123,6 +131,7 @@ export class StorePromotionCampaignService {
                     remainingIssueCount,
                     claimed: customerClaimedCount > 0,
                     claimable:
+                        view.claimable &&
                         !config?.archivedAt &&
                         customerClaimedCount === 0 &&
                         (remainingIssueCount == null || remainingIssueCount > 0),
@@ -416,6 +425,7 @@ export class StorePromotionCampaignService {
         if (!existingPromotion || !this.isManagedPromotion(existingPromotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, existingPromotion.id);
         if (this.toCouponView(existingPromotion)) await this.lockOwnedCampaign(ctx, existingPromotion);
         if (!enabled && this.toCouponView(existingPromotion)) {
             const issuedCount = await this.connection
@@ -452,6 +462,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.isManagedPromotion(promotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, promotion.id);
         if (this.toCouponView(promotion)) await this.lockOwnedCampaign(ctx, promotion);
         const name = this.requiredText(value, '活动名称', 120);
         const result = await this.promotionService.updatePromotion(ctx, {
@@ -558,6 +569,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.isManagedPromotion(promotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, promotion.id);
         if (this.toCouponView(promotion)) {
             await this.lockOwnedCampaign(ctx, promotion);
             const issuedCount = await this.connection
@@ -681,18 +693,15 @@ export class StorePromotionCampaignService {
             ctx?.channel.defaultCurrencyCode ||
             CurrencyCode.CNY) as CurrencyCode;
         const targetCurrencyCode = ctx?.currencyCode ?? sourceCurrencyCode;
+        const sourceMinimumSpend = numberArg(minimumCondition, 'amount');
         const minimumSpend = ctx
-            ? (convertChannelAmount(
-                  ctx,
-                  numberArg(minimumCondition, 'amount'),
-                  sourceCurrencyCode,
-                  targetCurrencyCode,
-              ) ?? 0)
-            : numberArg(minimumCondition, 'amount');
+            ? convertChannelAmount(ctx, sourceMinimumSpend, sourceCurrencyCode, targetCurrencyCode)
+            : sourceMinimumSpend;
         const fixedDiscount = ctx
             ? convertChannelAmount(ctx, numberArg(action, 'discount'), sourceCurrencyCode, targetCurrencyCode)
             : numberArg(action, 'discount');
         const percentageOff = numberArg(action, 'discount');
+        const convertible = minimumSpend != null && (kind !== 'ORDER_FIXED' || fixedDiscount != null);
         return {
             id: promotion.id,
             createdAt: promotion.createdAt,
@@ -701,12 +710,13 @@ export class StorePromotionCampaignService {
             couponCode: promotion.couponCode,
             kind,
             appearanceTheme: null,
-            enabled: promotion.enabled,
+            enabled: promotion.enabled && convertible,
             startsAt: promotion.startsAt,
             endsAt: promotion.endsAt,
-            minimumSpend,
-            currencyCode: targetCurrencyCode,
-            discountAmount: kind === 'ORDER_FIXED' ? fixedDiscount : null,
+            minimumSpend: convertible ? minimumSpend : sourceMinimumSpend,
+            currencyCode: convertible ? targetCurrencyCode : sourceCurrencyCode,
+            discountAmount:
+                kind === 'ORDER_FIXED' ? (convertible ? fixedDiscount : numberArg(action, 'discount')) : null,
             discountRate: kind === 'ORDER_FIXED' ? null : percentageOffToDiscountRate(percentageOff),
             collectionIds: idListArg(action, 'collectionIds'),
             productVariantIds: idListArg(action, 'productVariantIds'),
@@ -724,7 +734,7 @@ export class StorePromotionCampaignService {
             archivedAt: null,
             remainingIssueCount: promotion.usageLimit,
             claimed: false,
-            claimable: true,
+            claimable: convertible,
         };
     }
 
@@ -834,6 +844,7 @@ export class StorePromotionCampaignService {
                               rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
                               ctx.currencyCode,
                           );
+                if (rule.salePrice != null && convertedSalePrice == null) return null;
                 const salePrice =
                     convertedSalePrice ??
                     Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
@@ -893,6 +904,7 @@ export class StorePromotionCampaignService {
         if (config && !idsAreEqual(config.channelId, ctx.channelId))
             throw new UserInputError('该优惠券属于其他店铺');
         if (!config) {
+            await this.assertExclusivePromotionOwner(ctx, promotion.id);
             config = await repository.save(
                 new StoreCouponCampaignConfig({
                     channelId: ctx.channelId,
@@ -911,6 +923,15 @@ export class StorePromotionCampaignService {
             );
         }
         return config;
+    }
+
+    private async assertExclusivePromotionOwner(ctx: RequestContext, id: ID): Promise<void> {
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE) return;
+        const promotion = await this.promotionService.findOne(ctx, id, ['channels']);
+        const stores = promotion?.channels?.filter(channel => channel.code !== DEFAULT_CHANNEL_CODE) ?? [];
+        if (stores.length !== 1 || !idsAreEqual(stores[0].id, ctx.channelId)) {
+            throw new UserInputError('该促销由其他店铺或多个店铺共享，请在平台管理中心处理');
+        }
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {

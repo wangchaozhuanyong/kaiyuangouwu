@@ -716,7 +716,13 @@ describe('native content translation event routing', () => {
             { publish: vi.fn().mockResolvedValue(undefined) } as any,
             {
                 getRepository: vi.fn(() => repository),
-                rawConnection: { getMetadata: () => ({ relations: [] }) },
+                rawConnection: {
+                    getMetadata: (entityClass: { name: string }) => ({
+                        name: entityClass.name,
+                        relations: [],
+                        findColumnWithPropertyName: () => undefined,
+                    }),
+                },
                 withTransaction: (ctx: any, work: any) => work(ctx),
             } as any,
             {} as any,
@@ -747,7 +753,13 @@ describe('native content translation event routing', () => {
             { publish: vi.fn().mockResolvedValue(undefined) } as any,
             {
                 getRepository: vi.fn(() => repository),
-                rawConnection: { getMetadata: () => ({ relations: [] }) },
+                rawConnection: {
+                    getMetadata: (entityClass: { name: string }) => ({
+                        name: entityClass.name,
+                        relations: [],
+                        findColumnWithPropertyName: () => undefined,
+                    }),
+                },
                 withTransaction: (ctx: any, work: any) => work(ctx),
             } as any,
             {} as any,
@@ -787,7 +799,13 @@ describe('native content translation event routing', () => {
             { publish: vi.fn().mockResolvedValue(undefined) } as any,
             {
                 getRepository: vi.fn(() => repository),
-                rawConnection: { getMetadata: () => ({ relations: [] }) },
+                rawConnection: {
+                    getMetadata: (entityClass: { name: string }) => ({
+                        name: entityClass.name,
+                        relations: [],
+                        findColumnWithPropertyName: () => undefined,
+                    }),
+                },
                 withTransaction: (ctx: any, work: any) => work(ctx),
             } as any,
             {} as any,

@@ -152,6 +152,7 @@ const input = () => ({ visitorId: device, rating: 5, tags: ['响应迅速'], com
 function ctx(channelId = 1, userId?: number, headers: Record<string, string> = {}) {
     return {
         channelId,
+        channel: { id: channelId, code: `store-${channelId}` },
         activeUserId: userId,
         req: { ip: '203.0.113.10', headers: { 'user-agent': 'Mozilla/5.0 Test Browser', ...headers } },
         userHasPermissions: () => false,
@@ -487,7 +488,7 @@ describe('unified store notifications with real persistence and additive migrati
                 promotionConnection,
                 {} as never,
                 presence,
-                {} as never,
+                fixtureDependency({}),
                 fixtureDependency(notifications),
                 {} as never,
             );
@@ -525,7 +526,7 @@ describe('unified store notifications with real persistence and additive migrati
             connection,
             { create: ({ channelOrToken }: any) => Promise.resolve(ctx(channelOrToken.id)) } as never,
             presence,
-            { get: () => Promise.resolve({ enabled: true, notifyOnlineReports: true }) } as never,
+            fixtureDependency({ get: () => Promise.resolve({ enabled: true, notifyOnlineReports: true }) }),
             fixtureDependency(notifications),
             {} as never,
         );

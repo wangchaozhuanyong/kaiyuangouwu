@@ -136,7 +136,7 @@ import { CountryService } from './country.service';
 import { CustomerService } from './customer.service';
 import { FulfillmentService } from './fulfillment.service';
 import { HistoryService } from './history.service';
-import { PaymentMethodService } from './payment-method.service';
+import { AcceptedPaymentIntent, PaymentMethodService } from './payment-method.service';
 import { PaymentService, VerifiedRefundSettlementEvidence } from './payment.service';
 import { ProductVariantService } from './product-variant.service';
 import { PromotionService } from './promotion.service';
@@ -1550,6 +1550,24 @@ export class OrderService {
         orderId: ID,
         input: PaymentInput,
     ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
+        return this.addPaymentToOrderWithScope(ctx, orderId, input);
+    }
+
+    /** Server-only settlement of a verified, already accepted intent. Not exposed by GraphQL resolvers. */
+    async addPaymentToOrderFromAcceptedIntent(
+        ctx: RequestContext,
+        scope: AcceptedPaymentIntent,
+        metadata: PaymentInput['metadata'],
+    ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
+        return this.addPaymentToOrderWithScope(ctx, scope.orderId, { method: scope.method, metadata }, scope);
+    }
+
+    private async addPaymentToOrderWithScope(
+        ctx: RequestContext,
+        orderId: ID,
+        input: PaymentInput,
+        acceptedIntent?: AcceptedPaymentIntent,
+    ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
         this.assertInTransaction(ctx, 'OrderService.addPaymentToOrder');
         await this.lockOrderForRefund(ctx, orderId);
         const order = await this.getOrderOrThrow(ctx, orderId);
@@ -1604,14 +1622,25 @@ export class OrderService {
         }
         freshOrder.payments = await this.getOrderPayments(ctx, freshOrder.id);
         const amountToPay = this.paymentAmountStillDue(freshOrder);
-        const payment = await this.paymentService.createPayment(
-            ctx,
-            freshOrder,
-            amountToPay,
-            input.method,
-            input.metadata,
-            (paymentCtx, created) => this.linkAdditionalPaymentModifications(paymentCtx, freshOrder, created),
-        );
+        const beforeFinalize = (paymentCtx: RequestContext, created: Payment) =>
+            this.linkAdditionalPaymentModifications(paymentCtx, freshOrder, created);
+        const payment = acceptedIntent
+            ? await this.paymentService.createPaymentFromAcceptedIntent(
+                  ctx,
+                  freshOrder,
+                  amountToPay,
+                  acceptedIntent,
+                  input.metadata,
+                  beforeFinalize,
+              )
+            : await this.paymentService.createPayment(
+                  ctx,
+                  freshOrder,
+                  amountToPay,
+                  input.method,
+                  input.metadata,
+                  beforeFinalize,
+              );
 
         if (isGraphQlErrorResult(payment)) {
             return payment;

@@ -115,7 +115,9 @@ export class ImageGenerationService {
                 },
             },
             new ImageGenerationRequestPolicy(this.rules),
-            new ImageGenerationJobViews(this.connection, this.storage),
+            new ImageGenerationJobViews(this.connection, this.storage, requestContext =>
+                this.configService.isStorefrontEntryEnabled(requestContext),
+            ),
         ).create(ctx, input);
     }
 
@@ -132,7 +134,9 @@ export class ImageGenerationService {
     }
 
     async jobView(ctx: RequestContext, job: ImageGenerationJob, customerId: ID) {
-        return new ImageGenerationJobViews(this.connection, this.storage).jobView(ctx, job, customerId);
+        return new ImageGenerationJobViews(this.connection, this.storage, requestContext =>
+            this.configService.isStorefrontEntryEnabled(requestContext),
+        ).jobView(ctx, job, customerId);
     }
 
     async cancelQueued(ctx: RequestContext, id: ID) {
@@ -370,7 +374,9 @@ export class ImageGenerationService {
                 },
             },
             new ImageGenerationRequestPolicy(this.rules),
-            new ImageGenerationJobViews(this.connection, this.storage),
+            new ImageGenerationJobViews(this.connection, this.storage, ctx =>
+                this.configService.isStorefrontEntryEnabled(ctx),
+            ),
         );
     }
 
@@ -382,7 +388,9 @@ export class ImageGenerationService {
                 storage: this.storage,
                 activeCustomer: this.activeCustomer.bind(this),
             },
-            new ImageGenerationJobViews(this.connection, this.storage),
+            new ImageGenerationJobViews(this.connection, this.storage, ctx =>
+                this.configService.isStorefrontEntryEnabled(ctx),
+            ),
         );
     }
 
@@ -400,7 +408,9 @@ export class ImageGenerationService {
                 findMine: this.findMine.bind(this),
                 wallet: this.wallet.bind(this),
             },
-            new ImageGenerationJobViews(this.connection, this.storage),
+            new ImageGenerationJobViews(this.connection, this.storage, ctx =>
+                this.configService.isStorefrontEntryEnabled(ctx),
+            ),
         );
     }
 
@@ -419,7 +429,9 @@ export class ImageGenerationService {
                     return getEnqueuer();
                 },
             },
-            new ImageGenerationJobViews(this.connection, this.storage),
+            new ImageGenerationJobViews(this.connection, this.storage, ctx =>
+                this.configService.isStorefrontEntryEnabled(ctx),
+            ),
             this.usageQuery,
         );
     }

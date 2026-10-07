@@ -50,6 +50,7 @@ import {
     type DashboardSearchIndexData,
 } from '../../graphql/dashboard.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import {
@@ -152,6 +153,7 @@ const metricTotal = (data: DashboardMetricsData | undefined, type: 'OrderCount' 
 export function DashboardModule() {
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
+    const { canAccessPath } = useAdminCapabilities();
     const [period, setPeriod] = useState<MetricPeriod>('TODAY');
     const [rangeEnd, setRangeEnd] = useState(() => Date.now());
     const [widgetPreferences, setWidgetPreferences] = useState(loadWidgetPreferences);
@@ -183,21 +185,15 @@ export function DashboardModule() {
     }>(GET_ACTIVE_CHANNEL, {});
     const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code ?? '');
     const businessQueryPaused = !channelContext.data || isPlatformContext;
-    const canReadOrders = hasAnyPermission(['ReadOrder']);
-    const canReadProducts = hasAnyPermission(['ReadProduct']);
+    const canReadOrders = canAccessPath('/sales/orders');
+    const canReadProducts = canAccessPath('/catalog/list');
+    const canReadCardAlerts = canAccessPath('/catalog/card-pool');
     const canReadCatalog = hasAnyPermission(['ReadCatalog']);
     const canReadSearchIndex = canReadProducts || canReadCatalog;
-    const canCreateProducts = hasAnyPermission(['CreateProduct']);
-    const canOpenAiSettings = hasAnyPermission(['ReadSettings']);
-    const canEditStorefront = hasAnyPermission(['ReadStorefrontContent']);
-    const canOpenStoreSettings = hasAnyPermission([
-        'ReadSettings',
-        'ReadChannel',
-        'ReadSeller',
-        'ReadPaymentMethod',
-        'ReadShippingMethod',
-        'ReadStoreProfile',
-    ]);
+    const canCreateProducts = canAccessPath('/catalog/products/new');
+    const canOpenAiSettings = canAccessPath('/plugins/ai-settings');
+    const canEditStorefront = canAccessPath('/storefront/decoration');
+    const canOpenStoreSettings = canAccessPath('/settings/store-profile');
     const hasQuickActions =
         canCreateProducts || canOpenAiSettings || canEditStorefront || canOpenStoreSettings;
 
@@ -235,7 +231,7 @@ export function DashboardModule() {
     });
     const productTodo = useQuery<DashboardProductTodoData>(DASHBOARD_PRODUCT_TODO_QUERY, {
         notifyOnNetworkStatusChange: true,
-        skip: businessQueryPaused || !canReadProducts,
+        skip: businessQueryPaused || !canReadCardAlerts,
     });
     const reviewTodo = useQuery<DashboardReviewTodoData>(DASHBOARD_REVIEW_TODO_QUERY, {
         notifyOnNetworkStatusChange: true,
@@ -318,12 +314,12 @@ export function DashboardModule() {
                 if (['METRICS', 'SHIPMENTS', 'AFTER_SALES', 'RECENT_ORDERS'].includes(widgetId)) {
                     return canReadOrders;
                 }
-                if (widgetId === 'CARD_ALERTS') return canReadProducts;
+                if (widgetId === 'CARD_ALERTS') return canReadCardAlerts;
                 if (widgetId === 'REVIEWS') return canReadCatalog;
                 if (widgetId === 'SEARCH_INDEX') return canReadSearchIndex;
                 return hasQuickActions;
             }),
-        [canReadCatalog, canReadOrders, canReadProducts, canReadSearchIndex, hasQuickActions],
+        [canReadCatalog, canReadOrders, canReadCardAlerts, canReadSearchIndex, hasQuickActions],
     );
     const visibleWidgets = widgetPreferences.order.filter(
         widgetId => allowedWidgets.includes(widgetId) && !widgetPreferences.hidden.includes(widgetId),
@@ -391,6 +387,7 @@ export function DashboardModule() {
                                 <AdminButton
                                     type="button"
                                     onClick={() => navigate('/settings/team')}
+                                    capabilityId="/settings/team/members"
                                     className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                 >
                                     员工与权限
@@ -398,6 +395,7 @@ export function DashboardModule() {
                                 <AdminButton
                                     type="button"
                                     onClick={() => navigate('/settings/system-ops')}
+                                    capabilityId="/settings/system-ops/health"
                                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                                 >
                                     系统运维

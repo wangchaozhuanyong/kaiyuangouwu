@@ -31,7 +31,14 @@ export class SettingsStoreAdminResolver {
         const allFields = this.settingsStoreService.getAllFieldDefinitions();
 
         // Filter to fields the user can read
-        const readable = allFields.filter(({ key }) => this.settingsStoreService.hasReadPermission(ctx, key));
+        const readable = allFields.filter(
+            ({ key, config }) =>
+                this.settingsStoreService.hasReadPermission(ctx, key) &&
+                (this.isPlatformContext(ctx) ||
+                    ['CHANNEL', 'USER', 'USER_AND_CHANNEL'].includes(
+                        this.settingsStoreService.getScopeType(config),
+                    )),
+        );
 
         // Batch-fetch current values
         const keys = readable.map(f => f.key);
@@ -76,6 +83,20 @@ export class SettingsStoreAdminResolver {
         @Args('input') input: SettingsStoreInput,
     ): Promise<SetSettingsStoreValueResult> {
         try {
+            const config = this.settingsStoreService.getFieldDefinition(input.key);
+            if (
+                !this.isPlatformContext(ctx) &&
+                config &&
+                !['CHANNEL', 'USER', 'USER_AND_CHANNEL'].includes(
+                    this.settingsStoreService.getScopeType(config),
+                )
+            ) {
+                return {
+                    key: input.key,
+                    result: false,
+                    error: '请切换到平台管理中心修改平台配置',
+                };
+            }
             if (!this.settingsStoreService.hasWritePermission(ctx, input.key)) {
                 return {
                     key: input.key,
@@ -99,6 +120,10 @@ export class SettingsStoreAdminResolver {
                 error: error instanceof Error ? error.message : 'Unknown error occurred',
             };
         }
+    }
+
+    private isPlatformContext(ctx: RequestContext): boolean {
+        return /^_+default_channel_+$/iu.test(ctx.channel?.code?.trim() ?? '');
     }
 
     @Mutation()

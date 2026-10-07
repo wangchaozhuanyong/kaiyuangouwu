@@ -31,7 +31,7 @@ afterEach(async () => {
     vi.useRealTimers();
 });
 
-async function mountUpdatePrompt() {
+async function mountUpdatePrompt(initialAssetReferences?: readonly string[]) {
     vi.stubEnv('PROD', true);
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
@@ -40,7 +40,9 @@ async function mountUpdatePrompt() {
     document.body.append(host);
     root = createRoot(host);
     await act(async () => {
-        root?.render(createElement(StorefrontUpdatePrompt, { language: 'zh', route: 'home' }));
+        root?.render(
+            createElement(StorefrontUpdatePrompt, { language: 'zh', route: 'home', initialAssetReferences }),
+        );
         await Promise.resolve();
     });
 }
@@ -138,6 +140,43 @@ describe('StorefrontUpdatePrompt', () => {
         expect(host?.querySelector('[role="status"]')).toBeNull();
         await act(async () => vi.advanceTimersByTimeAsync(54_999));
         expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(host?.textContent).toContain('发现新版本');
+    });
+
+    it('uses early entry references after lazy route CSS is attached without inventing a new version', async () => {
+        vi.useFakeTimers();
+        vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockResolvedValue(
+                new Response('<script type="module" src="/assets/index-old.js"></script>', { status: 200 }),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        await mountUpdatePrompt(['/assets/index-old.js']);
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            '<link rel="stylesheet" href="/assets/account-route.css">',
+        );
+        await act(async () => {
+            window.dispatchEvent(new Event('focus'));
+            await Promise.resolve();
+        });
+        expect(fetchMock).toHaveBeenCalled();
+        expect(host?.querySelector('[role="status"]')).toBeNull();
+    });
+
+    it('still announces a real new entry when supplied an early resource snapshot', async () => {
+        vi.useFakeTimers();
+        vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
+        vi.stubGlobal(
+            'fetch',
+            vi.fn<typeof fetch>().mockResolvedValue(
+                new Response('<script type="module" src="/assets/index-new.js"></script>', {
+                    status: 200,
+                }),
+            ),
+        );
+        await mountUpdatePrompt(['/assets/index-old.js']);
         expect(host?.textContent).toContain('发现新版本');
     });
 

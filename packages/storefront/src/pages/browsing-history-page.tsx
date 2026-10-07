@@ -5,13 +5,12 @@ import { useState } from 'react';
 import { ShopApi } from '../api';
 import { filterProductsByVisitDate, type ProductVisitTimes, type VisitPeriod } from '../browsing-history';
 import { useDesktopLayout } from '../desktop-layout';
-import { storefrontInitialQueryError } from '../loading-state';
+import { useAccountProductList } from '../hooks/useAccountProductList';
 import { PageSkeleton } from '../route-loading';
-import { useProductsByIdsQuery } from '../route-queries';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { BrowsingHistoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
-import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
+import { EmptyState, InlineError, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { MarketConfig, StorefrontLanguage } from '../types';
 
@@ -53,8 +52,11 @@ export function BrowsingHistoryPage() {
         onClear,
     } = BrowsingHistoryPageContext.useValue();
     const isZh = language === 'zh';
-    const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
-    const historyProducts = productIds.length ? (historyQuery.data ?? []) : [];
+    const {
+        query: historyQuery,
+        products: historyProducts,
+        error: queryError,
+    } = useAccountProductList({ api, productIds, market, language });
     const visibleProducts = filterProductsByVisitDate(historyProducts, visitTimes, period);
     const periods: Array<[VisitPeriod, string]> = [
         ['all', isZh ? '全部' : 'All'],
@@ -64,9 +66,9 @@ export function BrowsingHistoryPage() {
         ['earlier', isZh ? '更早' : 'Earlier'],
     ];
     const loading = activityLoading || (productIds.length > 0 && historyQuery.isLoading);
-    const historyError = activityError
-        ? storefrontErrorMessage(activityError, language)
-        : storefrontInitialQueryError(historyQuery, language);
+    const historyError = activityError ? storefrontErrorMessage(activityError, language) : queryError;
+    const retry = () =>
+        activityError ? onActivityRetry?.() : void historyQuery.refetch({ cancelRefetch: false });
 
     return (
         <main className="page subpage history-page">
@@ -124,19 +126,18 @@ export function BrowsingHistoryPage() {
                     </button>
                 </div>
             )}
+            {historyError && historyProducts.length > 0 && (
+                <InlineError message={historyError} action={isZh ? '重试' : 'Retry'} onAction={retry} />
+            )}
             {loading && !historyProducts.length ? (
                 <PageSkeleton label={isZh ? '正在加载浏览足迹' : 'Loading browsing history'} />
-            ) : historyError ? (
+            ) : historyError && !historyProducts.length ? (
                 <EmptyState
                     icon={<WifiOff />}
                     title={isZh ? '浏览足迹加载失败' : 'Could not load browsing history'}
                     detail={historyError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() =>
-                        activityError
-                            ? onActivityRetry?.()
-                            : void historyQuery.refetch({ cancelRefetch: false })
-                    }
+                    onAction={retry}
                 />
             ) : historyProducts.length ? (
                 visibleProducts.length || !desktop ? (

@@ -8,28 +8,25 @@ import {
     PaymentMethodService,
     ProductVariant,
     RequestContext,
-    ShippingMethod,
+    ShippingMethodService,
     TransactionalConnection,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
-import { IsNull } from 'typeorm';
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
-import { storeShippingMethodCode, storeZoneName } from './store-commerce-settings.service';
+import { hasReadyShippingMethod } from './shipping-readiness';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
 import {
     USDT_TRC20_PAYMENT_HANDLER_CODE,
     USDT_TRC20_PAYMENT_METHOD_CODE,
 } from './usdt/usdt-payment.constants';
+export { hasReadyShippingMethod } from './shipping-readiness';
 
 const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
-const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
-const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
-
 export function isUsableEnglishContent(value: unknown): boolean {
     return isUsableEnglishTranslation(value);
 }
@@ -127,7 +124,10 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
         zh: '发布使用条款（英文自动生成）',
         en: 'Publish the terms (English is generated automatically)',
     },
-    SHIPPING: { zh: '保存店铺专属配送区域和配送方式', en: 'Save the store shipping zone and method' },
+    SHIPPING: {
+        zh: '配置本店配送区域，并启用通用包邮或本店配送模板',
+        en: 'Configure the store shipping zone and enable a shared or private shipping template',
+    },
     PAYMENT: { zh: '启用至少一种非测试支付方式', en: 'Enable at least one non-test payment method' },
 };
 
@@ -164,12 +164,13 @@ export class StoreActivationReadinessService {
         private readonly configService: ConfigService,
         private readonly currencySettings: StoreCurrencySettingsService,
         private readonly paymentMethodService: PaymentMethodService,
+        private readonly shippingMethodService: ShippingMethodService,
     ) {}
 
     async get(ctx: RequestContext, profile: StoreProfile): Promise<StoreActivationReadiness> {
         const channel = await this.connection.getRepository(ctx, Channel).findOne({
             where: { id: profile.channelId },
-            relations: { defaultTaxZone: true, defaultShippingZone: true },
+            relations: { defaultTaxZone: true, defaultShippingZone: { members: true } },
         });
         if (!channel) {
             return evaluateStoreActivationReadiness(this.emptySnapshot());
@@ -204,15 +205,9 @@ export class StoreActivationReadinessService {
                 relations: { items: { translations: true } },
             }),
             this.paymentMethodService.getActivePaymentMethods(ctx.copy({ channel })),
-            this.connection.getRepository(ctx, ShippingMethod).find({
-                where: { channels: { id: profile.channelId }, deletedAt: IsNull() },
-                relations: { channels: true },
-            }),
+            this.shippingMethodService.getActiveShippingMethods(ctx.copy({ channel })),
         ]);
 
-        const storeShippingMethod = shippingMethods.find(
-            method => method.code === storeShippingMethodCode(channel.code),
-        );
         const activeContent = contentBlocks.filter(block => this.isActiveContent(block));
         const registeredPaymentHandlers = new Set(
             this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
@@ -241,10 +236,7 @@ export class StoreActivationReadinessService {
                 support: this.hasSupportContent(activeContent),
                 privacy: this.hasLegalContent(activeContent, 'privacy'),
                 terms: this.hasLegalContent(activeContent, 'terms'),
-                shipping:
-                    channel.defaultShippingZone?.name === storeZoneName(channel.code, 'shipping') &&
-                    storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
-                    storeShippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
+                shipping: hasReadyShippingMethod(channel, shippingMethods),
                 payment: paymentMethods.some(method =>
                     isProductionPaymentMethod(method, registeredPaymentHandlers, usdtPaymentReady),
                 ),

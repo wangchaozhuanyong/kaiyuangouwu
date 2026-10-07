@@ -1038,7 +1038,6 @@
 
 .ai-generation-lightbox {
     position: fixed;
-    z-index: 1300;
     inset: 0;
     display: grid;
     place-items: center;
@@ -1050,7 +1049,6 @@
     inset: 0;
     border: 0;
     background: rgb(8 10 16 / 92%);
-    backdrop-filter: blur(10px);
 }
 
 .ai-generation-lightbox-dialog {
@@ -1155,7 +1153,6 @@
 
 .ai-confirmation-dialog-layer {
     position: fixed;
-    z-index: 1400;
     inset: 0;
     display: grid;
     place-items: center;
@@ -1167,7 +1164,6 @@
     inset: 0;
     border: 0;
     background: rgb(26 23 34 / 52%);
-    backdrop-filter: blur(3px);
 }
 
 .ai-confirmation-dialog {

@@ -17,11 +17,7 @@ import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
-import {
-    newAccountHeroBlock,
-    newContentBlock,
-    newContentItem,
-} from '../../src/pages/Storefront/storefront-content-utils';
+import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
@@ -127,7 +123,7 @@ if (params.has('managedImages')) {
         item.translations[0].label = label;
         return item;
     });
-    const account = newAccountHeroBlock(0);
+    const account = newContentBlock('ACCOUNT_HERO', 0, '账户页主图');
     blocks.push(
         ...[trust, account].map((block, index) => ({
             ...block,
@@ -545,6 +541,7 @@ const client = new ApolloClient({
                         } else if (name === 'NextAdminCreateSystemAnnouncement') {
                             const next = {
                                 ...input,
+                                ownerChannelId: channel.code === '__default_channel__' ? null : channel.id,
                                 channels:
                                     input.targetMode === 'ALL'
                                         ? []

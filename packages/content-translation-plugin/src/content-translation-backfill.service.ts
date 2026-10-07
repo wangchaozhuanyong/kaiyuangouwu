@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { EntityMetadata, ObjectLiteral } from 'typeorm';
 
@@ -28,6 +29,8 @@ export class ContentTranslationBackfillService {
         limit = 100,
         offset = 0,
     ): Promise<NativeContentBackfillResult> {
+        if (ctx.channel?.code !== DEFAULT_CHANNEL_CODE)
+            throw new UserInputError('批量补译请切换到平台管理中心');
         if (!Number.isInteger(limit) || limit < 1 || limit > 500 || !Number.isInteger(offset) || offset < 0) {
             throw new UserInputError('补译每页须为 1 至 500 条，偏移量须为非负整数');
         }
@@ -38,9 +41,12 @@ export class ContentTranslationBackfillService {
         if (entityType && !entries.length) throw new UserInputError('此内容类型未启用或不支持补译');
         const counts = await Promise.all(
             entries.map(({ metadata }) =>
-                this.connection
-                    .getRepository(ctx, metadata.target)
-                    .count({ where: this.adapter.scopeWhere(metadata, ctx.channelId) }),
+                this.connection.getRepository(ctx, metadata.target).count({
+                    where:
+                        metadata.name === 'SystemAnnouncement'
+                            ? {}
+                            : this.adapter.scopeWhere(metadata, ctx.channelId),
+                }),
             ),
         );
         const total = counts.reduce((sum, count) => sum + count, 0);
@@ -72,7 +78,10 @@ export class ContentTranslationBackfillService {
                 result.skippedRecords.push(...page.skippedRecords);
             } else {
                 const rows = await this.connection.getRepository(ctx, metadata.target).find({
-                    where: this.adapter.scopeWhere(metadata, ctx.channelId),
+                    where:
+                        metadata.name === 'SystemAnnouncement'
+                            ? {}
+                            : this.adapter.scopeWhere(metadata, ctx.channelId),
                     order: { id: 'ASC' },
                     take,
                     skip,
@@ -96,6 +105,9 @@ export class ContentTranslationBackfillService {
         result.skippedRecords = result.skippedRecords.slice(0, 50);
         result.nextOffset = Math.min(offset + result.scanned, total);
         result.hasMore = result.nextOffset < total;
+        if (result.hasMore && result.nextOffset <= offset) {
+            throw new UserInputError('补译扫描未取得进展，内容可能已变更，请刷新后重新扫描');
+        }
         return result;
     }
 
@@ -109,7 +121,12 @@ export class ContentTranslationBackfillService {
         const identity = {
             entityType: metadata.name,
             entityId: String(row.id),
-            channelId: metadata.name === 'SystemAnnouncement' ? null : String(ctx.channelId),
+            channelId:
+                metadata.name === 'SystemAnnouncement'
+                    ? row.ownerChannelId == null
+                        ? null
+                        : String(row.ownerChannelId)
+                    : String(ctx.channelId),
         };
         const relation = metadata.relations.find(item => item.propertyName === 'translations');
         const definition =

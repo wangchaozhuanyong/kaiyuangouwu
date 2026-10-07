@@ -9,6 +9,10 @@ import { StoreProfile } from './entities/store-profile.entity';
 import { StoreProfileService } from './store-profile.service';
 import { StoreActivationReadiness } from './types';
 
+function platformContext() {
+    return { channelId: 'default', channel: { code: '__default_channel__' } } as any;
+}
+
 function channel(id = 'channel-1') {
     return {
         id,
@@ -138,6 +142,42 @@ function createService(
 }
 
 describe('StoreProfileService', () => {
+    it('keeps platform directory access across stores but scopes an operating SuperAdmin to its active store', async () => {
+        const own = profile();
+        const other = profile({ id: 'profile-2', channelId: 'channel-2', channel: channel('channel-2') });
+        const repository = {
+            find: vi.fn(({ where }) => Promise.resolve(where ? [own] : [own, other])),
+        };
+        const { service } = createService(repository, { find: vi.fn().mockResolvedValue([]) });
+        expect(await service.findAllForAdmin(platformContext())).toHaveLength(2);
+        const ctx = { channelId: own.channelId, channel: own.channel, userHasPermissions: () => true } as any;
+        expect(await service.findAllForAdmin(ctx)).toEqual([own]);
+        expect(repository.find).toHaveBeenLastCalledWith(
+            expect.objectContaining({ where: { channelId: own.channelId } }),
+        );
+    });
+
+    it.each(['profile-1', 'forged-other-profile'])(
+        'rejects operating SuperAdmin governance writes to %s before lookup',
+        async id => {
+            const repository = { findOne: vi.fn(), save: vi.fn() };
+            const { service, channelService } = createService(repository, {});
+            await expect(
+                service.update(
+                    { channelId: 'channel-1', channel: channel(), userHasPermissions: () => true } as any,
+                    {
+                        id,
+                        expectedUpdatedAt: new Date(),
+                        sellerId: 'forged-seller',
+                    },
+                ),
+            ).rejects.toThrow('平台管理中心');
+            expect(repository.findOne).not.toHaveBeenCalled();
+            expect(repository.save).not.toHaveBeenCalled();
+            expect(channelService.update).not.toHaveBeenCalled();
+        },
+    );
+
     it('rebinds only the selected store while keeping the legal identity independently editable', async () => {
         const current = profile({ legalEntityName: '注册公司名称' });
         const repository = {
@@ -149,7 +189,7 @@ describe('StoreProfileService', () => {
             sellers: [seller],
             find: vi.fn().mockResolvedValue([]),
         });
-        const result = await service.update({} as any, {
+        const result = await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             sellerId: seller.id,
@@ -172,7 +212,11 @@ describe('StoreProfileService', () => {
             const repository = { findOne: vi.fn().mockResolvedValue(current), save: vi.fn() };
             const { service, channelService } = createService(repository, { sellers: [] });
             await expect(
-                service.update({} as any, { id: current.id, expectedUpdatedAt: current.updatedAt, sellerId }),
+                service.update(platformContext(), {
+                    id: current.id,
+                    expectedUpdatedAt: current.updatedAt,
+                    sellerId,
+                }),
             ).rejects.toThrow(/商家主体/);
             expect(channelService.update).not.toHaveBeenCalled();
             expect(repository.save).not.toHaveBeenCalled();
@@ -193,14 +237,14 @@ describe('StoreProfileService', () => {
             ],
             find: vi.fn().mockResolvedValue([]),
         });
-        const result = await service.update({} as any, {
+        const result = await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: originalVersion,
             sellerId: 'seller-2',
         });
         expect(result.updatedAt.getTime()).toBeGreaterThan(originalVersion.getTime());
         await expect(
-            service.update({} as any, {
+            service.update(platformContext(), {
                 id: current.id,
                 expectedUpdatedAt: originalVersion,
                 sellerId: 'seller-3',
@@ -217,7 +261,7 @@ describe('StoreProfileService', () => {
             sellers: [{ id: 'seller-2', name: '新商家' }],
         });
         await expect(
-            service.update({} as any, {
+            service.update(platformContext(), {
                 id: current.id,
                 expectedUpdatedAt: new Date('2026-01-01'),
                 sellerId: 'seller-2',
@@ -236,7 +280,7 @@ describe('StoreProfileService', () => {
         const { service, channelService } = createService(repository, {
             find: vi.fn().mockResolvedValue([]),
         });
-        const result = await service.update({} as any, {
+        const result = await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             legalEntityName: '新的法律文案',
@@ -294,7 +338,7 @@ describe('StoreProfileService', () => {
                     taglineEnLocked: true,
                 };
                 return mode === 'admin'
-                    ? service.update({ channelId: current.channelId } as any, input)
+                    ? service.update(platformContext(), input)
                     : service.updateForMerchant({ channelId: current.channelId } as any, input);
             };
             for (const name of ['大马通 DAMATONG', '大马通 DAMATONG', '大马通']) {
@@ -357,7 +401,7 @@ describe('StoreProfileService', () => {
             realTranslations.prepareLocalizedFields(fields),
         );
         await expect(
-            service.update({} as any, {
+            service.update(platformContext(), {
                 id: current.id,
                 expectedUpdatedAt: current.updatedAt,
                 storefrontNameZh: '大马通 DAMATONG',
@@ -447,7 +491,7 @@ describe('StoreProfileService', () => {
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { service } = createService(profileRepository, domainRepository);
 
-        const updated = await service.update({} as any, {
+        const updated = await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             status: 'ACTIVE',
@@ -519,7 +563,7 @@ describe('StoreProfileService', () => {
         const { service } = createService(profileRepository, {}, readiness);
 
         await expect(
-            service.update({} as any, {
+            service.update(platformContext(), {
                 id: current.id,
                 expectedUpdatedAt: current.updatedAt,
                 status: 'ACTIVE',
@@ -536,7 +580,7 @@ describe('StoreProfileService', () => {
         };
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { channelService, service } = createService(profileRepository, domainRepository);
-        const ctx = {} as any;
+        const ctx = platformContext();
 
         await service.update(ctx, {
             id: current.id,
@@ -574,7 +618,7 @@ describe('StoreProfileService', () => {
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { channelService, service } = createService(profileRepository, domainRepository);
 
-        const updated = await service.update({} as any, {
+        const updated = await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             descriptionZh: ' AI 软件商城 ',
@@ -724,7 +768,7 @@ describe('StoreProfileService', () => {
             find: vi.fn().mockResolvedValue([]),
         });
 
-        await service.update({} as any, {
+        await service.update(platformContext(), {
             id: current.id,
             expectedUpdatedAt: current.updatedAt,
             storefrontNameZh: damatongStorefront.storefrontNameZh,
@@ -761,7 +805,9 @@ describe('StoreProfileService', () => {
             const ctx = { channelId: 'channel-1' } as any;
 
             await expect(
-                mode === 'admin' ? service.update(ctx, input) : service.updateForMerchant(ctx, input),
+                mode === 'admin'
+                    ? service.update(platformContext(), input)
+                    : service.updateForMerchant(ctx, input),
             ).rejects.toThrow('1 至 16 个显示单位');
             expect(channelService.update).not.toHaveBeenCalled();
             expect(profileRepository.save).not.toHaveBeenCalled();
@@ -795,7 +841,7 @@ describe('StoreProfileService', () => {
         const { service } = createService(profileRepository, { find: vi.fn().mockResolvedValue([]) });
 
         await expect(
-            service.update({} as any, {
+            service.update(platformContext(), {
                 id: current.id,
                 expectedUpdatedAt: new Date('2026-08-27T09:59:59.000Z'),
                 descriptionZh: '旧页面修改',
@@ -823,7 +869,10 @@ describe('shared public operational state', () => {
                     ]),
                 },
             );
-            expect((await service.findAllForAdmin({} as any))[0].isOperational).toBe(isPublished);
+            expect(
+                (await service.findAllForAdmin({ channel: { code: '__default_channel__' } } as any))[0]
+                    .isOperational,
+            ).toBe(isPublished);
         },
     );
 });

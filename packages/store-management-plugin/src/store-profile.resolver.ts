@@ -1,4 +1,5 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { Allow, Ctx, Permission, RequestContext, Transaction, UserInputError } from '@vendure/core';
 
 import { manageStoreLifecyclePermission, storeProfilePermission } from './constants';
@@ -17,7 +18,9 @@ export class StoreProfileAdminResolver {
 
     @ResolveField()
     internalNote(@Ctx() ctx: RequestContext, @Parent() profile: { internalNote?: string | null }) {
-        return ctx.userHasPermissions([Permission.SuperAdmin]) ? (profile.internalNote ?? null) : null;
+        return ctx.channel.code === DEFAULT_CHANNEL_CODE && ctx.userHasPermissions([Permission.SuperAdmin])
+            ? (profile.internalNote ?? null)
+            : null;
     }
 
     @Query()

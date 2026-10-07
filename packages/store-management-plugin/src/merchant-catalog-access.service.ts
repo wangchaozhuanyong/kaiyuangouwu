@@ -3,6 +3,7 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, Type } from '@vendure/common/lib/shared-types';
 import {
     Asset,
+    Channel,
     ChannelAware,
     ChannelService,
     Collection,
@@ -77,9 +78,61 @@ const merchantManagedStockLocationMutations = new Set([
     'updateStockLocation',
 ]);
 
+// Configuration and new operational work follow the store's commerce mode.
+// Accepted order delivery, refunds and recovery remain available after a mode change.
+const physicalCommerceFields = new Set([
+    'Query.stockLocations',
+    'Query.stockLocation',
+    'Query.physicalProductWorkspace',
+    'Query.catalogInventoryAlertOverview',
+    'Query.catalogInventoryOperations',
+    'Query.catalogInventoryReconciliation',
+    'Query.catalogPurchaseOrders',
+    'Query.catalogPurchaseOrder',
+    'Query.productPackaging',
+    'Query.productPackagingStock',
+    'Query.productPackagingUnpackEvents',
+    'Query.shippingTemplateManagement',
+    'Query.shippingMethods',
+    'Query.shippingMethod',
+    'Query.shippingEligibilityCheckers',
+    'Query.shippingCalculators',
+    'Mutation.createStockLocation',
+    'Mutation.updateStockLocation',
+    'Mutation.deleteStockLocation',
+    'Mutation.deleteStockLocations',
+    'Mutation.updatePhysicalVariant',
+    'Mutation.updateCatalogInventoryThreshold',
+    'Mutation.saveCatalogInventoryLot',
+    'Mutation.adjustCatalogLegacyInventory',
+    'Mutation.transferCatalogInventoryLot',
+    'Mutation.resolveCatalogInventoryReconciliation',
+    'Mutation.createCatalogPurchaseOrder',
+    'Mutation.submitCatalogPurchaseOrder',
+    'Mutation.updateProductPackaging',
+    'Mutation.unpackProductPackaging',
+    'Mutation.setMyShippingTemplateEnabled',
+    'Mutation.copyPlatformShippingTemplate',
+    'Mutation.copyLegacyShippingMethod',
+]);
+const digitalCommerceFields = new Set([
+    'Query.autoCardConfig',
+    'Query.autoCardPoolItems',
+    'Query.autoCardTodoSummary',
+    'Mutation.updateAutoCardConfig',
+    'Mutation.previewAutoCardPoolImport',
+    'Mutation.importAutoCardPoolItems',
+    'Mutation.revealAutoCardPoolItem',
+    'Mutation.setAutoCardPoolItemEnabled',
+]);
+
 // These APIs return platform-wide data or operate shared infrastructure. Even a
 // SuperAdmin must switch to the management center rather than bypass store scope.
 const platformManagementFields = new Set([
+    'Mutation.initializePlatformShippingTemplates',
+    'Query.imagePromptSkillReleases',
+    'Mutation.createPlatformFreeShippingVersion',
+    'Mutation.confirmLegacyShippingMethodOwnership',
     'Mutation.createCountry',
     'Mutation.updateCountry',
     'Mutation.deleteCountry',
@@ -98,11 +151,23 @@ const platformManagementFields = new Set([
     'Mutation.updateTaxRate',
     'Mutation.deleteTaxRate',
     'Mutation.deleteTaxRates',
+    'Query.globalSettings',
+    'Mutation.updateGlobalSettings',
+    'Mutation.backfillCustomerContentTranslations',
     'Query.dataRetentionRecords',
     'Mutation.setDataRetentionLegalHold',
     'Mutation.retryDataRetentionRecord',
     'Query.dataSubjectRequests',
     'Mutation.retryDataSubjectRequest',
+    'Query.storeDeprovisionImpact',
+    'Query.storeProvisioningTemplates',
+    'Mutation.provisionStore',
+    'Mutation.updateStoreProfile',
+    'Mutation.suspendStore',
+    'Mutation.deprovisionStore',
+    'Query.scheduledTasks',
+    'Mutation.updateScheduledTask',
+    'Mutation.runScheduledTask',
     'Query.job',
     'Query.jobs',
     'Query.jobsById',
@@ -120,10 +185,6 @@ const platformManagementFields = new Set([
     'Query.storeUsdtReconciliationActions',
     'Mutation.reviewStoreUsdtWallet',
     'Mutation.submitMyStoreUsdtWallet',
-    'Query.systemAnnouncements',
-    'Mutation.createSystemAnnouncement',
-    'Mutation.updateSystemAnnouncement',
-    'Mutation.deleteSystemAnnouncement',
     'Query.telegramNotificationConfig',
     'Query.telegramNotificationStatus',
     'Query.telegramNotificationConfigAudits',
@@ -197,6 +258,22 @@ const platformOrderMutations = new Set([
     'updateOrderNote',
     'deleteOrderNote',
 ]);
+const draftOrderMutations = new Set([
+    'createDraftOrder',
+    'deleteDraftOrder',
+    'addItemToDraftOrder',
+    'adjustDraftOrderLine',
+    'removeDraftOrderLine',
+    'setDraftOrderCustomFields',
+    'setCustomerForDraftOrder',
+    'setDraftOrderShippingAddress',
+    'setDraftOrderBillingAddress',
+    'unsetDraftOrderShippingAddress',
+    'unsetDraftOrderBillingAddress',
+    'applyCouponCodeToDraftOrder',
+    'removeCouponCodeFromDraftOrder',
+    'setDraftOrderShippingMethod',
+]);
 
 const sensitiveStoreOrderMutations = new Set([
     'addManualPaymentToOrder',
@@ -250,6 +327,7 @@ interface CatalogMutationInput {
     productId?: ID;
     productOptionGroupId?: ID;
     stockLevels?: Array<{ stockLocationId: ID }> | null;
+    transferToLocationId?: ID;
 }
 
 @Injectable()
@@ -299,6 +377,42 @@ export class MerchantCatalogAccessService {
             ) {
                 throw new UserInputError('支付系统配置仅允许超级管理员在平台管理中心修改');
             }
+        }
+        if (
+            parentType === 'Mutation' &&
+            draftOrderMutations.has(fieldName) &&
+            ctx.channel.code === DEFAULT_CHANNEL_CODE
+        ) {
+            throw new UserInputError('草稿订单经营操作请切换到对应店铺，平台管理中心不创建销售订单');
+        }
+
+        if (ctx.channel.code !== DEFAULT_CHANNEL_CODE) {
+            const rawStockWrite =
+                parentType === 'Mutation' &&
+                ['createProductVariants', 'updateProductVariant', 'updateProductVariants'].includes(
+                    fieldName,
+                ) &&
+                this.getInputs(args).some(input => Boolean(input.stockLevels?.length));
+            const physicalField = physicalCommerceFields.has(`${parentType}.${fieldName}`) || rawStockWrite;
+            const digitalField = digitalCommerceFields.has(`${parentType}.${fieldName}`);
+            if (physicalField || digitalField) {
+                // RequestContext may carry a mode cached when its channel token was resolved.
+                // New operations must obey the current persisted mode, including mid-session changes.
+                const channel = await this.connection
+                    .getRepository(ctx, Channel)
+                    .findOne({ where: { id: ctx.channelId } });
+                const mode = channel?.customFields?.commerceMode;
+                if (!['DIGITAL_ONLY', 'PHYSICAL_ONLY', 'HYBRID'].includes(mode ?? '')) {
+                    throw new UserInputError('店铺经营模式尚未确认，请由平台核实后操作');
+                }
+                if (physicalField && mode === 'DIGITAL_ONLY') {
+                    throw new UserInputError('当前店铺仅经营虚拟商品，不能使用实物库存、采购或配送配置');
+                }
+                if (digitalField && mode === 'PHYSICAL_ONLY') {
+                    throw new UserInputError('当前店铺仅经营实物商品，不能配置卡池或新增数字供货');
+                }
+            }
+            await this.assertSellerScope(ctx, parentType, fieldName, args);
         }
 
         if (parentType === 'Mutation') {
@@ -369,12 +483,33 @@ export class MerchantCatalogAccessService {
             }
         }
 
+        // Warehouse ownership follows the active store even for platform staff
+        // and SuperAdmin who have switched into an operating channel.
+        if (
+            parentType === 'Mutation' &&
+            ctx.channel.code !== DEFAULT_CHANNEL_CODE &&
+            ['createProductVariants', 'updateProductVariant', 'updateProductVariants'].includes(fieldName)
+        ) {
+            await this.assertStockLocationsBelongToActiveChannel(
+                ctx,
+                this.getInputs(args).flatMap(
+                    input => input.stockLevels?.map(level => level.stockLocationId) ?? [],
+                ),
+            );
+        }
+
         const channelIds = await this.getMerchantChannelIds(ctx);
         if (channelIds == null) {
             return;
         }
         if (channelIds.length !== 1 || !idsAreEqual(channelIds[0], ctx.channelId)) {
             throw new ForbiddenError();
+        }
+        if (
+            (parentType === 'Mutation' && draftOrderMutations.has(fieldName)) ||
+            (parentType === 'Query' && fieldName === 'eligibleShippingMethodsForDraftOrder')
+        ) {
+            await this.assertDraftOrderOperation(ctx, fieldName, args);
         }
 
         if (parentType !== 'Mutation') {
@@ -384,7 +519,13 @@ export class MerchantCatalogAccessService {
             throw new UserInputError('店铺团队请使用受限的员工与岗位权限接口');
         }
         if (merchantManagedStockLocationMutations.has(fieldName)) {
-            throw new ForbiddenError();
+            const stockInputs = this.getInputs(args);
+            await this.assertEntitiesExclusiveToActiveChannel(ctx, StockLocation, [
+                ...this.directIds(args),
+                ...stockInputs.flatMap(input =>
+                    [input.id, input.transferToLocationId].filter((id): id is ID => id != null),
+                ),
+            ]);
         }
         if (managedPromotionMutations.has(fieldName)) {
             throw new ForbiddenError();
@@ -426,7 +567,64 @@ export class MerchantCatalogAccessService {
     }
 
     private isPlatformOrderMutation(fieldName: string): boolean {
-        return platformOrderMutations.has(fieldName) || fieldName.includes('DraftOrder');
+        return platformOrderMutations.has(fieldName);
+    }
+
+    private async assertDraftOrderOperation(
+        ctx: RequestContext,
+        fieldName: string,
+        args: Record<string, unknown>,
+    ) {
+        if (fieldName === 'createDraftOrder') return;
+        const orderIds = this.uniqueIds([
+            ...this.namedIds(args, 'orderId'),
+            ...this.getInputs(args).flatMap(input => (input.orderId == null ? [] : [input.orderId])),
+        ]);
+        if (!orderIds.length) throw new ForbiddenError();
+        const owned = await this.connection.getRepository(ctx, Order).count({
+            where: { id: In(orderIds), salesChannelId: ctx.channelId, state: 'Draft' },
+        });
+        if (owned !== orderIds.length) throw new ForbiddenError();
+    }
+
+    private async assertSellerScope(
+        ctx: RequestContext,
+        parentType: string,
+        fieldName: string,
+        args: Record<string, unknown>,
+    ): Promise<void> {
+        if (
+            parentType === 'Mutation' &&
+            (['createSeller', 'deleteSeller', 'deleteSellers'].includes(fieldName) ||
+                (['createChannel', 'updateChannel'].includes(fieldName) &&
+                    this.getInputs(args).some(input =>
+                        Object.prototype.hasOwnProperty.call(input, 'sellerId'),
+                    )))
+        ) {
+            throw new UserInputError('商家创建、删除与店铺绑定请在平台管理中心操作');
+        }
+        if (
+            (parentType === 'Query' && fieldName === 'seller') ||
+            (parentType === 'Mutation' && fieldName === 'updateSeller')
+        ) {
+            const id = parentType === 'Query' ? args.id : this.getInputs(args)[0]?.id;
+            if (
+                (typeof id !== 'string' && typeof id !== 'number') ||
+                ctx.channel.sellerId == null ||
+                !idsAreEqual(ctx.channel.sellerId, id)
+            ) {
+                throw new ForbiddenError();
+            }
+            if (parentType === 'Mutation') {
+                const channels = await this.connection.getRepository(ctx, Channel).find({
+                    where: { sellerId: id },
+                    select: { id: true },
+                });
+                if (channels.length !== 1 || !idsAreEqual(channels[0].id, ctx.channelId)) {
+                    throw new UserInputError('该商家资料由多个频道共享，请在平台管理中心修改');
+                }
+            }
+        }
     }
 
     private async assertMerchantOrderOperation(
@@ -584,12 +782,13 @@ export class MerchantCatalogAccessService {
             .getRepository(ctx, AdministratorAccessProfile)
             .findOne({ where: { userId: ctx.activeUserId } });
         if (profile?.scope === 'STORE') return profile.channelId != null ? [profile.channelId] : [];
-        if (profile?.scope === 'PLATFORM') return null;
+        if (profile?.scope === 'PLATFORM')
+            return ctx.channel.code === DEFAULT_CHANNEL_CODE ? null : [ctx.channelId];
         const access = await this.connection
             .getRepository(ctx, StoreAdministratorAccess)
             .findOne({ where: { userId: ctx.activeUserId } });
         if (!access) {
-            return null;
+            return ctx.channel.code === DEFAULT_CHANNEL_CODE ? null : [ctx.channelId];
         }
         const user = await this.connection.getRepository(ctx, User).findOne({
             where: { id: ctx.activeUserId },

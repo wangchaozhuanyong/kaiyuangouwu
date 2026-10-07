@@ -26,6 +26,28 @@ function createService(
 }
 
 describe('StorefrontActivationService', () => {
+    it('reads suspension fresh on the next Shop request even with a retained Channel context', async () => {
+        let status = 'ACTIVE';
+        const repository = {
+            findOne: vi.fn(() => Promise.resolve({ id: 'profile-a', status, isPublished: true })),
+            exists: vi.fn().mockResolvedValue(true),
+        };
+        const service = new StorefrontActivationService(
+            { getRepository: () => repository } as any,
+            {
+                findOne: vi.fn().mockResolvedValue({ id: 'store-a', sellerId: 'merchant' }),
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform' }),
+            } as any,
+        );
+        const ctx = { apiType: 'shop', channelId: 'store-a' } as any;
+        await expect(service.assertActive(ctx)).resolves.toBeUndefined();
+        status = 'SUSPENDED';
+        await expect(service.assertActive(ctx)).rejects.toThrow();
+        expect(repository.findOne).toHaveBeenCalledTimes(2);
+        await expect(service.assertActive({ ...ctx, apiType: 'admin' })).resolves.toBeUndefined();
+        expect(repository.findOne).toHaveBeenCalledTimes(2);
+    });
+
     it('never treats the platform management center as an operating store', () => {
         expect(
             isOperationalStorefront({

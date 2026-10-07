@@ -43,6 +43,8 @@ describe('same-host mail notification bridge', () => {
                 stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
                 env: {
                     ...process.env,
+                    // Nx already selects FORCE_COLOR; a second color selector adds a Node warning.
+                    NO_COLOR: process.env.FORCE_COLOR == null ? process.env.NO_COLOR : undefined,
                     TS_NODE_SKIP_PROJECT: 'true',
                     TS_NODE_COMPILER_OPTIONS: JSON.stringify({
                         module: 'CommonJS',

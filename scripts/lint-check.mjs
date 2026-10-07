@@ -48,6 +48,8 @@ const sourceFiles = [...new Set([...changedFiles, ...untrackedFiles])]
     .filter(Boolean)
     .filter(file => !selectedFiles || selectedFiles.has(file))
     .filter(file => supportedExtensions.has(path.extname(file)))
+    // Declarations follow the existing ESLint ignore rule and are checked by TypeScript.
+    .filter(file => !file.endsWith('.d.ts'))
     .filter(file => !path.basename(file).startsWith('generated'))
     .sort();
 
@@ -98,10 +100,15 @@ for (const [name, files] of groups) {
             `Linting ${name}: files ${offset + 1}-${offset + shard.length}/${lintFiles.length}` +
                 `${usesPackageFlatConfig ? ' (package config)' : ''}\n`,
         );
-        const result = spawnSync(process.execPath, [eslintBin, '--max-warnings=0', ...shard], {
-            cwd: lintWorkingDirectory,
-            stdio: 'inherit',
-        });
+        // Match the repository pre-commit memory limit when CI invokes typed lint directly.
+        const result = spawnSync(
+            process.execPath,
+            ['--max-old-space-size=8096', eslintBin, '--max-warnings=0', ...shard],
+            {
+                cwd: lintWorkingDirectory,
+                stdio: 'inherit',
+            },
+        );
         if (result.error) {
             throw result.error;
         }

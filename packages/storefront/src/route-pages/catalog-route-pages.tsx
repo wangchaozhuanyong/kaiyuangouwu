@@ -6,24 +6,14 @@ import { useDesktopLayout } from '../desktop-layout';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
-import {
-    CategoryPageContext,
-    HomePageContext,
-    ProductDetailPageContext,
-    SearchPageContext,
-} from '../storefront-page-contexts';
+import { HomePageContext, ProductDetailPageContext, SearchPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { CollectionSummary, FulfillmentType, Product, ProductVariant } from '../types';
+import { CollectionSummary, Product, ProductVariant } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');
-const DesktopCatalogPage = lazyRouteComponent(
-    () => import('../pages/desktop-catalog-page'),
-    'DesktopCatalogPage',
-);
-const CategoryPage = lazyRouteComponent(() => import('../pages/category-page'), 'CategoryPage');
 const ProductDetailPage = lazyRouteComponent(
     () => import('../pages/product-detail-page'),
     'ProductDetailPage',
@@ -99,8 +89,14 @@ export function HomeRoutePage() {
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
-                onCouponCampaignsRetry: () =>
-                    void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
+                onCouponCampaignsRetry: () => {
+                    if (runtime.customerLoadState !== 'ready') {
+                        // Recover the account first; its resolved customer key enables the coupon read.
+                        void runtime.retryAccount();
+                    } else {
+                        void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false });
+                    }
+                },
                 onContentTarget: runtime.openContentTarget,
                 onContentRetry: () => void runtime.contentQuery?.refetch?.({ cancelRefetch: false }),
                 onRetry: () => void runtime.refetchStorefront(),
@@ -108,54 +104,6 @@ export function HomeRoutePage() {
         >
             <HomePage />
         </HomePageContext.Provider>
-    );
-}
-
-export function CategoryRoutePage() {
-    const runtime = useRuntime();
-    const desktop = useDesktopLayout();
-    if (desktop) return <DesktopCatalogPage />;
-    return (
-        <CategoryPageContext.Provider
-            value={{
-                api: runtime.api,
-                products: runtime.products,
-                collections: runtime.collections,
-                contentBlocks: runtime.contentBlocks,
-                loading: runtime.loading,
-                error: runtime.error,
-                market: runtime.market,
-                locale: runtime.locale,
-                language: runtime.language,
-                activeCollectionId: runtime.activeCollectionId,
-                activeChildId: runtime.activeChildId,
-                sortMode: runtime.sortMode,
-                fulfillmentFilter: runtime.fulfillmentFilter,
-                inStockOnly: runtime.inStockOnly,
-                minimumPrice: runtime.minimumPrice,
-                maximumPrice: runtime.maximumPrice,
-                onCollectionChange: (collectionId: string, childId: string) =>
-                    runtime.updateCategory({ collectionId, childId }),
-                onChildChange: (childId: string) => runtime.updateCategory({ childId }),
-                onSortChange: sort => runtime.updateCategory({ sort }),
-                onFilterChange: (
-                    fulfillment: 'all' | FulfillmentType,
-                    inStockOnly: boolean,
-                    minPrice: string,
-                    maxPrice: string,
-                ) =>
-                    runtime.updateCategory({
-                        fulfillment,
-                        inStockOnly,
-                        minPrice: minPrice || undefined,
-                        maxPrice: maxPrice || undefined,
-                    }),
-                onNotify: () => runtime.navigate({ name: 'notifications' }),
-                onRetry: () => void runtime.refetchStorefront(),
-            }}
-        >
-            <CategoryPage />
-        </CategoryPageContext.Provider>
     );
 }
 
@@ -221,6 +169,7 @@ export function ProductRoutePage() {
                 couponCampaigns: runtime.activeCoupons,
                 customerCoupons: runtime.myCoupons,
                 addingVariantId: runtime.addingVariantId,
+                cartCommandUnknown: runtime.cartCommandUnknown,
                 favorite: runtime.favoriteProductIds.includes(product.id),
                 onAdd: (variant: ProductVariant, quantity: number) =>
                     void runtime.addToCart(variant, quantity),
@@ -243,6 +192,7 @@ export function SearchRoutePage() {
         <SearchPageContext.Provider
             value={{
                 api: runtime.api,
+                contextResolved: runtime.storefrontContextResolved,
                 products: runtime.products,
                 collections: runtime.collections,
                 market: runtime.market,
@@ -260,6 +210,5 @@ export function SearchRoutePage() {
 }
 
 export const preloadHomeRoutePage = registerRoutePreload(HomeRoutePage, HomePage);
-export const preloadCategoryRoutePage = registerRoutePreload(CategoryRoutePage, CategoryPage);
 export const preloadProductRoutePage = registerRoutePreload(ProductRoutePage, ProductDetailPage);
 export const preloadSearchRoutePage = registerRoutePreload(SearchRoutePage, SearchPage);

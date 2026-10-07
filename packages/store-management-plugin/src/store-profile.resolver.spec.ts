@@ -73,19 +73,41 @@ describe('StoreProfileAdminResolver', () => {
         const profile = { internalNote: '平台审核记录' };
 
         expect(
-            resolver.internalNote({ userHasPermissions: vi.fn().mockReturnValue(true) } as any, profile),
+            resolver.internalNote(
+                {
+                    channel: { code: '__default_channel__' },
+                    userHasPermissions: vi.fn().mockReturnValue(true),
+                } as any,
+                profile,
+            ),
         ).toBe('平台审核记录');
         expect(
-            resolver.internalNote({ userHasPermissions: vi.fn().mockReturnValue(false) } as any, profile),
+            resolver.internalNote(
+                {
+                    channel: { code: '__default_channel__' },
+                    userHasPermissions: vi.fn().mockReturnValue(false),
+                } as any,
+                profile,
+            ),
         ).toBeNull();
     });
 
     it('checks the SuperAdmin permission explicitly', () => {
         const userHasPermissions = vi.fn().mockReturnValue(false);
 
-        resolver.internalNote({ userHasPermissions } as any, { internalNote: 'secret' });
+        resolver.internalNote({ channel: { code: '__default_channel__' }, userHasPermissions } as any, {
+            internalNote: 'secret',
+        });
 
         expect(userHasPermissions).toHaveBeenCalledWith([Permission.SuperAdmin]);
+    });
+
+    it('does not expose platform notes to a SuperAdmin in an operating store', () => {
+        expect(
+            resolver.internalNote({ channel: { code: 'store-a' }, userHasPermissions: () => true } as any, {
+                internalNote: '平台审核记录',
+            }),
+        ).toBeNull();
     });
 
     it('routes suspension through the guarded lifecycle operation', async () => {

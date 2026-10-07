@@ -1,5 +1,5 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { Order, ShippingCalculator, ShippingEligibilityChecker } from '@vendure/core';
+import { Order, ShippingCalculator, ShippingEligibilityChecker, ZoneService } from '@vendure/core';
 import { convertChannelAmount } from '@vendure/store-management-plugin/currency-conversion';
 
 import { getOrderLineFulfillmentType } from './fulfillment-classification';
@@ -66,6 +66,17 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
                 { languageCode: LanguageCode.en, value: 'Shipping configuration currency' },
             ],
         },
+        sourceCurrencyCode: {
+            type: 'string',
+            defaultValue: '',
+            label: [{ languageCode: LanguageCode.zh_Hans, value: '金额来源币种（保存后固定）' }],
+            description: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    value: '新模板取创建时本店默认币种，之后更换店铺币种不会重新解释原金额。',
+                },
+            ],
+        },
         taxRate: {
             type: 'float',
             defaultValue: 0,
@@ -104,7 +115,8 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
     },
     calculate: (ctx, order, args) => {
         const physicalSubtotalWithTax = physicalOrderSubtotalWithTax(order);
-        const sourceCurrency = (args.currencyCode ||
+        const sourceCurrency = (args.sourceCurrencyCode ||
+            args.currencyCode ||
             ctx.channel.defaultCurrencyCode) as typeof ctx.currencyCode;
         const baseRate = convertChannelAmount(ctx, args.baseRate, sourceCurrency, ctx.currencyCode);
         const freeAbove = convertChannelAmount(ctx, args.freeAbove, sourceCurrency, ctx.currencyCode);
@@ -125,6 +137,44 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
                 estimateMaxDays: Math.max(args.estimateMinDays, args.estimateMaxDays),
             },
         };
+    },
+});
+
+/** New templates cannot broaden a store's configured destination zone. Legacy checkers stay unchanged. */
+let shippingZones: ZoneService;
+export const storeShippingZoneEligibilityChecker = new ShippingEligibilityChecker({
+    code: 'store-shipping-zone-eligibility-checker',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '本店配送区域内的实物订单，可进一步限制国家和邮编' },
+    ],
+    args: {
+        allowedCountryCodes: {
+            type: 'string',
+            defaultValue: '',
+            label: [{ languageCode: LanguageCode.zh_Hans, value: '限定国家代码（留空沿用本店区域）' }],
+        },
+        blockedPostalPrefixes: {
+            type: 'string',
+            defaultValue: '',
+            label: [{ languageCode: LanguageCode.zh_Hans, value: '不配送的邮编前缀' }],
+        },
+    },
+    init(injector) {
+        shippingZones = injector.get(ZoneService);
+    },
+    check: async (ctx, order, args) => {
+        const countryCode = order.shippingAddress?.countryCode?.trim().toUpperCase();
+        const zoneId = ctx.channel.defaultShippingZone?.id;
+        if (!countryCode || !zoneId || physicalOrderQuantity(order) === 0) return false;
+        const zone = await shippingZones.findOne(ctx, zoneId);
+        if (!zone?.members?.some(country => country.enabled && country.code.toUpperCase() === countryCode))
+            return false;
+        const allowedCountries = splitConfigurationList(args.allowedCountryCodes ?? '');
+        if (allowedCountries.length && !allowedCountries.includes(countryCode)) return false;
+        const postalCode = order.shippingAddress?.postalCode?.replace(/\s+/gu, '').toUpperCase() ?? '';
+        return !splitConfigurationList(args.blockedPostalPrefixes ?? '').some(prefix =>
+            postalCode.startsWith(prefix.replace(/\s+/gu, '')),
+        );
     },
 });
 
@@ -174,12 +224,12 @@ export const supportedDestinationEligibilityChecker = new ShippingEligibilityChe
         if (!countryCode) {
             return false;
         }
-        const allowedCountries = splitConfigurationList(args.allowedCountryCodes);
+        const allowedCountries = splitConfigurationList(args.allowedCountryCodes ?? '');
         if (allowedCountries.length && !allowedCountries.includes(countryCode)) {
             return false;
         }
         const postalCode = order.shippingAddress?.postalCode?.replace(/\s+/gu, '').toUpperCase() ?? '';
-        const blockedPrefixes = splitConfigurationList(args.blockedPostalPrefixes).map(prefix =>
+        const blockedPrefixes = splitConfigurationList(args.blockedPostalPrefixes ?? '').map(prefix =>
             prefix.replace(/\s+/gu, ''),
         );
         return !blockedPrefixes.some(prefix => postalCode.startsWith(prefix));

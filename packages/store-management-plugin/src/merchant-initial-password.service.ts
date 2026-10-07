@@ -102,6 +102,7 @@ const allowedRootFields = new Set([
     'Query.activeAdministrator',
     'Query.me',
     'Query.merchantInitialPasswordStatus',
+    'Query.currentAdminCapabilities',
     'Mutation.completeInitialPasswordChange',
     'Mutation.logout',
 ]);

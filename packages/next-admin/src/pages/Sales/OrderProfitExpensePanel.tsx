@@ -27,14 +27,16 @@ export function OrderProfitExpensePanel({
     currencyCode,
     canRead,
     canUpdate,
+    targetChannelId,
 }: {
     orderId: string;
     currencyCode: string;
     canRead: boolean;
     canUpdate: boolean;
+    targetChannelId?: string;
 }) {
     const query = useQuery<CatalogOrderProfitExpenseQueryResult>(CATALOG_ORDER_PROFIT_EXPENSE_QUERY, {
-        variables: { orderId },
+        variables: { orderId, targetChannelId },
         skip: !canRead,
 
         notifyOnNetworkStatusChange: true,

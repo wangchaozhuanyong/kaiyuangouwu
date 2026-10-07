@@ -272,20 +272,6 @@
         height: 17px;
         color: var(--accent);
     }
-    .desktop-cart-link b {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 20px;
-        height: 20px;
-        padding: 0 6px;
-        border-radius: 9999px;
-        background: var(--accent);
-        color: var(--accent-foreground);
-        font-size: var(--type-meta-size);
-        font-weight: var(--font-weight-bold);
-        line-height: var(--type-meta-leading);
-    }
     .desktop-store-nav {
         display: flex;
         flex-wrap: wrap;

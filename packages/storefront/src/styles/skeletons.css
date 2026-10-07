@@ -1,5 +1,9 @@
-/* A quiet, bounded loading state avoids showing empty media-shaped boxes. */
+/* Static placeholders share the final media geometry and never hide available content. */
 .page-skeleton,
+.page-skeleton--compact {
+    min-height: 100px;
+}
+
 .list-skeleton {
     display: grid;
     place-items: center;
@@ -9,6 +13,10 @@
 
 .page-skeleton--route {
     min-height: 65vh;
+}
+
+.page-skeleton--compact {
+    min-height: 100px;
 }
 
 .list-skeleton {
@@ -41,5 +49,148 @@
 @media (prefers-reduced-motion: reduce) {
     .page-loading-spinner {
         animation: none;
+    }
+}
+
+/* Loading placeholders keep geometry without competing animated indicators. */
+.route-static-skeleton {
+    display: grid;
+    gap: var(--space-16);
+    width: 100%;
+}
+.route-static-skeleton .skeleton-block {
+    display: block;
+    background: var(--soft);
+    border-radius: var(--radius-control);
+}
+.route-static-skeleton .skeleton-heading {
+    width: 45%;
+    height: 24px;
+}
+.route-static-skeleton .skeleton-row {
+    width: 100%;
+    height: 104px;
+}
+
+.catalog-static-skeleton {
+    width: 100%;
+    display: grid;
+    gap: var(--space-16);
+}
+.catalog-skeleton-item {
+    display: flex;
+    gap: var(--space-16);
+}
+.catalog-skeleton-media {
+    flex: 0 0 104px;
+    aspect-ratio: 1;
+    background: var(--soft);
+    border-radius: var(--radius-control);
+}
+.catalog-skeleton-copy {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding-block: var(--space-8);
+}
+.catalog-skeleton-copy > span {
+    height: 16px;
+    background: var(--soft);
+    border-radius: var(--radius-control);
+}
+.catalog-skeleton-copy > span:last-child {
+    width: 45%;
+    margin-top: auto;
+}
+.is-product-grid .catalog-static-skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.is-product-grid .catalog-skeleton-item {
+    flex-direction: column;
+}
+.is-product-grid .catalog-skeleton-media {
+    flex-basis: auto;
+    width: 100%;
+}
+@media (min-width: 1024px) {
+    .is-product-grid .catalog-static-skeleton {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* The same store identity owns first-load and route-module placeholders. No panel or page mask. */
+.brand-loading {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: var(--space-16);
+    max-width: min(100%, 280px);
+    color: var(--text);
+}
+.brand-loading .route-transition-mark {
+    width: 80px;
+    height: 80px;
+}
+.brand-loading .route-transition-mark img,
+.brand-loading .route-transition-placeholder {
+    width: 72px;
+    height: 72px;
+}
+.brand-loading .is-logo-ready img {
+    animation: brand-loading-breathe 1.8s ease-in-out infinite;
+}
+.brand-loading-name {
+    max-width: 100%;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.brand-loading-dots {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    height: 8px;
+    color: var(--muted);
+}
+.brand-loading-dots > i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: brand-loading-breathe 1.8s ease-in-out infinite;
+}
+.brand-loading-dots > i:nth-child(2) {
+    animation-delay: 150ms;
+}
+.brand-loading-dots > i:nth-child(3) {
+    animation-delay: 300ms;
+}
+@keyframes brand-loading-breathe {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+.brand-loading--compact {
+    display: flex;
+    gap: var(--space-8);
+}
+.brand-loading--compact .route-transition-mark,
+.brand-loading--compact .route-transition-mark img,
+.brand-loading--compact .route-transition-placeholder {
+    width: 24px;
+    height: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .brand-loading .is-logo-ready img,
+    .brand-loading-dots > i {
+        animation: none;
+        opacity: 1;
     }
 }

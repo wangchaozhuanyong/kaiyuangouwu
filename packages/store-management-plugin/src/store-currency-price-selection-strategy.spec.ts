@@ -3,7 +3,10 @@ import 'reflect-metadata';
 import { CurrencyCode, ProductVariantPrice, RequestContext } from '@vendure/core';
 import { describe, expect, it } from 'vitest';
 
-import { StoreDefaultCurrencyPriceSelectionStrategy } from './store-currency-price-selection-strategy';
+import {
+    convertChannelAmount,
+    StoreDefaultCurrencyPriceSelectionStrategy,
+} from './store-currency-price-selection-strategy';
 
 describe('StoreDefaultCurrencyPriceSelectionStrategy', () => {
     const strategy = new StoreDefaultCurrencyPriceSelectionStrategy();
@@ -55,6 +58,65 @@ describe('StoreDefaultCurrencyPriceSelectionStrategy', () => {
         const usd = price(1, CurrencyCode.USD, 2_500);
 
         expect(strategy.selectPrice(context(CurrencyCode.USD, CurrencyCode.USD), [usd])).toBe(usd);
+    });
+});
+
+describe('fixed channel amount conversion', () => {
+    it('rejects unsupported cross-currency conversions rather than assuming a 1:1 rate', () => {
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.MYR, CurrencyCode.MYR),
+                1200,
+                CurrencyCode.USD,
+                CurrencyCode.MYR,
+            ),
+        ).toBeNull();
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.CNY, CurrencyCode.USD),
+                1200,
+                CurrencyCode.CNY,
+                CurrencyCode.USD,
+            ),
+        ).toBeNull();
+    });
+
+    it('retains same-currency amounts without needing a managed exchange rate', () => {
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.USD, CurrencyCode.USD, { cnyToMyrRate: 0 }),
+                1200,
+                CurrencyCode.USD,
+                CurrencyCode.USD,
+            ),
+        ).toBe(1200);
+    });
+
+    it('keeps both supported conversion directions and rejects a missing rate', () => {
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.CNY, CurrencyCode.MYR),
+                10_000,
+                CurrencyCode.CNY,
+                CurrencyCode.MYR,
+            ),
+        ).toBe(5_991);
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.MYR, CurrencyCode.CNY),
+                5_991,
+                CurrencyCode.MYR,
+                CurrencyCode.CNY,
+            ),
+        ).toBe(10_000);
+        expect(
+            convertChannelAmount(
+                context(CurrencyCode.CNY, CurrencyCode.MYR, { cnyToMyrRate: null }),
+                1200,
+                CurrencyCode.CNY,
+                CurrencyCode.MYR,
+            ),
+        ).toBeNull();
     });
 });
 

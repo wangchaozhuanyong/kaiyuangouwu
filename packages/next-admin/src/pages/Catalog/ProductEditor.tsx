@@ -1,5 +1,6 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Save } from 'lucide-react';
 import { AdminButton } from '../../components/AdminControls';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ProductAssetPickerModal } from './ProductAssetPickerModal';
 import { ProductEditorProvider } from './ProductEditorContext';
@@ -9,6 +10,11 @@ import { useProductEditorForm } from './useProductEditorForm';
 
 export function ProductEditor() {
     const editor = useProductEditorForm();
+    const { canUseCapability } = useAdminCapabilities();
+    const canWriteProduct = canUseCapability(
+        editor.isCreateMode ? '/catalog/products/new' : '/catalog/products',
+        'write',
+    );
     const {
         isCreateMode,
         leaveToProductList,
@@ -189,6 +195,11 @@ export function ProductEditor() {
                                 </div>
                             )}
 
+                        {!canWriteProduct && (
+                            <p role="status" className="text-xs text-slate-500">
+                                当前商品仅可查看，不能修改或保存。
+                            </p>
+                        )}
                         <ProductEditorWorkspace />
                     </div>
                 </div>
@@ -204,34 +215,36 @@ export function ProductEditor() {
                     >
                         取消
                     </AdminButton>
-                    <AdminButton
-                        type="button"
-                        onClick={handleSave}
-                        disabled={saving || legacyTypeMismatch}
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
-                    >
-                        {saving ? (
-                            <>
-                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                <span>保存中...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Save className="w-3.5 h-3.5" />
-                                <span>保存商品</span>
-                                {isDirty && (
-                                    <span
-                                        className="w-1.5 h-1.5 rounded-full bg-emerald-300"
-                                        title="有未保存变更"
-                                    />
-                                )}
-                            </>
-                        )}
-                    </AdminButton>
+                    {canWriteProduct && (
+                        <AdminButton
+                            type="button"
+                            onClick={handleSave}
+                            disabled={saving || legacyTypeMismatch}
+                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                            {saving ? (
+                                <>
+                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>保存中...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-3.5 h-3.5" />
+                                    <span>保存商品</span>
+                                    {isDirty && (
+                                        <span
+                                            className="w-1.5 h-1.5 rounded-full bg-emerald-300"
+                                            title="有未保存变更"
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </AdminButton>
+                    )}
                 </div>
 
                 {/* Modals */}
-                <ProductAssetPickerModal />
+                {canWriteProduct && <ProductAssetPickerModal />}
             </div>
         </ProductEditorProvider>
     );

@@ -1632,6 +1632,7 @@ export function OrderEditor() {
                                 {order.orderPlacedAt && (
                                     <OrderProfitExpensePanel
                                         orderId={order.id}
+                                        targetChannelId={order.salesChannel?.id}
                                         currencyCode={order.currencyCode}
                                         canRead={canReadProfitExpenses}
                                         canUpdate={canUpdateProfitExpenses}

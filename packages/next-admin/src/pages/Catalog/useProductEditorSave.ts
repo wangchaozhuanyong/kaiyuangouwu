@@ -1,6 +1,13 @@
 import { useMutation } from '@apollo/client/react';
+import { useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { client, sensitiveActionContext } from '../../apollo';
+import {
+    channelRequestContext,
+    client,
+    getActiveChannelToken,
+    getAdminQueryScope,
+    sensitiveActionContext,
+} from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     customFieldInputFromValues,
@@ -27,6 +34,7 @@ import {
     UPDATE_VARIANT_COST,
     UPDATE_VARIANT_SUPPLIER,
 } from '../../graphql/product-domains.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -170,6 +178,40 @@ export function useProductEditorSave({
     controls,
 }: ProductEditorSaveInput) {
     const isCreateMode = !productId || productId === 'new';
+    const { canUseCapability } = useAdminCapabilities();
+    const saveScope = useRef({ queryScope: getAdminQueryScope(), channelToken: getActiveChannelToken() });
+    const writeAccess = useRef(canUseCapability);
+    useLayoutEffect(() => {
+        writeAccess.current = canUseCapability;
+        return () => {
+            writeAccess.current = () => false;
+        };
+    }, [canUseCapability]);
+    const isCurrentSaveScope = () =>
+        saveScope.current.queryScope === getAdminQueryScope() &&
+        saveScope.current.channelToken === getActiveChannelToken();
+    const saveAccessError = () => {
+        if (!isCurrentSaveScope()) return '店铺已切换，请在当前店铺重新打开商品后保存。';
+        return writeAccess.current(isCreateMode ? '/catalog/products/new' : '/catalog/products', 'write')
+            ? null
+            : '当前商品仅可查看，不能保存修改。';
+    };
+    const assertSaveAccess = () => {
+        const error = saveAccessError();
+        if (error) throw new Error(error);
+    };
+    const saveMutationContext = (extra?: ReturnType<typeof sensitiveActionContext>) => {
+        assertSaveAccess();
+        const channelContext = saveScope.current.channelToken
+            ? channelRequestContext(saveScope.current.channelToken)
+            : undefined;
+        if (!channelContext && !extra) return undefined;
+        return {
+            ...extra,
+            ...channelContext,
+            headers: { ...extra?.headers, ...channelContext?.headers },
+        };
+    };
     const {
         productName,
         slug,
@@ -238,6 +280,7 @@ export function useProductEditorSave({
             ) {
                 if (variant.digitalMigrationRequired) throw new Error('请先核对并迁移该规格的旧数字库存');
                 await client.mutate({
+                    context: saveMutationContext(),
                     mutation: UPDATE_DIGITAL_VARIANT,
                     variables: {
                         input: {
@@ -265,6 +308,7 @@ export function useProductEditorSave({
                 !sameValue(variant.physicalSettings, original?.physicalSettings)
             ) {
                 await client.mutate({
+                    context: saveMutationContext(),
                     mutation: UPDATE_PHYSICAL_VARIANT,
                     variables: {
                         input: {
@@ -278,12 +322,14 @@ export function useProductEditorSave({
             }
             if (variant.supplierId !== original?.supplierId && variant.supplierId !== undefined) {
                 await client.mutate({
+                    context: saveMutationContext(),
                     mutation: UPDATE_VARIANT_SUPPLIER,
                     variables: { productVariantId: id, supplierId: variant.supplierId || null },
                 });
             }
             if (variant.costPrice !== original?.costPrice && variant.costPrice?.trim()) {
                 await client.mutate({
+                    context: saveMutationContext(),
                     mutation: UPDATE_VARIANT_COST,
                     variables: {
                         productVariantId: id,
@@ -302,10 +348,14 @@ export function useProductEditorSave({
         const addedGroupIds = effectiveGroupIds.filter(id => !originalGroupIds.includes(id));
         const removedGroupIds = originalGroupIds.filter(id => !effectiveGroupIds.includes(id));
         for (const optionGroupId of addedGroupIds) {
-            await addOptionGroupToProduct({ variables: { productId: targetProductId, optionGroupId } });
+            await addOptionGroupToProduct({
+                variables: { productId: targetProductId, optionGroupId },
+                context: saveMutationContext(),
+            });
         }
         for (const optionGroupId of removedGroupIds) {
             const result = await removeOptionGroupFromProduct({
+                context: saveMutationContext(),
                 variables: { productId: targetProductId, optionGroupId },
             });
             if (result.data?.removeOptionGroupFromProduct.__typename === 'ProductOptionInUseError') {
@@ -339,10 +389,12 @@ export function useProductEditorSave({
                     query: GET_COLLECTION_ASSIGNMENT_DETAIL,
                     variables: { id: change.collectionId },
                     fetchPolicy: 'network-only',
+                    context: saveMutationContext(),
                 });
                 const collection = detail.data?.collection;
                 if (!collection) throw new Error('所选商品分类不存在或已被删除');
                 await updateCollectionAssignment({
+                    context: saveMutationContext(),
                     variables: {
                         input: {
                             id: change.collectionId,
@@ -376,11 +428,13 @@ export function useProductEditorSave({
         await Promise.all([
             ...addedChannelIds.map(channelId =>
                 assignProductsToChannel({
+                    context: saveMutationContext(),
                     variables: { input: { productIds: [targetProductId], channelId, priceFactor: 1 } },
                 }),
             ),
             ...removedChannelIds.map(channelId =>
                 removeProductsFromChannel({
+                    context: saveMutationContext(),
                     variables: { input: { productIds: [targetProductId], channelId } },
                 }),
             ),
@@ -543,6 +597,11 @@ export function useProductEditorSave({
     };
 
     const handleSave = async () => {
+        const accessError = saveAccessError();
+        if (accessError) {
+            showError(accessError);
+            return;
+        }
         if (!isCreateMode && !hasChanges) {
             showNotice('没有需要保存的修改');
             return;
@@ -621,6 +680,7 @@ export function useProductEditorSave({
                 let newProductId = '';
                 try {
                     const createRes = await createProductMutation({
+                        context: saveMutationContext(),
                         variables: {
                             input: {
                                 enabled,
@@ -653,6 +713,7 @@ export function useProductEditorSave({
 
                     newProductId = createRes?.data?.createProduct?.id || '';
                     if (!newProductId) throw new Error('后端未返回创建的商品 ID');
+                    assertSaveAccess();
                 } catch (err: unknown) {
                     throw new Error(`[阶段 1：商品创建失败] ${toUserFacingError(err, '请稍后重试')}`);
                 }
@@ -661,6 +722,7 @@ export function useProductEditorSave({
                 try {
                     await syncProductOptionGroups(newProductId, []);
                 } catch (err: unknown) {
+                    if (!isCurrentSaveScope()) return;
                     navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
                         `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}`,
@@ -688,6 +750,7 @@ export function useProductEditorSave({
                         }));
 
                         const createdResult = await createVariantsMutation({
+                            context: saveMutationContext(),
                             variables: { input: variantsInput },
                         });
 
@@ -700,6 +763,7 @@ export function useProductEditorSave({
 
                         await saveDomainConfiguration(createdList);
                     } catch (err: unknown) {
+                        if (!isCurrentSaveScope()) return;
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
                         navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                         showError(
@@ -716,6 +780,7 @@ export function useProductEditorSave({
                     await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
+                    if (!isCurrentSaveScope()) return;
                     navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
                         `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
@@ -724,6 +789,7 @@ export function useProductEditorSave({
                     return;
                 }
 
+                assertSaveAccess();
                 showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已保存！`);
                 navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
             } else {
@@ -752,6 +818,7 @@ export function useProductEditorSave({
                         requireCurrentPassword: true,
                     });
                     if (!confirmation) return;
+                    assertSaveAccess();
                     enabledMutationContext = sensitiveActionContext(confirmation.currentPassword ?? '');
                 }
 
@@ -783,7 +850,9 @@ export function useProductEditorSave({
                     try {
                         await updateProductMutation({
                             variables: { input: productInput },
-                            context: changesProductEnabledState ? enabledMutationContext : undefined,
+                            context: saveMutationContext(
+                                changesProductEnabledState ? enabledMutationContext : undefined,
+                            ),
                         });
                         const labels = [
                             changes.assets ? '商品图片' : '',
@@ -853,7 +922,9 @@ export function useProductEditorSave({
                                     createVariants: createVariantInputs,
                                 },
                             },
-                            context: changesVariantEnabledState ? enabledMutationContext : undefined,
+                            context: saveMutationContext(
+                                changesVariantEnabledState ? enabledMutationContext : undefined,
+                            ),
                         });
                         createdVariantList =
                             (
@@ -885,7 +956,9 @@ export function useProductEditorSave({
                         try {
                             await updateVariantsMutation({
                                 variables: { input: updateVariantInputs },
-                                context: changesVariantEnabledState ? enabledMutationContext : undefined,
+                                context: saveMutationContext(
+                                    changesVariantEnabledState ? enabledMutationContext : undefined,
+                                ),
                             });
                             completedStages.push('现有 SKU');
                         } catch (err: unknown) {
@@ -897,6 +970,7 @@ export function useProductEditorSave({
                     if (createVariantInputs.length > 0) {
                         try {
                             const result = await createVariantsMutation({
+                                context: saveMutationContext(),
                                 variables: { input: createVariantInputs },
                             });
                             createdVariantList =
@@ -938,8 +1012,10 @@ export function useProductEditorSave({
                     }
                 }
 
+                assertSaveAccess();
                 await refetchProduct();
                 await data.refetchWorkspace?.();
+                assertSaveAccess();
                 showNotice(
                     completedStages.length > 0
                         ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
@@ -947,6 +1023,7 @@ export function useProductEditorSave({
                 );
             }
         } catch (err: unknown) {
+            if (!isCurrentSaveScope()) return;
             if (!isCreateMode && completedStages.length > 0) {
                 const reloaded = await refetchProduct().then(
                     () => true,

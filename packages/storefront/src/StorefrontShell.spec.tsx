@@ -7,6 +7,15 @@ import { StorefrontContext } from './StorefrontContext';
 import { StorefrontShell } from './StorefrontShell';
 
 const viewport = vi.hoisted(() => ({ desktop: false }));
+const deferredModules = vi.hoisted(() => ({ updates: 0, privacy: 0 }));
+vi.mock('./StorefrontUpdatePrompt', () => {
+    deferredModules.updates++;
+    return { StorefrontUpdatePrompt: () => <div>DEFERRED_UPDATE</div> };
+});
+vi.mock('./storefront-ui/storefront-traffic-preference', () => {
+    deferredModules.privacy++;
+    return { StorefrontTrafficPreference: () => <div>DEFERRED_PRIVACY</div> };
+});
 vi.mock('./desktop-layout', async importOriginal => ({
     ...(await importOriginal<typeof import('./desktop-layout')>()),
     useDesktopViewport: () => viewport.desktop,
@@ -51,7 +60,11 @@ describe('catalog rendering boundary', () => {
         element = document.createElement('div');
         root = createRoot(element);
     });
-    afterEach(() => act(() => root.unmount()));
+    afterEach(() => {
+        act(() => root.unmount());
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
     const render = (overrides: Record<string, unknown> = {}) => {
         const state = {
             storefrontContextValue: {},
@@ -68,10 +81,65 @@ describe('catalog rendering boundary', () => {
         };
         state.storefrontContextValue = {
             route: state.displayedRoute,
+            market: { code: 'fixture-store', currencyCode: 'MYR' },
+            storefrontCode: 'fixture-store',
             ...(state.storefrontContextValue as Record<string, unknown>),
         };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
+    it('requests neither deferred module before readiness and idle, and hides update UI on sensitive routes', async () => {
+        vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        let idle: IdleRequestCallback | undefined;
+        vi.stubGlobal(
+            'requestIdleCallback',
+            vi.fn((callback: IdleRequestCallback) => {
+                idle = callback;
+                return 1;
+            }),
+        );
+        vi.stubGlobal('cancelIdleCallback', vi.fn());
+        render();
+        expect(deferredModules.updates).toBe(0);
+        expect(deferredModules.privacy).toBe(0);
+        act(() => {
+            document.dispatchEvent(new Event('storefront:page-ready'));
+        });
+        expect(deferredModules.updates).toBe(0);
+        expect(deferredModules.privacy).toBe(0);
+        await act(async () => {
+            idle?.({ didTimeout: false, timeRemaining: () => 50 });
+            await Promise.resolve();
+        });
+        expect(deferredModules.updates).toBe(1);
+        expect(deferredModules.privacy).toBe(1);
+        expect(element.textContent).toContain('DEFERRED_UPDATE');
+        expect(element.textContent).toContain('DEFERRED_PRIVACY');
+        render({ displayedRoute: { name: 'checkout' }, customer: { id: 'customer-a' } });
+        expect(element.textContent).not.toContain('DEFERRED_UPDATE');
+        expect(element.textContent).toContain('DEFERRED_PRIVACY');
+    });
+
+    it('keeps one shared viewport tracker across routes and removes it when the shell unmounts', async () => {
+        const visibleViewport = Object.assign(new EventTarget(), { height: 768, offsetTop: 0, scale: 1 });
+        vi.stubGlobal('visualViewport', visibleViewport);
+        try {
+            render();
+            await act(async () => {
+                await vi.dynamicImportSettled();
+            });
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
+            render({ displayedRoute: { name: 'product', id: '1' } });
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
+            act(() => root.render(null));
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(0);
+            expect(
+                document.documentElement.style.getPropertyValue('--storefront-viewport-bottom-offset'),
+            ).toBe('');
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
     it('never mounts catalog content while account validation is pending', () => {
         render({ displayedRoute: { name: 'orders' }, customerLoadState: 'loading' });
         expect(element.textContent).toContain('CATALOG_SKELETON');

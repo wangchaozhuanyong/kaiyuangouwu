@@ -5,6 +5,7 @@ import {
     Channel,
     ChannelService,
     CountryService,
+    CurrencyCode,
     ID,
     idsAreEqual,
     isGraphQlErrorResult,
@@ -23,6 +24,7 @@ import {
 } from '@vendure/core';
 import { IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
+import { hasReadyShippingMethod } from './shipping-readiness';
 import { StoreCommerceConfiguration, UpdateMyStoreCommerceConfigurationInput } from './types';
 
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
@@ -79,17 +81,25 @@ export class StoreCommerceSettingsService {
         const shippingZoneName = shippingZone?.name ?? null;
         const managedTaxEnabled = taxZoneName === storeZoneName(channel.code, 'tax');
         const commerceMode = channel.customFields?.commerceMode ?? 'DIGITAL_ONLY';
-        const shippingReady =
-            Boolean(countryCode && shippingMethod) &&
-            shippingZoneName === storeZoneName(channel.code, 'shipping') &&
-            shippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
-            shippingMethod?.checker?.code === SHIPPING_CHECKER_CODE;
+        const activeMethods = await this.shippingMethodService.getActiveShippingMethods(
+            ctx.copy({ channel }),
+        );
+        const shippingReady = hasReadyShippingMethod(
+            { ...channel, defaultShippingZone: shippingZone } as Channel,
+            activeMethods,
+        );
+        const sourceCurrency = shippingMethod
+            ? await this.shippingMethodService.getShippingMethodSourceCurrency(ctx, shippingMethod)
+            : channel.defaultCurrencyCode;
 
         return {
             channelId: channel.id,
             channelCode: channel.code,
             updatedAt: channel.updatedAt,
             currencyCode: channel.defaultCurrencyCode,
+            shippingSourceCurrencyCode: Object.values(CurrencyCode).includes(sourceCurrency as CurrencyCode)
+                ? (sourceCurrency as CurrencyCode)
+                : null,
             pricesIncludeTax: channel.pricesIncludeTax,
             countryCode,
             taxRate: taxRate?.value ?? 0,
@@ -144,27 +154,44 @@ export class StoreCommerceSettingsService {
         ctx: RequestContext,
         input: UpdateMyStoreCommerceConfigurationInput,
     ): Promise<StoreCommerceConfiguration> {
-        const normalized = normalizeStoreCommerceInput(input);
         const channel = await this.lockActiveChannel(ctx);
-        this.assertExpectedUpdatedAt(channel.updatedAt, normalized.expectedUpdatedAt);
+        this.assertExpectedUpdatedAt(channel.updatedAt, input.expectedUpdatedAt);
         const existing = await this.get(ctx);
-        const prepared = await this.translations.prepareLocalizedFields([
-            {
-                path: 'name',
-                sourceText: normalized.shippingMethodNameZh,
-                targetText: normalized.shippingMethodNameEn,
-                existingSourceText: existing.shippingMethodNameZh,
-                existingTargetText: existing.shippingMethodNameEn,
-                required: true,
-            },
-            {
-                path: 'description',
-                sourceText: normalized.shippingDescriptionZh,
-                targetText: normalized.shippingDescriptionEn,
-                existingSourceText: existing.shippingDescriptionZh,
-                existingTargetText: existing.shippingDescriptionEn,
-            },
-        ]);
+        const normalized = normalizeStoreCommerceInput(input, existing);
+        const shippingChanged = (
+            [
+                'shippingMethodNameZh',
+                'shippingMethodNameEn',
+                'shippingDescriptionZh',
+                'shippingDescriptionEn',
+                'baseRate',
+                'freeShippingThreshold',
+                'shippingTaxRate',
+                'shippingPriceIncludesTax',
+                'estimateMinDays',
+                'estimateMaxDays',
+                'blockedPostalPrefixes',
+            ] as const
+        ).some(key => input[key] != null && normalized[key] !== existing[key]);
+        const prepared = shippingChanged
+            ? await this.translations.prepareLocalizedFields([
+                  {
+                      path: 'name',
+                      sourceText: normalized.shippingMethodNameZh,
+                      targetText: normalized.shippingMethodNameEn,
+                      existingSourceText: existing.shippingMethodNameZh,
+                      existingTargetText: existing.shippingMethodNameEn,
+                      required: true,
+                  },
+                  {
+                      path: 'description',
+                      sourceText: normalized.shippingDescriptionZh,
+                      targetText: normalized.shippingDescriptionEn,
+                      existingSourceText: existing.shippingDescriptionZh,
+                      existingTargetText: existing.shippingDescriptionEn,
+                  },
+              ])
+            : [];
         const english = new Map(prepared.map(field => [field.path, field.translatedText]));
         normalized.shippingMethodNameEn = english.get('name') ?? '';
         normalized.shippingDescriptionEn = english.get('description') ?? '';
@@ -189,17 +216,21 @@ export class StoreCommerceSettingsService {
         }
 
         await this.ensureDefaultTaxRate(ctx, updatedChannel, taxZone, normalized.taxRate);
-        const shippingMethod = await this.ensureShippingMethod(ctx, updatedChannel, normalized);
-        await this.translations.recordPreparedFields(
-            ctx,
-            {
-                channelId: ctx.channelId,
-                entityType: ShippingMethod.name,
-                entityId: shippingMethod.id,
-            },
-            prepared,
-        );
-        await this.detachPlaceholderShippingMethods(ctx, updatedChannel, shippingMethod.id);
+        const shippingMethod = shippingChanged
+            ? await this.ensureShippingMethod(ctx, updatedChannel, normalized)
+            : undefined;
+        if (shippingMethod) {
+            await this.translations.recordPreparedFields(
+                ctx,
+                {
+                    channelId: ctx.channelId,
+                    entityType: ShippingMethod.name,
+                    entityId: shippingMethod.id,
+                },
+                prepared,
+            );
+            await this.detachPlaceholderShippingMethods(ctx, updatedChannel, shippingMethod.id);
+        }
 
         return this.get(ctx);
     }
@@ -307,7 +338,7 @@ export class StoreCommerceSettingsService {
     private async ensureShippingMethod(
         ctx: RequestContext,
         channel: Channel,
-        input: UpdateMyStoreCommerceConfigurationInput,
+        input: Required<UpdateMyStoreCommerceConfigurationInput>,
     ) {
         const code = storeShippingMethodCode(channel.code);
         const current = (await this.shippingMethodService.findAll(ctx)).items.find(
@@ -375,27 +406,48 @@ function isLockNotSupportedError(error: unknown): boolean {
 
 export function normalizeStoreCommerceInput(
     input: UpdateMyStoreCommerceConfigurationInput,
-): UpdateMyStoreCommerceConfigurationInput {
+    existing?: StoreCommerceConfiguration,
+): Required<UpdateMyStoreCommerceConfigurationInput> {
+    const shippingKeys = [
+        'shippingMethodNameZh',
+        'shippingMethodNameEn',
+        'shippingDescriptionZh',
+        'shippingDescriptionEn',
+        'baseRate',
+        'freeShippingThreshold',
+        'shippingTaxRate',
+        'shippingPriceIncludesTax',
+        'estimateMinDays',
+        'estimateMaxDays',
+        'blockedPostalPrefixes',
+    ] as const;
+    const merged = { ...input };
+    for (const key of shippingKeys) {
+        if (merged[key] == null && existing) Object.assign(merged, { [key]: existing[key] });
+    }
+    if (shippingKeys.some(key => merged[key] == null))
+        throw new UserInputError('未提交的配送字段无法从当前设置确认，请重新读取本店设置后操作');
+    const values = merged as Required<UpdateMyStoreCommerceConfigurationInput>;
     const countryCode = input.countryCode.trim().toUpperCase();
     if (!/^(?:[A-Z]{2}|[0-9]{3})$/u.test(countryCode)) {
         throw new UserInputError('配送国家代码无效');
     }
-    const shippingMethodNameZh = requiredText(input.shippingMethodNameZh, '中文配送名称', 80);
-    const shippingMethodNameEn = optionalText(input.shippingMethodNameEn, '英文配送名称', 80);
-    const shippingDescriptionZh = optionalText(input.shippingDescriptionZh, '中文配送说明', 500);
-    const shippingDescriptionEn = optionalText(input.shippingDescriptionEn, '英文配送说明', 500);
+    const shippingMethodNameZh = requiredText(values.shippingMethodNameZh, '中文配送名称', 80);
+    const shippingMethodNameEn = optionalText(values.shippingMethodNameEn, '英文配送名称', 80);
+    const shippingDescriptionZh = optionalText(values.shippingDescriptionZh, '中文配送说明', 500);
+    const shippingDescriptionEn = optionalText(values.shippingDescriptionEn, '英文配送说明', 500);
     const taxRate = percentage(input.taxRate, '商品税率');
-    const shippingTaxRate = percentage(input.shippingTaxRate, '运费税率');
-    const baseRate = money(input.baseRate, '基础运费');
-    const freeShippingThreshold = money(input.freeShippingThreshold, '免邮门槛');
-    const estimateMinDays = deliveryDays(input.estimateMinDays, '最短配送天数');
-    const estimateMaxDays = deliveryDays(input.estimateMaxDays, '最长配送天数');
+    const shippingTaxRate = percentage(values.shippingTaxRate, '运费税率');
+    const baseRate = money(values.baseRate, '基础运费');
+    const freeShippingThreshold = money(values.freeShippingThreshold, '免邮门槛');
+    const estimateMinDays = deliveryDays(values.estimateMinDays, '最短配送天数');
+    const estimateMaxDays = deliveryDays(values.estimateMaxDays, '最长配送天数');
     if (estimateMaxDays < estimateMinDays) {
         throw new UserInputError('最长配送天数不能小于最短配送天数');
     }
 
     return {
-        ...input,
+        ...values,
         countryCode,
         taxRate,
         shippingTaxRate,
@@ -407,7 +459,7 @@ export function normalizeStoreCommerceInput(
         shippingMethodNameEn,
         shippingDescriptionZh,
         shippingDescriptionEn,
-        blockedPostalPrefixes: normalizePostalPrefixes(input.blockedPostalPrefixes),
+        blockedPostalPrefixes: normalizePostalPrefixes(values.blockedPostalPrefixes),
     };
 }
 
@@ -421,7 +473,7 @@ export function storeZoneName(channelCode: string, kind: 'tax' | 'shipping'): st
 
 export function shippingCalculatorInput(
     input: Pick<
-        UpdateMyStoreCommerceConfigurationInput,
+        Required<UpdateMyStoreCommerceConfigurationInput>,
         | 'baseRate'
         | 'freeShippingThreshold'
         | 'shippingTaxRate'

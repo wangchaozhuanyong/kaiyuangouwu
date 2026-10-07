@@ -180,7 +180,9 @@ export function PlatformGovernanceCenter({
     ].map(key => ({ key, label: governancePayloadRows({ [key]: null })[0][0] }));
     const recentPermissionAudits =
         query.data?.administratorPermissionAudits?.slice(0, standalonePage ? undefined : 5) ?? [];
-    const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
+    const domainProfiles = profiles.filter(profile => profile.channel.code !== '__default_channel__');
+    const selectedProfile =
+        domainProfiles.find(profile => profile.id === selectedStoreId) ?? domainProfiles[0] ?? null;
     const canReadBusinessSettings = hasAnyPermission([
         'ReadSettings',
         'ReadChannel',
@@ -438,7 +440,9 @@ export function PlatformGovernanceCenter({
                         </div>
                     </section>
                 )}
-                {(!standalonePage || (tab === 'DOMAINS' && profiles.length > 0) || tab === 'SELLERS') && (
+                {(!standalonePage ||
+                    (tab === 'DOMAINS' && domainProfiles.length > 0) ||
+                    tab === 'SELLERS') && (
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         {!standalonePage && (
                             <StoreSettingsNavigation
@@ -448,13 +452,13 @@ export function PlatformGovernanceCenter({
                                 canReadBusinessSettings={canReadBusinessSettings}
                             />
                         )}
-                        {tab === 'DOMAINS' && profiles.length > 0 && (
+                        {tab === 'DOMAINS' && domainProfiles.length > 0 && (
                             <AdminSelect
                                 value={selectedProfile?.id ?? ''}
                                 onChange={event => setSelectedStoreId(event.target.value)}
                                 className={`${inputClass} w-full xl:w-72`}
                             >
-                                {profiles.map(profile => (
+                                {domainProfiles.map(profile => (
                                     <option key={profile.id} value={profile.id}>
                                         {storeName(profile)}
                                     </option>
@@ -500,8 +504,9 @@ export function PlatformGovernanceCenter({
                         )}
                         {tab === 'DOMAINS' && (
                             <DomainsPanel
+                                key={selectedProfile?.channel.id ?? 'no-store'}
                                 profile={selectedProfile}
-                                profiles={profiles}
+                                profiles={domainProfiles}
                                 onChanged={message => completed(message)}
                                 onError={setActionError}
                             />

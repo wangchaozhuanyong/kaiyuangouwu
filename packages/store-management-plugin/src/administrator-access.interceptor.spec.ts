@@ -70,7 +70,7 @@ function invoke(
         getType: () => 'graphql',
     } as never;
     const access = {
-        current: vi.fn().mockResolvedValue(profile),
+        currentForChannel: vi.fn().mockResolvedValue(profile),
     };
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
     const next = { handle: vi.fn(() => from(value)) };
@@ -87,7 +87,7 @@ function invoke(
 
 function invokeMailboxChain(field: string, parentType = 'Query') {
     const first = invoke(field, {}, Promise.resolve('ok'), undefined, parentType);
-    first.access.current.mockRejectedValue(new Error('Machine users have no employee profile'));
+    first.access.currentForChannel.mockRejectedValue(new Error('Machine users have no employee profile'));
     const connection = { getRepository: vi.fn() };
     const merchant = new MerchantCatalogAccessInterceptor(
         new MerchantCatalogAccessService(connection as never, {} as never, {} as never),
@@ -119,7 +119,7 @@ describe('administrator access failure audit', () => {
             );
             await expect(runChain()).resolves.toBe('ok');
             expect(state.requestContext.userHasPermissions).toHaveBeenCalledWith([permission]);
-            expect(access.current).not.toHaveBeenCalled();
+            expect(access.currentForChannel).not.toHaveBeenCalled();
             expect(nextGate.handle).toHaveBeenCalledOnce();
             expect(next.handle).toHaveBeenCalledOnce();
             expect(connection.getRepository).not.toHaveBeenCalled();
@@ -149,7 +149,7 @@ describe('administrator access failure audit', () => {
                 parentType,
             );
             await expect(runChain()).rejects.toThrow('Machine users have no employee profile');
-            expect(access.current).toHaveBeenCalledOnce();
+            expect(access.currentForChannel).toHaveBeenCalledOnce();
             expect(nextGate.handle).not.toHaveBeenCalled();
             expect(next.handle).not.toHaveBeenCalled();
             expect(connection.getRepository).not.toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe('administrator access failure audit', () => {
             );
             const { runChain, access, next, nextGate, connection } = invokeMailboxChain(field);
             await expect(runChain()).resolves.toBe('ok');
-            expect(access.current).not.toHaveBeenCalled();
+            expect(access.currentForChannel).not.toHaveBeenCalled();
             expect(nextGate.handle).toHaveBeenCalledOnce();
             expect(next.handle).toHaveBeenCalledOnce();
             expect(connection.getRepository).not.toHaveBeenCalled();
@@ -182,9 +182,9 @@ describe('administrator access failure audit', () => {
         'allows public %s without loading an old administrator profile',
         async field => {
             const { run, access, next } = invoke(field, {}, Promise.resolve('ok'));
-            access.current.mockRejectedValue(new Error('stale session profile'));
+            access.currentForChannel.mockRejectedValue(new Error('stale session profile'));
             await expect(run()).resolves.toBe('ok');
-            expect(access.current).not.toHaveBeenCalled();
+            expect(access.currentForChannel).not.toHaveBeenCalled();
             expect(next.handle).toHaveBeenCalledOnce();
         },
     );
@@ -204,7 +204,7 @@ describe('administrator access failure audit', () => {
             const { run, access, next } = invoke(field, {}, Promise.resolve('ok'), undefined, parentType);
             await expect(run()).resolves.toBeTruthy();
             expect(state.requestContext.userHasPermissions).toHaveBeenCalledWith([permission]);
-            expect(access.current).not.toHaveBeenCalled();
+            expect(access.currentForChannel).not.toHaveBeenCalled();
             expect(next.handle).toHaveBeenCalledOnce();
         },
     );
@@ -220,9 +220,9 @@ describe('administrator access failure audit', () => {
             state.requestContext.channel.code = channelCode;
             state.requestContext.userHasPermissions.mockReturnValue(hasPermission);
             const { run, access } = invoke(field, {}, Promise.resolve('unused'), undefined, parentType);
-            access.current.mockRejectedValue(new Error('No administrator profile'));
+            access.currentForChannel.mockRejectedValue(new Error('No administrator profile'));
             await expect(run()).rejects.toThrow('No administrator profile');
-            expect(access.current).toHaveBeenCalledOnce();
+            expect(access.currentForChannel).toHaveBeenCalledOnce();
         },
     );
 

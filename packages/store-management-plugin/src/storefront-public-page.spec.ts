@@ -1,12 +1,14 @@
-import { PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenError, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
 import {
     StorefrontAccountSettingsService,
     StorefrontVisualPresetService,
 } from '@vendure/storefront-content-plugin';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { StorefrontClosedError } from './storefront-activation.service';
-import { StorefrontPublicPageController } from './storefront-public-page.controller';
+import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
+import { StorefrontActivationService, StorefrontClosedError } from './storefront-activation.service';
+import { parsePublicPageRequest, StorefrontPublicPageController } from './storefront-public-page.controller';
 import { publicSectionWithinBudget, StorefrontPublicPageService } from './storefront-public-page.service';
 
 const response = () => {
@@ -14,7 +16,9 @@ const response = () => {
     res.status.mockReturnValue(res);
     return res;
 };
-const activation = () => ({ getAccessMode: vi.fn().mockResolvedValue('PREVIEW') });
+const activation = (mode: 'LIVE' | 'PREVIEW' = 'PREVIEW') => ({
+    getAccessMode: vi.fn().mockResolvedValue(mode),
+});
 
 function setup() {
     const ctx = {
@@ -47,36 +51,79 @@ function setup() {
 }
 
 describe('public page boundary', () => {
-    it.each(['PREVIEW', 'LIVE', 'CLOSED'])('rechecks %s access even when the page is cached', async mode => {
-        const cached = { config: { accessMode: 'LIVE', name: 'Cached store' }, version: 'cached' };
-        const policy = activation();
-        policy.getAccessMode.mockResolvedValue(mode);
-        const service = new StorefrontPublicPageService(
-            { readThrough: vi.fn().mockResolvedValue(cached) } as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            policy as never,
-        );
-        const result = service.read(setup().ctx as never, 'a.test');
-        if (mode === 'CLOSED') {
-            await expect(result).rejects.toBeInstanceOf(StorefrontClosedError);
-        } else {
-            await expect(result).resolves.toMatchObject({
-                config: { accessMode: mode, name: 'Cached store' },
+    it.each([new ForbiddenError(), new StorefrontClosedError()])(
+        'maps closed store resolution to structured no-store 403',
+        async error => {
+            const h = setup();
+            h.access.resolveRequest.mockRejectedValue(error);
+            const res = response();
+            await h.controller.read({ query: {} } as never, res as never);
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith({
+                errorCode: 'STOREFRONT_CLOSED',
+                message: 'Storefront is closed',
             });
-        }
-        expect(cached.config.accessMode).toBe('LIVE');
-        expect(policy.getAccessMode).toHaveBeenCalledTimes(1);
+            expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+            expect(h.pages.read).not.toHaveBeenCalled();
+        },
+    );
+
+    it('maps a late page access denial to 403 without treating infrastructure errors as closure', async () => {
+        const h = setup();
+        h.pages.read.mockRejectedValue(new StorefrontClosedError());
+        const res = response();
+        await h.controller.read({ query: {} } as never, res as never);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json).toHaveBeenCalledWith({
+            errorCode: 'STOREFRONT_CLOSED',
+            message: 'Storefront is closed',
+        });
+        expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+        expect(res.status).not.toHaveBeenCalledWith(200);
+        h.pages.read.mockRejectedValue(new Error('origin unavailable'));
+        await expect(h.controller.read({ query: {} } as never, response() as never)).rejects.toThrow(
+            'origin unavailable',
+        );
     });
+    it('shares canonical route identity with early requests and rejects malformed routes', () => {
+        expect(
+            parsePublicPageRequest({ kind: 'catalog', path: '/search', input: '{"term":" phone "}' }),
+        ).toEqual({
+            kind: 'catalog',
+            path: '/search',
+            input: {
+                term: 'phone',
+                sort: 'RECOMMENDED',
+                inStockOnly: false,
+                skip: 0,
+                take: 12,
+            },
+        });
+        expect(() => parsePublicPageRequest({ kind: 'catalog', path: '/account', input: '{}' })).toThrow();
+    });
+    it.each(['PREVIEW', 'LIVE', 'CLOSED'] as const)(
+        'rechecks %s access even when the page is cached',
+        async mode => {
+            const h = accessHarness();
+            h.config.mockResolvedValue({ code: 'a', name: 'Cached store' });
+            const cached = (await h.service.read(h.ctx, 'a.test')) as { config: { accessMode: 'LIVE' } };
+            h.activation.getAccessMode.mockClear();
+            h.state.mode = mode;
+            const result = h.service.read(h.ctx, 'a.test');
+            if (mode === 'CLOSED') {
+                await expect(result).rejects.toBeInstanceOf(StorefrontClosedError);
+            } else {
+                await expect(result).resolves.toMatchObject({
+                    config: { accessMode: mode, name: 'Cached store' },
+                });
+            }
+            expect(cached.config.accessMode).toBe('LIVE');
+            // The common guard contract rechecks subsequent phases; it never memoizes authority.
+            if (mode === 'LIVE') expect(h.activation.getAccessMode.mock.calls.length).toBeGreaterThan(1);
+            else expect(h.activation.getAccessMode).toHaveBeenCalledTimes(mode === 'PREVIEW' ? 2 : 1);
+            expect(h.config).toHaveBeenCalledTimes(mode === 'PREVIEW' ? 2 : 1);
+        },
+    );
     it('returns a typed closed-store response without assembling cached public content', async () => {
         const { controller, access, pages } = setup();
         access.resolveRequest.mockRejectedValue(new StorefrontClosedError());
@@ -85,7 +132,7 @@ describe('public page boundary', () => {
         expect(res.status).toHaveBeenCalledWith(403);
         expect(res.json).toHaveBeenCalledWith({
             errorCode: 'STOREFRONT_CLOSED',
-            message: 'Store not open yet',
+            message: 'Storefront is closed',
         });
         expect(pages.read).not.toHaveBeenCalled();
     });
@@ -167,6 +214,366 @@ describe('public page boundary', () => {
     });
 });
 
+function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
+    const state = { mode: initial };
+    const entries = new Map<string, unknown>();
+    const raw = {
+        get: vi.fn((key: string) => Promise.resolve(entries.get(key))),
+        set: vi.fn((key: string, value: unknown) => {
+            entries.set(key, value);
+            return Promise.resolve();
+        }),
+    };
+    const cache = new StorefrontPublicCacheService(
+        raw as never,
+        { systemOptions: { cacheStrategy: {} } } as never,
+    );
+    const invalidate = vi.spyOn(cache, 'invalidate');
+    const accessActivation = { getAccessMode: vi.fn(() => Promise.resolve(state.mode)) };
+    const sources = {
+        content: { findPublished: vi.fn().mockResolvedValue([]), getSettings: vi.fn().mockResolvedValue({}) },
+        auth: { get: vi.fn().mockResolvedValue({}) },
+        account: {
+            getPersonalDataExportEnabled: vi.fn().mockResolvedValue(true),
+            getRecommendations: vi.fn().mockResolvedValue({ enabled: false }),
+        },
+        announcements: { findActive: vi.fn().mockResolvedValue([]) },
+    };
+    let version = 0;
+    const modules = {
+        get: vi.fn(token => {
+            if (token === StorefrontAccountSettingsService) return sources.account;
+            if (token === PUBLIC_PRODUCT_SUMMARY_READER)
+                return {
+                    list: vi.fn().mockResolvedValue({ items: [] }),
+                    detail: vi.fn().mockResolvedValue({ id: 'p' }),
+                };
+            return {
+                get: vi.fn().mockResolvedValue({ presetId: 'default' }),
+                find: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
+            };
+        }),
+    };
+    const service = new StorefrontPublicPageService(
+        cache,
+        modules as never,
+        sources.content as never,
+        sources.auth as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        { findFlashSales: vi.fn().mockResolvedValue([]) } as never,
+        sources.announcements as never,
+        accessActivation as never,
+    );
+    const config = vi
+        .spyOn(service as unknown as { loadConfig(): Promise<unknown> }, 'loadConfig')
+        .mockImplementation(() => Promise.resolve({ code: 'a', sourceVersion: ++version }));
+    const content = vi
+        .spyOn(service as unknown as { loadContent(): Promise<unknown> }, 'loadContent')
+        .mockImplementation(() =>
+            cache.readThrough(setup().ctx as never, 'nested-content', 60_000, () =>
+                Promise.resolve({ blocks: [] }),
+            ),
+        );
+    vi.spyOn(
+        service as unknown as { loadCollections(): Promise<unknown[]> },
+        'loadCollections',
+    ).mockResolvedValue([]);
+    return {
+        service,
+        cache,
+        invalidate,
+        raw,
+        entries,
+        activation: accessActivation,
+        state,
+        config,
+        content,
+        sources,
+        modules,
+        ctx: setup().ctx as never,
+    };
+}
+
+describe('authoritative public access modes', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('coalesces only an in-flight section guard, then rechecks later phases and hot hits', async () => {
+        const h = accessHarness();
+        let release!: (mode: 'LIVE') => void;
+        const authority = new Promise<'LIVE'>(resolve => {
+            release = resolve;
+        });
+        h.activation.getAccessMode.mockResolvedValueOnce('LIVE').mockReturnValueOnce(authority);
+        const result = h.service.read(h.ctx, 'a.test');
+        // Every shared section has started while the first completion guard is awaiting authority.
+        await vi.waitFor(() => expect(h.cache.metrics.misses).toBeGreaterThanOrEqual(8));
+        expect(h.activation.getAccessMode).toHaveBeenCalledTimes(2);
+        release('LIVE');
+        await result;
+        const cold = h.activation.getAccessMode.mock.calls.length;
+        expect(cold).toBeGreaterThan(2);
+        h.activation.getAccessMode.mockClear();
+        await h.service.read(h.ctx, 'a.test');
+        const hot = h.activation.getAccessMode.mock.calls.length;
+        expect(hot).toBeGreaterThan(1);
+        process.stdout.write(
+            JSON.stringify({
+                event: 'public-access-guard-call-counts',
+                cold,
+                hot,
+                fixture: 'in-memory cache; gated concurrent sections; not SQL counts or production timings',
+            }) + '\n',
+        );
+        h.state.mode = 'CLOSED';
+        await expect(h.service.read(h.ctx, 'a.test')).rejects.toMatchObject({ code: 'STOREFRONT_CLOSED' });
+    });
+
+    it.each([
+        ['ACTIVE', false, true, 'LIVE'],
+        ['ACTIVE', false, false, 'CLOSED'],
+        ['DRAFT', true, true, 'PREVIEW'],
+        ['DRAFT', false, true, 'CLOSED'],
+        ['DRAFT', true, false, 'CLOSED'],
+        ['SUSPENDED', true, true, 'CLOSED'],
+    ] as const)(
+        'reads current mode for %s published=%s domain=%s',
+        async (status, isPublished, verified, mode) => {
+            const profile = { findOne: vi.fn().mockResolvedValue({ status, isPublished }) };
+            const domain = { exists: vi.fn().mockResolvedValue(verified) };
+            const connection = {
+                getRepository: vi.fn().mockReturnValueOnce(profile).mockReturnValue(domain),
+            };
+            const channels = {
+                findOne: vi.fn().mockResolvedValue({ id: 'a' }),
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default' }),
+            };
+            const service = new StorefrontActivationService(connection as never, channels as never);
+            expect(await service.getAccessMode(setup().ctx as never)).toBe(mode);
+            expect(profile.findOne).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { channelId: 'a' } }),
+            );
+        },
+    );
+
+    it('keeps a missing/default channel closed and exposes matching structured error code', async () => {
+        const service = new StorefrontActivationService(
+            { getRepository: () => ({ findOne: () => Promise.resolve({ status: 'ACTIVE' }) }) } as never,
+            {
+                findOne: () => Promise.resolve({ id: 'default' }),
+                getDefaultChannel: () => Promise.resolve({ id: 'default' }),
+            } as never,
+        );
+        expect(await service.getAccessMode(setup().ctx as never)).toBe('CLOSED');
+        const error = new StorefrontClosedError();
+        expect(error.code).toBe('STOREFRONT_CLOSED');
+        expect(error.extensions.code).toBe('STOREFRONT_CLOSED');
+    });
+
+    it('uses all current preview sections without any shared reads/writes, including nested readers', async () => {
+        const h = accessHarness('PREVIEW');
+        const readThrough = vi.spyOn(h.cache, 'readThrough');
+        const first = await h.service.read(h.ctx, 'a.test');
+        const second = await h.service.read(h.ctx, 'a.test');
+        expect(first.config).toMatchObject({ accessMode: 'PREVIEW', sourceVersion: 1 });
+        expect(second.config).toMatchObject({ accessMode: 'PREVIEW', sourceVersion: 2 });
+        expect(first.products).toEqual([]);
+        expect(first.failures).toEqual([]);
+        expect(h.raw.get).not.toHaveBeenCalled();
+        expect(h.raw.set).not.toHaveBeenCalled();
+        expect(readThrough.mock.calls.every(call => call[1] === 'nested-content')).toBe(true);
+        expect(h.invalidate).toHaveBeenCalledTimes(1);
+        expect(await h.service.peek(h.ctx, 'a.test')).toBeUndefined();
+    });
+
+    it.each(['PREVIEW', 'CLOSED'] as const)(
+        'retains %s semantics when Redis invalidation is unavailable',
+        async mode => {
+            const h = accessHarness(mode);
+            h.invalidate.mockRejectedValue(new ServiceUnavailableException('Public cache unavailable'));
+            if (mode === 'CLOSED') {
+                await expect(h.service.read(h.ctx, 'a.test')).rejects.toMatchObject({
+                    code: 'STOREFRONT_CLOSED',
+                });
+                await expect(h.service.peek(h.ctx, 'a.test')).rejects.toMatchObject({
+                    code: 'STOREFRONT_CLOSED',
+                });
+            } else {
+                expect((await h.service.read(h.ctx, 'a.test')).config).toMatchObject({
+                    accessMode: 'PREVIEW',
+                });
+                expect(await h.service.peek(h.ctx, 'a.test')).toBeUndefined();
+            }
+            expect(h.raw.get).not.toHaveBeenCalled();
+            expect(h.raw.set).not.toHaveBeenCalled();
+            expect(h.invalidate).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('does not reuse a LIVE snapshot after a downgrade or revive it on the same context after reopening', async () => {
+        const h = accessHarness();
+        await h.service.read(h.ctx, 'a.test');
+        expect(await h.service.peek(h.ctx, 'a.test')).toBeDefined();
+        h.state.mode = 'PREVIEW';
+        expect(await h.service.peek(h.ctx, 'a.test')).toBeUndefined();
+        const preview = await h.service.read(h.ctx, 'a.test');
+        expect(preview.config).toMatchObject({ accessMode: 'PREVIEW', sourceVersion: 2 });
+        h.state.mode = 'LIVE';
+        const reopened = await h.service.read(h.ctx, 'a.test');
+        expect(reopened.config).toMatchObject({ accessMode: 'LIVE', sourceVersion: 3 });
+        h.state.mode = 'CLOSED';
+        await expect(h.service.read(h.ctx, 'a.test')).rejects.toMatchObject({ code: 'STOREFRONT_CLOSED' });
+        await expect(h.service.peek(h.ctx, 'a.test')).rejects.toMatchObject({ code: 'STOREFRONT_CLOSED' });
+        expect(h.invalidate).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['read', 'peek'] as const)(
+        'rechecks current state after a %s cache hit before returning',
+        async operation => {
+            const h = accessHarness();
+            await h.service.read(h.ctx, 'a.test');
+            const original = h.raw.get.getMockImplementation();
+            if (!original) throw new Error('Missing cache fixture');
+            h.raw.get.mockImplementationOnce(key => {
+                h.state.mode = 'CLOSED';
+                return original(key);
+            });
+            await expect(h.service[operation](h.ctx, 'a.test')).rejects.toMatchObject({
+                code: 'STOREFRONT_CLOSED',
+            });
+        },
+    );
+
+    it.each(['read', 'peek'] as const)(
+        'does not revive a prior generation when closure/reopening races with %s authorization',
+        async operation => {
+            const h = accessHarness();
+            await h.service.read(h.ctx, 'a.test');
+            h.activation.getAccessMode.mockResolvedValueOnce('LIVE').mockImplementationOnce(async () => {
+                // Both status transitions are already committed before this authority lookup completes.
+                await h.cache.invalidate('a');
+                return 'LIVE';
+            });
+            const result = await h.service[operation](h.ctx, 'a.test');
+            if (operation === 'peek') expect(result).toBeUndefined();
+            else expect(result?.config).toMatchObject({ sourceVersion: 2, accessMode: 'LIVE' });
+        },
+    );
+
+    it('keeps preview assembly bounded after real optional section budgets have returned responses', async () => {
+        const h = accessHarness('PREVIEW');
+        let release!: (value: object) => void;
+        const optional = new Promise<object>(resolve => {
+            release = resolve;
+        });
+        h.content.mockReturnValue(optional);
+        const first = await Promise.all(Array.from({ length: 4 }, () => h.service.read(h.ctx, 'a.test')));
+        expect(first.every(page => page.failures.includes('content'))).toBe(true);
+        expect(h.config).toHaveBeenCalledTimes(4);
+        const next = h.service.read(h.ctx, 'a.test');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(h.config).toHaveBeenCalledTimes(4);
+        release({ blocks: [] });
+        expect((await next).failures).toEqual([]);
+        expect(h.config).toHaveBeenCalledTimes(5);
+        expect(h.raw.set).not.toHaveBeenCalled();
+    });
+
+    it('holds preview ownership for a pending content source after a sibling rejects immediately', async () => {
+        const h = accessHarness('PREVIEW');
+        h.content.mockRestore();
+        let release!: (value: unknown[]) => void;
+        const slow = new Promise<unknown[]>(resolve => {
+            release = resolve;
+        });
+        h.sources.content.findPublished.mockReturnValue(slow);
+        h.sources.auth.get.mockRejectedValue(new Error('auth settings unavailable'));
+        const first = await Promise.all(Array.from({ length: 4 }, () => h.service.read(h.ctx, 'a.test')));
+        expect(first.every(page => page.failures.includes('content'))).toBe(true);
+        expect(h.sources.content.findPublished).toHaveBeenCalledTimes(4);
+        const fifth = h.service.read(h.ctx, 'a.test');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(h.sources.content.findPublished).toHaveBeenCalledTimes(4);
+        release([]);
+        await fifth;
+        expect(h.sources.content.findPublished).toHaveBeenCalledTimes(5);
+        expect(h.raw.set).not.toHaveBeenCalled();
+    });
+
+    it('owns a pending route read after required config fails and releases only when that route settles', async () => {
+        const h = accessHarness('PREVIEW');
+        let release!: (value: { items: unknown[]; totalItems: number }) => void;
+        const route = new Promise<{ items: unknown[]; totalItems: number }>(resolve => {
+            release = resolve;
+        });
+        const find = vi.fn(() => route);
+        const modules = h.modules.get.getMockImplementation();
+        if (!modules) throw new Error('Missing module fixture');
+        const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_CATALOG_READER ? ({ find } as never) : modules(token),
+        );
+        h.config.mockRejectedValue(new Error('required config unavailable'));
+        const request = { kind: 'catalog', input: {} } as const;
+        const first = await Promise.allSettled(
+            Array.from({ length: 4 }, () => h.service.read(h.ctx, 'a.test', request)),
+        );
+        expect(first.every(result => result.status === 'rejected')).toBe(true);
+        expect(find).toHaveBeenCalledTimes(4);
+        const fifth = h.service.read(h.ctx, 'a.test', request);
+        const failed = expect(fifth).rejects.toThrow('required config unavailable');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(find).toHaveBeenCalledTimes(4);
+        release({ items: [], totalItems: 0 });
+        await failed;
+        expect(find).toHaveBeenCalledTimes(5);
+    });
+
+    it('rejects in-flight LIVE fills after closure, including optional work finishing after the page budget', async () => {
+        const h = accessHarness();
+        let release!: (value: object) => void;
+        const gate = new Promise<object>(resolve => {
+            release = resolve;
+        });
+        h.content.mockReturnValue(gate);
+        const page = await h.service.read(h.ctx, 'a.test');
+        expect(page.failures).toContain('content');
+        h.state.mode = 'CLOSED';
+        await expect(h.service.peek(h.ctx, 'a.test')).rejects.toMatchObject({ code: 'STOREFRONT_CLOSED' });
+        const writes = h.raw.set.mock.calls.length;
+        release({ blocks: [{ title: 'revoked content' }] });
+        await gate;
+        await vi.waitFor(async () => {
+            expect(await h.cache.peek(h.ctx, 'content:a.test')).toBeUndefined();
+            expect(h.raw.set).toHaveBeenCalledTimes(writes);
+        });
+        h.state.mode = 'LIVE';
+        expect(await h.service.peek(h.ctx, 'a.test')).toBeUndefined();
+    });
+
+    it('reassembles a LIVE-to-PREVIEW in-flight response without filling the new cache generation', async () => {
+        const h = accessHarness();
+        let release!: (value: object) => void;
+        const gate = new Promise<object>(resolve => {
+            release = resolve;
+        });
+        h.config.mockReturnValueOnce(gate);
+        const result = h.service.read(h.ctx, 'a.test');
+        await vi.waitFor(() => expect(h.config).toHaveBeenCalled());
+        h.state.mode = 'PREVIEW';
+        await h.service.getAccessMode(h.ctx);
+        release({ code: 'a', sourceVersion: 'old' });
+        const page = await result;
+        expect(page.config).toMatchObject({ accessMode: 'PREVIEW', sourceVersion: 1 });
+        expect(await h.cache.peek(h.ctx, 'config:a.test')).toBeUndefined();
+        expect(await h.service.peek(h.ctx, 'a.test')).toBeUndefined();
+    });
+});
+
 describe('public page optional section budgets', () => {
     afterEach(() => vi.restoreAllMocks());
 
@@ -226,7 +633,11 @@ describe('public page optional section budgets', () => {
                 getSettings: vi.fn().mockResolvedValue({ heroAutoplayIntervalSeconds: 5 }),
             };
             const service = new StorefrontPublicPageService(
-                { readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()) } as never,
+                {
+                    readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()),
+                    runGuarded: (_guard: unknown, load: () => Promise<unknown>) => load(),
+                    trackSource: (load: () => Promise<unknown>) => load(),
+                } as never,
                 modules as never,
                 content as never,
                 { get: vi.fn().mockResolvedValue({ emailPasswordEnabled: true }) } as never,
@@ -238,7 +649,7 @@ describe('public page optional section budgets', () => {
                 {} as never,
                 campaigns as never,
                 { findActive: vi.fn().mockResolvedValue([]) } as never,
-                activation() as never,
+                activation('LIVE') as never,
             );
             vi.spyOn(
                 service as unknown as { loadConfig(): Promise<unknown> },
@@ -282,7 +693,11 @@ describe('public page media assembly', () => {
             const find = vi.fn(() => Promise.resolve({ items: [routeProduct], totalItems: 1 }));
             const detail = vi.fn(() => Promise.resolve(routeProduct));
             const service = new StorefrontPublicPageService(
-                { readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()) } as never,
+                {
+                    readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()),
+                    runGuarded: (_guard: unknown, load: () => Promise<unknown>) => load(),
+                    trackSource: (load: () => Promise<unknown>) => load(),
+                } as never,
                 { get: vi.fn(() => ({ find, detail })) } as never,
                 {} as never,
                 {} as never,
@@ -294,7 +709,7 @@ describe('public page media assembly', () => {
                 {} as never,
                 {} as never,
                 {} as never,
-                activation() as never,
+                activation('LIVE') as never,
             );
             vi.spyOn(service as unknown as { assemble(): Promise<unknown> }, 'assemble').mockResolvedValue({
                 schemaVersion: 1,
@@ -349,13 +764,15 @@ describe('public page media assembly', () => {
                 );
             }
             expect(result.version).not.toBe('before-route');
+            expect(result.request?.kind).toBe(kind);
+            expect(result.requestKey).toContain(`"kind":"${kind}"`);
+            expect(result.route).toBe(kind === 'product' ? '/product?id=p' : '/category');
         },
     );
 });
 
 it('shares timed-out optional source reads across different public page assemblies and caches their later completion', async () => {
-    const { StorefrontPublicCacheService } = await import('./performance/storefront-public-cache.service.js');
-    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
+    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader');
     const entries = new Map<string, unknown>();
     const cache = new StorefrontPublicCacheService(
         {
@@ -406,7 +823,7 @@ it('shares timed-out optional source reads across different public page assembli
         {} as never,
         { findFlashSales } as never,
         {} as never,
-        activation() as never,
+        activation('LIVE') as never,
     );
     vi.spyOn(service as unknown as { loadConfig(): Promise<unknown> }, 'loadConfig').mockResolvedValue({
         code: 'a',

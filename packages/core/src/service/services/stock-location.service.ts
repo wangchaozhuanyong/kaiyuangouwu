@@ -18,7 +18,7 @@ import { EntityNotFoundError, ForbiddenError, UserInputError } from '../../commo
 import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
-import { assertFound, idsAreEqual } from '../../common/utils';
+import { idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { OrderLine } from '../../entity/order-line/order-line.entity';
@@ -111,10 +111,7 @@ export class StockLocationService {
     }
 
     async update(ctx: RequestContext, input: UpdateStockLocationInput): Promise<StockLocation> {
-        // Ensure the entity belongs to the active channel before updating.
-        const stockLocation = await this.connection.getEntityOrThrow(ctx, StockLocation, input.id, {
-            channelId: ctx.channelId,
-        });
+        const stockLocation = await this.getStockLocationForMaintenance(ctx, input.id);
         const updatedStockLocation = patchEntity(stockLocation, input);
         await this.connection.getRepository(ctx, StockLocation).save(updatedStockLocation);
         await this.customFieldRelationService.updateRelations(
@@ -124,7 +121,7 @@ export class StockLocationService {
             updatedStockLocation,
         );
         await this.eventBus.publish(new StockLocationEvent(ctx, updatedStockLocation, 'updated', input));
-        return assertFound(this.findOne(ctx, updatedStockLocation.id));
+        return this.connection.getEntityOrThrow(ctx, StockLocation, updatedStockLocation.id);
     }
 
     /**
@@ -134,24 +131,31 @@ export class StockLocationService {
      * cannot be deleted.
      */
     async delete(ctx: RequestContext, input: DeleteStockLocationInput): Promise<DeletionResponse> {
-        const stockLocation = await this.connection.findOneInChannel(
-            ctx,
-            StockLocation,
-            input.id,
-            ctx.channelId,
-        );
-        if (!stockLocation) {
-            throw new EntityNotFoundError('StockLocation', input.id);
+        const stockLocation = await this.getStockLocationForMaintenance(ctx, input.id);
+        if (input.transferToLocationId != null) {
+            if (idsAreEqual(input.id, input.transferToLocationId)) {
+                throw new ForbiddenError();
+            }
+            // Validate the destination before changing any stock levels.
+            await this.getStockLocationForMaintenance(ctx, input.transferToLocationId);
         }
-        // Do not allow the last StockLocation to be deleted
-        const allStockLocations = await this.connection.getRepository(ctx, StockLocation).find();
-        if (allStockLocations.length === 1) {
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        const stockLocations = this.connection.getRepository(ctx, StockLocation);
+        const stockLocationCount = idsAreEqual(ctx.channelId, defaultChannel.id)
+            ? await stockLocations.count()
+            : await stockLocations
+                  .createQueryBuilder('stockLocation')
+                  .innerJoin('stockLocation.channels', 'channel')
+                  .where('channel.id = :channelId', { channelId: ctx.channelId })
+                  .getCount();
+        // Each store must retain a warehouse even when other stores have their own locations.
+        if (stockLocationCount <= 1) {
             return {
                 result: DeletionResult.NOT_DELETED,
                 message: ctx.translate('message.cannot-delete-last-stock-location'),
             };
         }
-        if (input.transferToLocationId) {
+        if (input.transferToLocationId != null) {
             // This is inefficient, and it would be nice to be able to do this as a single
             // SQL `update` statement with a nested `select` subquery, but TypeORM doesn't
             // seem to have a good solution for that. If this proves a perf bottleneck, we
@@ -280,6 +284,30 @@ export class StockLocationService {
         );
     }
 
+    private async getStockLocationForMaintenance(ctx: RequestContext, id: ID): Promise<StockLocation> {
+        // Load every membership independently of the active-channel filter: the default channel
+        // is a platform association, while another operating channel means shared store stock.
+        const stockLocation = await this.connection.getEntityOrThrow(ctx, StockLocation, id, {
+            relations: ['channels'],
+        });
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (idsAreEqual(ctx.channelId, defaultChannel.id)) {
+            return stockLocation;
+        }
+        if (!stockLocation.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))) {
+            throw new EntityNotFoundError('StockLocation', id);
+        }
+        if (
+            stockLocation.channels.some(
+                channel =>
+                    !idsAreEqual(channel.id, ctx.channelId) && !idsAreEqual(channel.id, defaultChannel.id),
+            )
+        ) {
+            throw new ForbiddenError();
+        }
+        return stockLocation;
+    }
+
     async defaultStockLocation(ctx: RequestContext) {
         // With a channel-aware StockLocationStrategy (the default MultiChannelStockLocationStrategy)
         // each Channel has its own StockLocation(s). Prefer the oldest StockLocation associated with
@@ -297,7 +325,12 @@ export class StockLocationService {
         if (channelStockLocation) {
             return channelStockLocation;
         }
-        // Fallback for data where the active Channel has no associated StockLocation.
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (!idsAreEqual(ctx.channelId, defaultChannel.id)) {
+            // A store without a warehouse must not write inventory into another store's location.
+            throw new UserInputError('当前店铺尚未配置库存仓库，请联系平台完成本店库存配置');
+        }
+        // Retain the platform fallback while default-channel associations are being repaired.
         return this.connection
             .getRepository(ctx, StockLocation)
             .find({ order: { createdAt: 'ASC', id: 'ASC' } })

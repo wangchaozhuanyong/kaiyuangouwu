@@ -56,6 +56,59 @@ export const adminApiExtensions = gql`
         states: [ContentTranslationStateRecord!]!
     }
 
+    type ContentTranslationReview {
+        state: ContentTranslationStateRecord!
+        sourceText: String!
+        targetText: String!
+        sourceHash: String!
+        translatedHash: String!
+        format: String!
+        canConfirm: Boolean!
+        reason: String
+        editPath: String
+    }
+
+    input ConfirmCustomerContentTranslationReviewInput {
+        id: ID!
+        revision: Int!
+        sourceHash: String!
+        translatedHash: String!
+    }
+
+    type ContentTranslationRecoveryRecord {
+        id: ID!
+        entityId: String!
+        fieldPath: String!
+        revision: Int!
+        sourceHash: String!
+        translatedHash: String
+        eligible: Boolean!
+        reason: String!
+    }
+
+    type ContentTranslationRecoveryPreview {
+        total: Int!
+        records: [ContentTranslationRecoveryRecord!]!
+    }
+
+    input RecoverCustomerContentTranslationInput {
+        id: ID!
+        revision: Int!
+        sourceHash: String!
+        translatedHash: String
+    }
+
+    type ContentTranslationRecoveryOutcome {
+        id: ID!
+        reason: String!
+    }
+
+    type ContentTranslationRecoveryResult {
+        queued: Int!
+        skipped: Int!
+        records: [ContentTranslationRecoveryOutcome!]!
+    }
+
     input ContentTranslationAuditOptions {
         skip: Int
         take: Int
@@ -83,6 +136,11 @@ export const adminApiExtensions = gql`
             options: ContentTranslationAuditOptions
         ): ContentTranslationAudit!
         contentTranslationStaleCount: Int!
+        contentTranslationReview(id: ID!): ContentTranslationReview!
+        contentTranslationRecoveryPreview(
+            limit: Int = 100
+            offset: Int = 0
+        ): ContentTranslationRecoveryPreview!
     }
 
     type ContentTranslationRetryResult {
@@ -90,6 +148,12 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        confirmCustomerContentTranslationReview(
+            input: ConfirmCustomerContentTranslationReviewInput!
+        ): ContentTranslationStateRecord!
+        recoverCustomerContentTranslations(
+            inputs: [RecoverCustomerContentTranslationInput!]!
+        ): ContentTranslationRecoveryResult!
         retryCustomerContentTranslations(ids: [ID!]!): ContentTranslationRetryResult!
         translateCustomerContent(segments: [ContentTranslationSegmentInput!]!): ContentTranslationResult!
         backfillCustomerContentTranslations(

@@ -1,4 +1,5 @@
-import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { gql } from '@apollo/client';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
@@ -22,19 +23,47 @@ import {
     type CatalogProfitReportResult,
     type CatalogProfitReportSummary,
 } from '../../graphql/catalog-operations.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { OrderExpenseImportDialog } from './OrderExpenseImportDialog';
 import { formatDateTime } from './sales-utils';
 
 const PAGE_SIZE = 50;
+const PROFIT_REPORT_CHANNELS_QUERY = gql`
+    query NextAdminProfitReportChannels {
+        manageableChannels {
+            id
+            code
+            defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
+        }
+    }
+`;
 
 export function ProfitReportModule() {
     const location = useLocation();
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
+    const { snapshot } = useAdminCapabilities();
+    const platformContext = snapshot?.scope === 'PLATFORM';
+    const [targetChannelId, setTargetChannelId] = useState('');
+    const targetChannels = useQuery<{
+        manageableChannels: Array<{
+            id: string;
+            code: string;
+            defaultCurrencyCode: string;
+            customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
+        }>;
+    }>(PROFIT_REPORT_CHANNELS_QUERY, { skip: !platformContext });
     const canImportExpenses =
-        hasAnyPermission(['UpdateOrder']) && hasAnyPermission(['UpdateCatalogOperations']);
+        !platformContext &&
+        hasAnyPermission(['UpdateOrder']) &&
+        hasAnyPermission(['UpdateCatalogOperations']);
     const initialRange = useMemo(() => defaultDateRange(), []);
     const [fromDate, setFromDate] = useState(initialRange.from);
     const [toDate, setToDate] = useState(initialRange.to);
@@ -48,13 +77,14 @@ export function ProfitReportModule() {
                 to: range?.to,
                 skip: page * PAGE_SIZE,
                 take: PAGE_SIZE,
+                ...(platformContext ? { targetChannelId } : {}),
             },
         },
-        skip: range == null,
+        skip: range == null || (platformContext && !targetChannelId),
 
         notifyOnNetworkStatusChange: true,
     });
-    const report = query.data?.catalogProfitReport;
+    const report = !platformContext || targetChannelId ? query.data?.catalogProfitReport : undefined;
     const summary = report?.summary;
     const totalPages = Math.max(1, Math.ceil((report?.totalItems ?? 0) / PAGE_SIZE));
     const hasMissingCost = (summary?.missingCostLineCount ?? 0) > 0;
@@ -87,7 +117,7 @@ export function ProfitReportModule() {
                             refreshPage
                             type="button"
                             onClick={() => void query.refetch()}
-                            disabled={!range || query.loading}
+                            disabled={!range || query.loading || (platformContext && !targetChannelId)}
                             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                         >
                             <RefreshCw
@@ -109,6 +139,37 @@ export function ProfitReportModule() {
             </header>
 
             <main className="space-y-5 p-4 sm:p-6 lg:p-8">
+                {platformContext && (
+                    <section className="rounded-xl border border-blue-200 bg-white p-4">
+                        <AdminField label="查看店铺">
+                            <AdminSelect
+                                value={targetChannelId}
+                                onChange={event => {
+                                    setTargetChannelId(event.target.value);
+                                    setPage(0);
+                                }}
+                            >
+                                <option value="">请选择要查看的店铺</option>
+                                {targetChannels.data?.manageableChannels
+                                    .filter(channel => !isDefaultChannelCode(channel.code))
+                                    .map(channel => (
+                                        <option key={channel.id} value={channel.id}>
+                                            {getChannelDisplayName(channel)} · {channel.defaultCurrencyCode}
+                                        </option>
+                                    ))}
+                            </AdminSelect>
+                        </AdminField>
+                        <p className="mt-2 text-xs text-slate-500">
+                            平台监督为只读。请选择一家店铺，报表按该店的币种核算。
+                        </p>
+                        {targetChannels.error && (
+                            <div role="alert">
+                                店铺列表读取失败。
+                                <AdminButton onClick={() => void targetChannels.refetch()}>重试</AdminButton>
+                            </div>
+                        )}
+                    </section>
+                )}
                 {!range && (
                     <Message tone="error" icon={<AlertCircle className="h-4 w-4" />}>
                         开始日期不能晚于结束日期，单次最多查询 366 天。

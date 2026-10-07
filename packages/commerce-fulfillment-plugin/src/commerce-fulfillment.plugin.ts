@@ -44,6 +44,7 @@ import { commercePaymentProcess } from './commerce-payment-process';
 import { CommerceShippingLineAssignmentStrategy } from './commerce-shipping-line-assignment-strategy';
 import {
     physicalSubtotalShippingCalculator,
+    storeShippingZoneEligibilityChecker,
     supportedDestinationEligibilityChecker,
 } from './commerce-shipping-options';
 import { createControlledTestPayment } from './controlled-test-payment';
@@ -563,6 +564,7 @@ import './types';
         config.shippingOptions.fulfillmentHandlers.push(manualServiceFulfillmentHandler);
         config.shippingOptions.shippingCalculators.push(physicalSubtotalShippingCalculator);
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
+        config.shippingOptions.shippingEligibilityCheckers.push(storeShippingZoneEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
         config.orderOptions.stockAllocationStrategy = new PhysicalOnlyStockAllocationStrategy();
         config.orderOptions.orderInterceptors.push(new QuoteOnlyOrderInterceptor());

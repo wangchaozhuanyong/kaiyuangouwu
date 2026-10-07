@@ -210,6 +210,10 @@ export const PLATFORM_GOVERNANCE_REVIEW_QUERY = gql`
 
 export const ADMINISTRATOR_ACCESS_SCOPE_QUERY = gql`
     query NextAdminAdministratorAccessScope {
+        activeChannel {
+            id
+            code
+        }
         myAdministratorAccess {
             id
             scope
@@ -958,6 +962,132 @@ export const DELETE_SHIPPING_METHOD_MUTATION = gql`
     }
 `;
 
+const SHIPPING_METHOD_FIELDS = {
+    ...STORE_MANAGEMENT_QUERY,
+    definitions: STORE_MANAGEMENT_QUERY.definitions.filter(
+        definition =>
+            definition.kind === 'FragmentDefinition' &&
+            definition.name.value === 'NextAdminShippingMethodManagementFields',
+    ),
+};
+
+const SHIPPING_TEMPLATE_MANAGEMENT_FIELDS = gql`
+    fragment NextAdminShippingTemplateManagementFields on ShippingTemplateManagement {
+        isPlatform
+        missingPlatformTemplates
+        latestPlatformVersion
+        adoptedPlatformTemplateId
+        items {
+            platformTemplate
+            ownedByStore
+            enabled
+            sourceCurrencyCode
+            ownershipConfirmed
+            assignedStoreChannels {
+                id
+                code
+            }
+            templateVersion
+            latestPlatformTemplate
+            method {
+                ...NextAdminShippingMethodManagementFields
+            }
+        }
+    }
+    ${SHIPPING_METHOD_FIELDS}
+`;
+
+export const SHIPPING_TEMPLATE_MANAGEMENT_QUERY = gql`
+    query NextAdminShippingTemplateManagement {
+        shippingTemplateManagement {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const INITIALIZE_PLATFORM_SHIPPING_TEMPLATES_MUTATION = gql`
+    mutation NextAdminInitializePlatformShippingTemplates {
+        initializePlatformShippingTemplates {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const SET_MY_SHIPPING_TEMPLATE_ENABLED_MUTATION = gql`
+    mutation NextAdminSetMyShippingTemplateEnabled($id: ID!, $enabled: Boolean!) {
+        setMyShippingTemplateEnabled(id: $id, enabled: $enabled) {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const CREATE_PLATFORM_FREE_SHIPPING_VERSION_MUTATION = gql`
+    mutation NextAdminCreatePlatformFreeShippingVersion {
+        createPlatformFreeShippingVersion {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const COPY_PLATFORM_SHIPPING_TEMPLATE_MUTATION = gql`
+    mutation NextAdminCopyPlatformShippingTemplate($id: ID!, $name: String) {
+        copyPlatformShippingTemplate(id: $id, name: $name) {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const CONFIRM_LEGACY_SHIPPING_METHOD_OWNERSHIP_MUTATION = gql`
+    mutation NextAdminConfirmLegacyShippingMethodOwnership(
+        $id: ID!
+        $channelId: ID!
+        $sourceCurrencyCode: String!
+    ) {
+        confirmLegacyShippingMethodOwnership(
+            id: $id
+            channelId: $channelId
+            sourceCurrencyCode: $sourceCurrencyCode
+        ) {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export const COPY_LEGACY_SHIPPING_METHOD_MUTATION = gql`
+    mutation NextAdminCopyLegacyShippingMethod($id: ID!, $sourceCurrencyCode: String!, $name: String) {
+        copyLegacyShippingMethod(id: $id, sourceCurrencyCode: $sourceCurrencyCode, name: $name) {
+            ...NextAdminShippingTemplateManagementFields
+        }
+    }
+    ${SHIPPING_TEMPLATE_MANAGEMENT_FIELDS}
+`;
+
+export type ShippingTemplateManagementData = {
+    shippingTemplateManagement: {
+        isPlatform: boolean;
+        missingPlatformTemplates: number;
+        latestPlatformVersion: number;
+        adoptedPlatformTemplateId: string | null;
+        items: Array<{
+            method: StoreManagementResult['shippingMethods']['items'][number];
+            platformTemplate: boolean;
+            ownedByStore: boolean;
+            enabled: boolean;
+            sourceCurrencyCode: string | null;
+            ownershipConfirmed: boolean;
+            assignedStoreChannels: Array<{ id: string; code: string }>;
+            templateVersion: number | null;
+            latestPlatformTemplate: boolean;
+        }>;
+    };
+};
+
 export const UPDATE_BUSINESS_TAX_CATEGORY_MUTATION = gql`
     mutation NextAdminUpdateBusinessTaxCategory($input: UpdateTaxCategoryInput!) {
         updateTaxCategory(input: $input) {
@@ -1459,6 +1589,7 @@ export interface TeamManagementResult {
 }
 
 export interface AdministratorAccessScopeResult {
+    activeChannel: { id: string; code: string };
     myAdministratorAccess: AdministratorAccessRecord;
 }
 

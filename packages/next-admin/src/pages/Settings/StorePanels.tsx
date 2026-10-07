@@ -358,11 +358,13 @@ export function StoresPanel({
 export function DomainsPanel({
     profile,
     profiles,
+    allowTransfer = true,
     onChanged,
     onError,
 }: {
     profile: StoreProfileRecord | null;
     profiles: StoreProfileRecord[];
+    allowTransfer?: boolean;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -395,6 +397,8 @@ export function DomainsPanel({
         await onChanged(message);
     };
     const add = async () => {
+        if (query.loading || !query.data || query.error)
+            return onError('请先成功读取本店域名配置，再添加域名');
         if (!domain.trim()) return onError('请输入需要绑定的域名');
         try {
             await create({
@@ -505,7 +509,10 @@ export function DomainsPanel({
         verifyState.loading ||
         primaryState.loading ||
         removeState.loading ||
-        transferState.loading;
+        transferState.loading ||
+        query.loading ||
+        !query.data ||
+        Boolean(query.error);
     return (
         <div className="space-y-4">
             <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -540,7 +547,9 @@ export function DomainsPanel({
                         <AdminButton
                             type="button"
                             onClick={() => void add()}
-                            disabled={busy || !domain.trim()}
+                            disabled={
+                                busy || query.loading || !query.data || Boolean(query.error) || !domain.trim()
+                            }
                             className={primaryButton}
                         >
                             <Plus className="h-3.5 w-3.5" />
@@ -549,6 +558,12 @@ export function DomainsPanel({
                     </div>
                 </div>
             </section>
+            {query.error && query.data && (
+                <ErrorState
+                    message={toUserFacingError(query.error, '店铺域名更新失败，请重试读取')}
+                    onRetry={() => void query.refetch()}
+                />
+            )}
             {query.loading && !query.data ? (
                 <LoadingState />
             ) : query.error && !query.data ? (
@@ -625,48 +640,50 @@ export function DomainsPanel({
                                         </td>
                                         <td>
                                             <div className="flex shrink-0 flex-wrap gap-2">
-                                                {profiles.some(
-                                                    candidate => candidate.channel.id !== profile.channel.id,
-                                                ) && (
-                                                    <div className="flex gap-2">
-                                                        <AdminSelect
-                                                            value={transferTargets[item.id] ?? ''}
-                                                            onChange={event =>
-                                                                setTransferTargets(current => ({
-                                                                    ...current,
-                                                                    [item.id]: event.target.value,
-                                                                }))
-                                                            }
-                                                            disabled={busy}
-                                                            className={inputClass}
-                                                            aria-label={`选择 ${item.domain} 的目标店铺`}
-                                                        >
-                                                            <option value="">转移到其他店铺…</option>
-                                                            {profiles
-                                                                .filter(
-                                                                    candidate =>
-                                                                        candidate.channel.id !==
-                                                                        profile.channel.id,
-                                                                )
-                                                                .map(candidate => (
-                                                                    <option
-                                                                        key={candidate.channel.id}
-                                                                        value={candidate.channel.id}
-                                                                    >
-                                                                        {storeName(candidate)}
-                                                                    </option>
-                                                                ))}
-                                                        </AdminSelect>
-                                                        <AdminButton
-                                                            type="button"
-                                                            onClick={() => void transferDomain(item)}
-                                                            disabled={busy || !transferTargets[item.id]}
-                                                            className={secondaryButton}
-                                                        >
-                                                            原子转移
-                                                        </AdminButton>
-                                                    </div>
-                                                )}
+                                                {allowTransfer &&
+                                                    profiles.some(
+                                                        candidate =>
+                                                            candidate.channel.id !== profile.channel.id,
+                                                    ) && (
+                                                        <div className="flex gap-2">
+                                                            <AdminSelect
+                                                                value={transferTargets[item.id] ?? ''}
+                                                                onChange={event =>
+                                                                    setTransferTargets(current => ({
+                                                                        ...current,
+                                                                        [item.id]: event.target.value,
+                                                                    }))
+                                                                }
+                                                                disabled={busy}
+                                                                className={inputClass}
+                                                                aria-label={`选择 ${item.domain} 的目标店铺`}
+                                                            >
+                                                                <option value="">转移到其他店铺…</option>
+                                                                {profiles
+                                                                    .filter(
+                                                                        candidate =>
+                                                                            candidate.channel.id !==
+                                                                            profile.channel.id,
+                                                                    )
+                                                                    .map(candidate => (
+                                                                        <option
+                                                                            key={candidate.channel.id}
+                                                                            value={candidate.channel.id}
+                                                                        >
+                                                                            {storeName(candidate)}
+                                                                        </option>
+                                                                    ))}
+                                                            </AdminSelect>
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() => void transferDomain(item)}
+                                                                disabled={busy || !transferTargets[item.id]}
+                                                                className={secondaryButton}
+                                                            >
+                                                                原子转移
+                                                            </AdminButton>
+                                                        </div>
+                                                    )}
                                                 {item.status !== 'ACTIVE' && (
                                                     <AdminButton
                                                         type="button"
@@ -703,7 +720,7 @@ export function DomainsPanel({
                             </tbody>
                         </table>
                     </div>
-                    {!query.data?.storeDomains.length && (
+                    {query.data && !query.error && !query.data.storeDomains.length && (
                         <div className="p-8 text-center text-xs text-slate-400">当前店铺尚未绑定独立域名</div>
                     )}
                 </section>

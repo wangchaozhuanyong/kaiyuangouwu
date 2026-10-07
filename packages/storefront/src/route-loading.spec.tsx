@@ -1,8 +1,9 @@
+// organize-imports-ignore
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
     loadingPageLabel,
@@ -10,8 +11,19 @@ import {
     pageSkeletonVariantForPathname,
     RouteTransitionLoader,
 } from './route-loading';
+import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeAll(async () => {
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    await act(async () => {
+        root.render(<PageSkeleton />);
+        await vi.dynamicImportSettled();
+    });
+    act(() => root.unmount());
+});
 
 describe('route loading skeletons', () => {
     it('uses a semantic branded transition without replacing the destination layout', () => {
@@ -23,7 +35,9 @@ describe('route loading skeletons', () => {
         expect(markup).toContain('role="status"');
         expect(markup).toContain('aria-label="正在加载页面"');
         expect(markup).toContain('aria-busy="true"');
-        expect(markup).toContain('class="route-transition-card"');
+        expect(markup).toContain('class="brand-loading"');
+        expect(markup).not.toContain('route-transition-card');
+        expect(markup).not.toContain('route-transition-track');
         expect(markup).toContain('src="/brand.svg"');
         expect(markup).toContain('MOYAO AI｜模钥');
         expect(markup).not.toContain('page-skeleton--route');
@@ -35,6 +49,38 @@ describe('route loading skeletons', () => {
         expect(markup).toContain('<div');
         expect(markup).not.toContain('<main');
         expect(markup).toContain('page-skeleton--default');
+    });
+
+    it('brands every store from its current provider without showing generic loading copy', () => {
+        for (const name of ['闪铸商城', '大马通', 'MOYAO AI']) {
+            const markup = renderToStaticMarkup(
+                <StorefrontContext.Provider
+                    value={
+                        {
+                            logoUrl: '/current-brand.svg',
+                            storefrontName: name,
+                            language: 'zh',
+                        } as StorefrontContextValue
+                    }
+                >
+                    <PageSkeleton language="zh" root />
+                </StorefrontContext.Provider>,
+            );
+            expect(markup).toContain('src="/current-brand.svg"');
+            expect(markup).toContain(name);
+            expect(markup).toContain('data-page-pending="data"');
+            expect(markup).toContain('aria-label="正在加载页面"');
+            expect(markup).not.toContain('page-loading-spinner');
+            expect(markup).not.toContain('>正在加载页面<');
+        }
+    });
+
+    it('keeps local coupon and product reads quiet without repeating the page brand', () => {
+        const markup = renderToStaticMarkup(<PageSkeleton compact label="正在加载优惠活动" />);
+        expect(markup).toContain('page-skeleton--compact');
+        expect(markup).not.toContain('route-transition-mark');
+        expect(markup).not.toContain('page-loading-spinner');
+        expect(markup).toContain('>正在加载优惠活动<');
     });
 
     it('maps storefront paths to stable layout variants', () => {
@@ -85,6 +131,36 @@ describe('transition logo loading', () => {
         expect(container.querySelector('svg.route-transition-placeholder')).not.toBeNull();
         expect(container.querySelector('img')).toBeNull();
         expect(container.innerHTML).not.toContain('/storefront/neutral-store.png');
+    });
+
+    it('clears the previous logo when the next store has no configured logo', async () => {
+        await interact(() =>
+            root.render(
+                <StorefrontContext.Provider
+                    value={
+                        {
+                            logoUrl: '/first-store.svg',
+                            storefrontName: 'First store',
+                        } as StorefrontContextValue
+                    }
+                >
+                    <PageSkeleton />
+                </StorefrontContext.Provider>,
+            ),
+        );
+        expect(logoImage().getAttribute('src')).toBe('/first-store.svg');
+        await interact(() =>
+            root.render(
+                <StorefrontContext.Provider
+                    value={{ logoUrl: null, storefrontName: 'Second store' } as StorefrontContextValue}
+                >
+                    <PageSkeleton />
+                </StorefrontContext.Provider>,
+            ),
+        );
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.textContent).toContain('Second store');
+        expect(container.textContent).not.toContain('First store');
     });
 
     it('keeps the mark visible until the downloaded logo has decoded', async () => {

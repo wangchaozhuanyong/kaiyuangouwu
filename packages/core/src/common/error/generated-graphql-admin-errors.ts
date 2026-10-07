@@ -694,6 +694,11 @@ export const adminErrorOperationTypeResolvers = {
       return isGraphQLError(value) ? (value as any).__typename : 'Order';
     },
   },
+  SettleRefundResult: {
+    __resolveType(value: any) {
+      return isGraphQLError(value) ? (value as any).__typename : 'Refund';
+    },
+  },
   RefundOrderResult: {
     __resolveType(value: any) {
       return isGraphQLError(value) ? (value as any).__typename : 'Refund';
@@ -732,11 +737,6 @@ export const adminErrorOperationTypeResolvers = {
   SettlePaymentResult: {
     __resolveType(value: any) {
       return isGraphQLError(value) ? (value as any).__typename : 'Payment';
-    },
-  },
-  SettleRefundResult: {
-    __resolveType(value: any) {
-      return isGraphQLError(value) ? (value as any).__typename : 'Refund';
     },
   },
   TransitionFulfillmentToStateResult: {

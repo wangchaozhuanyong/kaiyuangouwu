@@ -123,7 +123,7 @@ export function buildModificationRefunds(
             result.push({
                 ...base,
                 amount: itemAmount,
-                reasonType: RefundReasonType.Items,
+                reasonType: RefundReasonType.ITEMS,
                 lines: index === itemSource ? [...reduced.values()] : [],
                 ...(groupKey ? { [quantityGroup]: { key: groupKey, anchor: index === itemSource } } : {}),
                 idempotencyKey: purposeRequestKey(source.idempotencyKey, 'items'),
@@ -137,7 +137,7 @@ export function buildModificationRefunds(
                 ...base,
                 amount: shipping,
                 shipping,
-                reasonType: RefundReasonType.Shipping,
+                reasonType: RefundReasonType.SHIPPING,
                 idempotencyKey: purposeRequestKey(source.idempotencyKey, 'shipping'),
             });
             shippingRemaining -= shipping;
@@ -147,7 +147,7 @@ export function buildModificationRefunds(
             result.push({
                 ...base,
                 amount: available,
-                reasonType: RefundReasonType.Compensation,
+                reasonType: RefundReasonType.COMPENSATION,
                 idempotencyKey: purposeRequestKey(source.idempotencyKey, 'compensation'),
             });
     }

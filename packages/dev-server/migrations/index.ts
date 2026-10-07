@@ -148,6 +148,8 @@ import { AddStorePaymentMethodState1790917200000 } from './1790917200000-add-sto
 import { AddIcloudMailEvents1791075600000 } from './1791075600000-add-icloud-mail-events';
 import { AddDigitalProductDomains1791086400000 } from './1791086400000-add-digital-product-domains';
 import { ExpandIcloudMailBodies1791120600000 } from './1791120600000-expand-icloud-mail-bodies';
+import { AddSystemAnnouncementOwner1791331200000 } from './1791331200000-add-system-announcement-owner';
+import { AddUsdtAcceptedHandlerSnapshot1791388800000 } from './1791388800000-add-usdt-accepted-handler-snapshot';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -300,4 +302,6 @@ export const devServerMigrations = [
     AddIcloudMailEvents1791075600000,
     AddDigitalProductDomains1791086400000,
     ExpandIcloudMailBodies1791120600000,
+    AddSystemAnnouncementOwner1791331200000,
+    AddUsdtAcceptedHandlerSnapshot1791388800000,
 ];

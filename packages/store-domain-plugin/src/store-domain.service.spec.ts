@@ -34,6 +34,7 @@ function createService() {
 function channelAdministrator(channelId: string) {
     return {
         channelId,
+        channel: { code: `store-${channelId}` },
         userHasPermissions: vi.fn((permissions: Permission[]) =>
             permissions.includes(Permission.ReadChannel),
         ),
@@ -41,6 +42,116 @@ function channelAdministrator(channelId: string) {
 }
 
 describe('StoreDomainService channel isolation', () => {
+    it('invalidates a retained pending route immediately after successful ownership verification', async () => {
+        const domain = {
+            id: 'domain-a',
+            domain: 'shop.example.com',
+            channelId: 'store-a',
+            channel: { id: 'store-a', code: 'store-a', token: 'verified-shop' },
+            status: 'PENDING',
+            verificationToken: 'fixture-domain-proof',
+            provisioningMode: 'MANUAL',
+        } as unknown as StoreDomain;
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(domain),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const entries = new Map<string, unknown>();
+        const cache = {
+            get: vi.fn(key => Promise.resolve(entries.get(key))),
+            set: vi.fn((key, value) => {
+                entries.set(key, value);
+                return Promise.resolve();
+            }),
+            delete: vi.fn(key => {
+                entries.delete(key);
+                return Promise.resolve();
+            }),
+        };
+        const connection = {
+            getRepository: vi.fn().mockReturnValue(repository),
+            rawConnection: { getRepository: vi.fn().mockReturnValue(repository) },
+        };
+        const options = {
+            cnameTarget: 'shops.example.com',
+            routingMode: 'require-domain' as const,
+            trustProxyHeaders: false,
+            bypassHosts: [],
+            cloudflare: null,
+            resolveTxt: vi.fn(() => Promise.resolve([[service.getVerificationRecordValue(domain)]])),
+        };
+        const service = new StoreDomainService(
+            connection as any,
+            cache as any,
+            { publish: vi.fn() } as any,
+            options,
+        );
+        expect(await service.resolveRoute(domain.domain)).toMatchObject({ status: 'PENDING' });
+        const ctx = {
+            channelId: 'store-a',
+            channel: { code: 'store-a' },
+            userHasPermissions: () => true,
+        } as any;
+        expect(await service.verify(ctx, domain.id)).toMatchObject({ success: true });
+        expect(cache.delete).toHaveBeenCalledWith('StoreDomainRoute:shop.example.com');
+        expect(await service.resolveRoute(domain.domain)).toEqual({
+            status: 'ACTIVE',
+            channelToken: 'verified-shop',
+        });
+        expect(repository.findOne).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not let SuperAdmin read another store from an operating context', async () => {
+        const { repository, service } = createService();
+        const ctx = {
+            channelId: 'store-a',
+            channel: { code: 'store-a' },
+            userHasPermissions: () => true,
+        } as any;
+        await service.findAll(ctx, 'store-a');
+        await expect(service.findAll(ctx, 'store-b')).rejects.toThrow('无权管理');
+        expect(repository.find).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['verify', 'setPrimary', 'delete'] as const)(
+        'rejects forged cross-store domain IDs for %s even for SuperAdmin',
+        async method => {
+            const { repository, service } = createService();
+            repository.findOne.mockResolvedValue({ id: 'foreign-domain', channelId: 'store-b' });
+            const ctx = {
+                channelId: 'store-a',
+                channel: { code: 'store-a' },
+                userHasPermissions: () => true,
+            } as any;
+            await expect(service[method](ctx, 'foreign-domain')).rejects.toThrow('无权管理');
+            expect(repository.save).not.toHaveBeenCalled();
+        },
+    );
+
+    it('rejects cross-store creation and transfer before lookup for an operating SuperAdmin', async () => {
+        const { repository, service } = createService();
+        const ctx = {
+            channelId: 'store-a',
+            channel: { code: 'store-a' },
+            userHasPermissions: () => true,
+        } as any;
+        await expect(
+            service.create(ctx, { channelId: 'store-b', domain: 'other.example.com' }),
+        ).rejects.toThrow('无权管理');
+        await expect(service.transferImpact(ctx, 'foreign-domain', 'store-b')).rejects.toThrow(
+            '平台管理中心',
+        );
+        await expect(
+            service.transfer(ctx, {
+                id: 'foreign-domain',
+                targetChannelId: 'store-b',
+                expectedUpdatedAt: new Date(),
+            }),
+        ).rejects.toThrow('平台管理中心');
+        expect(repository.findOne).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
     it('lets a channel administrator read only the active channel domains', async () => {
         const { repository, service } = createService();
         const ctx = channelAdministrator('store-a');
@@ -57,6 +168,7 @@ describe('StoreDomainService channel isolation', () => {
         const { repository, service } = createService();
         const ctx = {
             channelId: 'default',
+            channel: { code: '__default_channel__' },
             userHasPermissions: vi.fn((permissions: Permission[]) =>
                 permissions.includes(Permission.SuperAdmin),
             ),
@@ -73,6 +185,7 @@ describe('StoreDomainService channel isolation', () => {
         const { repository, service } = createService();
         const ctx = {
             channelId: 'store-a',
+            channel: { code: 'store-a' },
             userHasPermissions: vi.fn((permissions: Permission[]) =>
                 permissions.includes(storeDomainPermission.Read),
             ),
@@ -151,6 +264,8 @@ describe('StoreDomainService atomic transfer', () => {
             cloudflare: null,
         });
         const ctx = {
+            channelId: 'default',
+            channel: { code: '__default_channel__' },
             userHasPermissions: vi.fn((permissions: Permission[]) =>
                 permissions.includes(Permission.SuperAdmin),
             ),
@@ -212,12 +327,18 @@ describe('StoreDomainService atomic transfer', () => {
         const state = setupTransfer();
 
         await expect(
-            state.service.transfer({ userHasPermissions: vi.fn().mockReturnValue(false) } as any, {
-                id: state.transferred.id,
-                targetChannelId: state.targetChannel.id,
-                expectedUpdatedAt: state.transferred.updatedAt,
-            }),
-        ).rejects.toThrow('只有超级管理员');
+            state.service.transfer(
+                {
+                    channel: { code: '__default_channel__' },
+                    userHasPermissions: vi.fn().mockReturnValue(false),
+                } as any,
+                {
+                    id: state.transferred.id,
+                    targetChannelId: state.targetChannel.id,
+                    expectedUpdatedAt: state.transferred.updatedAt,
+                },
+            ),
+        ).rejects.toThrow('平台管理中心的超级管理员');
     });
 
     it('refuses to transfer a public domain to the native default Channel', async () => {
@@ -250,6 +371,7 @@ describe('StoreDomainService public store boundary', () => {
         repository.findOne.mockResolvedValue({ id: 'default', code: '__default_channel__' });
         const ctx = {
             channelId: 'default',
+            channel: { code: '__default_channel__' },
             userHasPermissions: vi.fn((permissions: Permission[]) =>
                 permissions.includes(Permission.SuperAdmin),
             ),
@@ -337,6 +459,7 @@ describe('StoreDomainService Cloudflare automation', () => {
         });
         const ctx = {
             channelId: 'store-a',
+            channel: { code: 'store-a' },
             userHasPermissions: vi.fn((permissions: Permission[]) =>
                 permissions.includes(Permission.SuperAdmin),
             ),

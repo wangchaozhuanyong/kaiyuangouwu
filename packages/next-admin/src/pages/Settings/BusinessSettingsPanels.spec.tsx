@@ -124,8 +124,22 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
+const usePlatformSettings = () => {
+    apolloMocks.useQuery.mockReturnValue({
+        data: {
+            ...businessSettings,
+            activeChannel: { ...businessSettings.activeChannel, code: '__default_channel__' },
+        },
+        error: undefined,
+        fetchMore: vi.fn(),
+        loading: false,
+        refetch,
+    });
+};
+
 describe('BusinessBasicsPanel', () => {
     it('uses the shared form grid and field shells instead of manual checkbox offsets', () => {
+        usePlatformSettings();
         const html = renderToStaticMarkup(
             <ConfirmDialogContext.Provider value={async () => false}>
                 <BusinessBasicsPanel onChanged={async () => undefined} onError={() => undefined} />
@@ -141,6 +155,7 @@ describe('BusinessBasicsPanel', () => {
     });
 
     it('uses guided choices instead of asking operators to remember language and currency codes', () => {
+        usePlatformSettings();
         const html = renderToStaticMarkup(
             <ConfirmDialogContext.Provider value={async () => false}>
                 <BusinessBasicsPanel onChanged={async () => undefined} onError={() => undefined} />

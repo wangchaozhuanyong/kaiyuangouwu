@@ -751,7 +751,7 @@ export class AutoCardService {
             delivery.state = 'SENT';
             delivery.sentAt = new Date();
             delivery.lastError = null;
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            await this.persistDeliveryState(ctx, delivery);
             await this.addEvent(ctx, delivery, 'EMAIL_SENT', '自动发卡邮件已发送');
             if (wasManualReview) await this.resolveDeliveryFailure(ctx, delivery);
             await this.completeFulfillment(ctx, delivery);
@@ -759,7 +759,7 @@ export class AutoCardService {
         }
         delivery.lastError = String(error?.message ?? '邮件发送失败').slice(0, 2_000);
         delivery.state = delivery.attemptCount >= MAX_EMAIL_ATTEMPTS ? 'MANUAL_REVIEW' : 'RETRYING';
-        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.persistDeliveryState(ctx, delivery);
         await this.addEvent(
             ctx,
             delivery,
@@ -793,7 +793,7 @@ export class AutoCardService {
         if (delivery.state !== 'SENT') {
             delivery.state = 'RETRYING';
             delivery.lastError = null;
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            await this.persistDeliveryState(ctx, delivery);
         }
         await this.addEvent(ctx, delivery, 'MANUAL_RETRY', '管理员手动重新发送原卡密', 'ADMIN');
         await this.dispatch(ctx, delivery, 'EMAIL_QUEUED', '手动重发已进入邮件队列');
@@ -879,7 +879,10 @@ export class AutoCardService {
 
     private async reconcileVariant(ctx: RequestContext, productVariantId: ID): Promise<void> {
         const waiting = await this.connection.getRepository(ctx, AutoCardDelivery).find({
-            where: { channelId: ctx.channelId, state: 'WAITING_STOCK', config: { productVariantId } },
+            where: {
+                state: 'WAITING_STOCK',
+                config: { channelId: ctx.channelId, productVariantId },
+            },
             relations: {
                 channel: true,
                 config: true,
@@ -953,7 +956,7 @@ export class AutoCardService {
         if (!remainingQuantity) {
             delivery.quantity = delivery.poolItems.length;
             if (eligible && delivery.state !== 'SENT') delivery.state = 'ALLOCATED';
-            return this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            return this.persistDeliveryState(ctx, delivery);
         }
         const reservation = await this.digitalProducts.reservation(ctx, delivery.orderLineId);
         const repository = this.connection.getRepository(ctx, AutoCardPoolItem);
@@ -989,7 +992,7 @@ export class AutoCardService {
         if (candidates.length < remainingQuantity) {
             delivery.state = 'WAITING_STOCK';
             delivery.lastError = `号池还需要 ${remainingQuantity} 份，当前可用 ${candidates.length} 份`;
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            await this.persistDeliveryState(ctx, delivery);
             if (!delivery.events.some(event => event.type === 'WAITING_STOCK')) {
                 await this.addEvent(ctx, delivery, 'WAITING_STOCK', delivery.lastError);
             }
@@ -1010,7 +1013,7 @@ export class AutoCardService {
         if (update.affected !== remainingQuantity) {
             delivery.state = 'WAITING_STOCK';
             delivery.lastError = '号池发生并发分配，系统将自动重试';
-            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            await this.persistDeliveryState(ctx, delivery);
             await this.addEvent(ctx, delivery, 'WAITING_STOCK', delivery.lastError);
             return delivery;
         }
@@ -1027,13 +1030,38 @@ export class AutoCardService {
                 }),
             ),
         ];
-        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.persistDeliveryState(ctx, delivery);
         delivery.quantity = delivery.poolItems.length;
-        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.persistDeliveryState(ctx, delivery);
         await this.digitalProducts.consumeLine(ctx, delivery.orderLineId, remainingQuantity);
         await this.addEvent(ctx, delivery, 'ALLOCATED', `已按号池顺序分配 ${delivery.quantity} 份卡密`);
         await this.publishSupplyStockChange(ctx, delivery.configId, delivery.config.productVariantId);
         if (wasWaitingForStock) await this.resolveStockShortage(ctx, delivery);
+        return delivery;
+    }
+
+    private async persistDeliveryState(
+        ctx: RequestContext,
+        delivery: AutoCardDelivery,
+    ): Promise<AutoCardDelivery> {
+        const repository = this.connection.getRepository(ctx, AutoCardDelivery);
+        if (!['mysql', 'mariadb'].includes(this.connection.rawConnection.options.type)) {
+            return repository.save(delivery);
+        }
+        // save() checks existence with a snapshot read and can insert a row acquired by a current lock.
+        // The locked delivery already exists; update its mutable columns without reconciling relations.
+        await repository.update(
+            { id: delivery.id, channelId: ctx.channelId },
+            {
+                state: delivery.state,
+                quantity: delivery.quantity,
+                attemptCount: delivery.attemptCount,
+                lastError: delivery.lastError,
+                lastDispatchedAt: delivery.lastDispatchedAt,
+                sentAt: delivery.sentAt,
+                fulfillmentId: delivery.fulfillmentId,
+            },
+        );
         return delivery;
     }
 
@@ -1045,7 +1073,7 @@ export class AutoCardService {
     ): Promise<void> {
         this.assertDeliveryScope(ctx, delivery);
         delivery.lastDispatchedAt = new Date();
-        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.persistDeliveryState(ctx, delivery);
         await this.addEvent(ctx, delivery, eventType, note);
         await this.eventBus.publish(
             new AutoCardDeliveryReadyEvent(
@@ -1103,7 +1131,7 @@ export class AutoCardService {
             throw new Error(transitioned.message);
         }
         delivery.fulfillmentId = String(result.id);
-        await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+        await this.persistDeliveryState(ctx, delivery);
 
         const order = await this.connection.getEntityOrThrow(ctx, Order, delivery.orderId, {
             relations: [
@@ -1181,7 +1209,11 @@ export class AutoCardService {
         return item;
     }
 
-    private async deliveryOrThrow(ctx: RequestContext, id: ID): Promise<AutoCardDelivery> {
+    private async deliveryOrThrow(
+        ctx: RequestContext,
+        id: ID,
+        currentRead = false,
+    ): Promise<AutoCardDelivery> {
         const delivery = await this.connection.getRepository(ctx, AutoCardDelivery).findOne({
             where: { id, channelId: ctx.channelId },
             relations: {
@@ -1193,6 +1225,9 @@ export class AutoCardService {
                 events: true,
             },
             order: { events: { createdAt: 'ASC' } },
+            ...(currentRead
+                ? { lock: { mode: 'pessimistic_write' as const }, relationLoadStrategy: 'join' as const }
+                : {}),
         });
         if (!delivery) throw new UserInputError('发卡记录不存在');
         this.assertDeliveryScope(ctx, delivery);
@@ -1228,7 +1263,12 @@ export class AutoCardService {
         } catch (error) {
             if (!isLockNotSupportedError(error)) throw error;
         }
-        return this.deliveryOrThrow(ctx, id);
+        // Hydration must also use a current read after the row lock under MySQL REPEATABLE READ.
+        return this.deliveryOrThrow(
+            ctx,
+            id,
+            ['mysql', 'mariadb'].includes(this.connection.rawConnection.options.type),
+        );
     }
 
     private async addEvent(

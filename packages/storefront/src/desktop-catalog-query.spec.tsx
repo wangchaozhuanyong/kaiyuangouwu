@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { catalogInputFromRoute, catalogRouteWithChanges } from './catalog-route-query';
 import { ProductCard } from './components/common/product-card';
 import { ProductRow } from './components/common/product-row';
+import { STOREFRONT_IMAGE_SIZES } from './responsive-image';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
 
@@ -209,5 +210,23 @@ describe('desktop catalog card', () => {
         expect(html).toContain('class="product-row product-row-detail-link"');
         expect(html).toContain('href="/product?id=product-1"');
         expect(html).not.toContain('product-catalog-action');
+    });
+    it('uses catalog grid sizes and eager loading without giving every first-row image high priority', () => {
+        const props = {
+            product: { ...product, featuredAsset: { id: 'cover', preview: '/assets/preview/catalog.jpg' } },
+            market,
+            locale: 'zh-CN',
+            language: 'zh' as const,
+            onOpen: () => undefined,
+        };
+        const catalogCard = renderToStaticMarkup(
+            <ProductCard {...props} imageSizes={STOREFRONT_IMAGE_SIZES.desktopCatalogCard} eager />,
+        );
+        expect(catalogCard).toContain(`sizes="${STOREFRONT_IMAGE_SIZES.desktopCatalogCard}"`);
+        expect(catalogCard).toContain('loading="eager"');
+        expect(catalogCard).toContain('fetchPriority="auto"');
+        const otherCard = renderToStaticMarkup(<ProductCard {...props} />);
+        expect(otherCard).toContain('sizes="(min-width: 900px) 300px, calc(50vw - 14px)"');
+        expect(otherCard).toContain('loading="lazy"');
     });
 });

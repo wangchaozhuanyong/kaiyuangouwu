@@ -5,6 +5,7 @@ import { minimumProductPrice } from './catalog-page-utils';
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
 import { ProductDetailPage } from './pages/product-detail-page';
+import { STOREFRONT_IMAGE_SIZES } from './responsive-image';
 import { SharePosterModal } from './share-poster-modal';
 import { ProductDetailPageContext } from './storefront-page-contexts';
 import { productImage as displayProductImage, formatMoney } from './storefront-ui/product-display';
@@ -225,6 +226,30 @@ describe('product image navigation layers', () => {
         const props = { product, market, locale: market.locale, language: 'zh' as const, onOpen: vi.fn() };
         const card = renderToStaticMarkup(<ProductCard {...props} />);
         const row = renderToStaticMarkup(<ProductRow {...props} />);
+        const mediaProduct = {
+            ...product,
+            featuredAsset: { id: 'cover', preview: '/assets/preview/product.png' },
+        };
+        const priorityRow = renderToStaticMarkup(
+            <ProductRow {...props} product={mediaProduct} priority fetchPriority="high" />,
+        );
+        expect(priorityRow).toContain('sizes="(min-width: 1024px) 300px, 104px"');
+        expect(priorityRow).toContain('loading="eager"');
+        expect(priorityRow).toContain('fetchPriority="high"');
+        const sidebarRow = renderToStaticMarkup(
+            <ProductRow
+                {...props}
+                product={mediaProduct}
+                imageSizes={STOREFRONT_IMAGE_SIZES.categorySidebarRow}
+                priority
+                fetchPriority="high"
+            />,
+        );
+        expect(sidebarRow).toContain(`sizes="${STOREFRONT_IMAGE_SIZES.categorySidebarRow}"`);
+        expect(sidebarRow).toContain('loading="eager"');
+        expect(renderToStaticMarkup(<ProductRow {...props} product={mediaProduct} />)).toContain(
+            'loading="lazy"',
+        );
         const detail = (initialVariantId?: string) =>
             renderToStaticMarkup(
                 <ProductDetailPageContext.Provider

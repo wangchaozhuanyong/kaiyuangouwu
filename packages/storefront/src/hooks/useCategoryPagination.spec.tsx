@@ -276,7 +276,9 @@ describe('category automatic pagination', () => {
         input = { collectionId: 'two', sort: 'sales' };
         render();
         await settle();
-        expect(pagination.query.isPlaceholderData).toBe(true);
+        expect(pagination.query.isPlaceholderData).toBe(false);
+        expect(pagination.query.isPending).toBe(true);
+        expect(pagination.products).toEqual([]);
         intersect(observer);
         act(() => {
             void pagination.loadMore();

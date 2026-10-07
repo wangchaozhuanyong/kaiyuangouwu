@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     ContentTranslationService,
     LocalizedContentFieldInput,
@@ -99,6 +100,7 @@ export class StoreProfileService {
 
     async findAllForAdmin(ctx: RequestContext): Promise<StoreProfile[]> {
         const profiles = await this.connection.getRepository(ctx, StoreProfile).find({
+            ...(ctx.channel.code === DEFAULT_CHANNEL_CODE ? {} : { where: { channelId: ctx.channelId } }),
             relations: this.profileRelations(),
             order: { sortOrder: 'ASC', createdAt: 'ASC' },
         });
@@ -125,6 +127,9 @@ export class StoreProfileService {
     }
 
     async update(ctx: RequestContext, input: UpdateStoreProfileInput): Promise<StoreProfile> {
+        if (ctx.channel.code !== DEFAULT_CHANNEL_CODE) {
+            throw new UserInputError('店铺治理请切换到平台管理中心；本店公开资料请使用我的店铺设置');
+        }
         const repository = this.connection.getRepository(ctx, StoreProfile);
         const profile = await this.lockProfileById(ctx, input.id);
         this.assertExpectedUpdatedAt(profile.updatedAt, input.expectedUpdatedAt);

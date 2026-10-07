@@ -1,42 +1,30 @@
 // @vitest-environment jsdom
-import { act, ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PageReadinessBoundary } from './page-readiness';
-import { SafeImage } from './safe-image';
+import { PageReadinessBoundary, usePageReadiness } from './page-readiness';
+import { PageSkeleton } from './route-loading';
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function requiredImage(host: ParentNode): HTMLImageElement {
-    const image = host.querySelector('img');
-    if (!image) throw new Error('Expected an image');
-    return image;
+function RequiredQuery({ pending }: { pending: boolean }) {
+    usePageReadiness(pending);
+    return (
+        <main>
+            <button>Action</button>
+            {pending ? 'Target query pending' : 'Target content'}
+        </main>
+    );
 }
+beforeAll(async () => {
+    await vi.dynamicImportSettled();
+});
 
-describe('progressive page readiness', () => {
+describe('explicit route readiness', () => {
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     beforeEach(() => {
         vi.useFakeTimers();
-        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-            const top = this.getAttribute('data-offscreen') === 'true' ? 2000 : 0;
-            return {
-                x: 0,
-                y: top,
-                top,
-                left: 0,
-                right: 300,
-                bottom: top + 200,
-                width: 300,
-                height: 200,
-                toJSON: () => ({}),
-            };
-        });
-        Object.defineProperty(HTMLImageElement.prototype, 'decode', {
-            configurable: true,
-            writable: true,
-            value: vi.fn().mockResolvedValue(undefined),
-        });
         host = document.createElement('div');
         document.body.append(host);
         root = createRoot(host);
@@ -44,303 +32,149 @@ describe('progressive page readiness', () => {
     afterEach(() => {
         act(() => root.unmount());
         host.remove();
-        vi.restoreAllMocks();
         vi.useRealTimers();
     });
+    const retry = vi.fn();
     function render(
-        children: ReactNode,
+        queryPending = false,
+        key = 'category',
         pending = false,
-        key = 'first',
         online = true,
-        requestKey = key,
+        image = false,
         navigationPreparing = false,
     ) {
         act(() =>
             root.render(
                 <PageReadinessBoundary
-                    navigationKey={key}
-                    requestKey={requestKey}
+                    requestKey={key}
                     pending={pending}
                     navigationPreparing={navigationPreparing}
                     online={online}
                     language="zh"
+                    onRetry={retry}
                     onBack={vi.fn()}
-                    onRetry={vi.fn()}
                 >
-                    {children}
+                    <RequiredQuery pending={queryPending} />
+                    {image && <img src="/never-loaded.webp" alt="Product" />}
                 </PageReadinessBoundary>,
             ),
         );
     }
-    async function advance(ms = 64) {
-        await act(async () => {
+    const phase = () => host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness');
+    const advance = (ms: number) =>
+        act(async () => {
             await vi.advanceTimersByTimeAsync(ms);
         });
-    }
-    function phase() {
-        return host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness');
-    }
-    async function complete(image: HTMLImageElement) {
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 640 },
-        });
-        await act(async () => {
-            image.dispatchEvent(new Event('load'));
-            await Promise.resolve();
-        });
-    }
-
-    it('keeps content visible while it observes data, a route module, and the visible image', async () => {
-        render(<span data-page-pending="module" />, true);
-        const stage = host.querySelector<HTMLElement>('.page-readiness-stage');
-        expect(stage?.hasAttribute('inert')).toBe(false);
-        expect(stage?.style.opacity).toBe('');
-        expect(stage?.style.pointerEvents).toBe('');
-        await advance(240);
+    it('holds readiness for the target query regardless of geometry and uses one delayed accessible status', async () => {
+        render(true);
+        expect(phase()).toBe('preparing');
+        expect(host.querySelectorAll('.page-readiness-progress')).toHaveLength(0);
+        await advance(220);
         expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
-        render(<span data-page-pending="module" />);
-        await advance();
-        expect(phase()).toBe('preparing');
-        render(<SafeImage src="/hero.webp" alt="Hero" loading="lazy" />);
-        await advance();
-        const image = requiredImage(host);
-        expect(image.getAttribute('loading')).toBe('eager');
-        expect(phase()).toBe('preparing');
-        await complete(image);
-        await advance();
+        expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
+        render(false);
         expect(phase()).toBe('ready');
-        expect(host.querySelector('[role=status]')).toBeNull();
-        expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
     });
-
-    it('shows one progress signal over the current page during product preparation', async () => {
-        render(<main>Current page</main>);
-        await advance();
-        expect(phase()).toBe('ready');
-        render(<main>Current page</main>, false, 'first', true, 'first', true);
-        expect(host.querySelector('main')?.textContent).toBe('Current page');
-        expect(host.querySelectorAll('.page-readiness-progress')).toHaveLength(1);
-        expect(host.querySelector('[aria-label="正在打开商品"]')).not.toBeNull();
-        expect(host.querySelector('[data-page-readiness]')?.getAttribute('aria-busy')).toBe('true');
-    });
-
-    it('does not wait for a decorative preview once the full image is decoded', async () => {
-        const inlinePreview =
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aC3sAAAAASUVORK5CYII=';
-        render(
-            <SafeImage
-                src="/assets/preview/banner.jpg"
-                placeholderSrc={inlinePreview}
-                alt="Banner"
-                imageKind="hero"
-            />,
-        );
-        const image = requiredImage(host);
-        const preview = host.querySelector<HTMLImageElement>('.safe-image-preview');
-        expect(preview?.getAttribute('src')).toBe(inlinePreview);
-        expect(preview?.complete).toBe(false);
-        await complete(image);
-        await advance();
-        expect(phase()).toBe('ready');
-        expect(preview?.complete).toBe(false);
-    });
-
-    it('does not wait for images or query placeholders outside the first viewport', async () => {
-        render(
-            <>
-                <h1>Ready</h1>
-                <div data-offscreen="true">
-                    <SafeImage src="/later.webp" alt="Later" loading="lazy" />
-                </div>
-                <div data-page-pending="data" data-offscreen="true" />
-            </>,
-        );
-        // The image rectangle is independently positioned in this fixture.
-        const frame = host.querySelector('[data-safe-image]');
-        if (!frame) throw new Error('Expected an image frame');
-        frame.setAttribute('data-offscreen', 'true');
-        await advance();
-        expect(phase()).toBe('ready');
-        expect(host.querySelector('img')?.getAttribute('loading')).toBe('lazy');
-    });
-
-    it('ignores hidden carousel slides', async () => {
-        render(
-            <>
-                <h1>Ready</h1>
-                <div aria-hidden="true">
-                    <SafeImage src="/slide-two.webp" alt="" />
-                </div>
-            </>,
-        );
-        await advance();
-        expect(phase()).toBe('ready');
-    });
-
-    it('does not downgrade a ready page for a failed decorative category icon', async () => {
-        const icon = (
-            <span aria-hidden="true">
-                <SafeImage src="/missing-category.png" alt="" />
-            </span>
-        );
-        render(icon, true);
-        act(() => {
-            requiredImage(host).dispatchEvent(new Event('error'));
-        });
-        render(icon);
-        await advance();
-        expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
-        expect(phase()).toBe('ready');
-    });
-
-    it('keeps a page ready when a failed category image has a usable replacement icon', async () => {
-        const category = (
-            <SafeImage src="/missing-category.png" alt="分类" errorFallback={<span>分类图标</span>} />
-        );
-        render(category, true);
-        act(() => {
-            requiredImage(host).dispatchEvent(new Event('error'));
-        });
-        render(category);
-        await advance();
-        expect(host.querySelector('[data-safe-image=error]')?.getAttribute('data-safe-image-recovered')).toBe(
-            'true',
-        );
-        expect(host.textContent).toContain('分类图标');
-        expect(phase()).toBe('ready');
-    });
-
-    it('waits for the declared route query even when its skeleton is below a large header', async () => {
-        render(<div data-page-pending="query" data-offscreen="true" />);
-        await advance(300);
-        expect(phase()).toBe('preparing');
-        render(<h1>Current query result</h1>);
-        await advance();
-        expect(phase()).toBe('ready');
-    });
-
-    it('uses the media budget after data settles, then allows a late image to replace its fallback', async () => {
-        render(<SafeImage src="/slow.webp" alt="Slow" />, true);
-        await advance(4000);
-        expect(phase()).toBe('preparing');
-        render(<SafeImage src="/slow.webp" alt="Slow" />);
-        await advance(3100);
-        expect(phase()).toBe('degraded');
-        expect(host.querySelector('[data-safe-image=timeout]')).not.toBeNull();
-        expect(host.querySelector('.safe-image-fallback')).not.toBeNull();
-        await complete(requiredImage(host));
-        await advance();
-        expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
-        expect(phase()).toBe('degraded');
-    });
-
-    it('shows retry on data timeout or an offline pending query without hiding the current content', async () => {
-        render(<h1>Form</h1>, true);
-        expect(host.textContent).toContain('Form');
-        await advance(10100);
-        expect(phase()).toBe('error');
-        expect(host.querySelector('[role=alert]')?.textContent).toContain('加载超时');
-        render(<h1>Form</h1>, true, 'offline', false);
-        await advance();
-        expect(host.querySelector('[role=alert]')?.textContent).toContain('网络不可用');
-    });
-
-    it('preserves one loading indicator while bootstrap resolves the store scope', async () => {
-        render(<span data-page-pending="module" />, true, 'unresolved', true, 'login');
-        await advance(250);
-        expect(host.querySelector('[role=status]')).not.toBeNull();
-        render(<span data-page-pending="module" />, true, 'resolved-store', true, 'login');
-        expect(host.querySelector('[role=status]')).not.toBeNull();
-        await advance(16);
-        expect(host.querySelector('[role=status]')).not.toBeNull();
-    });
-
-    it('does not cover a released page when a background refresh begins', async () => {
-        render(<h1>Existing content</h1>);
-        await advance();
-        render(<h1>Existing content</h1>, true);
+    it('does not wait for images, cached content or DOM pending-marker remnants', async () => {
+        render(false, 'cached', false, true, true);
         await advance(400);
         expect(phase()).toBe('ready');
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
+        expect(host.querySelector('img')?.complete).toBe(false);
     });
-
-    it('keeps one deadline across late member resolution and clears the timeout when data arrives', async () => {
-        render(<span data-page-pending="query" />, true, 'guest', true, 'account');
-        await advance(9000);
-        render(<span data-page-pending="query" />, true, 'member', true, 'account');
-        await advance(1100);
-        expect(phase()).toBe('error');
-        render(<h1>Member content</h1>, false, 'resolved-member', true, 'account');
-        await advance(500);
+    it('starts a new query requirement after a previously ready module', async () => {
+        render();
         expect(phase()).toBe('ready');
-        expect(host.querySelector('[role=status]')).toBeNull();
-        expect(host.querySelector('[role=alert]')).toBeNull();
+        render(true);
+        await advance(250);
+        expect(phase()).toBe('preparing');
+        expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
+        expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
     });
-
-    it('recovers when a timed-out route module finishes after navigation settles', async () => {
-        render(<span data-page-pending="module" />, true, 'services');
-        await advance(10100);
+    it('times out without hiding or disabling the existing page, and recovers on late data', async () => {
+        render(true);
+        host.querySelector('button')?.focus();
+        await advance(10_100);
         expect(phase()).toBe('error');
-        render(<span data-page-pending="module" />, false, 'services');
-        await advance();
-        expect(phase()).toBe('error');
-        render(<h1>Services</h1>, false, 'services');
-        await advance();
-        await advance();
+        expect(host.querySelector('[role=alert]')?.textContent).toContain('超时');
+        expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+        expect(document.activeElement?.textContent).toBe('Action');
+        render(false);
         expect(phase()).toBe('ready');
         expect(host.querySelector('[role=alert]')).toBeNull();
     });
-
-    it('gives a new navigation its own deadline while retaining an already visible indicator', async () => {
-        render(<span data-page-pending="module" />, true, 'first');
+    it('gives a new filter its own deadline and cancels the previous deadline', async () => {
+        render(true, 'empty-a');
         await advance(9000);
-        render(<span data-page-pending="module" />, true, 'second');
-        expect(host.querySelector('[role=status]')).not.toBeNull();
+        render(true, 'products-b');
         await advance(2000);
         expect(phase()).toBe('preparing');
-        await advance(8100);
-        expect(phase()).toBe('error');
-    });
-
-    it('cancels old navigation completions and does not impose the progress delay on cached content', async () => {
-        render(<SafeImage src="/old.webp" alt="" />);
-        const old = requiredImage(host);
-        await advance(250);
-        render(<h1>New destination</h1>, false, 'new');
-        await complete(old);
-        await advance();
+        render(false, 'products-b');
+        await advance(9000);
         expect(phase()).toBe('ready');
-        expect(host.querySelector('[role=status]')).toBeNull();
-        expect(host.textContent).toContain('New destination');
     });
-
-    it('does not hide, inert, or blur the current stage while a new route prepares', () => {
-        render(
-            <div>
-                <button type="button" id="test-btn">
-                    Action
-                </button>
-            </div>,
-            true,
-        );
-        const stageElement = host.querySelector('.page-readiness-stage');
-        expect(stageElement?.getAttribute('aria-hidden')).toBeNull();
-        expect(stageElement?.hasAttribute('inert')).toBe(false);
-
-        const button = host.querySelector<HTMLButtonElement>('#test-btn');
-        expect(button).not.toBeNull();
-        button?.focus();
-        expect(document.activeElement).toBe(button);
-
-        render(
-            <div>
-                <button type="button" id="test-btn">
-                    Action
-                </button>
-            </div>,
-            true,
-            'second',
-        );
-        expect(document.activeElement).toBe(button);
+    it('handles offline required data but leaves available data usable offline', () => {
+        render(true, 'offline', false, false);
+        expect(phase()).toBe('error');
+        expect(host.textContent).toContain('网络不可用');
+        render(false, 'offline', false, false);
+        expect(phase()).toBe('ready');
+    });
+    it('waits for route code in the same readiness boundary', async () => {
+        render(false, 'module', true);
+        await advance(250);
+        expect(phase()).toBe('preparing');
+        render(false, 'module', false);
+        expect(phase()).toBe('ready');
+    });
+    it('retains content and shows compact branding only while product preparation is pending', async () => {
+        render(false);
+        expect(phase()).toBe('ready');
+        render(false, 'product', false, true, false, true);
+        expect(phase()).toBe('preparing');
+        expect(host.querySelector('main')?.textContent).toContain('Target content');
+        expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(host.querySelectorAll('.page-readiness-navigation')).toHaveLength(1);
+        expect(host.querySelector('.brand-loading--compact')).not.toBeNull();
+        expect(host.querySelector('[aria-label="正在打开商品"]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
+        render(false, 'product');
+        expect(phase()).toBe('ready');
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+    });
+    it('retains skeleton readiness registration and emits page-ready when its token is released', () => {
+        const ready = vi.fn();
+        document.addEventListener('storefront:page-ready', ready);
+        const skeleton = (loading: boolean) =>
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        requestKey="route"
+                        pending={false}
+                        online
+                        language="zh"
+                        onRetry={retry}
+                        onBack={vi.fn()}
+                    >
+                        {loading ? <PageSkeleton /> : <main>Loaded</main>}
+                    </PageReadinessBoundary>,
+                ),
+            );
+        try {
+            skeleton(true);
+            expect(phase()).toBe('preparing');
+            expect(ready).not.toHaveBeenCalled();
+            skeleton(false);
+            expect(phase()).toBe('ready');
+            expect(ready).toHaveBeenCalledTimes(1);
+        } finally {
+            document.removeEventListener('storefront:page-ready', ready);
+        }
     });
 });

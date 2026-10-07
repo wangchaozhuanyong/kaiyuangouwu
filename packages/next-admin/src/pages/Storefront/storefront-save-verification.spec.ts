@@ -119,6 +119,7 @@ it('checks announcement copy, enable state and explicit target store scope', () 
         titleEnLocked: false,
         contentEnLocked: false,
         channels: [{ id: 'damatong', code: 'damatong' }],
+        ownerChannelId: 'damatong',
     } as SystemAnnouncementRecord;
     expect(() => verifyAnnouncement(saved, expected)).not.toThrow();
     for (const altered of [

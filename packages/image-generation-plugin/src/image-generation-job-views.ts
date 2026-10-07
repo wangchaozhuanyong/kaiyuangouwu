@@ -11,6 +11,8 @@ export class ImageGenerationJobViews {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly storage: ImagePrivateStorageService,
+        private readonly canIssueDownload: (ctx: RequestContext) => Promise<boolean> = () =>
+            Promise.resolve(false),
     ) {}
 
     async jobView(ctx: RequestContext, job: ImageGenerationJob, customerId: ID) {
@@ -28,6 +30,7 @@ export class ImageGenerationJobViews {
             : [];
         const byId = new Map(assets.map(asset => [String(asset.id), asset]));
         const outputs = job.outputs ?? [];
+        const issueDownload = ctx.apiType !== 'shop' || (await this.canIssueDownload(ctx));
         return {
             ...job,
             referenceAssetIds,
@@ -53,9 +56,10 @@ export class ImageGenerationJobViews {
                 width: output.asset?.width ?? null,
                 height: output.asset?.height ?? null,
                 imageUrl: output.asset ? this.storage.signedUrl(ctx, output.asset, customerId) : null,
-                downloadUrl: output.asset
-                    ? this.storage.signedUrl(ctx, output.asset, customerId, true)
-                    : null,
+                downloadUrl:
+                    output.asset && issueDownload
+                        ? this.storage.signedUrl(ctx, output.asset, customerId, true)
+                        : null,
             })),
         };
     }

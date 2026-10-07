@@ -3,6 +3,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import { Permission, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { StorefrontClientPluginAccessService } from '@vendure/store-management-plugin';
 import { createHash, randomUUID } from 'node:crypto';
 import { In, IsNull, MoreThanOrEqual } from 'typeorm';
 
@@ -50,6 +51,8 @@ const PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImagePr
 
 @Injectable()
 export class ImageGenerationConfigService implements OnApplicationBootstrap {
+    @Inject(StorefrontClientPluginAccessService)
+    private readonly clientPluginAccess!: StorefrontClientPluginAccessService;
     @Inject(ContentTranslationService)
     private readonly translations!: ContentTranslationService;
     constructor(
@@ -238,6 +241,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     }
 
     async shopConfig(ctx: RequestContext) {
+        await this.assertStorefrontEntryEnabled(ctx);
         await this.synchronizeActiveSkillRelease();
         const config = await this.getConfig(ctx);
         const models = await this.getOrCreateModels(ctx);
@@ -293,6 +297,18 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             maxQuantity: 4,
             models: availableModels.map(model => shopModelView(ctx, model)),
         };
+    }
+
+    isStorefrontEntryEnabled(ctx: RequestContext): Promise<boolean> {
+        return ctx.apiType === 'shop'
+            ? this.clientPluginAccess.isEnabled(ctx, 'ai-image-studio-entry')
+            : Promise.resolve(true);
+    }
+
+    async assertStorefrontEntryEnabled(ctx: RequestContext): Promise<void> {
+        if (ctx.apiType === 'shop') {
+            await this.clientPluginAccess.assertEnabled(ctx, 'ai-image-studio-entry');
+        }
     }
 
     async promptRoutingConfig(ctx: RequestContext) {

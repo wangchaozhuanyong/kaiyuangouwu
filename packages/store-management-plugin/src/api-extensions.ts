@@ -1,5 +1,6 @@
 import { gql } from 'graphql-tag';
 
+import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { administratorAccessSchema } from './administrator-access.schema';
 import { businessClosureCommonSchema } from './business-closure-common.schema';
 import { customerGovernanceApiSchema } from './customer-governance-api.schema';
@@ -221,6 +222,7 @@ const commonTypes = gql`
 
 export const adminApiExtensions = gql`
     ${administratorAccessSchema}
+    ${adminCapabilitiesSchema}
     ${storefrontPreviewBrandingSchema}
     ${storeNotificationAdminSchema}
     ${trafficAdminSchema}
@@ -337,11 +339,36 @@ export const adminApiExtensions = gql`
         deletedSeller: Boolean!
     }
 
+    type ShippingTemplateStoreChannel {
+        id: ID!
+        code: String!
+    }
+    type ShippingTemplateOption {
+        method: ShippingMethod!
+        platformTemplate: Boolean!
+        ownedByStore: Boolean!
+        enabled: Boolean!
+        sourceCurrencyCode: String
+        ownershipConfirmed: Boolean!
+        assignedStoreChannels: [ShippingTemplateStoreChannel!]!
+        templateVersion: Int
+        latestPlatformTemplate: Boolean!
+    }
+
+    type ShippingTemplateManagement {
+        isPlatform: Boolean!
+        missingPlatformTemplates: Int!
+        latestPlatformVersion: Int!
+        adoptedPlatformTemplateId: ID
+        items: [ShippingTemplateOption!]!
+    }
+
     type StoreCommerceConfiguration {
         channelId: ID!
         channelCode: String!
         updatedAt: DateTime!
         currencyCode: CurrencyCode!
+        shippingSourceCurrencyCode: CurrencyCode
         pricesIncludeTax: Boolean!
         countryCode: String
         taxRate: Float!
@@ -369,17 +396,17 @@ export const adminApiExtensions = gql`
         pricesIncludeTax: Boolean!
         countryCode: String!
         taxRate: Float!
-        shippingMethodNameZh: String!
-        shippingMethodNameEn: String!
-        shippingDescriptionZh: String!
-        shippingDescriptionEn: String!
-        baseRate: Money!
-        freeShippingThreshold: Money!
-        shippingTaxRate: Float!
-        shippingPriceIncludesTax: Boolean!
-        estimateMinDays: Int!
-        estimateMaxDays: Int!
-        blockedPostalPrefixes: String!
+        shippingMethodNameZh: String
+        shippingMethodNameEn: String
+        shippingDescriptionZh: String
+        shippingDescriptionEn: String
+        baseRate: Money
+        freeShippingThreshold: Money
+        shippingTaxRate: Float
+        shippingPriceIncludesTax: Boolean
+        estimateMinDays: Int
+        estimateMaxDays: Int
+        blockedPostalPrefixes: String
     }
 
     type StorePaymentOption {
@@ -422,6 +449,7 @@ export const adminApiExtensions = gql`
         enabled: Boolean!
         priority: Int!
         targetMode: SystemAnnouncementTargetMode!
+        ownerChannelId: ID
         channels: [Channel!]!
         titleZh: String!
         titleEn: String!
@@ -978,6 +1006,7 @@ export const adminApiExtensions = gql`
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         myStorePaymentOptions: [StorePaymentOption!]!
+        shippingTemplateManagement: ShippingTemplateManagement!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
         myStoreUsdtWallet: StoreUsdtWallet!
         myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
@@ -1041,6 +1070,20 @@ export const adminApiExtensions = gql`
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
         setMyStorePaymentOptionEnabled(id: ID!, enabled: Boolean!): StorePaymentOption!
+        initializePlatformShippingTemplates: ShippingTemplateManagement!
+        createPlatformFreeShippingVersion: ShippingTemplateManagement!
+        setMyShippingTemplateEnabled(id: ID!, enabled: Boolean!): ShippingTemplateManagement!
+        copyPlatformShippingTemplate(id: ID!, name: String): ShippingTemplateManagement!
+        confirmLegacyShippingMethodOwnership(
+            id: ID!
+            channelId: ID!
+            sourceCurrencyCode: String!
+        ): ShippingTemplateManagement!
+        copyLegacyShippingMethod(
+            id: ID!
+            sourceCurrencyCode: String!
+            name: String
+        ): ShippingTemplateManagement!
         updateMyStoreCurrencyConfiguration(
             input: UpdateStoreCurrencyConfigurationInput!
         ): StoreCurrencyConfiguration!

@@ -81,6 +81,7 @@ import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
 import { createCatalogImageTransformStrategies } from './catalog-asset-access-strategy';
 import { contentTranslationOptions } from './content-translation-config';
 import { customerImageConfiguration } from './customer-image-config';
+import { storefrontEmailFromAddress, storefrontEmailLogoForChannel } from './email-branding';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
 import { devServerMigrations } from './migrations';
@@ -395,10 +396,13 @@ async function storefrontUrlForChannel(
 }
 
 async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAddress: string) {
-    const storefrontUrl = await storefrontUrlForChannel(ctx, injector.get(TransactionalConnection));
+    const connection = injector.get(TransactionalConnection);
+    const storefrontUrl = await storefrontUrlForChannel(ctx, connection);
+    const brandLogoUrl = await storefrontEmailLogoForChannel(ctx, injector, storefrontUrl);
     return {
         ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields),
-        fromAddress,
+        fromAddress: storefrontEmailFromAddress(fromAddress, ctx.languageCode, ctx.channel.customFields),
+        brandLogoUrl,
         storefrontUrl,
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
         verifyEmailAddressUrl: `${storefrontUrl}/promo/account-entry?route=verify-account`,

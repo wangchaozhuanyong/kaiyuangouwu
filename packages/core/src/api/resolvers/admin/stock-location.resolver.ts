@@ -57,8 +57,12 @@ export class StockLocationResolver {
     @Mutation()
     @Transaction()
     @Allow(Permission.DeleteStockLocation)
-    deleteStockLocations(@Ctx() ctx: RequestContext, @Args() args: MutationDeleteStockLocationsArgs) {
-        return Promise.all(args.input.map(input => this.stockLocationService.delete(ctx, input)));
+    async deleteStockLocations(@Ctx() ctx: RequestContext, @Args() args: MutationDeleteStockLocationsArgs) {
+        const results = [];
+        for (const input of args.input) {
+            results.push(await this.stockLocationService.delete(ctx, input));
+        }
+        return results;
     }
 
     @Mutation()

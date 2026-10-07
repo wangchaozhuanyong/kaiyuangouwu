@@ -406,13 +406,13 @@ export function AccountPage() {
                 className={`account-services ${accountSectionClass}`}
                 aria-label={isZh ? '常用服务' : 'Services'}
             >
-                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-transform hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:type-meta [&>button>span_em]:weight-semibold [&>button>span_em]:not-italic  [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:type-helper [&>button>b]:weight-medium [&>button>b]:text-[var(--text)]">
+                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-transform hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:type-helper [&>button>b]:weight-medium [&>button>b]:text-[var(--text)]">
                     {!desktop && (
                         <ServiceButton
                             icon={<Heart />}
                             tone="support"
                             label={compactCopy.services.favorites}
-                            badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
+                            badge={favoriteProductCount}
                             onClick={() => navigateTo({ name: 'favorites' })}
                         />
                     )}
@@ -421,7 +421,7 @@ export function AccountPage() {
                             icon={<TicketPercent />}
                             tone="coupon"
                             label={compactCopy.services.coupons}
-                            badge={couponCount > 0 ? String(couponCount) : undefined}
+                            badge={couponCount}
                             onClick={() => navigateTo({ name: 'coupons' })}
                         />
                     )}

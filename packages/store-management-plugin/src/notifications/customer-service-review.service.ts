@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     CustomerService,
     ID,
@@ -224,7 +225,10 @@ export class CustomerServiceReviewService {
     }
 
     async list(ctx: RequestContext, skip = 0, take = 25, allStores = false) {
-        if (allStores && !ctx.userHasPermissions([Permission.SuperAdmin]))
+        if (
+            allStores &&
+            (ctx.channel.code !== DEFAULT_CHANNEL_CODE || !ctx.userHasPermissions([Permission.SuperAdmin]))
+        )
             throw new UserInputError('仅平台管理员可查看全店评价');
         const offset = Math.max(0, Math.min(10_000, Math.trunc(skip)));
         const limit = Math.min(100, Math.max(1, Math.trunc(take)));

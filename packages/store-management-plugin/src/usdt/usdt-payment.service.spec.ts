@@ -1,4 +1,4 @@
-import { Order } from '@vendure/core';
+import { Order, paymentHandlerArgumentsHash, PaymentMethod } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +6,7 @@ import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkou
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
 import { configureUsdtPaymentProofSecret, verifyUsdtPaymentProof } from './usdt-payment-proof';
-import { USDT_TRC20_CONTRACT_ADDRESS } from './usdt-payment.constants';
+import { USDT_TRC20_CONTRACT_ADDRESS, USDT_TRC20_PAYMENT_HANDLER_CODE } from './usdt-payment.constants';
 import { createMatchKey, UsdtPaymentService } from './usdt-payment.service';
 import { fingerprintReceivingAddress } from './usdt-wallet-configuration.service';
 
@@ -50,7 +50,14 @@ describe('UsdtPaymentService', () => {
                 getRepository: (_ctx: any, entity: any) =>
                     entity === StorefrontUsdtPaymentIntent
                         ? repository
-                        : { findOne: vi.fn().mockResolvedValue({ id: 'platform-method', enabled: true }) },
+                        : {
+                              findOne: vi.fn().mockResolvedValue({
+                                  id: 'platform-method',
+                                  code: 'usdt-trc20',
+                                  enabled: true,
+                                  handler: { code: USDT_TRC20_PAYMENT_HANDLER_CODE, args: [] },
+                              }),
+                          },
                 getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'order-1', salesChannelId: 'channel-1' }),
             } as any,
             {
@@ -82,6 +89,10 @@ describe('UsdtPaymentService', () => {
             network: 'TRC20',
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,
             status: 'PENDING',
+            acceptedHandlerSnapshot: expect.objectContaining({
+                methodId: 'platform-method',
+                handlerCode: USDT_TRC20_PAYMENT_HANDLER_CODE,
+            }),
         });
     });
 
@@ -92,6 +103,12 @@ describe('UsdtPaymentService', () => {
         'foreign-quote',
         'wrong-payment',
         'invalidated-quote',
+        'missing-snapshot',
+        'unknown-snapshot',
+        'changed-handler',
+        'changed-args',
+        'deleted-handler',
+        'recreated-same-code',
     ] as const)('preserves verified transfer evidence when settlement outcome is %s', async outcome => {
         const now = new Date('2026-08-26T02:05:00.000Z');
         const intent = new StorefrontUsdtPaymentIntent({
@@ -110,7 +127,21 @@ describe('UsdtPaymentService', () => {
             receivingAddressFingerprint,
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,
             status: 'PENDING',
+            acceptedHandlerSnapshot: {
+                version: 1,
+                methodId: 'platform-method',
+                methodCode: 'usdt-trc20',
+                handlerCode: USDT_TRC20_PAYMENT_HANDLER_CODE,
+                argsHash: paymentHandlerArgumentsHash([]),
+                acceptedAt: now.getTime(),
+            },
         });
+        if (outcome === 'missing-snapshot') intent.acceptedHandlerSnapshot = null;
+        if (outcome === 'unknown-snapshot') {
+            const snapshot = intent.acceptedHandlerSnapshot;
+            if (!snapshot) throw new Error('Missing accepted handler snapshot in fixture');
+            Object.assign(snapshot, { version: 2 });
+        }
         if (outcome === 'invalidated-quote') {
             intent.status = 'EXPIRED';
             intent.failureReason = 'PAYMENT_CURRENCY_QUOTE_INVALIDATED:客户已切换为其他付款币种';
@@ -140,7 +171,34 @@ describe('UsdtPaymentService', () => {
         });
         const connection = {
             getRepository: vi.fn((_ctx, entity) =>
-                entity === StorefrontUsdtPaymentIntent ? intentRepository : paymentRepository,
+                entity === StorefrontUsdtPaymentIntent
+                    ? intentRepository
+                    : entity === PaymentMethod
+                      ? {
+                            findOne: vi.fn().mockResolvedValue(
+                                outcome === 'deleted-handler'
+                                    ? null
+                                    : {
+                                          id:
+                                              outcome === 'recreated-same-code'
+                                                  ? 'replacement-method'
+                                                  : 'platform-method',
+                                          code: 'usdt-trc20',
+                                          enabled: false,
+                                          handler: {
+                                              code:
+                                                  outcome === 'changed-handler'
+                                                      ? 'foreign-handler'
+                                                      : USDT_TRC20_PAYMENT_HANDLER_CODE,
+                                              args:
+                                                  outcome === 'changed-args'
+                                                      ? [{ name: 'destination', value: 'changed' }]
+                                                      : [],
+                                          },
+                                      },
+                            ),
+                        }
+                      : paymentRepository,
             ),
             getEntityOrThrow: vi.fn((_ctx, entity) =>
                 Promise.resolve(
@@ -157,10 +215,15 @@ describe('UsdtPaymentService', () => {
         const orderService = {
             withOrderMutationTransaction: vi.fn((ctx, work) => work(ctx)),
             lockOrderForRefund: vi.fn(() => Promise.resolve()),
-            addPaymentToOrder: vi.fn().mockResolvedValue({ id: 'order-1', state: 'PaymentSettled' }),
+            addPaymentToOrder: vi.fn(),
+            addPaymentToOrderFromAcceptedIntent: vi
+                .fn()
+                .mockResolvedValue({ id: 'order-1', state: 'PaymentSettled' }),
         };
         if (outcome === 'validation-throws') {
-            orderService.addPaymentToOrder.mockRejectedValue(new Error('Injected pricing failure'));
+            orderService.addPaymentToOrderFromAcceptedIntent.mockRejectedValue(
+                new Error('Injected pricing failure'),
+            );
         }
         const tronClient = {
             scanIncomingTransfers: vi.fn().mockResolvedValue({
@@ -208,8 +271,21 @@ describe('UsdtPaymentService', () => {
             settledCount: outcome === 'success' ? 1 : 0,
             manualReviewCount: outcome === 'success' ? 0 : 1,
         });
-        if (outcome === 'foreign-order' || outcome === 'foreign-quote' || outcome === 'invalidated-quote') {
-            expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+        if (
+            [
+                'foreign-order',
+                'foreign-quote',
+                'invalidated-quote',
+                'missing-snapshot',
+                'unknown-snapshot',
+                'changed-handler',
+                'changed-args',
+                'deleted-handler',
+                'recreated-same-code',
+            ].includes(outcome)
+        ) {
+            expect(orderService.addPaymentToOrderFromAcceptedIntent).not.toHaveBeenCalled();
             expect(intent).toMatchObject({
                 status: 'MANUAL_REVIEW',
                 transactionId: 'a'.repeat(64),
@@ -219,19 +295,24 @@ describe('UsdtPaymentService', () => {
             return;
         }
         expect(intentRepository.save.mock.invocationCallOrder[0]).toBeLessThan(
-            orderService.addPaymentToOrder.mock.invocationCallOrder[0],
+            orderService.addPaymentToOrderFromAcceptedIntent.mock.invocationCallOrder[0],
         );
         expect(orderService.withOrderMutationTransaction.mock.calls.length).toBeGreaterThanOrEqual(2);
-        const submitted = orderService.addPaymentToOrder.mock.calls[0] as unknown as [
+        const submitted = orderService.addPaymentToOrderFromAcceptedIntent.mock.calls[0] as unknown as [
             unknown,
             unknown,
-            { metadata: { proof: string } },
+            { proof: string },
         ];
-        expect(verifyUsdtPaymentProof(submitted[2].metadata.proof)?.paidAt).toBe(now.getTime());
-        expect(orderService.addPaymentToOrder).toHaveBeenCalledWith(
+        expect(verifyUsdtPaymentProof(submitted[2].proof)?.paidAt).toBe(now.getTime());
+        expect(orderService.addPaymentToOrderFromAcceptedIntent).toHaveBeenCalledWith(
             expect.objectContaining({ channelId: 'channel-1' }),
-            'order-1',
-            expect.objectContaining({ method: 'usdt-trc20' }),
+            expect.objectContaining({
+                orderId: 'order-1',
+                method: 'usdt-trc20',
+                paymentMethodId: 'platform-method',
+                handlerArgumentsHash: paymentHandlerArgumentsHash([]),
+            }),
+            expect.objectContaining({ proof: expect.any(String) }),
         );
         expect(intent).toMatchObject({
             status: outcome === 'success' ? 'SETTLED' : 'MANUAL_REVIEW',

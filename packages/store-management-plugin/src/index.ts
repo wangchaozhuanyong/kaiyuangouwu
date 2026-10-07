@@ -1,3 +1,7 @@
+export {
+    AdminCapabilitiesService,
+    type AdminImageCapabilityReadiness,
+} from './admin-capabilities.service.js';
 export { AdministratorAccessService } from './administrator-access.service.js';
 export { AdministratorPermissionAuditService } from './administrator-permission-audit.service.js';
 export {
@@ -122,6 +126,7 @@ export {
     isOperationalStorefront,
 } from './storefront-activation.service.js';
 export type { OperationalStorefrontInput, StorefrontAccessMode } from './storefront-activation.service.js';
+export { StorefrontClientPluginAccessService } from './storefront-client-plugin-access.service.js';
 export { SystemAnnouncementService } from './system-announcement.service.js';
 export type {
     CreateStoreCouponCampaignInput,
@@ -176,3 +181,5 @@ export { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalo
 
 export { StorefrontPublicCacheInvalidatedEvent } from './performance/storefront-cache-invalidation.service';
 export { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';
+
+export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-purge-config';

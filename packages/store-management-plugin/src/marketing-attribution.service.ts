@@ -89,19 +89,18 @@ export class MarketingAttributionService implements OnApplicationBootstrap {
 
     async captureOrderAttribution(ctx: RequestContext, orderId: string | number, settledAt = new Date()) {
         const repository = this.connection.getRepository(ctx, StorefrontOrderAttribution);
-        const existing = await repository.findOneBy({ channelId: ctx.channelId, orderId });
-        if (existing) return existing;
-
         const order = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
             .leftJoinAndSelect('order.customer', 'customer')
-            .innerJoin('order.channels', 'attributionChannel', 'attributionChannel.id = :channelId', {
+            .innerJoin('order.salesChannel', 'attributionChannel', 'attributionChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
             .where('order.id = :orderId', { orderId })
             .getOne();
         if (!order) return null;
+        const existing = await repository.findOneBy({ channelId: ctx.channelId, orderId });
+        if (existing) return existing;
 
         const channelId = String(ctx.channelId);
         const identity = order.customer
@@ -217,6 +216,7 @@ export class MarketingAttributionService implements OnApplicationBootstrap {
                 .leftJoinAndSelect('order.payments', 'payment')
                 .leftJoinAndSelect('payment.refunds', 'refund')
                 .where('attribution.channelId = :channelId', { channelId: ctx.channelId })
+                .andWhere('order.salesChannelId = :channelId', { channelId: ctx.channelId })
                 .andWhere('order.orderPlacedAt >= :from AND order.orderPlacedAt <= :to', { from, to })
                 .andWhere('order.currencyCode = :currencyCode', { currencyCode })
                 .orderBy('order.orderPlacedAt', 'ASC')

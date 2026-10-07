@@ -519,13 +519,11 @@
 
 .security-privacy-dialog-backdrop {
     position: fixed;
-    z-index: 120;
     inset: 0;
     display: grid;
     place-items: center;
     padding: 20px;
     background: rgb(15 23 42 / 58%);
-    backdrop-filter: blur(4px);
 }
 
 .security-privacy-dialog {

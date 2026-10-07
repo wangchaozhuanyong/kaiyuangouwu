@@ -1,5 +1,22 @@
 export type StorefrontImageKind = 'card' | 'detail' | 'hero' | 'icon' | 'thumbnail';
 
+/** Match shared component geometry; these are CSS widths, before device pixel ratio. */
+export const STOREFRONT_IMAGE_SIZES = {
+    productRow: '(min-width: 1024px) 300px, 104px',
+    // category-layout sidebar = clamp(64px, 22%, 86px); list has 8px insets on each side.
+    categorySidebarRow:
+        '(min-width: 1024px) 300px, clamp(64px, calc((100vw - clamp(64px, 22vw, 86px) - 16px) * 0.3), 104px)',
+    // Desktop catalog: min(viewport - 64px, 1280px) shell; 220px sidebar + 20px gap;
+    // auto-fill min 180px cards with 16px gaps yields 3/4/5 tracks; full shell has 195.2px cards.
+    desktopCatalogCard:
+        '(min-width: 1344px) 195.2px, (min-width: 1268px) calc((100vw - 368px) / 5), ' +
+        '(min-width: 1072px) calc((100vw - 352px) / 4), ' +
+        '(min-width: 1024px) calc((100vw - 336px) / 3), 104px',
+    compactProductRow: '104px',
+    categoryNavigation: '(min-width: 1024px) 44px, 56px',
+    galleryThumbnail: '60px',
+} as const;
+
 interface ImagePreset {
     name: string;
     width: number;
@@ -48,6 +65,8 @@ export interface MediaDescriptor {
     version: string | null;
     kind?: StorefrontImageKind;
     src: string;
+    /** One bounded recovery candidate; never fall back to an untransformed uploaded original. */
+    recoverySrc?: string;
     srcSet?: string;
     sizes?: string;
     width?: number;
@@ -84,6 +103,7 @@ export function mediaDescriptor(
         version,
         kind,
         src: responsive?.fallbackSrc ?? normalized,
+        recoverySrc: kind ? (storefrontRecoveryImageUrl(normalized, kind) ?? undefined) : undefined,
         srcSet: responsive?.fallbackSrcSet,
         sizes: options.sizes ?? responsive?.sizes,
         width: options.width ?? responsive?.width,
@@ -214,6 +234,19 @@ export function responsiveImageSources(
 
 export function storefrontWebpUrl(source: string, kind: StorefrontImageKind): string {
     return responsiveImageSources(source, kind)?.fallbackSrc ?? normalizeStorefrontAssetUrl(source);
+}
+
+export function storefrontRecoveryImageUrl(source: string, kind: StorefrontImageKind): string | null {
+    const group = IMAGE_PRESETS[kind];
+    const widths: Record<StorefrontImageKind, number> = {
+        card: 640,
+        detail: 1200,
+        hero: 960,
+        icon: 96,
+        thumbnail: 160,
+    };
+    const preset = group.presets.find(candidate => candidate.width === widths[kind]);
+    return preset ? imageUrl(normalizeStorefrontAssetUrl(source), preset.name, group.quality) : null;
 }
 
 export function storefrontPlaceholderUrl(source: string, kind: StorefrontImageKind): string | null {

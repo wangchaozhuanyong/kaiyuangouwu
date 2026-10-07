@@ -5,13 +5,14 @@ import {
     DeletionResult,
     UpdateSellerInput,
 } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
 import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
-import { assertFound } from '../../common/utils';
+import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { Seller } from '../../entity/seller/seller.entity';
@@ -40,16 +41,26 @@ export class SellerService {
     }
 
     findAll(ctx: RequestContext, options?: ListQueryOptions<Seller>): Promise<PaginatedList<Seller>> {
-        return this.listQueryBuilder
-            .build(Seller, options, { ctx })
-            .getManyAndCount()
-            .then(([items, totalItems]) => ({
-                items,
-                totalItems,
-            }));
+        if (ctx.channel.code !== DEFAULT_CHANNEL_CODE && ctx.channel.sellerId == null) {
+            return Promise.resolve({ items: [], totalItems: 0 });
+        }
+        const query = this.listQueryBuilder.build(Seller, options, { ctx });
+        if (ctx.channel.code !== DEFAULT_CHANNEL_CODE) {
+            query.andWhere('seller.id = :storeSellerId', { storeSellerId: ctx.channel.sellerId });
+        }
+        return query.getManyAndCount().then(([items, totalItems]) => ({
+            items,
+            totalItems,
+        }));
     }
 
     findOne(ctx: RequestContext, sellerId: ID): Promise<Seller | undefined> {
+        if (
+            ctx.channel.code !== DEFAULT_CHANNEL_CODE &&
+            (ctx.channel.sellerId == null || !idsAreEqual(ctx.channel.sellerId, sellerId))
+        ) {
+            return Promise.resolve(undefined);
+        }
         return this.connection
             .getRepository(ctx, Seller)
             .findOne({ where: { id: sellerId } })

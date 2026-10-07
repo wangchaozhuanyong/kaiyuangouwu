@@ -28,6 +28,7 @@ import { ImageProviderCredentialModel } from './entities/image-provider-credenti
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
+import { ImageCapabilityReadinessService } from './image-capability-readiness.service';
 import { ImageGenerationConfigService } from './image-generation-config.service';
 import { ImageGenerationHealthController } from './image-generation-health.controller';
 import { ImageGenerationQueueService } from './image-generation-queue.service';
@@ -84,6 +85,7 @@ import { ImageGenerationPluginOptions } from './types';
         ImageProviderRouterService,
         ImagePrivateStorageService,
         ImageGenerationConfigService,
+        ImageCapabilityReadinessService,
         ImageGenerationReliabilityService,
         ImageUsageQuotaService,
         ImagePromptEngineService,

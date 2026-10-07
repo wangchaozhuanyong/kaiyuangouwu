@@ -84,6 +84,7 @@ export function notificationReferenceKey(reference: StoreNotificationReference):
 }
 
 type NotificationEntry = ReturnType<typeof recentNotificationEntries>[number];
+type NotificationReadState = { keys: string[]; versions: string[] };
 
 export function NotificationsPage() {
     const queryClient = useQueryClient();
@@ -137,8 +138,17 @@ export function NotificationsPage() {
         customer?.id ?? '',
         referenceVersions,
     );
+    // A source update changes the batch key, but unchanged versions keep their confirmed status.
+    // Seed only from the exact private scope: store, currency, language and customer.
+    const previousReadQuery = queryClient
+        .getQueryCache()
+        .findAll({ queryKey: readQueryKey.slice(0, -1) })
+        .filter(query => query.state.data !== undefined)
+        .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0];
     const readQuery = useQuery({
         queryKey: readQueryKey,
+        initialData: () => previousReadQuery?.state.data as NotificationReadState | undefined,
+        initialDataUpdatedAt: () => previousReadQuery?.state.dataUpdatedAt,
         queryFn: async ({ signal }) => {
             const keys: string[] = [];
             for (let offset = 0; offset < references.length; offset += 100) {
@@ -149,23 +159,25 @@ export function NotificationsPage() {
                     )),
                 );
             }
-            return keys;
+            return { keys, versions: references.map(notificationReferenceKey) };
         },
         enabled: Boolean(customer && references.length),
         staleTime: 0,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
-    const readKeys = new Set(readQuery.data ?? []);
-    const readStatusKnown = !readQuery.isLoading && !readQuery.isError && !readQuery.isPaused;
-    const unreadCount = notifications.filter(
-        entry => entry.reference && !readKeys.has(notificationReferenceKey(entry.reference)),
-    ).length;
-    const visibleNotifications =
-        filter === 'unread' && !readQuery.isError
-            ? notifications.filter(
-                  entry => entry.reference && !readKeys.has(notificationReferenceKey(entry.reference)),
-              )
-            : notifications;
+    const readKeys = new Set(readQuery.data?.keys ?? []);
+    const checkedVersions = new Set(readQuery.data?.versions ?? []);
+    const allVersionsKnown = references.every(reference =>
+        checkedVersions.has(notificationReferenceKey(reference)),
+    );
+    const readStatusKnown = allVersionsKnown && !readQuery.isError && !readQuery.isPaused;
+    const unreadNotifications = notifications.filter(entry => {
+        if (!entry.reference) return false;
+        const key = notificationReferenceKey(entry.reference);
+        return checkedVersions.has(key) && !readKeys.has(key);
+    });
+    const unreadCount = unreadNotifications.length;
+    const visibleNotifications = filter === 'unread' ? unreadNotifications : notifications;
     const markRead = async (referencesToMark: StoreNotificationReference[]) => {
         if (!referencesToMark.length) return;
         setReadError('');
@@ -175,9 +187,10 @@ export function NotificationsPage() {
                 const saved = await api.contentReviewsApi.markNotificationsRead(
                     referencesToMark.slice(offset, offset + 100),
                 );
-                queryClient.setQueryData<string[]>(readQueryKey, previous => [
-                    ...new Set([...(previous ?? []), ...saved]),
-                ]);
+                queryClient.setQueryData<NotificationReadState>(readQueryKey, previous => ({
+                    keys: [...new Set([...(previous?.keys ?? []), ...saved])],
+                    versions: [...new Set([...(previous?.versions ?? []), ...saved])],
+                }));
             }
         } catch (error) {
             setReadError(storefrontErrorMessage(error, language));
@@ -287,7 +300,11 @@ export function NotificationsPage() {
                                 const isRead = entry.reference
                                     ? readKeys.has(notificationReferenceKey(entry.reference))
                                     : false;
-                                const isUnread = Boolean(entry.reference && readStatusKnown && !isRead);
+                                const entryReadStatusKnown = Boolean(
+                                    entry.reference &&
+                                    checkedVersions.has(notificationReferenceKey(entry.reference)),
+                                );
+                                const isUnread = entryReadStatusKnown && !isRead;
                                 const Icon =
                                     entry.kind === 'after-sales'
                                         ? RotateCcw
@@ -338,7 +355,7 @@ export function NotificationsPage() {
                                                   })
                                                 : '--'}
                                         </time>
-                                        {entry.reference && readStatusKnown && (
+                                        {entry.reference && entryReadStatusKnown && (
                                             <span className="notification-read-status">
                                                 {isRead ? (isZh ? '已读' : 'Read') : isZh ? '未读' : 'Unread'}
                                             </span>
@@ -351,7 +368,19 @@ export function NotificationsPage() {
                                 <EmptyState
                                     compact
                                     icon={<Bell />}
-                                    title={isZh ? '没有未读消息' : 'No unread notifications'}
+                                    title={
+                                        allVersionsKnown
+                                            ? isZh
+                                                ? '没有未读消息'
+                                                : 'No unread notifications'
+                                            : readQuery.isError || readQuery.isPaused
+                                              ? isZh
+                                                  ? '未读状态暂不可用'
+                                                  : 'Unread status unavailable'
+                                              : isZh
+                                                ? '正在确认未读消息'
+                                                : 'Checking unread notifications'
+                                    }
                                     detail={
                                         isZh ? '新消息会显示在这里' : 'New notifications will appear here'
                                     }
