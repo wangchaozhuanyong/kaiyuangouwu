@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { CheckoutResourcesService } from './checkout-resources.service';
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
 import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
 import { FulfillmentDeliveryService } from './fulfillment-delivery.service';
@@ -123,6 +124,12 @@ function createHarness() {
     const eventBus = { publish: vi.fn().mockResolvedValue(undefined) };
     const orderService = { lockOrderForRefund: vi.fn().mockResolvedValue(undefined) };
     const receipts = { statuses: vi.fn().mockResolvedValue([]) };
+    const resourceHold = vi.fn().mockResolvedValue(null);
+    const resources = Object.assign(Object.create(CheckoutResourcesService.prototype), {
+        order: vi.fn().mockResolvedValue(order),
+        hold: resourceHold,
+    }) as CheckoutResourcesService;
+    const canDeliver = vi.spyOn(resources, 'canDeliver');
     const service = new FulfillmentDeliveryService(
         connection as any,
         fulfillmentService as any,
@@ -131,6 +138,7 @@ function createHarness() {
         eventBus as any,
         orderService as any,
         receipts as any,
+        resources,
     );
     const ctx = {
         activeUserId: 'admin-1',
@@ -150,6 +158,8 @@ function createHarness() {
         rawDeliveryRepository,
         orderService,
         receipts,
+        resourceHold,
+        canDeliver,
         orderQueryBuilder,
         fulfillmentQueryBuilder,
         connection,
@@ -218,7 +228,7 @@ describe('physical shipment eligibility', () => {
         await expect(guard(test)).resolves.toMatch(/当前经营店铺|订单未付款/);
     });
 
-    it('combines real settled and authorized payments but ignores invalid and simulated funding', async () => {
+    it('combines real settled and authorized payments but rejects simulated order identity', async () => {
         const test = shipmentHarness();
         test.order.payments = [
             { state: 'Settled', amount: 40, method: 'real', refunds: [] },
@@ -234,7 +244,8 @@ describe('physical shipment eligibility', () => {
             method: 'controlled-test-payment-fixture',
             refunds: [],
         });
-        await expect(guard(test)).resolves.toContain('金额不足');
+        await expect(guard(test)).resolves.toContain('模拟付款');
+        test.order.payments.pop();
         test.order.payments[1].amount = -1;
         await expect(guard(test)).resolves.toContain('金额不足');
     });
@@ -252,12 +263,92 @@ describe('physical shipment eligibility', () => {
                     metadata: { public: { testPayment: true } },
                 },
             ];
-            await expect(guard(test, 'Pending')).resolves.toContain('金额不足');
-            await expect(guard(test, 'Shipped')).resolves.toContain('金额不足');
+            await expect(guard(test, 'Pending')).resolves.toContain('模拟付款');
+            await expect(guard(test, 'Shipped')).resolves.toContain('模拟付款');
             test.order.payments[0].metadata.public.testPayment = false;
             await expect(guard(test)).resolves.toBeUndefined();
         },
     );
+
+    it.each(
+        ['Settled', 'Authorized'].flatMap(realState =>
+            ['Settled', 'Authorized', 'Declined', 'Cancelled'].flatMap(testState =>
+                ['method', 'server-marker'].map(identity => [realState, testState, identity]),
+            ),
+        ),
+    )('rejects full %s real funding plus %s test identity via %s', async (realState, testState, identity) => {
+        const test = shipmentHarness();
+        test.order.payments[0].state = realState;
+        test.order.payments.push({
+            state: testState,
+            amount: 100,
+            method: identity === 'method' ? 'controlled-test-payment-platform' : 'historical-provider',
+            metadata: { public: { testPayment: identity === 'server-marker' } },
+            refunds: [],
+        });
+        await expect(guard(test, 'Pending')).resolves.toContain('模拟付款');
+        await expect(guard(test)).resolves.toContain('模拟付款');
+        expect(test.fulfillmentService.transitionToState).not.toHaveBeenCalled();
+    });
+
+    it.each(['Created', 'TestSettled', 'unknown', 'manual-review'])(
+        'rejects review evidence %s despite full real funding',
+        async evidence => {
+            const test = shipmentHarness();
+            test.order.payments.push({
+                state: evidence === 'manual-review' ? 'Settled' : evidence,
+                amount: 1,
+                method: 'real-provider',
+                metadata: { manualReview: { required: evidence === 'manual-review' } },
+                refunds: [],
+            });
+            await expect(guard(test)).resolves.toContain('待核验');
+            expect(test.fulfillmentService.transitionToState).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['REVIEW', 'HELD', 'RELEASED'])(
+        'rejects nonconfirmed resource hold %s despite full real funding',
+        async state => {
+            const test = shipmentHarness();
+            test.resourceHold.mockResolvedValue({ state });
+            await expect(guard(test)).resolves.toContain('待核验');
+        },
+    );
+
+    it('allows historical real funding without a hold and uses the fresh locked order', async () => {
+        const test = shipmentHarness();
+        await expect(guard(test)).resolves.toBeUndefined();
+        expect(test.canDeliver).toHaveBeenCalledWith(test.ctx, test.order.id, test.order);
+        expect(test.orderQueryBuilder.getMany.mock.invocationCallOrder[0]).toBeLessThan(
+            test.canDeliver.mock.invocationCallOrder[0],
+        );
+    });
+
+    it('does not trust an earlier pure-real snapshot after persisted test evidence is added', async () => {
+        const test = shipmentHarness();
+        const staleOrder = { ...test.order, payments: [...test.order.payments] };
+        test.order.payments.push({ state: 'Cancelled', method: 'controlled-test-payment-platform' });
+        await expect(
+            test.service.guardPhysicalFulfillmentPayment(test.ctx, test.fulfillment, [staleOrder], 'Shipped'),
+        ).resolves.toContain('模拟付款');
+    });
+
+    it('blocks mixed funding when confirming a previously shipped package', async () => {
+        const test = createHarness();
+        test.record.proofReference = 'delivery-proof';
+        test.order.payments.push({
+            state: 'Settled',
+            amount: 100,
+            method: 'controlled-test-payment-platform',
+            metadata: { public: { testPayment: true } },
+            refunds: [],
+        });
+        await expect(
+            test.service.guardDeliveredTransition(test.ctx, test.fulfillment, [test.order]),
+        ).resolves.toContain('模拟付款');
+        expect(test.fulfillmentService.transitionToState).not.toHaveBeenCalled();
+    });
 
     it('blocks added-price orders and missing payment amounts while permitting recorded zero-price settlement', async () => {
         const test = shipmentHarness();

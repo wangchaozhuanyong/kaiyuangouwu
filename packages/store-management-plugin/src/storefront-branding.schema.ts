@@ -4,7 +4,13 @@ import { storefrontRegionSchema } from './storefront-region.schema';
 
 export const storefrontBrandingSchema = gql`
     ${storefrontRegionSchema}
+    enum StorefrontAccessMode {
+        CLOSED
+        PREVIEW
+        LIVE
+    }
     type StorefrontBranding {
+        accessMode: StorefrontAccessMode!
         logoAssetId: ID
         logoOnLightAssetId: ID
         logoOnDarkAssetId: ID

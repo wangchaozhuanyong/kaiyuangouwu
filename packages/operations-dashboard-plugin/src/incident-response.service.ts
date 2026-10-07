@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { RequestContext, TransactionalConnection } from '@vendure/core';
+import {
+    assertOrderSalesChannel,
+    Order,
+    Payment,
+    Permission,
+    RequestContext,
+    TransactionalConnection,
+} from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
 import { FindOptionsWhere, In, IsNull, LessThanOrEqual, Not } from 'typeorm';
 
@@ -112,6 +119,127 @@ export class IncidentResponseService {
         occurredAt = new Date(),
     ) {
         return this.appendEvidence(ctx, incident, eventType, null, summary, evidence, occurredAt);
+    }
+
+    /** Internal historical repair only. No recovery claim, notification dispatch, or public mutation. */
+    async closeHistoricalTestTaskIncidents(
+        ctx: RequestContext,
+        input: { orderId: ID; deliveryId: ID; receiptId: string },
+    ): Promise<ID[]> {
+        const actor = requiredActor(ctx);
+        if (ctx.apiType !== 'admin' || !ctx.userHasPermissions([Permission.SuperAdmin])) {
+            throw new Error('历史测试事故终止需要已认证平台管理员');
+        }
+        if (!/^[a-zA-Z0-9:_-]{8,180}$/.test(input.receiptId)) {
+            throw new Error('历史测试收据标识无效');
+        }
+        const orderRepository = this.connection.getRepository(ctx, Order);
+        if (!orderRepository.manager.queryRunner?.isTransactionActive) {
+            throw new Error('历史测试事故终止必须位于原订单收尾事务内');
+        }
+        const order = await orderRepository.findOne({ where: { id: input.orderId } });
+        if (!order) throw new Error('历史测试订单不存在');
+        assertOrderSalesChannel(ctx, order);
+        const payments = await this.connection.getRepository(ctx, Payment).find({
+            where: { order: { id: input.orderId } },
+            relations: { refunds: true },
+        });
+        if (
+            !payments.some(payment => payment.state === 'Settled') ||
+            payments.some(
+                payment =>
+                    !['Settled', 'Authorized'].includes(payment.state) ||
+                    payment.method !== `controlled-test-payment-${ctx.channelId}` ||
+                    payment.metadata?.public?.testPayment !== true ||
+                    payment.metadata?.manualReview?.required ||
+                    payment.refunds.length !== 0,
+            )
+        )
+            throw new Error('真实或未知付款不能按历史测试事故终止');
+        const deliveryTarget = this.connection.rawConnection.getMetadata('manual_digital_delivery').target;
+        const eventTarget = this.connection.rawConnection.getMetadata('manual_digital_delivery_event').target;
+        const delivery = await this.connection.getRepository(ctx, deliveryTarget).findOne({
+            where: { id: input.deliveryId, orderId: input.orderId, channelId: ctx.channelId },
+        });
+        const closingEvent = await this.connection.getRepository(ctx, eventTarget).findOne({
+            where: {
+                deliveryId: input.deliveryId,
+                type: 'CANCELLED',
+                actorType: 'ADMIN',
+                note: `历史测试任务终止；收据 ${input.receiptId}`,
+            },
+        });
+        if (delivery?.state !== 'CANCELLED' || !closingEvent) {
+            throw new Error('人工任务尚未按同一历史测试收据终止');
+        }
+        const fingerprints = [
+            `commerce.fulfillment.manual_delivery_failed:${input.deliveryId}`,
+            `commerce.fulfillment.manual_delivery_overdue:${input.deliveryId}`,
+        ];
+        const candidates = await this.incidentRepository(ctx).find({
+            where: { mode: 'INCIDENT', fingerprint: In(fingerprints) },
+            order: { id: 'ASC' },
+        });
+        const closed: ID[] = [];
+        for (const candidate of candidates) {
+            const incident = await this.lockIncident(ctx, candidate.id);
+            if (
+                incident.sourceType !== 'ManualDigitalDelivery' ||
+                String(incident.sourceId) !== String(input.deliveryId) ||
+                String(incident.payload?.channelId) !== String(ctx.channelId) ||
+                String(incident.payload?.orderId) !== String(input.orderId) ||
+                String(incident.payload?.deliveryId) !== String(input.deliveryId) ||
+                !fingerprints.includes(incident.fingerprint ?? '')
+            )
+                throw new Error('历史交付事故归属不一致');
+            if (incident.deliveryStatus === 'CLAIMED' || incident.claimedAt || incident.claimedBy) {
+                throw new Error('历史事故通知发送结果未知，需要先核对');
+            }
+            if (incident.incidentStatus === 'CLOSED') continue;
+            const actions = await this.actionRepository(ctx).find({
+                where: { incidentId: Number(incident.id) },
+            });
+            if (
+                actions.some(action => action.status === 'OPEN') ||
+                incident.incidentStatus === 'ACTION_PENDING'
+            ) {
+                throw new Error('历史事故仍有整改流程，不能自动终结');
+            }
+            const now = new Date();
+            incident.activeFingerprint = null;
+            incident.eventState = 'RESOLVED';
+            incident.incidentStatus = 'CLOSED';
+            incident.resolvedAt = now;
+            incident.closedAt = now;
+            incident.actionRequired = false;
+            incident.slaDueAt = null;
+            incident.recoveryValidationDueAt = null;
+            incident.reviewDueAt = null;
+            // No queued notification should describe termination as successful delivery.
+            if (['PENDING', 'RETRY'].includes(incident.deliveryStatus)) incident.deliveryStatus = 'SKIPPED';
+            incident.payload = sanitizePayload({
+                ...incident.payload,
+                historicalTestClosureKey: input.receiptId,
+                historicalTestOutcome: 'TASK_TERMINATED',
+            });
+            await this.incidentRepository(ctx).save(incident);
+            await this.appendEvidence(
+                ctx,
+                incident,
+                'CLOSED',
+                actor,
+                '历史测试任务终止，事故结束；未声明发送成功',
+                {
+                    orderId: String(input.orderId),
+                    deliveryId: String(input.deliveryId),
+                    closureKey: input.receiptId,
+                    outcome: 'TASK_TERMINATED',
+                },
+                now,
+            );
+            closed.push(incident.id);
+        }
+        return closed;
     }
 
     async acknowledgeIncident(
@@ -328,14 +456,14 @@ export class IncidentResponseService {
         let actionsEscalated = 0;
         for (const incident of recovery) {
             const claimed = await incidentRepository.update(
-                { id: incident.id, recoveryEscalatedAt: IsNull() },
+                { id: incident.id, incidentStatus: 'RECOVERY_PENDING', recoveryEscalatedAt: IsNull() },
                 { recoveryEscalatedAt: now },
             );
             if (claimed.affected !== 1) continue;
             incident.recoveryEscalatedAt = now;
             try {
-                await this.escalateStage(incident, '恢复验证逾期', { stage: 'RECOVERY_VALIDATION' }, now);
-                recoveryEscalated += 1;
+                if (await this.escalateStage(incident, '恢复验证逾期', { stage: 'RECOVERY_VALIDATION' }, now))
+                    recoveryEscalated += 1;
             } catch (error) {
                 await incidentRepository.update(
                     { id: incident.id, recoveryEscalatedAt: now },
@@ -346,14 +474,16 @@ export class IncidentResponseService {
         }
         for (const incident of reviews) {
             const claimed = await incidentRepository.update(
-                { id: incident.id, reviewEscalatedAt: IsNull() },
+                { id: incident.id, incidentStatus: 'REVIEW_PENDING', reviewEscalatedAt: IsNull() },
                 { reviewEscalatedAt: now },
             );
             if (claimed.affected !== 1) continue;
             incident.reviewEscalatedAt = now;
             try {
-                await this.escalateStage(incident, '事故复盘逾期', { stage: 'POST_INCIDENT_REVIEW' }, now);
-                reviewsEscalated += 1;
+                if (
+                    await this.escalateStage(incident, '事故复盘逾期', { stage: 'POST_INCIDENT_REVIEW' }, now)
+                )
+                    reviewsEscalated += 1;
             } catch (error) {
                 await incidentRepository.update(
                     { id: incident.id, reviewEscalatedAt: now },
@@ -364,7 +494,7 @@ export class IncidentResponseService {
         }
         for (const action of actions) {
             const claimed = await actionRepository.update(
-                { id: action.id, escalatedAt: IsNull() },
+                { id: action.id, status: 'OPEN', escalatedAt: IsNull() },
                 { escalatedAt: now },
             );
             if (claimed.affected !== 1) continue;
@@ -372,13 +502,13 @@ export class IncidentResponseService {
             const incident = await incidentRepository.findOne({ where: { id: action.incidentId } });
             if (incident) {
                 try {
-                    await this.escalateStage(
+                    const escalated = await this.escalateStage(
                         incident,
                         '整改任务逾期',
                         { stage: 'CORRECTIVE_ACTION', actionId: action.id, title: action.title },
                         now,
                     );
-                    actionsEscalated += 1;
+                    if (escalated) actionsEscalated += 1;
                 } catch (error) {
                     await actionRepository.update({ id: action.id, escalatedAt: now }, { escalatedAt: null });
                     throw error;
@@ -398,12 +528,26 @@ export class IncidentResponseService {
         evidence: Record<string, unknown>,
         now: Date,
     ) {
-        incident.escalationDepartmentCode = 'EXEC';
-        incident.payload = sanitizePayload({ ...incident.payload, workflowEscalation: summary });
-        await this.incidentRepository(null).save(incident);
-        await this.appendSystemEvidence(null, incident, 'ESCALATED', summary, evidence, now);
-        const queued = await this.queueWorkflowUpdate(null, incident, now);
+        const queued = await this.connection.withTransaction(async txCtx => {
+            // A scheduler may have selected this row before historical termination committed.
+            // Lock and use the current row instead of saving that stale incident snapshot.
+            const current = await this.lockIncident(txCtx, incident.id);
+            const requiredStatus =
+                evidence.stage === 'RECOVERY_VALIDATION'
+                    ? 'RECOVERY_PENDING'
+                    : evidence.stage === 'POST_INCIDENT_REVIEW'
+                      ? 'REVIEW_PENDING'
+                      : 'ACTION_PENDING';
+            if (current.incidentStatus !== requiredStatus) return null;
+            current.escalationDepartmentCode = 'EXEC';
+            current.payload = sanitizePayload({ ...current.payload, workflowEscalation: summary });
+            await this.incidentRepository(txCtx).save(current);
+            await this.appendSystemEvidence(txCtx, current, 'ESCALATED', summary, evidence, now);
+            return this.queueWorkflowUpdate(txCtx, current, now);
+        });
+        if (!queued) return false;
         await this.dispatchIfNeeded(queued);
+        return true;
     }
 
     private async queueWorkflowUpdate(

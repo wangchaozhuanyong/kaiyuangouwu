@@ -1,9 +1,14 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
 import { CurrencyCode, LanguageCode, RequestContextService } from '@vendure/core';
-import type { PublicPageCatalogInput, PublicPageRequest } from '@vendure/storefront-content-plugin';
+import type {
+    PublicPageCatalogInput,
+    PublicPageRequest,
+    StorefrontPageData,
+} from '@vendure/storefront-content-plugin';
 import type { Request, Response } from 'express';
 
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
+import { StorefrontClosedError } from './storefront-activation.service';
 import { StorefrontPublicPageService } from './storefront-public-page.service';
 
 export function parsePublicPageRequest(query: Request['query']): PublicPageRequest {
@@ -65,7 +70,14 @@ export class StorefrontPublicPageController {
         // Public snapshots contain no cookie/session data, but are host-scoped and not a CDN HTML cache.
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        const verified = await this.access.resolveRequest(req);
+        let verified: Awaited<ReturnType<StorefrontPromotionAccessService['resolveRequest']>>;
+        try {
+            verified = await this.access.resolveRequest(req);
+        } catch (error) {
+            if (!(error instanceof StorefrontClosedError)) throw error;
+            res.status(403).json({ errorCode: 'STOREFRONT_CLOSED', message: 'Store not open yet' });
+            return;
+        }
         if (!verified) {
             res.status(404).end();
             return;
@@ -104,7 +116,14 @@ export class StorefrontPublicPageController {
             currencyCode: (currency as CurrencyCode | undefined) ?? verified.ctx.currencyCode,
         });
         const start = performance.now();
-        const page = await this.pages.read(ctx, verified.host, request);
+        let page: StorefrontPageData;
+        try {
+            page = await this.pages.read(ctx, verified.host, request);
+        } catch (error) {
+            if (!(error instanceof StorefrontClosedError)) throw error;
+            res.status(403).json({ errorCode: 'STOREFRONT_CLOSED', message: 'Store not open yet' });
+            return;
+        }
         res.setHeader('Server-Timing', `public-page;dur=${(performance.now() - start).toFixed(1)}`);
         res.status(200).json(page);
     }

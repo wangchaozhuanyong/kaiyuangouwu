@@ -13,7 +13,7 @@ export class StorefrontActivationInterceptor implements NestInterceptor {
         const parentType = parsed.info.parentType.name;
         if (parentType !== 'Query' && parentType !== 'Mutation') return next.handle();
         const requestContext = internal_getRequestContext(parsed.req, context);
-        await this.storefrontActivationService.assertActive(requestContext);
+        await this.storefrontActivationService.assertActive(requestContext, parsed.info.fieldName);
         return next.handle();
     }
 }

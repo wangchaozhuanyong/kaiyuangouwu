@@ -18,6 +18,11 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+import {
+    PROTECTION_MANIFEST_FILE,
+    PROTECTION_MANIFEST_VERSION,
+    REQUIRED_PROTECTION_PAIRS,
+} from './public-preview-production-verification.mjs';
 import { moyaoBrandAssets } from './sync-moyao-brand.mjs';
 import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 
@@ -120,9 +125,23 @@ export const CUSTOMER_IMAGE_WORKER_FILES = Object.freeze([
     'deploy/image-worker/clamd.cjs',
 ]);
 
+export const PUBLIC_PREVIEW_CLOSEOUT_RUNTIME_FILES = Object.freeze(
+    [
+        'public-preview-legacy-compensation.mjs',
+        'public-preview-legacy-compensation-host.mjs',
+        'public-preview-legacy-digital-compensation.mjs',
+        'public-preview-legacy-digital-compensation-host.mjs',
+        'public-preview-production-verification.mjs',
+        'public-preview-managed-digital-closeout.mjs',
+    ].map(file => `packages/dev-server/scripts/${file}`),
+);
+
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     ...CUSTOMER_IMAGE_WORKER_FILES,
     ...GOVERNANCE_RECONCILIATION_RUNTIME_FILES,
+    ...PUBLIC_PREVIEW_CLOSEOUT_RUNTIME_FILES,
+    ...REQUIRED_PROTECTION_PAIRS.map(({ source }) => source),
+    PROTECTION_MANIFEST_FILE,
     'production-runtime-audit.mjs',
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
@@ -344,6 +363,7 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         'repair-coupon-lifecycle.mjs',
         ...HOMEPAGE_CAROUSEL_RUNTIME_FILES.map(file => path.basename(file)),
         ...GOVERNANCE_RECONCILIATION_RUNTIME_FILES.map(file => path.basename(file)),
+        ...PUBLIC_PREVIEW_CLOSEOUT_RUNTIME_FILES.map(file => path.basename(file)),
     ];
     for (const scriptName of releaseScripts) {
         const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts', scriptName);
@@ -387,6 +407,32 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         await mkdir(path.dirname(destination), { recursive: true });
         await cp(entry.file, destination);
     }
+}
+
+// Bind reviewed source and the actual production build output in the immutable artifact.
+// The independently pinned manifest is subsequently checked against running API/worker PIDs.
+export async function writePublicPreviewProtectionManifest(stagingRoot, gitSha) {
+    assert.match(gitSha, /^[a-f0-9]{40}$/u);
+    const files = [];
+    for (const { source, compiled } of REQUIRED_PROTECTION_PAIRS) {
+        const destination = path.join(stagingRoot, source);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await cp(path.join(repositoryRoot, source), destination);
+        files.push({
+            source,
+            compiled,
+            sourceSha256: createHash('sha256')
+                .update(await readFile(destination))
+                .digest('hex'),
+            compiledSha256: createHash('sha256')
+                .update(await readFile(path.join(stagingRoot, compiled)))
+                .digest('hex'),
+        });
+    }
+    await writeFile(
+        path.join(stagingRoot, PROTECTION_MANIFEST_FILE),
+        `${JSON.stringify({ version: PROTECTION_MANIFEST_VERSION, releaseSha: gitSha, files }, null, 2)}\n`,
+    );
 }
 
 /**
@@ -488,6 +534,7 @@ export async function buildRuntimeArtifact({
         await copyRuntimeBuildOutputs(stagingRoot);
         await writeRuntimeFrontendReleaseManifests(stagingRoot, gitSha);
         await copyStorefrontMediaReleaseInputs(stagingRoot);
+        await writePublicPreviewProtectionManifest(stagingRoot, gitSha);
 
         const metadata = {
             artifactFormat: 1,

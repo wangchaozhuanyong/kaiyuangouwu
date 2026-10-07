@@ -8,6 +8,10 @@ import {
 } from './digital-fulfillment.guard';
 
 function fixture(mode: keyof typeof DIGITAL_FULFILLMENT_HANDLER_BY_MODE = 'manual_service') {
+    const customFields: { fulfillmentTypeSnapshot: string; digitalDeliveryModeSnapshot: string } = {
+        fulfillmentTypeSnapshot: 'digital',
+        digitalDeliveryModeSnapshot: mode,
+    };
     const current = {
         id: 'current',
         state: 'Created',
@@ -24,7 +28,7 @@ function fixture(mode: keyof typeof DIGITAL_FULFILLMENT_HANDLER_BY_MODE = 'manua
                 id: 'line-1',
                 quantity: 2,
                 orderPlacedQuantity: 2,
-                customFields: { fulfillmentTypeSnapshot: 'digital', digitalDeliveryModeSnapshot: mode },
+                customFields,
             },
         ],
         payments: [
@@ -146,6 +150,68 @@ describe('digital fulfillment readiness guard', () => {
         test.order.payments[0].method = 'fixture-payment';
         test.order.payments[0].metadata.public.testPayment = true;
         expect(test.check()).toContain('模拟付款');
+    });
+
+    it.each(
+        (['file_download', 'manual_service', 'auto_card'] as const).flatMap(mode =>
+            ['Settled', 'Authorized', 'Declined', 'Cancelled'].flatMap(state =>
+                ['method', 'server-marker'].map(identity => ({ mode, state, identity })),
+            ),
+        ),
+    )(
+        'rejects $mode delivery with full real funds and $state test identity via $identity',
+        ({ mode, state, identity }) => {
+            const test = fixture(mode);
+            test.order.payments.push({
+                state,
+                amount: 1000,
+                method: identity === 'method' ? 'controlled-test-payment-platform' : 'historical-provider',
+                metadata: { public: { testPayment: identity === 'server-marker' } },
+                refunds: [],
+            });
+            expect(test.check()).toContain('模拟付款');
+            test.current.state = 'Pending';
+            expect(test.check('Delivered')).toContain('模拟付款');
+        },
+    );
+
+    it.each(['Created', 'TestSettled', 'unknown', 'manual-review'])(
+        'rejects review evidence %s even when another genuine payment covers the total',
+        evidence => {
+            const test = fixture();
+            const order: DigitalFulfillmentOrderSource = {
+                ...test.order,
+                payments: [
+                    ...test.order.payments,
+                    {
+                        state: evidence === 'manual-review' ? 'Settled' : evidence,
+                        amount: 1,
+                        method: 'real-provider',
+                        metadata: { manualReview: { required: evidence === 'manual-review' } },
+                        refunds: [],
+                    },
+                ],
+            };
+            expect(guardDigitalFulfillment(order, test.current, test.statuses, 'Pending')).toContain(
+                '待核验',
+            );
+            test.current.state = 'Pending';
+            expect(guardDigitalFulfillment(order, test.current, test.statuses, 'Delivered')).toContain(
+                '待核验',
+            );
+        },
+    );
+
+    it('keeps genuinely funded historical orders eligible after declined real payment attempts', () => {
+        const test = fixture();
+        test.order.payments.push({
+            state: 'Declined',
+            amount: 1000,
+            method: 'real-provider',
+            metadata: { public: { testPayment: false } },
+            refunds: [],
+        });
+        expect(test.check()).toBeUndefined();
     });
 
     it('allows a genuinely settled zero-price order but requires its real payment record', () => {

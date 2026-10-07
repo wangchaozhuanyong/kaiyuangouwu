@@ -1,8 +1,101 @@
+import { Channel, Order, TransactionSubscriber } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AdminNotificationService } from './admin-notification.service';
 
 describe('AdminNotificationService', () => {
+    for (const eventType of [
+        'commerce.fulfillment.manual_delivery_failed',
+        'commerce.fulfillment.manual_delivery_overdue',
+    ]) {
+        for (const activeIncident of [null, { id: 8, activeFingerprint: `${eventType}:1` }]) {
+            it(`ignores late ${eventType} after CANCELLED with ${activeIncident ? 'old' : 'no'} active incident`, async () => {
+                const test = manualIncidentTest({ state: 'CANCELLED' }, activeIncident);
+                const result = await test.service.upsertIncident(null, manualIncidentInput(eventType));
+                expect(result).toBeNull();
+                expect(test.repository.findOne).not.toHaveBeenCalled();
+                expect(test.repository.save).not.toHaveBeenCalled();
+                expect(test.incidentResponse.appendSystemEvidence).not.toHaveBeenCalled();
+                expect(test.configService.get).not.toHaveBeenCalled();
+                expect(test.worker.dispatch).not.toHaveBeenCalled();
+                expect(test.taskQuery.getOne).toHaveBeenCalledOnce();
+            });
+        }
+    }
+
+    for (const payload of [
+        { channelId: '2', orderId: '37', deliveryId: '1' },
+        { channelId: '5', orderId: '38', deliveryId: '1' },
+        { channelId: '5', orderId: '37', deliveryId: '2' },
+    ]) {
+        it(`rejects stale manual incident scope ${JSON.stringify(payload)} before writing`, async () => {
+            const test = manualIncidentTest();
+            await expect(
+                test.service.upsertIncident(null, { ...manualIncidentInput(), payload }),
+            ).rejects.toThrow('归属不一致');
+            expect(test.repository.save).not.toHaveBeenCalled();
+            expect(test.worker.dispatch).not.toHaveBeenCalled();
+        });
+    }
+
+    it('rejects wrong current sales Channel and managed context Channel', async () => {
+        const test = manualIncidentTest();
+        test.orderRepository.findOne.mockResolvedValueOnce({ id: '37', salesChannelId: '2' });
+        await expect(test.service.upsertIncident(null, manualIncidentInput())).rejects.toThrow('归属不一致');
+        await expect(
+            test.service.upsertIncident({ channelId: '2' } as never, manualIncidentInput()),
+        ).rejects.toThrow('归属不一致');
+        expect(test.repository.save).not.toHaveBeenCalled();
+    });
+
+    it('persists the first legitimate manual incident while holding Delivery through the commit', async () => {
+        const test = manualIncidentTest();
+        const result = await test.service.upsertIncident(null, manualIncidentInput());
+        expect(result).toMatchObject({ id: 11, incidentStatus: 'OPEN', deliveryStatus: 'PENDING' });
+        expect(test.timeline).toEqual(['save-locked', 'commit', 'dispatch-after-commit']);
+        expect(test.worker.dispatch).toHaveBeenCalledOnce();
+    });
+
+    it('aggregates a legitimate pending manual incident without re-dispatching it', async () => {
+        const test = manualIncidentTest(
+            {},
+            { id: 8, occurrenceCount: 1, severity: 'P1', deliveryStatus: 'PENDING', payload: {} },
+        );
+        const result = await test.service.upsertIncident(null, manualIncidentInput());
+        expect(result).toMatchObject({ id: 8, occurrenceCount: 2 });
+        expect(test.worker.dispatch).not.toHaveBeenCalled();
+        expect(test.timeline).toEqual(['save-locked', 'commit']);
+    });
+
+    it('defers notification dispatch to the caller native transaction commit without blocking its return', async () => {
+        const test = manualIncidentTest({}, null, true);
+        await test.service.upsertIncident({ channelId: '5' } as never, manualIncidentInput());
+        expect(test.subscriber.awaitCommit).toHaveBeenCalledOnce();
+        expect(test.worker.dispatch).not.toHaveBeenCalled();
+        test.queryRunner.isTransactionActive = false;
+        test.commit();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(test.worker.dispatch).toHaveBeenCalledWith(11);
+    });
+
+    it('does not dispatch a manual incident whose caller native transaction rolls back', async () => {
+        const test = manualIncidentTest({}, null, true);
+        await test.service.upsertIncident({ channelId: '5' } as never, manualIncidentInput());
+        test.queryRunner.isTransactionActive = false;
+        test.rollback();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(test.worker.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('keeps other incident source semantics even when its event name is the manual failure name', async () => {
+        const test = serviceTest();
+        const result = await test.service.upsertIncident(null, {
+            ...manualIncidentInput(),
+            sourceType: 'OtherSource',
+        });
+        expect(result).toMatchObject({ incidentStatus: 'OPEN', deliveryStatus: 'PENDING' });
+        expect(test.worker.dispatch).toHaveBeenCalledOnce();
+    });
     it('does not reclaim a pending incident and alerts immediately when a sent incident becomes critical', async () => {
         const existing = {
             id: 5,
@@ -188,6 +281,8 @@ function serviceTest(
     const worker = { dispatch: vi.fn().mockResolvedValue(true) };
     const incidentResponse = { appendSystemEvidence: vi.fn().mockResolvedValue(undefined) };
     return {
+        connection,
+        configService,
         repository,
         worker,
         incidentResponse,
@@ -198,4 +293,93 @@ function serviceTest(
             incidentResponse as never,
         ),
     };
+}
+
+function manualIncidentInput(eventType = 'commerce.fulfillment.manual_delivery_failed') {
+    return {
+        eventType,
+        category: 'FULFILLMENT',
+        severity: 'P1' as const,
+        sourceType: 'ManualDigitalDelivery',
+        sourceId: '1',
+        fingerprint: `${eventType}:1`,
+        title: 'Synthetic test delivery failure',
+        payload: { channelId: '5', orderId: '37', deliveryId: '1' },
+    };
+}
+
+function manualIncidentTest(
+    deliveryOverrides: Record<string, unknown> = {},
+    existing: Record<string, unknown> | null = null,
+    callerTransaction = false,
+) {
+    const test = serviceTest({ findOne: vi.fn().mockResolvedValue(existing) });
+    const timeline: string[] = [];
+    const queryRunner = { isTransactionActive: callerTransaction };
+    const delivery = { id: '1', channelId: '5', orderId: '37', state: 'EMAIL_FAILED', ...deliveryOverrides };
+    const taskQuery = {
+        where: vi.fn().mockReturnThis(),
+        setLock: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(delivery),
+    };
+    const taskTarget = class NativeManualDeliveryTarget {};
+    const taskRepository = {
+        createQueryBuilder: vi.fn().mockReturnValue(taskQuery),
+        manager: { queryRunner },
+    };
+    const orderRepository = { findOne: vi.fn().mockResolvedValue({ id: '37', salesChannelId: '5' }) };
+    const channelRepository = {
+        findOne: vi.fn().mockResolvedValue({ id: '5', code: 'Synthetic', customFields: {} }),
+    };
+    const getRepository = (_ctx: unknown, target: unknown) =>
+        target === taskTarget
+            ? taskRepository
+            : target === Order
+              ? orderRepository
+              : target === Channel
+                ? channelRepository
+                : test.repository;
+    let commit: () => void = () => undefined;
+    let rollback: () => void = () => undefined;
+    const commitPromise = new Promise<void>((resolve, reject) => {
+        commit = resolve;
+        rollback = () => reject(new Error('native rollback'));
+    });
+    const subscriber = Object.assign(Object.create(TransactionSubscriber.prototype), {
+        awaitCommit: vi.fn().mockReturnValue(commitPromise),
+    });
+    Object.assign(test.connection.rawConnection, {
+        getMetadata: vi.fn().mockReturnValue({ target: taskTarget }),
+        subscribers: [subscriber],
+    });
+    test.connection.getRepository.mockImplementation(getRepository);
+    let depth = 0;
+    test.connection.withTransaction.mockImplementation(
+        async (ctxOrWork: unknown, maybeWork?: (ctx: unknown) => unknown) => {
+            const work = typeof ctxOrWork === 'function' ? ctxOrWork : maybeWork;
+            depth += 1;
+            queryRunner.isTransactionActive = true;
+            try {
+                return await work?.({});
+            } finally {
+                depth -= 1;
+                if (!depth && !callerTransaction) {
+                    queryRunner.isTransactionActive = false;
+                    timeline.push('commit');
+                }
+            }
+        },
+    );
+    test.repository.save.mockImplementation(value => {
+        expect(queryRunner.isTransactionActive).toBe(true);
+        timeline.push('save-locked');
+        if (value.id == null) value.id = 11;
+        return Promise.resolve(value);
+    });
+    test.worker.dispatch.mockImplementation(() => {
+        expect(queryRunner.isTransactionActive).toBe(false);
+        timeline.push('dispatch-after-commit');
+        return Promise.resolve(true);
+    });
+    return { ...test, taskQuery, orderRepository, timeline, queryRunner, subscriber, commit, rollback };
 }

@@ -335,6 +335,7 @@ describe('ShopApi storefront config', () => {
             availableCountries: [],
             availableStorefrontProvinces: [{ code: 'MY-10', name: 'Selangor', countryCode: 'MY' }],
             storefrontBranding: {
+                accessMode: 'PREVIEW',
                 legalEntityName: 'MOYAO AI Example Limited',
                 legalRegistrationCountry: 'Malaysia',
                 legalRegistrationNumber: '123456789012 (123456-A)',
@@ -346,6 +347,7 @@ describe('ShopApi storefront config', () => {
         });
 
         await expect(new ShopApi(market).storefrontConfig()).resolves.toMatchObject({
+            accessMode: 'PREVIEW',
             availableProvinces: [{ code: 'MY-10', name: 'Selangor', countryCode: 'MY' }],
             legalEntityName: 'MOYAO AI Example Limited',
             legalRegistrationCountry: 'Malaysia',
@@ -356,6 +358,7 @@ describe('ShopApi storefront config', () => {
         });
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
         expect(request.query).toContain('legalEntityName');
+        expect(request.query).toContain('accessMode');
         expect(request.query).toContain('legalRegistrationCountry');
         expect(request.query).toContain('legalRegistrationNumber');
         expect(request.query).toContain('legalContactAddress');

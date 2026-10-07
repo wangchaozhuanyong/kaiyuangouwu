@@ -7,6 +7,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const checkoutResources = {
         hold: vi.fn().mockResolvedValue(null),
         confirm: vi.fn(),
+        isConfirmedSimulation: vi.fn().mockResolvedValue(false),
         canDeliver: vi.fn().mockResolvedValue(false),
         reserve: vi.fn(),
         assertCancellationAllowed: vi.fn(),
@@ -74,6 +75,8 @@ describe('commerceOrderProcess digital fulfillment', () => {
 
     beforeEach(async () => {
         vi.clearAllMocks();
+        checkoutResources.hold.mockReset().mockResolvedValue(null);
+        checkoutResources.isConfirmedSimulation.mockResolvedValue(false);
         orderService.createFulfillment.mockResolvedValue({ id: 'fulfillment-1' });
         productVariantService.getSaleableStockLevel.mockResolvedValue(10);
         stockQueryBuilder.getMany.mockResolvedValue([]);
@@ -135,6 +138,35 @@ describe('commerceOrderProcess digital fulfillment', () => {
         expect(stockMovementService.createAllocationsForOrderLines).toHaveBeenCalledWith(expect.anything(), [
             { orderLineId: 'physical-line', quantity: 1 },
         ]);
+    });
+
+    it('does not allocate legacy physical stock when the checkout completion is a confirmed simulation', async () => {
+        checkoutResources.isConfirmedSimulation.mockResolvedValue(true);
+        const order = {
+            id: 'simulation-order',
+            lines: [
+                { id: 'physical-line', quantity: 1, customFields: { fulfillmentTypeSnapshot: 'physical' } },
+            ],
+        };
+        hydratedOrder = order;
+        await commerceOrderProcess.onTransitionEnd?.('ArrangingPayment', 'PaymentSettled', {
+            ctx: { channelId: 'channel-1' },
+            order,
+        } as any);
+        expect(checkoutResources.confirm).toHaveBeenCalled();
+        expect(stockMovementService.createAllocationsForOrderLines).not.toHaveBeenCalled();
+    });
+
+    it('allows known simulation completion after its temporary resources have already been released', async () => {
+        checkoutResources.isConfirmedSimulation.mockResolvedValue(true);
+        checkoutResources.hold.mockResolvedValueOnce({ state: 'RELEASED' } as any);
+        expect(
+            await commerceOrderProcess.onTransitionStart?.('ArrangingPayment', 'PaymentSettled', {
+                ctx: { channelId: 'channel-1' },
+                order: { id: 'simulation-order', lines: [] },
+            } as any),
+        ).toBeUndefined();
+        expect(checkoutResources.markReview).not.toHaveBeenCalled();
     });
 
     it('does not deliver digital products when payment is only authorized', async () => {

@@ -167,6 +167,7 @@ describe('active order payment currency', () => {
         Object.assign(service, {
             connection: { getEntityOrThrow: vi.fn().mockResolvedValue(order) },
             orderService,
+            activation: { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) },
             usdtPaymentService,
         });
         vi.spyOn(service, 'get').mockResolvedValue(configuration);
@@ -277,7 +278,12 @@ describe('USDT checkout quote amount', () => {
         const usdtPaymentService = { expirePendingIntentsForOrder: vi.fn().mockResolvedValue(0) };
         const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
         Object.assign(service, {
-            orderService: { findOne: vi.fn().mockResolvedValue(order) },
+            activation: { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) },
+            orderService: {
+                withOrderMutationTransaction: vi.fn((ctx, work) => work(ctx)),
+                lockOrderForRefund: vi.fn(),
+                findOne: vi.fn().mockResolvedValue(order),
+            },
             connection: { getRepository: vi.fn().mockReturnValue(repository) },
             usdtPaymentService,
         });
@@ -398,5 +404,39 @@ describe('public storefront currency selection', () => {
             defaultCurrencyCode: CurrencyCode.MYR,
             availableCurrencyCodes: [CurrencyCode.MYR, CurrencyCode.CNY],
         });
+    });
+});
+
+describe('preview USDT preparation boundary', () => {
+    it('blocks quote creation and reuse before querying quotes, saving records or exposing an intent', async () => {
+        const repository = { findOne: vi.fn(), save: vi.fn() };
+        const activation = {
+            assertNewRealPaymentAllowed: vi.fn().mockRejectedValue(new Error('公开预览禁止真实付款')),
+        };
+        const service = Object.assign(Object.create(StoreCurrencySettingsService.prototype), {
+            activation,
+            connection: { getRepository: vi.fn().mockReturnValue(repository) },
+            get: vi.fn(),
+            usdtPaymentService: { ensureIntent: vi.fn(), expirePendingIntentsForOrder: vi.fn() },
+        }) as StoreCurrencySettingsService;
+        await expect(
+            (service as any).createOrderUsdtQuote(
+                { channelId: 'store' },
+                {
+                    id: 'order',
+                    salesChannelId: 'store',
+                    currencyCode: 'CNY',
+                },
+                1000,
+            ),
+        ).rejects.toThrow('禁止真实付款');
+        expect(activation.assertNewRealPaymentAllowed).toHaveBeenCalledWith(
+            { channelId: 'store' },
+            'store',
+            expect.objectContaining({ id: 'order', salesChannelId: 'store' }),
+        );
+        expect(repository.findOne).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
+        expect((service as any).get).not.toHaveBeenCalled();
     });
 });

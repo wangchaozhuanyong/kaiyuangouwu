@@ -694,6 +694,8 @@ export class DigitalProductService implements OnApplicationBootstrap {
     }
 
     async lock<T extends ObjectLiteral>(ctx: RequestContext, entity: ObjectType<T>, id: ID): Promise<T> {
+        // Resource expiry and recovery must use the same cart -> order locking as payment.
+        if (entity === Order) await this.orders.lockOrderForRefund(ctx, id);
         const repository = this.connection.getRepository(ctx, entity);
         const query = repository.createQueryBuilder('lockedRow').where('lockedRow.id = :id', { id });
         if (

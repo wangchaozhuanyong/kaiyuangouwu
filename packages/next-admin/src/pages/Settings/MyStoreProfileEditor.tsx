@@ -1,16 +1,15 @@
 import { useMutation } from '@apollo/client/react';
 import { AdminButton } from '../../components/AdminControls';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
-import { useServerDraft } from '../../hooks/use-server-draft';
-import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
-
-import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION,
     UPDATE_MY_STORE_PROFILE_MUTATION,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
+import { useServerDraft } from '../../hooks/use-server-draft';
+import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { useStorePublicPreview } from '../../hooks/use-store-public-preview';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 import { FieldArea, FieldInput } from './MyStoreFields';
@@ -26,7 +25,7 @@ export function MyStoreProfileEditor({
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const requestConfirmation = useConfirmDialog();
+    const publicPreview = useStorePublicPreview(onCompleted, onError);
     const [updateProfile, updateState] = useMutation<{ updateMyStoreProfile: StoreProfileRecord }>(
         UPDATE_MY_STORE_PROFILE_MUTATION,
     );
@@ -55,29 +54,7 @@ export function MyStoreProfileEditor({
         setDraft(current => ({ ...(current ?? draft), [field]: value }));
     const togglePublicPreview = async () => {
         if (owner.dirty || owner.sourceChanged) return;
-        if (!profile.isPublished) {
-            const confirmed = await requestConfirmation({
-                title: '开放店铺公开预览？',
-                description:
-                    '所有访客都能浏览店铺；如启用测试支付，访客也能生成模拟订单。正式上线检查保持独立。',
-                confirmLabel: '开放预览',
-                tone: 'warning',
-            });
-            if (!confirmed) return;
-        }
-        try {
-            await updateProfile({
-                variables: {
-                    input: {
-                        expectedUpdatedAt: profile.updatedAt,
-                        isPublished: !profile.isPublished,
-                    },
-                },
-            });
-            await onCompleted(profile.isPublished ? '公开预览已关闭' : '公开预览已开放');
-        } catch (error) {
-            onError(toUserFacingError(error, '更新公开预览失败'));
-        }
+        await publicPreview.togglePublicPreview(profile);
     };
     const save = async () => {
         if (owner.sourceChanged) return;
@@ -167,6 +144,9 @@ export function MyStoreProfileEditor({
                             {!profile.primaryDomain && (
                                 <p className="mt-1 text-xs text-rose-700">请先验证并设置主域名。</p>
                             )}
+                            {!publicPreview.canUpdatePublicPreview && (
+                                <p className="mt-1 text-xs text-slate-500">当前账号仅可查看公开预览状态。</p>
+                            )}
                         </div>
                         <AdminButton
                             type="button"
@@ -176,6 +156,8 @@ export function MyStoreProfileEditor({
                             onClick={() => void togglePublicPreview()}
                             disabled={
                                 updateState.loading ||
+                                publicPreview.publicPreviewBusy ||
+                                !publicPreview.canUpdatePublicPreview ||
                                 owner.dirty ||
                                 owner.sourceChanged ||
                                 (!profile.primaryDomain && !profile.isPublished)

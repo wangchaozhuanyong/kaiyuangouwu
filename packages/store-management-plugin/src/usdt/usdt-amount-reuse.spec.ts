@@ -1,4 +1,6 @@
 import { Channel, Order, Payment, PaymentMethod, StorePaymentMethodState } from '@vendure/core';
+import { createConnection } from 'mysql2/promise';
+import { randomUUID } from 'node:crypto';
 import { DataSource, EntitySchema, EntitySchemaColumnOptions, getMetadataArgsStorage } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,7 +76,7 @@ const channelSchema = new EntitySchema({
     tableName: 'channel',
     columns: { id: { type: Number, primary: true }, code: { type: String } },
 });
-const methodSchema = new EntitySchema({
+const methodSchema = new EntitySchema<PaymentMethod>({
     name: 'PaymentMethod',
     target: PaymentMethod,
     tableName: 'payment_method',
@@ -101,6 +103,31 @@ const orderSchema = new EntitySchema({
     columns: { id: { type: Number, primary: true }, salesChannelId: { type: Number, nullable: true } },
 });
 type TestContext = { channelId?: number; manager?: DataSource['manager'] };
+
+async function isolatedMysqlDatabase(): Promise<string> {
+    const port = Number(process.env.USDT_TEST_PORT);
+    if (
+        process.env.ORDER_CLOSURE_MYSQL !== '1' ||
+        port !== 37406 ||
+        !process.env.ORDER_CLOSURE_MYSQL_PASSWORD
+    )
+        throw new Error('USDT MySQL tests require the owned isolated order-closure runner');
+    const database = `usdt_preview_${randomUUID().replace(/-/gu, '')}`;
+    const connection = await createConnection({
+        host: '127.0.0.1',
+        port,
+        user: 'root',
+        password: process.env.ORDER_CLOSURE_MYSQL_PASSWORD,
+    });
+    try {
+        // Only create a new randomly named database in our owned disposable server. Never drop
+        // existing tables or reuse a configured application database, even between test cases.
+        await connection.query(`CREATE DATABASE \`${database}\``);
+    } finally {
+        await connection.end();
+    }
+    return database;
+}
 
 describe('USDT amount lifecycle on a real database', () => {
     let db: DataSource;
@@ -130,21 +157,21 @@ describe('USDT amount lifecycle on a real database', () => {
 
     beforeEach(async () => {
         const driver = process.env.USDT_TEST_DB ?? 'sqljs';
-        if (!['sqljs', 'mysql', 'postgres'].includes(driver)) throw new Error('Unsupported isolated test DB');
+        if (!['sqljs', 'mysql'].includes(driver)) throw new Error('Unsupported isolated test DB');
         db = new DataSource({
             ...(driver === 'sqljs'
                 ? { type: 'sqljs' as const }
                 : {
-                      type: driver as 'mysql' | 'postgres',
+                      type: 'mysql' as const,
                       host: '127.0.0.1',
                       port: Number(process.env.USDT_TEST_PORT),
-                      username: driver === 'mysql' ? 'root' : 'postgres',
-                      password: '',
-                      database: 'vendure_logic_repair',
+                      username: 'root',
+                      password: process.env.ORDER_CLOSURE_MYSQL_PASSWORD,
+                      database: await isolatedMysqlDatabase(),
                   }),
             entities: [intentSchema, quoteSchema, channelSchema, orderSchema, methodSchema, switchSchema],
             synchronize: true,
-            dropSchema: true,
+            dropSchema: false,
         });
         await db.initialize();
         await db.getRepository(Channel).save([
@@ -195,6 +222,7 @@ describe('USDT amount lifecycle on a real database', () => {
             { requireConfigured: () => Promise.resolve(wallet) } as never,
             chain as never,
             eventBus as never,
+            { assertNewRealPaymentAllowed: vi.fn().mockResolvedValue(undefined) } as never,
         );
     });
     afterEach(async () => {

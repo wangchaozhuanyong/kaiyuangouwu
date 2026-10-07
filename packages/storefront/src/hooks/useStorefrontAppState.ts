@@ -18,7 +18,7 @@ import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import { isPublicStorefrontRoute } from '../storefront-access';
-import { storefrontErrorCode, storefrontErrorMessage } from '../storefront-errors';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
@@ -52,6 +52,8 @@ export function useStorefrontAppState() {
         displayCurrencyCode,
         setDisplayCurrencyCode,
         storefrontContextResolved,
+        storefrontUnavailable,
+        storefrontAccessMode,
         favoriteProductIds: guestFavoriteProductIds,
         recentProductIds: guestRecentProductIds,
         setFavoriteProductIds: setGuestFavoriteProductIds,
@@ -822,10 +824,8 @@ export function useStorefrontAppState() {
         // The shell only depends on resolving the current store identity. Route components own
         // their content/query skeletons, so an unrelated content request never blocks the app.
         pageDataPending: !storefrontContextResolved && !configQuery.isError,
-        storefrontUnavailable:
-            configQuery.isError &&
-            configQuery.data === undefined &&
-            storefrontErrorCode(configQuery.error) === 'FORBIDDEN',
+        storefrontUnavailable,
+        storefrontAccessMode,
         isNavigationPending,
         isPreparingProduct,
         storefrontContextValue,

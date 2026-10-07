@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 
+import { Order, Payment, RequestContext } from '@vendure/core';
 import { CreateDateColumn, DataSource, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -30,8 +31,10 @@ describe('IncidentResponseService', () => {
             rawConnection: database,
             getRepository: (_ctx: unknown, entity: typeof AdminNotificationDelivery) =>
                 database.getRepository(entity),
-            withTransaction: (ctx: unknown, callback: (transactionContext: unknown) => unknown) =>
-                Promise.resolve(callback(ctx)),
+            withTransaction: (ctxOrWork: unknown, callback?: (transactionContext: unknown) => unknown) =>
+                Promise.resolve(
+                    callback ? callback(ctxOrWork) : (ctxOrWork as (ctx: unknown) => unknown)(null),
+                ),
         };
         const config = {
             get: vi.fn().mockResolvedValue({ enabled: false }),
@@ -143,6 +146,210 @@ describe('IncidentResponseService', () => {
         await expect(
             service.acknowledgeIncident({ activeUserId: null } as never, '999', '未认证的管理员不能确认事故'),
         ).rejects.toThrow('需要已认证管理员');
+    });
+
+    let historicalTaskSequence = 100;
+    async function historicalClosureHarness() {
+        const deliveryId = String(++historicalTaskSequence);
+        const input = { orderId: '37', deliveryId, receiptId: 'digital-test-closure:37' };
+        const ctx = {
+            apiType: 'admin',
+            activeUserId: 'admin-1',
+            channelId: '5',
+            userHasPermissions: () => true,
+        } as unknown as RequestContext;
+        const order = { id: '37', salesChannelId: '5' };
+        const payment = {
+            state: 'Settled',
+            method: 'controlled-test-payment-5',
+            metadata: { public: { testPayment: true }, manualReview: { required: false } },
+            refunds: [] as object[],
+        };
+        const task = { id: deliveryId, state: 'CANCELLED', orderId: '37', channelId: '5' };
+        const closingEvent = {
+            type: 'CANCELLED',
+            actorType: 'ADMIN',
+            note: `历史测试任务终止；收据 ${input.receiptId}`,
+        };
+        const manager = { queryRunner: { isTransactionActive: true } };
+        const connection = {
+            rawConnection: { options: { type: 'sqljs' }, getMetadata: (name: string) => ({ target: name }) },
+            getRepository: (_ctx: unknown, entity: unknown) => {
+                if (entity === Order) return { manager, findOne: () => Promise.resolve(order) };
+                if (entity === Payment) return { find: () => Promise.resolve([payment]) };
+                if (entity === 'manual_digital_delivery') return { findOne: () => Promise.resolve(task) };
+                if (entity === 'manual_digital_delivery_event')
+                    return {
+                        findOne: ({ where }: { where: { note: string; actorType: string } }) =>
+                            Promise.resolve(
+                                where.note === closingEvent.note && where.actorType === closingEvent.actorType
+                                    ? closingEvent
+                                    : null,
+                            ),
+                    };
+                return database.getRepository(entity as typeof AdminNotificationDelivery);
+            },
+            withTransaction: (work: (ctx: RequestContext) => unknown) => Promise.resolve(work(ctx)),
+        };
+        const closure = new IncidentResponseService(connection as never, {} as never, worker as never);
+        const incident = await createIncident(database, 'P1');
+        incident.sourceType = 'ManualDigitalDelivery';
+        incident.sourceId = deliveryId;
+        incident.eventType = 'commerce.fulfillment.manual_delivery_failed';
+        incident.fingerprint = `${incident.eventType}:${deliveryId}`;
+        incident.activeFingerprint = incident.fingerprint;
+        incident.title = '人工交付发送失败';
+        incident.payload = { channelId: '5', orderId: '37', deliveryId };
+        incident.attempts = 7;
+        incident.lastError = 'historical send failure';
+        incident.deliveryStatus = 'RETRY';
+        await database.getRepository(AdminNotificationDelivery).save(incident);
+        return { closure, input, ctx, order, payment, task, closingEvent, manager, incident };
+    }
+
+    it('terminates a historical test incident truthfully with preserved failure evidence and no notification', async () => {
+        const h = await historicalClosureHarness();
+        const beforeDispatch = worker.dispatch.mock.calls.length;
+        const closed = await h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input);
+        expect(closed).toEqual([h.incident.id]);
+        const result = await service.incidentDetail(h.incident.id);
+        expect(result).toMatchObject({
+            incidentStatus: 'CLOSED',
+            eventState: 'RESOLVED',
+            activeFingerprint: null,
+            deliveryStatus: 'SKIPPED',
+            attempts: 7,
+            lastError: 'historical send failure',
+            recoveryObservedAt: null,
+            recoveryValidatedAt: null,
+        });
+        expect(result.title).toBe('人工交付发送失败');
+        expect(result.evidence).toHaveLength(1);
+        expect(result.evidence[0]).toMatchObject({
+            eventType: 'CLOSED',
+            integrityValid: true,
+            summary: '历史测试任务终止，事故结束；未声明发送成功',
+            evidence: { closureKey: h.input.receiptId, outcome: 'TASK_TERMINATED' },
+        });
+        expect(worker.dispatch.mock.calls.length).toBe(beforeDispatch);
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).resolves.toEqual([]);
+        expect((await service.incidentDetail(h.incident.id)).evidence).toHaveLength(1);
+    });
+
+    it.each(['real', 'unmarked', 'unknown', 'refund'] as const)(
+        'protects incidents for %s funding',
+        async funding => {
+            const h = await historicalClosureHarness();
+            if (funding === 'real') h.payment.method = 'real-payment';
+            if (funding === 'unmarked') h.payment.metadata.public.testPayment = false;
+            if (funding === 'unknown') h.payment.state = 'Pending';
+            if (funding === 'refund') h.payment.refunds.push({ state: 'Pending' });
+            await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+                '真实或未知付款',
+            );
+            expect((await service.incidentDetail(h.incident.id)).incidentStatus).toBe('OPEN');
+        },
+    );
+
+    it('requires the same closure receipt, immutable store owner and active native transaction', async () => {
+        const h = await historicalClosureHarness();
+        h.closingEvent.note = '订单取消';
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '同一历史测试收据',
+        );
+        h.closingEvent.note = `历史测试任务终止；收据 ${h.input.receiptId}`;
+        h.closingEvent.actorType = 'SYSTEM';
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '同一历史测试收据',
+        );
+        h.closingEvent.actorType = 'ADMIN';
+        h.order.salesChannelId = '2';
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow();
+        h.order.salesChannelId = '5';
+        h.manager.queryRunner.isTransactionActive = false;
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '原订单收尾事务',
+        );
+        expect((await service.incidentDetail(h.incident.id)).evidence).toHaveLength(0);
+    });
+
+    it('rejects mismatched incident ownership and an in-flight claimed notification', async () => {
+        const h = await historicalClosureHarness();
+        h.incident.payload.channelId = '2';
+        await database.getRepository(AdminNotificationDelivery).save(h.incident);
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '归属不一致',
+        );
+        h.incident.payload.channelId = '5';
+        h.incident.deliveryStatus = 'CLAIMED';
+        await database.getRepository(AdminNotificationDelivery).save(h.incident);
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '发送结果未知',
+        );
+        h.incident.deliveryStatus = 'SENT';
+        h.incident.claimedAt = new Date();
+        await database.getRepository(AdminNotificationDelivery).save(h.incident);
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow(
+            '发送结果未知',
+        );
+        expect((await service.incidentDetail(h.incident.id)).incidentStatus).toBe('OPEN');
+    });
+
+    it('keeps unfinished corrective actions protected', async () => {
+        const h = await historicalClosureHarness();
+        await database.getRepository(AdminIncidentAction).save(
+            new AdminIncidentAction({
+                incidentId: Number(h.incident.id),
+                title: '仍需人工核验的历史处理',
+                ownerDepartmentCode: 'TECH',
+                status: 'OPEN',
+                dueAt: new Date(),
+                completedAt: null,
+                completedByUserId: null,
+                completionNote: null,
+                escalatedAt: null,
+            }),
+        );
+        await expect(h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input)).rejects.toThrow('整改流程');
+        expect((await service.incidentDetail(h.incident.id)).evidence).toHaveLength(0);
+    });
+
+    it('requires managed SuperAdmin and a valid nonsecret receipt before accessing history', async () => {
+        const h = await historicalClosureHarness();
+        await expect(
+            h.closure.closeHistoricalTestTaskIncidents(
+                { ...h.ctx, userHasPermissions: () => false } as never,
+                h.input,
+            ),
+        ).rejects.toThrow('平台管理员');
+        await expect(
+            h.closure.closeHistoricalTestTaskIncidents(h.ctx, {
+                ...h.input,
+                receiptId: 'invalid with spaces',
+            }),
+        ).rejects.toThrow('收据标识无效');
+        expect((await service.incidentDetail(h.incident.id)).incidentStatus).toBe('OPEN');
+    });
+
+    it('does not reopen or notify a terminated incident from an earlier scheduler snapshot', async () => {
+        const h = await historicalClosureHarness();
+        await h.closure.closeHistoricalTestTaskIncidents(h.ctx, h.input);
+        const stale = { ...h.incident, incidentStatus: 'RECOVERY_PENDING' } as AdminNotificationDelivery;
+        const background = h.closure as unknown as {
+            escalateStage(
+                incident: AdminNotificationDelivery,
+                summary: string,
+                evidence: Record<string, unknown>,
+                now: Date,
+            ): Promise<boolean>;
+        };
+        await expect(
+            background.escalateStage(stale, '恢复验证逾期', { stage: 'RECOVERY_VALIDATION' }, new Date()),
+        ).resolves.toBe(false);
+        const result = await service.incidentDetail(h.incident.id);
+        expect(result.incidentStatus).toBe('CLOSED');
+        expect(result.deliveryStatus).toBe('SKIPPED');
+        expect(result.evidence).toHaveLength(1);
     });
 });
 

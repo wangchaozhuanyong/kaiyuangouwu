@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ShopApiGraphQlError } from '../api/helpers';
 import { enabledMarkets, marketForStorefrontConfig } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
 import { scopedStorageKey } from '../storefront-storage';
 import { FAVORITE_PRODUCT_STORAGE_KEY } from '../storefront-utils';
 import { Product, StorefrontConfig } from '../types';
 
+import { StorefrontQueryContext } from './storefront-query-context';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,6 +23,7 @@ describe('storefront bootstrap boundaries', () => {
     let client: QueryClient;
     let value: ReturnType<typeof useStorefrontBootstrap>;
     let config: StorefrontConfig | undefined;
+    let configError: unknown;
     let listedProducts: Product[] | undefined;
     const dataUpdatedAt = 123_000;
     function Harness() {
@@ -65,9 +68,10 @@ describe('storefront bootstrap boundaries', () => {
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         root = createRoot(document.createElement('div'));
         config = undefined;
+        configError = undefined;
         listedProducts = undefined;
         queries.read.mockReset().mockImplementation(() => ({
-            configQuery: { data: config, dataUpdatedAt, refetch: vi.fn() },
+            configQuery: { data: config, error: configError, dataUpdatedAt, refetch: vi.fn() },
             productsQuery: { data: listedProducts, refetch: vi.fn() },
             collectionsQuery: { refetch: vi.fn() },
         }));
@@ -83,6 +87,215 @@ describe('storefront bootstrap boundaries', () => {
         render();
         expect(value.storefrontContextResolved).toBe(false);
         expect(queries.read.mock.lastCall?.[0].storefrontContextResolved).toBe(false);
+    });
+    it('closes an already-loaded store, discards its scoped catalog cache and resumes reads after configuration recovery', () => {
+        config = { ...nextConfig(), accessMode: 'PREVIEW' };
+        render();
+        const currentMarket = storefrontQueryKeys.market(value.market);
+        const productKey = storefrontQueryKeys.product(currentMarket, 'zh_Hans', 'cached-product');
+        const otherKey = storefrontQueryKeys.product('other:CNY', 'zh_Hans', 'unrelated-product');
+        client.setQueryData(productKey, { id: 'cached-product' });
+        client.setQueryData(otherKey, { id: 'unrelated-product' });
+        configError = new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED');
+        render();
+        expect(value.storefrontUnavailable).toBe(true);
+        expect(value.storefrontContextResolved).toBe(false);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        expect(client.getQueryData(otherKey)).toEqual({ id: 'unrelated-product' });
+        configError = undefined;
+        config = { ...nextConfig(), accessMode: 'PREVIEW' };
+        render();
+        expect(value.storefrontUnavailable).toBe(false);
+        expect(value.storefrontContextResolved).toBe(true);
+        expect(value.storefrontAccessMode).toBe('PREVIEW');
+    });
+    it('reacts immediately to a current-scope closure, ignores other scopes and permissions, and only reopens after configuration succeeds', async () => {
+        config = { ...nextConfig(), accessMode: 'PREVIEW' };
+        render();
+        const market = storefrontQueryKeys.market(value.market);
+        const currentKey = storefrontQueryKeys.product(market, 'zh_Hans', 'current-product');
+        const otherKey = storefrontQueryKeys.product('other:CNY', 'zh_Hans', 'other-product');
+        const denied = new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED');
+        const readError = (key: readonly unknown[], error: Error) =>
+            client
+                .fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => Promise.reject(error) })
+                .catch(() => undefined);
+        await act(async () => {
+            await readError(otherKey, denied);
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        await act(async () => {
+            await readError(currentKey, new ShopApiGraphQlError(['permission'], 403, 'FORBIDDEN'));
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        const configKey = [...storefrontQueryKeys.config(market, 'zh_Hans'), 'public'];
+        let finishOldConfig!: (response: StorefrontConfig) => void;
+        let oldRead!: Promise<unknown>;
+        await act(async () => {
+            oldRead = client
+                .fetchQuery({
+                    queryKey: configKey,
+                    staleTime: 0,
+                    queryFn: () =>
+                        new Promise<StorefrontConfig>(resolve => {
+                            finishOldConfig = resolve;
+                        }),
+                })
+                .catch(() => undefined);
+            await Promise.resolve();
+        });
+        await act(async () => {
+            await readError(currentKey, denied);
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        expect(value.storefrontContextResolved).toBe(false);
+        expect(config.accessMode).toBe('PREVIEW');
+        await act(async () => {
+            finishOldConfig(config as StorefrontConfig);
+            await oldRead;
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        // A late catalog aggregate can seed an old PREVIEW configuration manually.
+        // Only the following new configuration fetch may clear the rejection boundary.
+        await act(async () => {
+            client.setQueryData(configKey, config);
+            await Promise.resolve();
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            await readError(configKey, new Error('network unavailable'));
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            await client.fetchQuery({
+                queryKey: configKey,
+                staleTime: 0,
+                queryFn: () => Promise.resolve(config),
+            });
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        expect(value.storefrontContextResolved).toBe(true);
+        await act(async () => {
+            await readError(configKey, new ShopApiGraphQlError(['legacy closed'], 403, 'FORBIDDEN'));
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            client.setQueryData(configKey, config);
+            await Promise.resolve();
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            await client.fetchQuery({
+                queryKey: configKey,
+                staleTime: 0,
+                queryFn: () => Promise.resolve(config),
+            });
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        expect(value.storefrontContextResolved).toBe(true);
+    });
+
+    it('keeps an explicit CLOSED configuration authoritative over an older pending response until a fresh read reopens it', async () => {
+        const preview: StorefrontConfig = {
+            ...nextConfig(),
+            code: enabledMarkets[0].code,
+            defaultLanguageCode: enabledMarkets[0].defaultLanguageCode,
+            defaultCurrencyCode: enabledMarkets[0].currencyCode,
+            accessMode: 'PREVIEW',
+        };
+        const configKey = [
+            ...storefrontQueryKeys.config(storefrontQueryKeys.market(enabledMarkets[0]), 'zh_Hans'),
+            'public',
+        ];
+        client.setQueryData(configKey, preview);
+        queries.read.mockImplementation(function useConfigFixture(context: StorefrontQueryContext) {
+            return {
+                configQuery: useQuery({
+                    queryKey: [
+                        ...storefrontQueryKeys.config(
+                            storefrontQueryKeys.market(context.market),
+                            context.vendureLanguageCode,
+                        ),
+                        'public',
+                    ],
+                    queryFn: () => Promise.resolve(preview),
+                    staleTime: Infinity,
+                }),
+                productsQuery: { data: [], refetch: vi.fn() },
+                collectionsQuery: { refetch: vi.fn() },
+            };
+        });
+        render();
+        expect(value.storefrontContextResolved).toBe(true);
+        const productKey = storefrontQueryKeys.product(
+            storefrontQueryKeys.market(value.market),
+            'zh_Hans',
+            'cached-product',
+        );
+        client.setQueryData(productKey, { id: 'cached-product' });
+        let finishOldConfig!: (response: StorefrontConfig) => void;
+        let oldRead!: Promise<unknown>;
+        await act(async () => {
+            oldRead = client
+                .fetchQuery({
+                    queryKey: configKey,
+                    staleTime: 0,
+                    queryFn: () =>
+                        new Promise<StorefrontConfig>(resolve => {
+                            finishOldConfig = resolve;
+                        }),
+                })
+                .catch(() => undefined);
+            await Promise.resolve();
+        });
+        await act(async () => {
+            client.setQueryData(configKey, { ...preview, accessMode: 'CLOSED' });
+            await Promise.resolve();
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        expect(value.storefrontContextResolved).toBe(false);
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        await act(async () => {
+            finishOldConfig(preview);
+            await oldRead;
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            client.setQueryData(configKey, preview);
+            await Promise.resolve();
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            await client.fetchQuery({
+                queryKey: configKey,
+                staleTime: 0,
+                queryFn: () => Promise.resolve(preview),
+            });
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        expect(value.storefrontContextResolved).toBe(true);
+        await act(async () => {
+            await client.fetchQuery({
+                queryKey: configKey,
+                staleTime: 0,
+                queryFn: () => Promise.resolve({ ...preview, accessMode: 'CLOSED' as const }),
+            });
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            client.setQueryData(configKey, preview);
+            await Promise.resolve();
+        });
+        expect(value.storefrontUnavailable).toBe(true);
+        await act(async () => {
+            await client.fetchQuery({
+                queryKey: configKey,
+                staleTime: 0,
+                queryFn: () => Promise.resolve(preview),
+            });
+        });
+        expect(value.storefrontUnavailable).toBe(false);
+        expect(value.storefrontContextResolved).toBe(true);
     });
 
     it('copies a changed market configuration with its original response age', () => {

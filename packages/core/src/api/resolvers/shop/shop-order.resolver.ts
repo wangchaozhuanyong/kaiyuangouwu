@@ -312,21 +312,23 @@ export class ShopOrderResolver {
         return [];
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Owner)
     async transitionOrderToState(
         @Ctx() ctx: RequestContext,
         @Args() args: MutationTransitionOrderToStateArgs & ActiveOrderArgs,
     ): Promise<ErrorResultUnion<TransitionOrderToStateResult, Order> | undefined> {
-        if (ctx.authorizedAsOwnerOnly) {
-            const sessionOrder = await this.activeOrderService.getActiveOrder(
-                ctx,
-                args[ACTIVE_ORDER_INPUT_FIELD_NAME],
-                true,
-            );
-            return await this.orderService.transitionToState(ctx, sessionOrder.id, args.state as OrderState);
-        }
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            if (txCtx.authorizedAsOwnerOnly) {
+                const sessionOrder = await this.activeOrderService.getActiveOrder(
+                    txCtx,
+                    args[ACTIVE_ORDER_INPUT_FIELD_NAME],
+                    true,
+                );
+                return this.orderService.transitionToState(txCtx, sessionOrder.id, args.state as OrderState);
+            }
+        });
     }
 
     @Transaction()

@@ -312,6 +312,159 @@ describe('StoreCouponLifecycleService', () => {
         expect(ledgerSave).toHaveBeenCalledTimes(1);
     });
 
+    it('returns a simulation coupon once without redeeming it or repricing the placed audit order', async () => {
+        const test = simulatedCouponHarness();
+
+        await (test.service as any).redeemForPaidOrder(ctx, test.order.id);
+        await (test.service as any).redeemForPaidOrder(ctx, test.order.id);
+
+        expect(test.coupon).toMatchObject({ status: 'AVAILABLE', lockedOrderId: null });
+        expect(test.allocation).toMatchObject({ status: 'RELEASED', releasedAt: expect.any(Date) });
+        expect(test.upsertAllocation).not.toHaveBeenCalled();
+        expect(test.removeCouponCode).not.toHaveBeenCalled();
+        expect(test.addLedger).toHaveBeenCalledExactlyOnceWith(ctx, test.coupon, 'RELEASED', {
+            actorType: 'SYSTEM',
+            orderId: test.order.id,
+            note: '模拟订单完成，释放真实优惠券',
+        });
+    });
+
+    it.each([
+        'method-only',
+        'metadata-only',
+        'mixed-real',
+        'unknown-created',
+        'unknown-state',
+        'manual-review',
+    ])('keeps the coupon locked for unresolved %s simulation evidence', async evidence => {
+        const test = simulatedCouponHarness();
+        const payment = test.order.payments[0];
+        if (evidence === 'method-only') payment.metadata.public.testPayment = false;
+        if (evidence === 'metadata-only') payment.method = 'real-payment';
+        if (evidence === 'mixed-real')
+            test.order.payments.push({
+                ...payment,
+                method: 'real-payment',
+                metadata: { public: { testPayment: false } },
+            } as any);
+        if (evidence === 'unknown-created') test.order.payments.push({ ...payment, state: 'Created' });
+        if (evidence === 'unknown-state') test.order.payments.push({ ...payment, state: 'Error' });
+        if (evidence === 'manual-review')
+            Object.assign(payment.metadata, { manualReview: { required: true } });
+
+        await (test.service as any).redeemForPaidOrder(ctx, test.order.id);
+
+        expect(test.coupon.status).toBe('LOCKED');
+        expect(test.allocation.status).toBe('LOCKED');
+        expect(test.addLedger).not.toHaveBeenCalled();
+        expect(test.upsertAllocation).not.toHaveBeenCalled();
+    });
+
+    it('does not write collected-payment coupon proof onto a server-owned simulation', async () => {
+        const test = simulatedCouponHarness();
+        const payment = test.order.payments[0];
+        delete (payment.metadata as any).couponPaymentValidation;
+        expect(
+            await (test.service as any).validateConfirmedPayment(
+                ctx,
+                test.order.id,
+                payment,
+                'Settled',
+                'handler',
+            ),
+        ).toBeUndefined();
+        expect(payment.metadata).not.toHaveProperty('couponPaymentValidation');
+    });
+
+    it('retains a later pending checkout lock even when an earlier simulation succeeded', async () => {
+        const test = simulatedCouponHarness();
+        const carts = { isOrderPaymentLocked: vi.fn().mockResolvedValue(true) };
+        Object.assign(test.service, { carts });
+        expect(await (test.service as any).isCouponOrderPaymentPending(ctx, test.order.id)).toBe(true);
+    });
+
+    it('does not retain a completed simulation coupon after the cart payment lock ends', async () => {
+        const test = simulatedCouponHarness();
+        Object.assign(test.service, { carts: { isOrderPaymentLocked: vi.fn().mockResolvedValue(false) } });
+        expect(await (test.service as any).isCouponOrderPaymentPending(ctx, test.order.id)).toBe(false);
+    });
+
+    it('retains a created gateway payment as pending even if the cart is no longer locked', async () => {
+        const test = simulatedCouponHarness();
+        test.order.payments[0].state = 'Created';
+        expect(await (test.service as any).isCouponOrderPaymentPending(ctx, test.order.id)).toBe(true);
+    });
+
+    it('does not release a cancelled order coupon before an unknown payment is reconciled', async () => {
+        const test = simulatedCouponHarness();
+        test.order.payments[0].state = 'Created';
+        await (test.service as any).handleCancelledOrder(ctx, test.order.id);
+        expect(test.coupon.status).toBe('LOCKED');
+        expect(test.addLedger).not.toHaveBeenCalled();
+    });
+
+    it.each(['none', 'Declined', 'Cancelled'])(
+        'automatically releases an expired coupon when its native checkout hold confirms no funds: %s',
+        async paymentState => {
+            const test = expiredCheckoutCouponHarness();
+            if (paymentState !== 'none')
+                test.order.payments.push({ state: paymentState, method: 'real-payment', metadata: {} });
+
+            expect(await test.service.reconcile()).toEqual({ expired: 0, released: 1 });
+            expect(await test.service.reconcile()).toEqual({ expired: 0, released: 0 });
+
+            expect(test.lockCalls).toEqual(['cart', 'order', 'coupon']);
+            expect(test.coupon).toMatchObject({ status: 'AVAILABLE', lockedOrderId: null });
+            expect(test.allocation).toMatchObject({ status: 'RELEASED' });
+            expect(test.order.state).toBe('ArrangingPayment');
+            expect(test.removeCouponCode).not.toHaveBeenCalled();
+            expect(test.carts.withOrderChange).not.toHaveBeenCalled();
+            expect(test.addLedger).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it.each([
+        'plugin-absent',
+        'hold-absent',
+        'cross-channel-hold',
+        'different-order-hold',
+        'HELD',
+        'PAYING',
+        'REVIEW',
+        'not-expired',
+        'cross-channel-order',
+        'inactive-order',
+        'Settled',
+        'Authorized',
+        'Created',
+        'Error',
+        'CustomGatewayPending',
+        'TestSettled',
+        'manual-review',
+    ])('retains the timeout coupon for missing or unresolved server evidence: %s', async evidence => {
+        const test = expiredCheckoutCouponHarness();
+        if (evidence === 'plugin-absent') test.connection.rawConnection.entityMetadatas = [];
+        else if (evidence === 'hold-absent') test.holdRepository.findOne.mockResolvedValue(null);
+        else if (evidence === 'cross-channel-hold') test.hold.channelId = 'different-store';
+        else if (evidence === 'different-order-hold') test.hold.orderId = 'different-order';
+        else if (['HELD', 'PAYING', 'REVIEW'].includes(evidence)) test.hold.state = evidence;
+        else if (evidence === 'not-expired') test.hold.expiresAt = new Date(Date.now() + 60_000);
+        else if (evidence === 'cross-channel-order') test.order.salesChannelId = 'different-store';
+        else if (evidence === 'inactive-order') test.order.active = false;
+        else
+            test.order.payments.push({
+                state: evidence === 'manual-review' ? 'Declined' : evidence,
+                method: 'real-payment',
+                metadata: evidence === 'manual-review' ? { manualReview: { required: true } } : {},
+            });
+
+        expect(await test.service.reconcile()).toEqual({ expired: 0, released: 0 });
+        expect(test.coupon.status).toBe('LOCKED');
+        expect(test.allocation.status).toBe('LOCKED');
+        expect(test.removeCouponCode).not.toHaveBeenCalled();
+        expect(test.addLedger).not.toHaveBeenCalled();
+    });
+
     it('rejects applying a coupon that has already been used', async () => {
         const applyCouponCode = vi.fn();
         const couponRepository = {
@@ -586,6 +739,125 @@ describe('StoreCouponLifecycleService', () => {
         expect(harness.ledgerEvents).toEqual(['REFUND_SETTLED']);
     });
 });
+
+function simulatedCouponHarness() {
+    const coupon = {
+        id: 'coupon-simulated',
+        channelId: ctx.channelId,
+        status: 'LOCKED',
+        lockedOrderId: 'simulation-order',
+        returnedAt: null,
+        promotion: { couponCode: 'CPN_SIMULATED' },
+    } as any;
+    const allocation = { status: 'LOCKED', releasedAt: null } as any;
+    const order = {
+        id: 'simulation-order',
+        state: 'PaymentSettled',
+        lines: [],
+        payments: [
+            {
+                state: 'Settled',
+                method: 'controlled-test-payment-store',
+                metadata: {
+                    public: { testPayment: true },
+                    couponPaymentValidation: { paidAt: new Date().toISOString() },
+                },
+            },
+        ],
+    };
+    const repository = {
+        find: vi.fn(async () => (coupon.status === 'LOCKED' ? [coupon] : [])),
+        findOneOrFail: vi.fn(async () => coupon),
+        update: vi.fn(async (_criteria: unknown, changes: any) => {
+            Object.assign(coupon, changes);
+            return { affected: 1 };
+        }),
+        save: vi.fn(async (value: any) => value),
+    };
+    const removeCouponCode = vi.fn();
+    const service = new StoreCouponLifecycleService(
+        { getRepository: () => repository, getEntityOrThrow: vi.fn(async () => order) } as any,
+        {} as any,
+        {} as any,
+        { removeCouponCode, findOne: vi.fn(async () => order) } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+    );
+    vi.spyOn(service as any, 'lockRow').mockResolvedValue(undefined);
+    vi.spyOn(service as any, 'allocationFor').mockResolvedValue(allocation);
+    const upsertAllocation = vi.spyOn(service as any, 'upsertAllocation').mockResolvedValue(undefined);
+    const addLedger = vi.spyOn(service as any, 'addLedger').mockResolvedValue(undefined);
+    return { service, coupon, allocation, order, removeCouponCode, upsertAllocation, addLedger };
+}
+
+function expiredCheckoutCouponHarness() {
+    const test = simulatedCouponHarness();
+    const order = {
+        ...test.order,
+        salesChannelId: ctx.channelId as string,
+        active: true,
+        state: 'ArrangingPayment',
+        payments: [] as Array<{ state: string; method: string; metadata: any }>,
+    };
+    Object.assign(test.coupon, { lockExpiresAt: new Date(Date.now() - 60_000) });
+    const hold = {
+        channelId: ctx.channelId as string,
+        orderId: order.id,
+        state: 'RELEASED',
+        expiresAt: new Date(Date.now() - 60_000),
+    };
+    const holdTarget = class CheckoutResourceHold {};
+    const holdRepository = { findOne: vi.fn<any>(async () => hold) };
+    const lockCalls: string[] = [];
+    const builder = {
+        update: vi.fn(() => builder),
+        set: vi.fn(() => builder),
+        where: vi.fn(() => builder),
+        execute: vi.fn(async () => {
+            lockCalls.push('coupon');
+            return { affected: 1 };
+        }),
+    };
+    const repository = {
+        find: vi.fn().mockResolvedValueOnce([test.coupon]).mockResolvedValue([]),
+        findOne: vi.fn(async () => test.coupon),
+        createQueryBuilder: vi.fn(() => builder),
+        update: vi.fn(async (_criteria: unknown, changes: any) => {
+            Object.assign(test.coupon, changes);
+            return { affected: 1 };
+        }),
+        save: vi.fn(async (value: unknown) => value),
+    };
+    const connection = {
+        rawConnection: {
+            entityMetadatas: [{ name: 'CheckoutResourceHold', target: holdTarget }],
+            getRepository: vi.fn(() => repository),
+        },
+        getRepository: vi.fn((_ctx, target) => (target === holdTarget ? holdRepository : repository)),
+    };
+    const carts = {
+        withTransaction: vi.fn(async (workCtx, work) => work(workCtx)),
+        lockForOrder: vi.fn(async () => {
+            lockCalls.push('cart');
+        }),
+        isOrderPaymentLocked: vi.fn(async () => true),
+        withOrderChange: vi.fn(),
+    };
+    Object.assign(test.service, {
+        connection,
+        carts,
+        requestContextService: { create: vi.fn(async () => ctx) },
+        orderService: {
+            findOne: vi.fn(async () => order),
+            lockOrderForRefund: vi.fn(async () => {
+                lockCalls.push('order');
+            }),
+            removeCouponCode: test.removeCouponCode,
+        },
+    });
+    return { ...test, order, hold, holdRepository, connection, carts, lockCalls };
+}
 
 function createIssueHarness({
     startsAt = null,

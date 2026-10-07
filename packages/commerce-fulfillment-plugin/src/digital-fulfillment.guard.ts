@@ -34,7 +34,7 @@ export interface DigitalFulfillmentOrderSource {
         state: string;
         amount: number;
         method: string;
-        metadata?: { public?: { testPayment?: unknown } };
+        metadata?: { public?: { testPayment?: unknown }; manualReview?: { required?: unknown } };
         refunds?: ReadonlyArray<{
             state: string;
             metadata?: Record<string, any>;
@@ -87,6 +87,22 @@ export function guardDigitalFulfillment(
     )
         return '数字履约状态已变化，请刷新后重试';
     if (!isLoadedArray(order.payments)) return '订单收款记录未加载完整，请刷新后重试';
+    if (
+        order.payments.some(
+            payment =>
+                isControlledTestPaymentMethod(payment.method) ||
+                payment.metadata?.public?.testPayment === true,
+        )
+    )
+        return '模拟付款订单不能用于真实数字交付';
+    if (
+        order.payments.some(
+            payment =>
+                !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
+                payment.metadata?.manualReview?.required,
+        )
+    )
+        return '付款证据尚待核验，不能创建真实数字交付';
     const funding = order.payments.filter(
         payment =>
             payment.state === 'Settled' &&

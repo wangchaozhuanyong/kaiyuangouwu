@@ -13,8 +13,9 @@ import {
     uiCopy,
 } from '../i18n';
 import { configureMoneyDisplay } from '../money-display';
-import { refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
+import { isStorefrontQueryInScope, refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
+import { isStorefrontClosedError } from '../storefront-access';
 import { readInitialPublicPage } from '../storefront-page-data';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
@@ -129,6 +130,66 @@ export function useStorefrontBootstrap() {
 
     const publicData = useStorefrontPublicData(queryContext);
     const { configQuery, productsQuery, collectionsQuery } = publicData;
+    const [requestAccessDenied, setRequestAccessDenied] = useState<string | null>(null);
+    const accessIdentity = `${storefrontQueryKeys.market(market)}:${vendureLanguageCode}`;
+    const storefrontUnavailable =
+        configQuery.data?.accessMode === 'CLOSED' ||
+        isStorefrontClosedError(configQuery.error, true) ||
+        requestAccessDenied === accessIdentity;
+
+    useEffect(() => {
+        const scope = {
+            marketCode: storefrontQueryKeys.market(market),
+            languageCode: vendureLanguageCode,
+            includePrivate: true,
+        };
+        return queryClient.getQueryCache().subscribe(event => {
+            if (event.type !== 'updated' || !isStorefrontQueryInScope(event.query.queryKey, scope)) return;
+            const explicitClosedConfiguration =
+                event.action.type === 'success' &&
+                event.query.queryKey[3] === 'config' &&
+                (event.query.state.data as StorefrontConfig | undefined)?.accessMode === 'CLOSED';
+            if (
+                explicitClosedConfiguration ||
+                (event.action.type === 'error' &&
+                    isStorefrontClosedError(event.query.state.error, event.query.queryKey[3] === 'config'))
+            ) {
+                // Explicit closure must hide old content immediately. This boundary remembers
+                // the rejection until a fresh configuration read authoritatively recovers.
+                setRequestAccessDenied(accessIdentity);
+                if (explicitClosedConfiguration || event.query.queryKey[3] !== 'config') {
+                    // An earlier in-flight config response cannot undo a later access rejection.
+                    void queryClient.cancelQueries({
+                        predicate: query =>
+                            isStorefrontQueryInScope(query.queryKey, scope) && query.queryKey[3] === 'config',
+                    });
+                }
+            } else if (
+                event.action.type === 'success' &&
+                event.action.manual !== true &&
+                event.query.queryKey[3] === 'config' &&
+                (event.query.state.data as StorefrontConfig | undefined)?.accessMode !== 'CLOSED'
+            ) {
+                setRequestAccessDenied(current => (current === accessIdentity ? null : current));
+            }
+        });
+    }, [accessIdentity, market.code, market.currencyCode, vendureLanguageCode, queryClient]);
+
+    useEffect(() => {
+        if (!storefrontUnavailable) return;
+        const scope = {
+            marketCode: storefrontQueryKeys.market(market),
+            languageCode: vendureLanguageCode,
+            includePrivate: true,
+        };
+        const predicate = (query: { queryKey: readonly unknown[] }) =>
+            isStorefrontQueryInScope(query.queryKey, scope) && query.queryKey[3] !== 'config';
+        // Keep the configuration query alive for read-only recovery; closed stores cannot
+        // keep displaying previously fetched public or customer data from this scope.
+        setStorefrontContextResolved(false);
+        void queryClient.cancelQueries({ predicate });
+        queryClient.removeQueries({ predicate });
+    }, [storefrontUnavailable, market.code, market.currencyCode, vendureLanguageCode, queryClient]);
 
     const legalIdentity = useMemo<StorefrontLegalIdentity>(
         () => ({
@@ -150,7 +211,7 @@ export function useStorefrontBootstrap() {
 
     useEffect(() => {
         const config = configQuery.data;
-        if (!config) return;
+        if (!config || storefrontUnavailable) return;
         const nextStorefrontCode = config.code;
         const configuredMarket = marketForStorefrontConfig(config);
         const currencyConfiguration = config.currencyConfiguration;
@@ -237,6 +298,7 @@ export function useStorefrontBootstrap() {
         customerAuthenticated,
         configQuery.data,
         configQuery.dataUpdatedAt,
+        storefrontUnavailable,
         language,
         market,
         queryClient,
@@ -275,6 +337,8 @@ export function useStorefrontBootstrap() {
 
     return {
         ...publicData,
+        storefrontUnavailable,
+        storefrontAccessMode: configQuery.data?.accessMode,
         market,
         language,
         setStorefrontContext,

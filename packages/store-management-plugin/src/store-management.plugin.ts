@@ -405,6 +405,7 @@ import {
         },
     ],
     exports: [
+        StorefrontActivationService,
         StorefrontMediaDeliveryService,
         StorefrontPublicCacheService,
         StorefrontMediaManifestService,

@@ -49,6 +49,23 @@ import { RoleService } from './role.service';
 @Injectable()
 @Instrument()
 export class PaymentMethodService {
+    private readonly eligibilityFilters = new Map<
+        string,
+        (ctx: RequestContext, order: Order, quotes: PaymentMethodQuote[]) => Promise<PaymentMethodQuote[]>
+    >();
+
+    /** Restrict new quotes without replacing historic settlement/refund handlers. */
+    registerEligibilityFilter(
+        id: string,
+        filter: (
+            ctx: RequestContext,
+            order: Order,
+            quotes: PaymentMethodQuote[],
+        ) => Promise<PaymentMethodQuote[]>,
+    ): void {
+        this.eligibilityFilters.set(id, filter);
+    }
+
     constructor(
         private connection: TransactionalConnection,
         private configService: ConfigService,
@@ -407,7 +424,11 @@ export class PaymentMethodService {
                 customFields: method.customFields,
             });
         }
-        return results;
+        let filtered = results;
+        for (const filter of this.eligibilityFilters.values()) {
+            filtered = await filter(ctx, order, filtered);
+        }
+        return filtered;
     }
 
     async getMethodAndOperations(

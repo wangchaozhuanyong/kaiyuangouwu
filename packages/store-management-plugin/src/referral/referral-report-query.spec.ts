@@ -41,7 +41,7 @@ const ds = new DataSource({
             target: ReferralAccount,
             columns: { id, channelId: number, customerId: number, inviteCode: text },
         }),
-        new EntitySchema({
+        new EntitySchema<ReferralRelationship>({
             name: 'ReferralRelationship',
             target: ReferralRelationship,
             columns: {
@@ -58,7 +58,7 @@ const ds = new DataSource({
                 inviteeCustomer: relation('Customer', 'inviteeCustomerId'),
             },
         }),
-        new EntitySchema({
+        new EntitySchema<ReferralReward>({
             name: 'ReferralReward',
             target: ReferralReward,
             columns: {
@@ -76,7 +76,7 @@ const ds = new DataSource({
                 order: relation('Order', 'orderId'),
             },
         }),
-        new EntitySchema({
+        new EntitySchema<ReferralWithdrawal>({
             name: 'ReferralWithdrawal',
             target: ReferralWithdrawal,
             columns: {
@@ -89,7 +89,7 @@ const ds = new DataSource({
             },
             relations: { customer: relation('Customer', 'customerId') },
         }),
-        new EntitySchema({
+        new EntitySchema<ReferralLedgerEntry>({
             name: 'ReferralLedgerEntry',
             target: ReferralLedgerEntry,
             columns: {
@@ -108,7 +108,7 @@ const ds = new DataSource({
             },
             relations: { customer: relation('Customer', 'customerId') },
         }),
-        new EntitySchema({
+        new EntitySchema<ReferralWallet>({
             name: 'ReferralWallet',
             target: ReferralWallet,
             columns: {
