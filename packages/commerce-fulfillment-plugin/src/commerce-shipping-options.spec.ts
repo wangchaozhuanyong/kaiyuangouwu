@@ -174,6 +174,22 @@ describe('storeShippingZoneEligibilityChecker', () => {
             ).resolves.toBe(false);
         }
     });
+    it('accepts legacy empty arguments only inside enabled countries of this store zone', async () => {
+        await init();
+        await expect(
+            storeShippingZoneEligibilityChecker.check(regionalContext, order, [], regionalContext),
+        ).resolves.toBe(true);
+        for (const countryCode of ['SG', 'US']) {
+            await expect(
+                storeShippingZoneEligibilityChecker.check(
+                    regionalContext,
+                    { ...order, shippingAddress: { countryCode } },
+                    [],
+                    regionalContext,
+                ),
+            ).resolves.toBe(false);
+        }
+    });
     it('country restrictions narrow rather than broaden the store zone', async () => {
         await init();
         const args = [

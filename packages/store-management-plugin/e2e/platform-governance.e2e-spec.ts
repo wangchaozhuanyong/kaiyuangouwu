@@ -40,6 +40,7 @@ import {
     TagService,
     TransactionalConnection,
     User,
+    ZoneService,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
@@ -1750,6 +1751,51 @@ describe('platform governance real database and API boundaries', () => {
                 .setMyShippingTemplateEnabled;
             expect(adopted.adoptedPlatformTemplateId).toBe(publicId);
             expect(adopted.items.find((item: any) => item.method.id === publicId).enabled).toBe(true);
+            const operatingChannel = await channels.findOneOrFail({
+                where: { id: a.channelId },
+                relations: ['defaultShippingZone'],
+            });
+            const operatingContext = a.copy({ channel: operatingChannel });
+            const zone = await server.app
+                .get(ZoneService)
+                .findOne(operatingContext, operatingChannel.defaultShippingZone.id);
+            const destination = zone?.members.find(member => member.enabled);
+            if (!destination) throw new Error('Synthetic store needs an enabled destination');
+            const shipping = server.app.get(ShippingMethodService);
+            const method = await shipping.findOne(operatingContext, publicId);
+            if (!method) throw new Error('Adopted public shipping template missing');
+            const checkerBefore = structuredClone(method.checker);
+            expect(checkerBefore.args).toEqual([
+                { name: 'allowedCountryCodes', value: '' },
+                { name: 'blockedPostalPrefixes', value: '' },
+            ]);
+            // Existing public versions can have no serialized optional arguments.
+            await connection.rawConnection.getRepository(ShippingMethod).update(method.id, {
+                checker: { ...method.checker, args: [] },
+            });
+            try {
+                const legacy = await shipping.findOne(operatingContext, publicId);
+                if (!legacy) throw new Error('Legacy public shipping template missing');
+                const physicalOrder = new Order({
+                    shippingAddress: { countryCode: destination.code, postalCode: '12345' },
+                    lines: [
+                        new OrderLine({
+                            quantity: 1,
+                            customFields: { fulfillmentTypeSnapshot: 'physical' },
+                        }),
+                    ],
+                });
+                await expect(legacy.test(operatingContext, physicalOrder)).resolves.toBe(true);
+                await expect(legacy.apply(operatingContext, physicalOrder)).resolves.toMatchObject({
+                    price: 0,
+                });
+                const outside = new Order({ ...physicalOrder, shippingAddress: { countryCode: 'ZZ' } });
+                await expect(legacy.test(operatingContext, outside)).resolves.toBe(false);
+            } finally {
+                await connection.rawConnection.getRepository(ShippingMethod).update(method.id, {
+                    checker: checkerBefore,
+                });
+            }
             expect(
                 adopted.items
                     .find((item: any) => item.method.id === publicId)

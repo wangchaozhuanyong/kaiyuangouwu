@@ -50,8 +50,8 @@ const customConfig = mergeConfig(testConfig(), {
             {
                 name: 'validateDateTime',
                 type: 'datetime',
-                min: '2019-01-01T08:30',
-                max: '2019-06-01T08:30',
+                min: '2019-01-01T08:30Z',
+                max: '2019-06-01T08:30Z',
             },
             {
                 name: 'validateFn1',
@@ -662,7 +662,7 @@ describe('Custom fields', () => {
                         }
                     `),
                 );
-            }, 'The custom field "validateDateTime" value [2019-01-01T05:25:00.000Z] is less than the minimum [2019-01-01T08:30]'),
+            }, 'The custom field "validateDateTime" value [2019-01-01T05:25:00.000Z] is less than the minimum [2019-01-01T08:30Z]'),
         );
 
         it(

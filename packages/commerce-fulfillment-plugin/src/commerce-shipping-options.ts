@@ -169,10 +169,10 @@ export const storeShippingZoneEligibilityChecker = new ShippingEligibilityChecke
         const zone = await shippingZones.findOne(ctx, zoneId);
         if (!zone?.members?.some(country => country.enabled && country.code.toUpperCase() === countryCode))
             return false;
-        const allowedCountries = splitConfigurationList(args.allowedCountryCodes);
+        const allowedCountries = splitConfigurationList(args.allowedCountryCodes ?? '');
         if (allowedCountries.length && !allowedCountries.includes(countryCode)) return false;
         const postalCode = order.shippingAddress?.postalCode?.replace(/\s+/gu, '').toUpperCase() ?? '';
-        return !splitConfigurationList(args.blockedPostalPrefixes).some(prefix =>
+        return !splitConfigurationList(args.blockedPostalPrefixes ?? '').some(prefix =>
             postalCode.startsWith(prefix.replace(/\s+/gu, '')),
         );
     },
@@ -224,12 +224,12 @@ export const supportedDestinationEligibilityChecker = new ShippingEligibilityChe
         if (!countryCode) {
             return false;
         }
-        const allowedCountries = splitConfigurationList(args.allowedCountryCodes);
+        const allowedCountries = splitConfigurationList(args.allowedCountryCodes ?? '');
         if (allowedCountries.length && !allowedCountries.includes(countryCode)) {
             return false;
         }
         const postalCode = order.shippingAddress?.postalCode?.replace(/\s+/gu, '').toUpperCase() ?? '';
-        const blockedPrefixes = splitConfigurationList(args.blockedPostalPrefixes).map(prefix =>
+        const blockedPrefixes = splitConfigurationList(args.blockedPostalPrefixes ?? '').map(prefix =>
             prefix.replace(/\s+/gu, ''),
         );
         return !blockedPrefixes.some(prefix => postalCode.startsWith(prefix));

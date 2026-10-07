@@ -59,7 +59,10 @@ export const PLATFORM_SHIPPING_TEMPLATE_INPUTS = [
         fulfillmentHandler: 'manual-fulfillment',
         checker: {
             code: 'store-shipping-zone-eligibility-checker',
-            arguments: [],
+            arguments: [
+                { name: 'allowedCountryCodes', value: '' },
+                { name: 'blockedPostalPrefixes', value: '' },
+            ],
         },
         calculator: {
             code: 'default-shipping-calculator',

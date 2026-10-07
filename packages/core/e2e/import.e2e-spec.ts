@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 
-import { omit } from '@vendure/common/lib/omit';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
+import { omit } from '@vendure/common/lib/omit';
 import { DefaultAssetImportStrategy, User } from '@vendure/core';
 import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN } from '@vendure/testing';
+import gql from 'graphql-tag';
 import * as fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -319,21 +320,15 @@ describe('Import resolver', () => {
         // channel (created by the earlier 'imports products' test) so we can assert the
         // re-import REUSES them rather than creating duplicates in the new channel.
         const defaultResult = await adminClient.query(getProductsDocument1, { options: {} });
-        const defaultSmock = defaultResult.products.items.find(
-            (p: any) => p.name === 'Artists Smock',
-        );
+        const defaultSmock = defaultResult.products.items.find((p: any) => p.name === 'Artists Smock');
         const defaultPaper = defaultResult.products.items.find(
             (p: any) => p.name === 'Perfect Paper Stretcher',
         );
         if (!defaultSmock || !defaultPaper) {
-            throw new Error(
-                'Expected products to exist in the default channel from the earlier import',
-            );
+            throw new Error('Expected products to exist in the default channel from the earlier import');
         }
         const defaultSmockFacetValueIds = idsByName(defaultSmock.facetValues);
-        const defaultPaperVariantFacetValueIds = idsByName(
-            defaultPaper.variants[0].facetValues,
-        );
+        const defaultPaperVariantFacetValueIds = idsByName(defaultPaper.variants[0].facetValues);
 
         // Create a new channel
         await adminClient.query(createChannelDocument, {
@@ -351,6 +346,18 @@ describe('Import resolver', () => {
         try {
             // Switch to the new channel
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+            // A new store needs its own warehouse; it must not fall back to another store's stock.
+            const { createStockLocation } = await adminClient.query<{
+                createStockLocation: { id: string; name: string };
+            }>(gql`
+                mutation {
+                    createStockLocation(input: { name: "Second channel import warehouse" }) {
+                        id
+                        name
+                    }
+                }
+            `);
+            expect(createStockLocation.name).toBe('Second channel import warehouse');
 
             // Import the same CSV into the new channel
             const csvFile = path.join(__dirname, 'fixtures', 'product-import.csv');
@@ -376,9 +383,7 @@ describe('Import resolver', () => {
             const paperStretcher = productResult.products.items.find(
                 (p: any) => p.name === 'Perfect Paper Stretcher',
             );
-            const smock = productResult.products.items.find(
-                (p: any) => p.name === 'Artists Smock',
-            );
+            const smock = productResult.products.items.find((p: any) => p.name === 'Artists Smock');
 
             if (!paperStretcher || !smock) {
                 throw new Error('Expected products to be found in second channel');
@@ -388,10 +393,7 @@ describe('Import resolver', () => {
             expect(smock.facetValues.map(byName).sort()).toEqual(['Denim', 'clothes']);
 
             // Verify variant-level facets are present in the new channel
-            expect(paperStretcher.variants[0].facetValues.map(byName).sort()).toEqual([
-                'Accessory',
-                'KB',
-            ]);
+            expect(paperStretcher.variants[0].facetValues.map(byName).sort()).toEqual(['Accessory', 'KB']);
 
             // Assert the facets/facetValues are the SAME entities as the default channel
             // (reused and assigned to this channel), not freshly-created duplicates.
@@ -409,20 +411,13 @@ describe('Import resolver', () => {
 
         // The default channel must be unharmed by the re-import (entities shared, not moved).
         const defaultAfter = await adminClient.query(getProductsDocument1, { options: {} });
-        const smockAfter = defaultAfter.products.items.find(
-            (p: any) => p.name === 'Artists Smock',
-        );
-        const paperAfter = defaultAfter.products.items.find(
-            (p: any) => p.name === 'Perfect Paper Stretcher',
-        );
+        const smockAfter = defaultAfter.products.items.find((p: any) => p.name === 'Artists Smock');
+        const paperAfter = defaultAfter.products.items.find((p: any) => p.name === 'Perfect Paper Stretcher');
         if (!smockAfter || !paperAfter) {
             throw new Error('Expected products to still exist in the default channel after re-import');
         }
         expect(smockAfter.facetValues.map(byName).sort()).toEqual(['Denim', 'clothes']);
-        expect(paperAfter.variants[0].facetValues.map(byName).sort()).toEqual([
-            'Accessory',
-            'KB',
-        ]);
+        expect(paperAfter.variants[0].facetValues.map(byName).sort()).toEqual(['Accessory', 'KB']);
     }, 30000);
 
     describe('asset urls', () => {
