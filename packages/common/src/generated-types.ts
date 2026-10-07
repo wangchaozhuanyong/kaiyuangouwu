@@ -3110,6 +3110,8 @@ export type Mutation = {
   modifyOrder: ModifyOrderResult;
   /** Move a Collection to a different parent or index */
   moveCollection: Collection;
+  /** Confirms a manual-channel refund from an actual external receipt; it does not send money. */
+  recordManualRefund: SettleRefundResult;
   refundOrder: RefundOrderResult;
   reindex: Job;
   /** Removes Collections from the specified Channel */
@@ -3149,6 +3151,8 @@ export type Mutation = {
   removeShippingMethodsFromChannel: Array<ShippingMethod>;
   /** Removes StockLocations from the specified Channel */
   removeStockLocationsFromChannel: Array<StockLocation>;
+  /** Retries the original failed refund using one stable identifier per reviewed attempt. */
+  retryRefund: RefundOrderResult;
   /**
    * Replaces the old with a new API-Key.
    * This is a convenience method to invalidate an API-Key without
@@ -3175,10 +3179,6 @@ export type Mutation = {
   setSettingsStoreValues: Array<SetSettingsStoreValueResult>;
   settlePayment: SettlePaymentResult;
   settleRefund: SettleRefundResult;
-  /** Confirms a manual-channel refund from an actual external receipt; it does not send money. */
-  recordManualRefund: SettleRefundResult;
-  /** Retries the original failed refund using one stable identifier per reviewed attempt. */
-  retryRefund: RefundOrderResult;
   transitionFulfillmentToState: TransitionFulfillmentToStateResult;
   transitionOrderToState?: Maybe<TransitionOrderToStateResult>;
   transitionPaymentToState: TransitionPaymentToStateResult;
@@ -3470,14 +3470,6 @@ export type MutationCreateProductOptionGroupArgs = {
 export type MutationCreateProductOptionGroupForProductArgs = {
   expectedUpdatedAt: Scalars['DateTime']['input'];
   input: CreateProductOptionGroupInput;
-  productId: Scalars['ID']['input'];
-};
-
-
-export type MutationRemoveOptionGroupsFromProductArgs = {
-  expectedUpdatedAt: Scalars['DateTime']['input'];
-  force?: InputMaybe<Scalars['Boolean']['input']>;
-  optionGroupIds: Array<Scalars['ID']['input']>;
   productId: Scalars['ID']['input'];
 };
 
@@ -3821,6 +3813,11 @@ export type MutationMoveCollectionArgs = {
 };
 
 
+export type MutationRecordManualRefundArgs = {
+  input: RecordManualRefundInput;
+};
+
+
 export type MutationRefundOrderArgs = {
   input: RefundOrderInput;
 };
@@ -3867,6 +3864,14 @@ export type MutationRemoveOptionGroupFromProductArgs = {
 };
 
 
+export type MutationRemoveOptionGroupsFromProductArgs = {
+  expectedUpdatedAt: Scalars['DateTime']['input'];
+  force?: InputMaybe<Scalars['Boolean']['input']>;
+  optionGroupIds: Array<Scalars['ID']['input']>;
+  productId: Scalars['ID']['input'];
+};
+
+
 export type MutationRemovePaymentMethodsFromChannelArgs = {
   input: RemovePaymentMethodsFromChannelInput;
 };
@@ -3905,6 +3910,11 @@ export type MutationRemoveShippingMethodsFromChannelArgs = {
 
 export type MutationRemoveStockLocationsFromChannelArgs = {
   input: RemoveStockLocationsFromChannelInput;
+};
+
+
+export type MutationRetryRefundArgs = {
+  input: RetryRefundInput;
 };
 
 
@@ -3976,14 +3986,6 @@ export type MutationSettlePaymentArgs = {
 
 export type MutationSettleRefundArgs = {
   input: SettleRefundInput;
-};
-
-export type MutationRecordManualRefundArgs = {
-  input: RecordManualRefundInput;
-};
-
-export type MutationRetryRefundArgs = {
-  input: RetryRefundInput;
 };
 
 
@@ -5913,6 +5915,13 @@ export type QueryZonesArgs = {
   options?: InputMaybe<ZoneListOptions>;
 };
 
+export type RecordManualRefundInput = {
+  evidenceReference: Scalars['String']['input'];
+  note: Scalars['String']['input'];
+  refundId: Scalars['ID']['input'];
+  transactionId: Scalars['String']['input'];
+};
+
 export type Refund = Node & {
   __typename?: 'Refund';
   adjustment: Scalars['Money']['output'];
@@ -5950,15 +5959,15 @@ export type RefundLine = {
 };
 
 export type RefundOrderInput = {
-  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /** @deprecated Use the `amount` field instead */
   adjustment?: InputMaybe<Scalars['Money']['input']>;
+  afterSalesId?: InputMaybe<Scalars['ID']['input']>;
   /**
    * The amount to be refunded to this particular payment. This was introduced in v2.2.0 as the preferred way to specify the refund amount.
    * Can be as much as the total amount of the payment minus the sum of all previous refunds.
    */
   amount?: InputMaybe<Scalars['Money']['input']>;
-  /** Stable request identifier. Replays return the original Pending, Settled or Failed refund. */
+  /** A stable identifier for this refund request. Reusing it returns the original refund, including Failed or Pending outcomes. */
   idempotencyKey?: InputMaybe<Scalars['String']['input']>;
   /** @deprecated Use the `amount` field instead */
   lines?: InputMaybe<Array<OrderLineInput>>;
@@ -5968,12 +5977,6 @@ export type RefundOrderInput = {
   /** @deprecated Use the `amount` field instead */
   shipping?: InputMaybe<Scalars['Money']['input']>;
 };
-
-export enum RefundReasonType {
-  Items = 'ITEMS',
-  Shipping = 'SHIPPING',
-  Compensation = 'COMPENSATION'
-}
 
 export type RefundOrderResult = AlreadyRefundedError | MultipleOrderError | NothingToRefundError | OrderStateTransitionError | PaymentOrderMismatchError | QuantityTooGreatError | Refund | RefundAmountError | RefundOrderStateError | RefundStateTransitionError;
 
@@ -5994,6 +5997,12 @@ export type RefundPaymentIdMissingError = ErrorResult & {
   errorCode: ErrorCode;
   message: Scalars['String']['output'];
 };
+
+export enum RefundReasonType {
+  COMPENSATION = 'COMPENSATION',
+  ITEMS = 'ITEMS',
+  SHIPPING = 'SHIPPING'
+}
 
 /** Returned when there is an error in transitioning the Refund state */
 export type RefundStateTransitionError = ErrorResult & {
@@ -6110,6 +6119,12 @@ export type RemoveShippingMethodsFromChannelInput = {
 export type RemoveStockLocationsFromChannelInput = {
   channelId: Scalars['ID']['input'];
   stockLocationIds: Array<Scalars['ID']['input']>;
+};
+
+export type RetryRefundInput = {
+  /** Use a new key for a new reviewed attempt, and reuse it when retrying the same submission. */
+  idempotencyKey: Scalars['String']['input'];
+  refundId: Scalars['ID']['input'];
 };
 
 export type Return = Node & StockMovement & {
@@ -6380,19 +6395,6 @@ export type SettlePaymentResult = OrderStateTransitionError | Payment | PaymentS
 export type SettleRefundInput = {
   id: Scalars['ID']['input'];
   transactionId: Scalars['String']['input'];
-};
-
-export type RecordManualRefundInput = {
-  refundId: Scalars['ID']['input'];
-  transactionId: Scalars['String']['input'];
-  evidenceReference: Scalars['String']['input'];
-  note: Scalars['String']['input'];
-};
-
-export type RetryRefundInput = {
-  refundId: Scalars['ID']['input'];
-  /** Use a new key for a new reviewed attempt, and reuse it when retrying the same submission. */
-  idempotencyKey: Scalars['String']['input'];
 };
 
 export type SettleRefundResult = Refund | RefundStateTransitionError;

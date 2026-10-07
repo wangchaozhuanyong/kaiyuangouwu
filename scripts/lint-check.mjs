@@ -48,6 +48,8 @@ const sourceFiles = [...new Set([...changedFiles, ...untrackedFiles])]
     .filter(Boolean)
     .filter(file => !selectedFiles || selectedFiles.has(file))
     .filter(file => supportedExtensions.has(path.extname(file)))
+    // Declarations follow the existing ESLint ignore rule and are checked by TypeScript.
+    .filter(file => !file.endsWith('.d.ts'))
     .filter(file => !path.basename(file).startsWith('generated'))
     .sort();
 
