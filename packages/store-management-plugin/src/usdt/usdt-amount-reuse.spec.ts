@@ -274,8 +274,12 @@ describe('USDT amount lifecycle on a real database', () => {
                     : (ctx.manager ?? db.manager).getRepository(entity),
             getEntityOrThrow: (ctx: TestContext, entity: typeof StorefrontUsdtCheckoutQuote, id: number) =>
                 (ctx.manager ?? db.manager).getRepository(entity).findOneByOrFail({ id }),
-            withTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
-                db.transaction(manager => work({ ..._ctx, manager })),
+            withTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) => {
+                const manager = _ctx.manager ?? db.manager;
+                return driver === 'sqljs'
+                    ? manager.transaction(tx => work({ ..._ctx, manager: tx }))
+                    : manager.transaction('READ COMMITTED', tx => work({ ..._ctx, manager: tx }));
+            },
         };
         service = new UsdtPaymentService(
             connection as never,
@@ -573,7 +577,7 @@ describe('USDT amount lifecycle on a real database', () => {
             const quotes = await Promise.all([quote(), quote()]);
             const outcomes = await Promise.allSettled(
                 quotes.map(q =>
-                    db.transaction(manager =>
+                    db.transaction('READ COMMITTED', manager =>
                         service.ensureIntent({ channelId: q.channelId, manager } as never, q),
                     ),
                 ),
@@ -709,7 +713,7 @@ describe('USDT amount lifecycle on a real database', () => {
                 .save({ channelId: otherChannelId, paymentMethodId: 1, enabled: true });
             const rows = await Promise.all(
                 quotes.map(q =>
-                    db.transaction(manager =>
+                    db.transaction('READ COMMITTED', manager =>
                         service.ensureIntent({ channelId: q.channelId, manager } as never, q),
                     ),
                 ),
