@@ -121,27 +121,71 @@ export async function createSelfRefreshingCache<V, RefreshArgs extends any[]>(
     let value = initialValue;
     let expires = getTimeNow() + ttl;
     const memoCache = new Map<string, { expires: number; value: any }>();
-    const refreshValue = (resetMemoCache = true, args: RefreshArgs): Promise<V> => {
-        return refresh
-            .fn(...args)
-            .then(newValue => {
-                value = newValue;
-                expires = getTimeNow() + ttl;
-                if (resetMemoCache) {
-                    memoCache.clear();
+    type RefreshState = {
+        args: readonly unknown[];
+        resetMemoCache: boolean;
+    };
+    type PendingRefresh = {
+        state: RefreshState;
+        promise: Promise<V>;
+    };
+    let pendingRefresh: PendingRefresh | undefined;
+    let refreshGeneration = 0;
+    let forceEpoch = 0;
+    let pendingForcedEpoch: number | undefined;
+    const refreshValue = (resetMemoCache = true, args: RefreshArgs, force = false): Promise<V> => {
+        if (
+            !force &&
+            pendingRefresh &&
+            pendingRefresh.state.args.length === args.length &&
+            pendingRefresh.state.args.every((arg, index) => Object.is(arg, args[index]))
+        ) {
+            // A value read must still clear memoized results when it joins a memoized refresh.
+            pendingRefresh.state.resetMemoCache ||= resetMemoCache;
+            return pendingRefresh.promise;
+        }
+        const generation = ++refreshGeneration;
+        const epoch = force ? ++forceEpoch : forceEpoch;
+        const canPublishAutomatic = pendingForcedEpoch === undefined;
+        if (force) pendingForcedEpoch = epoch;
+        const state: RefreshState = {
+            args: [...args],
+            resetMemoCache,
+        };
+        const pending: PendingRefresh = {
+            state,
+            promise: (async () => {
+                try {
+                    const newValue = await refresh.fn(...args);
+                    // Reads overlapping a write's forced refresh never replace its published value.
+                    const canPublish =
+                        epoch === forceEpoch &&
+                        (force || (canPublishAutomatic && generation === refreshGeneration));
+                    if (canPublish) {
+                        value = newValue;
+                        expires = getTimeNow() + ttl;
+                        if (state.resetMemoCache) {
+                            memoCache.clear();
+                        }
+                    }
+                    return newValue;
+                } catch (err: any) {
+                    const _message = err.message;
+                    const message = typeof _message === 'string' ? _message : JSON.stringify(err.message);
+                    Logger.error(
+                        `Failed to update SelfRefreshingCache "${name}": ${message}`,
+                        undefined,
+                        err.stack,
+                    );
+                    return value;
                 }
-                return value;
-            })
-            .catch((err: any) => {
-                const _message = err.message;
-                const message = typeof _message === 'string' ? _message : JSON.stringify(err.message);
-                Logger.error(
-                    `Failed to update SelfRefreshingCache "${name}": ${message}`,
-                    undefined,
-                    err.stack,
-                );
-                return value;
-            });
+            })().finally(() => {
+                if (pendingRefresh === pending) pendingRefresh = undefined;
+                if (force && pendingForcedEpoch === epoch) pendingForcedEpoch = undefined;
+            }),
+        };
+        pendingRefresh = pending;
+        return pending.promise;
     };
     const getValue = async (_refreshArgs?: RefreshArgs, resetMemoCache = true): Promise<V> => {
         const now = getTimeNow();
@@ -175,7 +219,7 @@ export async function createSelfRefreshingCache<V, RefreshArgs extends any[]>(
                     ? undefined
                     : (args as RefreshArgs),
             ),
-        refresh: (...args) => refreshValue(true, args),
+        refresh: (...args) => refreshValue(true, args, true),
         memoize,
     };
 }
