@@ -123,7 +123,7 @@ export function CommerceModePanel({
         <section className="min-h-[220px] rounded-xl border border-slate-200 bg-white p-5">
             {modeDraft.sourceChanged && <DraftUpdateNotice onReload={modeDraft.reload} />}
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                <div className="admin-section-title-line">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         当前店铺经营模式
                         <FeatureHelpButton
@@ -134,6 +134,7 @@ export function CommerceModePanel({
                             }
                         />
                     </h2>
+                    <p className="text-xs text-slate-500">选择商品类型与结账信息</p>
                 </div>
                 <AdminButton
                     type="button"
@@ -504,11 +505,14 @@ export function DomainsPanel({
         <div className="space-y-4">
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            {storeName(profile)} · 独立域名
-                            <FeatureHelpButton topic="settings.store-profile" title="店铺独立域名" />
-                        </h2>
+                    <div className="min-w-0">
+                        <div className="admin-section-title-line">
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                {storeName(profile)} · 独立域名
+                                <FeatureHelpButton topic="settings.store-profile" title="店铺独立域名" />
+                            </h2>{' '}
+                            <p className="text-xs text-slate-500">域名绑定与 DNS 验证</p>
+                        </div>
                         <p className="mt-1 text-xs text-slate-400">
                             先将域名 CNAME 指向{' '}
                             <code className="font-mono text-slate-600">
@@ -549,130 +553,154 @@ export function DomainsPanel({
                 />
             ) : (
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <div className="divide-y divide-slate-100">
-                        {(query.data?.storeDomains ?? []).map(item => (
-                            <div
-                                key={item.id}
-                                className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between"
-                            >
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <strong className="font-mono text-sm text-slate-900">
-                                            {item.domain}
-                                        </strong>
-                                        <span
-                                            className={`rounded px-2 py-0.5 text-[9px] font-bold ${item.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                    <div
+                        className="admin-comparison-scroll overflow-x-auto"
+                        role="region"
+                        aria-label="店铺域名与 DNS 记录"
+                        tabIndex={0}
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整域名与 DNS 记录</p>
+                        <table className="admin-compact-table w-full min-w-[1360px] text-left text-xs">
+                            <thead>
+                                <tr>
+                                    {[
+                                        '域名',
+                                        '验证状态',
+                                        '主域名',
+                                        '记录名',
+                                        '记录值',
+                                        '最近验证错误',
+                                        '操作',
+                                    ].map(label => (
+                                        <th key={label}>{label}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(query.data?.storeDomains ?? []).map(item => (
+                                    <tr key={item.id}>
+                                        <td className="font-mono font-semibold">{item.domain}</td>
+                                        <td
+                                            className={
+                                                item.status === 'ACTIVE'
+                                                    ? 'text-emerald-700'
+                                                    : 'text-amber-700'
+                                            }
                                         >
                                             {item.status === 'ACTIVE' ? '已验证' : '待验证'}
-                                        </span>
-                                        {item.isPrimary && (
-                                            <span className="rounded bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">
-                                                主域名
-                                            </span>
-                                        )}
-                                    </div>
-                                    {item.status !== 'ACTIVE' && (
-                                        <div className="mt-2 space-y-1 text-[10px] text-slate-500">
-                                            <div>
-                                                记录名：
-                                                <code className="select-all font-mono text-slate-700">
-                                                    {item.verificationRecordName}
-                                                </code>
-                                            </div>
-                                            <div>
-                                                记录值：
-                                                <code className="select-all break-all font-mono text-slate-700">
-                                                    {item.verificationRecordValue}
-                                                </code>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {item.lastVerificationError && (
-                                        <p className="mt-2 text-[10px] text-rose-600">
-                                            {serviceMessageDisplay(item.lastVerificationError, 'zh')}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex shrink-0 flex-wrap gap-2">
-                                    {profiles.some(
-                                        candidate => candidate.channel.id !== profile.channel.id,
-                                    ) && (
-                                        <div className="flex gap-2">
-                                            <AdminSelect
-                                                value={transferTargets[item.id] ?? ''}
-                                                onChange={event =>
-                                                    setTransferTargets(current => ({
-                                                        ...current,
-                                                        [item.id]: event.target.value,
-                                                    }))
-                                                }
-                                                disabled={busy}
-                                                className={inputClass}
-                                                aria-label={`选择 ${item.domain} 的目标店铺`}
-                                            >
-                                                <option value="">转移到其他店铺…</option>
-                                                {profiles
-                                                    .filter(
-                                                        candidate =>
-                                                            candidate.channel.id !== profile.channel.id,
-                                                    )
-                                                    .map(candidate => (
-                                                        <option
-                                                            key={candidate.channel.id}
-                                                            value={candidate.channel.id}
+                                        </td>
+                                        <td>{item.isPrimary ? '主域名' : '—'}</td>
+                                        <td
+                                            className="max-w-72 truncate select-all font-mono"
+                                            title={
+                                                item.status !== 'ACTIVE' ? item.verificationRecordName : ''
+                                            }
+                                        >
+                                            {item.status !== 'ACTIVE' ? item.verificationRecordName : '—'}
+                                        </td>
+                                        <td
+                                            className="max-w-72 truncate select-all font-mono"
+                                            title={
+                                                item.status !== 'ACTIVE' ? item.verificationRecordValue : ''
+                                            }
+                                        >
+                                            {item.status !== 'ACTIVE' ? item.verificationRecordValue : '—'}
+                                        </td>
+                                        <td
+                                            className="max-w-72 truncate text-rose-600"
+                                            title={
+                                                item.lastVerificationError
+                                                    ? serviceMessageDisplay(item.lastVerificationError, 'zh')
+                                                    : ''
+                                            }
+                                        >
+                                            {item.lastVerificationError
+                                                ? serviceMessageDisplay(item.lastVerificationError, 'zh')
+                                                : '—'}
+                                        </td>
+                                        <td>
+                                            <div className="flex shrink-0 flex-wrap gap-2">
+                                                {profiles.some(
+                                                    candidate => candidate.channel.id !== profile.channel.id,
+                                                ) && (
+                                                    <div className="flex gap-2">
+                                                        <AdminSelect
+                                                            value={transferTargets[item.id] ?? ''}
+                                                            onChange={event =>
+                                                                setTransferTargets(current => ({
+                                                                    ...current,
+                                                                    [item.id]: event.target.value,
+                                                                }))
+                                                            }
+                                                            disabled={busy}
+                                                            className={inputClass}
+                                                            aria-label={`选择 ${item.domain} 的目标店铺`}
                                                         >
-                                                            {storeName(candidate)}
-                                                        </option>
-                                                    ))}
-                                            </AdminSelect>
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() => void transferDomain(item)}
-                                                disabled={busy || !transferTargets[item.id]}
-                                                className={secondaryButton}
-                                            >
-                                                原子转移
-                                            </AdminButton>
-                                        </div>
-                                    )}
-                                    {item.status !== 'ACTIVE' && (
-                                        <AdminButton
-                                            type="button"
-                                            onClick={() => void verifyDomain(item)}
-                                            disabled={busy}
-                                            className={secondaryButton}
-                                        >
-                                            验证 DNS
-                                        </AdminButton>
-                                    )}
-                                    {item.status === 'ACTIVE' && !item.isPrimary && (
-                                        <AdminButton
-                                            type="button"
-                                            onClick={() => void makePrimary(item)}
-                                            disabled={busy}
-                                            className={secondaryButton}
-                                        >
-                                            设为主域名
-                                        </AdminButton>
-                                    )}
-                                    <AdminButton
-                                        type="button"
-                                        onClick={() => void destroy(item)}
-                                        disabled={busy}
-                                        className={`${secondaryButton} text-rose-600`}
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                        移除
-                                    </AdminButton>
-                                </div>
-                            </div>
-                        ))}
-                        {!query.data?.storeDomains.length && (
-                            <div className="p-12 text-center text-xs text-slate-400">
-                                当前店铺尚未绑定独立域名
-                            </div>
-                        )}
+                                                            <option value="">转移到其他店铺…</option>
+                                                            {profiles
+                                                                .filter(
+                                                                    candidate =>
+                                                                        candidate.channel.id !==
+                                                                        profile.channel.id,
+                                                                )
+                                                                .map(candidate => (
+                                                                    <option
+                                                                        key={candidate.channel.id}
+                                                                        value={candidate.channel.id}
+                                                                    >
+                                                                        {storeName(candidate)}
+                                                                    </option>
+                                                                ))}
+                                                        </AdminSelect>
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() => void transferDomain(item)}
+                                                            disabled={busy || !transferTargets[item.id]}
+                                                            className={secondaryButton}
+                                                        >
+                                                            原子转移
+                                                        </AdminButton>
+                                                    </div>
+                                                )}
+                                                {item.status !== 'ACTIVE' && (
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => void verifyDomain(item)}
+                                                        disabled={busy}
+                                                        className={secondaryButton}
+                                                    >
+                                                        验证 DNS
+                                                    </AdminButton>
+                                                )}
+                                                {item.status === 'ACTIVE' && !item.isPrimary && (
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => void makePrimary(item)}
+                                                        disabled={busy}
+                                                        className={secondaryButton}
+                                                    >
+                                                        设为主域名
+                                                    </AdminButton>
+                                                )}
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() => void destroy(item)}
+                                                    disabled={busy}
+                                                    className={`${secondaryButton} text-rose-600`}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    移除
+                                                </AdminButton>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                    {!query.data?.storeDomains.length && (
+                        <div className="p-8 text-center text-xs text-slate-400">当前店铺尚未绑定独立域名</div>
+                    )}
                 </section>
             )}
         </div>
@@ -743,8 +771,14 @@ export function SellersPanel({
                     占用情况来自店铺的所属商家绑定。需要调整时，请到“店铺实例 → 编辑店铺档案 →
                     所属商家主体”；“法定经营主体”用于法律文案。
                 </p>
-                <div className="overflow-x-auto">
-                    <table className="admin-mobile-record-table w-full min-w-[940px] border-collapse text-left text-xs">
+                <div
+                    className="admin-comparison-scroll overflow-x-auto"
+                    role="region"
+                    aria-label="商家主体目录"
+                    tabIndex={0}
+                >
+                    <p className="admin-mobile-table-hint">左右滑动查看完整商家主体字段</p>
+                    <table className="admin-compact-table w-full min-w-[940px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={theadClass}>
                                 <th
@@ -848,16 +882,10 @@ export function SellersPanel({
                                     </tr>
                                 );
                             })}
-                            {!sellers.length && (
-                                <tr>
-                                    <td colSpan={6} className="p-12 text-center text-slate-400">
-                                        暂无商家主体
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
+                {!sellers.length && <p className="p-8 text-center text-xs text-slate-400">暂无商家主体</p>}
             </section>
             {editing && (
                 <SellerDialog

@@ -260,13 +260,13 @@ export function BusinessBasicsPanel({
     };
     return (
         <div className="space-y-4">
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-800">
-                <strong className="block text-sm">按业务选项配置，不需要记代码</strong>
+            <details className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
+                <summary className="cursor-pointer font-semibold">按业务选项配置，不需要记代码</summary>
                 <span className="mt-1 block">
                     建议顺序：先选择语言和币种，再从国家列表创建业务区域，最后按“税类 +
                     区域”设置税率。只有自定义项目才需要手工命名。
                 </span>
-            </div>
+            </details>
             {!storeScoped &&
                 (!standalonePage || ['global', 'language'].includes(standalonePage.detail ?? '')) && (
                     <GlobalBusinessSettings
@@ -389,7 +389,7 @@ function GlobalBusinessSettings({
         <section className="rounded-xl border border-slate-200 bg-white p-5">
             {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
+                <div className="admin-section-title-line">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         平台全局设置
                         <FeatureHelpButton
@@ -398,6 +398,7 @@ function GlobalBusinessSettings({
                             description={'影响所有 Channel 可选语言和库存默认行为'}
                         />
                     </h2>
+                    <p className="text-xs text-slate-500">设置平台允许使用的内容语言</p>
                 </div>
                 <AdminButton
                     type="button"
@@ -581,14 +582,14 @@ function ChannelBusinessSettings({
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
             {draftOwner.sourceChanged && <DraftUpdateNotice onReload={draftOwner.reload} />}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
-                <div>
+            <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:gap-4">
+                <div className="admin-section-title-line">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Languages className="h-4 w-4 text-blue-600" />
                         {page?.title ?? '当前店铺语言与币种'}
                         <FeatureHelpButton topic="settings.store-profile" title="当前店铺语言与币种" />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="text-xs text-slate-400">
                         {getChannelDisplayName(channel)} · 直接选择店铺要使用的选项
                     </p>
                 </div>
@@ -897,7 +898,7 @@ function TaxBusinessSettings({
         deleteRateState.loading;
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 p-5">
+            <div className="admin-section-title-line border-b border-slate-100 p-4 sm:p-5">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <ReceiptText className="h-4 w-4 text-blue-600" />
                     税类与税率
@@ -907,253 +908,313 @@ function TaxBusinessSettings({
                         description={'税率按“税类 + 区域”匹配订单'}
                     />
                 </h2>
+                <p className="text-xs text-slate-500">按税类与业务区域匹配订单</p>
             </div>
             <div className="space-y-4 p-5">
-                <SettingsFormGrid columns={2}>
-                    <Field
-                        label={editingCategoryId ? '税类名称' : '选择税类用途'}
-                        description="为商品选择对应的税务规则分组。"
-                    >
-                        {editingCategoryId ? (
-                            <AdminInput
-                                value={categoryName}
-                                onChange={event => setCategoryName(event.target.value)}
-                                placeholder="税类名称"
-                                className={inputClass}
-                            />
-                        ) : (
-                            <AdminSelect
-                                value={categoryPreset}
-                                onChange={event => {
-                                    const value = event.target.value;
-                                    setCategoryPreset(value);
-                                    setCategoryName(value === '__custom__' ? '' : value);
-                                }}
-                                className={inputClass}
+                <details className="rounded-lg border border-slate-200 p-3" open={Boolean(editingCategoryId)}>
+                    <summary className="cursor-pointer text-xs font-semibold text-blue-700">
+                        {editingCategoryId ? '编辑税类' : '新增税类'}
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                        <SettingsFormGrid columns={2}>
+                            <Field
+                                label={editingCategoryId ? '税类名称' : '选择税类用途'}
+                                description="为商品选择对应的税务规则分组。"
                             >
-                                <option value="">请选择要创建的税类</option>
-                                {TAX_CATEGORY_PRESETS.map(preset => (
-                                    <option
-                                        key={preset.value}
-                                        value={preset.value}
-                                        disabled={categories.some(category => category.name === preset.value)}
+                                {editingCategoryId ? (
+                                    <AdminInput
+                                        value={categoryName}
+                                        onChange={event => setCategoryName(event.target.value)}
+                                        placeholder="税类名称"
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <AdminSelect
+                                        value={categoryPreset}
+                                        onChange={event => {
+                                            const value = event.target.value;
+                                            setCategoryPreset(value);
+                                            setCategoryName(value === '__custom__' ? '' : value);
+                                        }}
+                                        className={inputClass}
                                     >
-                                        {preset.label}
-                                        {categories.some(category => category.name === preset.value)
-                                            ? ' · 已创建'
-                                            : ''}
-                                    </option>
-                                ))}
-                                <option value="__custom__">自定义税类</option>
-                            </AdminSelect>
-                        )}
-                    </Field>
-                    {categoryPreset === '__custom__' && !editingCategoryId && (
-                        <Field label="自定义税类名称" description="仅用于预设列表以外的业务场景。">
-                            <AdminInput
-                                value={categoryName}
-                                onChange={event => setCategoryName(event.target.value)}
-                                placeholder="例如：特殊服务"
-                                className={inputClass}
+                                        <option value="">请选择要创建的税类</option>
+                                        {TAX_CATEGORY_PRESETS.map(preset => (
+                                            <option
+                                                key={preset.value}
+                                                value={preset.value}
+                                                disabled={categories.some(
+                                                    category => category.name === preset.value,
+                                                )}
+                                            >
+                                                {preset.label}
+                                                {categories.some(category => category.name === preset.value)
+                                                    ? ' · 已创建'
+                                                    : ''}
+                                            </option>
+                                        ))}
+                                        <option value="__custom__">自定义税类</option>
+                                    </AdminSelect>
+                                )}
+                            </Field>
+                            {categoryPreset === '__custom__' && !editingCategoryId && (
+                                <Field label="自定义税类名称" description="仅用于预设列表以外的业务场景。">
+                                    <AdminInput
+                                        value={categoryName}
+                                        onChange={event => setCategoryName(event.target.value)}
+                                        placeholder="例如：特殊服务"
+                                        className={inputClass}
+                                    />
+                                </Field>
+                            )}
+                            <CheckboxField
+                                label="默认设置"
+                                description="新商品优先采用该税类。"
+                                checkboxLabel="设为默认税类"
+                                checked={categoryDefault}
+                                onChange={event => setCategoryDefault(event.target.checked)}
+                                disabled={busy}
                             />
-                        </Field>
-                    )}
-                    <CheckboxField
-                        label="默认设置"
-                        description="新商品优先采用该税类。"
-                        checkboxLabel="设为默认税类"
-                        checked={categoryDefault}
-                        onChange={event => setCategoryDefault(event.target.checked)}
-                        disabled={busy}
-                    />
-                </SettingsFormGrid>
-                <div className="flex flex-wrap gap-2">
-                    <AdminButton
-                        type="button"
-                        onClick={() => void addCategory()}
-                        disabled={busy || !categoryName.trim()}
-                        className={secondaryButton}
-                    >
-                        {editingCategoryId ? '保存税类' : '新增税类'}
-                    </AdminButton>
-                    {editingCategoryId && (
-                        <AdminButton
-                            type="button"
-                            onClick={() => {
-                                setEditingCategoryId('');
-                                setCategoryPreset('');
-                                setCategoryName('');
-                                setCategoryDefault(false);
-                            }}
-                            className={secondaryButton}
-                        >
-                            取消
-                        </AdminButton>
-                    )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {categories.map(category => (
-                        <span
-                            key={category.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-700"
-                        >
-                            {category.name}
-                            {category.isDefault && <strong className="text-blue-600">默认</strong>}
+                        </SettingsFormGrid>
+                        <div className="flex flex-wrap gap-2">
                             <AdminButton
                                 type="button"
-                                onClick={() => {
-                                    setEditingCategoryId(category.id);
-                                    setCategoryPreset(
-                                        TAX_CATEGORY_PRESETS.some(preset => preset.value === category.name)
-                                            ? category.name
-                                            : '__custom__',
-                                    );
-                                    setCategoryName(category.name);
-                                    setCategoryDefault(category.isDefault);
-                                }}
-                                className="ml-1 text-blue-600"
-                                aria-label={`编辑税类${category.name}`}
+                                onClick={() => void addCategory()}
+                                disabled={busy || !categoryName.trim()}
+                                className={secondaryButton}
                             >
-                                <Pencil className="h-3 w-3" />
+                                {editingCategoryId ? '保存税类' : '新增税类'}
                             </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void removeCategory(category.id, category.name)}
-                                className="text-rose-600"
-                                aria-label={`删除税类${category.name}`}
-                            >
-                                <Trash2 className="h-3 w-3" />
-                            </AdminButton>
-                        </span>
-                    ))}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                    {editingRateId && (
-                        <Field label="税率名称">
-                            <AdminInput
-                                value={rateName}
-                                onChange={event => setRateName(event.target.value)}
-                                placeholder="税率名称"
-                                className={inputClass}
-                            />
-                        </Field>
-                    )}
-                    <Field label="税率百分比">
-                        <AdminInput
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={rateValue}
-                            onChange={event => setRateValue(event.target.value)}
-                            placeholder="例如：6；免税填 0"
-                            className={inputClass}
-                        />
-                    </Field>
-                    <Field label="应用到哪个税类">
-                        <AdminSelect
-                            value={categoryId}
-                            onChange={event => setCategoryId(event.target.value)}
-                            className={inputClass}
-                        >
-                            <option value="">请选择税类</option>
-                            {categories.map(category => (
-                                <option key={category.id} value={category.id}>
-                                    {category.name}
-                                </option>
-                            ))}
-                        </AdminSelect>
-                    </Field>
-                    <Field label="适用哪个业务区域">
-                        <AdminSelect
-                            value={zoneId}
-                            onChange={event => setZoneId(event.target.value)}
-                            className={inputClass}
-                        >
-                            <option value="">请选择业务区域</option>
-                            {zones.map(zone => (
-                                <option key={zone.id} value={zone.id}>
-                                    {zone.name}
-                                </option>
-                            ))}
-                        </AdminSelect>
-                    </Field>
-                </div>
-                {!editingRateId && categoryId && zoneId && rateValue && (
-                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                        创建后自动命名：
-                        {`${categories.find(category => category.id === categoryId)?.name ?? '税类'} · ${zones.find(zone => zone.id === zoneId)?.name ?? '业务区域'}`}
-                    </p>
-                )}
-                <AdminButton
-                    type="button"
-                    onClick={() => void addRate()}
-                    disabled={busy || !rateValue.trim() || !categoryId || !zoneId}
-                    className={primaryButton}
-                >
-                    {editingRateId ? '保存税率' : '创建税率'}
-                </AdminButton>
-                {editingRateId && (
-                    <AdminButton
-                        type="button"
-                        onClick={() => {
-                            setEditingRateId('');
-                            setRateName('');
-                            setRateValue('');
-                        }}
-                        className={secondaryButton}
-                    >
-                        取消编辑
-                    </AdminButton>
-                )}
-            </div>
-            <div className="divide-y divide-slate-100 border-t border-slate-100">
-                {rates.map(rate => (
-                    <div key={rate.id} className="flex items-center justify-between gap-3 p-4">
-                        <div>
-                            <strong className="text-xs text-slate-900">
-                                {rate.name} · {rate.value}%
-                            </strong>
-                            <p className="mt-1 text-[10px] text-slate-400">
-                                {rate.category.name} / {rate.zone.name}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                                <AdminInput
-                                    type="checkbox"
-                                    checked={rate.enabled}
-                                    onChange={event => void toggleRate(rate.id, event.target.checked)}
-                                    disabled={busy}
-                                />
-                                {rate.enabled ? '已启用' : '已停用'}
-                            </label>
-                            <AdminButton
-                                type="button"
-                                onClick={() => {
-                                    setEditingRateId(rate.id);
-                                    setRateName(rate.name);
-                                    setRateValue(String(rate.value));
-                                    setCategoryId(rate.category.id);
-                                    setZoneId(rate.zone.id);
-                                }}
-                                className="rounded p-1 text-blue-600"
-                                aria-label={`编辑税率${rate.name}`}
-                            >
-                                <Pencil className="h-3.5 w-3.5" />
-                            </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void removeRate(rate.id, rate.name)}
-                                className="rounded p-1 text-rose-600"
-                                aria-label={`删除税率${rate.name}`}
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                            </AdminButton>
+                            {editingCategoryId && (
+                                <AdminButton
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingCategoryId('');
+                                        setCategoryPreset('');
+                                        setCategoryName('');
+                                        setCategoryDefault(false);
+                                    }}
+                                    className={secondaryButton}
+                                >
+                                    取消
+                                </AdminButton>
+                            )}
                         </div>
                     </div>
-                ))}
-                {!rates.length && <div className="p-8 text-center text-xs text-slate-400">尚未配置税率</div>}
+                </details>
+                <div
+                    className="admin-comparison-scroll overflow-x-auto"
+                    role="region"
+                    aria-label="税类目录"
+                    tabIndex={0}
+                >
+                    <p className="admin-mobile-table-hint">左右滑动查看税类目录</p>
+                    <table className="admin-compact-table w-full min-w-[560px] text-left text-xs">
+                        <thead>
+                            <tr>
+                                {['税类名称', '默认状态', '操作'].map(label => (
+                                    <th key={label}>{label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {categories.map(category => (
+                                <tr key={category.id}>
+                                    <td className="font-semibold">{category.name}</td>
+                                    <td>{category.isDefault ? '默认' : '非默认'}</td>
+                                    <td>
+                                        <div className="flex items-center gap-2">
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditingCategoryId(category.id);
+                                                    setCategoryPreset(
+                                                        TAX_CATEGORY_PRESETS.some(
+                                                            preset => preset.value === category.name,
+                                                        )
+                                                            ? category.name
+                                                            : '__custom__',
+                                                    );
+                                                    setCategoryName(category.name);
+                                                    setCategoryDefault(category.isDefault);
+                                                }}
+                                                className="ml-1 text-blue-600"
+                                                aria-label={`编辑税类${category.name}`}
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                            </AdminButton>
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() =>
+                                                    void removeCategory(category.id, category.name)
+                                                }
+                                                className="text-rose-600"
+                                                aria-label={`删除税类${category.name}`}
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </AdminButton>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                {!categories.length && (
+                    <p className="py-6 text-center text-xs text-slate-400">尚未配置税类</p>
+                )}
+                <details className="rounded-lg border border-slate-200 p-3" open={Boolean(editingRateId)}>
+                    <summary className="cursor-pointer text-xs font-semibold text-blue-700">
+                        {editingRateId ? '编辑税率' : '创建税率'}
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {editingRateId && (
+                                <Field label="税率名称">
+                                    <AdminInput
+                                        value={rateName}
+                                        onChange={event => setRateName(event.target.value)}
+                                        placeholder="税率名称"
+                                        className={inputClass}
+                                    />
+                                </Field>
+                            )}
+                            <Field label="税率百分比">
+                                <AdminInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={rateValue}
+                                    onChange={event => setRateValue(event.target.value)}
+                                    placeholder="例如：6；免税填 0"
+                                    className={inputClass}
+                                />
+                            </Field>
+                            <Field label="应用到哪个税类">
+                                <AdminSelect
+                                    value={categoryId}
+                                    onChange={event => setCategoryId(event.target.value)}
+                                    className={inputClass}
+                                >
+                                    <option value="">请选择税类</option>
+                                    {categories.map(category => (
+                                        <option key={category.id} value={category.id}>
+                                            {category.name}
+                                        </option>
+                                    ))}
+                                </AdminSelect>
+                            </Field>
+                            <Field label="适用哪个业务区域">
+                                <AdminSelect
+                                    value={zoneId}
+                                    onChange={event => setZoneId(event.target.value)}
+                                    className={inputClass}
+                                >
+                                    <option value="">请选择业务区域</option>
+                                    {zones.map(zone => (
+                                        <option key={zone.id} value={zone.id}>
+                                            {zone.name}
+                                        </option>
+                                    ))}
+                                </AdminSelect>
+                            </Field>
+                        </div>
+                        {!editingRateId && categoryId && zoneId && rateValue && (
+                            <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                                创建后自动命名：
+                                {`${categories.find(category => category.id === categoryId)?.name ?? '税类'} · ${zones.find(zone => zone.id === zoneId)?.name ?? '业务区域'}`}
+                            </p>
+                        )}
+                        <AdminButton
+                            type="button"
+                            onClick={() => void addRate()}
+                            disabled={busy || !rateValue.trim() || !categoryId || !zoneId}
+                            className={primaryButton}
+                        >
+                            {editingRateId ? '保存税率' : '创建税率'}
+                        </AdminButton>
+                        {editingRateId && (
+                            <AdminButton
+                                type="button"
+                                onClick={() => {
+                                    setEditingRateId('');
+                                    setRateName('');
+                                    setRateValue('');
+                                }}
+                                className={secondaryButton}
+                            >
+                                取消编辑
+                            </AdminButton>
+                        )}
+                    </div>
+                </details>
             </div>
+            <div
+                className="admin-comparison-scroll overflow-x-auto border-t border-slate-100"
+                role="region"
+                aria-label="税率目录"
+                tabIndex={0}
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看税率目录</p>
+                <table className="admin-compact-table w-full min-w-[900px] text-left text-xs">
+                    <thead>
+                        <tr>
+                            {['税率名称', '税率百分比', '税类', '业务区域', '启用状态', '操作'].map(label => (
+                                <th key={label}>{label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rates.map(rate => (
+                            <tr key={rate.id}>
+                                <td className="font-semibold">{rate.name}</td>
+                                <td>{rate.value}%</td>
+                                <td>{rate.category.name}</td>
+                                <td>{rate.zone.name}</td>
+                                <td>
+                                    <label className="inline-flex items-center gap-2">
+                                        <AdminInput
+                                            type="checkbox"
+                                            checked={rate.enabled}
+                                            onChange={event => void toggleRate(rate.id, event.target.checked)}
+                                            disabled={busy}
+                                            aria-label={`${rate.name}启用状态`}
+                                        />
+                                        {rate.enabled ? '已启用' : '已停用'}
+                                    </label>
+                                </td>
+                                <td>
+                                    <div className="flex items-center gap-2">
+                                        <AdminButton
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingRateId(rate.id);
+                                                setRateName(rate.name);
+                                                setRateValue(String(rate.value));
+                                                setCategoryId(rate.category.id);
+                                                setZoneId(rate.zone.id);
+                                            }}
+                                            className="rounded p-1 text-blue-600"
+                                            aria-label={`编辑税率${rate.name}`}
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </AdminButton>
+                                        <AdminButton
+                                            type="button"
+                                            onClick={() => void removeRate(rate.id, rate.name)}
+                                            className="rounded p-1 text-rose-600"
+                                            aria-label={`删除税率${rate.name}`}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </AdminButton>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {!rates.length && <div className="p-8 text-center text-xs text-slate-400">尚未配置税率</div>}
         </section>
     );
 }
@@ -1340,7 +1401,7 @@ function ZoneBusinessSettings({
         deleteCountryState.loading;
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 p-5">
+            <div className="admin-section-title-line border-b border-slate-100 p-4 sm:p-5">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <MapPin className="h-4 w-4 text-blue-600" />
                     国家与业务区域
@@ -1350,291 +1411,353 @@ function ZoneBusinessSettings({
                         description={'业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。'}
                     />
                 </h2>
+                <p className="text-xs text-slate-500">配置计税与配送范围</p>
             </div>
-            <div className="space-y-3 p-5">
-                {!editingZoneId && (
-                    <Field label="选择要创建的业务区域">
-                        <AdminSelect
-                            value={zonePresetCountryId}
-                            onChange={event => {
-                                const countryId = event.target.value;
-                                setZonePresetCountryId(countryId);
-                                if (countryId === '__custom__' || !countryId) {
-                                    setName('');
-                                    setMemberIds([]);
-                                    return;
-                                }
-                                const country = countries.find(item => item.id === countryId);
-                                setName(country ? `${country.name}区域` : '');
-                                setMemberIds(country ? [country.id] : []);
-                            }}
-                            className={inputClass}
-                        >
-                            <option value="">请选择国家/地区</option>
-                            {countries
-                                .filter(country => country.enabled)
-                                .map(country => (
-                                    <option key={country.id} value={country.id}>
-                                        {country.name}（用于该国计税与配送）
-                                    </option>
-                                ))}
-                            <option value="__custom__">自定义多个国家/地区组合</option>
-                        </AdminSelect>
-                    </Field>
-                )}
-                {(editingZoneId || zonePresetCountryId === '__custom__') && (
-                    <Field label="业务区域名称">
-                        <AdminInput
-                            value={name}
-                            onChange={event => setName(event.target.value)}
-                            placeholder="例如：东南亚区域"
-                            className={inputClass}
-                        />
-                    </Field>
-                )}
-                {(editingZoneId || zonePresetCountryId === '__custom__') && (
-                    <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 p-2">
-                        <p className="px-2 pb-2 text-[11px] font-bold text-slate-600">选择包含的国家/地区</p>
-                        <div className="grid gap-1 sm:grid-cols-2">
-                            {countries.map(country => (
-                                <label
-                                    key={country.id}
-                                    className="flex items-center gap-2 rounded px-2 py-1.5 text-[11px] hover:bg-slate-50"
-                                >
-                                    <AdminInput
-                                        type="checkbox"
-                                        checked={memberIds.includes(country.id)}
-                                        onChange={event =>
-                                            setMemberIds(previous =>
-                                                event.target.checked
-                                                    ? [...previous, country.id]
-                                                    : previous.filter(id => id !== country.id),
-                                            )
-                                        }
-                                    />
-                                    <span className="truncate">
-                                        {country.name} ({country.code})
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
-                        {!countries.length && (
-                            <p className="py-6 text-center text-xs text-slate-400">请先在下方添加国家/地区</p>
-                        )}
-                    </div>
-                )}
-                {!editingZoneId && zonePresetCountryId && zonePresetCountryId !== '__custom__' && (
-                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                        将创建“{name}”，包含{' '}
-                        {countries.find(country => country.id === zonePresetCountryId)?.name}。
-                    </p>
-                )}
-                <AdminButton
-                    type="button"
-                    onClick={() => void submit()}
-                    disabled={busy || !name.trim() || memberIds.length === 0}
-                    className={primaryButton}
-                >
-                    {editingZoneId ? '保存业务区域' : '创建业务区域'}
-                </AdminButton>
-                {editingZoneId && (
-                    <AdminButton
-                        type="button"
-                        onClick={() => {
-                            setEditingZoneId('');
-                            setZonePresetCountryId('');
-                            setName('');
-                            setMemberIds([]);
-                        }}
-                        className={secondaryButton}
-                    >
-                        取消编辑
-                    </AdminButton>
-                )}
-            </div>
-            <div className="divide-y divide-slate-100 border-t border-slate-100">
-                {zones.map(zone => (
-                    <div key={zone.id} className="flex items-start justify-between gap-3 p-4">
-                        <div>
-                            <strong className="text-xs text-slate-900">{zone.name}</strong>
-                            <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400">
-                                {zone.members.map(member => member.name).join('、') || '尚无成员'}
-                            </p>
-                        </div>
-                        <div className="flex gap-1">
-                            <AdminButton
-                                type="button"
-                                onClick={() => {
-                                    setEditingZoneId(zone.id);
-                                    setZonePresetCountryId('__custom__');
-                                    setName(zone.name);
-                                    setMemberIds(zone.members.map(member => member.id));
+            <details className="border-b border-slate-100 px-4 py-3 sm:px-5" open={Boolean(editingZoneId)}>
+                <summary className="cursor-pointer text-xs font-semibold text-blue-700">
+                    {editingZoneId ? '编辑业务区域' : '创建业务区域'}
+                </summary>
+                <div className="space-y-3 p-5">
+                    {!editingZoneId && (
+                        <Field label="选择要创建的业务区域">
+                            <AdminSelect
+                                value={zonePresetCountryId}
+                                onChange={event => {
+                                    const countryId = event.target.value;
+                                    setZonePresetCountryId(countryId);
+                                    if (countryId === '__custom__' || !countryId) {
+                                        setName('');
+                                        setMemberIds([]);
+                                        return;
+                                    }
+                                    const country = countries.find(item => item.id === countryId);
+                                    setName(country ? `${country.name}区域` : '');
+                                    setMemberIds(country ? [country.id] : []);
                                 }}
-                                className="rounded p-1 text-blue-600"
-                                aria-label={`编辑区域${zone.name}`}
+                                className={inputClass}
                             >
-                                <Pencil className="h-3.5 w-3.5" />
-                            </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void removeZone(zone.id, zone.name)}
-                                className="rounded p-1 text-rose-600"
-                                aria-label={`删除区域${zone.name}`}
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                            </AdminButton>
+                                <option value="">请选择国家/地区</option>
+                                {countries
+                                    .filter(country => country.enabled)
+                                    .map(country => (
+                                        <option key={country.id} value={country.id}>
+                                            {country.name}（用于该国计税与配送）
+                                        </option>
+                                    ))}
+                                <option value="__custom__">自定义多个国家/地区组合</option>
+                            </AdminSelect>
+                        </Field>
+                    )}
+                    {(editingZoneId || zonePresetCountryId === '__custom__') && (
+                        <Field label="业务区域名称">
+                            <AdminInput
+                                value={name}
+                                onChange={event => setName(event.target.value)}
+                                placeholder="例如：东南亚区域"
+                                className={inputClass}
+                            />
+                        </Field>
+                    )}
+                    {(editingZoneId || zonePresetCountryId === '__custom__') && (
+                        <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                            <p className="px-2 pb-2 text-[11px] font-bold text-slate-600">
+                                选择包含的国家/地区
+                            </p>
+                            <div className="grid gap-1 sm:grid-cols-2">
+                                {countries.map(country => (
+                                    <label
+                                        key={country.id}
+                                        className="flex items-center gap-2 rounded px-2 py-1.5 text-[11px] hover:bg-slate-50"
+                                    >
+                                        <AdminInput
+                                            type="checkbox"
+                                            checked={memberIds.includes(country.id)}
+                                            onChange={event =>
+                                                setMemberIds(previous =>
+                                                    event.target.checked
+                                                        ? [...previous, country.id]
+                                                        : previous.filter(id => id !== country.id),
+                                                )
+                                            }
+                                        />
+                                        <span className="truncate">
+                                            {country.name} ({country.code})
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                            {!countries.length && (
+                                <p className="py-6 text-center text-xs text-slate-400">
+                                    请先在下方添加国家/地区
+                                </p>
+                            )}
                         </div>
-                    </div>
-                ))}
-                {!zones.length && (
-                    <div className="p-8 text-center text-xs text-slate-400">尚未创建业务区域</div>
-                )}
-            </div>
-            <div className="space-y-3 border-t border-slate-100 p-5">
-                <div>
-                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                        添加国家/地区
-                        <FeatureHelpButton
-                            topic="settings.store-profile"
-                            title="添加国家/地区"
-                            description={'常用国家直接选择，代码和名称会自动填写。'}
-                        />
-                    </h3>
-                </div>
-                <Field label={editingCountryId ? '正在编辑' : '选择国家/地区'}>
-                    <AdminSelect
-                        value={countryPresetCode}
-                        onChange={event => {
-                            const code = event.target.value;
-                            setCountryPresetCode(code);
-                            if (code === '__custom__' || !code) {
-                                setCountryCode('');
-                                setCountryName('');
-                                return;
-                            }
-                            const preset = COUNTRY_PRESETS.find(item => item.code === code);
-                            setCountryCode(preset?.code ?? '');
-                            setCountryName(preset?.name ?? '');
-                        }}
-                        disabled={Boolean(editingCountryId)}
-                        className={inputClass}
-                    >
-                        <option value="">请选择要添加的国家/地区</option>
-                        {COUNTRY_PRESETS.map(preset => {
-                            const exists = countries.some(country => country.code === preset.code);
-                            return (
-                                <option key={preset.code} value={preset.code} disabled={exists}>
-                                    {preset.name}（{preset.code}）{exists ? ' · 已添加' : ''}
-                                </option>
-                            );
-                        })}
-                        <option value="__custom__">其他国家/地区（自定义）</option>
-                    </AdminSelect>
-                </Field>
-                {(editingCountryId || countryPresetCode === '__custom__') && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                        <Field label="两位国家代码">
-                            <AdminInput
-                                value={countryCode}
-                                onChange={event => setCountryCode(event.target.value)}
-                                placeholder="例如：NZ"
-                                maxLength={2}
-                                className={inputClass}
-                            />
-                        </Field>
-                        <Field label="中文显示名称">
-                            <AdminInput
-                                value={countryName}
-                                onChange={event => setCountryName(event.target.value)}
-                                placeholder="例如：新西兰"
-                                className={inputClass}
-                            />
-                        </Field>
-                    </div>
-                )}
-                {!editingCountryId && countryPresetCode && countryPresetCode !== '__custom__' && (
-                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                        将添加：{countryName}（{countryCode}）
-                    </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                    <label className="flex items-center gap-2 text-xs text-slate-600">
-                        <AdminInput
-                            type="checkbox"
-                            checked={countryEnabled}
-                            onChange={event => setCountryEnabled(event.target.checked)}
-                        />
-                        启用
-                    </label>
+                    )}
+                    {!editingZoneId && zonePresetCountryId && zonePresetCountryId !== '__custom__' && (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                            将创建“{name}”，包含{' '}
+                            {countries.find(country => country.id === zonePresetCountryId)?.name}。
+                        </p>
+                    )}
                     <AdminButton
                         type="button"
-                        disabled={busy || !countryCode || !countryName}
-                        onClick={() => void submitCountry()}
-                        className={secondaryButton}
+                        onClick={() => void submit()}
+                        disabled={busy || !name.trim() || memberIds.length === 0}
+                        className={primaryButton}
                     >
-                        {editingCountryId ? '保存国家/地区' : '新增国家/地区'}
+                        {editingZoneId ? '保存业务区域' : '创建业务区域'}
                     </AdminButton>
-                    {editingCountryId && (
+                    {editingZoneId && (
                         <AdminButton
                             type="button"
                             onClick={() => {
-                                setEditingCountryId('');
-                                setCountryPresetCode('');
-                                setCountryCode('');
-                                setCountryName('');
-                                setCountryEnabled(true);
+                                setEditingZoneId('');
+                                setZonePresetCountryId('');
+                                setName('');
+                                setMemberIds([]);
                             }}
                             className={secondaryButton}
                         >
-                            取消
+                            取消编辑
                         </AdminButton>
                     )}
                 </div>
-                <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
-                    {countries.map(country => (
-                        <div
-                            key={country.id}
-                            className="flex items-center justify-between gap-2 p-2.5 text-[10px]"
-                        >
-                            <span className="truncate">
-                                {country.name} ({country.code})
-                            </span>
-                            <div className="flex items-center gap-1">
+            </details>
+            <div
+                className="admin-comparison-scroll overflow-x-auto border-t border-slate-100"
+                role="region"
+                aria-label="业务区域"
+                tabIndex={0}
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整业务区域</p>
+                <table className="admin-compact-table w-full min-w-[760px] text-left text-xs">
+                    <thead>
+                        <tr>
+                            {['区域名称', '包含的国家/地区', '操作'].map(label => (
+                                <th key={label}>{label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {zones.map(zone => (
+                            <tr key={zone.id}>
+                                <td className="font-semibold">{zone.name}</td>
+                                <td
+                                    className="max-w-[32rem] truncate"
+                                    title={zone.members.map(member => member.name).join('、') || '尚无成员'}
+                                >
+                                    {zone.members.map(member => member.name).join('、') || '尚无成员'}
+                                </td>
+                                <td>
+                                    <div className="flex items-center gap-2">
+                                        <AdminButton
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingZoneId(zone.id);
+                                                setZonePresetCountryId('__custom__');
+                                                setName(zone.name);
+                                                setMemberIds(zone.members.map(member => member.id));
+                                            }}
+                                            className="rounded p-1 text-blue-600"
+                                            aria-label={`编辑区域${zone.name}`}
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </AdminButton>
+                                        <AdminButton
+                                            type="button"
+                                            onClick={() => void removeZone(zone.id, zone.name)}
+                                            className="rounded p-1 text-rose-600"
+                                            aria-label={`删除区域${zone.name}`}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </AdminButton>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {!zones.length && <div className="p-8 text-center text-xs text-slate-400">尚未创建业务区域</div>}
+            <div className="border-t border-slate-100 p-4 sm:p-5">
+                <details
+                    className="rounded-lg border border-slate-200 p-3 mb-4"
+                    open={Boolean(editingCountryId)}
+                >
+                    <summary className="cursor-pointer text-xs font-semibold text-blue-700">
+                        {editingCountryId ? '编辑国家/地区' : '新增国家/地区'}
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                        <div>
+                            <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                                添加国家/地区
+                                <FeatureHelpButton
+                                    topic="settings.store-profile"
+                                    title="添加国家/地区"
+                                    description={'常用国家直接选择，代码和名称会自动填写。'}
+                                />
+                            </h3>
+                        </div>
+                        <Field label={editingCountryId ? '正在编辑' : '选择国家/地区'}>
+                            <AdminSelect
+                                value={countryPresetCode}
+                                onChange={event => {
+                                    const code = event.target.value;
+                                    setCountryPresetCode(code);
+                                    if (code === '__custom__' || !code) {
+                                        setCountryCode('');
+                                        setCountryName('');
+                                        return;
+                                    }
+                                    const preset = COUNTRY_PRESETS.find(item => item.code === code);
+                                    setCountryCode(preset?.code ?? '');
+                                    setCountryName(preset?.name ?? '');
+                                }}
+                                disabled={Boolean(editingCountryId)}
+                                className={inputClass}
+                            >
+                                <option value="">请选择要添加的国家/地区</option>
+                                {COUNTRY_PRESETS.map(preset => {
+                                    const exists = countries.some(country => country.code === preset.code);
+                                    return (
+                                        <option key={preset.code} value={preset.code} disabled={exists}>
+                                            {preset.name}（{preset.code}）{exists ? ' · 已添加' : ''}
+                                        </option>
+                                    );
+                                })}
+                                <option value="__custom__">其他国家/地区（自定义）</option>
+                            </AdminSelect>
+                        </Field>
+                        {(editingCountryId || countryPresetCode === '__custom__') && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                <Field label="两位国家代码">
+                                    <AdminInput
+                                        value={countryCode}
+                                        onChange={event => setCountryCode(event.target.value)}
+                                        placeholder="例如：NZ"
+                                        maxLength={2}
+                                        className={inputClass}
+                                    />
+                                </Field>
+                                <Field label="中文显示名称">
+                                    <AdminInput
+                                        value={countryName}
+                                        onChange={event => setCountryName(event.target.value)}
+                                        placeholder="例如：新西兰"
+                                        className={inputClass}
+                                    />
+                                </Field>
+                            </div>
+                        )}
+                        {!editingCountryId && countryPresetCode && countryPresetCode !== '__custom__' && (
+                            <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                                将添加：{countryName}（{countryCode}）
+                            </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
                                 <AdminInput
                                     type="checkbox"
-                                    checked={country.enabled}
-                                    onChange={event => void toggleCountry(country.id, event.target.checked)}
-                                    aria-label={`${country.name}启用状态`}
+                                    checked={countryEnabled}
+                                    onChange={event => setCountryEnabled(event.target.checked)}
                                 />
+                                启用
+                            </label>
+                            <AdminButton
+                                type="button"
+                                disabled={busy || !countryCode || !countryName}
+                                onClick={() => void submitCountry()}
+                                className={secondaryButton}
+                            >
+                                {editingCountryId ? '保存国家/地区' : '新增国家/地区'}
+                            </AdminButton>
+                            {editingCountryId && (
                                 <AdminButton
                                     type="button"
                                     onClick={() => {
-                                        setEditingCountryId(country.id);
-                                        setCountryPresetCode(
-                                            COUNTRY_PRESETS.some(preset => preset.code === country.code)
-                                                ? country.code
-                                                : '__custom__',
-                                        );
-                                        setCountryCode(country.code);
-                                        setCountryName(country.name);
-                                        setCountryEnabled(country.enabled);
+                                        setEditingCountryId('');
+                                        setCountryPresetCode('');
+                                        setCountryCode('');
+                                        setCountryName('');
+                                        setCountryEnabled(true);
                                     }}
-                                    className="rounded p-1 text-blue-600"
-                                    aria-label={`编辑${country.name}`}
+                                    className={secondaryButton}
                                 >
-                                    <Pencil className="h-3 w-3" />
+                                    取消
                                 </AdminButton>
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => void removeCountry(country.id, country.name)}
-                                    className="rounded p-1 text-rose-600"
-                                    aria-label={`删除${country.name}`}
-                                >
-                                    <Trash2 className="h-3 w-3" />
-                                </AdminButton>
-                            </div>
+                            )}
                         </div>
-                    ))}
+                    </div>
+                </details>
+                <div
+                    className="admin-comparison-scroll overflow-x-auto rounded-lg border border-slate-200"
+                    role="region"
+                    aria-label="国家与地区目录"
+                    tabIndex={0}
+                >
+                    <p className="admin-mobile-table-hint">左右滑动查看完整国家与地区</p>
+                    <table className="admin-compact-table w-full min-w-[680px] text-left text-xs">
+                        <thead>
+                            <tr>
+                                {['国家/地区名称', '国家代码', '启用状态', '操作'].map(label => (
+                                    <th key={label}>{label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {countries.map(country => (
+                                <tr key={country.id}>
+                                    <td className="font-semibold">{country.name}</td>
+                                    <td className="font-mono">{country.code}</td>
+                                    <td>
+                                        <label className="inline-flex items-center gap-2">
+                                            <AdminInput
+                                                type="checkbox"
+                                                checked={country.enabled}
+                                                onChange={event =>
+                                                    void toggleCountry(country.id, event.target.checked)
+                                                }
+                                                aria-label={`${country.name}启用状态`}
+                                            />
+                                            {country.enabled ? '已启用' : '已停用'}
+                                        </label>
+                                    </td>
+                                    <td>
+                                        <div className="flex items-center gap-2">
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditingCountryId(country.id);
+                                                    setCountryPresetCode(
+                                                        COUNTRY_PRESETS.some(
+                                                            preset => preset.code === country.code,
+                                                        )
+                                                            ? country.code
+                                                            : '__custom__',
+                                                    );
+                                                    setCountryCode(country.code);
+                                                    setCountryName(country.name);
+                                                    setCountryEnabled(country.enabled);
+                                                }}
+                                                className="rounded p-1 text-blue-600"
+                                                aria-label={`编辑${country.name}`}
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                            </AdminButton>
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => void removeCountry(country.id, country.name)}
+                                                className="rounded p-1 text-rose-600"
+                                                aria-label={`删除${country.name}`}
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </AdminButton>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>

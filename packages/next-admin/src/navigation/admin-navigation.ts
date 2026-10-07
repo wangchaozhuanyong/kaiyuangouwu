@@ -337,6 +337,7 @@ export function standalonePageScopeAllows(path: string, platformContext: boolean
     )
         return platformContext;
     if (
+        (page.sourcePath === '/settings/system-ops' && page.key === 'telegram') ||
         page.sourcePath === '/settings/usdt-payments' ||
         page.sourcePath === '/settings/governance-risk' ||
         page.sourcePath === '/settings/data-management'

@@ -278,8 +278,10 @@ export function StorefrontContentModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                <div
+                    className={`mx-auto flex w-full ${tab === 'ANNOUNCEMENTS' ? 'max-w-none' : 'max-w-[1600px]'} flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
+                >
+                    <div className={tab === 'ANNOUNCEMENTS' ? 'admin-page-title-line' : undefined}>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             {standalonePage?.title ?? '店铺内容与页面'}
                             <FeatureHelpButton
@@ -288,6 +290,9 @@ export function StorefrontContentModule() {
                                 description={'法律客服、登录视觉、导航、公告和推广落地页集中管理'}
                             />
                         </h1>
+                        {tab === 'ANNOUNCEMENTS' && (
+                            <p className="text-xs text-slate-500">全部店铺的系统公告与展示排期</p>
+                        )}
                     </div>
                     <AdminButton
                         refreshPage
@@ -350,7 +355,9 @@ export function StorefrontContentModule() {
                 </nav>
             )}
 
-            <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main
+                className={`mx-auto w-full ${tab === 'ANNOUNCEMENTS' ? 'max-w-none' : 'max-w-[1600px]'} flex-1 space-y-4 overflow-y-auto p-5 sm:p-8`}
+            >
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -602,8 +609,8 @@ function AnnouncementList({
     );
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-100 p-4">
-                <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+                <div className="admin-section-title-line">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         首页公告
                         <FeatureHelpButton
@@ -614,6 +621,7 @@ function AnnouncementList({
                             }
                         />
                     </h2>
+                    <p className="text-xs text-slate-500">{sorted.length} 条公告</p>
                 </div>
                 <AdminButton
                     type="button"
@@ -624,64 +632,119 @@ function AnnouncementList({
                     新建公告
                 </AdminButton>
             </div>
-            {sorted.length ? (
-                <div className="divide-y divide-slate-100">
-                    {sorted.map(item => (
-                        <article
-                            key={item.id}
-                            className="flex flex-col gap-3 p-4 hover:bg-slate-50 sm:flex-row sm:items-start"
-                        >
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <h3 className="text-xs font-bold text-slate-900">{item.titleZh}</h3>
-                                    <span
-                                        className={`rounded px-2 py-0.5 text-[9px] font-bold ${item.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+            <div
+                className="admin-comparison-scroll"
+                role="region"
+                aria-label="首页公告，可横向滚动"
+                tabIndex={0}
+            >
+                <table className="admin-compact-table w-full min-w-[1480px] text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                            {[
+                                '标题',
+                                '状态',
+                                '优先级',
+                                '范围',
+                                '正文',
+                                '更新时间',
+                                '上线时间',
+                                '下线时间',
+                                '操作',
+                            ].map(label => (
+                                <th key={label} scope="col" className="whitespace-nowrap px-4 py-3">
+                                    {label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {sorted.map(item => {
+                            const targetScope =
+                                item.targetMode === 'ALL'
+                                    ? '全部店铺'
+                                    : item.channels.length
+                                      ? item.channels
+                                            .map(channel => getChannelDisplayName(channel, 'zh_Hans'))
+                                            .join('、')
+                                      : '指定店铺未找到';
+                            return (
+                                <tr key={item.id} className="hover:bg-slate-50">
+                                    <td
+                                        data-label="标题"
+                                        className="max-w-56 px-4 py-2 font-bold text-slate-900"
                                     >
-                                        {item.enabled ? '已启用' : '已停用'}
-                                    </span>
-                                    <span className="rounded bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">
-                                        优先级 {item.priority}
-                                    </span>
-                                    <span className="rounded bg-violet-50 px-2 py-0.5 text-[9px] font-bold text-violet-700">
-                                        {item.targetMode === 'ALL'
-                                            ? '全部店铺'
-                                            : item.channels.length
-                                              ? item.channels
-                                                    .map(channel => getChannelDisplayName(channel, 'zh_Hans'))
-                                                    .join('、')
-                                              : '指定店铺未找到'}
-                                    </span>
-                                </div>
-                                <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
-                                    {item.contentZh}
-                                </p>
-                                <div className="mt-2 flex flex-wrap gap-3 font-mono text-[9px] text-slate-400">
-                                    <span>更新 {formatDate(item.updatedAt)}</span>
-                                    {item.startsAt && <span>上线 {formatDate(item.startsAt)}</span>}
-                                    {item.endsAt && <span>下线 {formatDate(item.endsAt)}</span>}
-                                </div>
-                            </div>
-                            <div className="flex shrink-0 gap-2">
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => onEdit(item)}
-                                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-700"
-                                >
-                                    编辑
-                                </AdminButton>
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => onDelete(item)}
-                                    className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
-                                    aria-label="删除公告"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </AdminButton>
-                            </div>
-                        </article>
-                    ))}
-                </div>
-            ) : (
+                                        <span className="block truncate" title={item.titleZh}>
+                                            {item.titleZh}
+                                        </span>
+                                    </td>
+                                    <td data-label="状态" className="whitespace-nowrap px-4 py-2">
+                                        <span
+                                            className={`rounded px-2 py-0.5 font-bold ${item.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+                                        >
+                                            {item.enabled ? '已启用' : '已停用'}
+                                        </span>
+                                    </td>
+                                    <td
+                                        data-label="优先级"
+                                        className="whitespace-nowrap px-4 py-2 font-mono text-slate-700"
+                                    >
+                                        {item.priority}
+                                    </td>
+                                    <td data-label="范围" className="max-w-56 px-4 py-2 text-slate-600">
+                                        <span className="block truncate" title={targetScope}>
+                                            {targetScope}
+                                        </span>
+                                    </td>
+                                    <td data-label="正文" className="max-w-64 px-4 py-2 text-slate-500">
+                                        <span className="block truncate" title={item.contentZh}>
+                                            {item.contentZh}
+                                        </span>
+                                    </td>
+                                    <td
+                                        data-label="更新时间"
+                                        className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                    >
+                                        {formatDate(item.updatedAt)}
+                                    </td>
+                                    <td
+                                        data-label="上线时间"
+                                        className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                    >
+                                        {item.startsAt ? formatDate(item.startsAt) : '-'}
+                                    </td>
+                                    <td
+                                        data-label="下线时间"
+                                        className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                    >
+                                        {item.endsAt ? formatDate(item.endsAt) : '-'}
+                                    </td>
+                                    <td data-label="操作" className="whitespace-nowrap px-4 py-2">
+                                        <div className="flex items-center gap-2">
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => onEdit(item)}
+                                                className="rounded-lg bg-slate-100 px-3 py-1.5 font-bold text-slate-700"
+                                            >
+                                                编辑
+                                            </AdminButton>
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => onDelete(item)}
+                                                className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                                                aria-label="删除公告"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </AdminButton>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            {!sorted.length && (
                 <EmptyState
                     icon={Megaphone}
                     title="还没有首页公告"

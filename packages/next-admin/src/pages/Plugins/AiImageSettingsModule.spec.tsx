@@ -155,6 +155,44 @@ describe('AI 图片工坊运营配置', () => {
         expect(modelDrawer?.textContent).toContain('服务商模型 ID');
         expect(modelDrawer?.textContent).toContain('保存模型');
     });
+    it('没有任务输出时，空态在横滚区域外保持可见', async () => {
+        const job: ImageGenerationAdminResult['imageGenerationJobs']['items'][number] = {
+            id: 'empty-job',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            state: 'PENDING',
+            modelCodeSnapshot: 'test',
+            modelNameSnapshot: 'Test',
+            officialModelIdSnapshot: 'test',
+            quantity: 1,
+            unitPriceSnapshot: 125,
+            reservedAmount: 125,
+            capturedAmount: 0,
+            releasedAmount: 0,
+            currencyCode: 'USD',
+            termsVersion: 'test',
+            errorMessage: null,
+            completedAt: null,
+            outputs: [],
+        };
+        await renderModule([job]);
+        const click = async (label: string) => {
+            const button = Array.from(document.querySelectorAll('button')).find(
+                element => element.textContent?.trim() === label,
+            );
+            if (!button) throw new Error('Missing button: ' + label);
+            await act(async () => button.click());
+        };
+        await click('任务与售后 1');
+        await click('查看输出 0');
+
+        const dialog = document.querySelector('[role="dialog"][aria-label="任务 empty-job 的输出明细"]');
+        const scrollRegion = dialog?.querySelector('[aria-label="任务输出，可横向滚动"]');
+        expect(dialog?.textContent).toContain('当前任务还没有输出记录');
+        expect(scrollRegion?.textContent).not.toContain('当前任务还没有输出记录');
+        expect(scrollRegion?.querySelectorAll('tbody tr')).toHaveLength(0);
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
     it.each(['FREE', 'PAID'])('确认和反馈使用实际退款类型：%s', async billingMode => {
         const job = {
             id: 'job-1',

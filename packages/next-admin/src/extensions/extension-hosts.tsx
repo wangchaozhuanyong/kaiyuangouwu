@@ -189,10 +189,10 @@ export function NextAdminDashboardWidgets() {
                         key={widget.id}
                         className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-xs"
                     >
-                        <div className="mb-4">
+                        <div className="admin-section-title-line mb-4">
                             <h2 className="text-sm font-bold text-slate-900">{widget.title}</h2>
                             {widget.description && (
-                                <p className="mt-1 text-xs text-slate-500">{widget.description}</p>
+                                <p className="text-xs text-slate-500">{widget.description}</p>
                             )}
                         </div>
                         <ExtensionBoundary extensionId={widget.id}>

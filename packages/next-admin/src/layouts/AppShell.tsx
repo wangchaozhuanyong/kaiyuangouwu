@@ -331,6 +331,9 @@ export function AppShell() {
         getNextAdminExtensionRoute(location.pathname)?.permissions ??
         getRequiredPermissionsForAdminPath(location.pathname);
     const currentRouteRequiresPermission = currentRoutePermissions.length > 0;
+    const currentRouteRequiresPlatformContext =
+        !standalonePageScopeAllows(location.pathname, isPlatformContext) &&
+        hasAnyAdminPermission(activePermissions, currentRoutePermissions);
     const canAccessCurrentRoute = canAccessPath(location.pathname);
     const hasPermissionSnapshot = hasAppShellPermissionSnapshot(channelData);
     const channelControlsLoading = !channelData && appShellLoading;
@@ -922,10 +925,10 @@ export function AppShell() {
                         <AdminField
                             className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600"
                             label={
-                                <>
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                                     <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
                                     <span className="sr-only lg:not-sr-only">当前店铺</span>
-                                </>
+                                </span>
                             }
                         >
                             {' '}
@@ -1337,9 +1340,19 @@ export function AppShell() {
                         <div className="flex h-full items-center justify-center overflow-y-auto p-6">
                             <section className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
                                 <ShieldCheck className="mx-auto h-10 w-10 text-amber-500" />
-                                <h1 className="mt-4 text-base font-bold text-slate-900">当前账号无权访问</h1>
+                                <h1 className="mt-4 text-base font-bold text-slate-900">
+                                    {currentRouteRequiresPlatformContext
+                                        ? displayLanguage === 'en'
+                                            ? 'Switch to the platform management center'
+                                            : '请切换到平台管理中心'
+                                        : '当前账号无权访问'}
+                                </h1>
                                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                                    当前账号在所选店铺中缺少访问该页面所需的权限。
+                                    {currentRouteRequiresPlatformContext
+                                        ? displayLanguage === 'en'
+                                            ? `This feature is managed across all stores. Select “${getChannelDisplayName('__default_channel__', displayLanguage)}” in the store selector at the top, then open this page again.`
+                                            : `此功能由平台统一管理。请在顶部“当前店铺”中选择“${getChannelDisplayName('__default_channel__', displayLanguage)}”，再打开此页面。`
+                                        : '当前账号在所选店铺中缺少访问该页面所需的权限。'}
                                 </p>
                                 <AdminButton
                                     type="button"

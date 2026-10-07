@@ -12,6 +12,7 @@ import { MAILBOX_INTEGRATION_PERMISSIONS, MAILBOX_INTEGRATION_ROLE_CODE } from '
 
 const mocks = vi.hoisted(() => ({
     roleData: null as null | Record<string, unknown>,
+    emptyApiKeys: false,
     createMailboxRole: vi.fn(),
     updateApiKey: vi.fn(),
     confirm: vi.fn(),
@@ -36,21 +37,23 @@ vi.mock('@apollo/client/react', () => ({
                 scheduledTasks: [],
                 settingsStoreFieldDefinitions: [],
                 apiKeys: {
-                    totalItems: 1,
-                    items: [
-                        {
-                            id: 'key-1',
-                            name: 'ID Business Vendure Mailbox',
-                            lookupId: 'lookup-1',
-                            lastUsedAt: null,
-                            owner: null,
-                            user: {
-                                id: 'key-user',
-                                roles: [{ id: 'old-role', code: 'old', description: '旧角色' }],
-                            },
-                            translations: [],
-                        },
-                    ],
+                    totalItems: mocks.emptyApiKeys ? 0 : 1,
+                    items: mocks.emptyApiKeys
+                        ? []
+                        : [
+                              {
+                                  id: 'key-1',
+                                  name: 'ID Business Vendure Mailbox',
+                                  lookupId: 'lookup-1',
+                                  lastUsedAt: null,
+                                  owner: null,
+                                  user: {
+                                      id: 'key-user',
+                                      roles: [{ id: 'old-role', code: 'old', description: '旧角色' }],
+                                  },
+                                  translations: [],
+                              },
+                          ],
                 },
                 activeAdministrator: { id: 'owner', user: { id: 'user', roles: [] } },
             },
@@ -87,6 +90,7 @@ let root: Root;
 
 beforeEach(async () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mocks.emptyApiKeys = false;
     mocks.createMailboxRole
         .mockReset()
         .mockResolvedValue({ data: { createMailboxIntegrationRole: { id: 'mail-role' } } });
@@ -102,10 +106,10 @@ afterEach(async () => {
     container.remove();
 });
 
-async function renderPage() {
+async function renderPage(tab = 'api-keys') {
     await act(async () => {
         root.render(
-            <MemoryRouter initialEntries={['/?tab=api-keys']}>
+            <MemoryRouter initialEntries={[`/?tab=${tab}`]}>
                 <ConfirmDialogContext.Provider value={mocks.confirm}>
                     <SystemOpsModule />
                 </ConfirmDialogContext.Provider>
@@ -121,6 +125,24 @@ async function clickButton(label: string) {
 }
 
 describe('mailbox API key recovery', () => {
+    it.each([
+        ['api-keys', '当前页没有 API 密钥'],
+        ['jobs', '当前条件下没有任务记录'],
+        ['schedules', '服务端没有注册定时任务'],
+    ])('keeps the %s empty state outside the horizontally scrolling table', async (tab, message) => {
+        mocks.emptyApiKeys = true;
+        await renderPage(tab);
+        const emptyMessage = [...container.querySelectorAll('div')].find(
+            element => element.textContent?.trim() === message && !element.children.length,
+        );
+        expect(emptyMessage).toBeDefined();
+        expect(emptyMessage?.closest('.admin-comparison-scroll')).toBeNull();
+        expect(emptyMessage?.closest('table')).toBeNull();
+        expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
+        expect(mocks.updateApiKey).not.toHaveBeenCalled();
+        expect(mocks.createMailboxRole).not.toHaveBeenCalled();
+    });
+
     it('uses the restricted mailbox role endpoint instead of the blocked legacy role endpoint', () => {
         const operation = print(CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION);
         expect(operation).toContain('createMailboxIntegrationRole');
@@ -156,11 +178,34 @@ describe('mailbox API key recovery', () => {
             },
         };
         await renderPage();
+        await clickButton('操作');
         await clickButton('设为邮箱专用密钥');
         expect(mocks.updateApiKey).toHaveBeenCalledWith({
             variables: { input: { id: 'key-1', roleIds: ['mail-role'] } },
             context: { headers: { 'x-vendure-sensitive-action-password': 'test-password' } },
         });
+    });
+
+    it('separates six API metadata fields and opening operations does not mutate the key', async () => {
+        mocks.roleData = {
+            activeChannel: { id: 'shop-a', code: 'shop-a' },
+            roles: { totalItems: 0, items: [] },
+        };
+        await renderPage();
+        expect(Array.from(container.querySelectorAll('thead th')).map(node => node.textContent)).toEqual([
+            '用途名称',
+            '查询编号',
+            '创建者',
+            '最近使用',
+            '当前角色',
+            '操作',
+        ]);
+        expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+        expect(container.querySelectorAll('tbody td')).toHaveLength(6);
+        await clickButton('操作');
+        expect(container.querySelector('[role="dialog"]')?.textContent).toContain('轮转');
+        expect(mocks.updateApiKey).not.toHaveBeenCalled();
+        expect(mocks.confirm).not.toHaveBeenCalled();
     });
 
     it('hides the key action when the role has extra permissions', async () => {
@@ -179,6 +224,7 @@ describe('mailbox API key recovery', () => {
             },
         };
         await renderPage();
+        await clickButton('操作');
         expect(container.textContent).toContain('同名角色的权限或渠道不符合专用要求');
         expect(container.textContent).not.toContain('设为邮箱专用密钥');
         expect(mocks.updateApiKey).not.toHaveBeenCalled();

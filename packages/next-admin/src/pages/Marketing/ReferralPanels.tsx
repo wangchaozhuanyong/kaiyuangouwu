@@ -494,9 +494,11 @@ export function LedgerPanel({
             <TableCard
                 comparison
                 title="钱包审计流水"
+                subtitle="奖励、消费、提款与人工调整"
+                emptyMessage={!items.length ? '当前条件下没有数据' : undefined}
                 description="所有奖励、消费抵扣、退款追缴、提款和人工调整均写入不可变流水"
             >
-                <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
+                <table className="admin-compact-table w-full min-w-[1240px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
                             <Th>时间</Th>
@@ -566,7 +568,6 @@ export function LedgerPanel({
                                 </Td>
                             </tr>
                         ))}
-                        {!items.length && <EmptyRow colSpan={10} />}
                     </tbody>
                 </table>
                 <ReportPagination
@@ -610,10 +611,13 @@ export function WithdrawalsPanel({
     const items = data?.referralWithdrawals.items ?? [];
     return (
         <TableCard
+            comparison
             title="人工提款审批"
+            subtitle="审批与线下打款登记"
+            emptyMessage={!items.length ? '当前条件下没有数据' : undefined}
             description="批准仅代表审核通过；完成线下打款后必须填写外部流水号并标记已打款"
         >
-            <table className="admin-mobile-record-table w-full min-w-[1680px] border-collapse text-left text-xs">
+            <table className="admin-compact-table w-full min-w-[1240px] border-collapse text-left text-xs">
                 <thead>
                     <tr>
                         <Th>申请编号</Th>
@@ -625,7 +629,7 @@ export function WithdrawalsPanel({
                         <Th>申请时间</Th>
                         <Th>状态</Th>
                         <Th>外部流水</Th>
-                        <Th>操作</Th>
+                        <Th sticky>操作</Th>
                     </tr>
                 </thead>
                 <tbody>
@@ -678,7 +682,7 @@ export function WithdrawalsPanel({
                             <Td label="外部流水">
                                 <span className="font-mono text-[10px]">{item.externalReference || '—'}</span>
                             </Td>
-                            <Td label="操作">
+                            <Td label="操作" sticky>
                                 <div className="flex flex-nowrap gap-1 whitespace-nowrap">
                                     {canManage && item.status === 'PENDING' && (
                                         <>
@@ -723,7 +727,6 @@ export function WithdrawalsPanel({
                             </Td>
                         </tr>
                     ))}
-                    {!items.length && <EmptyRow colSpan={10} />}
                 </tbody>
             </table>
             <ReportPagination

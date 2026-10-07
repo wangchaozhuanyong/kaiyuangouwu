@@ -244,107 +244,113 @@ export function PaymentShippingManager({
                                 }
                             />
                         </div>
-                        <div className="divide-y divide-slate-100">
-                            {data.paymentMethods.items.map(item => {
-                                const systemManaged = isSystemManagedUsdtPaymentMethod(item);
-                                const displayName = getLocalizedEntityName(item);
-                                const displayDescription = getLocalizedEntityDescription(item);
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-center justify-between gap-4 p-5"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <strong className="text-xs text-slate-900">
+                        <div
+                            className="admin-comparison-scroll overflow-x-auto"
+                            role="region"
+                            aria-label="平台支付方式"
+                            tabIndex={0}
+                        >
+                            <p className="admin-mobile-table-hint">左右滑动查看完整支付方式</p>
+                            <table className="admin-compact-table w-full min-w-[880px] text-left text-xs">
+                                <thead>
+                                    <tr>
+                                        {['支付方式', '描述', '管理方式', '平台状态', '操作'].map(label => (
+                                            <th key={label}>{label}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.paymentMethods.items.map(item => {
+                                        const systemManaged = isSystemManagedUsdtPaymentMethod(item);
+                                        const displayName = getLocalizedEntityName(item);
+                                        const displayDescription = getLocalizedEntityDescription(item);
+                                        return (
+                                            <tr key={item.id}>
+                                                <td className="font-semibold text-slate-900">
                                                     {displayName}
-                                                </strong>
-                                                {systemManaged && (
-                                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
-                                                        系统管理
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {displayDescription && (
-                                                <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                                    {displayDescription}
-                                                </p>
-                                            )}
-                                            {systemManaged && (
-                                                <p className="mt-1 text-[10px] text-emerald-700">
-                                                    使用下方平台统一收款地址；各店铺独立启停。
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-2">
-                                            {systemManaged ? (
-                                                <span className="text-[10px] font-bold text-slate-500">
-                                                    {canUpdatePayment && (
-                                                        <AdminInput
-                                                            type="checkbox"
-                                                            aria-label="平台 USDT 全局开关"
-                                                            checked={item.enabled}
-                                                            disabled={toggleState.loading}
-                                                            onChange={e =>
-                                                                void changePayment(item.id, e.target.checked)
-                                                            }
-                                                        />
-                                                    )}{' '}
-                                                    {item.enabled ? '平台启用' : '平台停用'}
-                                                </span>
-                                            ) : (
-                                                <>
-                                                    {canUpdatePayment && (
-                                                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                                </td>
+                                                <td
+                                                    className="max-w-96 truncate text-slate-500"
+                                                    title={displayDescription}
+                                                >
+                                                    {displayDescription || '—'}
+                                                </td>
+                                                <td>
+                                                    {systemManaged ? (
+                                                        <span
+                                                            title="使用平台统一收款地址；各店铺独立启停。"
+                                                            className="text-emerald-700"
+                                                        >
+                                                            系统管理
+                                                        </span>
+                                                    ) : (
+                                                        '平台配置'
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <label className="inline-flex items-center gap-2 text-slate-500">
+                                                        {canUpdatePayment && (
                                                             <AdminInput
                                                                 type="checkbox"
+                                                                aria-label={
+                                                                    systemManaged
+                                                                        ? '平台 USDT 全局开关'
+                                                                        : `${displayName}平台启用状态`
+                                                                }
                                                                 checked={item.enabled}
+                                                                disabled={toggleState.loading}
                                                                 onChange={event =>
                                                                     void changePayment(
                                                                         item.id,
                                                                         event.target.checked,
                                                                     )
                                                                 }
-                                                                disabled={toggleState.loading}
                                                             />
-                                                            {item.enabled ? '启用' : '停用'}
-                                                        </label>
-                                                    )}
-                                                    {canUpdatePayment && (
-                                                        <AdminButton
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setEditor({ kind: 'payment', item })
-                                                            }
-                                                            className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                            aria-label={`编辑支付方式${displayName}`}
-                                                        >
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                        </AdminButton>
-                                                    )}
-                                                    {canDeletePayment && (
-                                                        <AdminButton
-                                                            type="button"
-                                                            disabled={deleting}
-                                                            onClick={() =>
-                                                                void removeMethod({ kind: 'payment', item })
-                                                            }
-                                                            className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                            aria-label={`删除支付方式${displayName}`}
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </AdminButton>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {!data.paymentMethods.items.length && (
-                                <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
-                            )}
+                                                        )}
+                                                        {item.enabled ? '平台启用' : '平台停用'}
+                                                    </label>
+                                                </td>
+                                                <td>
+                                                    <div className="flex items-center gap-1">
+                                                        {!systemManaged && canUpdatePayment && (
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setEditor({ kind: 'payment', item })
+                                                                }
+                                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                                aria-label={`编辑支付方式${displayName}`}
+                                                            >
+                                                                <Pencil className="h-3.5 w-3.5" />
+                                                            </AdminButton>
+                                                        )}
+                                                        {!systemManaged && canDeletePayment && (
+                                                            <AdminButton
+                                                                type="button"
+                                                                disabled={deleting}
+                                                                onClick={() =>
+                                                                    void removeMethod({
+                                                                        kind: 'payment',
+                                                                        item,
+                                                                    })
+                                                                }
+                                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                                aria-label={`删除支付方式${displayName}`}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </AdminButton>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
+                        {!data.paymentMethods.items.length && (
+                            <div className="p-8 text-center text-xs text-slate-400">未配置支付方式</div>
+                        )}
                     </section>
                 )}
 
@@ -371,7 +377,10 @@ export function PaymentShippingManager({
                                 </AdminButton>
                             )}
                         </div>
-                        <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3.5">
+                        <details className="border-b border-slate-100 bg-slate-50/80 px-5 py-3">
+                            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                                配送设置与客户端展示指引
+                            </summary>
                             <div className="flex items-start gap-2.5">
                                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                                 <div className="space-y-1 text-xs text-slate-600">
@@ -390,77 +399,104 @@ export function PaymentShippingManager({
                                     </p>
                                 </div>
                             </div>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {data.shippingMethods.items.map(item => {
-                                const displayName = getLocalizedEntityName(item);
-                                const displayDescription = getLocalizedEntityDescription(item);
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-center justify-between gap-4 p-5"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <strong className="text-xs font-bold text-slate-900">
+                        </details>
+                        <div
+                            className="admin-comparison-scroll overflow-x-auto"
+                            role="region"
+                            aria-label="平台配送方式"
+                            tabIndex={0}
+                        >
+                            <p className="admin-mobile-table-hint">左右滑动查看完整配送方式</p>
+                            <table className="admin-compact-table w-full min-w-[1080px] text-left text-xs">
+                                <thead>
+                                    <tr>
+                                        {['配送名称', '描述', '运费规则', '资格检查', '履约方式', '操作'].map(
+                                            label => (
+                                                <th key={label}>{label}</th>
+                                            ),
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.shippingMethods.items.map(item => {
+                                        const displayName = getLocalizedEntityName(item);
+                                        const displayDescription = getLocalizedEntityDescription(item);
+                                        return (
+                                            <tr key={item.id}>
+                                                <td className="font-semibold text-slate-900">
                                                     {displayName}
-                                                </strong>
-                                            </div>
-                                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                                </td>
+                                                <td
+                                                    className="max-w-72 truncate text-slate-500"
+                                                    title={displayDescription}
+                                                >
+                                                    {displayDescription || '—'}
+                                                </td>
+                                                <td
+                                                    className="max-w-80 truncate"
+                                                    title={formatShippingCalculatorSummary(
+                                                        item.calculator,
+                                                        data.activeChannel.defaultCurrencyCode,
+                                                    )}
+                                                >
                                                     {formatShippingCalculatorSummary(
                                                         item.calculator,
                                                         data.activeChannel.defaultCurrencyCode,
                                                     )}
-                                                </span>
-                                                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
+                                                </td>
+                                                <td
+                                                    className="max-w-72 truncate"
+                                                    title={formatShippingCheckerSummary(item.checker)}
+                                                >
                                                     {formatShippingCheckerSummary(item.checker)}
-                                                </span>
-                                                <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+                                                </td>
+                                                <td>
                                                     {formatFulfillmentHandlerSummary(
                                                         item.fulfillmentHandlerCode,
                                                         data.fulfillmentHandlers,
                                                     )}
-                                                </span>
-                                            </div>
-                                            {displayDescription && (
-                                                <p className="mt-1.5 line-clamp-2 text-[11px] text-slate-500">
-                                                    {displayDescription}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-1">
-                                            {canUpdateShipping && (
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => setEditor({ kind: 'shipping', item })}
-                                                    className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                    aria-label={`编辑配送方式${displayName}`}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </AdminButton>
-                                            )}
-                                            {canDeleteShipping && (
-                                                <AdminButton
-                                                    type="button"
-                                                    disabled={deleting}
-                                                    onClick={() =>
-                                                        void removeMethod({ kind: 'shipping', item })
-                                                    }
-                                                    className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                    aria-label={`删除配送方式${displayName}`}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </AdminButton>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {!data.shippingMethods.items.length && (
-                                <div className="p-10 text-center text-xs text-slate-400">未配置配送方式</div>
-                            )}
+                                                </td>
+                                                <td>
+                                                    <div className="flex items-center gap-1">
+                                                        {canUpdateShipping && (
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setEditor({ kind: 'shipping', item })
+                                                                }
+                                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                                aria-label={`编辑配送方式${displayName}`}
+                                                            >
+                                                                <Pencil className="h-3.5 w-3.5" />
+                                                            </AdminButton>
+                                                        )}
+                                                        {canDeleteShipping && (
+                                                            <AdminButton
+                                                                type="button"
+                                                                disabled={deleting}
+                                                                onClick={() =>
+                                                                    void removeMethod({
+                                                                        kind: 'shipping',
+                                                                        item,
+                                                                    })
+                                                                }
+                                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                                aria-label={`删除配送方式${displayName}`}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </AdminButton>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
+                        {!data.shippingMethods.items.length && (
+                            <div className="p-8 text-center text-xs text-slate-400">未配置配送方式</div>
+                        )}
                     </section>
                 )}
                 {section === 'shipping' && commerceMode === 'DIGITAL_ONLY' && (
@@ -577,36 +613,51 @@ function StorePaymentSwitches({
                     支付方式未获取，请刷新重试
                 </p>
             )}
-            {query.data?.myStorePaymentOptions?.map(item => (
-                <div
-                    key={item.id}
-                    className="mt-4 flex items-center justify-between gap-4 border-t border-slate-100 pt-4"
-                >
-                    <div>
-                        <strong className="text-xs">{item.name}</strong>
-                        <p className="mt-1 text-xs text-slate-500">{item.description}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                            {!item.platformEnabled
-                                ? '平台已停用'
-                                : item.effectiveEnabled
-                                  ? '本店已开启'
-                                  : '本店未开启'}
-                        </p>
-                    </div>
-                    {canUpdate && (
-                        <label className="flex shrink-0 items-center gap-2 text-xs">
-                            <AdminInput
-                                type="checkbox"
-                                aria-label={`本店${item.name}开关`}
-                                checked={item.enabled}
-                                disabled={saving.loading || (!item.platformEnabled && !item.enabled)}
-                                onChange={e => void toggle(item, e.target.checked)}
-                            />
-                            本店开关
-                        </label>
-                    )}
-                </div>
-            ))}
+            <div
+                className="admin-comparison-scroll mt-4 overflow-x-auto"
+                role="region"
+                aria-label="本店支付方式"
+                tabIndex={0}
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整支付方式</p>
+                <table className="admin-compact-table w-full min-w-[980px] text-left text-xs">
+                    <thead>
+                        <tr>
+                            {['支付方式', '描述', '平台状态', '本店状态', '有效状态', '本店开关'].map(
+                                label => (
+                                    <th key={label}>{label}</th>
+                                ),
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {query.data?.myStorePaymentOptions?.map(item => (
+                            <tr key={item.id}>
+                                <td className="font-semibold">{item.name}</td>
+                                <td className="max-w-96 truncate text-slate-500" title={item.description}>
+                                    {item.description || '—'}
+                                </td>
+                                <td>{item.platformEnabled ? '平台启用' : '平台已停用'}</td>
+                                <td>{item.enabled ? '本店已开启' : '本店未开启'}</td>
+                                <td>{item.effectiveEnabled ? '已启用' : '未启用'}</td>
+                                <td>
+                                    {canUpdate && (
+                                        <AdminInput
+                                            type="checkbox"
+                                            aria-label={`本店${item.name}开关`}
+                                            checked={item.enabled}
+                                            disabled={
+                                                saving.loading || (!item.platformEnabled && !item.enabled)
+                                            }
+                                            onChange={event => void toggle(item, event.target.checked)}
+                                        />
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
             {query.data?.myStorePaymentOptions?.length === 0 && (
                 <p className="mt-4 text-xs text-slate-500">平台尚未配置支付方式</p>
             )}

@@ -352,8 +352,8 @@ export function TwoFactorCodesModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" aria-hidden="true" />
                             2FA 动态码
@@ -365,6 +365,7 @@ export function TwoFactorCodesModule() {
                                 }
                             />
                         </h1>
+                        <p className="text-xs text-slate-500">当前管理员跨店铺共用</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <AdminButton
@@ -404,7 +405,7 @@ export function TwoFactorCodesModule() {
                 </div>
             </header>
 
-            <main className="mx-auto w-full max-w-[1400px] flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -689,7 +690,7 @@ function AccountList({
             aria-labelledby="account-list-title"
         >
             <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
+                <div className="admin-section-title-line">
                     <div>
                         <h2
                             id="account-list-title"
@@ -743,112 +744,70 @@ function AccountList({
                 </div>
             </div>
 
-            {!accounts.length ? (
-                <div className="flex min-h-64 flex-col items-center justify-center p-8 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                        <KeyRound className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <h3 className="mt-4 text-sm font-bold text-slate-800">还没有保存 2FA 账号</h3>
-                    <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">
-                        可以先在上方单独查询验证码，确认密钥正确后再保存；也可以批量导入。
-                    </p>
-                </div>
-            ) : !filteredAccounts.length ? (
-                <div className="flex min-h-48 flex-col items-center justify-center p-8 text-center">
-                    <Search className="h-7 w-7 text-slate-300" aria-hidden="true" />
-                    <h3 className="mt-3 text-sm font-bold text-slate-700">没有匹配的项目</h3>
-                    <AdminButton
-                        type="button"
-                        onClick={() => setSearch('')}
-                        className="mt-3 text-xs font-bold text-blue-600"
-                    >
-                        清除搜索条件
-                    </AdminButton>
-                </div>
-            ) : (
-                <>
-                    <div className="hidden overflow-x-auto md:block">
-                        <table className="w-full min-w-[920px] text-left text-xs">
-                            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                <tr>
-                                    <th className="px-5 py-3">项目名称</th>
-                                    <th className="px-5 py-3">动态验证码</th>
-                                    <th className="px-5 py-3">加密密钥</th>
-                                    <th className="px-5 py-3">最近使用</th>
-                                    <th className="px-5 py-3 text-right">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredAccounts.map(account => (
-                                    <tr key={account.id} className="hover:bg-slate-50/80">
-                                        <td className="px-5 py-4 font-bold text-slate-800">
-                                            {account.projectName}
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <div
-                                                className="font-mono text-lg font-bold tracking-[0.12em] text-slate-950"
-                                                aria-live="polite"
-                                            >
-                                                {codes[account.id]
-                                                    ? formatTotpCode(codes[account.id])
-                                                    : '••• •••'}
-                                            </div>
-                                            <Countdown secondsRemaining={secondsRemaining} compact />
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <SecretValue
-                                                account={account}
-                                                revealed={revealedIds.has(account.id)}
-                                                onToggle={() => toggleSecret(account.id)}
-                                            />
-                                        </td>
-                                        <td className="px-5 py-4 text-slate-500">
-                                            {formatLastUsed(account.lastUsedAt)}
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex justify-end gap-1">
-                                                <IconButton
-                                                    label="复制验证码"
-                                                    disabled={busy || !codes[account.id]}
-                                                    onClick={() => onCopy(account)}
-                                                >
-                                                    <Copy className="h-4 w-4" />
-                                                </IconButton>
-                                                <IconButton
-                                                    label="编辑账号"
-                                                    disabled={busy}
-                                                    onClick={() => onEdit(account)}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </IconButton>
-                                                <IconButton
-                                                    label="删除账号"
-                                                    danger
-                                                    disabled={busy}
-                                                    onClick={() => onDelete(account)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </IconButton>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="divide-y divide-slate-100 md:hidden">
+            <div
+                className="admin-comparison-scroll"
+                role="region"
+                aria-label="2FA 账号列表，可横向滚动"
+                tabIndex={0}
+            >
+                <table className="admin-compact-table w-full min-w-[980px] text-left text-xs">
+                    <thead className="bg-slate-50 font-bold text-slate-500">
+                        <tr>
+                            {['项目名称', '动态验证码', '剩余时间', '加密密钥', '最近使用', '操作'].map(
+                                label => (
+                                    <th key={label} scope="col" className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                    </th>
+                                ),
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
                         {filteredAccounts.map(account => (
-                            <article key={account.id} className="space-y-4 p-5">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-900">
-                                            {account.projectName}
-                                        </h3>
-                                        <p className="mt-1 text-[10px] text-slate-400">
-                                            {formatLastUsed(account.lastUsedAt)}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-1">
+                            <tr key={account.id} className="hover:bg-slate-50/80">
+                                <td
+                                    data-label="项目名称"
+                                    className="max-w-60 px-4 py-2 font-bold text-slate-800"
+                                >
+                                    <span className="block truncate" title={account.projectName}>
+                                        {account.projectName}
+                                    </span>
+                                </td>
+                                <td
+                                    data-label="动态验证码"
+                                    className="whitespace-nowrap px-4 py-2 font-mono text-lg font-bold tracking-[0.12em] text-slate-950"
+                                    aria-live="polite"
+                                >
+                                    {codes[account.id] ? formatTotpCode(codes[account.id]) : '••• •••'}
+                                </td>
+                                <td
+                                    data-label="剩余时间"
+                                    className={`whitespace-nowrap px-4 py-2 font-mono ${secondsRemaining <= 5 ? 'text-rose-600' : 'text-slate-500'}`}
+                                >
+                                    {secondsRemaining} 秒
+                                </td>
+                                <td data-label="加密密钥" className="whitespace-nowrap px-4 py-2">
+                                    <SecretValue
+                                        account={account}
+                                        revealed={revealedIds.has(account.id)}
+                                        onToggle={() => toggleSecret(account.id)}
+                                    />
+                                </td>
+                                <td
+                                    data-label="最近使用"
+                                    className="whitespace-nowrap px-4 py-2 text-slate-500"
+                                >
+                                    {formatLastUsed(account.lastUsedAt)}
+                                </td>
+                                <td data-label="操作" className="whitespace-nowrap px-4 py-2">
+                                    <div className="flex justify-end gap-1">
+                                        <IconButton
+                                            label="复制验证码"
+                                            disabled={busy || !codes[account.id]}
+                                            onClick={() => onCopy(account)}
+                                        >
+                                            <Copy className="h-4 w-4" />
+                                        </IconButton>
                                         <IconButton
                                             label="编辑账号"
                                             disabled={busy}
@@ -865,36 +824,31 @@ function AccountList({
                                             <Trash2 className="h-4 w-4" />
                                         </IconButton>
                                     </div>
-                                </div>
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => onCopy(account)}
-                                    disabled={busy || !codes[account.id]}
-                                    className="w-full rounded-xl border border-blue-200 bg-blue-50 p-4 text-left disabled:opacity-50"
-                                >
-                                    <span className="text-[10px] font-bold text-blue-600">
-                                        点击复制验证码
-                                    </span>
-                                    <span className="mt-1 flex items-center justify-between gap-3">
-                                        <span className="font-mono text-2xl font-bold tracking-[0.14em] text-slate-950">
-                                            {codes[account.id]
-                                                ? formatTotpCode(codes[account.id])
-                                                : '••• •••'}
-                                        </span>
-                                        <Copy className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                                    </span>
-                                    <Countdown secondsRemaining={secondsRemaining} compact />
-                                </AdminButton>
-                                <SecretValue
-                                    account={account}
-                                    revealed={revealedIds.has(account.id)}
-                                    onToggle={() => toggleSecret(account.id)}
-                                />
-                            </article>
+                                </td>
+                            </tr>
                         ))}
-                    </div>
-                </>
-            )}
+                    </tbody>
+                </table>
+            </div>
+            {!accounts.length ? (
+                <div className="p-8 text-center">
+                    <h3 className="text-sm font-bold text-slate-800">还没有保存 2FA 账号</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                        可以先在上方单独查询验证码，确认密钥正确后再保存；也可以批量导入。
+                    </p>
+                </div>
+            ) : !filteredAccounts.length ? (
+                <div className="p-8 text-center">
+                    <h3 className="text-sm font-bold text-slate-700">没有匹配的项目</h3>
+                    <AdminButton
+                        type="button"
+                        onClick={() => setSearch('')}
+                        className="mt-3 text-xs font-bold text-blue-600"
+                    >
+                        清除搜索条件
+                    </AdminButton>
+                </div>
+            ) : null}
         </section>
     );
 }

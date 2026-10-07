@@ -2,6 +2,55 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Approved admin layouts: related titles share a baseline and records stay comparable. */
+.admin-page-title-line,
+.admin-section-title-line {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+}
+
+.admin-page-title-line > :is(p, small),
+.admin-section-title-line > :is(p, small) {
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+    color: var(--admin-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.admin-compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: start;
+    font-size: 0.75rem;
+}
+
+.admin-compact-table > :is(thead, tbody) > tr > :is(th, td) {
+    padding-inline: 0.75rem;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.admin-compact-table > thead > tr > th {
+    height: 2.5rem;
+    padding-block: 0.5rem;
+}
+
+.admin-compact-table > tbody > tr:not(:has([colspan])) > td {
+    height: 3rem;
+    padding-block: 0.5rem;
+}
+
+@media (max-width: 767px) {
+    .admin-compact-table > :is(thead, tbody) > tr > :is(th, td):first-child {
+        position: static;
+    }
+}
+
 :root {
     color-scheme: light;
     --admin-canvas: #f0f2f5;

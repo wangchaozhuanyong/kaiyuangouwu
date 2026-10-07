@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -189,8 +193,65 @@ describe('TelegramNotificationsPanel', () => {
         expect(html).toContain('配置变更审计');
         expect(html).toContain('事故响应与闭环');
         expect(html).toContain('确认接手');
-        expect(html).toContain('修改字段：通知总开关');
+        expect(html).toContain('data-label="修改字段"');
+        expect(html).toContain('通知总开关');
         expect(html).toContain('重试');
+    });
+
+    it('renders independent notification fields and preserves all six sections', () => {
+        const html = renderPanel();
+        expect(html).toContain('aria-label="消息通知分区"');
+        expect(html).toContain('data-label="通知标题"');
+        expect(html).toContain('data-label="事件"');
+        expect(html).toContain('data-label="已尝试次数"');
+        expect(html).toContain('data-label="最多尝试次数"');
+        expect(html).not.toContain('data-label="通知"');
+        expect(html).not.toContain('data-label="尝试"');
+        expect(html).toContain('data-label="事故状态"');
+        expect(html).toContain('data-label="发生次数"');
+        expect((html.match(/<section hidden=""/g) ?? []).length).toBe(5);
+    });
+
+    it('keeps a configuration draft when switching sections without issuing writes', async () => {
+        (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+        const mutation = vi.fn();
+        apolloMocks.useMutation.mockReturnValue([mutation, { loading: false }]);
+        try {
+            await act(async () =>
+                root.render(
+                    <FeatureHelpProvider>
+                        <TelegramNotificationsPanel />
+                    </FeatureHelpProvider>,
+                ),
+            );
+            const input = container.querySelector<HTMLInputElement>(
+                'input[placeholder="https://console.example.com/dashboard"]',
+            )!;
+            await act(async () => {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+                    input,
+                    'https://draft.example.com/dashboard',
+                );
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            const tab = (text: string) =>
+                Array.from(container.querySelectorAll<HTMLButtonElement>('nav button')).find(
+                    node => node.textContent === text,
+                )!;
+            await act(async () => tab('部门路由').click());
+            expect(input.closest('section')?.hidden).toBe(true);
+            await act(async () => tab('连接与策略').click());
+            expect(input.closest('section')?.hidden).toBe(false);
+            expect(input.value).toBe('https://draft.example.com/dashboard');
+            expect(mutation).not.toHaveBeenCalled();
+        } finally {
+            await act(async () => root.unmount());
+            container.remove();
+            (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+        }
     });
 
     it('keeps P0 escalation and action controls locked', () => {

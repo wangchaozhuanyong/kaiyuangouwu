@@ -31,19 +31,24 @@ export function TableCard({
     description,
     children,
     comparison = false,
+    subtitle,
+    emptyMessage,
 }: {
     title: string;
     description: string;
     children: React.ReactNode;
     comparison?: boolean;
+    subtitle?: string;
+    emptyMessage?: string;
 }) {
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-            <div className="border-b border-slate-200 p-4">
+            <div className="admin-section-title-line border-b border-slate-200 px-4 py-3">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     {title}
                     <FeatureHelpButton topic="marketing.referrals" title={title} description={description} />
                 </h2>
+                {subtitle && <p>{subtitle}</p>}
             </div>
             <div
                 className={comparison ? 'admin-comparison-scroll overflow-x-auto' : 'overflow-x-auto'}
@@ -54,19 +59,38 @@ export function TableCard({
                 {comparison && <p className="admin-mobile-table-hint">左右滑动查看完整{title}</p>}
                 {children}
             </div>
+            {emptyMessage && (
+                <div role="status" className="px-4 py-8 text-center text-xs text-slate-400">
+                    {emptyMessage}
+                </div>
+            )}
         </section>
     );
 }
-export function Th({ children }: { children: React.ReactNode }) {
+export function Th({ children, sticky = false }: { children: React.ReactNode; sticky?: boolean }) {
     return (
-        <th scope="col" className="whitespace-nowrap bg-slate-50 px-3 py-3 font-bold text-slate-500">
+        <th
+            scope="col"
+            className={`whitespace-nowrap bg-slate-50 px-3 py-3 font-bold text-slate-500 ${sticky ? 'sticky right-0 z-20 border-l border-slate-200' : ''}`}
+        >
             {children}
         </th>
     );
 }
-export function Td({ children, label }: { children: React.ReactNode; label?: string }) {
+export function Td({
+    children,
+    label,
+    sticky = false,
+}: {
+    children: React.ReactNode;
+    label?: string;
+    sticky?: boolean;
+}) {
     return (
-        <td data-label={label} className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-700">
+        <td
+            data-label={label}
+            className={`h-[52px] whitespace-nowrap px-3 py-0 text-slate-700 ${sticky ? 'sticky right-0 z-10 border-l border-slate-200 bg-white' : ''}`}
+        >
             {children}
         </td>
     );
@@ -477,9 +501,12 @@ export function errorText(error: unknown) {
     return toUserFacingError(error, '操作失败，请稍后重试');
 }
 
-export function ReferralHeading({ title = '分销与返利' }: { title?: string } = {}) {
+export function ReferralHeading({
+    title = '分销与返利',
+    subtitle,
+}: { title?: string; subtitle?: string } = {}) {
     return (
-        <div>
+        <div className="admin-page-title-line">
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                 {title}
                 <FeatureHelpButton
@@ -488,6 +515,7 @@ export function ReferralHeading({ title = '分销与返利' }: { title?: string 
                     description={'一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理'}
                 />
             </h1>
+            {subtitle && <p>{subtitle}</p>}
         </div>
     );
 }
