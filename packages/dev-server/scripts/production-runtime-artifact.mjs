@@ -2,7 +2,22 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
-import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import {
+    chmod,
+    cp,
+    lstat,
+    mkdir,
+    mkdtemp,
+    readdir,
+    readFile,
+    readlink,
+    realpath,
+    rename,
+    rm,
+    stat,
+    unlink,
+    writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -277,8 +292,104 @@ export async function pruneDeniedRuntimePackages(stagingRoot) {
     const deniedPackages = findDeniedPackages(runtimePackages).sort(
         (left, right) => right.path.split('/').length - left.path.split('/').length,
     );
+    const root = await realpath(stagingRoot);
+    const binLinks = new Set();
+    // Validate every candidate before mutating the staging tree. A conflicting
+    // command owned by another package must survive denied-package pruning.
     for (const runtimePackage of deniedPackages) {
-        await rm(path.join(stagingRoot, runtimePackage.path), { recursive: true, force: true });
+        const packageRoot = path.join(root, runtimePackage.path);
+        const segments = runtimePackage.path.split('/');
+        const modulesIndex = segments.lastIndexOf('node_modules');
+        const packageSegments = segments.slice(modulesIndex + 1);
+        if (
+            modulesIndex < 0 ||
+            !isPathInside(root, packageRoot) ||
+            (packageSegments.length !== 1 &&
+                !(packageSegments.length === 2 && packageSegments[0].startsWith('@')))
+        ) {
+            throw new Error(`Denied runtime package is not an installed dependency: ${runtimePackage.path}`);
+        }
+        if ((await realpath(packageRoot)) !== packageRoot) {
+            throw new Error(`Denied runtime package redirects through symlinks: ${runtimePackage.path}`);
+        }
+        const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+        const bins =
+            typeof manifest.bin === 'string'
+                ? { [runtimePackage.name.split('/').at(-1)]: manifest.bin }
+                : manifest.bin === undefined
+                  ? {}
+                  : manifest.bin;
+        if (typeof bins !== 'object' || bins === null || Array.isArray(bins)) {
+            throw new Error(`Invalid denied runtime package bins: ${runtimePackage.path}`);
+        }
+        const modulesRoot = path.join(root, ...segments.slice(0, modulesIndex + 1));
+        const binDirectory = path.join(modulesRoot, '.bin');
+        let binDirectoryExists = true;
+        try {
+            const attributes = await lstat(binDirectory);
+            if (!attributes.isDirectory() || (await realpath(binDirectory)) !== binDirectory) {
+                throw new Error(
+                    `Denied runtime package command directory is not a real directory: ${binDirectory}`,
+                );
+            }
+        } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+            binDirectoryExists = false;
+        }
+        for (const [name, target] of Object.entries(bins)) {
+            if (
+                !/^[\w.-]+$/u.test(name) ||
+                name === '.' ||
+                name === '..' ||
+                typeof target !== 'string' ||
+                target.length === 0 ||
+                /[\\\0\r\n]/u.test(target) ||
+                path.isAbsolute(target) ||
+                path.win32.isAbsolute(target)
+            ) {
+                throw new Error(`Invalid denied runtime package bin: ${runtimePackage.path}`);
+            }
+            const binTarget = path.resolve(packageRoot, target);
+            if (!isPathInside(packageRoot, binTarget)) {
+                throw new Error(`Denied runtime package bin escapes its package: ${runtimePackage.path}`);
+            }
+            const realBinTarget = await realpath(binTarget);
+            if (!isPathInside(packageRoot, realBinTarget) || !(await lstat(realBinTarget)).isFile()) {
+                throw new Error(`Denied runtime package bin has an invalid target: ${runtimePackage.path}`);
+            }
+            if (!binDirectoryExists) continue;
+            const binLink = path.join(binDirectory, name);
+            let attributes;
+            try {
+                attributes = await lstat(binLink);
+            } catch (error) {
+                if (error?.code === 'ENOENT') continue;
+                throw error;
+            }
+            if (!attributes.isSymbolicLink()) continue;
+            const linkTarget = await readlink(binLink);
+            const resolvedTarget = path.resolve(path.dirname(binLink), linkTarget);
+            if (path.isAbsolute(linkTarget) || !isPathInside(root, resolvedTarget)) {
+                throw new Error(`Denied runtime package command link escapes the artifact: ${binLink}`);
+            }
+            const realTarget = await realpath(binLink);
+            if (!isPathInside(root, realTarget)) {
+                throw new Error(
+                    `Denied runtime package command link redirects outside the artifact: ${binLink}`,
+                );
+            }
+            if (resolvedTarget === binTarget && realTarget === realBinTarget) {
+                binLinks.add(binLink);
+            } else if (isPathInside(packageRoot, resolvedTarget) || isPathInside(packageRoot, realTarget)) {
+                throw new Error(
+                    `Denied runtime package command link does not match its declared bin: ${binLink}`,
+                );
+            }
+        }
+    }
+    for (const binLink of binLinks) await unlink(binLink);
+    for (const runtimePackage of deniedPackages) {
+        await rm(path.join(root, runtimePackage.path), { recursive: true, force: true });
     }
     return deniedPackages;
 }
