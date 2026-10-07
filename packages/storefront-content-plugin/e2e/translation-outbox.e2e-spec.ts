@@ -482,7 +482,8 @@ describe('real Admin API saves and Shop API publication with the translation out
             const targets = await repository.find({ where: scope });
             expect(targets).toHaveLength(15);
             // Reconstruct the previous successful translation history before testing cache-only rediscovery.
-            expect((await server.app.get(ContentTranslationRetryService).retryPending()).translated).toBe(15);
+            // The warm-up translates three parent titles and their fifteen owned children.
+            expect((await server.app.get(ContentTranslationRetryService).retryPending()).translated).toBe(18);
             await repository.update({ id: In(targets.map((target: any) => target.id)) }, { label: '' });
             await db.getRepository(ContentTranslationState).clear();
             translate.mockClear();
