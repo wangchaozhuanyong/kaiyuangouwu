@@ -18,6 +18,7 @@ import {
     Permission,
     RequestContextService,
     RoleService,
+    SettingsStoreEntry,
     TransactionalConnection,
     User,
 } from '@vendure/core';
@@ -473,6 +474,13 @@ describe('real Admin API saves and Shop API publication with the translation out
         );
         adminClient.setChannelToken(defaultChannel.token);
         try {
+            // Build this case's translation history independently of the preceding outbox retry.
+            // A warm shared cache resolves saves immediately and leaves no work for the warm-up below.
+            await db.getRepository(SettingsStoreEntry).delete({ key: 'contentTranslationCache.result' });
+            // The preceding successful provider call also leaves a one-second pacing interval.
+            await db
+                .getRepository(TranslationProviderState)
+                .update({ provider: 'outbox-e2e' }, { nextAttemptAt: new Date(0) });
             // Bulk discovery is platform-only. Seed owned platform content instead of bypassing its guard.
             for (let index = 0; index < 3; index++) {
                 await adminClient.query(create, { input: input(`platform-historical-${index}`) });
