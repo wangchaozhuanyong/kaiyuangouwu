@@ -1759,7 +1759,10 @@ describe('platform governance real database and API boundaries', () => {
             const destination = await server.app.get(CountryService).create(platform, {
                 code: 'QZ',
                 enabled: true,
-                translations: [{ languageCode: LanguageCode.en, name: 'Synthetic quote destination' }],
+                translations: [
+                    { languageCode: LanguageCode.zh_Hans, name: '合成配送报价目的地' },
+                    { languageCode: LanguageCode.en, name: 'Synthetic quote destination' },
+                ],
             });
             const zone = await server.app.get(ZoneService).create(platform, {
                 name: 'Synthetic public shipping quote zone',

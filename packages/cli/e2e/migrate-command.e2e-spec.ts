@@ -253,14 +253,17 @@ describe('Migrate Command E2E', { timeout: 60_000 }, () => {
             const { runMigrationsOperation: runMigrationsWithInvalidDb } =
                 await import('../src/commands/migrate/migration-operations');
 
-            const result = await runMigrationsWithInvalidDb();
+            try {
+                const result = await runMigrationsWithInvalidDb();
 
-            expect(result.success).toBe(false);
-            expect(result.message).toBeDefined();
-            expect(result.migrationsRan).toBeUndefined();
-
-            // Clean up mock for subsequent tests
-            vi.unmock('../src/commands/migrate/load-vendure-config-file');
+                expect(result.success).toBe(false);
+                expect(result.message).toBeDefined();
+                expect(result.migrationsRan).toBeUndefined();
+            } finally {
+                // Clear the exact helper mock after the test, including assertion failures.
+                vi.doUnmock('../src/shared/load-vendure-config-file');
+                vi.resetModules();
+            }
         });
     });
 
