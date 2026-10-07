@@ -129,7 +129,7 @@ const serverConfig = mergeConfig(testConfig, {
     ],
 });
 let mysqlLab: string | undefined;
-const { server, adminClient } = createTestEnvironment(serverConfig);
+const { server, adminClient, shopClient } = createTestEnvironment(serverConfig);
 let connection: TransactionalConnection;
 let platform: RequestContext;
 let a: RequestContext;
@@ -1714,6 +1714,106 @@ describe('platform governance real database and API boundaries', () => {
             await expect(adminClient.query(update, { input: ownInput })).rejects.toThrow();
         } finally {
             adminClient.setChannelToken(platform.channel.token);
+        }
+    });
+    it('isolates active platform and owned announcements across real A/B Shop API requests', async () => {
+        const create = gql`
+            mutation ($input: CreateSystemAnnouncementInput!) {
+                createSystemAnnouncement(input: $input) {
+                    id
+                }
+            }
+        `;
+        const update = gql`
+            mutation ($input: UpdateSystemAnnouncementInput!) {
+                updateSystemAnnouncement(input: $input) {
+                    id
+                    enabled
+                }
+            }
+        `;
+        const read = gql`
+            query {
+                activeSystemAnnouncements {
+                    id
+                }
+            }
+        `;
+        const allInput = {
+            titleZh: '合成全店通知',
+            contentZh: '合成平台通知正文',
+            titleEn: 'Platform notice',
+            contentEn: 'Synthetic notice for all stores.',
+            targetMode: 'ALL',
+            enabled: true,
+        };
+        const targetedInput = {
+            titleZh: '合成平台定向通知',
+            contentZh: '合成平台定向正文',
+            titleEn: 'Targeted notice',
+            contentEn: 'Synthetic platform notice for store A.',
+            targetMode: 'SINGLE',
+            channelIds: [String(a.channelId)],
+            enabled: true,
+        };
+        const ownInput = {
+            titleZh: '合成本店通知',
+            contentZh: '合成本店正文',
+            titleEn: 'Store notice',
+            contentEn: 'Synthetic owned notice for store A.',
+            targetMode: 'SINGLE',
+            channelIds: [String(a.channelId)],
+            enabled: true,
+        };
+        const notices: Array<{
+            id: string;
+            ctx: RequestContext;
+            input: typeof allInput | typeof targetedInput;
+        }> = [];
+        try {
+            adminClient.setChannelToken(platform.channel.token);
+            const all = (await adminClient.query(create, { input: allInput })).createSystemAnnouncement;
+            notices.push({ id: all.id, ctx: platform, input: allInput });
+            const targeted = (await adminClient.query(create, { input: targetedInput }))
+                .createSystemAnnouncement;
+            notices.push({ id: targeted.id, ctx: platform, input: targetedInput });
+            adminClient.setChannelToken(a.channel.token);
+            const own = (await adminClient.query(create, { input: ownInput })).createSystemAnnouncement;
+            notices.push({ id: own.id, ctx: a, input: ownInput });
+            shopClient.setChannelToken(a.channel.token);
+            const forA = (await shopClient.query(read)).activeSystemAnnouncements.map(
+                (row: { id: string }) => row.id,
+            );
+            expect(forA).toEqual(expect.arrayContaining([all.id, targeted.id, own.id]));
+            shopClient.setChannelToken(b.channel.token);
+            const forB = (await shopClient.query(read)).activeSystemAnnouncements.map(
+                (row: { id: string }) => row.id,
+            );
+            expect(forB).toContain(all.id);
+            expect(forB).not.toContain(targeted.id);
+            expect(forB).not.toContain(own.id);
+            for (const notice of notices) {
+                adminClient.setChannelToken(notice.ctx.channel.token);
+                await adminClient.query(update, {
+                    input: { ...notice.input, id: notice.id, enabled: false },
+                });
+            }
+            for (const ctx of [a, b]) {
+                shopClient.setChannelToken(ctx.channel.token);
+                const after = (await shopClient.query(read)).activeSystemAnnouncements.map(
+                    (row: { id: string }) => row.id,
+                );
+                for (const notice of notices) expect(after).not.toContain(notice.id);
+            }
+        } finally {
+            for (const notice of notices) {
+                adminClient.setChannelToken(notice.ctx.channel.token);
+                await adminClient.query(update, {
+                    input: { ...notice.input, id: notice.id, enabled: false },
+                });
+            }
+            adminClient.setChannelToken(platform.channel.token);
+            shopClient.setChannelToken(platform.channel.token);
         }
     });
     it('adopts the public free-shipping version only in the current store and preserves its original', async () => {
