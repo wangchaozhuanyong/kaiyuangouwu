@@ -739,7 +739,7 @@ describe('storefront navigation state', () => {
         const actualRouter = await actualMemoryRouter();
         await actualRouter.load();
         // Model the installed Transitioner's completed-render boundary before a same-URL reload.
-        actualRouter.stores.resolvedLocation.setState(() => actualRouter.state.location);
+        actualRouter.stores.resolvedLocation.set(() => actualRouter.state.location);
         const loads: boolean[] = [];
         const unsubscribe = actualRouter.subscribe('onBeforeLoad', event => {
             loads.push(event.hrefChanged);
