@@ -157,21 +157,6 @@
         height: 20px;
         object-fit: contain;
     }
-    .desktop-cart-count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        min-width: 18px;
-        height: 18px;
-        padding: 0 5px;
-        border-radius: 9px;
-        background: var(--accent);
-        color: var(--accent-foreground);
-        font-size: var(--type-badge-size);
-        line-height: var(--type-badge-leading);
-        text-align: center;
-    }
     .desktop-header-settings {
         display: flex;
         align-items: center;

@@ -1,14 +1,22 @@
-/* Same published artwork in the storefront and its Admin preview; only phone composition changes. */
+/* Shared non-desktop overlays; phones use the proportions of the approved reference. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
         min-height: 0;
+        aspect-ratio: 12 / 5;
         background: var(--surface);
     }
 
+    .hero.hero-image-overlay .hero-carousel-stage {
+        position: absolute;
+        inset: 0;
+    }
+
     .hero.hero-image-overlay .hero-scene-wrapper {
-        position: relative;
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
+        height: 100%;
         background: var(--surface);
     }
 
@@ -16,7 +24,7 @@
         position: relative;
         inset: auto;
         width: 100%;
-        height: auto;
+        height: 100%;
     }
 
     .hero.hero-image-overlay .hero-rich-image-link,
@@ -25,7 +33,7 @@
         inset: auto;
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         border-radius: 0;
         background: var(--surface);
     }
@@ -33,7 +41,7 @@
     .hero.hero-image-overlay .hero-rich-backdrop {
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         object-fit: contain;
     }
 
@@ -49,26 +57,36 @@
         min-height: 0;
         max-height: none;
         margin: 0;
-        padding: 12px 12px calc(var(--hero-overlay-height, 0px) + 20px);
-        gap: 8px;
+        padding: var(--space-8) var(--space-12) calc(var(--hero-overlay-height, 0px) + var(--space-12));
+        gap: var(--space-8);
         background: transparent;
+    }
+
+    /* Copy owns the available space; the left-aligned action and service strip remain outside scrolling. */
+    .hero.hero-image-overlay .hero-rich-copy-region {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        touch-action: pan-y;
+        scrollbar-width: thin;
+        pointer-events: auto;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
         width: 100%;
         max-width: 450px;
         min-height: 0;
-        flex: 0 1 auto;
         grid-auto-rows: min-content;
         align-content: start;
         gap: 6px;
-        overflow-y: auto;
-        overscroll-behavior-y: contain;
-        scrollbar-width: thin;
-        pointer-events: auto;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-title {
+        order: -2;
         font-size: var(--type-hero-size);
         line-height: var(--type-hero-leading);
         text-wrap: pretty;
@@ -76,6 +94,7 @@
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-desc {
+        order: -1;
         font-size: var(--type-helper-size);
         line-height: var(--type-helper-leading);
         font-weight: var(--font-weight-normal);
@@ -89,11 +108,8 @@
 
     .hero.hero-image-overlay .hero-rich-stats-row {
         min-height: 0;
-        flex: 0 1 auto;
-        overflow-y: auto;
-        overscroll-behavior-y: contain;
-        scrollbar-width: thin;
-        pointer-events: auto;
+        margin-top: var(--space-8);
+        overflow: visible;
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn {
@@ -102,64 +118,24 @@
         margin-top: 0;
         font-size: var(--type-action-size);
         line-height: var(--type-action-leading);
-    }
-
-    /* Very wide originals have little vertical room on phones: copy and action share one row. */
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-content {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-rows: minmax(0, 1fr);
-        align-items: start;
-    }
-
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-copy-region {
-        display: block;
-        grid-column: 1;
-        grid-row: 1;
-        width: 100%;
-        height: 100%;
-        min-width: 0;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior-y: contain;
-        scrollbar-width: thin;
-        pointer-events: auto;
-    }
-
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-copy-region:only-child {
-        grid-column: 1 / -1;
-    }
-
-    .hero.hero-image-overlay .has-wide-artwork :is(.hero-rich-copy-surface, .hero-rich-stats-row) {
-        overflow: visible;
-        max-height: none;
-    }
-
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-title {
-        order: -1;
-    }
-
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-cta-btn {
-        grid-column: 2;
-        grid-row: 1;
-        max-width: 40vw;
+        max-width: 100%;
         min-height: var(--experience-control-min, 44px);
         white-space: nowrap;
     }
 
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-cta-label {
+    .hero.hero-image-overlay .hero-rich-cta-label {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    .hero.hero-image-overlay .has-wide-artwork .hero-rich-cta-btn svg {
+    .hero.hero-image-overlay .hero-rich-cta-btn svg {
         flex-shrink: 0;
     }
 
     .home-page .hero.hero-image-overlay .hero-overlay-controls {
         position: absolute;
-        bottom: 12px;
+        bottom: var(--space-8);
         left: 12px;
         right: 12px;
         transform: none;
@@ -169,32 +145,54 @@
         padding: 0;
     }
 
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar {
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar,
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar.has-long-copy {
         padding: 0;
         border-radius: 0;
         background: transparent;
     }
 }
 
+@media (max-width: 767px) {
+    .hero.hero-image-overlay {
+        aspect-ratio: 16 / 9;
+    }
+
+    .hero.hero-image-overlay .hero-rich-copy-region {
+        width: 60%;
+    }
+
+    .hero.hero-image-overlay .hero-rich-cta-btn {
+        max-width: 60%;
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar,
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar.has-long-copy {
+        padding: var(--space-4);
+        border-radius: var(--skin-control-radius);
+        background: var(--surface);
+        color: var(--text);
+    }
+
+    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-item {
+        color: var(--text);
+    }
+}
+
 @media (max-width: 389px) {
     .hero.hero-image-overlay .hero-rich-content {
-        padding: 8px 12px calc(var(--hero-overlay-height, 0px) + 16px);
-        gap: 6px;
+        gap: var(--space-4);
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
         gap: 4px;
-    }
-
-    .home-page .hero.hero-image-overlay .hero-overlay-controls {
-        bottom: 8px;
     }
 }
 
 /* Keep the same full artwork usable on narrow phones without shrinking its type or CTA. */
 @media (max-width: 359px) {
     .hero.hero-image-overlay .hero-rich-content {
-        padding: 6px 6px calc(var(--hero-overlay-height, 0px) + 8px);
+        padding: var(--space-4) var(--space-4) calc(var(--hero-overlay-height, 0px) + 6px);
         gap: 2px;
     }
 
@@ -207,12 +205,8 @@
     }
 
     .home-page .hero.hero-image-overlay .hero-overlay-controls {
-        bottom: 6px;
-        left: 6px;
-        right: 6px;
-    }
-
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-item {
-        flex-direction: row;
+        bottom: var(--space-4);
+        left: var(--space-4);
+        right: var(--space-4);
     }
 }

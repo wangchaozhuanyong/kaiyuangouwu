@@ -1,9 +1,16 @@
+import { Injector, RequestContext, TransactionalConnection } from '@vendure/core';
 import { FileBasedTemplateLoader, HandlebarsMjmlGenerator } from '@vendure/email-plugin';
+import { StorefrontMediaManifestService, StoreProfile } from '@vendure/store-management-plugin';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ACCOUNT_TOKEN_EXPIRY_HOURS, buildAccountActionUrl } from './account-auth';
+import {
+    storefrontEmailFromAddress,
+    storefrontEmailLogoForChannel,
+    storefrontEmailLogoUrl,
+} from './email-branding';
 import { emailLanguageVariables } from './email-localization';
 
 const templatePath = path.join(__dirname, 'email-templates');
@@ -19,6 +26,7 @@ async function renderTemplate(
     languageCode: string,
     digitalOrder = false,
     containsDigitalProducts = digitalOrder,
+    branding: { fromAddress?: string; brandName?: string; brandLogoUrl?: string } = {},
 ) {
     const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
     const templateVars = {
@@ -81,8 +89,156 @@ async function renderTemplate(
               ],
     };
 
-    return generator.generate('store@example.com', 'Subject', template, templateVars);
+    return generator.generate('{{ fromAddress }}', 'Subject', template, {
+        ...templateVars,
+        fromAddress: 'store@example.com',
+        ...branding,
+    });
 }
+
+describe('store-owned email branding', () => {
+    it('resolves the event channel logo against that store public-media policy', async () => {
+        const ctx = { channelId: 'event-channel' } as unknown as RequestContext;
+        const findOne = vi.fn().mockResolvedValue({ logoAsset: { source: 'source/store-logo.png' } });
+        const getRepository = vi.fn().mockReturnValue({ findOne });
+        const isPublic = vi.fn().mockResolvedValue(true);
+        const injector = {
+            get: (token: unknown) => {
+                if (token === TransactionalConnection) return { getRepository };
+                if (token === StorefrontMediaManifestService) return { isPublic };
+                throw new Error('Unexpected email dependency');
+            },
+        } as unknown as Injector;
+
+        expect(await storefrontEmailLogoForChannel(ctx, injector, 'https://shop.example.invalid')).toBe(
+            'https://shop.example.invalid/assets/source/store-logo.png?preset=storefront-thumbnail-fit-320&format=png',
+        );
+        expect(getRepository).toHaveBeenCalledExactlyOnceWith(ctx, StoreProfile);
+        expect(findOne).toHaveBeenCalledExactlyOnceWith({
+            where: { channelId: ctx.channelId },
+            relations: { logoAsset: true, logoOnLightAsset: true },
+        });
+        expect(isPublic).toHaveBeenCalledExactlyOnceWith(
+            ctx,
+            'shop.example.invalid',
+            'source/store-logo.png',
+        );
+    });
+
+    it('does not prevent notification delivery when the optional channel logo read fails', async () => {
+        const findOne = vi.fn().mockRejectedValue(new Error('Optional brand read unavailable'));
+        const injector = {
+            get: () => ({ getRepository: () => ({ findOne }) }),
+        } as unknown as Injector;
+        const ctx = { channelId: 'event-channel' } as unknown as RequestContext;
+        await expect(
+            storefrontEmailLogoForChannel(ctx, injector, 'https://shop.example.invalid'),
+        ).resolves.toBeUndefined();
+    });
+
+    const configuredFrom = '"Platform sender" <verified@example.invalid>';
+
+    it.each([
+        ['zh_Hans', { storefrontNameZh: '店铺甲', storefrontNameEn: 'Shop A' }, '店铺甲'],
+        ['zh_Hans', { storefrontNameZh: '店铺乙', storefrontNameEn: 'Shop B' }, '店铺乙'],
+        ['en', { storefrontNameZh: '店铺丙', storefrontNameEn: 'Shop C' }, 'Shop C'],
+    ])(
+        'renders the %s event store name in From without changing the sending address',
+        async (language, names, name) => {
+            const fromAddress = storefrontEmailFromAddress(configuredFrom, language, names);
+            const email = await renderTemplate('order-confirmation', language, false, false, {
+                fromAddress,
+                brandName: name,
+                brandLogoUrl: 'https://shop.example.invalid/assets/preview/own-logo.png',
+            });
+            expect(email.from).toBe(`"${name}" <verified@example.invalid>`);
+            expect(email.body).toContain(name);
+            expect(email.body).toContain('https://shop.example.invalid/assets/preview/own-logo.png');
+            expect(email.body).not.toContain('Platform sender');
+        },
+    );
+
+    it('does not invent a brand or reuse the platform display name when the store name is unset', () => {
+        expect(storefrontEmailFromAddress(configuredFrom, 'en', {})).toBe('verified@example.invalid');
+        expect(
+            storefrontEmailFromAddress('verified@example.invalid', 'zh_Hans', { storefrontNameZh: '  ' }),
+        ).toBe('verified@example.invalid');
+    });
+
+    it('escapes display-name punctuation and removes header control characters', () => {
+        const sender = storefrontEmailFromAddress(configuredFrom, 'en', {
+            storefrontNameEn: 'Shop "A"\\B\r\nextra',
+        });
+        expect(sender).toBe('"Shop \\"A\\"\\\\B  extra" <verified@example.invalid>');
+        expect(sender).not.toMatch(/[\r\n]/u);
+    });
+
+    it.each([
+        'a@example.invalid, b@example.invalid',
+        'not-a-mailbox',
+        'a@example.invalid\r\nBcc: b@example.invalid',
+    ])('rejects ambiguous or injected configured sending addresses', from => {
+        expect(() => storefrontEmailFromAddress(from, 'en', {})).toThrow('one valid sending mailbox');
+    });
+
+    it('uses the Admin light logo only when the current store public-media policy allows it', async () => {
+        const isPublic = vi.fn().mockResolvedValue(true);
+        const url = await storefrontEmailLogoUrl(
+            {
+                logoOnLightAsset: { source: 'source/light.svg', preview: 'preview/light.png' },
+                logoAsset: { source: 'source/icon.png', preview: 'preview/icon.png' },
+            },
+            'https://shop.example.invalid',
+            isPublic,
+        );
+        expect(isPublic).toHaveBeenCalledExactlyOnceWith('preview/light.png');
+        expect(url).toBe(
+            'https://shop.example.invalid/assets/preview/light.png?preset=storefront-thumbnail-fit-320&format=png',
+        );
+    });
+
+    it('can use the same store standard logo if its light variant is not publicly accessible', async () => {
+        const isPublic = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        const url = await storefrontEmailLogoUrl(
+            {
+                logoOnLightAsset: { source: 'source/private-light.svg' },
+                logoAsset: { source: '/assets/source/public-icon.svg' },
+            },
+            'https://shop.example.invalid',
+            isPublic,
+        );
+        expect(url).toContain('/assets/source/public-icon.svg?');
+        expect(isPublic.mock.calls).toEqual([['source/private-light.svg'], ['source/public-icon.svg']]);
+    });
+
+    it.each([
+        'https://other-store.example.invalid/assets/preview/logo.png',
+        'https://user:pass@shop.example.invalid/assets/preview/logo.png',
+        'data:image/png;base64,AAAA',
+        '/private/logo.png',
+    ])('omits non-public or cross-store logo URLs', async source => {
+        const isPublic = vi.fn().mockResolvedValue(true);
+        expect(
+            await storefrontEmailLogoUrl({ logoAsset: { source } }, 'https://shop.example.invalid', isPublic),
+        ).toBeUndefined();
+        expect(isPublic).not.toHaveBeenCalled();
+    });
+
+    it('keeps notifications usable without a logo or while its public policy lookup is unavailable', async () => {
+        const isPublic = vi.fn().mockRejectedValue(new Error('temporary media lookup failure'));
+        expect(await storefrontEmailLogoUrl(null, 'https://shop.example.invalid', isPublic)).toBeUndefined();
+        expect(
+            await storefrontEmailLogoUrl(
+                { logoAsset: { source: 'preview/logo.png' } },
+                'https://shop.example.invalid',
+                isPublic,
+            ),
+        ).toBeUndefined();
+        const email = await renderTemplate('order-confirmation', 'en');
+        expect(email.body).toContain('Test Store');
+        expect(email.body).not.toContain('<img');
+    });
+});
 
 describe('localized email templates', () => {
     it.each([

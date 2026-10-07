@@ -996,10 +996,6 @@
     }
     .desktop-store-layout :is(.payment-method-section, .payment-summary, .payment-test-notice) {
         padding: 24px;
-        border: var(--skin-card-outline, 0);
-        background: var(--surface, var(--paper));
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .payment-summary {
         top: calc(var(--desktop-header-height) + 24px);
@@ -1010,12 +1006,6 @@
     }
     .desktop-store-layout .payment-method-list label {
         padding: 18px;
-        border-radius: var(--skin-control-radius);
-    }
-    .desktop-store-layout .payment-summary .primary-action {
-        border-radius: var(--skin-control-radius);
-        min-height: 48px;
-        box-shadow: none;
     }
     .desktop-store-layout .order-confirmation-page {
         display: grid;

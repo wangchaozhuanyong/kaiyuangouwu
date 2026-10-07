@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/require-await -- React act callbacks and API fixtures use asynchronous contracts. */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
 import {
@@ -16,6 +16,11 @@ import { clearStudioCache } from './ai-image-studio-cache';
 import { AiImageStudioPage } from './ai-image-studio-page';
 
 const cleanups: Array<() => void> = [];
+beforeAll(async () => {
+    // Bootstrap preloads this shared visual chunk. Complete module loading with real
+    // timers before the workflow fixtures use fake timers for business polling.
+    await import('../brand-loading-content');
+});
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
     clearStudioCache();

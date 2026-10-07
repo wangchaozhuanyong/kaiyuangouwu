@@ -198,28 +198,36 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('allows long English labels in collapsed category navigation to wrap', () => {
-        expect(stylesheet).toMatch(
-            /html\[lang='en'\] \.primary-category-label\s*\{[^}]*height:\s*48px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
+    it('keeps category labels on one line in the same five-character width for every language', () => {
+        const labelRule = stylesheet.match(/\.primary-category-label\s*\{([^}]*)\}/)?.[1] ?? '';
+        expect(labelRule).toMatch(/width:\s*5em;[^}]*min-width:\s*5em;[^}]*max-width:\s*5em;/);
+        expect(labelRule).toMatch(/overflow:\s*hidden;/);
+        expect(labelRule).toMatch(/white-space:\s*nowrap;/);
+        expect(labelRule).toMatch(/text-overflow:\s*ellipsis;/);
+        expect(stylesheet).not.toMatch(
+            /(?:html\[lang='en'\] |\.category-page )?\.primary-category-label\s*\{[^}]*(?:white-space:\s*normal|-webkit-line-clamp:|overflow-wrap:\s*anywhere)/,
         );
-        expect(stylesheet).toMatch(
-            /html\[lang='en'\] \.primary-categories button\s*\{[^}]*width:\s*80px;[^}]*min-width:\s*80px;[^}]*height:\s*92px;/,
+        expect(categoryPageSource).toContain('title={collection.name}');
+        expect(categoryPageSource).toContain('aria-label={collection.name}');
+        expect(categoryPageSource).toContain(
+            '<span className="primary-category-label">{collection.name}</span>',
         );
     });
 
-    it('allows complete category labels without stretching sparse navigation items', () => {
+    it('reserves the five-character width without stretching sparse categories or overlapping expanded labels', () => {
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-category-label\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;[^}]*white-space:\s*normal;/,
+            /\.primary-categories button\s*\{[^}]*width:\s*calc\(5 \* var\(--type-label-size\) \+ 4px\);[^}]*flex:\s*0 0 auto;/,
+        );
+        expect(stylesheet).not.toMatch(/html\[lang='en'\] \.primary-categories button\s*\{/);
+        expect(stylesheet).toMatch(
+            /\.all-primary-category-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit, calc\(5 \* var\(--type-label-size\) \+ 4px\)\);/,
         );
         expect(stylesheet).toMatch(
-            /\.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
+            /\.all-primary-category-grid button > span:last-child\s*\{[^}]*width:\s*5em;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/,
         );
         expect(stylesheet).toMatch(
             // eslint-disable-next-line max-len -- This single rule is the shared mobile gutter contract.
             /@media \(max-width:\s*1023px\)[\s\S]*?\.category-page \.primary-category-strip\s*\{[^}]*margin-inline:\s*var\(--page-section-inset, 16px\);[^}]*padding-inline:\s*0;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*72px;[^}]*flex:\s*0 0 72px;/,
         );
         expect(categoryPageSource).not.toContain('--primary-category-visible-slots');
         expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);

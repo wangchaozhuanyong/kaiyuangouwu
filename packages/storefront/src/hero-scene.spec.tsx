@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
-    it('uses actual wide artwork dimensions without stale source or tone-cache shape state', async () => {
+    it('keeps one copy and action structure across every artwork ratio with phone-only scroll semantics', async () => {
         vi.stubGlobal(
             'ResizeObserver',
             class {
@@ -48,11 +48,12 @@ describe('shared hero content layout', () => {
             targetType: 'PAGE',
             items: [{ label: '权益', description: '统计说明保留' }],
         };
-        const render = (ready: boolean, width: number, height: number) =>
+        const render = (ready: boolean, width: number, height: number, copyScrollable = true) =>
             act(async () => {
                 root.render(
                     <HeroScene
                         content={{ ...content }}
+                        copyScrollable={copyScrollable}
                         image={
                             <img
                                 key={content.imageUrl}
@@ -74,7 +75,6 @@ describe('shared hero content layout', () => {
             if (!image) throw new Error('Missing current artwork');
             return image;
         };
-        const wide = () => host.firstElementChild?.classList.contains('has-wide-artwork');
         const load = (image: HTMLImageElement) =>
             act(async () => {
                 image.dispatchEvent(new Event('load'));
@@ -82,7 +82,6 @@ describe('shared hero content layout', () => {
             });
         try {
             await render(true, 2200, 715);
-            expect(wide()).toBe(true);
             const region = host.querySelector<HTMLElement>('.hero-rich-copy-region');
             if (!region) throw new Error('Missing copy scroll region');
             for (const text of [content.title, content.subtitle, content.body, '权益', '统计说明保留']) {
@@ -93,27 +92,38 @@ describe('shared hero content layout', () => {
             expect(host.querySelector('.hero-rich-cta-btn')?.textContent).toBe(content.ctaLabel);
             expect(region.contains(host.querySelector('.test-trust'))).toBe(false);
             expect(region.getAttribute('tabindex')).toBe('0');
+            const composition = () =>
+                `${host.firstElementChild?.className}\n${host.querySelector('.hero-rich-content')?.outerHTML}`;
+            const initialComposition = composition();
+            for (const [width, height] of [
+                [1774, 887],
+                [1672, 941],
+                [1920, 800],
+            ]) {
+                artwork().dataset.width = String(width);
+                artwork().dataset.height = String(height);
+                await load(artwork());
+                expect(composition()).toBe(initialComposition);
+            }
             const oldImage = artwork();
             content.imageUrl = '/phone-original.jpg';
             await render(false, 0, 0);
-            expect(wide()).toBe(false);
+            expect(composition()).toBe(initialComposition);
             await load(oldImage);
-            expect(wide()).toBe(false);
+            expect(composition()).toBe(initialComposition);
             const image = artwork();
             image.dataset.ready = 'true';
             image.dataset.width = '1200';
             image.dataset.height = '900';
             await load(image);
-            expect(wide()).toBe(false);
+            expect(composition()).toBe(initialComposition);
             expect(canvas).toHaveBeenCalledTimes(2);
-            // The current source is already tone-cached; a later real ratio must still update composition.
-            image.dataset.width = '2200';
-            image.dataset.height = '715';
-            await load(image);
-            expect(wide()).toBe(true);
-            image.dataset.height = '1100';
-            await load(image);
-            expect(wide()).toBe(false);
+            await render(true, 1920, 800, false);
+            expect(region.getAttribute('tabindex')).toBeNull();
+            expect(region.getAttribute('role')).toBeNull();
+            expect(region.querySelector('.hero-rich-copy-surface')?.firstElementChild?.className).toContain(
+                'hero-rich-pill',
+            );
             expect(canvas).toHaveBeenCalledTimes(2);
         } finally {
             await act(async () => {

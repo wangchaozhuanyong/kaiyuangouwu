@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
+import { heroContentForViewport } from '../../../../storefront-content-plugin/src/shared/hero-image';
+
 import { newContentBlock } from './storefront-content-utils';
 import {
     applyDecorationDraft,
@@ -57,6 +60,55 @@ describe('decoration drafts follow the Shop publication contract', () => {
             imageAsset: { width: 1600, height: 520 },
             items: [],
         });
+    });
+
+    it('carries phone artwork, per-language copy and colors through the real client draft without changing desktop copy', () => {
+        const block = newContentBlock('HERO', 0, '手机专图');
+        block.imageUrl = '/assets/desktop.webp';
+        block.settings = {
+            mobileImageUrl: '/assets/phone.webp',
+            mobileImageAssetId: 'phone',
+            mobileImageWidth: 1200,
+            mobileImageHeight: 900,
+            mobileHeroTextColor: '#292d32',
+            mobileHeroSecondaryTextColor: '#454b52',
+            mobileHeroTranslations: [
+                {
+                    languageCode: 'zh_Hans',
+                    title: '简短中文',
+                    subtitle: '',
+                    body: '手机说明',
+                    ctaLabel: '浏览',
+                },
+                {
+                    languageCode: 'en',
+                    title: 'Phone copy',
+                    subtitle: '',
+                    body: 'Short copy',
+                    ctaLabel: 'Browse',
+                },
+            ],
+        };
+        for (const [language, clientLanguage, expectedTitle] of [
+            ['zh_Hans', 'zh', '简短中文'],
+            ['en', 'en', 'Phone copy'],
+        ] as const) {
+            const draft = decorationDraft(block, language).block;
+            if (!draft) throw new Error('Expected a phone hero draft');
+            expect(draft.settings).toEqual(block.settings);
+            expect(heroContentForViewport(draft, false, clientLanguage)).toMatchObject({
+                imageUrl: '/assets/phone.webp',
+                imageAsset: { width: 1200, height: 900 },
+                title: expectedTitle,
+                subtitle: '',
+                textColor: '#292d32',
+                settings: { secondaryTextColor: '#454b52' },
+            });
+            expect(heroContentForViewport(draft, true, clientLanguage)).toBe(draft);
+            expect(draft.title).toBe(
+                block.translations.find(translation => translation.languageCode === language)?.title,
+            );
+        }
     });
 
     it('replaces a saved block, removes unpublished drafts and leaves neighbouring content intact', () => {

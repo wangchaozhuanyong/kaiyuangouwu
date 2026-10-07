@@ -30,6 +30,7 @@ export function HeroScene({
     content,
     image,
     mediaOverlay,
+    copyScrollable = false,
     imageLabel,
     onImageOpen,
     onOpen,
@@ -37,6 +38,7 @@ export function HeroScene({
     content: HeroSceneData;
     image: ReactNode;
     mediaOverlay?: ReactNode;
+    copyScrollable?: boolean;
     imageLabel: string;
     onImageOpen?: MouseEventHandler<HTMLButtonElement>;
     onOpen?: () => void;
@@ -49,8 +51,6 @@ export function HeroScene({
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
     const [sampledTone, setSampledTone] = useState<{ imageUrl: typeof content.imageUrl; tone: ImageTone }>();
-    const [artworkShape, setArtworkShape] = useState<{ imageUrl: typeof content.imageUrl; wide: boolean }>();
-    const wideArtwork = artworkShape?.imageUrl === content.imageUrl && artworkShape?.wide;
     const adaptiveStyle = heroThemeStyle(
         content,
         sampledTone?.imageUrl === content.imageUrl ? sampledTone?.tone : undefined,
@@ -68,15 +68,6 @@ export function HeroScene({
                 !mediaRef.current?.querySelector('.hero-rich-image-link')?.contains(artworkElement)
             )
                 return;
-            const wide =
-                artworkElement.naturalHeight > 0 &&
-                artworkElement.naturalWidth / artworkElement.naturalHeight > 2.5;
-            // Shape can change even when the tone for this source has already been sampled.
-            setArtworkShape(current =>
-                current?.imageUrl === content.imageUrl && current?.wide === wide
-                    ? current
-                    : { imageUrl: content.imageUrl, wide },
-            );
             const source = `${content.imageUrl ?? ''}\u0000${artworkElement.currentSrc || artworkElement.src}`;
             if (sampledSource.current === source) return;
             sampledSource.current = source;
@@ -104,7 +95,7 @@ export function HeroScene({
 
     return (
         <div
-            className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}${wideArtwork ? ' has-wide-artwork' : ''}`}
+            className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
             style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
             data-copy-layout="overlay"
         >
@@ -128,9 +119,9 @@ export function HeroScene({
             <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
                 <div
                     className="hero-rich-copy-region"
-                    role={wideArtwork ? 'region' : undefined}
-                    aria-label={wideArtwork ? title || imageLabel : undefined}
-                    tabIndex={wideArtwork ? 0 : undefined}
+                    role={copyScrollable ? 'region' : undefined}
+                    aria-label={copyScrollable ? title || imageLabel : undefined}
+                    tabIndex={copyScrollable ? 0 : undefined}
                 >
                     <div className="hero-rich-copy-surface">
                         {subtitle && (

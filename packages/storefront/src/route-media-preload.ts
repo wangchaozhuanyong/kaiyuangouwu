@@ -18,7 +18,6 @@ export function preloadRouteMedia(
         window.matchMedia('(min-width: 1024px)').matches,
 ) {
     let source: string | undefined;
-    let kind: 'detail' | 'hero' = 'detail';
     let sizes: string | undefined;
     if (route.name === 'login' || route.name === 'register' || route.name === 'forgot-password') {
         // Mobile login/register artwork is hidden by the auth layout; do not fetch it speculatively.
@@ -26,19 +25,14 @@ export function preloadRouteMedia(
         const content = findAuthVisualContent(blocks, route.name === 'register' ? 'register' : 'login');
         if (content?.imageUrl) source = authOriginalImageUrl(content.imageUrl);
         sizes = '(min-width: 1024px) 640px, 1px';
-    } else if (route.name === 'home') {
-        source = blocks.find(block => block.type === 'HERO' && block.imageUrl?.trim())?.imageUrl ?? undefined;
-        if (source) {
-            kind = 'hero';
-        }
-        // Product modules may use their own selections. Let the rendered priority card
-        // request its actual image instead of speculating from the catalog's first item.
     } else if (route.name === 'product') {
         const product = products.find(item => item.id === route.id);
         if (product) source = productImage(product) ?? undefined;
     }
     if (!source) return;
-    const descriptor = imageSources(source, kind, sizes);
+    // Home's priority SafeImage selects its phone/desktop source after the viewport resolves.
+    // A route-level hint would fetch the desktop artwork before a phone override is available.
+    const descriptor = imageSources(source, 'detail', sizes);
     preload(descriptor.src, {
         as: 'image',
         imageSrcSet: descriptor.srcSet,

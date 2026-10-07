@@ -64,7 +64,7 @@ Tailwind 优先使用成对的语义工具类：
 
 ## 明确例外
 
-- `badge` 仅供数字角标。商品封面装饰微型字 `artwork-caption / artwork-title` 仅由 `styles/ai-product-covers.css` 使用，自动检查禁止其他页面借用。
+- `badge` 仅供数字角标，手机与电脑均为 10px／12px。`CountBadge` 与 `styles/count-badge.css` 统一拥有购物车、订单、收藏、优惠券入口角标：18px 等高、个位正圆、多位胶囊、双向居中，超过 99 显示 `99+`；完整数量保留在所属控件的可访问名称和角标标题中。零值／未加载不显示，桌面行内统计和通知圆点保持各自语义。商品封面装饰微型字 `artwork-caption / artwork-title` 仅由 `styles/ai-product-covers.css` 使用，自动检查禁止其他页面借用。
 - `watermark` 仅为结算页的装饰符号；`illustration / error-code` 仅用于非正文插画或错误编号。
 - `referral-poster-layout.ts` 的画布导出测量属于固定图片尺寸，不属于 DOM 排版；检查仅放行此文件中的 `lineHeight` 测量属性，不放行新的页面样式。
 - 商家上传图片内的文字属于素材内容；不要通过修改界面字号模仿图片文字。

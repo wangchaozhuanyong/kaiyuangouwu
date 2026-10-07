@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import { orderPageStyles } from './tailwind/order-page-styles';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 const stylesheet = readStorefrontStylesheet();
 
@@ -23,6 +23,19 @@ describe('fixed bottom layout clearance', () => {
         expect(checkoutPageStyles['checkout-form']).not.toContain('safe-bottom');
         expect(checkoutPageStyles['purchase-page']).not.toContain('padding-bottom:128px');
         expect(orderPageStyles['order-detail-summary']).not.toContain('margin-bottom:82px');
+        expect(stylesheet).not.toContain('--checkout-viewport-bottom-offset');
+        expect(stylesheet).toContain(
+            'bottom: calc(var(--fixed-bottom-stack, 0px) + var(--storefront-viewport-bottom-offset, 0px))',
+        );
+        // Browser/keyboard movement belongs to fixed positioning, never document clearance.
+        const offsetUses = stylesheet
+            .split('\n')
+            .filter(line => line.includes('--storefront-viewport-bottom-offset'));
+        expect(offsetUses.length).toBeGreaterThan(0);
+        expect(offsetUses.every(line => line.trim().startsWith('bottom:'))).toBe(true);
+        expect(stylesheet).toMatch(
+            /\.page:is\(\.product-detail-page, \.checkout-page, \.order-detail-page\):not\(:has\(\.page-action-bar\)\)\s*\{\s*--page-bottom-fixed-height: 0px;/,
+        );
     });
 
     it('reserves bottom navigation clearance until the desktop layout starts', () => {

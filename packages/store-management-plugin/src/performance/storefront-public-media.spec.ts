@@ -1,7 +1,12 @@
 import { mediaDescriptor } from '@vendure/storefront-content-plugin';
 import { describe, expect, it } from 'vitest';
 
-import { PUBLIC_MEDIA_USES, publicContentImageKinds, publicPageMedia } from './storefront-public-media';
+import {
+    PUBLIC_MEDIA_USES,
+    publicContentImageKinds,
+    publicHeroMobileImage,
+    publicPageMedia,
+} from './storefront-public-media';
 
 function page(data: Record<string, unknown> = {}) {
     return {
@@ -161,5 +166,40 @@ describe('public page media projection', () => {
         expect(publicContentImageKinds('QUICK_LINKS', 'item')).toContain('icon');
         expect(PUBLIC_MEDIA_USES.collection).toEqual(['thumbnail', 'icon']);
         expect(PUBLIC_MEDIA_USES.productDetail).toEqual(['detail', 'thumbnail']);
+    });
+    it('adds an explicitly published phone HERO and intrinsic dimensions without replacing desktop media', () => {
+        const block = {
+            type: 'HERO',
+            enabled: true,
+            imageUrl: '/assets/preview/desktop.webp',
+            settings: {
+                mobileImageUrl: '/assets/preview/phone.webp?v=2',
+                mobileImageWidth: 1200,
+                mobileImageHeight: 900,
+            },
+        };
+        const media = publicPageMedia(page({ content: { blocks: [block] } }));
+        expect(sources(media, 'hero')).toEqual([
+            '/assets/preview/desktop.webp',
+            '/assets/preview/phone.webp?v=2',
+        ]);
+        expect(media[1]).toMatchObject({ kind: 'hero', width: 1200, height: 900, version: '2' });
+        expect(block.imageUrl).toBe('/assets/preview/desktop.webp');
+        block.settings.mobileImageUrl = '';
+        expect(sources(publicPageMedia(page({ content: { blocks: [block] } })), 'hero')).toEqual([
+            '/assets/preview/desktop.webp',
+        ]);
+    });
+    it.each([
+        ['HERO', false, '/assets/preview/phone.webp'],
+        ['SUPPORT', true, '/assets/preview/phone.webp'],
+        ['HERO', true, 'https://other.example/assets/preview/phone.webp'],
+        ['HERO', true, '/assets/cache/phone.webp'],
+        ['HERO', true, '/assets/preview/%2e%2e/private.webp'],
+        ['HERO', true, 'https://user:secret@shop.example/assets/preview/phone.webp'],
+    ] as const)('does not project a phone binding from %s/%s/%s', (type, enabled, mobileImageUrl) => {
+        const block = { type, enabled, settings: { mobileImageUrl } };
+        expect(publicHeroMobileImage(block, 'https://shop.example')).toBeUndefined();
+        expect(publicPageMedia(page({ content: { blocks: [block] } }))).toEqual([]);
     });
 });

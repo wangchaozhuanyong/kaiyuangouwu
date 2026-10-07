@@ -6,11 +6,12 @@ import {
     StorefrontContentLayoutVariant,
     StorefrontContentTargetType,
 } from './constants';
+import { MobileHeroTranslation } from './shared/hero-image';
 
 export type StorefrontContentSettingScalar = string | number | boolean | null;
 export type StorefrontContentSettingsValue = Record<
     string,
-    StorefrontContentSettingScalar | StorefrontContentSettingScalar[]
+    StorefrontContentSettingScalar | StorefrontContentSettingScalar[] | MobileHeroTranslation[]
 >;
 
 export interface StorefrontContentBlockTranslationInput {

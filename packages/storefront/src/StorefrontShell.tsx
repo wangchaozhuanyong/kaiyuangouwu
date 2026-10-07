@@ -45,6 +45,20 @@ const PREVIEW_CUSTOMER: ActiveCustomer = {
 };
 
 export function StorefrontShell({ state }: StorefrontShellProps) {
+    useEffect(() => {
+        let active = true;
+        let dispose: () => void = () => undefined;
+        // Native CSS positioning remains the fallback while this small enhancement loads.
+        void import('./fixed-bottom-viewport')
+            .then(({ trackFixedBottomViewport }) => {
+                if (active) dispose = trackFixedBottomViewport();
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+            dispose();
+        };
+    }, []);
     const desktop = useDesktopViewport();
     // Preview identity belongs to this iframe document, not a changing route query string.
     const [previewParameters] = useState(storefrontPreviewParameters);

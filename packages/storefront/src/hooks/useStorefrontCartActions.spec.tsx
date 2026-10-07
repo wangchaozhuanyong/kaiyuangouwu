@@ -185,6 +185,29 @@ describe('storefront cart action boundaries', () => {
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
     });
 
+    it.each([true, false])(
+        'directs uncertain add and buy-now results to cart review without claiming success: zh=%s',
+        async isZh => {
+            options.isZh = isZh;
+            const uncertain = new ShopApiError('UNKNOWN_RESULT', 'Unknown acknowledgement');
+            api.addItem.mockRejectedValue(uncertain);
+            vi.spyOn(controller, 'execute').mockRejectedValue(uncertain);
+            const variant = {
+                id: 'variant-a',
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant;
+            render();
+            await value.addToCart(variant);
+            await value.startDirectPurchase(variant);
+            const expected = isZh ? '结果待确认，请核对购物车。' : 'Result unconfirmed. Review your cart.';
+            expect(vi.mocked(options.notify).mock.calls).toEqual([[expected], [expected]]);
+            expect(options.setCartError).toHaveBeenLastCalledWith(expected);
+            expect(options.setCart).not.toHaveBeenCalled();
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+            expect(options.navigate).not.toHaveBeenCalled();
+        },
+    );
+
     it('publishes the confirmed buy-now session before navigating to its review page', async () => {
         const order = { id: 'order-a' } as Order;
         const session = { cart, order, checkout: null };

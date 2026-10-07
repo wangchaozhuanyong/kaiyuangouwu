@@ -16,6 +16,7 @@ import {
 } from './checkout-address';
 import { DialogSheet as Sheet } from './components/common/dialog-sheet';
 import { languageCodeFor } from './i18n';
+import { storefrontInitialQueryError, storefrontQueryPresentation } from './loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -26,7 +27,7 @@ import {
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     CustomerAddress,
@@ -101,7 +102,13 @@ export function AddressesPage({
     const [deleting, setDeleting] = useState(false);
     const deletingRef = useRef(false);
     const [emailOpen, setEmailOpen] = useState(false);
-    const [selectedTab, setSelectedTab] = useState<'physical' | 'email' | null>(null);
+    const contactScope = JSON.stringify([market.code, market.currencyCode, language, customer?.id ?? null]);
+    const [tabSelection, setTabSelection] = useState<{
+        scope: string;
+        tab: 'physical' | 'email';
+    } | null>(null);
+    const selectedTab = tabSelection?.scope === contactScope ? tabSelection.tab : null;
+    const selectTab = (tab: 'physical' | 'email') => setTabSelection({ scope: contactScope, tab });
 
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
@@ -128,6 +135,8 @@ export function AddressesPage({
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const deliveryEmails = deliveryEmailsQuery.data ?? [];
+    const deliveryEmailsState = storefrontQueryPresentation(deliveryEmailsQuery);
+    const deliveryEmailsError = storefrontInitialQueryError(deliveryEmailsQuery, language);
 
     const effectiveTab: 'physical' | 'email' = selection
         ? 'physical'
@@ -137,6 +146,18 @@ export function AddressesPage({
             ? 'physical'
             : (selectedTab ??
               (customer?.addresses?.length ? 'physical' : deliveryEmails.length ? 'email' : 'physical'));
+
+    // Remember the first confirmed HYBRID tab for this scope. Refreshes and deleting
+    // the last contact must not move the user to the other tab.
+    if (
+        customer &&
+        !selection &&
+        commerceMode === 'HYBRID' &&
+        selectedTab === null &&
+        (customer.addresses?.length || deliveryEmailsState.hasData)
+    ) {
+        selectTab(effectiveTab);
+    }
 
     if (!customer) {
         return (
@@ -151,10 +172,29 @@ export function AddressesPage({
         );
     }
 
-    if (!commerceMode && commerceModeQuery.isLoading) {
+    // A HYBRID customer's default tab depends on both confirmed contact lists.
+    // Do not briefly present a physical-address empty state while email data is unknown.
+    const requiredQuery = !commerceMode
+        ? commerceModeQuery
+        : !selection && commerceMode === 'HYBRID' && !customer.addresses?.length && selectedTab === null
+          ? deliveryEmailsQuery
+          : null;
+    if (requiredQuery && !storefrontQueryPresentation(requiredQuery).hasData) {
+        const error = storefrontInitialQueryError(requiredQuery, language);
         return (
             <Subpage title={isZh ? '收货信息' : 'Delivery contacts'} language={language} onBack={onBack}>
-                <PageSkeleton label={isZh ? '正在加载收货信息' : 'Loading delivery contacts'} />
+                {error ? (
+                    <InlineError
+                        message={error}
+                        action={isZh ? '重试' : 'Retry'}
+                        onAction={() => void requiredQuery.refetch({ cancelRefetch: false })}
+                    />
+                ) : (
+                    <PageSkeleton
+                        label={isZh ? '正在加载收货信息' : 'Loading delivery contacts'}
+                        language={language}
+                    />
+                )}
             </Subpage>
         );
     }
@@ -522,7 +562,7 @@ export function AddressesPage({
                             <button
                                 type="button"
                                 className={effectiveTab === 'physical' ? 'is-active' : undefined}
-                                onClick={() => setSelectedTab('physical')}
+                                onClick={() => selectTab('physical')}
                             >
                                 <MapPin />
                                 {isZh ? '实际地址' : 'Physical addresses'}
@@ -530,7 +570,7 @@ export function AddressesPage({
                             <button
                                 type="button"
                                 className={effectiveTab === 'email' ? 'is-active' : undefined}
-                                onClick={() => setSelectedTab('email')}
+                                onClick={() => selectTab('email')}
                             >
                                 <Mail />
                                 {isZh ? '交付邮箱' : 'Delivery emails'}
@@ -642,8 +682,17 @@ export function AddressesPage({
                     />
                 ))}
             {effectiveTab === 'email' &&
-                (deliveryEmailsQuery.isLoading && !deliveryEmailsQuery.data ? (
-                    <PageSkeleton label={isZh ? '正在加载交付邮箱' : 'Loading delivery emails'} />
+                (deliveryEmailsError ? (
+                    <InlineError
+                        message={deliveryEmailsError}
+                        action={isZh ? '重试' : 'Retry'}
+                        onAction={() => void deliveryEmailsQuery.refetch({ cancelRefetch: false })}
+                    />
+                ) : deliveryEmailsState.initialLoading ? (
+                    <PageSkeleton
+                        label={isZh ? '正在加载交付邮箱' : 'Loading delivery emails'}
+                        language={language}
+                    />
                 ) : deliveryEmails.length ? (
                     <div className="address-list delivery-email-list">
                         {deliveryEmails.map(email => (

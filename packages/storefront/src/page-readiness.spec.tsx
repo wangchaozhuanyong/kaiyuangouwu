@@ -99,6 +99,8 @@ describe('progressive page readiness', () => {
         expect(stage?.style.pointerEvents).toBe('');
         await advance(240);
         expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
+        expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
         render(<span data-page-pending="module" />);
         await advance();
         expect(phase()).toBe('preparing');
@@ -114,13 +116,18 @@ describe('progressive page readiness', () => {
         expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
     });
 
-    it('shows one progress signal over the current page during product preparation', async () => {
+    it('shows one compact brand status while retaining the current page during product preparation', async () => {
         render(<main>Current page</main>);
         await advance();
         expect(phase()).toBe('ready');
         render(<main>Current page</main>, false, 'first', true, 'first', true);
         expect(host.querySelector('main')?.textContent).toBe('Current page');
-        expect(host.querySelectorAll('.page-readiness-progress')).toHaveLength(1);
+        expect(host.querySelectorAll('.page-readiness-navigation')).toHaveLength(1);
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(host.querySelector('.brand-loading--compact')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-progress')).toBeNull();
         expect(host.querySelector('[aria-label="正在打开商品"]')).not.toBeNull();
         expect(host.querySelector('[data-page-readiness]')?.getAttribute('aria-busy')).toBe('true');
     });

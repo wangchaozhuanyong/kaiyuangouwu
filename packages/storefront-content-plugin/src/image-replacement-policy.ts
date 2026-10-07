@@ -56,6 +56,16 @@ export function imageReplacements(
             imageAssetId: after.imageAssetId ?? null,
             imageUrl: after.imageUrl ?? null,
         });
+        const phoneHero = (value: ImageBinding) => ({
+            imageAssetId:
+                typeof value.settings?.mobileImageAssetId === 'string' ||
+                typeof value.settings?.mobileImageAssetId === 'number'
+                    ? value.settings.mobileImageAssetId
+                    : null,
+            imageUrl:
+                typeof value.settings?.mobileImageUrl === 'string' ? value.settings.mobileImageUrl : null,
+        });
+        check('mobile-hero', phoneHero(previous), phoneHero(patch));
     }
 
     if (patch.items != null) {

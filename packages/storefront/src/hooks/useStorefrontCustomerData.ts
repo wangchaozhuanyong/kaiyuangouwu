@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { type StorefrontConfig } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
 
@@ -14,7 +15,13 @@ export function useStorefrontCustomerData({
     vendureLanguageCode,
     storefrontContextResolved,
     customerAuthenticated,
-}: StorefrontQueryContext) {
+    configQuery,
+}: StorefrontQueryContext & {
+    configQuery: Pick<
+        UseQueryResult<StorefrontConfig>,
+        'isLoading' | 'isPaused' | 'isError' | 'error' | 'refetch'
+    >;
+}) {
     const text = uiCopy[language];
     const cartQueryKey = storefrontQueryKeys.cart(storefrontQueryKeys.market(market), vendureLanguageCode);
 
@@ -37,7 +44,7 @@ export function useStorefrontCustomerData({
         staleTime: 0,
     });
 
-    const customer = customerQuery.data ?? null;
+    const customer = storefrontContextResolved ? (customerQuery.data ?? null) : null;
 
     const couponCampaignsQueryKey = storefrontQueryKeys.couponCampaigns(
         storefrontQueryKeys.market(market),
@@ -89,12 +96,16 @@ export function useStorefrontCustomerData({
         language,
     );
 
+    // An unresolved store cannot load its account yet. Surface the prerequisite failure
+    // instead of leaving the disabled customer query in an endless loading state.
+    const customerReadQuery = storefrontContextResolved ? customerQuery : configQuery;
     const customerLoadState = resolveQueryLoadState({
-        hasData: customerQuery.data !== undefined,
-        isLoading: customerQuery.isLoading,
-        isPaused: customerQuery.isPaused,
-        isError: customerQuery.isError,
+        hasData: storefrontContextResolved && customerQuery.data !== undefined,
+        isLoading: customerReadQuery.isLoading,
+        isPaused: customerReadQuery.isPaused,
+        isError: customerReadQuery.isError,
     });
+    const retryCustomer = () => customerReadQuery.refetch({ cancelRefetch: false });
 
     const cartLoadState = resolveQueryLoadState({
         hasData: cartQuery.data !== undefined,
@@ -106,8 +117,8 @@ export function useStorefrontCustomerData({
     const customerLoadError =
         customerLoadState === 'paused'
             ? offlineLoadError(language)
-            : customerQuery.error instanceof Error
-              ? storefrontErrorMessage(customerQuery.error, language)
+            : customerReadQuery.error instanceof Error
+              ? storefrontErrorMessage(customerReadQuery.error, language)
               : text.loadError;
 
     const couponCampaignsLoading =
@@ -137,6 +148,7 @@ export function useStorefrontCustomerData({
         customerCouponUsageRecordsError,
         customerLoadError,
         customerLoadState,
+        retryCustomer,
         cartLoadState,
         couponCampaignsLoading,
         couponCampaignsError,

@@ -222,8 +222,10 @@ export class CartController {
         this.publish();
         try {
             let result = await this.repository.recover(pending.command.commandId, cancel);
+            if (epoch !== this.epoch) return;
             if (result.status === 'NOT_FOUND') {
-                if (pending.recoveryOnly) throw new Error('尚未找到操作回执，请继续核对或取消待确认操作。');
+                if (cancel || pending.recoveryOnly)
+                    throw new Error('尚未找到操作回执，请继续核对或取消待确认操作。');
                 result = await this.repository.apply(pending.command);
             }
             if (epoch !== this.epoch) return;
@@ -284,6 +286,7 @@ export class CartController {
                             attempt === 0
                                 ? await this.repository.apply(pending.command)
                                 : await this.repository.recover(pending.command.commandId);
+                        if (epoch !== this.epoch) return;
                         if (result.status === 'NOT_FOUND')
                             result = await this.repository.apply(pending.command);
                         break;
@@ -309,8 +312,12 @@ export class CartController {
                 this.error = pending.command
                     ? new ShopApiError('UNKNOWN_RESULT', '保存结果尚未确认，请重试核对后再结算。')
                     : message(error);
-                if (pending.command) this.phase = 'unknown';
-                else {
+                if (pending.command) {
+                    Object.defineProperty(this.error, 'cause', {
+                        value: error,
+                    });
+                    this.phase = 'unknown';
+                } else {
                     this.queue.shift();
                     this.phase = 'idle';
                 }

@@ -104,12 +104,9 @@ describe('bottom navigation configuration', () => {
             'utf8',
         );
 
-        expect(source).toContain('h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))]');
-        expect(source).toContain('lg:top-0 lg:bottom-auto');
-        expect(source).toContain('lg:max-w-[560px]');
-        expect(source).toContain('lg:w-[96px] lg:min-w-[96px]');
-        expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
-        expect(source).not.toContain('sm:top-0');
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        expect(stylesheet).toContain('height: calc(var(--bottom-navigation-height) + var(--safe-bottom))');
+        expect(stylesheet).toContain('bottom: var(--storefront-viewport-bottom-offset, 0px)');
         expect(source).toContain('storefront-bottom-nav');
         expect(source).not.toContain('-translate-x-1/2');
 

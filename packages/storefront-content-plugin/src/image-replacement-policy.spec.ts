@@ -95,3 +95,20 @@ it('preserves decoration bindings for copy edits and reviews replacement or clea
         { slot: 'mobile-decoration', after: 'asset:new' },
     ]);
 });
+
+it('protects an existing phone hero binding while allowing phone copy-only edits and initial artwork', () => {
+    const previous = {
+        imageAssetId: 'desktop',
+        settings: { mobileImageAssetId: 'phone', mobileImageUrl: '/assets/phone.webp' },
+    };
+    expect(
+        imageReplacements(previous, { settings: { ...previous.settings, mobileHeroTextColor: '#292d32' } }),
+    ).toEqual([]);
+    expect(imageReplacements(previous, { settings: { mobileImageAssetId: 'new-phone' } })).toEqual([
+        { slot: 'mobile-hero', before: 'asset:phone', after: 'asset:new-phone' },
+    ]);
+    expect(imageReplacements(previous, { settings: {} })).toEqual([
+        { slot: 'mobile-hero', before: 'asset:phone', after: null },
+    ]);
+    expect(imageReplacements({ imageAssetId: 'desktop' }, previous)).toEqual([]);
+});

@@ -31,7 +31,7 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
                 error={runtime.customerLoadError}
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.customerQuery.refetch({ cancelRefetch: false })}
+                onRetry={() => void runtime.retryAccount()}
             />
         );
     }

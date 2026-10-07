@@ -447,7 +447,14 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             await vi.advanceTimersByTimeAsync(401);
         });
     }
-    function mount(options: { methods?: ShippingMethod[]; selectedCode?: string; manual?: boolean } = {}) {
+    function mount(
+        options: {
+            methods?: ShippingMethod[];
+            selectedCode?: string;
+            manual?: boolean;
+            mode?: 'checkout' | 'purchase';
+        } = {},
+    ) {
         const order = orderFor('PHYSICAL');
         if (options.selectedCode)
             order.checkoutShipping = {
@@ -495,7 +502,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         };
         const onCartChange = vi.fn();
         const props = {
-            mode: 'purchase' as const,
+            mode: options.mode ?? 'purchase',
             api: api as unknown as ShopApi,
             cart: cartFor(order),
             order,
@@ -519,7 +526,8 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         return { api, props, order, onCartChange };
     }
     function element<T extends Element = HTMLElement>(selector: string): T {
-        const match = container.querySelector<T>(selector);
+        const match =
+            container.querySelector<T>(selector) ?? document.querySelector<T>(`.sheet-layer ${selector}`);
         if (!match) throw new Error(`Missing checkout element: ${selector}`);
         return match;
     }
@@ -538,7 +546,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
         expect(container.textContent).not.toContain('下一步，选择配送');
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(api.preparePayment).not.toHaveBeenCalled();
         expect(navigate).not.toHaveBeenCalled();
     });
@@ -550,14 +558,36 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             expect.objectContaining({ preferredShippingCode: 'economy' }),
         );
         await flush(() => trigger().click());
-        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
         expect(container.querySelector('.checkout-options fieldset')).toBeNull();
         await flush(() => element<HTMLInputElement>('input[value="standard"]').click());
         expect(api.setShippingMethodWithCart).toHaveBeenLastCalledWith('standard');
         expect(trigger().textContent).toContain('标准配送');
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(api.preparePayment).not.toHaveBeenCalled();
     });
+
+    it.each(['checkout', 'purchase'] as const)(
+        'portals the delivery chooser outside %s and restores focus without submitting',
+        async mode => {
+            const { api } = mount({ mode });
+            await flush();
+            trigger().focus();
+            await flush(() => trigger().click());
+            const dialog = document.querySelector('[role="dialog"]');
+            expect(dialog?.parentElement?.parentElement).toBe(document.body);
+            expect(container.querySelector('.shipping-method-sheet')).toBeNull();
+            expect(dialog?.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+            expect(document.body.style.overflow).toBe('hidden');
+            await flush(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+            expect(document.querySelector('[role="dialog"]')).toBeNull();
+            expect(document.activeElement).toBe(trigger());
+            expect(document.body.style.overflow).not.toBe('hidden');
+            expect(api.setShippingMethodWithCart).not.toHaveBeenCalled();
+            expect(api.preparePayment).not.toHaveBeenCalled();
+            expect(navigate).not.toHaveBeenCalled();
+        },
+    );
 
     it('uses the only eligible delivery without a chooser, then submits in one click', async () => {
         const { api } = mount({ methods: [methods[1]] });
@@ -664,15 +694,15 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             new ShopApiError('INELIGIBLE_SHIPPING_METHOD_ERROR', 'Shipping is ineligible'),
         );
         await flush(() => element<HTMLInputElement>('input[value="economy"]').click());
-        expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
             '此配送方式不适用于当前订单，请重新选择。',
         );
         expect(submitButton().disabled).toBe(true);
-        const retry = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
             button => button.textContent === '重新计算配送',
         );
         await flush(() => retry?.click());
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
         expect(api.preparePayment).not.toHaveBeenCalled();

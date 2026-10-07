@@ -4,7 +4,7 @@ import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
 import { quantityStockMessage } from '../product-availability';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { storefrontErrorMessage } from '../storefront-errors';
+import { storefrontErrorCode, storefrontErrorMessage } from '../storefront-errors';
 import { ActiveCustomer, Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
 
 import { useStorefrontNavigation } from './useStorefrontNavigation';
@@ -40,6 +40,12 @@ export function useStorefrontCartActions({
     setCartError,
     setAddingVariantId,
 }: StorefrontCartActionOptions) {
+    const cartErrorMessage = (error: unknown, fallback = text.loadError) =>
+        storefrontErrorCode(error) === 'UNKNOWN_RESULT'
+            ? isZh
+                ? '结果待确认，请核对购物车。'
+                : 'Result unconfirmed. Review your cart.'
+            : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback);
     const refreshCart = useCallback(async () => {
         await cartController.recoverPending();
         const latest = await api.cart();
@@ -69,7 +75,7 @@ export function useStorefrontCartActions({
                         isZh ? '购物车已更新，请重新操作' : 'Your cart was updated. Please try again.',
                     );
                 } else {
-                    const message = storefrontErrorMessage(requestError, isZh ? 'zh' : 'en', text.loadError);
+                    const message = cartErrorMessage(requestError);
                     setCartError(message);
                     notify(message);
                 }
@@ -145,19 +151,12 @@ export function useStorefrontCartActions({
                     requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
                 ) {
                     await refreshCart().catch(() => undefined);
-                    setCartError(
-                        isZh
-                            ? '购物车已更新，请重新点击立即购买'
-                            : 'Your cart was updated. Please try Buy now again.',
-                    );
-                } else {
-                    setCartError(storefrontErrorMessage(requestError, isZh ? 'zh' : 'en', text.loadError));
                 }
-                const errorMessage = storefrontErrorMessage(
+                const errorMessage = cartErrorMessage(
                     requestError,
-                    isZh ? 'zh' : 'en',
                     isZh ? '暂时无法发起购买' : 'Could not start the purchase',
                 );
+                setCartError(errorMessage);
                 notify(errorMessage);
             } finally {
                 setAddingVariantId(null);

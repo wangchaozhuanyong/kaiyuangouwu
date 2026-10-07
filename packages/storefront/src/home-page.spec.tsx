@@ -340,6 +340,8 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('后台配置的首页轮播');
         expect(markup).toContain('只显示后台配置的内容');
         expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);
+        const copyAttributes = markup.match(/<div class="hero-rich-copy-region"([^>]*)>/)?.[1] ?? '';
+        expect(copyAttributes.includes('tabindex="0"')).toBe(!desktop);
     });
 
     it('pairs the current store icon with a separate store name in the main header', () => {

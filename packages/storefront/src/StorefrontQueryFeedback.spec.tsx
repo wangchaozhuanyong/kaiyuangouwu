@@ -100,7 +100,7 @@ describe('shared background query feedback', () => {
             else expect(feedback).toBeNull();
         },
     );
-    it('keeps content visible, delays progress, and clears progress after success', async () => {
+    it('keeps routine background refresh silent even when it is slow, then updates content', async () => {
         const page = await mount();
         let refresh!: Promise<void>;
         await act(async () => {
@@ -109,8 +109,11 @@ describe('shared background query feedback', () => {
         });
         expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
         expect(page.container.querySelector('aside')).toBeNull();
-        await page.tick();
-        expect(page.container.querySelector('[role=status]')?.textContent).toContain('正在更新');
+        await page.tick(10_000);
+        expect(page.read).toHaveBeenCalledTimes(1);
+        expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
+        expect(page.container.querySelector('aside')).toBeNull();
+        expect(page.container.querySelector('[role=status]')).toBeNull();
         await act(async () => {
             page.succeed(['新商品']);
             await refresh;
@@ -119,7 +122,38 @@ describe('shared background query feedback', () => {
         expect(page.container.querySelector('main')?.textContent).toBe('新商品');
         expect(page.container.querySelector('aside')).toBeNull();
     });
-    it('keeps cached data after failure, retries locally once, and dismisses only that failure', async () => {
+    it('keeps a dismissed failure quiet during the next refresh but exposes a new failure', async () => {
+        const page = await mount();
+        await act(async () => {
+            const initialRefresh = page.start();
+            page.fail();
+            await initialRefresh;
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        const dismiss = page.container.querySelector<HTMLButtonElement>('button[aria-label="关闭更新提示"]');
+        if (!dismiss) throw new Error('Expected dismiss action');
+        await act(async () => {
+            dismiss.click();
+            await Promise.resolve();
+        });
+        expect(page.container.querySelector('aside')).toBeNull();
+        let refresh!: Promise<void>;
+        await act(async () => {
+            refresh = page.start();
+            await Promise.resolve();
+        });
+        await page.tick(1000);
+        expect(page.container.querySelector('aside')).toBeNull();
+        await act(async () => {
+            page.fail();
+            await refresh;
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(page.container.querySelector('[role=alert]')?.textContent).toContain('更新失败');
+        expect(page.container.querySelector('main')?.textContent).toBe('已有商品');
+    });
+
+    it('keeps cached data after failure and exposes one local retry with a busy state', async () => {
         const page = await mount();
         let refresh!: Promise<void>;
         await act(async () => {
@@ -137,7 +171,11 @@ describe('shared background query feedback', () => {
             retry.click();
             await Promise.resolve();
         });
+        await page.tick(1);
         expect(page.read).toHaveBeenCalledTimes(2);
+        expect(retry.disabled).toBe(true);
+        expect(retry.getAttribute('aria-busy')).toBe('true');
+        expect(page.container.querySelector('[role=alert]')).not.toBeNull();
         await act(async () => {
             page.succeed(['恢复']);
             await vi.advanceTimersByTimeAsync(1);

@@ -148,9 +148,10 @@
     overflow-wrap: anywhere;
     color: var(--hero-image-copy-foreground, var(--text));
 }
-.home-page .hero .hero-service-overlay .trust-icon {
+.home-page .hero .hero-service-overlay .home-trust-item .trust-icon {
     width: 15px;
     height: 15px;
+    color: inherit;
 }
 .home-page .hero .hero-service-overlay .home-trust-copy {
     gap: 2px;
@@ -180,51 +181,44 @@
 
     .home-page .hero .hero-service-overlay .home-trust-bar,
     .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        align-items: stretch;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
         width: 100%;
         gap: var(--space-4);
         padding: var(--space-4);
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
         background: transparent;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
 
     .home-page .hero .hero-service-overlay .home-trust-item {
+        flex: 0 0 auto;
+        flex-direction: row;
         min-width: 0;
-        justify-content: center;
+        justify-content: flex-start;
         gap: var(--space-4);
         font-size: var(--type-meta-size);
         line-height: var(--type-meta-leading);
+        white-space: nowrap;
+    }
+
+    /* Center the group when it fits; overflowing labels keep their scrollable start. */
+    .home-page .hero .hero-service-overlay .home-trust-item:first-child {
+        margin-inline-start: auto;
+    }
+
+    .home-page .hero .hero-service-overlay .home-trust-item:last-child {
+        margin-inline-end: auto;
     }
 
     .home-page .hero .hero-service-overlay .home-trust-label {
         max-width: 100%;
         text-align: center;
-    }
-
-    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy {
-        display: flex;
-        flex-wrap: nowrap;
-        justify-content: flex-start;
-        gap: var(--space-12);
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        scrollbar-width: none;
-    }
-
-    .home-page .hero .hero-service-overlay .home-trust-bar.has-long-copy .home-trust-item {
-        flex: 0 0 auto;
-        flex-direction: row;
-        justify-content: flex-start;
-        white-space: nowrap;
-    }
-}
-@media (max-width: 359px) {
-    .home-page .hero .hero-service-overlay .home-trust-item {
-        flex-direction: column;
-        justify-content: flex-start;
     }
 }
 
@@ -2726,12 +2720,13 @@
 }
 
 .primary-categories button {
-    width: 76px;
-    min-width: 76px;
-    max-width: 76px;
+    /* Five full-width characters plus the existing horizontal button padding, in every language. */
+    width: calc(5 * var(--type-label-size) + 4px);
+    min-width: calc(5 * var(--type-label-size) + 4px);
+    max-width: calc(5 * var(--type-label-size) + 4px);
     height: 68px;
     padding: 0 2px;
-    flex: 0 0 76px;
+    flex: 0 0 auto;
     border: 0;
     background: transparent;
     color: var(--muted);
@@ -2804,10 +2799,13 @@
 }
 
 .primary-category-label {
-    width: 100%;
-    height: 18px;
-    min-height: 18px;
-    padding: 0 1px;
+    width: 5em;
+    min-width: 5em;
+    max-width: 5em;
+    height: var(--type-label-leading);
+    min-height: var(--type-label-leading);
+    padding: 0;
+    display: block;
     overflow: hidden;
     border-radius: 9999px;
     font-size: var(--type-label-size);
@@ -2826,33 +2824,6 @@
 html[lang='en'] .primary-category-image {
     width: 34px;
     height: 34px;
-}
-
-html[lang='en'] .primary-category-label {
-    height: 48px;
-    padding: 0 2px;
-    border-radius: 6px;
-    display: -webkit-box;
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-    text-overflow: clip;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-}
-
-html[lang='en'] .primary-category-switcher {
-    height: 106px;
-}
-
-html[lang='en'] .primary-category-strip {
-    height: 105px;
-}
-
-html[lang='en'] .primary-categories button {
-    width: 80px;
-    min-width: 80px;
-    height: 92px;
 }
 
 .primary-categories button.is-active {
@@ -2973,7 +2944,8 @@ html[lang='en'] .primary-categories button {
     margin: 0 auto;
     padding: 3px 7px 5px;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, calc(5 * var(--type-label-size) + 4px));
+    justify-content: space-between;
     row-gap: 5px;
 }
 
@@ -3026,7 +2998,7 @@ html[lang='en'] .primary-categories button {
 .all-primary-category-grid button > span:last-child {
     width: 5em;
     min-width: 5em;
-    max-width: none;
+    max-width: 5em;
     min-height: 0;
     padding: 2px 0;
     display: block;
@@ -3037,7 +3009,7 @@ html[lang='en'] .primary-categories button {
     text-align: center;
     line-height: var(--type-label-leading);
     letter-spacing: var(--tracking-normal);
-    text-overflow: clip;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
@@ -3296,6 +3268,8 @@ html[lang='en'] .primary-categories button {
     }
 
     .category-navigation-shell > .topbar.category-topbar {
+        /* Match the product column without moving the category rail or All control. */
+        --page-section-inset: var(--experience-page-gutter-mobile);
         background: var(--bg);
         box-shadow: none;
     }
@@ -3385,17 +3359,8 @@ html[lang='en'] .primary-categories button {
     }
 
     .category-page .primary-category-label {
-        width: 100%;
-        max-width: 100%;
         height: auto;
-        min-height: 0;
-        padding: 2px 0;
-        display: block;
-        overflow: visible;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        line-height: var(--type-label-leading);
-        font-size: var(--type-label-size);
+        padding-block: 2px;
         border-radius: var(--skin-control-radius);
     }
 
@@ -3482,15 +3447,11 @@ html[lang='en'] .primary-categories button {
         gap: 4px;
     }
     .category-page .primary-category-strip .primary-categories button {
-        width: 72px;
-        min-width: 72px;
-        max-width: 72px;
-        flex: 0 0 72px;
         padding-inline: 0;
     }
     .category-page .all-primary-category-grid {
         padding-inline: var(--page-section-inset, 16px);
-        grid-template-columns: repeat(auto-fit, 72px);
+        grid-template-columns: repeat(auto-fit, calc(5 * var(--type-label-size) + 4px));
         column-gap: 16px;
         justify-content: space-between;
     }
@@ -3509,7 +3470,6 @@ html[lang='en'] .primary-categories button {
         width: 60px;
         height: 60px;
     }
-    html[lang='en'] .category-page .primary-category-label,
     html[lang='en'] .category-page .primary-categories-all-label {
         height: auto;
         min-height: 0;
@@ -3530,7 +3490,6 @@ html[lang='en'] .primary-categories button {
 
 @media (max-width: 767px) {
     .category-page .all-primary-category-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
         column-gap: 8px;
         row-gap: 8px;
     }
@@ -3652,14 +3611,6 @@ html[lang='en'] .primary-categories button {
     padding-inline: 0 var(--primary-category-toggle-width);
     scroll-padding-inline: 0 var(--primary-category-toggle-width);
     justify-content: flex-start;
-}
-
-.category-page .primary-categories button {
-    width: 76px;
-    min-width: 76px;
-    max-width: 76px;
-    flex: 0 0 76px;
-    padding-inline: 2px;
 }
 
 .category-page .primary-categories-all {
