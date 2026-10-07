@@ -750,6 +750,16 @@ describe('complete cart domain on MySQL', () => {
                 }
             }
         `);
+        // This case must also seed its digital item when run as a failed-case retry.
+        const currentCart = await read();
+        if (
+            !currentCart.lines.some((line: any) => line.selected && variants.includes(line.productVariant.id))
+        ) {
+            const digital = await send({
+                changes: { add: [{ productVariantId: variants[0], quantity: 1 }] },
+            });
+            expect(digital.status, digital.message).toBe('APPLIED');
+        }
         const product = await adminClient.query(gql`
             mutation {
                 createProduct(
