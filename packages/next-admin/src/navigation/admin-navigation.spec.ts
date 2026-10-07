@@ -27,6 +27,7 @@ describe('standalone administration navigation', () => {
     });
     it.each([
         ['/settings/system-ops', '?tab=jobs&state=FAILED', '/settings/system-ops/jobs?state=FAILED'],
+        ['/settings/system-ops', '?tab=telegram', '/settings/system-ops/telegram'],
         ['/settings/system-ops', '?tab=governance&take=50', '/settings/governance-risk/rules?take=50'],
         [
             '/settings/data-management',
@@ -88,5 +89,12 @@ describe('standalone administration navigation', () => {
         expect(
             standalonePagePermissions(getStandaloneAdminPage('/settings/store-profile/usdt-payments')!),
         ).toContain('ReadStoreProfile');
+    });
+    it('requires platform context and SuperAdmin for the shared notification page', () => {
+        const path = '/settings/system-ops/telegram';
+        expect(standalonePageScopeAllows(path, false)).toBe(false);
+        expect(standalonePageScopeAllows(path, true)).toBe(true);
+        expect(standalonePagePermissions(getStandaloneAdminPage(path)!)).toEqual(['SuperAdmin']);
+        expect(standalonePageScopeAllows('/settings/system-ops/api-keys', false)).toBe(true);
     });
 });

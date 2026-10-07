@@ -15,7 +15,7 @@ import { MyStoreCommerceEditor } from './MyStoreCommerceEditor';
 import { MyStorePaymentOptions, MyStorePayoutAccount, MyStoreUsdtWallet } from './MyStoreFinanceEditors';
 import { MyStoreProfileEditor } from './MyStoreProfileEditor';
 import { ErrorState, Message, SettingsContentSkeleton } from './settings-ui';
-import { governanceStatusLabel } from './StoreGovernanceLabels';
+import { governanceStatusLabel, storeSettingsSubtitle } from './StoreGovernanceLabels';
 import { DomainsPanel } from './StorePanels';
 export function MyStoreSettingsModule() {
     const standalonePage = useStandaloneAdminPage();
@@ -78,18 +78,21 @@ export function MyStoreSettingsModule() {
     };
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                    <Store className="h-5 w-5 text-blue-600" />
-                    {standalonePage?.title ?? '我的店铺设置'}
-                    <FeatureHelpButton
-                        topic="settings.store-profile"
-                        title="我的店铺设置"
-                        description={'此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。'}
-                    />
-                </h1>
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
+                <div className="admin-page-title-line">
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                        <Store className="h-5 w-5 text-blue-600" />
+                        {standalonePage?.title ?? '我的店铺设置'}
+                        <FeatureHelpButton
+                            topic="settings.store-profile"
+                            title="我的店铺设置"
+                            description={'此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。'}
+                        />
+                    </h1>
+                    <p className="text-xs text-slate-500">{storeSettingsSubtitle(standalonePage?.key)}</p>
+                </div>
             </header>
-            <main className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="min-h-0 min-w-0 w-full flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}

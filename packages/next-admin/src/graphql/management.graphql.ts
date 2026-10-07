@@ -1200,6 +1200,10 @@ const API_KEY_FIELDS = gql`
 export const SYSTEM_OPERATIONS_QUERY = gql`
     ${API_KEY_FIELDS}
     query NextAdminSystemOperations($jobOptions: JobListOptions, $apiKeyOptions: ApiKeyListOptions) {
+        activeChannel {
+            id
+            code
+        }
         jobs(options: $jobOptions) {
             totalItems
             items {
@@ -1845,6 +1849,7 @@ export interface ApiKeyRecord {
 }
 
 export interface SystemOperationsResult {
+    activeChannel?: { id: string; code: string };
     jobs: { totalItems: number; items: SystemJobRecord[] };
     jobQueues: Array<{ name: string; running: boolean }>;
     scheduledTasks: ScheduledTaskRecord[];

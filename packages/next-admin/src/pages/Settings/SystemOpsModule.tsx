@@ -2,7 +2,6 @@ import { useMutation } from '@apollo/client/react';
 import {
     Activity,
     AlertCircle,
-    Braces,
     CalendarClock,
     CheckCircle2,
     ChevronLeft,
@@ -26,8 +25,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getSystemLabel } from '../../../../common/src/display-localization';
-import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -59,14 +57,12 @@ import {
     MAILBOX_INTEGRATION_ACCESS_QUERY,
     ROTATE_API_KEY_MUTATION,
     RUN_SCHEDULED_TASK_MUTATION,
-    SET_SETTINGS_STORE_VALUE_MUTATION,
     SYSTEM_OPERATIONS_QUERY,
     UPDATE_API_KEY_MUTATION,
     UPDATE_SCHEDULED_TASK_MUTATION,
     type ApiKeyRecord,
     type MailboxIntegrationAccessResult,
     type ScheduledTaskRecord,
-    type SettingsStoreFieldRecord,
     type SystemJobRecord,
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
@@ -83,9 +79,19 @@ import { GovernanceRiskPanel } from './GovernanceRiskPanel';
 import { isMailboxIntegrationRole } from './mailbox-integration-role';
 import { SettingsContentSkeleton } from './settings-ui';
 import { getSystemWorkerHealth } from './system-worker-health';
+import { SystemSettingsPanel } from './SystemSettingsPanel';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
 type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM' | 'GOVERNANCE';
+const SYSTEM_OPS_DESCRIPTIONS: Record<Tab, string> = {
+    HEALTH: '服务状态与真实运行指标',
+    JOBS: '队列筛选与最近执行记录',
+    SCHEDULES: '计划与执行状态',
+    SETTINGS: '中文摘要与专用设置入口',
+    API_KEYS: '用途、访问角色与最近使用',
+    TELEGRAM: '连接策略、部门路由与发送记录',
+    GOVERNANCE: '治理审批与风险复核',
+};
 const SYSTEM_OPS_TABS = {
     health: 'HEALTH',
     jobs: 'JOBS',
@@ -123,7 +129,7 @@ export function SystemOpsModule() {
                         : activeTab === 'SCHEDULES'
                           ? ['scheduledTasks']
                           : activeTab === 'SETTINGS'
-                            ? ['settingsStoreFieldDefinitions']
+                            ? ['settingsStoreFieldDefinitions', 'activeChannel']
                             : ['apiKeys', 'activeAdministrator'],
               )
             : systemOperationsDocument,
@@ -157,20 +163,27 @@ export function SystemOpsModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Terminal className="h-5 w-5 text-blue-600" />
                             {standalonePage?.title ?? '系统运维'}
                             <FeatureHelpButton
-                                topic="settings.system-ops"
-                                title="系统运维"
+                                topic={
+                                    activeTab === 'SETTINGS'
+                                        ? 'settings.dynamic-config'
+                                        : 'settings.system-ops'
+                                }
+                                title={activeTab === 'SETTINGS' ? '高级配置' : '系统运维'}
                                 description={
-                                    '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
+                                    activeTab === 'SETTINGS'
+                                        ? '查看中文配置说明和对应设置入口；技术诊断按需展开'
+                                        : '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
                                 }
                             />
                         </h1>
+                        <p className="text-xs text-slate-500">{SYSTEM_OPS_DESCRIPTIONS[activeTab]}</p>
                     </div>
                     <AdminButton
                         refreshPage
@@ -186,7 +199,7 @@ export function SystemOpsModule() {
                     </AdminButton>
                 </div>
             </header>
-            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -309,8 +322,9 @@ export function SystemOpsModule() {
                                 />
                             )}
                             {activeTab === 'SETTINGS' && (
-                                <SettingsStorePanel
+                                <SystemSettingsPanel
                                     fields={data.settingsStoreFieldDefinitions}
+                                    channelCode={data.activeChannel?.code}
                                     onChanged={completed}
                                     onError={setActionError}
                                 />
@@ -447,8 +461,9 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                             <Server className="h-5 w-5" />
                         </div>
                         <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                                 服务实时检查
+                                <span className="text-xs font-normal text-slate-500">后台健康与管理 API</span>
                                 <FeatureHelpButton topic="settings.service-checks" title="服务实时检查" />
                             </h2>
                             <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -468,8 +483,9 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                             <Gauge className="h-5 w-5" />
                         </div>
                         <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                            <h2 className="admin-section-title-line text-sm font-bold text-amber-950">
                                 监控能力边界
+                                <span className="text-xs font-normal text-amber-700">当前可观测范围</span>
                                 <FeatureHelpButton
                                     topic="settings.service-checks"
                                     title="监控能力边界"
@@ -580,8 +596,9 @@ function JobsPanel({
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="space-y-3 border-b border-slate-100 p-4">
                     <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                             任务执行记录
+                            <span className="text-xs font-normal text-slate-500">最多读取最近 100 条</span>
                             <FeatureHelpButton
                                 topic="settings.job-runs"
                                 title="任务执行记录"
@@ -640,19 +657,16 @@ function JobsPanel({
                     </div>
                 </div>
                 <div
-                    className="max-h-[min(60vh,36rem)] overflow-auto"
+                    className="admin-comparison-scroll max-h-[min(60vh,36rem)] overflow-auto"
                     tabIndex={0}
                     role="region"
                     aria-label="任务执行记录"
                     ref={recordsRef}
                 >
-                    <table className="admin-mobile-record-table w-full min-w-[1680px] border-collapse text-left text-xs">
+                    <table className="admin-compact-table w-full min-w-[1680px] border-collapse text-left text-xs">
                         <thead className="sticky top-0 z-30 bg-slate-50">
                             <tr className={theadClass}>
-                                <th
-                                    scope="col"
-                                    className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
-                                >
+                                <th scope="col" className="w-56 whitespace-nowrap bg-slate-50 px-3 py-3">
                                     任务 ID
                                 </th>
                                 <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
@@ -692,7 +706,7 @@ function JobsPanel({
                                 <tr key={job.id} className="group h-[52px] hover:bg-slate-50">
                                     <td
                                         data-label="任务 ID"
-                                        className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                        className="h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
                                     >
                                         <span
                                             className="block truncate font-mono text-[10px] font-bold text-slate-700"
@@ -772,10 +786,10 @@ function JobsPanel({
                                     </td>
                                 </tr>
                             ))}
-                            {!filtered.length && <EmptyRow colSpan={10} text="当前条件下没有任务记录" />}
                         </tbody>
                     </table>
                 </div>
+                {!filtered.length && <EmptyRecordsMessage text="当前条件下没有任务记录" />}
                 <div className="border-t border-slate-100 px-4 py-3">
                     <LookupPager
                         page={currentPage}
@@ -834,8 +848,9 @@ function SchedulesPanel({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                     定时任务调度
+                    <span className="text-xs font-normal text-slate-500">计划与执行状态</span>
                     <FeatureHelpButton
                         topic="settings.schedules"
                         title="定时任务调度"
@@ -843,14 +858,11 @@ function SchedulesPanel({
                     />
                 </h2>
             </div>
-            <div className="overflow-x-auto">
-                <table className="admin-mobile-record-table w-full min-w-[1720px] border-collapse text-left text-xs">
+            <div className="admin-comparison-scroll">
+                <table className="admin-compact-table w-full min-w-[1720px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th
-                                scope="col"
-                                className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
-                            >
+                            <th scope="col" className="w-56 whitespace-nowrap bg-slate-50 px-3 py-3">
                                 任务名称
                             </th>
                             <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
@@ -887,7 +899,7 @@ function SchedulesPanel({
                             <tr key={task.id} className="group h-[52px] hover:bg-slate-50">
                                 <td
                                     data-label="任务名称"
-                                    className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
+                                    className="h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50"
                                 >
                                     <span
                                         className="block truncate font-bold text-slate-800"
@@ -983,146 +995,10 @@ function SchedulesPanel({
                                 </td>
                             </tr>
                         ))}
-                        {!tasks.length && <EmptyRow colSpan={9} text="服务端没有注册定时任务" />}
                     </tbody>
                 </table>
             </div>
-        </section>
-    );
-}
-
-function SettingsStorePanel({
-    fields,
-    onChanged,
-    onError,
-}: {
-    fields: SettingsStoreFieldRecord[];
-    onChanged: (message: string) => Promise<void>;
-    onError: (message: string) => void;
-}) {
-    const [search, setSearch] = useState('');
-    const [scope, setScope] = useState('ALL');
-    const [editor, setEditor] = useState<SettingsStoreFieldRecord | null>(null);
-    const [save, state] = useMutation<{ setSettingsStoreValue: { result: boolean; error: string | null } }>(
-        SET_SETTINGS_STORE_VALUE_MUTATION,
-    );
-    const filtered = fields.filter(
-        field =>
-            (scope === 'ALL' || field.scopeType === scope) &&
-            (!search.trim() || field.key.toLowerCase().includes(search.trim().toLowerCase())),
-    );
-    const update = async (field: SettingsStoreFieldRecord, value: unknown) => {
-        try {
-            const response = await save({ variables: { input: { key: field.key, value } } });
-            const result = response.data?.setSettingsStoreValue;
-            if (!result?.result) throw new Error(result?.error || '保存失败');
-            setEditor(null);
-            await onChanged(`配置 ${field.key} 已更新`);
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        动态配置仓库
-                        <FeatureHelpButton
-                            topic="settings.dynamic-config"
-                            title="动态配置仓库"
-                            description={'字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型'}
-                        />
-                    </h2>
-                </div>
-                <div className="flex gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
-                        <AdminInput
-                            value={search}
-                            onChange={event => setSearch(event.target.value)}
-                            aria-label="搜索系统配置"
-                            placeholder="搜索配置键"
-                            className={`${inputClass} w-60 pl-8`}
-                        />
-                    </div>
-                    <AdminSelect
-                        value={scope}
-                        onChange={event => setScope(event.target.value)}
-                        className={inputClass}
-                    >
-                        <option value="ALL">全部作用域</option>
-                        {['GLOBAL', 'CHANNEL', 'USER', 'USER_AND_CHANNEL', 'CUSTOM'].map(value => (
-                            <option key={value} value={value}>
-                                {scopeLabel(value)}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </div>
-            </div>
-            <div className="divide-y divide-slate-100">
-                {filtered.map(field => (
-                    <div
-                        key={field.key}
-                        className="flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between"
-                    >
-                        <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <code className="font-mono text-xs font-bold text-slate-800">
-                                    {field.key}
-                                </code>
-                                <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] text-slate-600">
-                                    {scopeLabel(field.scopeType)}
-                                </span>
-                                {field.readonly && (
-                                    <span className="rounded bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-700">
-                                        只读
-                                    </span>
-                                )}
-                            </div>
-                            <code
-                                className="mt-2 block max-w-4xl truncate text-[10px] text-slate-500"
-                                title={formatJson(field.currentValue)}
-                            >
-                                {formatJson(field.currentValue)}
-                            </code>
-                        </div>
-                        {!field.readonly &&
-                            (typeof field.currentValue === 'boolean' ? (
-                                <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-600">
-                                    <AdminInput
-                                        type="checkbox"
-                                        checked={field.currentValue}
-                                        onChange={event => void update(field, event.target.checked)}
-                                        disabled={state.loading}
-                                    />
-                                    {field.currentValue ? '已开启' : '已关闭'}
-                                </label>
-                            ) : (
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => setEditor(field)}
-                                    className={secondaryButton}
-                                >
-                                    <Braces className="h-3.5 w-3.5" />
-                                    编辑值
-                                </AdminButton>
-                            ))}
-                    </div>
-                ))}
-                {!filtered.length && (
-                    <div className="p-12 text-center text-xs text-slate-400">当前条件下没有配置项</div>
-                )}
-            </div>
-            {editor && (
-                <SettingsValueEditor
-                    field={editor}
-                    saving={state.loading}
-                    onClose={() => setEditor(null)}
-                    onSave={value => void update(editor, value)}
-                    onError={onError}
-                />
-            )}
+            {!tasks.length && <EmptyRecordsMessage text="服务端没有注册定时任务" />}
         </section>
     );
 }
@@ -1159,6 +1035,7 @@ function ApiKeysPanel({
     const requestConfirmation = useConfirmDialog();
     const [createOpen, setCreateOpen] = useState(false);
     const [editingKey, setEditingKey] = useState<ApiKeyRecord | null>(null);
+    const [actionsKey, setActionsKey] = useState<ApiKeyRecord | null>(null);
     const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
     const mailboxAccess = useQuery<MailboxIntegrationAccessResult>(MAILBOX_INTEGRATION_ACCESS_QUERY, {
         skip: !canManageMailboxAccess,
@@ -1291,8 +1168,9 @@ function ApiKeysPanel({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 p-5">
                 <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                         API 密钥
+                        <span className="text-xs font-normal text-slate-500">用途与访问角色</span>
                         <FeatureHelpButton
                             topic="settings.api-keys"
                             title="API 密钥"
@@ -1335,78 +1213,87 @@ function ApiKeysPanel({
                     )}
                 </div>
             )}
-            <div className="divide-y divide-slate-100">
-                {keys.map(key => (
-                    <div
-                        key={key.id}
-                        className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between"
-                    >
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <KeyRound className="h-4 w-4 text-blue-600" />
-                                <strong className="text-xs text-slate-900">{key.name}</strong>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-400">
-                                <span>
-                                    查询编号：
-                                    <code className="font-mono text-slate-600">{key.lookupId}</code>
-                                </span>
-                                <span>创建者：{key.owner?.identifier ?? '—'}</span>
-                                <span>
-                                    最近使用：{key.lastUsedAt ? formatDateTime(key.lastUsedAt) : '从未使用'}
-                                </span>
-                                <span>
-                                    当前角色：
-                                    {key.user.roles.map(role => getRoleLabel(role)).join('、') || '无'}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {mailboxRole &&
-                                (key.user.roles.length !== 1 || key.user.roles[0]?.id !== mailboxRole.id) && (
+            <div
+                className="admin-comparison-scroll"
+                role="region"
+                tabIndex={0}
+                aria-label="接口密钥表，可横向滚动"
+            >
+                <table className="admin-compact-table w-full min-w-[1010px] table-fixed border-collapse text-left text-xs">
+                    <colgroup>
+                        <col className="w-[200px]" />
+                        <col className="w-[180px]" />
+                        <col className="w-[170px]" />
+                        <col className="w-[150px]" />
+                        <col className="w-[210px]" />
+                        <col className="w-[100px]" />
+                    </colgroup>
+                    <thead>
+                        <tr className={theadClass}>
+                            <th scope="col">用途名称</th>
+                            <th scope="col">查询编号</th>
+                            <th scope="col">创建者</th>
+                            <th scope="col">最近使用</th>
+                            <th scope="col">当前角色</th>
+                            <th scope="col" className="sticky right-0 bg-slate-50 text-right">
+                                操作
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {keys.map(key => (
+                            <tr key={key.id} className="group hover:bg-slate-50">
+                                <td data-label="用途名称">
+                                    <span
+                                        className="block truncate font-semibold text-slate-900"
+                                        title={key.name}
+                                    >
+                                        {key.name}
+                                    </span>
+                                </td>
+                                <td data-label="查询编号" className="font-mono text-slate-500">
+                                    <span className="block truncate" title={key.lookupId}>
+                                        {key.lookupId}
+                                    </span>
+                                </td>
+                                <td data-label="创建者">
+                                    <span className="block truncate" title={key.owner?.identifier ?? '—'}>
+                                        {key.owner?.identifier ?? '—'}
+                                    </span>
+                                </td>
+                                <td data-label="最近使用" className="whitespace-nowrap">
+                                    {key.lastUsedAt ? formatDateTime(key.lastUsedAt) : '从未使用'}
+                                </td>
+                                <td data-label="当前角色">
+                                    <span
+                                        className="block truncate"
+                                        title={
+                                            key.user.roles.map(role => getRoleLabel(role)).join('、') || '无'
+                                        }
+                                    >
+                                        {key.user.roles.map(role => getRoleLabel(role)).join('、') || '无'}
+                                    </span>
+                                </td>
+                                <td
+                                    data-label="操作"
+                                    className="sticky right-0 bg-white text-right group-hover:bg-slate-50"
+                                >
                                     <AdminButton
                                         type="button"
-                                        onClick={() => void restrictKeyToMailbox(key)}
+                                        onClick={() => setActionsKey(key)}
                                         disabled={busy}
                                         className={secondaryButton}
+                                        aria-label={`${key.name} 操作`}
                                     >
-                                        设为邮箱专用密钥
+                                        操作
                                     </AdminButton>
-                                )}
-                            <AdminButton
-                                type="button"
-                                onClick={() => setEditingKey(key)}
-                                disabled={busy}
-                                className={secondaryButton}
-                            >
-                                <Pencil className="h-3.5 w-3.5" />
-                                编辑
-                            </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void rotateKey(key)}
-                                disabled={busy}
-                                className={secondaryButton}
-                            >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                                轮转
-                            </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void destroy(key)}
-                                disabled={busy}
-                                className={`${secondaryButton} text-rose-600`}
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                删除
-                            </AdminButton>
-                        </div>
-                    </div>
-                ))}
-                {!keys.length && (
-                    <div className="p-12 text-center text-xs text-slate-400">当前页没有 API 密钥</div>
-                )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
+            {!keys.length && <EmptyRecordsMessage text="当前页没有 API 密钥" />}
             <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
                 <span>
                     共 {total} 条，第 {page + 1}/{totalPages} 页
@@ -1437,6 +1324,63 @@ function ApiKeysPanel({
                     </AdminButton>
                 </div>
             </div>
+            {actionsKey && (
+                <Modal title={actionsKey.name} description="密钥操作" onClose={() => setActionsKey(null)}>
+                    <div className="flex flex-wrap gap-2">
+                        {mailboxRole &&
+                            (actionsKey.user.roles.length !== 1 ||
+                                actionsKey.user.roles[0]?.id !== mailboxRole.id) && (
+                                <AdminButton
+                                    type="button"
+                                    onClick={() => {
+                                        setActionsKey(null);
+                                        void restrictKeyToMailbox(actionsKey);
+                                    }}
+                                    disabled={busy}
+                                    className={secondaryButton}
+                                >
+                                    设为邮箱专用密钥
+                                </AdminButton>
+                            )}
+                        <AdminButton
+                            type="button"
+                            onClick={() => {
+                                setActionsKey(null);
+                                setEditingKey(actionsKey);
+                            }}
+                            disabled={busy}
+                            className={secondaryButton}
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                            编辑
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            onClick={() => {
+                                setActionsKey(null);
+                                void rotateKey(actionsKey);
+                            }}
+                            disabled={busy}
+                            className={secondaryButton}
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            轮转
+                        </AdminButton>
+                        <AdminButton
+                            type="button"
+                            onClick={() => {
+                                setActionsKey(null);
+                                void destroy(actionsKey);
+                            }}
+                            disabled={busy}
+                            className={`${secondaryButton} text-rose-600`}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            删除
+                        </AdminButton>
+                    </div>
+                </Modal>
+            )}
             {createOpen && (
                 <CreateApiKeyDialog
                     roles={mailboxRole ? [...roles, mailboxRole] : roles}
@@ -1725,57 +1669,6 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
     );
 }
 
-function SettingsValueEditor({
-    field,
-    saving,
-    onClose,
-    onSave,
-    onError,
-}: {
-    field: SettingsStoreFieldRecord;
-    saving: boolean;
-    onClose: () => void;
-    onSave: (value: unknown) => void;
-    onError: (message: string) => void;
-}) {
-    const complex = typeof field.currentValue === 'object' && field.currentValue !== null;
-    const [draft, setDraft] = useState(
-        field.currentValue == null
-            ? ''
-            : typeof field.currentValue === 'object'
-              ? JSON.stringify(field.currentValue, null, 2)
-              : String(field.currentValue),
-    );
-    const submit = () => {
-        try {
-            if (complex) return onSave(JSON.parse(draft));
-            if (typeof field.currentValue === 'number') {
-                const value = Number(draft);
-                if (!Number.isFinite(value)) throw new Error('请输入有效数字');
-                return onSave(value);
-            }
-            onSave(draft);
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <Modal
-            title={`编辑 ${field.key}`}
-            description={`作用域：${scopeLabel(field.scopeType)}；将按 ${complex ? 'JSON' : typeof field.currentValue} 类型保存`}
-            onClose={onClose}
-        >
-            <AdminTextArea
-                rows={complex ? 16 : 5}
-                value={draft}
-                onChange={event => setDraft(event.target.value)}
-                className={`${inputClass} font-mono leading-5`}
-                spellCheck={false}
-            />
-            <ModalActions onClose={onClose} onSave={submit} saving={saving} saveLabel="保存配置" />
-        </Modal>
-    );
-}
 function JobStateBadge({ state }: { state: string }) {
     const classes = ['COMPLETED'].includes(state)
         ? 'bg-emerald-50 text-emerald-700'
@@ -1799,16 +1692,6 @@ function jobStateLabel(state: string) {
         CANCELLED: '已取消',
     };
     return labels[state] ?? getStatusLabel(state);
-}
-function scopeLabel(scope: string) {
-    const labels: Record<string, string> = {
-        GLOBAL: '全局',
-        CHANNEL: '当前渠道',
-        USER: '当前用户',
-        USER_AND_CHANNEL: '用户与渠道',
-        CUSTOM: '自定义',
-    };
-    return getSystemLabel(scope, labels, 'zh', 'scope');
 }
 function formatDuration(duration: number) {
     if (!duration) return '—';
@@ -1888,18 +1771,16 @@ function Modal({
     children: React.ReactNode;
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 p-4">
             <AccessibleDialogSurface
                 accessibleName={title}
                 onRequestClose={onClose}
                 className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
             >
                 <div className="mb-5 flex items-start justify-between gap-4">
-                    <div>
+                    <div className="admin-section-title-line">
                         <h2 className="font-bold text-slate-900">{title}</h2>
-                        {description && (
-                            <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-                        )}
+                        {description && <p className="text-xs leading-5 text-slate-400">{description}</p>}
                     </div>
                     <AdminButton
                         type="button"
@@ -1952,14 +1833,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         </AdminField>
     );
 }
-function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
-    return (
-        <tr>
-            <td colSpan={colSpan} className="p-12 text-center text-xs text-slate-400">
-                {text}
-            </td>
-        </tr>
-    );
+function EmptyRecordsMessage({ text }: { text: string }) {
+    return <div className="px-4 py-8 text-left text-xs text-slate-400">{text}</div>;
 }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
     return (

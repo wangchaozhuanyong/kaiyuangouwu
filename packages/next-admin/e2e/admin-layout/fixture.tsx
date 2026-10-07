@@ -57,8 +57,10 @@ import { ReviewsModule } from '../../src/pages/Storefront/ReviewsModule';
 import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 import type { CollectionFilterValue } from '../../src/utils/product-collection-assignment';
+import { adminRolloutFixtureData } from './admin-rollout-fixture-data';
 import { FieldLayoutFixture } from './field-layout-fixture';
 import { FixtureAuditTheme } from './fixture-audit-theme';
+import { FixtureSettingsConfirmation } from './fixture-confirmation';
 import { PerformanceFixture } from './performance-fixture';
 import {
     productEditorDesignCategories,
@@ -71,6 +73,7 @@ import {
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'product';
 const layoutAudit = params.has('layoutAudit');
+const adminRollout = params.has('adminRollout');
 const productEditorDesign = params.has('productEditorDesign');
 const digitalFixture = params.has('digital') || (productEditorDesign && !params.has('physical'));
 const productFixtureName = productEditorDesign ? productEditorDesignContent.name : '布局验收示例商品';
@@ -79,7 +82,8 @@ const productFixtureDescription = productEditorDesign
     ? productEditorDesignContent.description
     : '<p>商品简介和主图应当优先展示。</p>';
 const authFixture = view === 'login' || view === 'initial-password';
-const mockWritesEnabled = params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign;
+const mockWritesEnabled =
+    params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign && !adminRollout;
 // Platform-only routes use the real shell scope guard; opt in with &platform.
 const platformFixture = params.has('platform');
 const alternateScopeParams = new URLSearchParams(params);
@@ -1137,26 +1141,81 @@ const data: Record<string, unknown> = {
         { name: 'apply-collection-filters', running: view !== 'health' },
     ],
     scheduledTasks: [],
-    settingsStoreFieldDefinitions:
-        view === 'health' && params.get('worker') !== 'missing'
-            ? [
-                  {
-                      key: 'systemOperations.workerHeartbeat',
-                      readonly: true,
-                      scopeType: 'GLOBAL',
-                      currentValue: {
-                          state: params.get('worker') === 'stopped' ? 'STOPPED' : 'RUNNING',
-                          heartbeatAt: new Date(
-                              Date.now() - (params.get('worker') === 'stale' ? 90_000 : 0),
-                          ).toISOString(),
-                          queues: [
-                              { name: 'translate-content', running: true },
-                              { name: 'apply-collection-filters', running: true },
-                          ],
-                      },
+    settingsStoreFieldDefinitions: params.has('settingsFixture')
+        ? [
+              { key: 'storefrontAuth.emailPasswordEnabled', scopeType: 'CHANNEL', currentValue: true },
+              {
+                  key: 'storefrontAuth.emailAutoRegistrationEnabled',
+                  scopeType: 'CHANNEL',
+                  currentValue: false,
+              },
+              {
+                  key: 'storefrontAuth.emailQuickRegistrationEnabled',
+                  scopeType: 'CHANNEL',
+                  currentValue: null,
+              },
+              { key: 'storefrontAuth.googleOverrideEnabled', scopeType: 'CHANNEL', currentValue: null },
+              { key: 'storefrontAuth.googleEnabled', scopeType: 'CHANNEL', currentValue: null },
+              { key: 'storefrontAuth.googleClientId', scopeType: 'CHANNEL', currentValue: null },
+              { key: 'storefrontAuth.platformGoogleEnabled', scopeType: 'GLOBAL', currentValue: true },
+              {
+                  key: 'storefrontAuth.platformGoogleClientId',
+                  scopeType: 'GLOBAL',
+                  currentValue: 'synthetic.apps.googleusercontent.com',
+              },
+              {
+                  key: 'storefrontAccount.recommendations',
+                  scopeType: 'CHANNEL',
+                  currentValue: { enabled: true, titleZh: '为你推荐', titleEn: 'Recommended', limit: 8 },
+              },
+              {
+                  key: 'storefrontAccount.personalDataExportEnabled',
+                  scopeType: 'CHANNEL',
+                  currentValue: false,
+              },
+              { key: 'storefrontReview.enabled', scopeType: 'CHANNEL', currentValue: null },
+              {
+                  key: 'vendure.dashboard.userSettings',
+                  scopeType: 'USER',
+                  currentValue: { displayLanguage: 'zh_Hans' },
+              },
+              { key: 'vendure.dashboard.globalSavedViews', scopeType: 'GLOBAL', currentValue: null },
+              { key: 'vendure.dashboard.userSavedViews', scopeType: 'USER', currentValue: null },
+              {
+                  key: 'systemOperations.workerHeartbeat',
+                  scopeType: 'GLOBAL',
+                  currentValue: {
+                      state: 'RUNNING',
+                      heartbeatAt: new Date().toISOString(),
+                      queues: [{ name: 'translate-content', running: true }],
                   },
-              ]
-            : [],
+              },
+              { key: 'contentTranslationCache.result', scopeType: 'GLOBAL', currentValue: null },
+          ].map(field => ({
+              ...field,
+              readonly: ['systemOperations.workerHeartbeat', 'contentTranslationCache.result'].includes(
+                  field.key,
+              ),
+          }))
+        : view === 'health' && params.get('worker') !== 'missing'
+          ? [
+                {
+                    key: 'systemOperations.workerHeartbeat',
+                    readonly: true,
+                    scopeType: 'GLOBAL',
+                    currentValue: {
+                        state: params.get('worker') === 'stopped' ? 'STOPPED' : 'RUNNING',
+                        heartbeatAt: new Date(
+                            Date.now() - (params.get('worker') === 'stale' ? 90_000 : 0),
+                        ).toISOString(),
+                        queues: [
+                            { name: 'translate-content', running: true },
+                            { name: 'apply-collection-filters', running: true },
+                        ],
+                    },
+                },
+            ]
+          : [],
     apiKeys: empty,
     activeAdministrator: null,
     storefrontContentBlocks:
@@ -1471,7 +1530,7 @@ const client = new ApolloClient({
                         ...data,
                         product: selectedProduct,
                         products: {
-                            ...data.products,
+                            ...(data.products as Record<string, unknown>),
                             items: [
                                 {
                                     ...product,
@@ -1553,7 +1612,7 @@ const client = new ApolloClient({
                             },
                         },
                     };
-                    operationTrace = { name: operation.operationName, variables: operation.variables };
+                    operationTrace = { name: operation.operationName ?? '', variables: operation.variables };
                     tabOperations.push(operationTrace);
                     if (
                         params.has('failRefresh') &&
@@ -1665,6 +1724,13 @@ const client = new ApolloClient({
                             ),
                         },
                     };
+                }
+                if (adminRollout) {
+                    responseData = adminRolloutFixtureData(
+                        responseData,
+                        operation.variables,
+                        params.has('empty'),
+                    );
                 }
                 const finish = () => {
                     if (operationTrace) operationTrace.completed = true;
@@ -1792,7 +1858,7 @@ const storeProfileSamples: StoreProfileRecord[] = [
         },
     };
 });
-const storeFixtureWindow = window as Window & { storePreviewRequests: string[] };
+const storeFixtureWindow = window as unknown as Window & { storePreviewRequests: string[] };
 storeFixtureWindow.storePreviewRequests = [];
 
 function StoreManagementFixture() {
@@ -1949,10 +2015,9 @@ if (view === 'performance') {
         <ThemeProvider>
             {layoutAudit && <FixtureAuditTheme />}
             <ApolloProvider client={client}>
-                <ConfirmDialogContext.Provider
-                    value={async () =>
-                        mockWritesEnabled ? { currentPassword: 'synthetic-local-proof' } : false
-                    }
+                <FixtureSettingsConfirmation
+                    settingsFixture={params.has('settingsFixture')}
+                    mockWritesEnabled={mockWritesEnabled}
                 >
                     <FeatureHelpProvider>
                         <MemoryRouter initialEntries={[params.get('path') ?? '/catalog/list']}>
@@ -2042,7 +2107,7 @@ if (view === 'performance') {
                             </Routes>
                         </MemoryRouter>
                     </FeatureHelpProvider>
-                </ConfirmDialogContext.Provider>
+                </FixtureSettingsConfirmation>
             </ApolloProvider>
         </ThemeProvider>,
     );

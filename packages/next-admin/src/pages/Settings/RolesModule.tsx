@@ -109,9 +109,9 @@ export function RolesModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-4 sm:px-6">
                 <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Shield className="h-5 w-5 text-blue-600" />
                             {standalonePage?.title ?? '员工与权限'}
@@ -121,6 +121,7 @@ export function RolesModule() {
                                 description={'账号、角色和渠道范围集中管理；权限项直接读取当前服务端定义'}
                             />
                         </h1>
+                        <p>{tab === 'MEMBERS' ? '账号、角色和店铺范围' : '岗位、权限与店铺范围'}</p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -150,7 +151,7 @@ export function RolesModule() {
                     </div>
                 </div>
             </header>
-            <main className="min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="min-h-0 min-w-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-3 sm:p-6">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -385,37 +386,46 @@ function MembersTable({
     };
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="overflow-x-auto">
-                <table className="admin-mobile-record-table w-full min-w-[1500px] border-collapse text-left text-xs">
+            <div
+                className="admin-comparison-scroll overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="员工账号列表"
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整员工账号字段</p>
+                <table className="admin-compact-table w-full min-w-[1080px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
                                 scope="col"
-                                className="sticky left-0 z-20 w-40 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                className="sticky left-0 z-20 w-32 whitespace-nowrap bg-slate-50 px-3 py-3"
                             >
                                 姓名
                             </th>
-                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
                                 当前账号
                             </th>
-                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
                                 邮箱
                             </th>
-                            <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
                                 登录标识
                             </th>
-                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
                                 角色
                             </th>
-                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                店铺范围
+                            </th>
+                            <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
                                 最近登录
                             </th>
-                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                            <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
                                 创建时间
                             </th>
                             <th
                                 scope="col"
-                                className="sticky right-0 z-20 w-44 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
                             >
                                 操作
                             </th>
@@ -474,12 +484,14 @@ function MembersTable({
                                                 +{member.user.roles.length - 1}
                                             </span>
                                         )}
-                                        <span className="shrink-0 rounded bg-blue-50 px-1.5 py-1 text-[9px] font-bold text-blue-700">
-                                            {member.access.scope === 'PLATFORM'
-                                                ? '跨店'
-                                                : getChannelDisplayName(member.access.channel ?? '')}
-                                        </span>
                                     </div>
+                                </td>
+                                <td data-label="店铺范围" className="h-[52px] whitespace-nowrap px-3 py-0">
+                                    <span className="rounded bg-blue-50 px-1.5 py-1 text-[10px] font-medium text-blue-700">
+                                        {member.access.scope === 'PLATFORM'
+                                            ? '跨店'
+                                            : getChannelDisplayName(member.access.channel ?? '')}
+                                    </span>
                                 </td>
                                 <td
                                     data-label="最近登录"
@@ -571,10 +583,14 @@ function MembersTable({
                                 </td>
                             </tr>
                         ))}
-                        {!members.length && <EmptyRow colSpan={8} text="没有符合条件的员工账号" />}
                     </tbody>
                 </table>
             </div>
+            {!members.length && (
+                <div role="status" className="p-8 text-center text-xs text-slate-500">
+                    没有符合条件的员工账号
+                </div>
+            )}
         </section>
     );
 }
@@ -590,8 +606,14 @@ function RolesTable({
 }) {
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="overflow-x-auto">
-                <table className="admin-mobile-record-table w-full min-w-[1120px] border-collapse text-left text-xs">
+            <div
+                className="admin-comparison-scroll overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="角色权限列表"
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整角色权限字段</p>
+                <table className="admin-compact-table w-full min-w-[860px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
                             <th
@@ -696,10 +718,14 @@ function RolesTable({
                                 </tr>
                             );
                         })}
-                        {!roles.length && <EmptyRow colSpan={6} text="没有符合条件的角色" />}
                     </tbody>
                 </table>
             </div>
+            {!roles.length && (
+                <div role="status" className="p-8 text-center text-xs text-slate-500">
+                    没有符合条件的角色
+                </div>
+            )}
         </section>
     );
 }
@@ -1298,18 +1324,16 @@ function Modal({
     children: React.ReactNode;
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 p-3 sm:p-4">
             <AccessibleDialogSurface
                 accessibleName={title}
                 onRequestClose={onClose}
-                className={`max-h-[94vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
+                className={`min-w-0 max-h-[94vh] w-full overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
             >
                 <div className="mb-5 flex items-start justify-between gap-4">
-                    <div>
+                    <div className="admin-section-title-line">
                         <h2 className="font-bold text-slate-900">{title}</h2>
-                        {description && (
-                            <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-                        )}
+                        {description && <p className="text-xs leading-5 text-slate-400">{description}</p>}
                     </div>
                     <AdminButton
                         type="button"
@@ -1364,15 +1388,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         >
             {children}
         </AdminField>
-    );
-}
-function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
-    return (
-        <tr>
-            <td colSpan={colSpan} className="p-12 text-center text-xs text-slate-400">
-                {text}
-            </td>
-        </tr>
     );
 }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

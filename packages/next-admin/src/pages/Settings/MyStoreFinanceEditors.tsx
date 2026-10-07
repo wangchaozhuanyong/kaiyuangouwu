@@ -58,15 +58,18 @@ export function MyStorePayoutAccount({
         }
     };
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                收款账户审核
-                <FeatureHelpButton
-                    topic="settings.finance"
-                    title="收款账户审核"
-                    description={'资料会加密保存；提交后进入平台审批，审核前继续沿用已批准记录。'}
-                />
-            </h2>
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="admin-section-title-line">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    收款账户审核
+                    <FeatureHelpButton
+                        topic="settings.finance"
+                        title="收款账户审核"
+                        description={'资料会加密保存；提交后进入平台审批，审核前继续沿用已批准记录。'}
+                    />
+                </h2>
+                <p className="text-xs text-slate-500">提交资料后由平台审核</p>
+            </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <FieldInput label="收款机构" value={provider} onChange={setProvider} />
@@ -103,20 +106,29 @@ export function MyStoreUsdtWallet({
     onError: (message: string) => void;
 }) {
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="flex items-center gap-2 text-sm font-bold">
-                平台统一 USDT 收款
-                <FeatureHelpButton
-                    topic="settings.platform-usdt"
-                    title="平台统一 USDT 收款"
-                    description={'收款地址由超级管理员在平台管理中心配置，本店通过支付选项开启或关闭。'}
-                />
-            </h2>
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="admin-section-title-line">
+                <h2 className="flex items-center gap-2 text-sm font-bold">
+                    平台统一 USDT 收款
+                    <FeatureHelpButton
+                        topic="settings.platform-usdt"
+                        title="平台统一 USDT 收款"
+                        description={'收款地址由超级管理员在平台管理中心配置，本店通过支付选项开启或关闭。'}
+                    />
+                </h2>
+                <p className="text-xs text-slate-500">仅显示已批准配置</p>
+            </div>
 
-            <p className="mt-3 text-xs">
-                {wallet.configured ? '平台已配置' : '平台尚未配置'} ·{' '}
-                {wallet.activeReceivingAddressMasked ?? '地址未获取'}
-            </p>
+            <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <dt className="text-slate-500">配置状态</dt>
+                    <dd className="font-medium">{wallet.configured ? '平台已配置' : '平台尚未配置'}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <dt className="text-slate-500">收款地址</dt>
+                    <dd className="font-mono">{wallet.activeReceivingAddressMasked ?? '地址未获取'}</dd>
+                </div>
+            </dl>
         </section>
     );
 }
@@ -140,42 +152,68 @@ export function MyStorePaymentOptions({
         }
     };
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                本店支付选项
-                <FeatureHelpButton
-                    topic="settings.payment-shipping"
-                    title="本店支付选项"
-                    description={'支付系统由平台统一配置，本店独立开启或关闭。处理器参数与密钥仅在平台管理。'}
-                />
-            </h2>
-
-            <div className="mt-4 divide-y divide-slate-100">
-                {options.map(option => (
-                    <label key={option.id} className="flex items-center justify-between gap-4 py-3 text-xs">
-                        <span>
-                            <strong className="block text-slate-800">{option.name}</strong>
-                            <span className="mt-1 block text-slate-400">
-                                {!option.platformEnabled
-                                    ? '平台已停用'
-                                    : option.effectiveEnabled
-                                      ? '本店已开启'
-                                      : '本店未开启'}
-                            </span>
-                        </span>
-                        <AdminInput
-                            type="checkbox"
-                            checked={option.enabled}
-                            disabled={state.loading || (!option.platformEnabled && !option.enabled)}
-                            onChange={event => void toggle(option.id, event.target.checked)}
-                            aria-label={`${option.name}启用状态`}
-                        />
-                    </label>
-                ))}
-                {!options.length && (
-                    <div className="py-8 text-center text-xs text-slate-400">平台尚未配置支付方式</div>
-                )}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="admin-section-title-line">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    本店支付选项
+                    <FeatureHelpButton
+                        topic="settings.payment-shipping"
+                        title="本店支付选项"
+                        description={
+                            '支付系统由平台统一配置，本店独立开启或关闭。处理器参数与密钥仅在平台管理。'
+                        }
+                    />
+                </h2>
+                <p className="text-xs text-slate-500">平台配置，本店独立启停</p>
             </div>
+
+            <div
+                className="admin-comparison-scroll mt-4 overflow-x-auto"
+                role="region"
+                aria-label="本店支付选项"
+                tabIndex={0}
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整支付选项</p>
+                <table className="admin-compact-table w-full min-w-[760px] text-left text-xs">
+                    <thead>
+                        <tr>
+                            {['支付方式', '平台状态', '本店状态', '有效状态', '本店开关'].map(label => (
+                                <th key={label}>{label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {options.map(option => (
+                            <tr key={option.id}>
+                                <td className="font-semibold text-slate-800">{option.name}</td>
+                                <td className="text-slate-500">
+                                    {option.platformEnabled ? '平台启用' : '平台已停用'}
+                                </td>
+                                <td className="text-slate-500">
+                                    {option.enabled ? '本店已开启' : '本店未开启'}
+                                </td>
+                                <td className="text-slate-500">
+                                    {option.effectiveEnabled ? '已启用' : '未启用'}
+                                </td>
+                                <td>
+                                    <AdminInput
+                                        type="checkbox"
+                                        checked={option.enabled}
+                                        disabled={
+                                            state.loading || (!option.platformEnabled && !option.enabled)
+                                        }
+                                        onChange={event => void toggle(option.id, event.target.checked)}
+                                        aria-label={`${option.name}启用状态`}
+                                    />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {!options.length && (
+                <div className="py-8 text-center text-xs text-slate-400">平台尚未配置支付方式</div>
+            )}
         </section>
     );
 }

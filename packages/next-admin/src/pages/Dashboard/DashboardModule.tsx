@@ -346,8 +346,8 @@ export function DashboardModule() {
     if (isPlatformContext) {
         return (
             <div className="flex h-full flex-col bg-slate-50">
-                <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
-                    <div className="mx-auto w-full max-w-5xl">
+                <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-4 sm:px-6">
+                    <div className="admin-page-title-line mx-auto w-full max-w-none">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             平台管理中心
                             <FeatureHelpButton
@@ -358,10 +358,11 @@ export function DashboardModule() {
                                 }
                             />
                         </h1>
+                        <p>平台配置与店铺管理</p>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
-                    <div className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-2">
+                <main className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
+                    <div className="mx-auto grid w-full max-w-none gap-4 md:grid-cols-2">
                         <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-blue-950">
                                 管理某个店铺
@@ -411,18 +412,19 @@ export function DashboardModule() {
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-4 sm:px-6">
+                <div className="mx-auto flex w-full max-w-none flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="admin-page-title-line">
                             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                                经营概览
+                                网站总览
                                 <FeatureHelpButton
                                     topic="dashboard.overview"
-                                    title="经营概览"
+                                    title="网站总览"
                                     description={'订单、履约与售后数据每分钟自动更新'}
                                 />
                             </h1>
+                            <p>经营指标与履约概况</p>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                                 当前店铺：
                                 {channelContext.data
@@ -475,11 +477,11 @@ export function DashboardModule() {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-8">
-                <div className="mx-auto mb-4 w-full max-w-7xl">
+            <main className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
+                <div className="mx-auto mb-4 w-full max-w-none">
                     <NextAdminDashboardAlerts />
                 </div>
-                <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-12">
+                <div className="mx-auto grid w-full max-w-none grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-12">
                     {visibleWidgets.map(widgetId => {
                         const spanClass =
                             widgetId === 'METRICS' || widgetId === 'SEARCH_INDEX'
@@ -660,7 +662,7 @@ export function DashboardModule() {
                                         aria-labelledby="recent-orders-title"
                                     >
                                         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                                            <div>
+                                            <div className="admin-section-title-line">
                                                 <h2
                                                     id="recent-orders-title"
                                                     className="flex items-center gap-2 text-sm font-bold text-slate-900"
@@ -671,7 +673,7 @@ export function DashboardModule() {
                                                         title="最近订单"
                                                     />
                                                 </h2>
-                                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                                <p className="text-[11px] text-slate-500">
                                                     最新下单记录，共{' '}
                                                     {recentOrders.data?.orders.totalItems ?? 0} 笔
                                                 </p>
@@ -715,8 +717,16 @@ export function DashboardModule() {
                                                 </p>
                                             </div>
                                         ) : (
-                                            <div className="overflow-x-auto">
-                                                <table className="admin-mobile-record-table w-full min-w-[760px] border-collapse text-left text-xs">
+                                            <div
+                                                className="admin-comparison-scroll overflow-x-auto"
+                                                role="region"
+                                                aria-label="最近订单"
+                                                tabIndex={0}
+                                            >
+                                                <p className="admin-mobile-table-hint">
+                                                    左右滑动查看完整订单字段
+                                                </p>
+                                                <table className="admin-compact-table w-full min-w-[760px] border-collapse text-left text-xs">
                                                     <thead className="bg-slate-50 text-[11px] text-slate-500">
                                                         <tr>
                                                             <th
@@ -754,6 +764,12 @@ export function DashboardModule() {
                                                                 className="whitespace-nowrap px-4 py-3 font-medium"
                                                             >
                                                                 下单时间
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="sticky right-0 z-10 whitespace-nowrap bg-slate-50 px-4 py-3 font-medium"
+                                                            >
+                                                                操作
                                                             </th>
                                                         </tr>
                                                     </thead>
@@ -825,6 +841,22 @@ export function DashboardModule() {
                                                                         order.orderPlacedAt ??
                                                                             order.createdAt,
                                                                     )}
+                                                                </td>
+                                                                <td
+                                                                    data-label="操作"
+                                                                    className="sticky right-0 z-[1] bg-white px-4 py-0 group-hover:bg-blue-50"
+                                                                >
+                                                                    <AdminButton
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            navigate(
+                                                                                `/sales/orders/${order.id}`,
+                                                                            )
+                                                                        }
+                                                                        className="text-xs font-bold text-blue-600"
+                                                                    >
+                                                                        查看
+                                                                    </AdminButton>
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -899,7 +931,7 @@ export function DashboardModule() {
                                         >
                                             <Clock3 className="h-5 w-5" />
                                         </span>
-                                        <div className="min-w-0 flex-1">
+                                        <div className="admin-section-title-line min-w-0 flex-1">
                                             <h2
                                                 id="search-index-title"
                                                 className="flex items-center gap-2 text-sm font-bold text-slate-900"
@@ -941,7 +973,7 @@ export function DashboardModule() {
                         </div>
                     )}
                 </div>
-                <div className="mx-auto mt-4 w-full max-w-7xl">
+                <div className="mx-auto mt-4 w-full max-w-none">
                     <NextAdminDashboardWidgets />
                 </div>
             </main>

@@ -44,7 +44,11 @@ import {
 } from './StoreDialogs';
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { StoreGovernanceHistory } from './StoreGovernanceHistory';
-import { governancePayloadRows, governanceRequestTypeLabel } from './StoreGovernanceLabels';
+import {
+    governancePayloadRows,
+    governanceRequestTypeLabel,
+    storeSettingsSubtitle,
+} from './StoreGovernanceLabels';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
 import { StoreSettingsNavigation } from './StoreSettingsNavigation';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
@@ -165,6 +169,16 @@ export function PlatformGovernanceCenter({
                     item.requestType ===
                         (standalonePage.detail === 'payout' ? 'PAYOUT_ACCOUNT' : 'LEGAL_IDENTITY')),
         ) ?? [];
+    const pendingPayloadColumns = [
+        ...new Set([
+            ...(standalonePage?.detail === 'payout'
+                ? ['provider', 'accountHolder', 'accountIdentifier']
+                : []),
+            ...pendingGovernance.flatMap(request =>
+                Object.keys(request.reviewPayload ?? request.maskedSummary),
+            ),
+        ]),
+    ].map(key => ({ key, label: governancePayloadRows({ [key]: null })[0][0] }));
     const recentPermissionAudits =
         query.data?.administratorPermissionAudits?.slice(0, standalonePage ? undefined : 5) ?? [];
     const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
@@ -246,9 +260,9 @@ export function PlatformGovernanceCenter({
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="admin-page-title-line">
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Store className="h-5 w-5 text-blue-600" />
                             {standalonePage?.title ?? '平台治理中心'}
@@ -258,6 +272,7 @@ export function PlatformGovernanceCenter({
                                 description={'集中管理全部店铺、主体与支付审批、平台级配送和经营政策'}
                             />
                         </h1>
+                        <p className="text-xs text-slate-500">{storeSettingsSubtitle(standalonePage?.key)}</p>
                     </div>
                     <div className="flex gap-2">
                         <AdminButton
@@ -284,7 +299,7 @@ export function PlatformGovernanceCenter({
                     </div>
                 </div>
             </header>
-            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 min-w-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -316,56 +331,89 @@ export function PlatformGovernanceCenter({
                                     {pendingGovernance.length} 项
                                 </span>
                             </div>
-                            <div className="space-y-2">
-                                {pendingGovernance.length === 0 && (
-                                    <p className="text-xs text-slate-500">当前没有待审批申请。</p>
-                                )}
-                                {pendingGovernance.map(request => (
-                                    <div
-                                        key={request.id}
-                                        className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <div className="text-xs">
-                                            <div className="font-bold text-slate-800">
-                                                {getChannelDisplayName(request.channel)} ·{' '}
-                                                {governanceRequestTypeLabel(request.requestType)}
-                                            </div>
-                                            <div className="mt-1 space-y-0.5 text-slate-500">
-                                                <div>版本 {request.version}</div>
-                                                {governancePayloadRows(
-                                                    request.reviewPayload ?? request.maskedSummary,
-                                                ).map(([label, value]) => (
-                                                    <div key={label}>
-                                                        {label}：{value}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <AdminButton
-                                                type="button"
-                                                disabled={reviewGovernanceState.loading}
-                                                onClick={() => void reviewRequest(request.id, 'REJECTED')}
-                                                className={secondaryButton}
-                                            >
-                                                驳回
-                                            </AdminButton>
-                                            <AdminButton
-                                                type="button"
-                                                disabled={reviewGovernanceState.loading}
-                                                onClick={() => void reviewRequest(request.id, 'APPROVED')}
-                                                className={primaryButton}
-                                            >
-                                                通过
-                                            </AdminButton>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div
+                                className="admin-comparison-scroll overflow-x-auto"
+                                role="region"
+                                aria-label="待审批店铺治理变更"
+                                tabIndex={0}
+                            >
+                                <p className="admin-mobile-table-hint">左右滑动查看完整申请资料</p>
+                                <table className="admin-compact-table w-full min-w-[1060px] text-left text-xs">
+                                    <thead>
+                                        <tr>
+                                            {['店铺', '类型', '版本'].map(label => (
+                                                <th key={label}>{label}</th>
+                                            ))}
+                                            {pendingPayloadColumns.map(column => (
+                                                <th key={column.key}>{column.label}</th>
+                                            ))}
+                                            {<th>操作</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pendingGovernance.map(request => {
+                                            const payload = request.reviewPayload ?? request.maskedSummary;
+                                            return (
+                                                <tr key={request.id}>
+                                                    <td className="font-semibold">
+                                                        {getChannelDisplayName(request.channel)}
+                                                    </td>
+                                                    <td>{governanceRequestTypeLabel(request.requestType)}</td>
+                                                    <td>{request.version}</td>
+                                                    {pendingPayloadColumns.map(column => {
+                                                        const value = governancePayloadRows({
+                                                            [column.key]: payload[column.key],
+                                                        })[0][1];
+                                                        return (
+                                                            <td
+                                                                key={column.key}
+                                                                className="max-w-72 truncate"
+                                                                title={value}
+                                                            >
+                                                                {value}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td>
+                                                        <div className="flex gap-2">
+                                                            <AdminButton
+                                                                type="button"
+                                                                disabled={reviewGovernanceState.loading}
+                                                                onClick={() =>
+                                                                    void reviewRequest(request.id, 'REJECTED')
+                                                                }
+                                                                className={secondaryButton}
+                                                            >
+                                                                驳回
+                                                            </AdminButton>
+                                                            <AdminButton
+                                                                type="button"
+                                                                disabled={reviewGovernanceState.loading}
+                                                                onClick={() =>
+                                                                    void reviewRequest(request.id, 'APPROVED')
+                                                                }
+                                                                className={primaryButton}
+                                                            >
+                                                                通过
+                                                            </AdminButton>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
+                            {pendingGovernance.length === 0 && (
+                                <p className="py-6 text-center text-xs text-slate-500">
+                                    当前没有待审批申请。
+                                </p>
+                            )}
                         </section>
                     )}
                 {standalonePage && ['review', 'payout'].includes(standalonePage.detail ?? '') && (
                     <StoreGovernanceHistory
+                        payloadType={standalonePage.detail === 'payout' ? 'payout' : 'legal'}
                         records={(query.data?.storeGovernanceChanges ?? []).filter(
                             item =>
                                 item.requestType ===

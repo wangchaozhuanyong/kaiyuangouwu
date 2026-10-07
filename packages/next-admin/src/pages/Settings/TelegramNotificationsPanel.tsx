@@ -95,6 +95,7 @@ interface IncidentDialogDraft {
 
 export function TelegramNotificationsPanel() {
     const [reviewPage, setReviewPage] = useState(0);
+    const [notificationSection, setNotificationSection] = useState('config');
     const reviewQuery = useQuery<{
         customerServiceReviews: {
             totalItems: number;
@@ -348,15 +349,49 @@ export function TelegramNotificationsPanel() {
                 />
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <nav
+                className="admin-comparison-scroll rounded-xl border border-slate-200 bg-white p-1"
+                aria-label="消息通知分区"
+            >
+                <div className="flex w-max min-w-full gap-1">
+                    {(
+                        [
+                            ['config', '连接与策略'],
+                            ['routing', '部门路由'],
+                            ['incidents', '事故闭环'],
+                            ['deliveries', '发送记录'],
+                            ['reviews', '服务评价'],
+                            ['audits', '配置审计'],
+                        ] as const
+                    ).map(([key, label]) => (
+                        <AdminButton
+                            key={key}
+                            type="button"
+                            onClick={() => setNotificationSection(key)}
+                            aria-pressed={notificationSection === key}
+                            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${notificationSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                        >
+                            {label}
+                        </AdminButton>
+                    ))}
+                </div>
+            </nav>
+            <section
+                hidden={notificationSection !== 'config'}
+                style={notificationSection === 'config' ? undefined : { display: 'none' }}
+                className="rounded-xl border border-slate-200 bg-white p-5"
+            >
                 <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
                         <span className="rounded-lg bg-blue-50 p-2 text-blue-700">
                             <Bot className="h-5 w-5" />
                         </span>
                         <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                                 Telegram 连接与策略
+                                <span className="text-xs font-normal text-slate-500">
+                                    机器人连接与通知规则
+                                </span>
                                 <FeatureHelpButton
                                     topic="settings.telegram"
                                     title="Telegram 连接与策略"
@@ -565,9 +600,14 @@ export function TelegramNotificationsPanel() {
                 </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <h2 className="flex items-center gap-2 text-sm font-bold">
+            <section
+                hidden={notificationSection !== 'reviews'}
+                style={notificationSection === 'reviews' ? undefined : { display: 'none' }}
+                className="rounded-xl border border-slate-200 bg-white p-5"
+            >
+                <h2 className="admin-section-title-line text-sm font-bold">
                     全店客服服务评价
+                    <span className="text-xs font-normal text-slate-500">全店服务反馈</span>
                     <FeatureHelpButton topic="settings.telegram" title="全店客服服务评价" />
                 </h2>
                 {reviewQuery.loading && !reviewQuery.data && <p role="status">正在读取评价…</p>}
@@ -577,25 +617,66 @@ export function TelegramNotificationsPanel() {
                     !reviewQuery.data?.customerServiceReviews?.items.length && (
                         <p className="mt-3 text-sm text-slate-500">暂无服务评价</p>
                     )}
-                <div className="mt-3 divide-y divide-slate-100">
-                    {reviewQuery.data?.customerServiceReviews?.items.map(review => (
-                        <article key={review.id} className="py-3 text-sm">
-                            <div className="flex flex-wrap gap-3 font-semibold">
-                                <span>店铺编号 {review.channelId}</span>
-                                <span>
-                                    {review.rating} 星{review.rating <= 2 ? ' · 需要处理' : ''}
-                                </span>
-                                <span>{review.orderCode ? `订单 ${review.orderCode}` : '未关联订单'}</span>
-                                <time className="font-normal text-slate-500">
-                                    {formatDateTime(review.createdAt)}
-                                </time>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-500">{review.tags.join('、')}</p>
-                            <p className="mt-1 whitespace-pre-wrap break-words">
-                                {review.comment || '未填写文字意见'}
-                            </p>
-                        </article>
-                    ))}
+                <div
+                    className="admin-comparison-scroll mt-3"
+                    role="region"
+                    tabIndex={0}
+                    aria-label="服务评价表，可横向滚动"
+                >
+                    <table className="admin-compact-table w-full min-w-[1130px] table-fixed text-left text-xs">
+                        <colgroup>
+                            <col className="w-[120px]" />
+                            <col className="w-[80px]" />
+                            <col className="w-[130px]" />
+                            <col className="w-[150px]" />
+                            <col className="w-[150px]" />
+                            <col className="w-[340px]" />
+                            <col className="w-[160px]" />
+                        </colgroup>
+                        <thead className={tableHeadClass}>
+                            <tr>
+                                {[
+                                    '店铺编号',
+                                    '评分',
+                                    '处理提示',
+                                    '订单编号',
+                                    '标签',
+                                    '文字意见',
+                                    '创建时间',
+                                ].map(label => (
+                                    <th key={label} scope="col">
+                                        {label}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {reviewQuery.data?.customerServiceReviews?.items.map(review => (
+                                <tr key={review.id}>
+                                    <td data-label="店铺编号">{review.channelId}</td>
+                                    <td data-label="评分">{review.rating} 星</td>
+                                    <td data-label="处理提示">{review.rating <= 2 ? '需要处理' : '—'}</td>
+                                    <td data-label="订单编号">{review.orderCode || '未关联订单'}</td>
+                                    <td data-label="标签">
+                                        <span className="block truncate" title={review.tags.join('、')}>
+                                            {review.tags.join('、') || '—'}
+                                        </span>
+                                    </td>
+                                    <td data-label="文字意见">
+                                        <span
+                                            className="block truncate"
+                                            title={review.comment || '未填写文字意见'}
+                                        >
+                                            {review.comment || '未填写文字意见'}
+                                        </span>
+                                    </td>
+                                    <td data-label="创建时间" className="whitespace-nowrap">
+                                        {formatDateTime(review.createdAt)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
                 <div className="mt-3 flex items-center gap-3 text-sm">
                     <AdminButton
@@ -622,10 +703,15 @@ export function TelegramNotificationsPanel() {
                     </AdminButton>
                 </div>
             </section>
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <section
+                hidden={notificationSection !== 'audits'}
+                style={notificationSection === 'audits' ? undefined : { display: 'none' }}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
                 <div className="border-b border-slate-100 p-5">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                         配置变更审计
+                        <span className="text-xs font-normal text-slate-500">最近 10 次后台修改</span>
                         <FeatureHelpButton
                             topic="settings.telegram"
                             title="Telegram 配置变更审计"
@@ -635,30 +721,61 @@ export function TelegramNotificationsPanel() {
                         />
                     </h2>
                 </div>
-                <div className="divide-y divide-slate-100">
-                    {audits.map(audit => (
-                        <div
-                            key={audit.id}
-                            className="grid gap-1 px-5 py-3 text-xs sm:grid-cols-[180px_150px_1fr]"
-                        >
-                            <span className="text-slate-500">{formatDateTime(audit.createdAt)}</span>
-                            <span className="font-medium text-slate-700">
-                                操作人 {audit.actorUserId ?? '系统'}
-                            </span>
-                            <span className="text-slate-600">
-                                修改字段：
-                                {Object.keys(audit.changes).map(configFieldLabel).join('、') || '无'}
-                            </span>
-                        </div>
-                    ))}
-                    {!audits.length && <p className="p-5 text-xs text-slate-400">暂无配置变更记录</p>}
+                <div
+                    className="admin-comparison-scroll"
+                    role="region"
+                    tabIndex={0}
+                    aria-label="配置变更审计表，可横向滚动"
+                >
+                    <table className="admin-compact-table w-full min-w-[800px] table-fixed text-left text-xs">
+                        <colgroup>
+                            <col className="w-[180px]" />
+                            <col className="w-[150px]" />
+                            <col />
+                        </colgroup>
+                        <thead className={tableHeadClass}>
+                            <tr>
+                                <th scope="col">时间</th>
+                                <th scope="col">操作人</th>
+                                <th scope="col">修改字段</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {audits.map(audit => (
+                                <tr key={audit.id}>
+                                    <td data-label="时间" className="whitespace-nowrap text-slate-500">
+                                        {formatDateTime(audit.createdAt)}
+                                    </td>
+                                    <td data-label="操作人">{audit.actorUserId ?? '系统'}</td>
+                                    <td data-label="修改字段">
+                                        <span
+                                            className="block truncate"
+                                            title={
+                                                Object.keys(audit.changes).map(configFieldLabel).join('、') ||
+                                                '无'
+                                            }
+                                        >
+                                            {Object.keys(audit.changes).map(configFieldLabel).join('、') ||
+                                                '无'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
+                {!audits.length && <p className="p-5 text-xs text-slate-400">暂无配置变更记录</p>}
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <section
+                hidden={notificationSection !== 'routing'}
+                style={notificationSection === 'routing' ? undefined : { display: 'none' }}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
                 <div className="border-b border-slate-100 p-5">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                         部门责任路由
+                        <span className="text-xs font-normal text-slate-500">分工、升级与处理时限</span>
                         <FeatureHelpButton
                             topic="settings.telegram"
                             title="部门责任路由"
@@ -688,8 +805,8 @@ export function TelegramNotificationsPanel() {
                         </Field>
                     ))}
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="admin-mobile-record-table w-full min-w-[1180px] border-collapse text-left text-xs">
+                <div className="admin-comparison-scroll">
+                    <table className="admin-compact-table w-full min-w-[1180px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={tableHeadClass}>
                                 <th className="px-4 py-3">事件</th>
@@ -700,7 +817,12 @@ export function TelegramNotificationsPanel() {
                                 <th className="px-4 py-3">需处理</th>
                                 <th className="px-4 py-3">处理时限</th>
                                 <th className="px-4 py-3">处理建议</th>
-                                <th className="px-4 py-3 text-right">路由操作</th>
+                                <th
+                                    scope="col"
+                                    className="sticky right-0 w-28 bg-slate-50 px-4 py-3 text-right"
+                                >
+                                    路由操作
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -723,7 +845,7 @@ export function TelegramNotificationsPanel() {
                                 const actionRequired =
                                     override?.actionRequired ?? route.defaultActionRequired;
                                 return (
-                                    <tr key={eventLabel(route.eventType)} className="hover:bg-slate-50">
+                                    <tr key={route.eventType} className="hover:bg-slate-50">
                                         <td
                                             data-label="事件"
                                             className="px-4 py-3 font-mono text-[10px] text-slate-700"
@@ -843,9 +965,14 @@ export function TelegramNotificationsPanel() {
                                             data-mobile-wide
                                             className="max-w-80 px-4 py-3 text-slate-600"
                                         >
-                                            {route.actionHint}
+                                            <span className="block truncate" title={route.actionHint}>
+                                                {route.actionHint}
+                                            </span>
                                         </td>
-                                        <td data-label="路由操作" className="px-4 py-3 text-right">
+                                        <td
+                                            data-label="路由操作"
+                                            className="sticky right-0 bg-white px-4 py-3 text-right"
+                                        >
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => resetRouteOverride(route.eventType)}
@@ -863,15 +990,20 @@ export function TelegramNotificationsPanel() {
                 </div>
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <section
+                hidden={notificationSection !== 'incidents'}
+                style={notificationSection === 'incidents' ? undefined : { display: 'none' }}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
                         <span className="rounded-lg bg-rose-50 p-2 text-rose-700">
                             <ShieldAlert className="h-5 w-5" />
                         </span>
                         <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                                 事故响应与闭环
+                                <span className="text-xs font-normal text-slate-500">确认、验证与整改</span>
                                 <FeatureHelpButton
                                     topic="settings.telegram"
                                     title="事故响应与闭环"
@@ -884,131 +1016,246 @@ export function TelegramNotificationsPanel() {
                     </div>
                     <span className={badgeBlue}>共 {incidents.totalItems} 起</span>
                 </div>
-                <div className="divide-y divide-slate-100">
-                    {incidents.items.map(incident => (
-                        <article key={incident.id} className="p-5">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
+                <div
+                    className="admin-comparison-scroll"
+                    role="region"
+                    tabIndex={0}
+                    aria-label="事故表，可横向滚动"
+                >
+                    <table className="admin-compact-table w-full min-w-[1450px] table-fixed text-left text-xs">
+                        <colgroup>
+                            <col className="w-[90px]" />
+                            <col className="w-[130px]" />
+                            <col className="w-[120px]" />
+                            <col className="w-[280px]" />
+                            <col className="w-[200px]" />
+                            <col className="w-[80px]" />
+                            <col className="w-[160px]" />
+                            <col className="w-[280px]" />
+                            <col className="w-[110px]" />
+                        </colgroup>
+                        <thead className={tableHeadClass}>
+                            <tr>
+                                {[
+                                    '严重程度',
+                                    '事故状态',
+                                    '主责部门',
+                                    '标题',
+                                    '事件类型',
+                                    '发生次数',
+                                    '最近发生',
+                                    '根因',
+                                ].map(label => (
+                                    <th key={label} scope="col">
+                                        {label}
+                                    </th>
+                                ))}
+                                <th scope="col" className="sticky right-0 bg-slate-50 text-right">
+                                    操作
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {incidents.items.map(incident => (
+                                <tr key={incident.id}>
+                                    <td data-label="严重程度">
                                         <span className={severityBadge(incident.severity)}>
                                             {severityDisplayLabel(incident.severity)}
                                         </span>
+                                    </td>
+                                    <td data-label="事故状态">
                                         <span className={incidentStatusBadge(incident.incidentStatus)}>
                                             {incidentStatusLabel(incident.incidentStatus)}
                                         </span>
-                                        <span className="text-[10px] font-bold text-slate-500">
-                                            {departmentDisplayLabel(incident.ownerDepartmentCode)}
+                                    </td>
+                                    <td data-label="主责部门">
+                                        {departmentDisplayLabel(incident.ownerDepartmentCode)}
+                                    </td>
+                                    <td data-label="标题">
+                                        <span
+                                            className="block truncate font-semibold text-slate-800"
+                                            title={incident.title}
+                                        >
+                                            {incident.title}
                                         </span>
-                                    </div>
-                                    <h3 className="mt-2 text-sm font-bold text-slate-900">
-                                        {incident.title}
-                                    </h3>
-                                    <p className="mt-1 font-mono text-[10px] text-slate-400">
-                                        {eventTypeDisplayLabel(incident.eventType)} · 发生{' '}
-                                        {incident.occurrenceCount} 次 · 最近{' '}
+                                    </td>
+                                    <td data-label="事件类型">
+                                        <span
+                                            className="block truncate"
+                                            title={eventTypeDisplayLabel(incident.eventType)}
+                                        >
+                                            {eventTypeDisplayLabel(incident.eventType)}
+                                        </span>
+                                    </td>
+                                    <td data-label="发生次数">{incident.occurrenceCount}</td>
+                                    <td data-label="最近发生" className="whitespace-nowrap">
                                         {formatDateTime(incident.lastOccurredAt)}
-                                    </p>
-                                    {incident.rootCause && (
-                                        <p className="mt-2 text-xs text-slate-600">
-                                            根因：{incident.rootCause}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {incident.incidentStatus === 'OPEN' && (
-                                        <AdminButton
-                                            type="button"
-                                            className={primaryButton}
-                                            disabled={busy}
-                                            onClick={() =>
-                                                openIncidentNoteAction(
-                                                    'ACKNOWLEDGE',
-                                                    incident.id,
-                                                    '负责人确认事故',
-                                                )
-                                            }
-                                        >
-                                            确认接手
-                                        </AdminButton>
-                                    )}
-                                    {incident.incidentStatus === 'RECOVERY_PENDING' && (
-                                        <AdminButton
-                                            type="button"
-                                            className={primaryButton}
-                                            disabled={busy}
-                                            onClick={() =>
-                                                openIncidentNoteAction(
-                                                    'RECOVERY',
-                                                    incident.id,
-                                                    '确认恢复验证',
-                                                )
-                                            }
-                                        >
-                                            验证恢复
-                                        </AdminButton>
-                                    )}
-                                    {incident.incidentStatus === 'REVIEW_PENDING' && (
-                                        <AdminButton
-                                            type="button"
-                                            className={primaryButton}
-                                            disabled={busy}
-                                            onClick={() =>
-                                                openIncidentReview(incident.id, incident.ownerDepartmentCode)
-                                            }
-                                        >
-                                            提交复盘
-                                        </AdminButton>
-                                    )}
-                                </div>
-                            </div>
-                            {incident.actions.length > 0 && (
-                                <div className="mt-4 grid gap-2 lg:grid-cols-2">
-                                    {incident.actions.map(action => (
-                                        <div
-                                            key={action.id}
-                                            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs"
-                                        >
-                                            <div>
-                                                <strong className="text-slate-800">{action.title}</strong>
-                                                <p className="mt-1 text-[10px] text-slate-500">
-                                                    {departmentDisplayLabel(action.ownerDepartmentCode)} ·
-                                                    截止 {formatDateTime(action.dueAt)} ·{' '}
-                                                    {systemStatusDisplayLabel(action.status)}
-                                                </p>
-                                            </div>
-                                            {action.status === 'OPEN' && (
-                                                <AdminButton
-                                                    type="button"
-                                                    className={secondaryButton}
-                                                    disabled={busy}
-                                                    onClick={() =>
-                                                        openIncidentNoteAction(
-                                                            'ACTION',
-                                                            action.id,
-                                                            '完成整改任务',
-                                                        )
-                                                    }
-                                                >
-                                                    完成整改
-                                                </AdminButton>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </article>
-                    ))}
-                    {!incidents.items.length && (
-                        <p className="p-8 text-center text-xs text-slate-400">暂无事故记录</p>
-                    )}
+                                    </td>
+                                    <td data-label="根因">
+                                        <span className="block truncate" title={incident.rootCause || '—'}>
+                                            {incident.rootCause || '—'}
+                                        </span>
+                                    </td>
+                                    <td data-label="操作" className="sticky right-0 bg-white text-right">
+                                        {incident.incidentStatus === 'OPEN' && (
+                                            <AdminButton
+                                                type="button"
+                                                className={primaryButton}
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    openIncidentNoteAction(
+                                                        'ACKNOWLEDGE',
+                                                        incident.id,
+                                                        '负责人确认事故',
+                                                    )
+                                                }
+                                            >
+                                                确认接手
+                                            </AdminButton>
+                                        )}
+                                        {incident.incidentStatus === 'RECOVERY_PENDING' && (
+                                            <AdminButton
+                                                type="button"
+                                                className={primaryButton}
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    openIncidentNoteAction(
+                                                        'RECOVERY',
+                                                        incident.id,
+                                                        '确认恢复验证',
+                                                    )
+                                                }
+                                            >
+                                                验证恢复
+                                            </AdminButton>
+                                        )}
+                                        {incident.incidentStatus === 'REVIEW_PENDING' && (
+                                            <AdminButton
+                                                type="button"
+                                                className={primaryButton}
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    openIncidentReview(
+                                                        incident.id,
+                                                        incident.ownerDepartmentCode,
+                                                    )
+                                                }
+                                            >
+                                                提交复盘
+                                            </AdminButton>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
+                {!incidents.items.length && <p className="p-5 text-xs text-slate-400">暂无事故记录</p>}
+                {incidents.items.some(incident => incident.actions.length > 0) && (
+                    <details className="border-t border-slate-100 p-4">
+                        <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                            整改任务 ·{' '}
+                            {incidents.items.reduce((total, incident) => total + incident.actions.length, 0)}{' '}
+                            项
+                        </summary>
+                        {incidents.items
+                            .filter(incident => incident.actions.length > 0)
+                            .map(incident => (
+                                <section key={incident.id} className="mt-3">
+                                    <div className="admin-section-title-line mb-2">
+                                        <h3 className="text-xs font-semibold text-slate-800">
+                                            {incident.title}
+                                        </h3>
+                                        <span className="text-xs text-slate-500">整改任务</span>
+                                    </div>
+                                    <div
+                                        className="admin-comparison-scroll"
+                                        role="region"
+                                        tabIndex={0}
+                                        aria-label={`${incident.title}整改任务，可横向滚动`}
+                                    >
+                                        <table className="admin-compact-table w-full min-w-[860px] table-fixed text-left text-xs">
+                                            <thead className={tableHeadClass}>
+                                                <tr>
+                                                    {['整改标题', '责任部门', '截止时间', '状态'].map(
+                                                        label => (
+                                                            <th key={label} scope="col">
+                                                                {label}
+                                                            </th>
+                                                        ),
+                                                    )}
+                                                    <th
+                                                        scope="col"
+                                                        className="sticky right-0 w-28 bg-slate-50 text-right"
+                                                    >
+                                                        操作
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {incident.actions.map(action => (
+                                                    <tr key={action.id}>
+                                                        <td data-label="整改标题">
+                                                            <span
+                                                                className="block truncate"
+                                                                title={action.title}
+                                                            >
+                                                                {action.title}
+                                                            </span>
+                                                        </td>
+                                                        <td data-label="责任部门">
+                                                            {departmentDisplayLabel(
+                                                                action.ownerDepartmentCode,
+                                                            )}
+                                                        </td>
+                                                        <td data-label="截止时间">
+                                                            {formatDateTime(action.dueAt)}
+                                                        </td>
+                                                        <td data-label="状态">
+                                                            {systemStatusDisplayLabel(action.status)}
+                                                        </td>
+                                                        <td
+                                                            data-label="操作"
+                                                            className="sticky right-0 bg-white text-right"
+                                                        >
+                                                            {action.status === 'OPEN' && (
+                                                                <AdminButton
+                                                                    type="button"
+                                                                    className={secondaryButton}
+                                                                    disabled={busy}
+                                                                    onClick={() =>
+                                                                        openIncidentNoteAction(
+                                                                            'ACTION',
+                                                                            action.id,
+                                                                            '完成整改任务',
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    完成整改
+                                                                </AdminButton>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            ))}
+                    </details>
+                )}
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <section
+                hidden={notificationSection !== 'deliveries'}
+                style={notificationSection === 'deliveries' ? undefined : { display: 'none' }}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <h2 className="admin-section-title-line text-sm font-bold text-slate-900">
                             最近发送记录
+                            <span className="text-xs font-normal text-slate-500">最近 25 条通知</span>
                             <FeatureHelpButton topic="settings.telegram" title="最近发送记录" />
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
@@ -1028,18 +1275,35 @@ export function TelegramNotificationsPanel() {
                         ))}
                     </AdminSelect>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="admin-mobile-record-table w-full min-w-[1240px] border-collapse text-left text-xs">
+                <div className="admin-comparison-scroll">
+                    <table className="admin-compact-table w-full min-w-[1540px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={tableHeadClass}>
                                 <th className="px-4 py-3">时间</th>
-                                <th className="px-4 py-3">通知</th>
+                                <th scope="col" className="px-4 py-3">
+                                    通知标题
+                                </th>
+                                <th scope="col" className="px-4 py-3">
+                                    事件
+                                </th>
                                 <th className="px-4 py-3">等级</th>
-                                <th className="px-4 py-3">责任</th>
+                                <th scope="col" className="px-4 py-3">
+                                    主责
+                                </th>
                                 <th className="px-4 py-3">状态</th>
-                                <th className="px-4 py-3">尝试</th>
+                                <th scope="col" className="px-4 py-3">
+                                    已尝试次数
+                                </th>
+                                <th scope="col" className="px-4 py-3">
+                                    最多尝试次数
+                                </th>
                                 <th className="px-4 py-3">错误</th>
-                                <th className="px-4 py-3 text-right">操作</th>
+                                <th
+                                    scope="col"
+                                    className="sticky right-0 w-24 bg-slate-50 px-4 py-3 text-right"
+                                >
+                                    操作
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1051,23 +1315,28 @@ export function TelegramNotificationsPanel() {
                                     >
                                         {formatDateTime(delivery.createdAt)}
                                     </td>
-                                    <td data-label="通知" className="max-w-80 px-4 py-3">
-                                        <strong
-                                            className="block truncate text-slate-800"
+                                    <td data-label="通知标题" className="max-w-80 px-4 py-3">
+                                        <span
+                                            className="block truncate font-semibold text-slate-800"
                                             title={delivery.title}
                                         >
                                             {delivery.title}
-                                        </strong>
-                                        <code className="mt-1 block truncate text-[9px] text-slate-400">
+                                        </span>
+                                    </td>
+                                    <td data-label="事件" className="max-w-56 px-4 py-3">
+                                        <span
+                                            className="block truncate text-slate-500"
+                                            title={eventLabel(delivery.eventType)}
+                                        >
                                             {eventLabel(delivery.eventType)}
-                                        </code>
+                                        </span>
                                     </td>
                                     <td data-label="等级" className="px-4 py-3">
                                         <span className={severityBadge(delivery.severity)}>
                                             {displayState(delivery.severity)}
                                         </span>
                                     </td>
-                                    <td data-label="责任" className="px-4 py-3 font-bold text-slate-700">
+                                    <td data-label="主责" className="px-4 py-3 font-bold text-slate-700">
                                         {routing.departments.find(
                                             department => department.code === delivery.ownerDepartmentCode,
                                         )?.nameZh ?? '运营调度中心'}
@@ -1077,8 +1346,11 @@ export function TelegramNotificationsPanel() {
                                             {displayState(delivery.deliveryStatus)}
                                         </span>
                                     </td>
-                                    <td data-label="尝试" className="px-4 py-3 text-slate-600">
-                                        {delivery.attempts}/{delivery.maxAttempts}
+                                    <td data-label="已尝试次数" className="px-4 py-3 text-slate-600">
+                                        {delivery.attempts}
+                                    </td>
+                                    <td data-label="最多尝试次数" className="px-4 py-3 text-slate-600">
+                                        {delivery.maxAttempts}
                                     </td>
                                     <td
                                         data-label="错误"
@@ -1092,7 +1364,10 @@ export function TelegramNotificationsPanel() {
                                             {chineseError(delivery.lastError)}
                                         </span>
                                     </td>
-                                    <td data-label="操作" className="px-4 py-3 text-right">
+                                    <td
+                                        data-label="操作"
+                                        className="sticky right-0 bg-white px-4 py-3 text-right"
+                                    >
                                         {['DEAD', 'RETRY'].includes(delivery.deliveryStatus) && (
                                             <AdminButton
                                                 type="button"
@@ -1107,21 +1382,15 @@ export function TelegramNotificationsPanel() {
                                     </td>
                                 </tr>
                             ))}
-                            {!deliveries.items.length && (
-                                <tr>
-                                    <td colSpan={8} className="p-12 text-center text-xs text-slate-400">
-                                        暂无通知记录
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
+                {!deliveries.items.length && <p className="p-5 text-xs text-slate-400">暂无通知记录</p>}
             </section>
 
             {incidentDialog && (
                 <div
-                    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
                     onClick={() => !busy && setIncidentDialog(null)}
                 >
                     <AccessibleDialogSurface

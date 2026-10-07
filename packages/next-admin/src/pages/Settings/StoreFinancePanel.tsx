@@ -146,7 +146,7 @@ export function CurrencyAndRatesPanel() {
     };
 
     return (
-        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
             {sourceChanged && <DraftUpdateNotice onReload={serverDraft.reload} />}
             <PanelHeading
                 icon={<CircleDollarSign className="h-5 w-5 text-blue-600" />}
@@ -156,6 +156,9 @@ export function CurrencyAndRatesPanel() {
             {notice && <Notice tone="success" message={notice} />}
             {error && !protectedAction && <Notice tone="error" message={error} />}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <h3 className="col-span-full border-b border-slate-100 pb-2 text-xs font-bold text-slate-800">
+                    币种设置
+                </h3>
                 <SelectField
                     label="网站主币"
                     value={draft.defaultCurrencyCode}
@@ -170,22 +173,27 @@ export function CurrencyAndRatesPanel() {
                     checked={draft.selectorEnabled}
                     onChange={value => update('selectorEnabled', value)}
                 />
-                <div className="flex items-end gap-3 rounded-lg border border-slate-200 px-3 py-2">
-                    {(['CNY', 'MYR'] as const).map(currency => (
-                        <label
-                            key={currency}
-                            className="flex items-center gap-2 text-xs font-bold text-slate-700"
-                        >
-                            <AdminInput
-                                type="checkbox"
-                                checked={draft.availableCurrencyCodes.includes(currency)}
-                                disabled={currency === draft.defaultCurrencyCode}
-                                onChange={() => toggleCurrency(currency)}
-                            />{' '}
-                            {currency}
-                        </label>
-                    ))}
-                </div>
+                <AdminField label="可用币种">
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                        {(['CNY', 'MYR'] as const).map(currency => (
+                            <label
+                                key={currency}
+                                className="flex items-center gap-2 text-xs font-bold text-slate-700"
+                            >
+                                <AdminInput
+                                    type="checkbox"
+                                    checked={draft.availableCurrencyCodes.includes(currency)}
+                                    disabled={currency === draft.defaultCurrencyCode}
+                                    onChange={() => toggleCurrency(currency)}
+                                />{' '}
+                                {currency}
+                            </label>
+                        ))}
+                    </div>
+                </AdminField>
+                <h3 className="col-span-full border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
+                    法币换算
+                </h3>
                 <SelectField
                     label="CNY/MYR 汇率模式"
                     value={draft.rateMode}
@@ -219,6 +227,9 @@ export function CurrencyAndRatesPanel() {
                         ['WHOLE', '整数'],
                     ]}
                 />
+                <h3 className="col-span-full border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
+                    USDT 采集
+                </h3>
                 <ToggleField
                     label="前台启用 USDT 付款"
                     checked={draft.usdtDisplayEnabled}
@@ -260,21 +271,52 @@ export function CurrencyAndRatesPanel() {
                     </AdminField>
                 )}
             </div>
-            <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-xs text-slate-600 md:grid-cols-2">
-                <p>
-                    <strong className="block text-slate-900">CNY/MYR</strong>1 CNY ={' '}
-                    {configuration.cnyToMyrRate.toFixed(4)} MYR
-                    <br />
-                    {systemFieldDisplayLabel('rateSource', configuration.rateSource) ?? '尚未采集'} ·{' '}
-                    {date(configuration.rateUpdatedAt)}
-                </p>
-                <p>
-                    <strong className="block text-slate-900">USDT</strong>CNY{' '}
-                    {configuration.cnyPerUsdtRate?.toFixed(4) ?? '—'} / MYR{' '}
-                    {configuration.myrPerUsdtRate?.toFixed(4) ?? '—'}
-                    <br />
-                    {configuration.usdtRateSource ?? '尚未采集'} · {date(configuration.usdtRateUpdatedAt)}
-                </p>
+            <div
+                className="admin-comparison-scroll overflow-x-auto rounded-lg border border-slate-200"
+                role="region"
+                aria-label="当前报价"
+                tabIndex={0}
+            >
+                <p className="admin-mobile-table-hint">左右滑动查看完整报价</p>
+                <table className="admin-compact-table w-full min-w-[800px] text-left text-xs">
+                    <thead>
+                        <tr>
+                            {['报价', 'CNY', 'MYR', '来源', '更新时间'].map(label => (
+                                <th key={label}>{label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td className="font-semibold">1 CNY</td>
+                            <td>1.0000</td>
+                            <td>{configuration.cnyToMyrRate.toFixed(4)}</td>
+                            <td
+                                className="max-w-96 truncate"
+                                title={
+                                    systemFieldDisplayLabel('rateSource', configuration.rateSource) ??
+                                    '尚未采集'
+                                }
+                            >
+                                {systemFieldDisplayLabel('rateSource', configuration.rateSource) ??
+                                    '尚未采集'}
+                            </td>
+                            <td>{date(configuration.rateUpdatedAt)}</td>
+                        </tr>
+                        <tr>
+                            <td className="font-semibold">1 USDT</td>
+                            <td>{configuration.cnyPerUsdtRate?.toFixed(4) ?? '—'}</td>
+                            <td>{configuration.myrPerUsdtRate?.toFixed(4) ?? '—'}</td>
+                            <td
+                                className="max-w-96 truncate"
+                                title={configuration.usdtRateSource ?? '尚未采集'}
+                            >
+                                {configuration.usdtRateSource ?? '尚未采集'}
+                            </td>
+                            <td>{date(configuration.usdtRateUpdatedAt)}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
                 <SecondaryButton
@@ -404,31 +446,52 @@ export function StoreUsdtPanel() {
                         description="按支付方式对账；受控模拟支付单列，不代表真实到账。"
                     />
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <Metric label="USDT 意向" value={String(stats?.totalCount ?? 0)} />
-                        <Metric label="已到账" value={String(stats?.settledCount ?? 0)} />
-                        <Metric label="待复核" value={String(stats?.manualReviewCount ?? 0)} />
-                        <Metric label="实收 USDT" value={(stats?.receivedUsdtTotal ?? 0).toFixed(6)} />
+                        <Metric label="USDT 意向" value={stats ? String(stats.totalCount) : '未取得'} />
+                        <Metric label="已到账" value={stats ? String(stats.settledCount) : '未取得'} />
+                        <Metric label="待复核" value={stats ? String(stats.manualReviewCount) : '未取得'} />
+                        <Metric
+                            label="实收 USDT"
+                            value={stats ? stats.receivedUsdtTotal.toFixed(6) : '未取得'}
+                        />
                     </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {paymentStats.map(item => (
-                            <article
-                                key={`${item.paymentMethodCode}:${item.currencyCode}`}
-                                className="rounded-lg border border-slate-200 p-3 text-xs"
-                            >
-                                <strong>{storePaymentMethodLabel(item.paymentMethodCode)}</strong>
-                                <span className="ml-2 text-slate-500">{item.currencyCode}</span>
-                                <b className="mt-2 block text-lg">
-                                    {formatMoney(item.netAmount, item.currencyCode)}
-                                </b>
-                                <small className="text-slate-500">
-                                    {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
-                                    {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
-                                    {formatMoney(item.refundedAmount, item.currencyCode)}
-                                </small>
-                            </article>
-                        ))}
-                        {!paymentStats.length && <p className="text-xs text-slate-500">暂无已结算支付</p>}
+                    <div
+                        className="admin-comparison-scroll mt-4 overflow-x-auto"
+                        role="region"
+                        aria-label="支付方式收款概览"
+                        tabIndex={0}
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动比较支付方式</p>
+                        <table className="admin-compact-table w-full min-w-[760px] text-left text-xs">
+                            <thead>
+                                <tr>
+                                    {['支付方式', '币种', '收入类型', '收款金额', '退款金额', '净额'].map(
+                                        label => (
+                                            <th key={label}>{label}</th>
+                                        ),
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paymentStats.map(item => (
+                                    <tr key={`${item.paymentMethodCode}:${item.currencyCode}`}>
+                                        <td className="font-semibold">
+                                            {storePaymentMethodLabel(item.paymentMethodCode)}
+                                        </td>
+                                        <td>{item.currencyCode}</td>
+                                        <td>{storePaymentSettlementLabel(item.paymentMethodCode)}</td>
+                                        <td>{formatMoney(item.grossAmount, item.currencyCode)}</td>
+                                        <td>{formatMoney(item.refundedAmount, item.currencyCode)}</td>
+                                        <td className="font-semibold">
+                                            {formatMoney(item.netAmount, item.currencyCode)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                    {!paymentStats.length && (
+                        <p className="py-6 text-center text-xs text-slate-500">暂无已结算支付</p>
+                    )}
                 </section>
             )}
             {view === 'intents' && (
@@ -437,29 +500,42 @@ export function StoreUsdtPanel() {
                         title="USDT 最新收款意向"
                         description="显示报价、到账、过期与人工复核结果。"
                     />
-                    <div className="mt-4 max-h-[34rem] space-y-2 overflow-auto">
-                        {intents.map(intent => (
-                            <article
-                                key={intent.id}
-                                className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
-                            >
-                                <span>
-                                    <strong>订单 {intent.orderCode}</strong>
-                                    <small className="ml-2 text-slate-500">
-                                        <span>{storeUsdtPaymentIntentStatusLabel(intent.status)}</span> ·{' '}
-                                        {formatDateTime(intent.createdAt)}
-                                    </small>
-                                    <span className="mt-1 block font-mono text-[10px] text-slate-500">
-                                        {intent.transactionId ?? '尚无交易号'}
-                                    </span>
-                                </span>
-                                <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
-                            </article>
-                        ))}
-                        {!intents.length && (
-                            <p className="py-8 text-center text-xs text-slate-500">暂无 USDT 收款记录</p>
-                        )}
+                    <div
+                        className="admin-comparison-scroll mt-4 overflow-x-auto"
+                        role="region"
+                        aria-label="USDT 收款意向"
+                        tabIndex={0}
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整收款意向</p>
+                        <table className="admin-compact-table w-full min-w-[860px] text-left text-xs">
+                            <thead>
+                                <tr>
+                                    {['订单', '状态', '报价 USDT', '创建时间', '交易号'].map(label => (
+                                        <th key={label}>{label}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {intents.map(intent => (
+                                    <tr key={intent.id}>
+                                        <td className="font-semibold">{intent.orderCode}</td>
+                                        <td>{storeUsdtPaymentIntentStatusLabel(intent.status)}</td>
+                                        <td className="font-mono">{intent.expectedUsdtAmount.toFixed(6)}</td>
+                                        <td>{formatDateTime(intent.createdAt)}</td>
+                                        <td
+                                            className="max-w-72 truncate font-mono"
+                                            title={intent.transactionId ?? '尚无交易号'}
+                                        >
+                                            {intent.transactionId ?? '尚无交易号'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                    {!intents.length && (
+                        <p className="py-8 text-center text-xs text-slate-500">暂无 USDT 收款记录</p>
+                    )}
                 </section>
             )}
             {view === 'payments' && (
@@ -472,7 +548,7 @@ export function StoreUsdtPanel() {
                         className="admin-comparison-scroll mt-4 overflow-x-auto"
                     >
                         <p className="admin-mobile-table-hint">左右滑动查看完整收款财务明细</p>
-                        <table className="min-w-full text-left text-xs">
+                        <table className="admin-compact-table w-full min-w-[760px] text-left text-xs">
                             <thead>
                                 <tr>
                                     {['订单', '支付方式', '状态', '金额', '创建时间'].map(label => (
@@ -503,18 +579,41 @@ export function StoreUsdtPanel() {
             {view === 'refunds' && (
                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                     <PanelHeading title="人工退款审计" description="仅显示本店已登记的退款证据。" />
-                    <div className="mt-4 space-y-2">
-                        {(query.data?.myStoreUsdtManualRefunds?.items ?? []).map(item => (
-                            <article key={item.id} className="rounded-lg border border-slate-200 p-3 text-xs">
-                                订单 {item.orderCode} · {Number(item.usdtAmount).toFixed(6)} USDT ·{' '}
-                                {formatDateTime(item.createdAt)}
-                                <p>{item.transactionId}</p>
-                            </article>
-                        ))}
-                        {!query.data?.myStoreUsdtManualRefunds?.items.length && (
-                            <p className="py-8 text-center text-xs text-slate-500">暂无退款记录</p>
-                        )}
+                    <div
+                        className="admin-comparison-scroll mt-4 overflow-x-auto"
+                        role="region"
+                        aria-label="人工退款审计"
+                        tabIndex={0}
+                    >
+                        <p className="admin-mobile-table-hint">左右滑动查看完整退款证据</p>
+                        <table className="admin-compact-table w-full min-w-[760px] text-left text-xs">
+                            <thead>
+                                <tr>
+                                    {['订单', '退款 USDT', '登记时间', '交易号'].map(label => (
+                                        <th key={label}>{label}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(query.data?.myStoreUsdtManualRefunds?.items ?? []).map(item => (
+                                    <tr key={item.id}>
+                                        <td className="font-semibold">{item.orderCode}</td>
+                                        <td className="font-mono">{Number(item.usdtAmount).toFixed(6)}</td>
+                                        <td>{formatDateTime(item.createdAt)}</td>
+                                        <td
+                                            className="max-w-72 truncate font-mono"
+                                            title={item.transactionId}
+                                        >
+                                            {item.transactionId}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                    {!query.data?.myStoreUsdtManualRefunds?.items.length && (
+                        <p className="py-8 text-center text-xs text-slate-500">暂无退款记录</p>
+                    )}
                 </section>
             )}
             <SensitiveActionDialog
@@ -589,12 +688,13 @@ function PanelHeading({
     description: string;
 }) {
     return (
-        <div>
+        <div className="admin-section-title-line">
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
                 <FeatureHelpButton topic="settings.finance" title={title} description={description} />
             </h2>
+            <p className="text-xs text-slate-500">{description}</p>
         </div>
     );
 }
