@@ -17,6 +17,7 @@ import {
     storefrontRefetchPolicy,
     watchPublicQueryCache,
 } from './query-client';
+import { isStorefrontClosedError } from './storefront-access';
 
 function memoryStorage() {
     const values = new Map<string, string>();
@@ -29,6 +30,23 @@ function memoryStorage() {
 }
 
 describe('public cache persistence work', () => {
+    it('treats closure as authoritative even with previously cached configuration, without promoting other forbidden operations to closure', async () => {
+        const client = createStorefrontQueryClient();
+        const queryKey = [...storefrontQueryKeys.config('fixture:CNY', 'zh_Hans'), 'public'];
+        await client.fetchQuery({ queryKey, queryFn: () => Promise.resolve({ accessMode: 'PREVIEW' }) });
+        const denied = new ShopApiGraphQlError(['closed'], 403, 'STOREFRONT_CLOSED');
+        await expect(
+            client.fetchQuery({ queryKey, staleTime: 0, queryFn: () => Promise.reject(denied) }),
+        ).rejects.toBe(denied);
+        const state = client.getQueryState(queryKey);
+        expect(state?.data).toEqual({ accessMode: 'PREVIEW' });
+        expect(isStorefrontClosedError(state?.error, true)).toBe(true);
+        expect(storefrontQueryRetry(0, denied)).toBe(false);
+        const otherDenied = new ShopApiGraphQlError(['forbidden'], 403, 'FORBIDDEN');
+        expect(isStorefrontClosedError(otherDenied)).toBe(false);
+        expect(isStorefrontClosedError(otherDenied, true)).toBe(true);
+        client.clear();
+    });
     it('does not serialize unchanged data when pages attach and detach query observers', async () => {
         const client = createStorefrontQueryClient();
         const options = {

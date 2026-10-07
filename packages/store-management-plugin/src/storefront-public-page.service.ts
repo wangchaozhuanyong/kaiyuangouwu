@@ -28,6 +28,7 @@ import { publicPageMedia } from './performance/storefront-public-media';
 import { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service';
 import { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
+import { StorefrontActivationService, StorefrontClosedError } from './storefront-activation.service';
 import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
@@ -67,6 +68,7 @@ export class StorefrontPublicPageService {
         private readonly currency: StoreCurrencySettingsService,
         private readonly campaigns: StorePromotionCampaignService,
         private readonly announcements: SystemAnnouncementService,
+        private readonly activation: StorefrontActivationService,
     ) {}
 
     private key(host: string, request: PublicPageRequest) {
@@ -84,33 +86,47 @@ export class StorefrontPublicPageService {
     ): Promise<StorefrontPageData> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
             throw new Error('Public page requires anonymous Shop context');
-        return this.cache.readThrough(ctx, this.key(host, request), PAGE_TTL, async () => {
-            const routeData =
-                request.kind === 'catalog'
-                    ? this.moduleRef
-                          .get<PublicCatalogReader>(PUBLIC_CATALOG_READER, { strict: false })
-                          .find(ctx, request.input)
-                          .then(catalog => ({ route: '/category', catalog }))
-                    : request.kind === 'product'
-                      ? this.moduleRef
-                            .get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, { strict: false })
-                            .detail(ctx, request.id)
-                            .then(product => ({
-                                route: `/product/${encodeURIComponent(request.id)}`,
-                                product,
-                            }))
-                      : Promise.resolve({ route: '/' });
-            const [common, data] = await Promise.all([
-                this.assemble(ctx, host, request.kind === 'home'),
-                routeData,
-            ]);
-            const combined = { ...common, ...data };
-            const page = { ...combined, media: publicPageMedia(combined) };
-            return {
-                ...page,
-                version: createHash('sha256').update(JSON.stringify(page)).digest('hex').slice(0, 24),
-            };
-        });
+        return this.cache
+            .readThrough(ctx, this.key(host, request), PAGE_TTL, async () => {
+                const routeData =
+                    request.kind === 'catalog'
+                        ? this.moduleRef
+                              .get<PublicCatalogReader>(PUBLIC_CATALOG_READER, { strict: false })
+                              .find(ctx, request.input)
+                              .then(catalog => ({ route: '/category', catalog }))
+                        : request.kind === 'product'
+                          ? this.moduleRef
+                                .get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
+                                    strict: false,
+                                })
+                                .detail(ctx, request.id)
+                                .then(product => ({
+                                    route: `/product/${encodeURIComponent(request.id)}`,
+                                    product,
+                                }))
+                          : Promise.resolve({ route: '/' });
+                const [common, data] = await Promise.all([
+                    this.assemble(ctx, host, request.kind === 'home'),
+                    routeData,
+                ]);
+                const combined = { ...common, ...data };
+                const page = { ...combined, media: publicPageMedia(combined) };
+                return {
+                    ...page,
+                    version: createHash('sha256').update(JSON.stringify(page)).digest('hex').slice(0, 24),
+                };
+            })
+            .then(async page => {
+                // Cache content only; public access must reflect the current store state on every response.
+                const accessMode = await this.activation.getAccessMode(ctx);
+                if (accessMode === 'CLOSED') throw new StorefrontClosedError();
+                const { version: _cachedVersion, ...data } = page;
+                const current = { ...data, config: { ...(data.config as object), accessMode } };
+                return {
+                    ...current,
+                    version: createHash('sha256').update(JSON.stringify(current)).digest('hex').slice(0, 24),
+                };
+            });
     }
 
     private async assemble(ctx: RequestContext, host: string, home: boolean): Promise<StorefrontPageData> {
@@ -179,7 +195,11 @@ export class StorefrontPublicPageService {
 
     private async loadConfig(ctx: RequestContext) {
         const [branding, countries, provinces, currency] = await Promise.all([
-            new StorefrontBrandingShopResolver(this.connection, this.configService).loadBranding(ctx),
+            new StorefrontBrandingShopResolver(
+                this.connection,
+                this.configService,
+                this.moduleRef.get(StorefrontActivationService, { strict: false }),
+            ).loadBranding(ctx),
             this.countries.findAllAvailable(ctx),
             new StorefrontRegionShopResolver(this.provinces, this.countries).availableStorefrontProvinces(
                 ctx,
@@ -201,6 +221,7 @@ export class StorefrontPublicPageService {
             availableCountries: countries.map(country => ({ code: country.code, name: country.name })),
             availableProvinces: provinces,
             ...publicFields(branding, [
+                'accessMode',
                 'logoUrl',
                 'logoOnLightUrl',
                 'logoOnDarkUrl',

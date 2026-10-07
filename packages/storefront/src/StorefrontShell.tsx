@@ -17,12 +17,19 @@ import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
-import { StorefrontTrafficPreference } from './storefront-ui/storefront-traffic-preference';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import { type ActiveCustomer } from './types';
 
 const LoginRoutePage = lazyRouteComponent(() => import('./route-pages/auth-route-pages'), 'LoginRoutePage');
+const StorefrontTrafficPreference = lazyRouteComponent(
+    () => import('./storefront-ui/storefront-traffic-preference'),
+    'StorefrontTrafficPreference',
+);
+const PreviewScenarioPanel = lazyRouteComponent(
+    () => import('./storefront-preview-scenario-panel'),
+    'PreviewScenarioPanel',
+);
 
 type StorefrontShellProps = { state: ReturnType<typeof useStorefrontAppState> };
 
@@ -172,6 +179,16 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                     : 'You are offline. Some actions may fail.'}
                             </div>
                         )}
+                        {!previewEmbedded && state.storefrontAccessMode === 'PREVIEW' && (
+                            <aside className="storefront-preview-notice type-helper" role="status">
+                                <strong>{isZh ? '公开预览' : 'Public preview'}</strong>
+                                <span>
+                                    {isZh
+                                        ? '店铺尚未正式营业；测试支付只会生成模拟订单。'
+                                        : 'This store is not live yet. Test payments create simulated orders only.'}
+                                </span>
+                            </aside>
+                        )}
                         {desktop && showNavigation && (
                             <DesktopHeader
                                 navigationBlock={navigationBlock}
@@ -225,7 +242,11 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                     !(
                                         displayedRoute.name === 'home' &&
                                         ['empty', 'loading'].includes(previewScenario)
-                                    ) && <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />}
+                                    ) && (
+                                        <Suspense fallback={null}>
+                                            <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />
+                                        </Suspense>
+                                    )}
                             </div>
                         </div>
                     </div>
@@ -274,49 +295,11 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         </div>
                     )}
 
-                    <StorefrontTrafficPreference api={storefrontContextValue.api} language={language} />
+                    <Suspense fallback={null}>
+                        <StorefrontTrafficPreference api={storefrontContextValue.api} language={language} />
+                    </Suspense>
                 </PageReadinessBoundary>
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>
-    );
-}
-
-function PreviewScenarioPanel({ scenario, isZh }: { scenario: string; isZh: boolean }) {
-    if (scenario === 'loading') return <PageSkeleton variant="account" language={isZh ? 'zh' : 'en'} root />;
-    const content =
-        scenario === 'empty'
-            ? {
-                  title: isZh ? '暂无数据' : 'No data yet',
-                  body: isZh ? '当前页面暂无可展示内容。' : 'There is nothing to display on this page.',
-              }
-            : scenario === 'error'
-              ? {
-                    title: isZh ? '加载失败' : 'Unable to load',
-                    body: isZh ? '请检查网络后重试。' : 'Check your connection and try again.',
-                }
-              : scenario === 'disabled'
-                ? {
-                      title: isZh ? '功能暂不可用' : 'Feature unavailable',
-                      body: isZh ? '当前操作条件尚未满足。' : 'The requirements for this action are not met.',
-                  }
-                : {
-                      title: isZh ? '确认操作' : 'Confirm action',
-                      body: isZh
-                          ? '这是用于验收弹窗状态的只读预览。'
-                          : 'This read-only preview verifies the dialog state.',
-                  };
-    return (
-        <div
-            className={`storefront-preview-scenario is-${scenario}`}
-            role={scenario === 'dialog' ? 'dialog' : 'status'}
-        >
-            <div className="storefront-preview-state-card">
-                <strong>{content.title}</strong>
-                <p>{content.body}</p>
-                <button type="button" disabled={scenario === 'disabled'}>
-                    {scenario === 'error' ? (isZh ? '重试' : 'Try again') : isZh ? '知道了' : 'Got it'}
-                </button>
-            </div>
-        </div>
     );
 }

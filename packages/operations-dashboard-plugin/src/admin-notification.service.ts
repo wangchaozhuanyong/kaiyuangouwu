@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { Channel, RequestContext, TransactionalConnection } from '@vendure/core';
-import { IsNull, LessThanOrEqual, Not } from 'typeorm';
+import {
+    Channel,
+    Order,
+    RequestContext,
+    TransactionalConnection,
+    TransactionSubscriber,
+} from '@vendure/core';
+import { IsNull, LessThanOrEqual, Not, QueryRunner } from 'typeorm';
 
 import {
     AdminNotificationConfigService,
@@ -69,9 +75,22 @@ export class AdminNotificationService {
 
     async upsertIncident(ctx: RequestContext | null, input: AdminNotificationInput, force = false) {
         if (!input.fingerprint?.trim()) throw new Error('持续事件必须提供 fingerprint');
+        if (isManualDeliveryIncident(input)) return this.upsertManualDeliveryIncident(ctx, input, force);
+        const updated = await this.updateExistingIncident(ctx, input, force);
+        if (!updated) return this.enqueue(ctx, input, 'INCIDENT', 'FIRING', force);
+        if (updated.dispatchDue)
+            await Promise.resolve(this.worker.dispatch(updated.incident.id)).catch(() => false);
+        return updated.incident;
+    }
+
+    private async updateExistingIncident(
+        ctx: RequestContext | null,
+        input: AdminNotificationInput,
+        force: boolean,
+    ) {
         const config = await this.configService.get();
         const shouldDeliver = force ? true : this.shouldEnqueue(config, input);
-        const fingerprint = boundedText(input.fingerprint, 255);
+        const fingerprint = boundedText(input.fingerprint ?? '', 255);
         const updated = await this.inTransaction(ctx, async txCtx => {
             const repository = this.repository(txCtx);
             const current = supportsWriteLock(this.connection.rawConnection.options.type)
@@ -122,10 +141,67 @@ export class AdminNotificationService {
             );
             return { incident: current, dispatchDue };
         });
-        if (!updated) return this.enqueue(ctx, input, 'INCIDENT', 'FIRING', force);
-        if (updated.dispatchDue)
-            await Promise.resolve(this.worker.dispatch(updated.incident.id)).catch(() => false);
-        return updated.incident;
+        return updated;
+    }
+
+    private async upsertManualDeliveryIncident(
+        ctx: RequestContext | null,
+        input: AdminNotificationInput,
+        force: boolean,
+    ): Promise<AdminNotificationDelivery | null> {
+        let queryRunner: QueryRunner | undefined;
+        const outcome = await this.inTransaction(ctx, async txCtx => {
+            const target = this.connection.rawConnection.getMetadata('manual_digital_delivery').target;
+            const tasks = this.connection.getRepository(txCtx, target);
+            queryRunner = tasks.manager.queryRunner;
+            const query = tasks.createQueryBuilder('delivery').where('delivery.id = :id', {
+                id: input.sourceId,
+            });
+            if (supportsWriteLock(this.connection.rawConnection.options.type))
+                query.setLock('pessimistic_write');
+            const delivery = await query.getOne();
+            if (!delivery) return null;
+            const payload = input.payload ?? {};
+            const order = await this.connection.getRepository(txCtx, Order).findOne({
+                where: { id: delivery.orderId },
+            });
+            if (
+                !order ||
+                String(input.sourceId) !== String(delivery.id) ||
+                String(payload.deliveryId) !== String(delivery.id) ||
+                String(payload.orderId) !== String(delivery.orderId) ||
+                String(payload.channelId) !== String(delivery.channelId) ||
+                String(order.salesChannelId) !== String(delivery.channelId) ||
+                (ctx && String(ctx.channelId) !== String(delivery.channelId)) ||
+                input.fingerprint !== `${input.eventType}:${delivery.id}`
+            )
+                throw new Error('人工交付告警的任务、订单或店铺归属不一致');
+            // An earlier asynchronous FIRING event must not reopen a terminated task's incident.
+            // Keep the Delivery lock through both aggregation and the first native enqueue commit.
+            if (delivery.state === 'CANCELLED') return null;
+            const updated = await this.updateExistingIncident(txCtx, input, force);
+            if (updated) return updated;
+            const incident = await this.enqueue(txCtx, input, 'INCIDENT', 'FIRING', force, false);
+            return { incident, dispatchDue: incident?.deliveryStatus === 'PENDING' };
+        });
+        if (!outcome?.incident) return null;
+        if (outcome.dispatchDue) {
+            if (queryRunner?.isTransactionActive) {
+                // Nested transactions cannot await their caller's commit. Register the exact native
+                // transaction subscriber now; rollback rejects this promise and cannot dispatch.
+                const subscriber = this.connection.rawConnection.subscribers.find(
+                    candidate => candidate instanceof TransactionSubscriber,
+                );
+                if (!subscriber) throw new Error('人工交付告警缺少原生事务提交观察器');
+                void subscriber
+                    .awaitCommit(queryRunner)
+                    .then(() => this.worker.dispatch((outcome.incident as AdminNotificationDelivery).id))
+                    .catch(() => false);
+            } else {
+                await Promise.resolve(this.worker.dispatch(outcome.incident.id)).catch(() => false);
+            }
+        }
+        return outcome.incident;
     }
 
     async resolveIncident(
@@ -555,4 +631,14 @@ export function departmentCodesForDelivery(delivery: AdminNotificationDelivery):
         ...delivery.collaboratorDepartmentCodes,
         ...(delivery.escalationDepartmentCode ? [delivery.escalationDepartmentCode] : []),
     ];
+}
+
+function isManualDeliveryIncident(input: AdminNotificationInput): boolean {
+    return (
+        input.sourceType === 'ManualDigitalDelivery' &&
+        [
+            'commerce.fulfillment.manual_delivery_failed',
+            'commerce.fulfillment.manual_delivery_overdue',
+        ].includes(input.eventType)
+    );
 }

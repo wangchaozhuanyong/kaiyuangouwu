@@ -437,6 +437,17 @@
     height: 17px;
 }
 
+.storefront-preview-notice {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--page-section-inset);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    text-align: center;
+}
+
 .toast {
     max-width: min(calc(100% - 32px), 380px);
     min-height: 42px;

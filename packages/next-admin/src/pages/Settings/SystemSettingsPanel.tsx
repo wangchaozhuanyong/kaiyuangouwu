@@ -396,8 +396,12 @@ function SettingsValueEditor({
                     className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
                 >
                     <div className="admin-section-title-line justify-between">
-                        <h2 className="font-bold text-slate-900">
+                        <h2 className="flex items-center gap-2 font-bold text-slate-900">
                             高级编辑：{getSettingsPresentation(field.key).title}
+                            <FeatureHelpButton
+                                topic="settings.dynamic-config"
+                                title={`高级编辑${getSettingsPresentation(field.key).title}`}
+                            />
                         </h2>
                         <span className="text-xs text-slate-500">
                             {getSettingsScopeLabel(field.scopeType)} · 原始格式

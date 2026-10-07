@@ -5,14 +5,30 @@ import {
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
 
-function createResolver(profile: Record<string, unknown> | null) {
+function createResolver(profile: Record<string, unknown> | null, accessMode = 'LIVE') {
     const repository = { findOne: vi.fn().mockResolvedValue(profile) };
     const connection = { getRepository: vi.fn().mockReturnValue(repository) };
     const configService = { assetOptions: { assetStorageStrategy: {} } };
-    return new StorefrontBrandingShopResolver(connection as any, configService as any);
+    return new StorefrontBrandingShopResolver(
+        connection as any,
+        configService as any,
+        {
+            getAccessMode: vi.fn().mockResolvedValue(accessMode),
+        } as any,
+    );
 }
 
 describe('StorefrontBrandingShopResolver', () => {
+    it.each(['CLOSED', 'PREVIEW', 'LIVE'])('returns the authoritative %s access mode', async accessMode => {
+        const resolver = createResolver(null, accessMode);
+        await expect(
+            resolver.storefrontBranding({
+                channelId: 'channel-1',
+                languageCode: 'en',
+                channel: { code: 'store', customFields: {} },
+            } as any),
+        ).resolves.toMatchObject({ accessMode });
+    });
     it('returns published store branding to guests and signed-in visitors alike', async () => {
         const resolver = createResolver({
             descriptionZh: 'AI 软件商城',
@@ -164,6 +180,47 @@ describe('StorefrontBrandingShopResolver', () => {
     });
 });
 
+describe('native Admin public cache refresh', () => {
+    const fixture = () => {
+        const cache = {
+            revision: vi.fn().mockResolvedValueOnce('before').mockResolvedValue('after'),
+            invalidate: vi.fn().mockResolvedValue(undefined),
+            sharedVersions: false,
+        };
+        const resolver = new StorefrontBrandingAdminResolver({} as any, {} as any, {} as any, cache as any);
+        const ctx = {
+            apiType: 'admin',
+            activeUserId: 'native-admin',
+            channelId: 'channel-current',
+            userHasPermissions: vi.fn().mockReturnValue(true),
+        };
+        return { cache, resolver, ctx };
+    };
+    it('rotates only the native active Channel and returns the serving process identity', async () => {
+        const { cache, resolver, ctx } = fixture();
+        const result = await resolver.refreshStorefrontPublicCache(ctx as any);
+        expect(cache.invalidate).toHaveBeenCalledExactlyOnceWith('channel-current');
+        expect(result).toMatchObject({ channelId: 'channel-current', processId: process.pid, shared: false });
+        expect(result.revisionFingerprint).toMatch(/^[a-f0-9]{64}$/u);
+    });
+    it.each([{ apiType: 'shop' }, { activeUserId: undefined }, { userHasPermissions: () => false }])(
+        'denies untrusted contexts before touching cache',
+        async change => {
+            const { cache, resolver, ctx } = fixture();
+            await expect(
+                resolver.refreshStorefrontPublicCache({ ...ctx, ...change } as any),
+            ).rejects.toThrow();
+            expect(cache.invalidate).not.toHaveBeenCalled();
+            expect(cache.revision).not.toHaveBeenCalled();
+        },
+    );
+    it('rejects unavailable or unchanged revision rather than claiming refresh succeeded', async () => {
+        const { cache, resolver, ctx } = fixture();
+        cache.revision.mockReset().mockResolvedValue('same');
+        await expect(resolver.refreshStorefrontPublicCache(ctx as any)).rejects.toThrow('did not advance');
+    });
+});
+
 describe('StorefrontBrandingAdminResolver', () => {
     it('reads the selected channel profile and clears branding for a new store', async () => {
         const profiles: Record<string, Record<string, unknown>> = {
@@ -187,6 +244,7 @@ describe('StorefrontBrandingAdminResolver', () => {
         const resolver = new StorefrontBrandingAdminResolver(
             connection as any,
             { assetOptions: { assetStorageStrategy: {} } } as any,
+            { getAccessMode: vi.fn().mockResolvedValue('CLOSED') } as any,
         );
         for (const channelId of ['a', 'b', 'new']) {
             const result = await resolver.storefrontPreviewBranding({

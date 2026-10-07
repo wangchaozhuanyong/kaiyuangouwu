@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ShopApiGraphQlError } from './api/helpers';
 import { createStorefrontQueryClient, refreshStorefrontQueries, storefrontQueryKeys } from './query-client';
 import { StorefrontQueryFeedback } from './StorefrontQueryFeedback';
 
@@ -16,12 +17,15 @@ afterEach(async () => {
     vi.useRealTimers();
 });
 
-async function mount() {
+async function mount(resource: 'products' | 'config' = 'products') {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     const client = createStorefrontQueryClient();
     const scope = { marketCode: 'shop:MYR', languageCode: 'zh_Hans', includePrivate: true };
-    const key = storefrontQueryKeys.products(scope.marketCode, scope.languageCode, 12);
+    const key =
+        resource === 'config'
+            ? [...storefrontQueryKeys.config(scope.marketCode, scope.languageCode), 'public']
+            : storefrontQueryKeys.products(scope.marketCode, scope.languageCode, 12);
     client.setQueryData(key, ['已有商品']);
     let resolve!: (data: string[]) => void;
     let reject!: (error: Error) => void;
@@ -60,11 +64,12 @@ async function mount() {
     return {
         client,
         scope,
+        key,
         container,
         read,
         start: () => refreshStorefrontQueries(client, scope),
         succeed: (data: string[]) => resolve(data),
-        fail: () => reject(new Error('Network unavailable')),
+        fail: (error = new Error('Network unavailable')) => reject(error),
         tick: async (ms = 250) => {
             await act(async () => vi.advanceTimersByTimeAsync(ms));
         },
@@ -72,6 +77,29 @@ async function mount() {
 }
 
 describe('shared background query feedback', () => {
+    it.each([
+        ['STOREFRONT_CLOSED', 'products', false],
+        ['FORBIDDEN', 'products', true],
+        ['FORBIDDEN', 'config', false],
+    ] as const)(
+        'delegates %s on %s to its owning boundary without suppressing ordinary permission feedback',
+        async (code, resource, feedbackVisible) => {
+            const page = await mount(resource);
+            let refresh!: Promise<void>;
+            await act(async () => {
+                refresh = page.start();
+                page.fail(new ShopApiGraphQlError(['access denied'], 403, code));
+                await refresh;
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            // TanStack retains old data after a refusal; the closed-store shell separately
+            // removes it from view, so the generic "previous content" notice must disappear.
+            expect(page.client.getQueryData(page.key)).toEqual(['已有商品']);
+            const feedback = page.container.querySelector('[data-query-feedback]');
+            if (feedbackVisible) expect(feedback?.textContent).toContain('保留上次内容');
+            else expect(feedback).toBeNull();
+        },
+    );
     it('keeps content visible, delays progress, and clears progress after success', async () => {
         const page = await mount();
         let refresh!: Promise<void>;

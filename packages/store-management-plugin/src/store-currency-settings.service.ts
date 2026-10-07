@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
     assertOrderSalesChannel,
     Channel,
@@ -28,6 +28,7 @@ import {
     STOREFRONT_USDT_CURRENCY_CODE,
 } from './payment-currency';
 import { convertMinorPrice } from './store-currency-conversion';
+import { StorefrontActivationService } from './storefront-activation.service';
 import {
     StoreCurrencyConfiguration,
     StoreCurrencyRateMode,
@@ -98,6 +99,7 @@ export class StoreCurrencySettingsService {
         private readonly usdtOtcRateService: UsdtOtcRateService,
         private readonly orderService: OrderService,
         private readonly usdtPaymentService: UsdtPaymentService,
+        @Inject(StorefrontActivationService) private readonly activation?: StorefrontActivationService,
     ) {}
 
     async get(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
@@ -122,7 +124,9 @@ export class StoreCurrencySettingsService {
         }
         const activeOrderId = ctx.session?.activeOrderId;
         if (!activeOrderId) throw new UserInputError('当前没有可结算订单');
-        const order = await this.connection.getEntityOrThrow(ctx, Order, activeOrderId);
+        const order = await this.connection.getEntityOrThrow(ctx, Order, activeOrderId, {
+            relations: ['payments'],
+        });
         assertOrderSalesChannel(ctx, order);
         if (order.state !== 'AddingItems') {
             throw new UserInputError('当前订单状态不能切换付款币种');
@@ -131,6 +135,10 @@ export class StoreCurrencySettingsService {
         const configuration = await this.get(ctx);
         if (!configuration.selectorEnabled) throw new UserInputError('当前店铺未开放付款币种切换');
         if (requestedCurrencyCode === STOREFRONT_USDT_CURRENCY_CODE) {
+            if (!this.activation || order.salesChannelId == null) {
+                throw new UserInputError('当前店铺付款配置不可用');
+            }
+            await this.activation.assertNewRealPaymentAllowed(ctx, order.salesChannelId, order);
             if (
                 !configuration.usdtDisplayEnabled ||
                 !configuration.usdtRateAvailable ||
@@ -226,8 +234,17 @@ export class StoreCurrencySettingsService {
     }
 
     async createCheckoutUsdtQuote(ctx: RequestContext): Promise<StorefrontUsdtCheckoutQuoteView> {
+        return this.orderService.withOrderMutationTransaction(ctx, txCtx =>
+            this.createCheckoutUsdtQuoteInTransaction(txCtx),
+        );
+    }
+
+    private async createCheckoutUsdtQuoteInTransaction(
+        ctx: RequestContext,
+    ): Promise<StorefrontUsdtCheckoutQuoteView> {
         const activeOrderId = ctx.session?.activeOrderId;
         if (!activeOrderId) throw new UserInputError('当前没有可结算订单');
+        await this.orderService.lockOrderForRefund(ctx, activeOrderId);
         const order = await this.orderService.findOne(ctx, activeOrderId, ['payments'], 'business');
         if (!order || !['AddingItems', 'ArrangingPayment'].includes(order.state)) {
             throw new UserInputError('当前订单状态不能生成 USDT 报价');
@@ -286,6 +303,11 @@ export class StoreCurrencySettingsService {
         order: Order,
         fiatAmount: number,
     ): Promise<StorefrontUsdtCheckoutQuoteView> {
+        assertOrderSalesChannel(ctx, order);
+        if (!this.activation || order.salesChannelId == null) {
+            throw new UserInputError('当前店铺付款配置不可用');
+        }
+        await this.activation.assertNewRealPaymentAllowed(ctx, order.salesChannelId, order);
         if (order.currencyCode !== CurrencyCode.CNY && order.currencyCode !== CurrencyCode.MYR) {
             throw new UserInputError('USDT 报价目前仅支持 CNY 和 MYR 订单');
         }

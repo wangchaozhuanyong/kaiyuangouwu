@@ -18,6 +18,7 @@ import {
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { LessThanOrEqual } from 'typeorm';
 
+import { CheckoutResourcesService } from './checkout-resources.service';
 import { guardDigitalFulfillment } from './digital-fulfillment.guard';
 import { DigitalReceiptService } from './digital-receipt.service';
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
@@ -56,6 +57,7 @@ export class FulfillmentDeliveryService {
         private readonly eventBus: EventBus,
         private readonly orderService: OrderService,
         private readonly receipts: DigitalReceiptService,
+        private readonly resources: CheckoutResourcesService,
     ) {}
 
     async recordShippedTransition(
@@ -124,6 +126,8 @@ export class FulfillmentDeliveryService {
         const { current, owners } = locked;
         if (current.state !== fulfillment.state || !['Created', 'Pending'].includes(current.state))
             return '包裹状态已变化，请刷新后重试';
+        const resourceBoundary = await this.guardDeliveryResources(ctx, owners);
+        if (resourceBoundary) return resourceBoundary;
         const included = current.lines.map(fulfillmentLine => {
             const matches = owners.flatMap(order =>
                 (order.lines ?? [])
@@ -229,6 +233,22 @@ export class FulfillmentDeliveryService {
         fulfillment.lines = current.lines;
     }
 
+    private async guardDeliveryResources(ctx: RequestContext, owners: Order[]): Promise<string | void> {
+        for (const order of owners) {
+            // The locking read owns this evidence. A later ordinary read must not revive a test order.
+            if (
+                (order.payments ?? []).some(
+                    payment =>
+                        isControlledTestPaymentMethod(payment.method) ||
+                        payment.metadata?.public?.testPayment === true,
+                )
+            )
+                return '模拟付款订单不能创建真实交付';
+            if (!(await this.resources.canDeliver(ctx, order.id, order)))
+                return '付款或交付资源尚待核验，不能创建真实交付';
+        }
+    }
+
     private async lockedFulfillment(
         ctx: RequestContext,
         fulfillment: Fulfillment,
@@ -299,6 +319,8 @@ export class FulfillmentDeliveryService {
         if (typeof locked === 'string') return locked;
         const { current, owners } = locked;
         if (current.state !== fulfillment.state) return '包裹状态已变化，请刷新后重试';
+        const resourceBoundary = await this.guardDeliveryResources(ctx, owners);
+        if (resourceBoundary) return resourceBoundary;
         const included = current.lines.map(item =>
             owners.flatMap(order =>
                 order.lines

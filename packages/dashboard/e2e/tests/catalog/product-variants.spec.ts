@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 
 import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
@@ -248,9 +249,14 @@ test.describe('manage product variants', () => {
     // Use "Laptop" from seed data — it already has option groups and variants
     let laptopId: string;
     let uniqueOptionId: string;
+    let uniqueOptionName: string;
+    let uniqueSku: string;
     let firstGroupId: string;
 
-    test.beforeAll(async ({ browser }) => {
+    test.beforeAll(async ({ browser }, testInfo) => {
+        const attemptId = `${testInfo.workerIndex}-${testInfo.retry}-${randomUUID()}`;
+        uniqueOptionName = `E2E Unique Test ${attemptId}`;
+        uniqueSku = `E2E-LAPTOP-UNIQUE-${attemptId}`;
         const page = await browser.newPage();
         const client = new VendureAdminClient(page);
         await client.login();
@@ -281,8 +287,8 @@ test.describe('manage product variants', () => {
             {
                 input: {
                     productOptionGroupId: firstGroupId,
-                    code: 'e2e-unique-test',
-                    translations: [{ languageCode: 'en', name: 'E2E Unique Test' }],
+                    code: `e2e-unique-test-${attemptId}`,
+                    translations: [{ languageCode: 'en', name: uniqueOptionName }],
                 },
             },
         );
@@ -403,7 +409,7 @@ test.describe('manage product variants', () => {
         await expect(dialog).toBeVisible();
 
         // Select an option for each option group using the combobox selectors.
-        // For the first group, select our unique option ("E2E Unique Test") created in beforeAll.
+        // For the first group, select the unique option for this attempt created in beforeAll.
         // For the remaining groups, select the first available option.
         const comboboxes = dialog.getByRole('combobox');
         const comboboxCount = await comboboxes.count();
@@ -412,7 +418,7 @@ test.describe('manage product variants', () => {
             await comboboxes.nth(i).click();
             if (i === 0) {
                 // Select our unique option that's guaranteed not to be a duplicate
-                await page.getByRole('option', { name: 'E2E Unique Test' }).click();
+                await page.getByRole('option', { name: uniqueOptionName, exact: true }).click();
             } else {
                 await page.getByRole('option').first().click();
             }
@@ -425,7 +431,7 @@ test.describe('manage product variants', () => {
                 has: page.locator('[data-slot="field-label"]').getByText('SKU', { exact: true }),
             })
             .getByRole('textbox');
-        await skuInput.fill('E2E-LAPTOP-UNIQUE');
+        await skuInput.fill(uniqueSku);
 
         // Submit the form
         await dialog.getByRole('button', { name: 'Create SKU' }).click();

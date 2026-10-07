@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isConfirmedControlledTestPayment } from '@vendure/common/lib/controlled-test-payment';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     assertOrderSalesChannel,
@@ -8,6 +9,7 @@ import {
     Logger,
     Order,
     OrderService,
+    Payment,
     Permission,
     RequestContext,
     RequestContextService,
@@ -23,7 +25,7 @@ import { AutoCardCipherService } from './auto-card-cipher.service';
 import { readSoldAutoCardsPermission } from './auto-card.constants';
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { DigitalProductService } from './digital-product.service';
-import { DigitalFileVersion } from './entities/digital-product.entity';
+import { DigitalFileVersion, DigitalReceiptAccess } from './entities/digital-product.entity';
 import {
     ManualDigitalDeliveryEvent,
     ManualDigitalDeliveryEventType,
@@ -208,104 +210,196 @@ export class ManualDigitalDeliveryService {
         return Object.assign(this.attachView(delivery), { packages: this.readPackages(delivery) });
     }
 
-    async saveDraft(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
-        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
-        const delivery = await this.ownedDelivery(ctx, input.id);
-        if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
-            throw new UserInputError('当前人工交付状态不能修改成品内容');
-        }
-        const packages = await this.normalizePackages(ctx, input.packages);
-        delivery.encryptedPackages = this.cipher.encrypt({ payload: JSON.stringify(packages) });
-        delivery.attachmentAssetIdsJson = JSON.stringify([
-            ...new Set(packages.flatMap(item => item.attachmentAssetIds)),
-        ]);
-        delivery.state = 'DRAFT';
-        delivery.lastError = null;
-        const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-        await this.addEvent(ctx, saved, 'DRAFT_SAVED', '管理员保存了人工交付成品草稿', 'ADMIN');
-        return this.attachView(saved);
-    }
-
-    async publish(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
-        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
-        const delivery = await this.ownedDelivery(ctx, input.id);
-        this.assertOrderCanDeliver(delivery);
-        if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
-            throw new UserInputError('当前状态不能覆盖成品；邮件失败或已发布时只能重发原成品');
-        }
-        const packages = await this.normalizePackages(ctx, input.packages);
-        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
-        if (packages.length !== eligible)
-            throw new UserInputError(`当前需交付 ${eligible} 份，请录入 ${eligible} 个成品`);
-        delivery.quantity = packages.length;
-        delivery.encryptedPackages = this.cipher.encrypt({ payload: JSON.stringify(packages) });
-        delivery.attachmentAssetIdsJson = JSON.stringify([
-            ...new Set(packages.flatMap(item => item.attachmentAssetIds)),
-        ]);
-        delivery.state = 'SENDING';
-        delivery.lastError = null;
-        delivery.lastDispatchedAt = new Date();
-        const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-        await this.addEvent(ctx, saved, 'PUBLISHED', '管理员发布了人工交付成品', 'ADMIN');
-        await this.digitalProducts.consumeLine(
-            ctx,
-            saved.orderLineId,
-            digitalDeliverableQuantity(saved.order, saved.orderLine),
-        );
-        await this.completeFulfillment(ctx, saved);
-        await this.resolveOverdue(ctx, saved);
-        await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(saved.id)));
-        return this.attachView(saved);
-    }
-
-    async append(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
-        await this.digitalProducts.lock(ctx, ManualDigitalDelivery, input.id);
-        const delivery = await this.ownedDelivery(ctx, input.id);
-        this.assertOrderCanDeliver(delivery);
+    /** Server-only adjudication. The host must verify content, runtime and all other protected risks. */
+    async closeHistoricalTestTask(
+        ctx: RequestContext,
+        id: ID,
+        receiptId: string,
+    ): Promise<ManualDigitalDelivery> {
         if (
-            !['SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(delivery.state) ||
-            !delivery.encryptedPackages
+            ctx.apiType !== 'admin' ||
+            !ctx.activeUserId ||
+            !ctx.userHasPermissions([Permission.SuperAdmin]) ||
+            !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,179}$/u.test(receiptId)
         )
-            throw new UserInputError('请先发布原交付内容');
-        const existing = this.readPackages(delivery);
-        const missing = Math.max(
-            0,
-            digitalDeliverableQuantity(delivery.order, delivery.orderLine) - existing.length,
-        );
-        const extra = await this.normalizePackages(ctx, input.packages);
-        if (!missing || extra.length !== missing)
-            throw new UserInputError(`当前待补交 ${missing} 份，请只填写新增成品`);
-        delivery.encryptedPackages = this.cipher.encrypt({
-            payload: JSON.stringify([...existing, ...extra]),
+            throw new UserInputError('历史测试任务关闭需要受管管理员及有效收据');
+        return this.withLockedDelivery(ctx, id, async (txCtx, delivery) => {
+            const order = delivery.order;
+            if (
+                order.active !== false ||
+                !['PaymentSettled', 'Modifying'].includes(order.state) ||
+                String(delivery.orderLine?.order?.id) !== String(order.id) ||
+                delivery.orderLine.customFields?.fulfillmentTypeSnapshot !== 'digital' ||
+                delivery.orderLine.customFields?.digitalDeliveryModeSnapshot !== 'manual_service' ||
+                !delivery.encryptedPackages ||
+                !delivery.events?.some(event => event.type === 'PUBLISHED') ||
+                !Array.isArray(order.payments) ||
+                !order.payments.some(payment => payment.state === 'Settled') ||
+                order.payments.some(
+                    payment =>
+                        !isConfirmedControlledTestPayment(payment) ||
+                        payment.method !== `controlled-test-payment-${order.salesChannelId}` ||
+                        !['Authorized', 'Settled'].includes(payment.state) ||
+                        payment.metadata?.manualReview?.required ||
+                        !Array.isArray(payment.refunds) ||
+                        payment.refunds.length !== 0,
+                )
+            )
+                throw new UserInputError('历史测试任务的商品、归属或付款证据不满足关闭条件');
+            const [claimed, fulfilled] = await Promise.all([
+                this.connection.getRepository(txCtx, DigitalReceiptAccess).count({
+                    where: [{ orderId: order.id }, { orderLineId: delivery.orderLineId }],
+                }),
+                this.connection.getRepository(txCtx, FulfillmentLine).count({
+                    where: [
+                        { orderLine: { order: { id: order.id } } },
+                        { orderLineId: delivery.orderLineId },
+                    ],
+                }),
+            ]);
+            if (
+                claimed ||
+                fulfilled ||
+                order.fulfillments?.length ||
+                delivery.sentAt ||
+                delivery.fulfillmentId ||
+                delivery.events.some(event => event.type === 'EMAIL_SENT') ||
+                delivery.events.some(event => event.note?.startsWith('[historical-test-late:'))
+            )
+                throw new UserInputError('已有领取、履约或邮件结果证据，历史测试任务需继续核对');
+            const note = `历史测试任务终止；收据 ${receiptId}`;
+            if (delivery.state === 'CANCELLED') {
+                if (
+                    delivery.events.some(
+                        event =>
+                            event.type === 'CANCELLED' && event.actorType === 'ADMIN' && event.note === note,
+                    )
+                )
+                    return this.attachView(delivery);
+                throw new UserInputError('任务已由其他流程关闭，不能替换原关闭依据');
+            }
+            if (!['SENDING', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(delivery.state))
+                throw new UserInputError('历史测试任务尚未发布或已经终结');
+            delivery.state = 'CANCELLED';
+            await this.connection.getRepository(txCtx, ManualDigitalDelivery).save(delivery);
+            await this.addEvent(txCtx, delivery, 'CANCELLED', note, 'ADMIN');
+            // The reviewed host closes incidents natively in this transaction, with a truthful reason.
+            // Sending an ordinary INCIDENT_RESOLVED here would falsely claim email recovery.
+            return this.attachView(delivery);
         });
-        delivery.quantity = existing.length + extra.length;
-        delivery.state = 'SENDING';
-        delivery.lastError = null;
-        delivery.lastDispatchedAt = new Date();
-        await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-        await this.digitalProducts.consumeLine(ctx, delivery.orderLineId, extra.length);
-        await this.completeFulfillment(ctx, delivery);
-        await this.addEvent(ctx, delivery, 'PUBLISHED', `管理员补交 ${extra.length} 份，原内容保留`, 'ADMIN');
-        await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
-        return this.attachView(delivery);
     }
 
-    async retry(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
-        const delivery = await this.ownedDelivery(ctx, id);
-        this.assertOrderCanDeliver(delivery);
-        if (!delivery.encryptedPackages) {
-            throw new UserInputError('尚未保存成品，不能发送');
-        }
-        if (!['EMAIL_FAILED', 'MANUAL_REVIEW', 'SENT'].includes(delivery.state)) {
-            throw new UserInputError('当前状态不能重发');
-        }
-        delivery.state = 'SENDING';
-        delivery.lastError = null;
-        delivery.lastDispatchedAt = new Date();
-        await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-        await this.addEvent(ctx, delivery, 'MANUAL_RETRY', '管理员重发原成品，内容未变更', 'ADMIN');
-        await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
-        return this.attachView(delivery);
+    async saveDraft(
+        requestCtx: RequestContext,
+        input: SaveManualDeliveryInput,
+    ): Promise<ManualDigitalDelivery> {
+        return this.withLockedDelivery(requestCtx, input.id, async (ctx, delivery) => {
+            if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
+                throw new UserInputError('当前人工交付状态不能修改成品内容');
+            }
+            const packages = await this.normalizePackages(ctx, input.packages);
+            delivery.encryptedPackages = this.cipher.encrypt({ payload: JSON.stringify(packages) });
+            delivery.attachmentAssetIdsJson = JSON.stringify([
+                ...new Set(packages.flatMap(item => item.attachmentAssetIds)),
+            ]);
+            delivery.state = 'DRAFT';
+            delivery.lastError = null;
+            const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+            await this.addEvent(ctx, saved, 'DRAFT_SAVED', '管理员保存了人工交付成品草稿', 'ADMIN');
+            return this.attachView(saved);
+        });
+    }
+
+    async publish(
+        requestCtx: RequestContext,
+        input: SaveManualDeliveryInput,
+    ): Promise<ManualDigitalDelivery> {
+        return this.withLockedDelivery(requestCtx, input.id, async (ctx, delivery) => {
+            this.assertOrderCanDeliver(delivery);
+            if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
+                throw new UserInputError('当前状态不能覆盖成品；邮件失败或已发布时只能重发原成品');
+            }
+            const packages = await this.normalizePackages(ctx, input.packages);
+            const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+            if (packages.length !== eligible)
+                throw new UserInputError(`当前需交付 ${eligible} 份，请录入 ${eligible} 个成品`);
+            delivery.quantity = packages.length;
+            delivery.encryptedPackages = this.cipher.encrypt({ payload: JSON.stringify(packages) });
+            delivery.attachmentAssetIdsJson = JSON.stringify([
+                ...new Set(packages.flatMap(item => item.attachmentAssetIds)),
+            ]);
+            delivery.state = 'SENDING';
+            delivery.lastError = null;
+            delivery.lastDispatchedAt = new Date();
+            const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+            await this.addEvent(ctx, saved, 'PUBLISHED', '管理员发布了人工交付成品', 'ADMIN');
+            await this.digitalProducts.consumeLine(
+                ctx,
+                saved.orderLineId,
+                digitalDeliverableQuantity(saved.order, saved.orderLine),
+            );
+            await this.completeFulfillment(ctx, saved);
+            await this.resolveOverdue(ctx, saved);
+            await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(saved.id)));
+            return this.attachView(saved);
+        });
+    }
+
+    async append(requestCtx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
+        return this.withLockedDelivery(requestCtx, input.id, async (ctx, delivery) => {
+            this.assertOrderCanDeliver(delivery);
+            if (
+                !['SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(delivery.state) ||
+                !delivery.encryptedPackages
+            )
+                throw new UserInputError('请先发布原交付内容');
+            const existing = this.readPackages(delivery);
+            const missing = Math.max(
+                0,
+                digitalDeliverableQuantity(delivery.order, delivery.orderLine) - existing.length,
+            );
+            const extra = await this.normalizePackages(ctx, input.packages);
+            if (!missing || extra.length !== missing)
+                throw new UserInputError(`当前待补交 ${missing} 份，请只填写新增成品`);
+            delivery.encryptedPackages = this.cipher.encrypt({
+                payload: JSON.stringify([...existing, ...extra]),
+            });
+            delivery.quantity = existing.length + extra.length;
+            delivery.state = 'SENDING';
+            delivery.lastError = null;
+            delivery.lastDispatchedAt = new Date();
+            await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+            await this.digitalProducts.consumeLine(ctx, delivery.orderLineId, extra.length);
+            await this.completeFulfillment(ctx, delivery);
+            await this.addEvent(
+                ctx,
+                delivery,
+                'PUBLISHED',
+                `管理员补交 ${extra.length} 份，原内容保留`,
+                'ADMIN',
+            );
+            await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
+            return this.attachView(delivery);
+        });
+    }
+
+    async retry(requestCtx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
+        return this.withLockedDelivery(requestCtx, id, async (ctx, delivery) => {
+            this.assertOrderCanDeliver(delivery);
+            if (!delivery.encryptedPackages) {
+                throw new UserInputError('尚未保存成品，不能发送');
+            }
+            if (!['EMAIL_FAILED', 'MANUAL_REVIEW', 'SENT'].includes(delivery.state)) {
+                throw new UserInputError('当前状态不能重发');
+            }
+            delivery.state = 'SENDING';
+            delivery.lastError = null;
+            delivery.lastDispatchedAt = new Date();
+            await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+            await this.addEvent(ctx, delivery, 'MANUAL_RETRY', '管理员重发原成品，内容未变更', 'ADMIN');
+            await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
+            return this.attachView(delivery);
+        });
     }
 
     async notificationPayload(ctx: RequestContext, id: ID) {
@@ -364,58 +458,86 @@ export class ManualDigitalDeliveryService {
         return this.notificationPayload(ctx, id);
     }
 
-    async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
-        const delivery = await this.ownedDelivery(ctx, id);
-        const hadManualReview =
-            delivery.state === 'MANUAL_REVIEW' ||
-            delivery.events?.some(event => event.type === 'MANUAL_REVIEW') === true;
-        // Old queued attempts must not reopen a cancelled or already completed task.
-        if (delivery.state === 'CANCELLED' || delivery.state === 'SENT') {
-            return;
-        }
-        // A queued attempt rejected after the task reached manual review must not replace
-        // the original send error with a secondary "current state cannot send" error.
-        if (delivery.state === 'MANUAL_REVIEW' && !success) {
-            return;
-        }
-        delivery.attemptCount += 1;
-        if (!success) {
-            delivery.lastError = String(error?.message ?? '邮件发送失败').slice(0, 2_000);
-            delivery.state = delivery.attemptCount >= MAX_ATTEMPTS ? 'MANUAL_REVIEW' : 'EMAIL_FAILED';
-            await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-            await this.addEvent(
-                ctx,
-                delivery,
-                delivery.state === 'MANUAL_REVIEW' ? 'MANUAL_REVIEW' : 'EMAIL_FAILED',
-                delivery.state === 'MANUAL_REVIEW'
-                    ? '邮件多次发送失败，已转人工核查'
-                    : '人工交付邮件发送失败，将重试原成品',
-            );
-            if (delivery.state === 'MANUAL_REVIEW') {
-                await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
+    async recordEmailResult(
+        requestCtx: RequestContext,
+        id: ID,
+        success: boolean,
+        error?: Error,
+    ): Promise<void> {
+        return this.withLockedDelivery(requestCtx, id, async (ctx, delivery) => {
+            if (
+                delivery.state === 'CANCELLED' &&
+                delivery.events?.some(
+                    event =>
+                        event.type === 'CANCELLED' &&
+                        event.actorType === 'ADMIN' &&
+                        event.note.startsWith('历史测试任务终止；收据 '),
+                )
+            ) {
+                const outcome = success ? 'success' : 'failure';
+                const type = success ? 'EMAIL_SENT' : 'EMAIL_FAILED';
+                const attempt = delivery.lastDispatchedAt?.toISOString() ?? 'unknown';
+                const note = `[historical-test-late:${attempt}:${outcome}] 历史测试任务关闭后的迟到邮件${success ? '成功' : '失败'}回执；仅留证，不重开任务`;
+                if (!delivery.events.some(event => event.type === type && event.note === note))
+                    await this.addEvent(ctx, delivery, type, note);
+                return;
             }
-            return;
-        }
-        delivery.state = 'SENT';
-        delivery.sentAt = new Date();
-        delivery.lastError = null;
-        await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-        await this.addEvent(ctx, delivery, 'EMAIL_SENT', '人工交付邮件已发送');
-        if (hadManualReview) await this.resolveDeliveryFailure(ctx, delivery);
-        await this.resolveOverdue(ctx, delivery);
-        await this.completeFulfillment(ctx, delivery);
+            const hadManualReview =
+                delivery.state === 'MANUAL_REVIEW' ||
+                delivery.events?.some(event => event.type === 'MANUAL_REVIEW') === true;
+            // Old queued attempts must not reopen a cancelled or already completed task.
+            if (delivery.state === 'CANCELLED' || delivery.state === 'SENT') {
+                return;
+            }
+            // A queued attempt rejected after the task reached manual review must not replace
+            // the original send error with a secondary "current state cannot send" error.
+            if (delivery.state === 'MANUAL_REVIEW' && !success) {
+                return;
+            }
+            delivery.attemptCount += 1;
+            if (!success) {
+                delivery.lastError = String(error?.message ?? '邮件发送失败').slice(0, 2_000);
+                delivery.state = delivery.attemptCount >= MAX_ATTEMPTS ? 'MANUAL_REVIEW' : 'EMAIL_FAILED';
+                await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+                await this.addEvent(
+                    ctx,
+                    delivery,
+                    delivery.state === 'MANUAL_REVIEW' ? 'MANUAL_REVIEW' : 'EMAIL_FAILED',
+                    delivery.state === 'MANUAL_REVIEW'
+                        ? '邮件多次发送失败，已转人工核查'
+                        : '人工交付邮件发送失败，将重试原成品',
+                );
+                if (delivery.state === 'MANUAL_REVIEW') {
+                    await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
+                }
+                return;
+            }
+            delivery.state = 'SENT';
+            delivery.sentAt = new Date();
+            delivery.lastError = null;
+            await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
+            await this.addEvent(ctx, delivery, 'EMAIL_SENT', '人工交付邮件已发送');
+            if (hadManualReview) await this.resolveDeliveryFailure(ctx, delivery);
+            await this.resolveOverdue(ctx, delivery);
+            await this.completeFulfillment(ctx, delivery);
+        });
     }
 
     async cancelOrder(ctx: RequestContext, orderId: ID): Promise<void> {
-        const repository = this.connection.getRepository(ctx, ManualDigitalDelivery);
-        const deliveries = await repository.find({
+        const deliveries = await this.connection.getRepository(ctx, ManualDigitalDelivery).find({
             where: { channelId: ctx.channelId, orderId, order: { salesChannelId: ctx.channelId } },
+            order: { id: 'ASC' },
         });
-        for (const delivery of deliveries.filter(item => !['SENT', 'CANCELLED'].includes(item.state))) {
-            delivery.state = 'CANCELLED';
-            await repository.save(delivery);
-            await this.addEvent(ctx, delivery, 'CANCELLED', '订单取消，人工交付任务已关闭');
-            await this.resolveOverdue(ctx, delivery);
+        for (const candidate of deliveries) {
+            await this.withLockedDelivery(ctx, candidate.id, async (txCtx, delivery) => {
+                if (String(delivery.orderId) !== String(orderId))
+                    throw new UserInputError('人工交付任务的订单归属已变化，请核对后重试');
+                if (['SENT', 'CANCELLED'].includes(delivery.state)) return;
+                delivery.state = 'CANCELLED';
+                await this.connection.getRepository(txCtx, ManualDigitalDelivery).save(delivery);
+                await this.addEvent(txCtx, delivery, 'CANCELLED', '订单取消，人工交付任务已关闭');
+                await this.resolveOverdue(txCtx, delivery);
+            });
         }
     }
 
@@ -426,45 +548,49 @@ export class ManualDigitalDeliveryService {
                 { state: 'SENT', fulfillmentId: IsNull() },
                 { state: In(['WAITING_PROCESSING', 'DRAFT']), expectedAt: LessThanOrEqual(new Date()) },
             ],
-            relations: { channel: true, order: true, orderLine: true },
+            relations: { channel: true },
             order: { createdAt: 'ASC' },
             take: 200,
         });
         let redispatched = 0;
         let completedFulfillments = 0;
-        for (const delivery of deliveries) {
+        for (const candidate of deliveries) {
             const ctx = await this.requestContextService.create({
                 apiType: 'admin',
-                channelOrToken: delivery.channel,
+                channelOrToken: candidate.channel,
             });
             try {
-                this.assertDeliveryScope(ctx, delivery);
-                if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
-                    await this.publishOverdue(ctx, delivery);
-                    continue;
-                }
-                if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
-                    await this.completeFulfillment(ctx, delivery);
-                    completedFulfillments++;
-                    continue;
-                }
-                if (delivery.attemptCount >= MAX_ATTEMPTS) {
-                    continue;
-                }
-                const age = delivery.lastDispatchedAt
-                    ? Date.now() - delivery.lastDispatchedAt.getTime()
-                    : Number.POSITIVE_INFINITY;
-                const retryAfter = delivery.state === 'SENDING' ? 15 * 60_000 : 5 * 60_000;
-                if (age < retryAfter) {
-                    continue;
-                }
-                delivery.state = 'SENDING';
-                delivery.lastError = null;
-                delivery.lastDispatchedAt = new Date();
-                await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
-                await this.addEvent(ctx, delivery, 'AUTO_RETRY', '系统重试发送原成品');
-                await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(delivery.id)));
-                redispatched++;
+                await this.withLockedDelivery(ctx, candidate.id, async (txCtx, delivery) => {
+                    if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
+                        if (delivery.expectedAt <= new Date()) await this.publishOverdue(txCtx, delivery);
+                        return;
+                    }
+                    if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
+                        await this.completeFulfillment(txCtx, delivery);
+                        if (delivery.fulfillmentId) completedFulfillments++;
+                        return;
+                    }
+                    if (
+                        !['SENDING', 'EMAIL_FAILED'].includes(delivery.state) ||
+                        delivery.attemptCount >= MAX_ATTEMPTS ||
+                        !digitalDeliverableQuantity(delivery.order, delivery.orderLine)
+                    )
+                        return;
+                    const age = delivery.lastDispatchedAt
+                        ? Date.now() - delivery.lastDispatchedAt.getTime()
+                        : Number.POSITIVE_INFINITY;
+                    const retryAfter = delivery.state === 'SENDING' ? 15 * 60_000 : 5 * 60_000;
+                    if (age < retryAfter) return;
+                    delivery.state = 'SENDING';
+                    delivery.lastError = null;
+                    delivery.lastDispatchedAt = new Date();
+                    await this.connection.getRepository(txCtx, ManualDigitalDelivery).save(delivery);
+                    await this.addEvent(txCtx, delivery, 'AUTO_RETRY', '系统重试发送原成品');
+                    await this.eventBus.publish(
+                        new ManualDigitalDeliveryReadyEvent(txCtx, String(delivery.id)),
+                    );
+                    redispatched++;
+                });
             } catch (error) {
                 Logger.error(error instanceof Error ? error.message : String(error), 'ManualDigitalDelivery');
             }
@@ -580,10 +706,36 @@ export class ManualDigitalDeliveryService {
         });
     }
 
+    private async withLockedDelivery<T>(
+        ctx: RequestContext,
+        id: ID,
+        operation: (txCtx: RequestContext, delivery: ManualDigitalDelivery) => Promise<T>,
+    ): Promise<T> {
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            const observed = await this.ownedDelivery(txCtx, id);
+            // The registered native cart hook runs before Order. The managed host must register it too.
+            await this.orderService.lockOrderForRefund(txCtx, observed.orderId);
+            const payments = await this.connection.getRepository(txCtx, Payment).find({
+                where: { order: { id: observed.orderId } },
+                order: { id: 'ASC' },
+            });
+            for (const payment of payments) await this.digitalProducts.lock(txCtx, Payment, payment.id);
+            await this.digitalProducts.lock(txCtx, ManualDigitalDelivery, id);
+            const delivery = await this.ownedDelivery(txCtx, id);
+            if (String(delivery.orderId) !== String(observed.orderId))
+                throw new UserInputError('人工交付任务的订单归属已变化，请核对后重试');
+            return operation(txCtx, delivery);
+        });
+    }
+
     private async ownedDelivery(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
         const delivery = await this.connection.getRepository(ctx, ManualDigitalDelivery).findOne({
             where: { id, channelId: ctx.channelId },
-            relations: { order: { payments: { refunds: { lines: true } } }, orderLine: true, events: true },
+            relations: {
+                order: { payments: { refunds: { lines: true } }, fulfillments: true },
+                orderLine: { order: true, productVariant: true },
+                events: true,
+            },
         });
         if (!delivery) {
             throw new UserInputError('人工交付任务不存在');

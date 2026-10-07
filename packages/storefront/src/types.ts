@@ -854,7 +854,11 @@ export interface StorefrontLegalIdentity {
     privacyEmail: string | null;
 }
 
+export type StorefrontAccessMode = 'CLOSED' | 'PREVIEW' | 'LIVE';
+
 export interface StorefrontConfig {
+    /** Older aggregate responses may omit this; only explicit modes drive access presentation. */
+    accessMode?: StorefrontAccessMode;
     code: string;
     defaultLanguageCode: string;
     defaultCurrencyCode: string;

@@ -5,6 +5,7 @@ import {
 } from '@vendure/storefront-content-plugin';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { StorefrontClosedError } from './storefront-activation.service';
 import { StorefrontPublicPageController } from './storefront-public-page.controller';
 import { publicSectionWithinBudget, StorefrontPublicPageService } from './storefront-public-page.service';
 
@@ -13,6 +14,7 @@ const response = () => {
     res.status.mockReturnValue(res);
     return res;
 };
+const activation = () => ({ getAccessMode: vi.fn().mockResolvedValue('PREVIEW') });
 
 function setup() {
     const ctx = {
@@ -45,6 +47,63 @@ function setup() {
 }
 
 describe('public page boundary', () => {
+    it.each(['PREVIEW', 'LIVE', 'CLOSED'])('rechecks %s access even when the page is cached', async mode => {
+        const cached = { config: { accessMode: 'LIVE', name: 'Cached store' }, version: 'cached' };
+        const policy = activation();
+        policy.getAccessMode.mockResolvedValue(mode);
+        const service = new StorefrontPublicPageService(
+            { readThrough: vi.fn().mockResolvedValue(cached) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            policy as never,
+        );
+        const result = service.read(setup().ctx as never, 'a.test');
+        if (mode === 'CLOSED') {
+            await expect(result).rejects.toBeInstanceOf(StorefrontClosedError);
+        } else {
+            await expect(result).resolves.toMatchObject({
+                config: { accessMode: mode, name: 'Cached store' },
+            });
+        }
+        expect(cached.config.accessMode).toBe('LIVE');
+        expect(policy.getAccessMode).toHaveBeenCalledTimes(1);
+    });
+    it('returns a typed closed-store response without assembling cached public content', async () => {
+        const { controller, access, pages } = setup();
+        access.resolveRequest.mockRejectedValue(new StorefrontClosedError());
+        const res = response();
+        await controller.read({ query: {} } as never, res as never);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json).toHaveBeenCalledWith({
+            errorCode: 'STOREFRONT_CLOSED',
+            message: 'Store not open yet',
+        });
+        expect(pages.read).not.toHaveBeenCalled();
+    });
+    it('does not disguise unrelated access failures as a closed store', async () => {
+        const { controller, access } = setup();
+        access.resolveRequest.mockRejectedValue(new Error('Domain lookup unavailable'));
+        await expect(controller.read({ query: {} } as never, response() as never)).rejects.toThrow(
+            'Domain lookup unavailable',
+        );
+    });
+    it('returns the same closed error when access changes during page assembly', async () => {
+        const { controller, pages } = setup();
+        pages.read.mockRejectedValue(new StorefrontClosedError());
+        const res = response();
+        await controller.read({ query: {} } as never, res as never);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'STOREFRONT_CLOSED' }));
+    });
     it('requires a verified active store and never takes a caller channel parameter', async () => {
         const { controller, access, pages } = setup();
         access.resolveRequest.mockResolvedValue(null);
@@ -100,6 +159,7 @@ describe('public page boundary', () => {
             {} as never,
             {} as never,
             {} as never,
+            activation() as never,
         );
         expect(() => service.read({ apiType: 'shop', activeUserId: 'customer' } as never, 'a.test')).toThrow(
             'anonymous',
@@ -178,6 +238,7 @@ describe('public page optional section budgets', () => {
                 {} as never,
                 campaigns as never,
                 { findActive: vi.fn().mockResolvedValue([]) } as never,
+                activation() as never,
             );
             vi.spyOn(
                 service as unknown as { loadConfig(): Promise<unknown> },
@@ -233,6 +294,7 @@ describe('public page media assembly', () => {
                 {} as never,
                 {} as never,
                 {} as never,
+                activation() as never,
             );
             vi.spyOn(service as unknown as { assemble(): Promise<unknown> }, 'assemble').mockResolvedValue({
                 schemaVersion: 1,
@@ -292,8 +354,8 @@ describe('public page media assembly', () => {
 });
 
 it('shares timed-out optional source reads across different public page assemblies and caches their later completion', async () => {
-    const { StorefrontPublicCacheService } = await import('./performance/storefront-public-cache.service');
-    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader');
+    const { StorefrontPublicCacheService } = await import('./performance/storefront-public-cache.service.js');
+    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
     const entries = new Map<string, unknown>();
     const cache = new StorefrontPublicCacheService(
         {
@@ -302,8 +364,10 @@ it('shares timed-out optional source reads across different public page assembli
                 entries.set(key, value);
                 return Promise.resolve();
             },
-        },
-        { systemOptions: { cacheStrategy: {} } },
+        } as unknown as ConstructorParameters<typeof StorefrontPublicCacheService>[0],
+        { systemOptions: { cacheStrategy: {} } } as ConstructorParameters<
+            typeof StorefrontPublicCacheService
+        >[1],
     );
     let productsReady!: (value: { items: unknown[] }) => void;
     let visualReady!: (value: { presetId: string }) => void;
@@ -342,6 +406,7 @@ it('shares timed-out optional source reads across different public page assembli
         {} as never,
         { findFlashSales } as never,
         {} as never,
+        activation() as never,
     );
     vi.spyOn(service as unknown as { loadConfig(): Promise<unknown> }, 'loadConfig').mockResolvedValue({
         code: 'a',

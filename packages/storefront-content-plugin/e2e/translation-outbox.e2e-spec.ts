@@ -8,18 +8,36 @@ import {
     TranslationProviderState,
 } from '@vendure/content-translation-plugin';
 import {
+    AdministratorService,
+    ChannelService,
     ConfigService,
+    CurrencyCode,
     DefaultSearchPlugin,
     LanguageCode,
     mergeConfig,
+    Permission,
     RequestContextService,
+    RoleService,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StoreManagementPlugin } from '@vendure/store-management-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import {
+    StorefrontActivationService,
+    StorefrontPublicCacheService,
+    StoreManagementPlugin,
+    StoreProfile,
+} from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
-import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
+import {
+    createTestEnvironment,
+    registerInitializer,
+    SimpleGraphQLClient,
+    SqljsInitializer,
+    testConfig,
+} from '@vendure/testing';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import gql from 'graphql-tag';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -49,6 +67,7 @@ const config = mergeConfig(testConfig, {
     defaultLanguageCode: LanguageCode.zh_Hans,
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         ContentTranslationPlugin.init({
             provider: { name: 'outbox-e2e', isConfigured: () => true, translate },
         }),
@@ -110,6 +129,16 @@ const input = (code: string) => ({
         translations: [{ languageCode: 'zh_Hans', label }],
     })),
 });
+const refreshPublicCache = gql`
+    mutation {
+        refreshStorefrontPublicCache {
+            channelId
+            processId
+            shared
+            revisionFingerprint
+        }
+    }
+`;
 
 describe('real Admin API saves and Shop API publication with the translation outbox', () => {
     beforeAll(async () => {
@@ -123,6 +152,52 @@ describe('real Admin API saves and Shop API publication with the translation out
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        const context = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const channels = server.app.get(ChannelService);
+        const defaultChannel = await channels.getDefaultChannel(context);
+        const channel = await channels.create(context, {
+            code: 'translation-outbox-fixture',
+            token: 'translation-outbox-fixture',
+            defaultLanguageCode: LanguageCode.zh_Hans,
+            defaultCurrencyCode: CurrencyCode.USD,
+            defaultTaxZoneId: defaultChannel.defaultTaxZoneId,
+            defaultShippingZoneId: defaultChannel.defaultShippingZoneId,
+            pricesIncludeTax: false,
+        });
+        if (!('id' in channel)) throw new Error(channel.message);
+        const roles = server.app.get(RoleService);
+        const customerRole = await roles.getCustomerRole(context);
+        await roles.assignRoleToChannel(context, customerRole.id, channel.id);
+        const superAdminRole = await roles.getSuperAdminRole(context);
+        await roles.assignRoleToChannel(context, superAdminRole.id, channel.id);
+        const connection = server.app.get(TransactionalConnection);
+        await connection.rawConnection.getRepository(StoreProfile).save(
+            new StoreProfile({
+                channelId: channel.id,
+                status: 'ACTIVE',
+                isPublished: false,
+                descriptionZh: '',
+                descriptionEn: '',
+            }),
+        );
+        // Native, disposable fixture records satisfy the shared access policy; no guard is bypassed.
+        await connection.rawConnection.getRepository(StoreDomain).save(
+            new StoreDomain({
+                channelId: channel.id,
+                domain: 'translation-outbox.example.test',
+                isPrimary: true,
+                primaryChannelId: channel.id,
+                status: 'ACTIVE',
+                verificationToken: 'translation-outbox-fixture',
+                verifiedAt: new Date(),
+            }),
+        );
+        expect(await server.app.get(StorefrontActivationService).getAccessMode(context, channel.id)).toBe(
+            'LIVE',
+        );
+        await adminClient.asSuperAdmin();
+        adminClient.setChannelToken(channel.token);
+        shopClient.setChannelToken(channel.token);
         for (const [code, title] of [
             ['terms', '测试使用条款'],
             ['privacy', '测试隐私政策'],
@@ -162,6 +237,59 @@ describe('real Admin API saves and Shop API publication with the translation out
             .rawConnection.getRepository(ContentTranslationState)
             .clear();
     }, 120_000);
+    it('refreshes the active store cache through the authenticated native Admin API', async () => {
+        const ctx = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: 'translation-outbox-fixture',
+        });
+        const cache = server.app.get(StorefrontPublicCacheService);
+        const channelId = String(config.entityOptions.entityIdStrategy.encodeId(ctx.channelId));
+        const first = (await adminClient.query(refreshPublicCache)).refreshStorefrontPublicCache;
+        const second = (await adminClient.query(refreshPublicCache)).refreshStorefrontPublicCache;
+        expect(first).toMatchObject({
+            channelId,
+            processId: process.pid,
+            shared: cache.sharedVersions,
+        });
+        expect(second).toMatchObject({ channelId, processId: process.pid });
+        expect(first.revisionFingerprint).toMatch(/^[a-f0-9]{64}$/);
+        expect(second.revisionFingerprint).toMatch(/^[a-f0-9]{64}$/);
+        expect(second.revisionFingerprint).not.toBe(first.revisionFingerprint);
+    });
+    it('rejects a logged-in native ReadChannel administrator without rotating the store cache', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const superAdmin = await connection.rawConnection.getRepository(User).findOneOrFail({
+            where: { identifier: config.authOptions.superadminCredentials?.identifier ?? 'superadmin' },
+            relations: { roles: { channels: true } },
+        });
+        const ctx = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: 'translation-outbox-fixture',
+            user: superAdmin,
+        });
+        const role = await server.app.get(RoleService).create(ctx, {
+            code: 'cache-readonly-fixture',
+            description: 'Native cache authorization fixture',
+            permissions: [Permission.ReadChannel],
+            channelIds: [ctx.channelId],
+        });
+        const identifier = 'cache-readonly@example.test';
+        const password = 'CacheReadFixturePass123!';
+        await server.app.get(AdministratorService).create(ctx, {
+            emailAddress: identifier,
+            password,
+            firstName: 'Cache',
+            lastName: 'ReadOnly',
+            roleIds: [role.id],
+        });
+        const reader = new SimpleGraphQLClient(config, 'http://127.0.0.1:3298/admin-api');
+        reader.setChannelToken('translation-outbox-fixture');
+        expect((await reader.asUserWithCredentials(identifier, password)).identifier).toBe(identifier);
+        const cache = server.app.get(StorefrontPublicCacheService);
+        const revision = await cache.revision(ctx.channelId);
+        await expect(reader.query(refreshPublicCache)).rejects.toThrow('not currently authorized');
+        expect(await cache.revision(ctx.channelId)).toBe(revision);
+    });
     afterAll(async () => {
         if (server.app && process.env.TRANSLATION_BROWSER_ACCEPTANCE === '1') {
             const control = path.join(directory, 'browser-control');
@@ -336,7 +464,10 @@ describe('real Admin API saves and Shop API publication with the translation out
         if (!metadata) throw new Error('Missing item translation metadata');
         await db.getRepository(metadata.target).update({ languageCode: 'en' }, { label: '' });
         translate.mockClear();
-        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const ctx = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: 'translation-outbox-fixture',
+        });
         const result = await server.app
             .get(ContentTranslationBackfillService)
             .backfill(ctx, 'StorefrontContentItem', 100, 0);

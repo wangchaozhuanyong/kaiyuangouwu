@@ -90,6 +90,8 @@ export const commerceOrderProcess: OrderProcess<string> = {
         if (!entersPayment && !confirmsPayment) {
             return;
         }
+        // The simulation records checkout success without consuming the previously held real resources.
+        if (confirmsPayment && (await checkoutResources.isConfirmedSimulation(ctx, order.id))) return;
 
         if (order.lines.length) {
             const variants = await connection.getRepository(ctx, ProductVariant).find({
@@ -271,6 +273,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled')
         ) {
             await checkoutResources.confirm(ctx, order);
+            if (await checkoutResources.isConfirmedSimulation(ctx, order.id)) return;
             const stockManagedLines = await stockLines(ctx, order.lines);
             if (stockManagedLines.length && !(await checkoutResources.hold(ctx, order.id))) {
                 await stockMovementService.createAllocationsForOrderLines(

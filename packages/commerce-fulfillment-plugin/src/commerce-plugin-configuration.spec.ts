@@ -3,9 +3,7 @@ import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createRequire } from 'node:module';
 import { expect, it } from 'vitest';
 
-const { CommerceFulfillmentPlugin } = createRequire(import.meta.url)(
-    '../dist/commerce-fulfillment.plugin.js',
-);
+const { CommerceFulfillmentPlugin } = createRequire(__filename)('../dist/commerce-fulfillment.plugin.js');
 
 it('retains the registered cart guard through actual plugin configuration after bootstrap cloning', async () => {
     const cartConfiguration = getConfigurationFunction(StorefrontCartPlugin);

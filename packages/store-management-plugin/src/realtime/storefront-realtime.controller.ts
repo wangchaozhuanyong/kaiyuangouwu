@@ -1,8 +1,9 @@
-import { Controller, Get, Req, Res } from '@nestjs/common';
+import { Controller, Get, Req, Res, UseFilters } from '@nestjs/common';
 import { SessionService } from '@vendure/core';
 import type { Request, Response } from 'express';
 
 import { StorefrontPromotionAccessService } from '../promotion/storefront-promotion-access.service';
+import { StorefrontClosedHttpFilter } from '../storefront-closed-http.filter';
 
 import { StorefrontRealtimePayload, StorefrontRealtimeService } from './storefront-realtime.service';
 
@@ -10,6 +11,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 const BACKPRESSURE_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2;
 
 @Controller('storefront-realtime')
+@UseFilters(StorefrontClosedHttpFilter)
 export class StorefrontRealtimeController {
     constructor(
         private readonly realtime: StorefrontRealtimeService,

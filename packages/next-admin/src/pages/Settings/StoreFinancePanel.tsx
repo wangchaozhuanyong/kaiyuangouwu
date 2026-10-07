@@ -156,8 +156,9 @@ export function CurrencyAndRatesPanel() {
             {notice && <Notice tone="success" message={notice} />}
             {error && !protectedAction && <Notice tone="error" message={error} />}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <h3 className="col-span-full border-b border-slate-100 pb-2 text-xs font-bold text-slate-800">
+                <h3 className="col-span-full flex items-center gap-2 border-b border-slate-100 pb-2 text-xs font-bold text-slate-800">
                     币种设置
+                    <FeatureHelpButton topic="settings.finance" title="币种设置" />
                 </h3>
                 <SelectField
                     label="网站主币"
@@ -191,8 +192,9 @@ export function CurrencyAndRatesPanel() {
                         ))}
                     </div>
                 </AdminField>
-                <h3 className="col-span-full border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
+                <h3 className="col-span-full flex items-center gap-2 border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
                     法币换算
+                    <FeatureHelpButton topic="settings.finance" title="法币换算" />
                 </h3>
                 <SelectField
                     label="CNY/MYR 汇率模式"
@@ -227,8 +229,9 @@ export function CurrencyAndRatesPanel() {
                         ['WHOLE', '整数'],
                     ]}
                 />
-                <h3 className="col-span-full border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
+                <h3 className="col-span-full flex items-center gap-2 border-b border-slate-100 pb-2 pt-1 text-xs font-bold text-slate-800">
                     USDT 采集
+                    <FeatureHelpButton topic="settings.usdt" title="USDT 采集" />
                 </h3>
                 <ToggleField
                     label="前台启用 USDT 付款"

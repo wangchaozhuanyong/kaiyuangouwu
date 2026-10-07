@@ -196,7 +196,7 @@ describe('MerchantCatalogAccessService', () => {
         async (parentType, fieldName, permission) => {
             const { service, connection } = createService({ merchant: false });
             const ctx = mailboxMachineContext([permission, Permission.SuperAdmin]);
-            const store = { ...ctx, channel: { code: 'store-a' } } as RequestContext;
+            const store = { ...ctx, channel: { code: 'store-a' } } as unknown as RequestContext;
             await expect(service.assertRootFieldAccess(store, parentType, fieldName, {})).rejects.toThrow(
                 '平台管理中心',
             );
@@ -212,7 +212,7 @@ describe('MerchantCatalogAccessService', () => {
             const native = {
                 ...ctx,
                 session: { authenticationStrategy: 'native' },
-            } as RequestContext;
+            } as unknown as RequestContext;
             await expect(service.assertRootFieldAccess(native, parentType, fieldName, {})).rejects.toThrow(
                 '超级管理员',
             );
@@ -296,6 +296,10 @@ describe('MerchantCatalogAccessService', () => {
                         channelPermissions: [
                             {
                                 id: permissionsChannelId,
+                                code:
+                                    permissionsChannelId === 'default-channel'
+                                        ? '__default_channel__'
+                                        : permissionsChannelId,
                                 token: 'fixture-channel-token',
                                 permissions: [...permissions] as Permission[],
                             },

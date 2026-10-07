@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, Res, UseFilters } from '@nestjs/common';
 import { ConfigService, extractSessionToken, SessionService } from '@vendure/core';
 import type { Request, Response } from 'express';
+
+import { StorefrontClosedHttpFilter } from '../storefront-closed-http.filter';
 
 import { isAccountEntryRoute } from './account-entry-proof';
 import { promotionEntryRedirect } from './promotion-entry-destination';
@@ -9,6 +11,7 @@ import { StorefrontPromotionAccessService } from './storefront-promotion-access.
 import { StorefrontPromotionService } from './storefront-promotion.service';
 
 @Controller('promo')
+@UseFilters(StorefrontClosedHttpFilter)
 export class StorefrontPromotionController {
     constructor(
         private readonly accessService: StorefrontPromotionAccessService,

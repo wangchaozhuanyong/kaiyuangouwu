@@ -33,16 +33,18 @@ function StorefrontRuntime() {
     return (
         <>
             <StorefrontShell state={state} />
-            <Suspense fallback={null}>
-                <StorefrontQueryFeedback
-                    language={state.language}
-                    scope={{
-                        marketCode: storefrontQueryKeys.market(state.storefrontContextValue.market),
-                        languageCode: languageCodeFor(state.language),
-                        includePrivate: true,
-                    }}
-                />
-            </Suspense>
+            {!state.storefrontUnavailable && (
+                <Suspense fallback={null}>
+                    <StorefrontQueryFeedback
+                        language={state.language}
+                        scope={{
+                            marketCode: storefrontQueryKeys.market(state.storefrontContextValue.market),
+                            languageCode: languageCodeFor(state.language),
+                            includePrivate: true,
+                        }}
+                    />
+                </Suspense>
+            )}
         </>
     );
 }
