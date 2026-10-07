@@ -797,6 +797,7 @@ export class ShippingMethodService {
             );
         let calculator = input.calculator;
         const checker = input.checker;
+        const checkerArguments = new Map(checker?.arguments.map(arg => [arg.name, arg.value]));
         if (
             checker &&
             ![
@@ -849,8 +850,22 @@ export class ShippingMethodService {
                 ...calculator,
                 arguments: [
                     ...calculator.arguments.filter(
-                        arg => !['sourceCurrencyCode', 'currencyCode'].includes(arg.name),
+                        arg =>
+                            ![
+                                'sourceCurrencyCode',
+                                'currencyCode',
+                                'estimateMinDays',
+                                'estimateMaxDays',
+                            ].includes(arg.name),
                     ),
+                    {
+                        name: 'estimateMinDays',
+                        value: calculator.arguments.find(arg => arg.name === 'estimateMinDays')?.value ?? '1',
+                    },
+                    {
+                        name: 'estimateMaxDays',
+                        value: calculator.arguments.find(arg => arg.name === 'estimateMaxDays')?.value ?? '3',
+                    },
                     { name: 'sourceCurrencyCode', value: sourceCurrencyCode },
                 ],
             };
@@ -862,9 +877,10 @@ export class ShippingMethodService {
                 ? {
                       checker: {
                           code: 'store-shipping-zone-eligibility-checker',
-                          arguments: checker.arguments.filter(arg =>
-                              ['allowedCountryCodes', 'blockedPostalPrefixes'].includes(arg.name),
-                          ),
+                          arguments: ['allowedCountryCodes', 'blockedPostalPrefixes'].map(name => ({
+                              name,
+                              value: checkerArguments.get(name) ?? '',
+                          })),
                       },
                   }
                 : {}),

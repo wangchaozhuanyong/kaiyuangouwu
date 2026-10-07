@@ -300,6 +300,70 @@ describe('shipping template store ownership and switches', () => {
         expect(f.channels.assignToChannels).not.toHaveBeenCalled();
     });
 
+    it('serializes optional destination and delivery-day defaults when adapting a legacy local method', async () => {
+        const f = fixture();
+        const created = await f.service.create(f.ctx, {
+            code: 'local-adapted',
+            fulfillmentHandler: 'manual-fulfillment',
+            translations: [],
+            checker: {
+                code: 'default-shipping-eligibility-checker',
+                arguments: [{ name: 'orderMinimum', value: '0' }],
+            },
+            calculator: { code: 'default-shipping-calculator', arguments: [{ name: 'rate', value: '500' }] },
+        });
+        expect(created.checker).toEqual({
+            code: 'store-shipping-zone-eligibility-checker',
+            args: [
+                { name: 'allowedCountryCodes', value: '' },
+                { name: 'blockedPostalPrefixes', value: '' },
+            ],
+        });
+        expect(created.calculator.args).toEqual(
+            expect.arrayContaining([
+                { name: 'baseRate', value: '500' },
+                { name: 'estimateMinDays', value: '1' },
+                { name: 'estimateMaxDays', value: '3' },
+                { name: 'sourceCurrencyCode', value: 'MYR' },
+            ]),
+        );
+    });
+
+    it('retains explicit country, postal and delivery-day restrictions during local normalization', async () => {
+        const f = fixture();
+        const created = await f.service.create(f.ctx, {
+            code: 'local-restricted',
+            fulfillmentHandler: 'manual-fulfillment',
+            translations: [],
+            checker: {
+                code: 'supported-destination-eligibility-checker',
+                arguments: [
+                    { name: 'allowedCountryCodes', value: 'GB' },
+                    { name: 'blockedPostalPrefixes', value: 'XX' },
+                ],
+            },
+            calculator: {
+                code: 'physical-subtotal-shipping-calculator',
+                arguments: [
+                    { name: 'baseRate', value: '500' },
+                    { name: 'freeAbove', value: '0' },
+                    { name: 'estimateMinDays', value: '4' },
+                    { name: 'estimateMaxDays', value: '8' },
+                ],
+            },
+        });
+        expect(created.checker.args).toEqual([
+            { name: 'allowedCountryCodes', value: 'GB' },
+            { name: 'blockedPostalPrefixes', value: 'XX' },
+        ]);
+        expect(created.calculator.args).toEqual(
+            expect.arrayContaining([
+                { name: 'estimateMinDays', value: '4' },
+                { name: 'estimateMaxDays', value: '8' },
+            ]),
+        );
+    });
+
     it('does not report a successful toggle when persistence fails', async () => {
         const f = fixture();
         f.settings.set.mockResolvedValue({ result: false });
