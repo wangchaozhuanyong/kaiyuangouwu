@@ -1,6 +1,7 @@
 import { Channel, DeepPartial, EntityId, ID, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne } from 'typeorm';
-import type { SystemAnnouncementTargetMode } from '../types';
+
+import { SystemAnnouncementTargetMode } from '../types';
 
 @Entity({ name: 'system_announcement' })
 @Index('IDX_system_announcement_schedule', ['enabled', 'startsAt', 'endsAt', 'priority'])
