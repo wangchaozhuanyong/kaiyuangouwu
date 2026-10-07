@@ -17,6 +17,7 @@ import {
     StockLocation,
     User,
 } from '@vendure/core';
+import { FieldNode, Kind, parse } from 'graphql';
 import { DataSource, EntitySchema } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -58,7 +59,7 @@ function createService(options?: {
     const paymentRepository = { find: vi.fn().mockResolvedValue(options?.payments ?? []) };
     const refundRepository = { find: vi.fn().mockResolvedValue(options?.refunds ?? []) };
     const connection = {
-        getRepository: vi.fn((_ctx, entity) => {
+        getRepository: vi.fn((_ctx: unknown, entity: unknown): unknown => {
             if (entity === Channel)
                 return {
                     findOne: vi.fn().mockResolvedValue({
@@ -545,6 +546,41 @@ describe('MerchantCatalogAccessService', () => {
                 input: { id: 'foreign-stock' },
             }),
         ).rejects.toThrow();
+    });
+
+    it('lets store pages read bootstrap metadata without bypassing membership checks', async () => {
+        const document = parse(
+            '{ globalSettings { availableLanguages serverConfig { entityCustomFields { entityName } } } }',
+        );
+        const operation = document.definitions[0];
+        if (operation.kind !== Kind.OPERATION_DEFINITION) throw new Error('Missing operation');
+        const info = {
+            fieldNodes: operation.selectionSet.selections.filter(
+                (selection): selection is FieldNode => selection.kind === Kind.FIELD,
+            ),
+            fragments: {},
+        };
+        const { service } = createService();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Query', 'globalSettings', {}, info),
+        ).resolves.toBeUndefined();
+        const wrongStore = createService({ channelIds: ['store-b'] });
+        await expect(
+            wrongStore.service.assertRootFieldAccess(merchantContext, 'Query', 'globalSettings', {}, info),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        const platformStaff = createService({ merchant: false });
+        await expect(
+            platformStaff.service.assertRootFieldAccess(
+                { ...merchantContext, userHasPermissions: () => true },
+                'Query',
+                'globalSettings',
+                {},
+                info,
+            ),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateGlobalSettings', {}, info),
+        ).rejects.toThrow('平台管理中心');
     });
 
     it.each([

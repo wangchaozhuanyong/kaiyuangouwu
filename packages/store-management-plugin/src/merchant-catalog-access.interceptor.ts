@@ -24,6 +24,7 @@ export class MerchantCatalogAccessInterceptor implements NestInterceptor {
             parentType,
             parsed.info.fieldName,
             args,
+            parsed.info,
         );
         return next.handle();
     }
