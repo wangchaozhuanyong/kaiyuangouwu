@@ -30,6 +30,7 @@ describe('StorefrontActivationService', () => {
         let status = 'ACTIVE';
         const repository = {
             findOne: vi.fn(() => Promise.resolve({ id: 'profile-a', status, isPublished: true })),
+            exists: vi.fn().mockResolvedValue(true),
         };
         const service = new StorefrontActivationService(
             { getRepository: () => repository } as any,

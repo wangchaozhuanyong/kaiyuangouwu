@@ -185,7 +185,10 @@ function MyStoreSettingsContent() {
                 </div>
                 {standalonePage?.key === 'sellers' && (
                     <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-700">
-                        <h2 className="font-bold text-slate-900">本店绑定的商家主体</h2>
+                        <h2 className="flex items-center gap-2 font-bold text-slate-900">
+                            本店绑定的商家主体{' '}
+                            <FeatureHelpButton topic="settings.store-profile" title="本店绑定的商家主体" />
+                        </h2>
                         <p className="mt-2">{profile.channel.seller?.name ?? '尚未绑定商家主体'}</p>
                         <p className="mt-2 text-xs leading-5 text-slate-500">
                             归属商家主体可能供多间店铺共用，由平台管理中心统一维护。当前页面仅提交本店法定主体资料的审核申请。

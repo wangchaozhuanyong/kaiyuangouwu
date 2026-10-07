@@ -117,7 +117,13 @@ describe('StoreCommerceSettingsService', () => {
             getActiveShippingMethods: vi.fn().mockResolvedValue([
                 {
                     checker: { code: 'supported-destination-eligibility-checker' },
-                    calculator: { code: 'physical-subtotal-shipping-calculator' },
+                    calculator: {
+                        code: 'physical-subtotal-shipping-calculator',
+                        args: [
+                            { name: 'baseRate', value: '0' },
+                            { name: 'freeAbove', value: '0' },
+                        ],
+                    },
                 },
             ]),
             getShippingMethodSourceCurrency: vi.fn().mockResolvedValue('CNY'),

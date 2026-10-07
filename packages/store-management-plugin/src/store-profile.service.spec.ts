@@ -869,7 +869,10 @@ describe('shared public operational state', () => {
                     ]),
                 },
             );
-            expect((await service.findAllForAdmin({} as any))[0].isOperational).toBe(isPublished);
+            expect(
+                (await service.findAllForAdmin({ channel: { code: '__default_channel__' } } as any))[0]
+                    .isOperational,
+            ).toBe(isPublished);
         },
     );
 });

@@ -16,7 +16,9 @@ const response = () => {
     res.status.mockReturnValue(res);
     return res;
 };
-const activation = () => ({ getAccessMode: vi.fn().mockResolvedValue('PREVIEW') });
+const activation = (mode: 'LIVE' | 'PREVIEW' = 'PREVIEW') => ({
+    getAccessMode: vi.fn().mockResolvedValue(mode),
+});
 
 function setup() {
     const ctx = {
@@ -647,7 +649,7 @@ describe('public page optional section budgets', () => {
                 {} as never,
                 campaigns as never,
                 { findActive: vi.fn().mockResolvedValue([]) } as never,
-                activation() as never,
+                activation('LIVE') as never,
             );
             vi.spyOn(
                 service as unknown as { loadConfig(): Promise<unknown> },
@@ -707,7 +709,7 @@ describe('public page media assembly', () => {
                 {} as never,
                 {} as never,
                 {} as never,
-                activation() as never,
+                activation('LIVE') as never,
             );
             vi.spyOn(service as unknown as { assemble(): Promise<unknown> }, 'assemble').mockResolvedValue({
                 schemaVersion: 1,
@@ -821,7 +823,7 @@ it('shares timed-out optional source reads across different public page assembli
         {} as never,
         { findFlashSales } as never,
         {} as never,
-        activation() as never,
+        activation('LIVE') as never,
     );
     vi.spyOn(service as unknown as { loadConfig(): Promise<unknown> }, 'loadConfig').mockResolvedValue({
         code: 'a',

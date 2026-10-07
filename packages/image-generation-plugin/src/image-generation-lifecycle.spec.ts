@@ -395,11 +395,13 @@ describe('Image studio lifecycle regression', () => {
             },
             customerService: { findOneByUserId: async () => ({ id: 'customer-1' }) },
             configService: {
+                assertStorefrontEntryEnabled: vi.fn().mockResolvedValue(undefined),
                 shopConfig: async () => ({ enabled: true, promptOptimizationEnabled: true }),
                 selectPromptModel: async () => ({ config: { id: 'model-1', modelId: 'fixture-text' } }),
                 promptModelAsCredential: () => ({}),
                 recordPromptModelSuccess: async () => undefined,
                 recordPromptModelFailure: async () => undefined,
+                notifyPromptAccessResult: vi.fn().mockResolvedValue(undefined),
             },
             quota: {
                 reserve: async () => ({ id: 'quota-1' }),
@@ -419,12 +421,27 @@ describe('Image studio lifecycle regression', () => {
         const first = engine.optimize(ctx, input);
         const second = engine.optimize(ctx, input);
         const settled = Promise.allSettled([first, second]);
-        await vi.waitFor(() => expect(providerCalls).toBe(1));
+        try {
+            await vi.waitFor(() => expect(providerCalls).toBe(1));
+        } catch (error) {
+            releaseProvider();
+            const failedResults = await settled;
+            throw new AggregateError(
+                [
+                    error,
+                    ...failedResults
+                        .filter(result => result.status === 'rejected')
+                        .map(result => result.reason),
+                ],
+                'Concurrent prompt optimization never reached the provider',
+            );
+        }
         releaseProvider();
         const results = await settled;
         expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
         expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
         expect(provider.optimizePrompt).toHaveBeenCalledTimes(1);
+        expect(engine.configService.assertStorefrontEntryEnabled).toHaveBeenCalledTimes(2);
         expect(record.id).toBe('optimization-1');
     });
 

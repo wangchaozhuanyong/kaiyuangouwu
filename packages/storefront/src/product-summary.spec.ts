@@ -89,6 +89,7 @@ describe('compact product display compatibility', () => {
             client,
             {
                 scope: { channelCode: 'store-a', currencyCode: 'MYR', languageCode: 'en' },
+                config: { accessMode: 'LIVE' },
                 generatedAt: Date.now() + 1,
                 products: [compactProduct(full)],
             } as PublicPageData,

@@ -129,7 +129,7 @@ describe('AI Image Studio responsive generation flow', () => {
         expect(pageSource).toContain('className="ai-generation-output-preview"');
         expect(pageSource).toContain('className="ai-generation-lightbox"');
         expect(pageSource).toContain('saveGeneratedImage');
-        expect(pageSource).toContain('await refreshJob()');
+        expect(pageSource).toContain('await refreshJob(controller.signal)');
         expect(pageSource).toContain('current?.downloadUrl ?? current?.imageUrl');
         expect(stylesheet).toContain('.ai-generation-output-preview > .safe-image-frame');
         expect(stylesheet).toContain('.ai-generation-lightbox-dialog');

@@ -788,7 +788,8 @@ describe('AddressesPage asynchronous contact readiness', () => {
         });
     };
     const button = (text: string) => {
-        const target = [...host.querySelectorAll('button')].find(item => item.textContent === text);
+        const scope = document.querySelector('[role="dialog"][aria-modal="true"]') ?? host;
+        const target = [...scope.querySelectorAll('button')].find(item => item.textContent === text);
         if (!target) throw new Error(`Missing contact action: ${text}`);
         return target;
     };

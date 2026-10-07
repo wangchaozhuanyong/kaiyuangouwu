@@ -3,6 +3,11 @@ import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import {
+    adminCapabilityForPath,
+    type AdminCapabilitySnapshot,
+} from '../../../../common/src/admin-capabilities';
+import { AdminCapabilitiesContext } from '../../hooks/use-admin-capabilities';
 import { PaymentCard } from './OrderOperationsBlock';
 import { OrderProcessingSummaryPanel } from './OrderProcessingSummaryPanel';
 import { OrderRefundScopeFields } from './OrderRefundScopeFields';
@@ -227,7 +232,45 @@ describe('payment capabilities in the order', () => {
         );
     });
 
-    it('sends pending verified-external refunds to the dedicated verification screen', async () => {
+    it.each([
+        ['PLATFORM', '/settings/usdt-payments/refunds'],
+        ['STORE', '/settings/store-profile/usdt-refunds'],
+    ] as const)('routes a permitted %s verified refund to its scoped screen', async (scope, path) => {
+        const capability = adminCapabilityForPath(path);
+        if (!capability) throw new Error('Expected a registered refund capability');
+        const snapshot: AdminCapabilitySnapshot = {
+            channelId: scope === 'PLATFORM' ? 'platform' : 'store-a',
+            channelCode: scope === 'PLATFORM' ? '__default_channel__' : 'store-a',
+            scope,
+            commerceMode: scope === 'PLATFORM' ? null : 'DIGITAL_ONLY',
+            capabilities: [
+                { id: capability.id, state: 'READY', canRead: true, canWrite: false, canConfigure: false },
+            ],
+        };
+        await withView(
+            <MemoryRouter>
+                <AdminCapabilitiesContext.Provider value={snapshot}>
+                    <PaymentCard
+                        payment={payment}
+                        currencyCode="CNY"
+                        canOperate
+                        canCancel={false}
+                        isTestOrder={false}
+                        refundSettlementMode="verified-external"
+                        onAction={vi.fn()}
+                        onSettleRefund={vi.fn()}
+                    />
+                </AdminCapabilitiesContext.Provider>
+            </MemoryRouter>,
+            host => {
+                expect(host.querySelector('a')?.getAttribute('href')).toBe(path);
+                expect(host.textContent).not.toContain('登记人工退款凭证');
+                expect(host.textContent).not.toContain('结算退款');
+            },
+        );
+    });
+
+    it('offers no verified refund navigation before capabilities have been read', async () => {
         await withView(
             <MemoryRouter>
                 <PaymentCard
@@ -241,11 +284,7 @@ describe('payment capabilities in the order', () => {
                     onSettleRefund={vi.fn()}
                 />
             </MemoryRouter>,
-            host => {
-                expect(host.querySelector('a')?.getAttribute('href')).toBe('/settings/usdt-payments');
-                expect(host.textContent).not.toContain('登记人工退款凭证');
-                expect(host.textContent).not.toContain('结算退款');
-            },
+            host => expect(host.querySelector('a')).toBeNull(),
         );
     });
 

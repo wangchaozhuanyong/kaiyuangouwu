@@ -457,28 +457,47 @@ describe('real Admin API saves and Shop API publication with the translation out
 
     it('registers historical custom child translations without fetching from the provider', async () => {
         const db = server.app.get(TransactionalConnection).rawConnection;
-        await db.getRepository(ContentTranslationState).clear();
         const metadata = db.entityMetadatas.find(
             (entity: any) => entity.name === 'StorefrontContentItemTranslation',
         );
         if (!metadata) throw new Error('Missing item translation metadata');
-        await db.getRepository(metadata.target).update({ languageCode: 'en' }, { label: '' });
-        translate.mockClear();
-        const ctx = await server.app.get(RequestContextService).create({
+        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const defaultChannel = await server.app.get(ChannelService).getDefaultChannel(ctx);
+        const storeCtx = await server.app.get(RequestContextService).create({
             apiType: 'admin',
             channelOrToken: 'translation-outbox-fixture',
         });
-        const result = await server.app
-            .get(ContentTranslationBackfillService)
-            .backfill(ctx, 'StorefrontContentItem', 100, 0);
-        expect(result.queued).toBe(15);
-        expect(result.failed).toBe(0);
-        expect(translate).not.toHaveBeenCalled();
-        expect(await db.getRepository(metadata.target).countBy({ languageCode: 'en', label: '' })).toBe(15);
-        const applied = await server.app.get(ContentTranslationRetryService).retryPending();
-        expect(applied.translated).toBe(15);
-        expect(await db.getRepository(metadata.target).countBy({ languageCode: 'en', label: '' })).toBe(0);
-        expect(translate).not.toHaveBeenCalled();
+        const backfill = server.app.get(ContentTranslationBackfillService);
+        await expect(backfill.backfill(storeCtx, 'StorefrontContentItem', 100, 0)).rejects.toThrow(
+            '批量补译请切换到平台管理中心',
+        );
+        adminClient.setChannelToken(defaultChannel.token);
+        try {
+            // Bulk discovery is platform-only. Seed owned platform content instead of bypassing its guard.
+            for (let index = 0; index < 3; index++) {
+                await adminClient.query(create, { input: input(`platform-historical-${index}`) });
+            }
+            const repository = db.getRepository(metadata.target);
+            const scope = { languageCode: 'en', base: { block: { channelId: ctx.channelId } } };
+            const targets = await repository.find({ where: scope });
+            expect(targets).toHaveLength(15);
+            // Reconstruct the previous successful translation history before testing cache-only rediscovery.
+            expect((await server.app.get(ContentTranslationRetryService).retryPending()).translated).toBe(15);
+            await repository.update({ id: In(targets.map((target: any) => target.id)) }, { label: '' });
+            await db.getRepository(ContentTranslationState).clear();
+            translate.mockClear();
+            const result = await backfill.backfill(ctx, 'StorefrontContentItem', 100, 0);
+            expect(result.queued).toBe(15);
+            expect(result.failed).toBe(0);
+            expect(translate).not.toHaveBeenCalled();
+            expect(await repository.countBy({ ...scope, label: '' })).toBe(15);
+            const applied = await server.app.get(ContentTranslationRetryService).retryPending();
+            expect(applied.translated).toBe(15);
+            expect(await repository.countBy({ ...scope, label: '' })).toBe(0);
+            expect(translate).not.toHaveBeenCalled();
+        } finally {
+            adminClient.setChannelToken('translation-outbox-fixture');
+        }
     });
 
     it('rolls back the content and outbox on an invalid child in a real save transaction', async () => {

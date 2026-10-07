@@ -180,11 +180,16 @@ beforeAll(async () => {
                 zones {
                     items {
                         id
+                        members {
+                            code
+                        }
                     }
                 }
             }
         `)
     ).zones.items;
+    const fixtureZone = zones.find((zone: any) => zone.members.some((country: any) => country.code === 'GB'));
+    expect(fixtureZone, 'The owned physical fixture requires the GB shipping zone').toBeDefined();
     const channel = (
         await adminClient.query(
             gql`
@@ -203,10 +208,11 @@ beforeAll(async () => {
                 input: {
                     code: cartChannelToken,
                     token: cartChannelToken,
+                    customFields: { commerceMode: 'HYBRID' },
                     defaultLanguageCode: 'zh_Hans',
                     currencyCode: 'USD',
-                    defaultTaxZoneId: zones[0].id,
-                    defaultShippingZoneId: zones[0].id,
+                    defaultTaxZoneId: fixtureZone.id,
+                    defaultShippingZoneId: fixtureZone.id,
                     pricesIncludeTax: false,
                 },
             },

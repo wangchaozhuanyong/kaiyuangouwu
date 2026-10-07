@@ -10,7 +10,7 @@
         "build:two-factor": "bun run check:typography && bun run verify:router-toolchain && tsc --noEmit && vite build --config vite.two-factor.config.ts",
         "build:carousel-assets": "bun scripts/build-carousel-assets.mjs",
         "preview": "vite preview --host 127.0.0.1",
-        "test": "vitest run",
+        "test": "node --test scripts/performance-report.spec.mjs e2e/client-loading/preview-server.spec.mjs && vitest run --exclude scripts/performance-report.spec.mjs --exclude e2e/client-loading/preview-server.spec.mjs",
         "test:visual-presets": "node e2e/visual-presets/verify.mjs",
         "test:compat": "bun run build && playwright test --config=e2e/playwright.compat.config.ts",
         "check:interaction": "node scripts/check-interaction-standard.mjs",

@@ -137,7 +137,8 @@ export function ProductEditorWorkspace() {
                                 <div className="space-y-5">
                                     <section className="product-editor-panel">
                                         <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                            商品描述
+                                            商品描述{' '}
+                                            <FeatureHelpButton topic="catalog.spu-core" title="商品描述" />
                                         </h2>
                                         <div
                                             className="product-editor-description-reader"
@@ -148,7 +149,11 @@ export function ProductEditorWorkspace() {
                                     </section>
                                     <section className="product-editor-panel">
                                         <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                            商品详情图
+                                            商品详情图{' '}
+                                            <FeatureHelpButton
+                                                topic="catalog.product-assets"
+                                                title="商品详情图"
+                                            />
                                         </h2>
                                         <div className="product-editor-gallery">
                                             {productData?.product?.assets.map(asset => (
@@ -228,7 +233,8 @@ export function ProductEditorWorkspace() {
                             </section>
                             <section className="product-editor-panel">
                                 <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                    售后规则
+                                    售后规则{' '}
+                                    <FeatureHelpButton topic="catalog.product-policy" title="售后规则" />
                                 </h2>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <AdminField

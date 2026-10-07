@@ -87,26 +87,6 @@ describe('catalog rendering boundary', () => {
         };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
-    it('keeps one shared viewport tracker across routes and removes it when the shell unmounts', async () => {
-        const visibleViewport = Object.assign(new EventTarget(), { height: 768, offsetTop: 0, scale: 1 });
-        vi.stubGlobal('visualViewport', visibleViewport);
-        try {
-            render();
-            await act(async () => {
-                await vi.dynamicImportSettled();
-            });
-            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
-            render({ displayedRoute: { name: 'product', id: '1' } });
-            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
-            act(() => root.render(null));
-            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(0);
-            expect(
-                document.documentElement.style.getPropertyValue('--storefront-viewport-bottom-offset'),
-            ).toBe('');
-        } finally {
-            vi.unstubAllGlobals();
-        }
-    });
     it('requests neither deferred module before readiness and idle, and hides update UI on sensitive routes', async () => {
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
@@ -140,6 +120,26 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).toContain('DEFERRED_PRIVACY');
     });
 
+    it('keeps one shared viewport tracker across routes and removes it when the shell unmounts', async () => {
+        const visibleViewport = Object.assign(new EventTarget(), { height: 768, offsetTop: 0, scale: 1 });
+        vi.stubGlobal('visualViewport', visibleViewport);
+        try {
+            render();
+            await act(async () => {
+                await vi.dynamicImportSettled();
+            });
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
+            render({ displayedRoute: { name: 'product', id: '1' } });
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(1);
+            act(() => root.render(null));
+            expect(document.querySelectorAll('.storefront-viewport-probe')).toHaveLength(0);
+            expect(
+                document.documentElement.style.getPropertyValue('--storefront-viewport-bottom-offset'),
+            ).toBe('');
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
     it('never mounts catalog content while account validation is pending', () => {
         render({ displayedRoute: { name: 'orders' }, customerLoadState: 'loading' });
         expect(element.textContent).toContain('CATALOG_SKELETON');

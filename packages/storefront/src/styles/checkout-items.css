@@ -116,10 +116,6 @@
 }
 
 @media (max-width: 1023px) {
-    .page.checkout-page {
-        --page-bottom-fixed-offset: var(--checkout-viewport-bottom-offset, 0px);
-    }
-
     :is(.purchase-page, .checkout-page) .checkout-options > button {
         min-height: 52px;
         margin-block: 4px;
@@ -133,6 +129,5 @@
     }
     :is(.purchase-page, .checkout-page) .submit-order-bar {
         border-top: 0;
-        bottom: var(--checkout-viewport-bottom-offset, 0px);
     }
 }

@@ -1209,42 +1209,50 @@ describe('platform governance real database and API boundaries', () => {
 
     it('preserves local shipping edits but rejects changes and deletion of historical shared methods', async () => {
         const shipping = server.app.get(ShippingMethodService);
-        const method = await shipping.create(a, {
-            code: 'synthetic-isolation-shipping',
-            checker: {
-                code: 'default-shipping-eligibility-checker',
-                arguments: [{ name: 'orderMinimum', value: '0' }],
-            },
-            calculator: {
-                code: 'default-shipping-calculator',
-                arguments: [
-                    { name: 'rate', value: '1000' },
-                    { name: 'includesTax', value: 'auto' },
-                    { name: 'taxRate', value: '0' },
+        const method = await connection.withTransaction(a, tx =>
+            shipping.create(tx, {
+                code: 'synthetic-isolation-shipping',
+                checker: {
+                    code: 'default-shipping-eligibility-checker',
+                    arguments: [{ name: 'orderMinimum', value: '0' }],
+                },
+                calculator: {
+                    code: 'default-shipping-calculator',
+                    arguments: [
+                        { name: 'rate', value: '1000' },
+                        { name: 'includesTax', value: 'auto' },
+                        { name: 'taxRate', value: '0' },
+                    ],
+                },
+                fulfillmentHandler: 'manual-fulfillment',
+                translations: [
+                    { languageCode: LanguageCode.zh_Hans, name: 'A 店配送', description: '' },
+                    { languageCode: LanguageCode.en, name: 'Store A local shipping', description: '' },
                 ],
-            },
-            fulfillmentHandler: 'manual-fulfillment',
-            translations: [
-                { languageCode: LanguageCode.zh_Hans, name: 'A 店配送', description: '' },
-                { languageCode: LanguageCode.en, name: 'Store A local shipping', description: '' },
-            ],
-        });
+            }),
+        );
         expect((await shipping.findAll(b)).items.some(item => String(item.id) === String(method.id))).toBe(
             false,
         );
-        await shipping.update(a, {
-            id: method.id,
-            translations: [{ languageCode: LanguageCode.zh_Hans, name: 'A 店更新配送', description: '' }],
-        });
+        await connection.withTransaction(a, tx =>
+            shipping.update(tx, {
+                id: method.id,
+                translations: [{ languageCode: LanguageCode.zh_Hans, name: 'A 店更新配送', description: '' }],
+            }),
+        );
         await connection.rawConnection
             .createQueryBuilder()
             .relation(ShippingMethod, 'channels')
             .of(method.id)
             .add(b.channelId);
         await expect(
-            shipping.update(a, { id: method.id, code: 'cannot-change-shared', translations: [] }),
+            connection.withTransaction(a, tx =>
+                shipping.update(tx, { id: method.id, code: 'cannot-change-shared', translations: [] }),
+            ),
         ).rejects.toThrow('共享配送方式');
-        await expect(shipping.softDelete(b, method.id)).rejects.toThrow(/共享配送方式|维护归属/u);
+        await expect(connection.withTransaction(b, tx => shipping.softDelete(tx, method.id))).rejects.toThrow(
+            /共享配送方式|维护归属/u,
+        );
         expect((await shipping.findOne(b, method.id))?.code).toBe('synthetic-isolation-shipping');
         adminClient.setChannelToken(b.channel.token);
         try {
@@ -1265,11 +1273,13 @@ describe('platform governance real database and API boundaries', () => {
         } finally {
             adminClient.setChannelToken(platform.channel.token);
         }
-        await shipping.update(platform, {
-            id: method.id,
-            code: 'platform-maintained-shared',
-            translations: [],
-        });
+        await connection.withTransaction(platform, tx =>
+            shipping.update(tx, {
+                id: method.id,
+                code: 'platform-maintained-shared',
+                translations: [],
+            }),
+        );
         expect((await shipping.findOne(a, method.id))?.code).toBe('platform-maintained-shared');
     });
 

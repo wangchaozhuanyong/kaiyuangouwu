@@ -3,6 +3,7 @@ import { Copy, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { addCustomFieldsToDocument } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
@@ -100,7 +101,7 @@ export function ShippingTemplatesPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold">
                         <Truck className="h-4 w-4" />
-                        配送方式
+                        配送方式 <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         {isPlatform
