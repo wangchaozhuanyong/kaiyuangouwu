@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import type { StoreManagementResult } from '../../graphql/management.graphql';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { ShippingTemplatesPanel } from './ShippingTemplatesPanel';
@@ -33,19 +34,24 @@ function render(platform = false) {
         <AdminPermissionsContext.Provider
             value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
         >
-            <ShippingTemplatesPanel
-                data={
-                    platform
-                        ? { ...data, activeChannel: { ...data.activeChannel, code: '__default_channel__' } }
-                        : data
-                }
-                onCreate={() => undefined}
-                onEdit={() => undefined}
-                onDelete={() => undefined}
-                deleting={false}
-                onChanged={async () => undefined}
-                onError={() => undefined}
-            />
+            <FeatureHelpProvider>
+                <ShippingTemplatesPanel
+                    data={
+                        platform
+                            ? {
+                                  ...data,
+                                  activeChannel: { ...data.activeChannel, code: '__default_channel__' },
+                              }
+                            : data
+                    }
+                    onCreate={() => undefined}
+                    onEdit={() => undefined}
+                    onDelete={() => undefined}
+                    deleting={false}
+                    onChanged={async () => undefined}
+                    onError={() => undefined}
+                />
+            </FeatureHelpProvider>
         </AdminPermissionsContext.Provider>,
     );
 }
